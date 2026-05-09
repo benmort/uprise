@@ -60,6 +60,7 @@ export class BasicAuthGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
+    if (request.method?.toUpperCase() === "OPTIONS") return true;
     if (this.isPublicWebhookPath(request)) return true;
     if (this.isAnalyticsStreamPath(request) && this.hasValidStreamToken(request)) return true;
 

@@ -88,7 +88,8 @@ Optional:
 - `STREAM_TOKEN_SECRET` (falls back to `INTEGRATION_CREDENTIAL_SECRET`)
 - `STREAM_TOKEN_TTL_SECONDS` (default: `43200`)
 - `BLAST_SEND_BATCH_SIZE` (default: `50`)
-- `CORS_ALLOWED_ORIGINS` (comma-separated allowlist)
+- `CORS_ALLOWED_ORIGINS` (comma-separated allowlist, recommended in production)
+  - example: `https://yarns.org.au,https://www.yarns.org.au`
 - `RATE_LIMIT_WINDOW_MS` (default: `60000`)
 - `RATE_LIMIT_MAX_REQUESTS` (default: `300`)
 - `FEATURE_REALTIME_ENABLED`

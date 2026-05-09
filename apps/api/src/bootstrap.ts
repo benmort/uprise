@@ -6,24 +6,39 @@ import { DomainLogger } from "./common/logging/domain-logger.service";
 import { PrismaService } from "./prisma/prisma.service";
 import { ConfigService } from "@nestjs/config";
 
+export function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+export function parseAllowedOrigins(rawOrigins: string): Set<string> {
+  return new Set(
+    rawOrigins
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => normalizeOrigin(value)),
+  );
+}
+
 export async function configureNestApp(app: INestApplication): Promise<void> {
   const config = app.get(ConfigService);
-  const configuredOrigins = config
-    .get<string>("CORS_ALLOWED_ORIGINS", "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const configuredOrigins = parseAllowedOrigins(config.get<string>("CORS_ALLOWED_ORIGINS", ""));
   app.enableCors({
-    origin:
-      configuredOrigins.length === 0
-        ? true
-        : (origin, callback) => {
-            if (!origin || configuredOrigins.includes(origin)) {
-              callback(null, true);
-              return;
-            }
-            callback(new Error("CORS origin blocked"), false);
-          },
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (configuredOrigins.size === 0) {
+        callback(null, true);
+        return;
+      }
+      callback(null, configuredOrigins.has(normalizeOrigin(origin)));
+    },
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    optionsSuccessStatus: 204,
+    maxAge: 600,
   });
   app.setGlobalPrefix("api/v1");
   app.useGlobalPipes(

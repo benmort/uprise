@@ -41,6 +41,19 @@ describe("BasicAuthGuard", () => {
     expect(guard.canActivate(context)).toBe(true);
   });
 
+  it("allows OPTIONS preflight requests without auth", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      method: "OPTIONS",
+      path: "/api/v1/auth/check",
+      headers: {
+        origin: "https://yarns.org.au",
+        "access-control-request-method": "GET",
+      },
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
   it("allows inbound webhook without auth on unprefixed path", () => {
     const guard = createGuard();
     const context = executionContextWithRequest({
