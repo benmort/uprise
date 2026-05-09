@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,16 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <div className="w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-sm">
-        <h1 className="mb-1 text-xl font-semibold">Messenger</h1>
+        <div className="mb-2">
+          <Image
+            src="/images/yarns-logo-full.png"
+            alt="Yarns"
+            width={512}
+            height={159}
+            priority
+            className="h-auto w-44"
+          />
+        </div>
         <p className="mb-6 text-sm text-muted-foreground">
           Sign in to continue
         </p>

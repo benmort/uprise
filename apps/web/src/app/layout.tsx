@@ -21,6 +21,15 @@ const publicSans = Public_Sans({
 export const metadata: Metadata = {
   title: "Yarns - SMS Blast Platform",
   description: "Audience management, blast composition, analytics, and inbox workflows.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/images/yarns-logo-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/images/yarns-logo-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/images/yarns-logo-192.png", sizes: "192x192", type: "image/png" }],
+    shortcut: ["/images/yarns-logo-192.png"],
+  },
 };
 
 export default function RootLayout({
