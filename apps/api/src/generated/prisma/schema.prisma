@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AudienceStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AudienceSource {
+  MANUAL
+  CSV
+  ACTION_NETWORK
+  INTERNAL
+}
+
+enum BlastStatus {
+  DRAFTED
+  PROOFED
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+}
+
+enum BlastRecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  RESPONDED
+  FAILED
+  SKIPPED
+}
+
+enum IntegrationType {
+  ACTION_NETWORK
+  INTERNAL
+}
+
+enum IntegrationConnectionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum IntegrationJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model Organization {
+  id            String                  @id @default(cuid())
+  slug          String                  @unique
+  name          String
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  users         AppUser[]
+  audiences     Audience[]
+  blasts        Blast[]
+  integrations  IntegrationConnection[]
+  inbound       InboundMessage[]
+  outbound      OutboundMessage[]
+  snapshots     AnalyticsSnapshot[]
+  conversations ConversationState[]
+}
+
+model AppUser {
+  id             String       @id @default(cuid())
+  organizationId String
+  email          String       @unique
+  displayName    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  audiences      Audience[]
+  blasts         Blast[]
+}
+
+model Audience {
+  id             String            @id @default(cuid())
+  organizationId String
+  createdById    String?
+  name           String
+  source         AudienceSource
+  status         AudienceStatus    @default(ACTIVE)
+  externalListId String?
+  syncedAt       DateTime?
+  archivedAt     DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      AppUser?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  contacts       AudienceContact[]
+  imports        AudienceImport[]
+  segments       AudienceSegment[]
+  blasts         Blast[]
+
+  @@index([organizationId, status])
+}
+
+model AudienceContact {
+  id             String         @id @default(cuid())
+  organizationId String
+  audienceId     String
+  externalId     String?
+  phoneE164      String
+  fullName       String?
+  metadata       Json?
+  source         AudienceSource
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  audience       Audience       @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+
+  @@unique([audienceId, phoneE164])
+  @@index([organizationId, phoneE164])
+}
+
+model AudienceImport {
+  id             String   @id @default(cuid())
+  organizationId String
+  audienceId     String
+  fileName       String
+  totalRows      Int      @default(0)
+  importedRows   Int      @default(0)
+  failedRows     Int      @default(0)
+  errors         Json?
+  createdAt      DateTime @default(now())
+  audience       Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+}
+
+model AudienceSegment {
+  id             String   @id @default(cuid())
+  organizationId String
+  audienceId     String
+  name           String
+  definition     Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  audience       Audience @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+}
+
+model Blast {
+  id             String              @id @default(cuid())
+  organizationId String
+  audienceId     String?
+  createdById    String?
+  title          String
+  bodyTemplate   String
+  status         BlastStatus         @default(DRAFTED)
+  scheduledFor   DateTime?
+  proofedAt      DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  audience       Audience?           @relation(fields: [audienceId], references: [id], onDelete: SetNull)
+  createdBy      AppUser?            @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  templates      BlastTemplate[]
+  recipients     BlastRecipient[]
+  inbound        InboundMessage[]
+  outbound       OutboundMessage[]
+  snapshots      AnalyticsSnapshot[]
+
+  @@index([organizationId, status])
+}
+
+model BlastTemplate {
+  id        String   @id @default(cuid())
+  blastId   String
+  version   Int
+  body      String
+  createdAt DateTime @default(now())
+  blast     Blast    @relation(fields: [blastId], references: [id], onDelete: Cascade)
+
+  @@unique([blastId, version])
+}
+
+model BlastRecipient {
+  id               String               @id @default(cuid())
+  blastId          String
+  contactId        String?
+  phoneE164        String
+  renderedBody     String
+  status           BlastRecipientStatus @default(PENDING)
+  failureCategory  String?
+  twilioMessageSid String?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  respondedAt      DateTime?
+  errorCode        String?
+  errorMessage     String?
+  metadata         Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  blast            Blast                @relation(fields: [blastId], references: [id], onDelete: Cascade)
+
+  @@index([blastId, status])
+  @@index([phoneE164])
+}
+
+model InboundMessage {
+  id               String       @id @default(cuid())
+  organizationId   String
+  blastId          String?
+  fromPhone        String
+  toPhone          String
+  body             String
+  twilioMessageSid String?      @unique
+  receivedAt       DateTime     @default(now())
+  threadKey        String
+  createdAt        DateTime     @default(now())
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  blast            Blast?       @relation(fields: [blastId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, threadKey, receivedAt])
+}
+
+model OutboundMessage {
+  id               String               @id @default(cuid())
+  organizationId   String
+  blastId          String?
+  recipientId      String?
+  toPhone          String
+  fromPhone        String
+  body             String
+  status           BlastRecipientStatus @default(SENT)
+  twilioMessageSid String?              @unique
+  sentAt           DateTime             @default(now())
+  errorCode        String?
+  errorMessage     String?
+  createdAt        DateTime             @default(now())
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  blast            Blast?               @relation(fields: [blastId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, toPhone, sentAt])
+}
+
+model IntegrationConnection {
+  id                  String                      @id @default(cuid())
+  organizationId      String
+  type                IntegrationType
+  name                String
+  status              IntegrationConnectionStatus @default(ACTIVE)
+  encryptedCredential String
+  settings            Json?
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  syncJobs            IntegrationSyncJob[]
+
+  @@index([organizationId, type, status])
+}
+
+model IntegrationSyncJob {
+  id                      String                @id @default(cuid())
+  organizationId          String
+  integrationConnectionId String
+  audienceId              String?
+  status                  IntegrationJobStatus  @default(QUEUED)
+  query                   String?
+  remoteListId            String?
+  syncedCount             Int                   @default(0)
+  failedCount             Int                   @default(0)
+  errorSummary            String?
+  startedAt               DateTime?
+  completedAt             DateTime?
+  createdAt               DateTime              @default(now())
+  connection              IntegrationConnection @relation(fields: [integrationConnectionId], references: [id], onDelete: Cascade)
+}
+
+model AnalyticsSnapshot {
+  id             String       @id @default(cuid())
+  organizationId String
+  blastId        String?
+  metricName     String
+  metricValue    Float
+  labels         Json?
+  bucketAt       DateTime
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  blast          Blast?       @relation(fields: [blastId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, metricName, bucketAt])
+}
+
+model ConversationState {
+  id             String       @id @default(cuid())
+  organizationId String
+  contactPhone   String
+  unreadCount    Int          @default(0)
+  resolved       Boolean      @default(false)
+  lastMessageAt  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, contactPhone])
+}

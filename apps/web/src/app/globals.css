@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --surface: 300 11% 98%;
+    --surface-variant: 300 3% 89%;
+    --background: 300 11% 98%;
+    --foreground: 220 7% 11%;
+    --muted: 300 8% 94%;
+    --muted-foreground: 225 8% 30%;
+    --border: 228 7% 49%;
+    --input: 228 7% 49%;
+    --ring: 220 91% 36%;
+
+    --primary: 220 91% 36%;
+    --on-primary: 0 0% 100%;
+    --primary-container: 220 60% 50%;
+    --on-primary-container: 227 100% 95%;
+
+    --secondary: 210 5% 37%;
+    --on-secondary: 0 0% 100%;
+    --secondary-container: 210 14% 88%;
+    --secondary-foreground: 210 8% 28%;
+
+    --tertiary: 50 100% 21%;
+    --on-tertiary: 0 0% 100%;
+    --tertiary-container: 49 47% 52%;
+
+    --error: 0 75% 42%;
+    --on-error: 0 0% 100%;
+    --error-container: 9 100% 92%;
+
+    --success: 143 77% 28%;
+    --on-success: 0 0% 100%;
+    --success-container: 138 41% 91%;
+
+    --warning-container: var(--tertiary-container);
+    --warning-foreground: var(--on-tertiary);
+
+    --radius-sm: 0.125rem;
+    --radius: 0.25rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-headline;
+  }
+}

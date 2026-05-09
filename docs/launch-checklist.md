@@ -1,0 +1,39 @@
+# Yarns Launch Checklist
+
+## Pre-Launch Gates
+
+- [ ] `pnpm --filter api build` passes
+- [ ] `pnpm --filter web build` passes
+- [ ] `pnpm --filter api test` passes
+- [ ] `pnpm --filter web test` passes
+- [ ] `prisma:deploy` tested in staging
+- [ ] Twilio credentials validated
+- [ ] Action Network connection validated
+- [ ] Internal source connection validated
+- [ ] Compliance defaults confirmed (quiet hours, opt-out policy)
+
+## Release Sequence
+
+1. Apply DB migration (`prisma:deploy`).
+2. Deploy API.
+3. Smoke-check health endpoint.
+4. Deploy web.
+5. Verify dashboard/audience/composer/analytics/inbox navigation.
+6. Run a small canary blast to a test audience.
+7. Verify analytics and inbox updates.
+
+## Rollback Gates
+
+Rollback immediately if any of:
+
+- API error rate > 5% for 5 minutes
+- Blast failure category spikes unexpectedly
+- DB migration causes query timeout or lock contention
+- Authentication failures across all endpoints
+
+Rollback actions:
+
+1. Pause send operations.
+2. Revert API/web images to previous versions.
+3. Restore DB snapshot if schema incompatibility is confirmed.
+4. Validate with health and canary checks before resuming sends.
