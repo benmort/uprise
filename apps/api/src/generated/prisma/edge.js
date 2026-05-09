@@ -384,7 +384,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/Users/benjaminmort/code/twilio-messenger/apps/api/src/generated/prisma",
+      "value": "/Users/benjaminmort/code/common-threads/yarns/apps/api/src/generated/prisma",
       "fromEnvVar": null
     },
     "config": {
@@ -398,7 +398,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/Users/benjaminmort/code/twilio-messenger/apps/api/prisma/schema.prisma",
+    "sourceFilePath": "/Users/benjaminmort/code/common-threads/yarns/apps/api/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
@@ -412,6 +412,7 @@ const config = {
     "db"
   ],
   "activeProvider": "postgresql",
+  "postinstall": false,
   "inlineDatasources": {
     "db": {
       "url": {
