@@ -21,10 +21,22 @@ describe("major route files", () => {
     expect(source).toContain("Sync Integrations");
   });
 
-  it("contains composer page scaffold", () => {
+  it("keeps legacy composer route as a redirect shim", () => {
     const source = read("composer/page.tsx");
+    expect(source).toContain("/blasts/");
+    expect(source).toContain("Redirecting...");
+  });
+
+  it("contains blast composer page scaffold", () => {
+    const source = read("blasts/[id]/composer/page.tsx");
     expect(source).toContain("Composer");
-    expect(source).toContain("TCPA Compliance");
+    expect(source).toContain("Privacy Compliance");
+  });
+
+  it("contains blast details page scaffold", () => {
+    const source = read("blasts/[id]/page.tsx");
+    expect(source).toContain("Blast analytics");
+    expect(source).toContain("Open Composer");
   });
 
   it("contains analytics page scaffold", () => {
@@ -39,9 +51,10 @@ describe("major route files", () => {
     expect(source).toContain("Type your response");
   });
 
-  it("wires the header create blast CTA to the composer route", () => {
+  it("wires the header create blast CTA to create-and-redirect flow", () => {
     const source = read("layout.tsx");
-    expect(source).toContain('Link href="/composer"');
+    expect(source).toContain("createBlast");
+    expect(source).toContain("/blasts/");
     expect(source).toContain("Create Blast");
   });
 });

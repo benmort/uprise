@@ -41,6 +41,10 @@ export class UpdateBlastDto {
 export class ProofBlastDto {
   @IsOptional()
   sampleRecipients?: Array<Record<string, unknown>>;
+
+  @IsOptional()
+  @IsString()
+  proofNumber?: string;
 }
 
 export class ScheduleBlastDto {

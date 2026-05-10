@@ -2,16 +2,19 @@ import React from "react";
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLES: Record<string, string> = {
-  DRAFTED: "bg-surface-variant text-muted-foreground",
-  PROOFED: "bg-warning-container text-warning-foreground",
-  SCHEDULED: "bg-secondary-container text-secondary-foreground",
-  SENDING: "bg-primary-container text-primary-foreground",
-  SENT: "bg-success-container text-success-foreground",
-  FAILED: "bg-error-container text-error-foreground",
-  ACTIVE: "bg-success-container text-success-foreground",
-  ARCHIVED: "bg-surface-variant text-muted-foreground",
-  RESPONDED: "bg-warning-container text-warning-foreground",
-  DELIVERED: "bg-secondary-container text-secondary-foreground",
+  DRAFTED: "bg-secondary text-secondary-foreground",
+  PROOFED: "bg-warning text-warning-foreground",
+  SCHEDULED: "bg-primary text-primary-foreground",
+  SENDING: "bg-primary text-primary-foreground",
+  SENT: "bg-success text-success-foreground",
+  FAILED: "bg-error text-error-foreground",
+  ACTIVE: "bg-success text-success-foreground",
+  ARCHIVED: "bg-secondary text-secondary-foreground",
+  UPLOADING: "bg-primary text-primary-foreground",
+  PROCESSING: "bg-warning text-warning-foreground",
+  COMPLETED: "bg-success text-success-foreground",
+  RESPONDED: "bg-warning text-warning-foreground",
+  DELIVERED: "bg-primary text-primary-foreground",
 };
 
 export function StatusBadge({
@@ -25,7 +28,7 @@ export function StatusBadge({
     <span
       className={cn(
         "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-label uppercase tracking-[0.05em]",
-        STATUS_STYLES[status] || "bg-surface-variant text-muted-foreground",
+        STATUS_STYLES[status] || "bg-secondary text-secondary-foreground",
         className,
       )}
     >

@@ -18,7 +18,7 @@
 2. Deploy API.
 3. Smoke-check health endpoint.
 4. Deploy web.
-5. Verify dashboard/audience/composer/analytics/inbox navigation.
+5. Verify dashboard/audience/analytics/inbox navigation and blast detail/composer routes.
 6. Run a small canary blast to a test audience.
 7. Verify analytics and inbox updates.
 

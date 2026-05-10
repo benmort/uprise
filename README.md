@@ -17,8 +17,8 @@ This repository is now configured for **Vercel-only deployment**:
 
 - **Web (`apps/web`)**
   - Next.js App Router UI
-  - Modern Authority design system
-  - Routes: `/dashboard`, `/audience`, `/composer`, `/analytics`, `/inbox`
+  - Yarns design system
+  - Routes: `/dashboard`, `/audience`, `/analytics`, `/inbox`, `/blasts/:id`, `/blasts/:id/composer`
 
 - **API (`apps/api`)**
   - NestJS with Prisma + Postgres

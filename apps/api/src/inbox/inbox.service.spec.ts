@@ -4,7 +4,7 @@ import { InboxService } from "./inbox.service";
 describe("InboxService", () => {
   const prisma = {
     organization: { upsert: jest.fn() },
-    blast: { findUnique: jest.fn() },
+    blast: { findMany: jest.fn() },
   } as any;
   const config = {
     get: jest.fn((key: string, fallback?: string) => {
@@ -21,6 +21,9 @@ describe("InboxService", () => {
   const repo = {
     listConversations: jest.fn(),
     listRecentMessageContacts: jest.fn(),
+    listContactPhonesForBlast: jest.fn(),
+    listContactPhonesForAudience: jest.fn(),
+    listContactNamesByPhones: jest.fn(),
     getThread: jest.fn(),
   } as any;
   const ai = { suggestReplies: jest.fn(() => []) } as any;
@@ -30,6 +33,7 @@ describe("InboxService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.organization.upsert.mockResolvedValue({ id: "org_1", slug: "default" });
+    repo.listContactNamesByPhones.mockResolvedValue([]);
     service = new InboxService(prisma, config, twilio, events, repo, ai);
   });
 

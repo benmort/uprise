@@ -8,7 +8,11 @@ export class InboxController {
 
   @Get("conversations")
   listConversations(@Query() dto: ListConversationsDto) {
-    return this.inbox.listConversations(dto.query);
+    return this.inbox.listConversations({
+      query: dto.query,
+      blastId: dto.blastId,
+      audienceId: dto.audienceId,
+    });
   }
 
   @Get("conversations/:contactPhone")

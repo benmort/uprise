@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -42,6 +43,11 @@ export class AudiencesController {
   @Patch(":id/restore")
   restore(@Param("id") id: string) {
     return this.audiences.restoreAudience(id);
+  }
+
+  @Delete(":id")
+  remove(@Param("id") id: string) {
+    return this.audiences.deleteAudience(id);
   }
 
   @Post(":id/import-csv")

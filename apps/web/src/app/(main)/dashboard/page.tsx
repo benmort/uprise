@@ -96,7 +96,7 @@ export default function DashboardPage() {
                   <tr
                     key={String(blast.id)}
                     className="cursor-pointer border-b border-border/60 hover:bg-primary-container/10"
-                    onClick={() => router.push(`/composer?blastId=${encodeURIComponent(String(blast.id))}`)}
+                    onClick={() => router.push(`/blasts/${encodeURIComponent(String(blast.id))}/composer`)}
                   >
                     <td className="py-3 pr-4">
                       <p className="font-medium">{String(blast.title || "Untitled Blast")}</p>
@@ -115,7 +115,7 @@ export default function DashboardPage() {
                 {filteredBlasts.length === 0 && (
                   <tr>
                     <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                      No blasts yet. Create your first campaign in Composer.
+                      No blasts yet. Create your first campaign from the Create Blast button.
                     </td>
                   </tr>
                 )}

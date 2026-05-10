@@ -23,6 +23,13 @@ type AudienceRow = {
   _count?: { contacts: number };
 };
 
+type UploadState = {
+  audienceId: string;
+  audienceName: string;
+  progress: number;
+  status: "UPLOADING" | "PROCESSING" | "COMPLETED" | "FAILED";
+};
+
 export default function AudiencePage() {
   const router = useRouter();
   const [rows, setRows] = useState<AudienceRow[]>([]);
@@ -37,6 +44,8 @@ export default function AudiencePage() {
   const [listsLoading, setListsLoading] = useState(false);
   const [tablePage, setTablePage] = useState(0);
   const [syncMessage, setSyncMessage] = useState("");
+  const [importMessage, setImportMessage] = useState("");
+  const [uploadState, setUploadState] = useState<UploadState | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -71,9 +80,25 @@ export default function AudiencePage() {
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => row.name.toLowerCase().includes(q));
-  }, [rows, filter]);
+    const base = !q ? rows : rows.filter((row) => row.name.toLowerCase().includes(q));
+    if (
+      uploadState &&
+      !base.some((row) => row.id === uploadState.audienceId) &&
+      uploadState.audienceName.toLowerCase().includes(q)
+    ) {
+      return [
+        {
+          id: uploadState.audienceId,
+          name: uploadState.audienceName,
+          source: "CSV",
+          status: uploadState.status,
+          _count: { contacts: 0 },
+        },
+        ...base,
+      ];
+    }
+    return base;
+  }, [rows, filter, uploadState]);
 
   const pageSize = 8;
   const paged = filtered.slice(tablePage * pageSize, tablePage * pageSize + pageSize);
@@ -102,14 +127,69 @@ export default function AudiencePage() {
               <Button
                 onClick={async () => {
                   if (!audienceName.trim() || !csvFile) return;
-                  const created = await createAudience({ name: audienceName.trim(), source: "CSV" });
-                  if (!created.ok) return;
+                  const trimmedName = audienceName.trim();
+                  setImportMessage("");
+                  const created = await createAudience({ name: trimmedName, source: "CSV" });
+                  if (!created.ok) {
+                    setImportMessage(created.error);
+                    return;
+                  }
                   const audienceId = String((created.data as any).id);
-                  const imported = await importAudienceCsv(audienceId, csvFile);
+                  setRows((prev) => [
+                    {
+                      id: audienceId,
+                      name: trimmedName,
+                      source: "CSV",
+                      status: "UPLOADING",
+                      _count: { contacts: 0 },
+                    },
+                    ...prev.filter((row) => row.id !== audienceId),
+                  ]);
+                  setTablePage(0);
+                  setUploadState({
+                    audienceId,
+                    audienceName: trimmedName,
+                    progress: 0,
+                    status: "UPLOADING",
+                  });
+                  const imported = await importAudienceCsv(audienceId, csvFile, (percent) => {
+                    setUploadState((prev) => {
+                      if (!prev || prev.audienceId !== audienceId) return prev;
+                      if (percent >= 100) {
+                        return { ...prev, status: "PROCESSING", progress: 95 };
+                      }
+                      return {
+                        ...prev,
+                        status: "UPLOADING",
+                        progress: Math.max(prev.progress, percent),
+                      };
+                    });
+                  });
                   if (imported.ok) {
+                    const importedRows = Number((imported.data as any)?.importedRows || 0);
+                    setUploadState({
+                      audienceId,
+                      audienceName: trimmedName,
+                      progress: 100,
+                      status: "COMPLETED",
+                    });
+                    setImportMessage(`Imported ${importedRows.toLocaleString()} subscribers.`);
                     setAudienceName("");
                     setCsvFile(null);
                     await refresh();
+                    setUploadState(null);
+                  } else {
+                    setUploadState((prev) =>
+                      prev && prev.audienceId === audienceId
+                        ? { ...prev, progress: 100, status: "FAILED" }
+                        : prev,
+                    );
+                    setRows((prev) =>
+                      prev.map((row) =>
+                        row.id === audienceId ? { ...row, status: "FAILED" } : row,
+                      ),
+                    );
+                    setImportMessage(imported.error);
                   }
                 }}
                 disabled={!audienceName.trim() || !csvFile}
@@ -118,8 +198,17 @@ export default function AudiencePage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Expected headers: <code>name</code>, <code>phone</code>, plus optional metadata columns.
+              Expected headers: <code>name</code>/<code>full_name</code>/<code>first_name</code> and{" "}
+              <code>mobile</code>, plus optional metadata columns.
             </p>
+            <a
+              href="/examples/subscribers-example.csv"
+              download
+              className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Download example CSV
+            </a>
+            {importMessage && <p className="text-xs text-muted-foreground">{importMessage}</p>}
           </CardContent>
         </Card>
 
@@ -214,30 +303,57 @@ export default function AudiencePage() {
                       <th className="py-2 pr-4">Source</th>
                       <th className="py-2 pr-4">Subscribers</th>
                       <th className="py-2 pr-4">Last Sync</th>
+                      <th className="py-2 pr-4">Upload Progress</th>
                       <th className="py-2 pr-4">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paged.map((row) => (
-                      <tr
-                        key={row.id}
-                        className="cursor-pointer border-b border-border/70 hover:bg-primary-container/10"
-                        onClick={() => router.push(`/audience/${row.id}`)}
-                      >
-                        <td className="py-3 pr-4">
-                          <p className="font-medium">{row.name}</p>
-                          <p className="text-xs text-muted-foreground">ID: {row.id}</p>
-                        </td>
-                        <td className="py-3 pr-4">{row.source}</td>
-                        <td className="py-3 pr-4">{Number(row._count?.contacts || 0).toLocaleString()}</td>
-                        <td className="py-3 pr-4 text-muted-foreground">
-                          {row.syncedAt ? new Date(row.syncedAt).toLocaleString() : "Never"}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <StatusBadge status={row.status} />
-                        </td>
-                      </tr>
-                    ))}
+                    {paged.map((row) => {
+                      const isUploading = uploadState?.audienceId === row.id;
+                      return (
+                        <tr
+                          key={row.id}
+                          className="cursor-pointer border-b border-border/70 hover:bg-primary-container/10"
+                          onClick={() => router.push(`/audience/${row.id}`)}
+                        >
+                          <td className="py-3 pr-4">
+                            <p className="font-medium">{row.name}</p>
+                            <p className="text-xs text-muted-foreground">ID: {row.id}</p>
+                          </td>
+                          <td className="py-3 pr-4">{row.source}</td>
+                          <td className="py-3 pr-4">{Number(row._count?.contacts || 0).toLocaleString()}</td>
+                          <td className="py-3 pr-4 text-muted-foreground">
+                            {row.syncedAt ? new Date(row.syncedAt).toLocaleString() : "Never"}
+                          </td>
+                          <td className="py-3 pr-4">
+                            {isUploading ? (
+                              <div className="w-36 space-y-1">
+                                <div className="h-2 rounded-full bg-surface-variant">
+                                  <div
+                                    className={`h-2 rounded-full transition-all ${
+                                      uploadState.status === "FAILED" ? "bg-error" : "bg-primary"
+                                    }`}
+                                    style={{ width: `${Math.max(4, uploadState.progress)}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {uploadState.status === "PROCESSING"
+                                    ? "Processing..."
+                                    : uploadState.status === "FAILED"
+                                      ? "Failed"
+                                      : `${uploadState.progress}%`}
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 pr-4">
+                            <StatusBadge status={isUploading ? uploadState.status : row.status} />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getAudience, getAudienceContacts } from "@/lib/api";
+import { deleteAudience, getAudience, getAudienceContacts } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,12 +41,14 @@ type AudienceContact = {
 
 export default function AudienceShowPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = typeof params?.id === "string" ? params.id : "";
 
   const [audience, setAudience] = useState<AudienceDetail | null>(null);
   const [contacts, setContacts] = useState<AudienceContact[]>([]);
   const [contactsTotal, setContactsTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -98,9 +100,33 @@ export default function AudienceShowPage() {
           <h1 className="text-4xl font-semibold">{audience?.name || "Audience"}</h1>
           <p className="text-sm text-muted-foreground">Audience ID: {id}</p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/audience">Back to Audiences</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="warning"
+            size="sm"
+            disabled={!id || deleting}
+            onClick={async () => {
+              if (!id) return;
+              const confirmed = window.confirm(
+                "Delete this audience? This action cannot be undone.",
+              );
+              if (!confirmed) return;
+              setDeleting(true);
+              const result = await deleteAudience(id);
+              setDeleting(false);
+              if (!result.ok) {
+                setError(result.error);
+                return;
+              }
+              router.replace("/audience");
+            }}
+          >
+            {deleting ? "Deleting..." : "Delete Audience"}
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/audience">Back to Audiences</Link>
+          </Button>
+        </div>
       </div>
 
       {error && (

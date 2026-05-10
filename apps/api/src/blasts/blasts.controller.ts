@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { BlastsService } from "./blasts.service";
 import {
   CreateBlastDto,
@@ -22,6 +22,11 @@ export class BlastsController {
     return this.blasts.updateDraft(id, dto);
   }
 
+  @Delete(":id")
+  remove(@Param("id") id: string) {
+    return this.blasts.deleteBlast(id);
+  }
+
   @Post(":id/proof-preview")
   proofPreview(@Param("id") id: string, @Body() dto: ProofBlastDto) {
     return this.blasts.previewProof(id, dto);
@@ -42,6 +47,7 @@ export class BlastsController {
     return this.blasts.sendNow(id);
   }
 
+  @Get("dispatch-due")
   @Post("dispatch-due")
   dispatchDue(@Query("limit") limit?: string) {
     const parsedLimit = limit ? Number(limit) : undefined;

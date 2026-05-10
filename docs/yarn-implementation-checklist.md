@@ -31,11 +31,11 @@
 - [ ] AI suggestion endpoint returns optional reply suggestions.
 
 ## Milestone 6: Web Product Surfaces
-- [ ] App shell includes persistent navigation for Dashboard, Audience, Composer, Analytics, Inbox.
-- [ ] Design system tokens and typography align with Modern Authority.
+- [ ] App shell includes persistent navigation for Dashboard, Audience, Analytics, Inbox, plus Create Blast CTA.
+- [ ] Design system tokens and typography align with Yarns branding.
 - [ ] Dashboard shows KPI cards and recent blasts.
 - [ ] Audience page supports CSV upload, integration sync, segmented list UI.
-- [ ] Composer supports templating, personalization chips, preview, and send/proof actions.
+- [ ] Blast composer route supports templating, personalization chips, preview, and send/proof actions.
 - [ ] Analytics shows KPI cards, trend chart, and recipient activity list.
 - [ ] Inbox supports search, contextual threading, and inline replies.
 

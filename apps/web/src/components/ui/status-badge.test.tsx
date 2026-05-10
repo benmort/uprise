@@ -7,6 +7,6 @@ describe("StatusBadge", () => {
   it("renders status text", () => {
     const html = renderToStaticMarkup(<StatusBadge status="SENT" />);
     expect(html).toContain("SENT");
-    expect(html).toContain("bg-success-container");
+    expect(html).toContain("bg-success");
   });
 });

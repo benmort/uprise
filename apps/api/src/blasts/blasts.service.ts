@@ -100,6 +100,11 @@ export class BlastsService {
     });
   }
 
+  async deleteBlast(id: string) {
+    await this.getBlastOrThrow(id);
+    return this.prisma.blast.delete({ where: { id } });
+  }
+
   async previewProof(id: string, dto: ProofBlastDto) {
     const blast = await this.getBlastOrThrow(id);
     const sampleRecipients =
@@ -110,7 +115,18 @@ export class BlastsService {
       recipient,
       rendered: this.renderer.render(blast.bodyTemplate, recipient),
     }));
-    return { blastId: blast.id, previews };
+    let proofDispatch: { to: string; sid: string } | null = null;
+    const proofNumber = typeof dto.proofNumber === "string" ? dto.proofNumber.trim() : "";
+    if (proofNumber && previews[0]?.rendered) {
+      const to = normalizePhoneE164(proofNumber);
+      const proofMessage = await this.twilio.sendMessage(to, previews[0].rendered);
+      proofDispatch = {
+        to: proofMessage.to,
+        sid: proofMessage.sid,
+      };
+    }
+
+    return { blastId: blast.id, previews, proofDispatch };
   }
 
   async markProofed(id: string) {

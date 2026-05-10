@@ -113,14 +113,22 @@ export class InboxService {
     return inbound;
   }
 
-  async listConversations(query?: string) {
+  async listConversations(input?: {
+    query?: string;
+    blastId?: string;
+    audienceId?: string;
+  }) {
     const org = await this.ensureOrganization();
-    const [rows, contactsFromMessages, twilioContacts] = await Promise.all([
+    const [rows, contactsFromMessages, twilioContacts, blastPhones, audiencePhones] = await Promise.all([
       this.repo.listConversations(org.id),
       this.repo.listRecentMessageContacts(org.id),
       this.twilio.getLatestByContact(500).catch(
         () => ({} as Record<string, { direction: string; date: string; body: string; status: string }>),
       ),
+      input?.blastId ? this.repo.listContactPhonesForBlast(org.id, input.blastId) : Promise.resolve([]),
+      input?.audienceId
+        ? this.repo.listContactPhonesForAudience(org.id, input.audienceId)
+        : Promise.resolve([]),
     ]);
 
     type ConversationRow = {
@@ -184,15 +192,45 @@ export class InboxService {
       }
     }
 
-    const sortedRows = Array.from(merged.values()).sort((a, b) => {
+    let sortedRows = Array.from(merged.values()).sort((a, b) => {
       const left = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
       const right = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
       return right - left;
     });
 
-    if (!query?.trim()) return sortedRows;
-    const q = query.trim().toLowerCase();
-    return sortedRows.filter((row) => row.contactPhone.toLowerCase().includes(q));
+    if (input?.blastId) {
+      const allowed = new Set(blastPhones.map((phone) => normalizePhoneE164(phone)));
+      sortedRows = sortedRows.filter((row) => allowed.has(row.contactPhone));
+    }
+    if (input?.audienceId) {
+      const allowed = new Set(audiencePhones.map((phone) => normalizePhoneE164(phone)));
+      sortedRows = sortedRows.filter((row) => allowed.has(row.contactPhone));
+    }
+
+    const contactNames = await this.repo.listContactNamesByPhones(
+      org.id,
+      sortedRows.map((row) => row.contactPhone),
+    );
+    const contactNameByPhone = new Map<string, string>();
+    for (const contact of contactNames) {
+      if (!contact.fullName) continue;
+      const phone = normalizePhoneE164(contact.phoneE164);
+      const fullName = contact.fullName.trim();
+      if (!fullName || contactNameByPhone.has(phone)) continue;
+      contactNameByPhone.set(phone, fullName);
+    }
+
+    const withNames = sortedRows.map((row) => ({
+      ...row,
+      contactName: contactNameByPhone.get(row.contactPhone) || null,
+    }));
+
+    if (!input?.query?.trim()) return withNames;
+    const q = input.query.trim().toLowerCase();
+    return withNames.filter((row) => {
+      if (row.contactPhone.toLowerCase().includes(q)) return true;
+      return (row.contactName || "").toLowerCase().includes(q);
+    });
   }
 
   async getThread(contactPhone: string) {
@@ -252,22 +290,55 @@ export class InboxService {
       deduped.push(message);
     }
 
-    const latestBlastId =
-      [...deduped].reverse().find((msg) => msg.blastId)?.blastId || null;
-    const blast = latestBlastId
-      ? await this.prisma.blast.findUnique({ where: { id: latestBlastId } })
-      : null;
+    const blastIds = Array.from(
+      new Set(
+        [...deduped]
+          .reverse()
+          .map((msg) => msg.blastId)
+          .filter((blastId): blastId is string => Boolean(blastId)),
+      ),
+    );
+    const [blasts, contactNames] = await Promise.all([
+      blastIds.length > 0
+        ? this.prisma.blast.findMany({
+            where: { id: { in: blastIds } },
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              audienceId: true,
+              completedAt: true,
+              startedAt: true,
+            },
+          })
+        : Promise.resolve([]),
+      this.repo.listContactNamesByPhones(org.id, [phone]),
+    ]);
+    const blastById = new Map(blasts.map((blast) => [blast.id, blast]));
+    const blastHistory = blastIds
+      .map((blastId) => {
+        const blast = blastById.get(blastId);
+        if (!blast) return null;
+        return {
+          blastId: blast.id,
+          title: blast.title,
+          status: blast.status,
+          audienceId: blast.audienceId,
+          sentAt: blast.completedAt || blast.startedAt,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row));
+    const blastContext = blastHistory[0] || null;
+    const contactName =
+      contactNames[0]?.fullName && contactNames[0].fullName.trim()
+        ? contactNames[0].fullName.trim()
+        : null;
 
     return {
       contactPhone: phone,
-      blastContext: blast
-        ? {
-            blastId: blast.id,
-            title: blast.title,
-            status: blast.status,
-            sentAt: blast.completedAt || blast.startedAt,
-          }
-        : null,
+      contactName,
+      blastContext,
+      blastHistory,
       messages: deduped,
     };
   }

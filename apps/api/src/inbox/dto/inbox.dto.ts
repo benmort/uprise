@@ -5,6 +5,14 @@ export class ListConversationsDto extends PaginationDto {
   @IsOptional()
   @IsString()
   query?: string;
+
+  @IsOptional()
+  @IsString()
+  blastId?: string;
+
+  @IsOptional()
+  @IsString()
+  audienceId?: string;
 }
 
 export class ReplyDto {

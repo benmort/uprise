@@ -124,6 +124,23 @@ export class AudiencesService {
     });
   }
 
+  async deleteAudience(id: string) {
+    const org = await this.ensureOrganization();
+    const audience = await this.prisma.audience.findFirst({
+      where: {
+        id,
+        organizationId: org.id,
+      },
+      select: { id: true },
+    });
+    if (!audience) throw new NotFoundException("Audience not found");
+
+    await this.prisma.audience.delete({
+      where: { id: audience.id },
+    });
+    return { ok: true };
+  }
+
   private parseCsvRows(csvRaw: string): CsvRow[] {
     return parse(csvRaw, {
       columns: true,

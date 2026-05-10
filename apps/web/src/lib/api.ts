@@ -109,6 +109,12 @@ export async function getAudience(audienceId: string) {
   return request<Record<string, unknown>>(`/audiences/${encodeURIComponent(audienceId)}`);
 }
 
+export async function deleteAudience(audienceId: string) {
+  return request<Record<string, unknown>>(`/audiences/${encodeURIComponent(audienceId)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function getAudienceContacts(
   audienceId: string,
   params?: { query?: string; limit?: number; offset?: number },
@@ -131,13 +137,56 @@ export async function createAudience(body: { name: string; source?: string }) {
   });
 }
 
-export async function importAudienceCsv(audienceId: string, file: File) {
+export async function importAudienceCsv(
+  audienceId: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+) {
   const credentials = getCredentials();
   if (!credentials) return { ok: false as const, error: "Not authenticated" };
   const form = new FormData();
   form.append("file", file);
+  const url = `${getApiUrl()}/audiences/${audienceId}/import-csv`;
+
+  if (onProgress && typeof window !== "undefined" && typeof XMLHttpRequest !== "undefined") {
+    return new Promise<
+      | { ok: true; data: Record<string, unknown> }
+      | { ok: false; error: string }
+    >((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.setRequestHeader("Authorization", getBasicAuthHeader(credentials));
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const percent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        onProgress(percent);
+      };
+      xhr.onerror = () => resolve({ ok: false, error: "Upload failed" });
+      xhr.onload = () => {
+        const raw = xhr.responseText || "";
+        let json: any = null;
+        if (raw) {
+          try {
+            json = JSON.parse(raw) as unknown;
+          } catch {
+            json = null;
+          }
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve({ ok: true, data: (json?.data ?? json) as Record<string, unknown> });
+          return;
+        }
+        resolve({
+          ok: false,
+          error: json?.error?.message || json?.message || `Upload failed (${xhr.status})`,
+        });
+      };
+      xhr.send(form);
+    });
+  }
+
   try {
-    const res = await fetch(`${getApiUrl()}/audiences/${audienceId}/import-csv`, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: getBasicAuthHeader(credentials),
@@ -203,13 +252,26 @@ export async function updateBlast(
   });
 }
 
-export async function proofBlast(blastId: string, sampleRecipients?: Array<Record<string, unknown>>) {
-  return request<{ previews: Array<{ recipient: Record<string, unknown>; rendered: string }> }>(
+export async function deleteBlast(blastId: string) {
+  return request<Record<string, unknown>>(`/blasts/${blastId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function proofBlast(
+  blastId: string,
+  sampleRecipients?: Array<Record<string, unknown>>,
+  proofNumber?: string,
+) {
+  return request<{
+    previews: Array<{ recipient: Record<string, unknown>; rendered: string }>;
+    proofDispatch?: { to: string; sid: string } | null;
+  }>(
     `/blasts/${blastId}/proof-preview`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sampleRecipients }),
+      body: JSON.stringify({ sampleRecipients, proofNumber }),
     },
   );
 }
@@ -257,9 +319,15 @@ export async function getBlastStatusDistribution(blastId: string) {
   return request<Array<Record<string, unknown>>>(`/analytics/blasts/${blastId}/status-distribution`);
 }
 
-export async function listConversations(query = "") {
+export async function listConversations(params?: {
+  query?: string;
+  blastId?: string;
+  audienceId?: string;
+}) {
   const q = new URLSearchParams();
-  if (query) q.set("query", query);
+  if (params?.query) q.set("query", params.query);
+  if (params?.blastId) q.set("blastId", params.blastId);
+  if (params?.audienceId) q.set("audienceId", params.audienceId);
   return request<Array<Record<string, unknown>>>(`/inbox/conversations?${q}`);
 }
 

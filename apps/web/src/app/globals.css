@@ -12,9 +12,9 @@
     --muted-foreground: 225 8% 30%;
     --border: 228 7% 49%;
     --input: 228 7% 49%;
-    --ring: 220 91% 36%;
+    --ring: 220 60% 50%;
 
-    --primary: 220 91% 36%;
+    --primary: 220 60% 50%;
     --on-primary: 0 0% 100%;
     --primary-container: 220 60% 50%;
     --on-primary-container: 227 100% 95%;
@@ -24,9 +24,9 @@
     --secondary-container: 210 14% 88%;
     --secondary-foreground: 210 8% 28%;
 
-    --tertiary: 50 100% 21%;
+    --tertiary: 0 60% 50%;
     --on-tertiary: 0 0% 100%;
-    --tertiary-container: 49 47% 52%;
+    --tertiary-container: 0 60% 50%;
 
     --error: 0 75% 42%;
     --on-error: 0 0% 100%;

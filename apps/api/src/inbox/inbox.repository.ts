@@ -71,4 +71,65 @@ export class InboxRepository {
       lastMessageAt,
     }));
   }
+
+  async listContactPhonesForBlast(organizationId: string, blastId: string) {
+    const [inbound, outbound] = await Promise.all([
+      this.prisma.inboundMessage.findMany({
+        where: { organizationId, blastId },
+        select: { fromPhone: true },
+        distinct: ["fromPhone"],
+      }),
+      this.prisma.outboundMessage.findMany({
+        where: { organizationId, blastId },
+        select: { toPhone: true },
+        distinct: ["toPhone"],
+      }),
+    ]);
+    return [
+      ...inbound.map((row) => row.fromPhone),
+      ...outbound.map((row) => row.toPhone),
+    ];
+  }
+
+  async listContactPhonesForAudience(organizationId: string, audienceId: string) {
+    const blasts = await this.prisma.blast.findMany({
+      where: { organizationId, audienceId },
+      select: { id: true },
+    });
+    const blastIds = blasts.map((blast) => blast.id);
+    if (blastIds.length === 0) return [];
+    const [inbound, outbound] = await Promise.all([
+      this.prisma.inboundMessage.findMany({
+        where: { organizationId, blastId: { in: blastIds } },
+        select: { fromPhone: true },
+        distinct: ["fromPhone"],
+      }),
+      this.prisma.outboundMessage.findMany({
+        where: { organizationId, blastId: { in: blastIds } },
+        select: { toPhone: true },
+        distinct: ["toPhone"],
+      }),
+    ]);
+    return [
+      ...inbound.map((row) => row.fromPhone),
+      ...outbound.map((row) => row.toPhone),
+    ];
+  }
+
+  listContactNamesByPhones(organizationId: string, phones: string[]) {
+    if (phones.length === 0) return Promise.resolve([]);
+    return this.prisma.audienceContact.findMany({
+      where: {
+        organizationId,
+        phoneE164: { in: phones },
+        NOT: [{ fullName: null }, { fullName: "" }],
+      },
+      select: {
+        phoneE164: true,
+        fullName: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+  }
 }
