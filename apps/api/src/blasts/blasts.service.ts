@@ -22,6 +22,15 @@ type RecipientSeed = {
   metadata: Record<string, unknown>;
 };
 
+const SENT_RECIPIENT_STATUSES: BlastRecipientStatus[] = [
+  BlastRecipientStatus.SENT,
+  BlastRecipientStatus.DELIVERED,
+  BlastRecipientStatus.RESPONDED,
+];
+
+const SKIPPED_DUPLICATE_ERROR =
+  "Skipped duplicate recipient: message already sent for this blast.";
+
 @Injectable()
 export class BlastsService {
   private readonly logger = new Logger(BlastsService.name);
@@ -211,25 +220,42 @@ export class BlastsService {
     if (existingCount > 0) return existingCount;
 
     const recipients = await this.getBlastRecipients(blast);
+    let skippedDuplicates = 0;
     for (const recipient of recipients) {
       const context = recipient.metadata;
+      const normalizedPhone = normalizePhoneE164(recipient.phoneE164);
       const renderedBody = this.renderer.render(blast.bodyTemplate, context);
       const compliance = this.compliance.validateMessageForSend(renderedBody);
-      await this.prisma.blastRecipient.create({
-        data: {
-          blastId: blast.id,
-          contactId: recipient.contactId,
-          phoneE164: normalizePhoneE164(recipient.phoneE164),
-          renderedBody,
-          status: BlastRecipientStatus.PENDING,
-          metadata: {
-            complianceWarnings: compliance.warnings,
-            context,
-          } as Prisma.InputJsonValue,
-        },
-      });
+      try {
+        await this.prisma.blastRecipient.create({
+          data: {
+            blastId: blast.id,
+            contactId: recipient.contactId,
+            phoneE164: normalizedPhone,
+            renderedBody,
+            status: BlastRecipientStatus.PENDING,
+            metadata: {
+              complianceWarnings: compliance.warnings,
+              context,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      } catch (error) {
+        if (!this.isBlastRecipientUniqueConflict(error)) throw error;
+        skippedDuplicates += 1;
+        this.logger.warn(
+          `Skipping duplicate recipient record during blast seed (blastId=${blast.id}, phoneE164=${normalizedPhone}, contactId=${recipient.contactId ?? "n/a"})`,
+        );
+      }
     }
-    return recipients.length;
+    if (skippedDuplicates > 0) {
+      this.logger.warn(
+        `Skipped duplicate recipient records during blast seed (blastId=${blast.id}, skipped=${skippedDuplicates})`,
+      );
+    }
+    return this.prisma.blastRecipient.count({
+      where: { blastId: blast.id },
+    });
   }
 
   private classifyFailure(error: unknown): string {
@@ -238,6 +264,17 @@ export class BlastsService {
     if (/auth|401|403/i.test(text)) return "AUTH";
     if (/timeout|network|fetch/i.test(text)) return "NETWORK";
     return "UNKNOWN";
+  }
+
+  private isBlastRecipientUniqueConflict(error: unknown): boolean {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
+    if (error.code !== "P2002") return false;
+    const rawTarget = error.meta?.target;
+    const target = Array.isArray(rawTarget) ? rawTarget.join(",") : String(rawTarget ?? "");
+    return (
+      (target.includes("blastId") && target.includes("phoneE164")) ||
+      target.includes("BlastRecipient_blastId_phoneE164_key")
+    );
   }
 
   private async writeSnapshot(orgId: string, blastId: string, metricName: string, value: number) {
@@ -286,8 +323,19 @@ export class BlastsService {
 
     let sent = 0;
     let failed = 0;
+    let skippedDuplicates = 0;
     const startedAtMs = Date.now();
     const runBudgetMs = this.getSendTimeBudgetMs();
+    const sentRecipients = await this.prisma.blastRecipient.findMany({
+      where: {
+        blastId: blast.id,
+        status: { in: SENT_RECIPIENT_STATUSES },
+      },
+      select: { phoneE164: true },
+      distinct: ["phoneE164"],
+    });
+    const sentPhones = new Set(sentRecipients.map((recipient) => recipient.phoneE164));
+
     for (const recipient of pendingRecipients) {
       const elapsedMs = Date.now() - startedAtMs;
       if (elapsedMs >= runBudgetMs) {
@@ -296,6 +344,20 @@ export class BlastsService {
         );
         break;
       }
+      if (sentPhones.has(recipient.phoneE164)) {
+        skippedDuplicates += 1;
+        await this.prisma.blastRecipient.update({
+          where: { id: recipient.id },
+          data: {
+            status: BlastRecipientStatus.SKIPPED,
+            errorMessage: SKIPPED_DUPLICATE_ERROR,
+          },
+        });
+        this.logger.warn(
+          `Skipping duplicate recipient send (blastId=${blast.id}, recipientId=${recipient.id}, phoneE164=${recipient.phoneE164})`,
+        );
+        continue;
+      }
       await this.prisma.blastRecipient.update({
         where: { id: recipient.id },
         data: { status: BlastRecipientStatus.QUEUED },
@@ -303,6 +365,7 @@ export class BlastsService {
       try {
         const message = await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
         sent += 1;
+        sentPhones.add(recipient.phoneE164);
         await this.prisma.blastRecipient.update({
           where: { id: recipient.id },
           data: {
@@ -335,6 +398,11 @@ export class BlastsService {
           },
         });
       }
+    }
+    if (skippedDuplicates > 0) {
+      this.logger.warn(
+        `Skipped duplicate recipient sends (blastId=${blast.id}, skipped=${skippedDuplicates})`,
+      );
     }
 
     const [remaining, totalFailed] = await Promise.all([
@@ -371,6 +439,7 @@ export class BlastsService {
       status: finalStatus,
       sent,
       failed,
+      skipped: skippedDuplicates,
       remaining,
     });
 
@@ -378,6 +447,7 @@ export class BlastsService {
       blast: updated,
       sent,
       failed,
+      skipped: skippedDuplicates,
       remaining,
       batchSize,
     };
@@ -412,6 +482,7 @@ export class BlastsService {
           status: outcome.blast.status,
           sent: outcome.sent,
           failed: outcome.failed,
+          skipped: outcome.skipped,
           remaining: outcome.remaining,
           batchSize: outcome.batchSize,
         });

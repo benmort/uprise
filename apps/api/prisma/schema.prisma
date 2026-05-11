@@ -204,6 +204,7 @@ model BlastRecipient {
   updatedAt       DateTime             @updatedAt
   blast           Blast                @relation(fields: [blastId], references: [id], onDelete: Cascade)
 
+  @@unique([blastId, phoneE164])
   @@index([blastId, status])
   @@index([phoneE164])
 }

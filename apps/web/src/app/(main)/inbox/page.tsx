@@ -64,6 +64,27 @@ function parseFilter(value: string | null): InboxFilter {
   return "all";
 }
 
+function matchesConversationFilter(row: ConversationRow, filter: InboxFilter) {
+  if (filter === "all") return true;
+  if (filter === "unresolved") return !row.resolved;
+  if (filter === "responded") return row.unreadCount === 0 && !row.resolved;
+  if (filter === "priority") return row.unreadCount >= 3 && !row.resolved;
+  return true;
+}
+
+function matchesConversationSearch(row: ConversationRow, query: string) {
+  if (!query) return true;
+  return fuzzyIncludes(`${row.contactName || ""} ${row.contactPhone}`, query);
+}
+
+function sortConversations(rows: ConversationRow[]) {
+  return [...rows].sort((a, b) => {
+    const left = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+    const right = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    return right - left;
+  });
+}
+
 export default function InboxPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -168,17 +189,9 @@ export default function InboxPage() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const navigable = conversations.filter((row) => {
-        const queryMatch = routeQuery
-          ? fuzzyIncludes(`${row.contactName || ""} ${row.contactPhone}`, routeQuery)
-          : true;
-        if (!queryMatch) return false;
-        if (routeFilter === "all") return true;
-        if (routeFilter === "unresolved") return !row.resolved;
-        if (routeFilter === "responded") return row.unreadCount === 0 && !row.resolved;
-        if (routeFilter === "priority") return row.unreadCount >= 3 && !row.resolved;
-        return true;
-      });
+      const navigable = conversations.filter(
+        (row) => matchesConversationSearch(row, routeQuery) && matchesConversationFilter(row, routeFilter),
+      );
       if (event.key === "/") {
         const target = event.target as HTMLElement | null;
         const tag = target?.tagName.toLowerCase();
@@ -218,19 +231,10 @@ export default function InboxPage() {
     }
     setError("");
     const rows = res.data as ConversationRow[];
-    setConversations(rows);
+    setConversations(sortConversations(rows));
     setLastUpdatedAt(new Date());
-    if (rows.length === 0) {
-      if (routeContact) setInboxRoute({ contact: null, filter: routeFilter }, true);
-      if (withLoadingState) setLoadingConversations(false);
-      return;
-    }
-    const hasSelected = routeContact && rows.some((row) => row.contactPhone === routeContact);
-    if (!routeContact && !hasSelected) {
-      setInboxRoute({ contact: rows[0].contactPhone, filter: routeFilter }, true);
-    }
     if (withLoadingState) setLoadingConversations(false);
-  }, [routeQuery, routeBlastId, routeAudienceId, routeContact, setInboxRoute]);
+  }, [routeQuery, routeBlastId, routeAudienceId]);
 
   const loadThread = useCallback(async (contactPhone: string, withLoadingState = true) => {
     if (withLoadingState) setLoadingThread(true);
@@ -293,18 +297,19 @@ export default function InboxPage() {
   }, [draftReply]);
 
   const filtered = useMemo(() => {
-    return conversations.filter((row) => {
-      const queryMatch = routeQuery
-        ? fuzzyIncludes(`${row.contactName || ""} ${row.contactPhone}`, routeQuery)
-        : true;
-      if (!queryMatch) return false;
-      if (routeFilter === "all") return true;
-      if (routeFilter === "unresolved") return !row.resolved;
-      if (routeFilter === "responded") return row.unreadCount === 0 && !row.resolved;
-      if (routeFilter === "priority") return row.unreadCount >= 3 && !row.resolved;
-      return true;
-    });
+    return conversations.filter(
+      (row) => matchesConversationSearch(row, routeQuery) && matchesConversationFilter(row, routeFilter),
+    );
   }, [conversations, routeFilter, routeQuery]);
+
+  useEffect(() => {
+    if (loadingConversations) return;
+    const currentContact = routeContact || null;
+    const nextContact = filtered[0]?.contactPhone || null;
+    if (currentContact === nextContact) return;
+    if (currentContact && filtered.some((row) => row.contactPhone === currentContact)) return;
+    setInboxRoute({ contact: nextContact, filter: routeFilter }, true);
+  }, [filtered, loadingConversations, routeContact, routeFilter, setInboxRoute]);
 
   const conversationPageSize = 12;
   const pagedConversations = useMemo(
@@ -327,17 +332,48 @@ export default function InboxPage() {
     [conversations, routeContact],
   );
 
+  const patchConversationRow = useCallback(
+    (contactPhone: string, patch: Partial<ConversationRow>) => {
+      setConversations((prev) => {
+        const next = [...prev];
+        const idx = next.findIndex((row) => row.contactPhone === contactPhone);
+        if (idx === -1) {
+          next.push({
+            contactPhone,
+            contactName:
+              selectedConversation?.contactPhone === contactPhone
+                ? selectedConversation.contactName || null
+                : null,
+            unreadCount: patch.unreadCount ?? 0,
+            resolved: patch.resolved ?? false,
+            lastMessageAt: patch.lastMessageAt,
+          });
+        } else {
+          next[idx] = {
+            ...next[idx],
+            ...patch,
+            contactPhone: next[idx].contactPhone,
+          };
+        }
+        return sortConversations(next);
+      });
+      setLastUpdatedAt(new Date());
+    },
+    [selectedConversation],
+  );
+
   const handleSendReply = async () => {
     if (!routeContact || !draftReply.trim() || sending) return;
     setSending(true);
     const body = draftReply;
+    const replyAt = new Date().toISOString();
     setDraftReply("");
     setThread((prev) => [
       ...prev,
       {
         id: `optimistic-${Date.now()}`,
         type: "outbound",
-        at: new Date().toISOString(),
+        at: replyAt,
         body,
         from: "You",
         to: routeContact,
@@ -357,9 +393,10 @@ export default function InboxPage() {
         tone: "success",
         title: "Reply sent",
       });
+      patchConversationRow(routeContact, { lastMessageAt: replyAt });
+      void loadConversations(false);
     }
-    await loadThread(routeContact);
-    await loadConversations();
+    await loadThread(routeContact, false);
   };
 
   return (
@@ -473,19 +510,45 @@ export default function InboxPage() {
                             className="opacity-0 transition group-hover:opacity-100"
                             onClick={async (event) => {
                               event.stopPropagation();
-                              await markConversation(row.contactPhone, true);
+                              const marked = await markConversation(row.contactPhone, true);
+                              if (!marked.ok) {
+                                showToast({
+                                  tone: "error",
+                                  title: "Unable to resolve conversation",
+                                  description: marked.error,
+                                });
+                                return;
+                              }
+                              patchConversationRow(row.contactPhone, {
+                                resolved: true,
+                                unreadCount: 0,
+                              });
                               showToast({
                                 tone: "success",
                                 title: "Conversation resolved",
                                 action: {
                                   label: "Undo",
                                   onClick: () => {
-                                    void markConversation(row.contactPhone, false);
-                                    void loadConversations();
+                                    void (async () => {
+                                      const unmarked = await markConversation(row.contactPhone, false);
+                                      if (!unmarked.ok) {
+                                        showToast({
+                                          tone: "error",
+                                          title: "Undo failed",
+                                          description: unmarked.error,
+                                        });
+                                        return;
+                                      }
+                                      patchConversationRow(row.contactPhone, {
+                                        resolved: false,
+                                        unreadCount: 0,
+                                      });
+                                      void loadConversations(false);
+                                    })();
                                   },
                                 },
                               });
-                              await loadConversations();
+                              void loadConversations(false);
                             }}
                           >
                             Resolve
@@ -742,19 +805,45 @@ export default function InboxPage() {
                     disabled={!routeContact}
                     onClick={async () => {
                       if (!routeContact) return;
-                      await markConversation(routeContact, true);
+                      const marked = await markConversation(routeContact, true);
+                      if (!marked.ok) {
+                        showToast({
+                          tone: "error",
+                          title: "Unable to resolve conversation",
+                          description: marked.error,
+                        });
+                        return;
+                      }
+                      patchConversationRow(routeContact, {
+                        resolved: true,
+                        unreadCount: 0,
+                      });
                       showToast({
                         tone: "success",
                         title: "Conversation resolved",
                         action: {
                           label: "Undo",
                           onClick: () => {
-                            void markConversation(routeContact, false);
-                            void loadConversations();
+                            void (async () => {
+                              const unmarked = await markConversation(routeContact, false);
+                              if (!unmarked.ok) {
+                                showToast({
+                                  tone: "error",
+                                  title: "Undo failed",
+                                  description: unmarked.error,
+                                });
+                                return;
+                              }
+                              patchConversationRow(routeContact, {
+                                resolved: false,
+                                unreadCount: 0,
+                              });
+                              void loadConversations(false);
+                            })();
                           },
                         },
                       });
-                      await loadConversations();
+                      void loadConversations(false);
                     }}
                   >
                     Mark Resolved

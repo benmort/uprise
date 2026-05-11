@@ -143,11 +143,12 @@ export async function importAudienceCsv(
   file: File,
   onProgress?: (percent: number) => void,
 ) {
+  const apiUrl = getApiUrl();
   const credentials = getCredentials();
   if (!credentials) return { ok: false as const, error: "Not authenticated" };
   const form = new FormData();
   form.append("file", file);
-  const url = `${getApiUrl()}/audiences/${audienceId}/import-csv`;
+  const url = `${apiUrl}/audiences/${audienceId}/import-csv`;
 
   if (onProgress && typeof window !== "undefined" && typeof XMLHttpRequest !== "undefined") {
     return new Promise<

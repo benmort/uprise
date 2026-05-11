@@ -1,11 +1,11 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Header,
   Param,
-  ParseFilePipeBuilder,
   Patch,
   Post,
   Query,
@@ -19,6 +19,22 @@ import { AudienceContactsDto, CreateAudienceDto, ListAudiencesDto } from "./dto/
 @Controller("audiences")
 export class AudiencesController {
   constructor(private readonly audiences: AudiencesService) {}
+
+  private validateCsvUpload(file: { mimetype?: string; originalname?: string } | undefined) {
+    if (!file) {
+      throw new BadRequestException("CSV file is required");
+    }
+    const mimetype = String(file.mimetype || "").toLowerCase();
+    const originalname = String(file.originalname || "");
+    const acceptedMimeTypes = new Set(["text/csv", "text/plain", "application/csv", "application/vnd.ms-excel"]);
+    const hasAcceptedMime = acceptedMimeTypes.has(mimetype) || mimetype.includes("csv");
+    const hasCsvExtension = /\.csv$/i.test(originalname);
+    if (!hasAcceptedMime && !hasCsvExtension) {
+      throw new BadRequestException(
+        `Validation failed (current file type is ${mimetype || "unknown"}, expected type is text/csv or text/plain)`,
+      );
+    }
+  }
 
   @Post()
   create(@Body() dto: CreateAudienceDto) {
@@ -54,13 +70,9 @@ export class AudiencesController {
   @UseInterceptors(FileInterceptor("file"))
   importCsv(
     @Param("id") id: string,
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({ fileType: /(csv|plain)/ })
-        .build({ fileIsRequired: true }),
-    )
-    file: any,
+    @UploadedFile() file: any,
   ) {
+    this.validateCsvUpload(file);
     return this.audiences.importCsv(id, file.originalname || "contacts.csv", file.buffer.toString("utf8"));
   }
 
