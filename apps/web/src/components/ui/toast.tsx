@@ -29,10 +29,10 @@ type ToastContextValue = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const TOAST_STYLE: Record<ToastTone, string> = {
-  success: "border-success/50 bg-success-container text-success",
-  error: "border-error/50 bg-error-container text-error",
-  warning: "border-warning/50 bg-warning-container text-warning-foreground",
-  info: "border-primary/40 bg-primary-container/40 text-foreground",
+  success: "border-border bg-background text-foreground",
+  error: "border-error/35 bg-background text-foreground",
+  warning: "border-border bg-background text-foreground",
+  info: "border-border bg-background text-foreground",
 };
 
 const TOAST_ICON: Record<ToastTone, typeof CheckCircle2> = {
@@ -40,6 +40,13 @@ const TOAST_ICON: Record<ToastTone, typeof CheckCircle2> = {
   error: AlertCircle,
   warning: AlertTriangle,
   info: Info,
+};
+
+const TOAST_ICON_STYLE: Record<ToastTone, string> = {
+  success: "text-success",
+  error: "text-error",
+  warning: "text-warning-foreground",
+  info: "text-primary",
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -79,11 +86,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               aria-live="polite"
             >
               <div className="flex items-start gap-2">
-                <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", TOAST_ICON_STYLE[toast.tone])} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{toast.title}</p>
+                  <p className="text-sm font-medium">{toast.title}</p>
                   {toast.description ? (
-                    <p className="mt-1 text-xs opacity-90">{toast.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{toast.description}</p>
                   ) : null}
                   {toast.action ? (
                     <Button
