@@ -7,13 +7,13 @@
   "theme_color": "#3366CC",
   "icons": [
     {
-      "src": "/images/yarns-logo-192.png",
-      "sizes": "192x192",
+      "src": "/images/yarns-logo.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/images/yarns-logo-512.png",
+      "src": "/images/yarns-logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

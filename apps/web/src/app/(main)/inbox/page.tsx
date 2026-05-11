@@ -109,8 +109,9 @@ export default function InboxPage() {
         }
         next.delete(key);
       };
+      const nextFilter = updates.filter === undefined ? routeFilter : updates.filter;
       write("contact", updates.contact);
-      write("filter", updates.filter === "all" ? null : updates.filter);
+      write("filter", nextFilter);
       write("q", updates.q);
       write("blastId", updates.blastId);
       write("audienceId", updates.audienceId);
@@ -122,7 +123,7 @@ export default function InboxPage() {
       }
       router.push(href);
     },
-    [params, pathname, router],
+    [params, pathname, routeFilter, router],
   );
 
   useEffect(() => {
@@ -189,13 +190,13 @@ export default function InboxPage() {
       if (event.key.toLowerCase() === "j") {
         const idx = navigable.findIndex((row) => row.contactPhone === routeContact);
         if (idx >= 0 && idx + 1 < navigable.length) {
-          setInboxRoute({ contact: navigable[idx + 1].contactPhone }, false);
+          setInboxRoute({ contact: navigable[idx + 1].contactPhone, filter: routeFilter }, false);
         }
       }
       if (event.key.toLowerCase() === "k") {
         const idx = navigable.findIndex((row) => row.contactPhone === routeContact);
         if (idx > 0) {
-          setInboxRoute({ contact: navigable[idx - 1].contactPhone }, false);
+          setInboxRoute({ contact: navigable[idx - 1].contactPhone, filter: routeFilter }, false);
         }
       }
     };
@@ -220,13 +221,13 @@ export default function InboxPage() {
     setConversations(rows);
     setLastUpdatedAt(new Date());
     if (rows.length === 0) {
-      if (routeContact) setInboxRoute({ contact: null }, true);
+      if (routeContact) setInboxRoute({ contact: null, filter: routeFilter }, true);
       if (withLoadingState) setLoadingConversations(false);
       return;
     }
     const hasSelected = routeContact && rows.some((row) => row.contactPhone === routeContact);
     if (!routeContact && !hasSelected) {
-      setInboxRoute({ contact: rows[0].contactPhone }, true);
+      setInboxRoute({ contact: rows[0].contactPhone, filter: routeFilter }, true);
     }
     if (withLoadingState) setLoadingConversations(false);
   }, [routeQuery, routeBlastId, routeAudienceId, routeContact, setInboxRoute]);
@@ -401,6 +402,7 @@ export default function InboxPage() {
                     setInboxRoute(
                       {
                         filter: key,
+                        contact: routeContact || null,
                       },
                       true,
                     )
@@ -448,7 +450,9 @@ export default function InboxPage() {
                       className={`group w-full border-b border-border px-3 py-3 text-left last:border-0 ${
                         row.contactPhone === routeContact ? "bg-primary-container/20" : ""
                       }`}
-                      onClick={() => setInboxRoute({ contact: row.contactPhone }, false)}
+                      onClick={() =>
+                        setInboxRoute({ contact: row.contactPhone, filter: routeFilter }, false)
+                      }
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -502,7 +506,9 @@ export default function InboxPage() {
                         title="No matching conversations"
                         description="Try clearing filters or search to widen the queue."
                         ctaLabel="Clear Filters"
-                        onCta={() => setInboxRoute({ filter: "all", q: null }, true)}
+                        onCta={() =>
+                          setInboxRoute({ filter: "all", contact: routeContact || null, q: null }, true)
+                        }
                       />
                     </div>
                   ) : null}
