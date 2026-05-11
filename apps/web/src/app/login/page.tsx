@@ -17,6 +17,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [touched, setTouched] = useState({ username: false, password: false });
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
 
@@ -38,6 +39,11 @@ function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ username: true, password: true });
+    if (!username.trim() || !password.trim()) {
+      setError("Enter both username and password.");
+      return;
+    }
     setError("");
     setLoading(true);
     const result = await login(username, password);
@@ -79,12 +85,16 @@ function LoginForm() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              onBlur={() => setTouched((prev) => ({ ...prev, username: true }))}
               placeholder="Username"
               autoComplete="username"
               required
               autoFocus
               className="w-full"
             />
+            {touched.username && !username.trim() ? (
+              <p className="mt-1 text-xs text-error">Username is required.</p>
+            ) : null}
           </div>
           <div>
             <label
@@ -99,6 +109,7 @@ function LoginForm() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onBlur={() => setTouched((prev) => ({ ...prev, password: true }))}
                 placeholder="Password"
                 autoComplete="current-password"
                 required
@@ -107,7 +118,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                className="absolute inset-y-0 right-0 inline-flex min-w-11 items-center justify-center text-muted-foreground hover:text-foreground"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -117,6 +128,9 @@ function LoginForm() {
                 )}
               </button>
             </div>
+            {touched.password && !password.trim() ? (
+              <p className="mt-1 text-xs text-error">Password is required.</p>
+            ) : null}
           </div>
           {error && (
             <p className="text-sm text-red-600" role="alert">

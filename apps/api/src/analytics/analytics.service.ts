@@ -21,7 +21,20 @@ export class AnalyticsService {
   }
 
   async kpiSummary(blastId: string) {
-    const [sent, delivered, responded, failed] = await Promise.all([
+    const [totalContacted, sent, delivered, responded, failed] = await Promise.all([
+      this.prisma.blastRecipient.count({
+        where: {
+          blastId,
+          status: {
+            in: [
+              BlastRecipientStatus.SENT,
+              BlastRecipientStatus.DELIVERED,
+              BlastRecipientStatus.RESPONDED,
+              BlastRecipientStatus.FAILED,
+            ],
+          },
+        },
+      }),
       this.prisma.blastRecipient.count({ where: { blastId, status: BlastRecipientStatus.SENT } }),
       this.prisma.blastRecipient.count({
         where: { blastId, status: BlastRecipientStatus.DELIVERED },
@@ -31,15 +44,16 @@ export class AnalyticsService {
       }),
       this.prisma.blastRecipient.count({ where: { blastId, status: BlastRecipientStatus.FAILED } }),
     ]);
-    return { sent, delivered, responded, failed };
+    return { totalContacted, sent, delivered, responded, failed };
   }
 
-  async engagementTrend(blastId: string, minutes = 60) {
-    const since = new Date(Date.now() - minutes * 60 * 1000);
+  async engagementTrend(blastId: string, minutes?: number | null) {
+    const useTimeWindow = typeof minutes === "number" && Number.isFinite(minutes) && minutes > 0;
+    const since = useTimeWindow ? new Date(Date.now() - minutes * 60 * 1000) : null;
     const snapshots = await this.prisma.analyticsSnapshot.findMany({
       where: {
         blastId,
-        bucketAt: { gte: since },
+        ...(since ? { bucketAt: { gte: since } } : {}),
       },
       orderBy: { bucketAt: "asc" },
     });
@@ -80,7 +94,20 @@ export class AnalyticsService {
 
   async dashboardPerformance() {
     const org = await this.ensureOrganization();
-    const [totalSent, totalResponded, activeDrafts] = await Promise.all([
+    const [totalContacted, totalSent, totalResponded, activeDrafts] = await Promise.all([
+      this.prisma.blastRecipient.count({
+        where: {
+          blast: { organizationId: org.id },
+          status: {
+            in: [
+              BlastRecipientStatus.SENT,
+              BlastRecipientStatus.DELIVERED,
+              BlastRecipientStatus.RESPONDED,
+              BlastRecipientStatus.FAILED,
+            ],
+          },
+        },
+      }),
       this.prisma.blastRecipient.count({
         where: { blast: { organizationId: org.id }, status: BlastRecipientStatus.SENT },
       }),
@@ -94,8 +121,10 @@ export class AnalyticsService {
         },
       }),
     ]);
-    const responseRate = totalSent > 0 ? Number(((totalResponded / totalSent) * 100).toFixed(1)) : 0;
+    const responseRate =
+      totalContacted > 0 ? Number(((totalResponded / totalContacted) * 100).toFixed(1)) : 0;
     return {
+      totalContacted,
       totalSent,
       totalResponded,
       responseRate,

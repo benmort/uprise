@@ -86,6 +86,7 @@ export async function getRealtimeStreamToken() {
 export async function getDashboardPerformance() {
   return request<{
     totalSent: number;
+    totalContacted?: number;
     totalResponded: number;
     responseRate: number;
     activeDrafts: number;
@@ -304,8 +305,14 @@ export async function getBlastKpis(blastId: string) {
   return request<Record<string, unknown>>(`/analytics/blasts/${blastId}/kpi`);
 }
 
-export async function getBlastTrend(blastId: string) {
-  return request<Array<Record<string, unknown>>>(`/analytics/blasts/${blastId}/trend`);
+export async function getBlastTrend(blastId: string, minutes: number | "all" = 60) {
+  const q = new URLSearchParams();
+  if (minutes === "all") {
+    q.set("range", "all");
+  } else {
+    q.set("minutes", String(minutes));
+  }
+  return request<Array<Record<string, unknown>>>(`/analytics/blasts/${blastId}/trend?${q}`);
 }
 
 export async function getBlastActivity(blastId: string, limit = 25, offset = 0) {

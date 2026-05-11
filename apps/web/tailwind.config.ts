@@ -55,9 +55,15 @@ const config: Config = {
         xl: "var(--radius-xl)",
       },
       fontFamily: {
-        headline: ["var(--font-noto-serif)", "serif"],
-        body: ["var(--font-inter)", "sans-serif"],
-        label: ["var(--font-public-sans)", "sans-serif"],
+        headline: ["var(--font-roboto)", "sans-serif"],
+        body: ["var(--font-roboto)", "sans-serif"],
+        label: ["var(--font-roboto)", "sans-serif"],
+      },
+      spacing: {
+        18: "4.5rem",
+      },
+      maxWidth: {
+        page: "80rem",
       },
     },
   },

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   BlastRecipientStatus,
   BlastStatus,
@@ -24,6 +24,8 @@ type RecipientSeed = {
 
 @Injectable()
 export class BlastsService {
+  private readonly logger = new Logger(BlastsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -186,6 +188,18 @@ export class BlastsService {
     return Math.min(Math.max(1, Math.trunc(effective)), 500);
   }
 
+  private getDispatchBatchSize(): number {
+    const envBatchSize = Number(this.config.get<string>("BLAST_DISPATCH_BATCH_SIZE", "5"));
+    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 5;
+    return Math.min(Math.max(1, Math.trunc(fallback)), 25);
+  }
+
+  private getSendTimeBudgetMs(): number {
+    const envBudgetMs = Number(this.config.get<string>("BLAST_SEND_MAX_RUN_MS", "22000"));
+    const fallback = Number.isFinite(envBudgetMs) ? envBudgetMs : 22000;
+    return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
+  }
+
   private async ensureBlastRecipientRecords(blast: {
     id: string;
     audienceId: string | null;
@@ -272,7 +286,16 @@ export class BlastsService {
 
     let sent = 0;
     let failed = 0;
+    const startedAtMs = Date.now();
+    const runBudgetMs = this.getSendTimeBudgetMs();
     for (const recipient of pendingRecipients) {
+      const elapsedMs = Date.now() - startedAtMs;
+      if (elapsedMs >= runBudgetMs) {
+        this.logger.warn(
+          `Stopping blast send batch early due to runtime budget (blastId=${blast.id}, elapsedMs=${elapsedMs}, budgetMs=${runBudgetMs})`,
+        );
+        break;
+      }
       await this.prisma.blastRecipient.update({
         where: { id: recipient.id },
         data: { status: BlastRecipientStatus.QUEUED },
@@ -360,8 +383,9 @@ export class BlastsService {
     };
   }
 
-  async dispatchDueScheduled(limit = 10) {
-    const boundedLimit = Math.min(Math.max(1, Math.trunc(limit || 10)), 100);
+  async dispatchDueScheduled(limit = 1) {
+    const boundedLimit = Math.min(Math.max(1, Math.trunc(limit || 1)), 25);
+    const dispatchBatchSize = this.getDispatchBatchSize();
     const due = await this.prisma.blast.findMany({
       where: {
         OR: [
@@ -381,7 +405,7 @@ export class BlastsService {
     const results: Array<Record<string, unknown>> = [];
     for (const blast of due) {
       try {
-        const outcome = await this.sendNow(blast.id);
+        const outcome = await this.sendNow(blast.id, dispatchBatchSize);
         results.push({
           blastId: blast.id,
           ok: true,
@@ -389,6 +413,7 @@ export class BlastsService {
           sent: outcome.sent,
           failed: outcome.failed,
           remaining: outcome.remaining,
+          batchSize: outcome.batchSize,
         });
       } catch (error) {
         results.push({

@@ -2,14 +2,20 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
-import { verifyStreamToken } from "./stream-token";
+import { resolveStreamTokenSecret } from "./stream-token-secret";
+import { verifyStreamTokenDetailed } from "./stream-token";
 
 @Injectable()
 export class BasicAuthGuard implements CanActivate {
+  private readonly logger = new Logger(BasicAuthGuard.name);
+  private readonly loggedStreamFailures = new Set<string>();
+  private warnedFallbackSecret = false;
+
   constructor(private readonly config: ConfigService) {}
 
   private isAnalyticsStreamPath(request: Request): boolean {
@@ -23,17 +29,37 @@ export class BasicAuthGuard implements CanActivate {
     return candidates.some((candidate) => allowedPaths.has(candidate));
   }
 
-  private hasValidStreamToken(request: Request): boolean {
-    const fallbackSecret = this.config.get<string>("INTEGRATION_CREDENTIAL_SECRET", "");
-    const secret = this.config.get<string>("STREAM_TOKEN_SECRET", fallbackSecret);
+  private getStreamTokenFromQuery(request: Request): string {
     const rawToken = request.query?.token;
-    const queryToken =
-      typeof rawToken === "string"
-        ? rawToken
-        : Array.isArray(rawToken) && typeof rawToken[0] === "string"
-          ? rawToken[0]
-          : "";
-    return verifyStreamToken(queryToken, secret);
+    return typeof rawToken === "string"
+      ? rawToken
+      : Array.isArray(rawToken) && typeof rawToken[0] === "string"
+        ? rawToken[0]
+        : "";
+  }
+
+  private hasValidStreamToken(request: Request): boolean {
+    const { secret, source } = resolveStreamTokenSecret(this.config);
+    const queryToken = this.getStreamTokenFromQuery(request);
+    const result = verifyStreamTokenDetailed(queryToken, secret);
+    if (!result.ok) {
+      const reason =
+        result.reason === "missing_secret"
+          ? `missing_secret(source=${source || "none"})`
+          : result.reason;
+      if (!this.loggedStreamFailures.has(reason)) {
+        this.logger.warn(`Denied analytics stream token: ${reason}`);
+        this.loggedStreamFailures.add(reason);
+      }
+      return false;
+    }
+    if (source !== "STREAM_TOKEN_SECRET" && !this.warnedFallbackSecret) {
+      this.logger.warn(
+        "Analytics stream token accepted with fallback secret source INTEGRATION_CREDENTIAL_SECRET",
+      );
+      this.warnedFallbackSecret = true;
+    }
+    return true;
   }
 
   private isCronDispatchPath(request: Request): boolean {

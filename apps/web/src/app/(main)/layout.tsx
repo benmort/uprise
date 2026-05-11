@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   LayoutDashboard,
@@ -16,12 +16,13 @@ import { createBlast } from "@/lib/api";
 import { clearCredentials, getCredentials } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 
 const DEFAULT_BLAST_TEMPLATE =
   "Hi {{first_name}}! It's been a while since we saw you in {{city}}. Your membership is expiring soon. Renew today with code {{discount_code}}. Reply STOP to opt out.";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/audience", label: "Audience", icon: Users },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/inbox", label: "Inbox", icon: Mail },
@@ -36,6 +37,7 @@ export default function MainLayout({
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [creatingBlast, setCreatingBlast] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!getCredentials()) {
@@ -44,6 +46,52 @@ export default function MainLayout({
     }
     setReady(true);
   }, [pathname, router]);
+
+  const handleCreateBlast = useCallback(async () => {
+    if (creatingBlast) return;
+    setCreatingBlast(true);
+    try {
+      const created = await createBlast({
+        title: "New Blast",
+        bodyTemplate: DEFAULT_BLAST_TEMPLATE,
+      });
+      if (!created.ok) {
+        showToast({
+          tone: "error",
+          title: "Could not create blast",
+          description: created.error,
+        });
+        return;
+      }
+      const id = String((created.data as any).id);
+      showToast({
+        tone: "success",
+        title: "Blast draft created",
+        description: "Opening the composer now.",
+      });
+      router.push(`/blasts/${encodeURIComponent(id)}/composer`);
+    } finally {
+      setCreatingBlast(false);
+    }
+  }, [creatingBlast, router, showToast]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        router.push("/inbox");
+      }
+      if (event.key.toLowerCase() === "c" && !event.metaKey && !event.ctrlKey) {
+        const target = event.target as HTMLElement | null;
+        const tag = target?.tagName.toLowerCase();
+        if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+        event.preventDefault();
+        void handleCreateBlast();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [router, handleCreateBlast]);
 
   const activeHref = useMemo(() => {
     if (!pathname) return "/dashboard";
@@ -84,7 +132,7 @@ export default function MainLayout({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-2 rounded px-3 py-2 text-sm font-label",
+                    "flex min-h-11 items-center gap-2 rounded px-3 py-2 text-sm font-label",
                     isActive
                       ? "bg-primary-container text-primary-foreground"
                       : "text-foreground hover:bg-surface-variant",
@@ -113,34 +161,12 @@ export default function MainLayout({
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="flex h-14 items-center justify-between border-b border-border bg-white px-6">
+          <header className="flex h-16 items-center justify-between border-b border-border bg-white px-6">
             <div />
-            <button
-              type="button"
-              disabled={creatingBlast}
-              className="flex items-center gap-2 rounded px-3 py-2 text-sm font-label text-foreground hover:bg-surface-variant"
-              onClick={async () => {
-                if (creatingBlast) return;
-                setCreatingBlast(true);
-                try {
-                  const created = await createBlast({
-                    title: "New Blast",
-                    bodyTemplate: DEFAULT_BLAST_TEMPLATE,
-                  });
-                  if (!created.ok) {
-                    window.alert(created.error);
-                    return;
-                  }
-                  const id = String((created.data as any).id);
-                  router.push(`/blasts/${encodeURIComponent(id)}/composer`);
-                } finally {
-                  setCreatingBlast(false);
-                }
-              }}
-            >
+            <Button type="button" disabled={creatingBlast} onClick={handleCreateBlast} className="gap-2">
               <MessageSquareText className="h-4 w-4" />
               {creatingBlast ? "Creating..." : "Create Blast"}
-            </button>
+            </Button>
           </header>
           <main className="flex-1 p-6">{children}</main>
         </div>

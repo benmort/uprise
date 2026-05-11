@@ -6,7 +6,7 @@ import { StatusBadge } from "./status-badge";
 describe("StatusBadge", () => {
   it("renders status text", () => {
     const html = renderToStaticMarkup(<StatusBadge status="SENT" />);
-    expect(html).toContain("SENT");
-    expect(html).toContain("bg-success");
+    expect(html).toContain("Sent");
+    expect(html).toContain("bg-success-container");
   });
 });

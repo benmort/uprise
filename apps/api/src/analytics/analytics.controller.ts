@@ -18,7 +18,14 @@ export class AnalyticsController {
   }
 
   @Get("blasts/:blastId/trend")
-  trend(@Param("blastId") blastId: string, @Query("minutes") minutes?: string) {
+  trend(
+    @Param("blastId") blastId: string,
+    @Query("minutes") minutes?: string,
+    @Query("range") range?: string,
+  ) {
+    if (String(range || "").toLowerCase() === "all") {
+      return this.analytics.engagementTrend(blastId, null);
+    }
     const value = Number(minutes || "60");
     return this.analytics.engagementTrend(blastId, Number.isFinite(value) ? value : 60);
   }

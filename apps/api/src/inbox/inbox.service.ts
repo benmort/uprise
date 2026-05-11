@@ -75,33 +75,51 @@ export class InboxService {
       },
     });
 
-    if (latestOutbound?.recipientId) {
-      await this.prisma.blastRecipient.updateMany({
-        where: { id: latestOutbound.recipientId },
+    const recipientWhere = latestOutbound?.recipientId
+      ? {
+          id: latestOutbound.recipientId,
+        }
+      : latestOutbound?.blastId
+        ? {
+            blastId: latestOutbound.blastId,
+            phoneE164: fromPhone,
+          }
+        : null;
+
+    if (recipientWhere) {
+      const updated = await this.prisma.blastRecipient.updateMany({
+        where: {
+          ...recipientWhere,
+          status: {
+            not: BlastRecipientStatus.RESPONDED,
+          },
+        },
         data: {
           status: BlastRecipientStatus.RESPONDED,
           respondedAt: inbound.receivedAt,
         },
       });
-      await this.prisma.analyticsSnapshot.create({
-        data: {
-          organizationId: org.id,
-          blastId: latestOutbound.blastId || null,
-          metricName: "responded",
-          metricValue: 1,
-          bucketAt: new Date(
-            Date.UTC(
-              inbound.receivedAt.getUTCFullYear(),
-              inbound.receivedAt.getUTCMonth(),
-              inbound.receivedAt.getUTCDate(),
-              inbound.receivedAt.getUTCHours(),
-              inbound.receivedAt.getUTCMinutes(),
-              0,
-              0,
+      if (updated.count > 0) {
+        await this.prisma.analyticsSnapshot.create({
+          data: {
+            organizationId: org.id,
+            blastId: latestOutbound?.blastId || null,
+            metricName: "responded",
+            metricValue: 1,
+            bucketAt: new Date(
+              Date.UTC(
+                inbound.receivedAt.getUTCFullYear(),
+                inbound.receivedAt.getUTCMonth(),
+                inbound.receivedAt.getUTCDate(),
+                inbound.receivedAt.getUTCHours(),
+                inbound.receivedAt.getUTCMinutes(),
+                0,
+                0,
+              ),
             ),
-          ),
-        },
-      });
+          },
+        });
+      }
     }
 
     this.events.emit("inbox.inbound", {

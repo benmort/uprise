@@ -8,6 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 
 type AudienceDetail = {
   id: string;
@@ -42,6 +48,7 @@ type AudienceContact = {
 export default function AudienceShowPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const { showToast } = useToast();
   const id = typeof params?.id === "string" ? params.id : "";
 
   const [audience, setAudience] = useState<AudienceDetail | null>(null);
@@ -49,6 +56,7 @@ export default function AudienceShowPage() {
   const [contactsTotal, setContactsTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
@@ -94,32 +102,24 @@ export default function AudienceShowPage() {
   }, [id, page, query]);
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
+      <Breadcrumbs
+        items={[
+          { label: "Audience", href: "/audience" },
+          { label: audience?.name || "Audience Details" },
+        ]}
+      />
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-semibold">{audience?.name || "Audience"}</h1>
+          <h1 className="text-3xl font-semibold">{audience?.name || "Audience Details"}</h1>
           <p className="text-sm text-muted-foreground">Audience ID: {id}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="warning"
+            variant="destructive"
             size="sm"
             disabled={!id || deleting}
-            onClick={async () => {
-              if (!id) return;
-              const confirmed = window.confirm(
-                "Delete this audience? This action cannot be undone.",
-              );
-              if (!confirmed) return;
-              setDeleting(true);
-              const result = await deleteAudience(id);
-              setDeleting(false);
-              if (!result.ok) {
-                setError(result.error);
-                return;
-              }
-              router.replace("/audience");
-            }}
+            onClick={() => setConfirmOpen(true)}
           >
             {deleting ? "Deleting..." : "Delete Audience"}
           </Button>
@@ -143,7 +143,11 @@ export default function AudienceShowPage() {
         </CardHeader>
         <CardContent>
           {loading && !audience ? (
-            <p className="text-sm text-muted-foreground">Loading audience...</p>
+            <div className="space-y-2">
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+            </div>
           ) : audience ? (
             <div className="grid gap-4 md:grid-cols-3">
               <Metric label="Name" value={audience.name} />
@@ -191,7 +195,12 @@ export default function AudienceShowPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Audience not found.</p>
+            <EmptyState
+              title="Audience not found"
+              description="This audience may have been deleted or is unavailable."
+              ctaLabel="Back to Audience List"
+              onCta={() => router.push("/audience")}
+            />
           )}
         </CardContent>
       </Card>
@@ -243,7 +252,7 @@ export default function AudienceShowPage() {
                     {contacts.length === 0 && (
                       <tr>
                         <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                          No contacts found for this audience.
+                          No contacts found for this audience yet.
                         </td>
                       </tr>
                     )}
@@ -254,29 +263,48 @@ export default function AudienceShowPage() {
                 <p className="text-xs text-muted-foreground">
                   Showing {contacts.length} of {contactsTotal} contacts
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page === 0}
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={(page + 1) * pageSize >= contactsTotal}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
+                <PaginationControls
+                  page={page}
+                  pageSize={pageSize}
+                  total={contactsTotal}
+                  onPrev={() => setPage((p) => Math.max(0, p - 1))}
+                  onNext={() => setPage((p) => p + 1)}
+                />
               </div>
             </>
           )}
         </CardContent>
       </Card>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete this audience?"
+        description="This action permanently removes the audience and cannot be undone."
+        confirmLabel="Delete Audience"
+        busy={deleting}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={async () => {
+          if (!id) return;
+          setDeleting(true);
+          const result = await deleteAudience(id);
+          setDeleting(false);
+          if (!result.ok) {
+            setError(result.error);
+            showToast({
+              tone: "error",
+              title: "Delete failed",
+              description: result.error,
+            });
+            return;
+          }
+          showToast({
+            tone: "success",
+            title: "Audience deleted",
+            description: "Returning to the audience list.",
+          });
+          setConfirmOpen(false);
+          router.replace("/audience");
+        }}
+      />
     </div>
   );
 }

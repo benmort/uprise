@@ -10,6 +10,7 @@
 - [ ] Twilio credentials validated
 - [ ] Action Network connection validated
 - [ ] Internal source connection validated
+- [ ] Stream token secret configured and consistent across all API instances
 - [ ] Compliance defaults confirmed (quiet hours, opt-out policy)
 
 ## Release Sequence

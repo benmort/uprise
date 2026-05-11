@@ -15,34 +15,66 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipHint } from "@/components/ui/tooltip-hint";
+import { useToast } from "@/components/ui/toast";
 
 type BlastOption = { id: string; title: string; status: string };
+type TrendWindow = "all" | "15" | "60" | "240";
 
 export default function AnalyticsPage() {
+  const { showToast } = useToast();
   const [blasts, setBlasts] = useState<BlastOption[]>([]);
   const [selectedBlastId, setSelectedBlastId] = useState("");
   const [kpis, setKpis] = useState<Record<string, number>>({});
   const [trend, setTrend] = useState<Array<Record<string, unknown>>>([]);
   const [activity, setActivity] = useState<Array<Record<string, unknown>>>([]);
+  const [activityTotal, setActivityTotal] = useState(0);
+  const [activityPage, setActivityPage] = useState(0);
+  const [trendWindow, setTrendWindow] = useState<TrendWindow>("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [statusDistribution, setStatusDistribution] = useState<Array<Record<string, unknown>>>([]);
   const [streamStatus, setStreamStatus] = useState("idle");
 
-  const loadForBlast = async (blastId: string) => {
+  const activityPageSize = 20;
+  const trendRange: number | "all" = trendWindow === "all" ? "all" : Number(trendWindow);
+
+  const loadForBlast = async (blastId: string, page = activityPage) => {
+    setError("");
     const [kpiRes, trendRes, activityRes, statusRes] = await Promise.all([
       getBlastKpis(blastId),
-      getBlastTrend(blastId),
-      getBlastActivity(blastId, 30, 0),
+      getBlastTrend(blastId, trendRange),
+      getBlastActivity(blastId, activityPageSize, page * activityPageSize),
       getBlastStatusDistribution(blastId),
     ]);
     if (kpiRes.ok) setKpis(kpiRes.data as Record<string, number>);
     if (trendRes.ok) setTrend(trendRes.data);
-    if (activityRes.ok) setActivity(activityRes.data.rows);
+    if (activityRes.ok) {
+      setActivity(activityRes.data.rows);
+      setActivityTotal(Number(activityRes.data.total || 0));
+    }
     if (statusRes.ok) setStatusDistribution(statusRes.data);
+    const firstFailure = [kpiRes, trendRes, activityRes, statusRes].find((result) => !result.ok);
+    if (firstFailure && !firstFailure.ok) {
+      setError(firstFailure.error);
+    }
+    if ([kpiRes, trendRes, activityRes, statusRes].every((result) => result.ok)) {
+      setLastUpdatedAt(new Date());
+    }
+    setLoading(false);
   };
 
   useEffect(() => {
     listBlasts().then((res) => {
-      if (!res.ok) return;
+      if (!res.ok) {
+        setError(res.error);
+        setLoading(false);
+        return;
+      }
       const mapped = (res.data || []).map((row) => ({
         id: String(row.id),
         title: String(row.title || "Untitled"),
@@ -50,58 +82,125 @@ export default function AnalyticsPage() {
       }));
       setBlasts(mapped);
       if (mapped[0]) setSelectedBlastId(mapped[0].id);
+      else setLoading(false);
     });
   }, []);
 
   useEffect(() => {
     if (!selectedBlastId) return;
-    loadForBlast(selectedBlastId);
-    const id = setInterval(() => loadForBlast(selectedBlastId), 8000);
+    setLoading(true);
+    void loadForBlast(selectedBlastId, activityPage);
+    const id = setInterval(() => void loadForBlast(selectedBlastId, activityPage), 8000);
     return () => clearInterval(id);
-  }, [selectedBlastId]);
+  }, [selectedBlastId, activityPage, trendWindow]);
 
   useEffect(() => {
+    if (!selectedBlastId) {
+      setStreamStatus("idle");
+      return;
+    }
     let source: EventSource | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
+    let reconnectAttempts = 0;
+
+    const clearTimers = () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const closeSource = () => {
+      source?.close();
+      source = null;
+    };
+
+    const scheduleReconnect = (delayMs: number, connect: () => void) => {
+      if (cancelled) return;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, delayMs);
+    };
 
     const connect = async () => {
+      if (cancelled) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      closeSource();
       const tokenRes = await getRealtimeStreamToken();
+      if (cancelled) return;
       if (!tokenRes.ok) {
         setStreamStatus("auth_failed");
+        scheduleReconnect(10000, () => {
+          void connect();
+        });
         return;
+      }
+      const expiresAtMs = Date.parse(tokenRes.data.expiresAt);
+      if (Number.isFinite(expiresAtMs)) {
+        const refreshInMs = Math.max(5000, expiresAtMs - Date.now() - 30000);
+        refreshTimer = setTimeout(() => {
+          if (cancelled) return;
+          setStreamStatus("refreshing");
+          closeSource();
+          void connect();
+        }, refreshInMs);
       }
       const streamUrl = new URL(`${getApiUrl()}/analytics/stream`);
       streamUrl.searchParams.set("token", tokenRes.data.token);
       source = new EventSource(streamUrl.toString(), { withCredentials: false });
       source.onopen = () => {
         if (!cancelled) setStreamStatus("live");
+        reconnectAttempts = 0;
       };
       source.onerror = () => {
         if (!cancelled) setStreamStatus("reconnecting");
+        closeSource();
+        reconnectAttempts += 1;
+        const delayMs = Math.min(15000, 1000 * 2 ** Math.min(reconnectAttempts, 4));
+        scheduleReconnect(delayMs, () => {
+          void connect();
+        });
       };
       source.onmessage = () => {
-        if (selectedBlastId) loadForBlast(selectedBlastId);
+        if (selectedBlastId) void loadForBlast(selectedBlastId, activityPage);
       };
     };
 
     connect();
     return () => {
       cancelled = true;
-      source?.close();
+      clearTimers();
+      closeSource();
     };
-  }, [selectedBlastId]);
+  }, [selectedBlastId, activityPage, trendWindow]);
 
   const maxTrend = useMemo(() => {
-    return Math.max(1, ...trend.map((row) => Number(row.sent || 0)));
+    return Math.max(
+      1,
+      ...trend.map((row) => Math.max(Number(row.sent || 0), Number(row.responses || 0))),
+    );
   }, [trend]);
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-4xl font-semibold">Blast Analytics</h1>
+        <div>
+          <h1 className="text-3xl font-semibold">Review Blast Performance</h1>
+          <p className="text-sm text-muted-foreground">
+            Track delivery and response outcomes in near real time.
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <select
-            className="h-10 rounded border border-input bg-background px-3 text-sm"
+            className="h-11 rounded border border-input bg-background px-3 text-sm"
             value={selectedBlastId}
             onChange={(e) => setSelectedBlastId(e.target.value)}
           >
@@ -111,27 +210,105 @@ export default function AnalyticsPage() {
               </option>
             ))}
           </select>
-          <StatusBadge status={streamStatus === "live" ? "ACTIVE" : "SENDING"} className="capitalize" />
+          <Button onClick={() => selectedBlastId && loadForBlast(selectedBlastId, activityPage)}>
+            Refresh Now
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <KpiCard label="Total Sent" value={String(kpis.sent || 0)} />
-        <KpiCard label="Delivered" value={String(kpis.delivered || 0)} />
-        <KpiCard label="Engagement" value={String(kpis.responded || 0)} subtitle={`${kpis.sent ? (((kpis.responded || 0) / (kpis.sent || 1)) * 100).toFixed(1) : "0"}% conversion`} />
-      </div>
+      {blasts.length === 0 && !loading ? (
+        <EmptyState
+          title="No blasts available yet"
+          description="Create your first blast to unlock analytics and engagement reporting."
+          ctaLabel="Go to Audience Setup"
+          onCta={() => {
+            showToast({
+              tone: "info",
+              title: "Start by importing contacts",
+              description: "Open Audience to create your first recipient list.",
+            });
+            window.location.assign("/audience");
+          }}
+        />
+      ) : null}
+
+      {error ? (
+        <EmptyState
+          title="Analytics failed to load"
+          description={error}
+          ctaLabel="Retry"
+          onCta={() => selectedBlastId && void loadForBlast(selectedBlastId, activityPage)}
+        />
+      ) : null}
+
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={`analytics-kpi-skeleton-${index}`}
+              className="rounded-lg border border-border bg-surface p-4"
+            >
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="mt-3 h-9 w-20" />
+              <Skeleton className="mt-2 h-3 w-24" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <KpiCard
+            label="Total Contacted"
+            value={String(kpis.totalContacted ?? kpis.sent ?? 0)}
+            tooltip="Recipients with sent, delivered, failed, or responded outcomes."
+          />
+          <KpiCard label="Delivered" value={String(kpis.delivered || 0)} />
+          <KpiCard
+            label="Engagement Rate"
+            value={`${kpis.totalContacted ? (((kpis.responded || 0) / (kpis.totalContacted || 1)) * 100).toFixed(1) : "0"}%`}
+            subtitle={`${kpis.responded || 0} replies`}
+            tooltip="Responded recipients divided by total contacted recipients."
+          />
+        </div>
+      )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle>Engagement Over Time</CardTitle>
+          <div className="flex items-center gap-2">
+            <TooltipHint label="Time window for the trend chart." />
+            <select
+              className="h-11 rounded border border-input bg-background px-3 text-sm"
+              value={trendWindow}
+              onChange={(event) => setTrendWindow(event.target.value as TrendWindow)}
+            >
+              <option value="all">All time</option>
+              <option value={15}>Last 15m</option>
+              <option value={60}>Last 60m</option>
+              <option value={240}>Last 4h</option>
+            </select>
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex h-56 items-end gap-2">
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-primary/50" />
+              Contacted
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="h-2.5 w-2.5 rounded-full bg-warning-container" />
+              Responses
+            </span>
+          </div>
+          <div className="flex h-56 items-end gap-2 overflow-x-auto">
             {trend.map((point) => {
               const sent = Number(point.sent || 0);
               const responses = Number(point.responses || 0);
               return (
-                <div key={String(point.bucket)} className="flex flex-1 flex-col items-center gap-1">
+                <div
+                  key={String(point.bucket)}
+                  className="flex min-w-8 flex-1 flex-col items-center gap-1"
+                  title={`Contacted ${sent}, Responses ${responses}`}
+                >
                   <div
                     className="w-full rounded-t bg-primary/35"
                     style={{ height: `${Math.max(8, (sent / maxTrend) * 160)}px` }}
@@ -157,11 +334,14 @@ export default function AnalyticsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Recipient Activity Log</CardTitle>
-          <Button variant="outline" onClick={() => selectedBlastId && loadForBlast(selectedBlastId)}>
+          <Button
+            variant="outline"
+            onClick={() => selectedBlastId && void loadForBlast(selectedBlastId, activityPage)}
+          >
             Refresh Live
           </Button>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="space-y-4 overflow-x-auto">
           <table className="w-full min-w-[960px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
@@ -191,7 +371,7 @@ export default function AnalyticsPage() {
                         onClick={async () => {
                           if (!selectedBlastId) return;
                           await retryBlast(selectedBlastId);
-                          await loadForBlast(selectedBlastId);
+                          await loadForBlast(selectedBlastId, activityPage);
                         }}
                       >
                         Retry
@@ -215,6 +395,19 @@ export default function AnalyticsPage() {
               )}
             </tbody>
           </table>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Showing {activity.length} of {activityTotal} recipients
+              {lastUpdatedAt ? ` • Updated ${lastUpdatedAt.toLocaleTimeString()}` : ""}
+            </p>
+            <PaginationControls
+              page={activityPage}
+              pageSize={activityPageSize}
+              total={activityTotal}
+              onPrev={() => setActivityPage((prev) => Math.max(0, prev - 1))}
+              onNext={() => setActivityPage((prev) => prev + 1)}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -229,20 +422,36 @@ export default function AnalyticsPage() {
               <span className="ml-2 text-sm">{String((row as any)._count)}</span>
             </div>
           ))}
+          {statusDistribution.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No status data yet.</p>
+          ) : null}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function KpiCard({ label, value, subtitle }: { label: string; value: string; subtitle?: string }) {
+function KpiCard({
+  label,
+  value,
+  subtitle,
+  tooltip,
+}: {
+  label: string;
+  value: string;
+  subtitle?: string;
+  tooltip?: string;
+}) {
   return (
     <Card>
       <CardHeader>
-        <p className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+        <p className="inline-flex items-center gap-1 text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
+          {label}
+          {tooltip ? <TooltipHint label={tooltip} /> : null}
+        </p>
       </CardHeader>
       <CardContent>
-        <p className="text-4xl font-headline font-semibold">{value}</p>
+        <p className="text-3xl font-headline font-semibold">{value}</p>
         {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
       </CardContent>
     </Card>

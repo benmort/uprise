@@ -7,19 +7,19 @@
     --surface: 300 11% 98%;
     --surface-variant: 300 3% 89%;
     --background: 300 11% 98%;
-    --foreground: 220 7% 11%;
+    --foreground: 220 10% 9%;
     --muted: 300 8% 94%;
     --muted-foreground: 225 8% 30%;
-    --border: 228 7% 49%;
-    --input: 228 7% 49%;
-    --ring: 220 60% 50%;
+    --border: 228 9% 42%;
+    --input: 228 9% 42%;
+    --ring: 220 68% 45%;
 
-    --primary: 220 60% 50%;
+    --primary: 220 64% 43%;
     --on-primary: 0 0% 100%;
     --primary-container: 220 60% 50%;
     --on-primary-container: 227 100% 95%;
 
-    --secondary: 210 5% 37%;
+    --secondary: 210 7% 31%;
     --on-secondary: 0 0% 100%;
     --secondary-container: 210 14% 88%;
     --secondary-foreground: 210 8% 28%;
@@ -28,11 +28,11 @@
     --on-tertiary: 0 0% 100%;
     --tertiary-container: 0 60% 50%;
 
-    --error: 0 75% 42%;
+    --error: 0 72% 38%;
     --on-error: 0 0% 100%;
     --error-container: 9 100% 92%;
 
-    --success: 143 77% 28%;
+    --success: 143 79% 24%;
     --on-success: 0 0% 100%;
     --success-container: 138 41% 91%;
 
@@ -53,13 +53,22 @@
   body {
     @apply bg-background text-foreground font-body antialiased;
   }
+}
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    @apply font-headline;
+@layer components {
+  .page-stack {
+    @apply mx-auto flex w-full max-w-page flex-col gap-6;
+  }
+
+  .section-stack {
+    @apply flex flex-col gap-4;
+  }
+
+  .panel-stack {
+    @apply flex flex-col gap-2;
+  }
+
+  .surface-muted {
+    @apply rounded-md border border-border bg-surface;
   }
 }

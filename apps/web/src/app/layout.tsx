@@ -1,21 +1,13 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Inter, Noto_Serif, Public_Sans } from "next/font/google";
+import { Roboto } from "next/font/google";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { ToastProvider } from "@/components/ui/toast";
 
-const inter = Inter({
+const roboto = Roboto({
   subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const notoSerif = Noto_Serif({
-  subsets: ["latin"],
-  variable: "--font-noto-serif",
-});
-
-const publicSans = Public_Sans({
-  subsets: ["latin"],
-  variable: "--font-public-sans",
+  variable: "--font-roboto",
+  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -40,14 +32,16 @@ export default function RootLayout({
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${notoSerif.variable} ${publicSans.variable}`}>
+      <body className={roboto.variable}>
         <script
           dangerouslySetInnerHTML={{
             __html: `window.__API_URL__=${JSON.stringify(apiUrl)};`,
           }}
         />
-        <PWAInstallPrompt />
-        {children}
+        <ToastProvider>
+          <PWAInstallPrompt />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );

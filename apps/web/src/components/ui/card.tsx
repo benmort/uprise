@@ -29,7 +29,7 @@ export function CardTitle({
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h3
-      className={cn("font-headline text-[24px] leading-tight text-foreground", className)}
+      className={cn("font-headline text-2xl font-semibold leading-tight text-foreground", className)}
       {...props}
     />
   );

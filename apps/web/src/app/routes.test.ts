@@ -12,12 +12,12 @@ describe("major route files", () => {
   it("contains dashboard page scaffold", () => {
     const source = read("dashboard/page.tsx");
     expect(source).toContain("Performance Pulse");
-    expect(source).toContain("Recent Blasts");
+    expect(source).toContain("Blast Campaigns");
   });
 
   it("contains audience page scaffold", () => {
     const source = read("audience/page.tsx");
-    expect(source).toContain("Audience Management");
+    expect(source).toContain("Build and Manage Audience Segments");
     expect(source).toContain("Sync Integrations");
   });
 
@@ -35,13 +35,13 @@ describe("major route files", () => {
 
   it("contains blast details page scaffold", () => {
     const source = read("blasts/[id]/page.tsx");
-    expect(source).toContain("Blast analytics");
+    expect(source).toContain("Detailed blast analytics");
     expect(source).toContain("Open Composer");
   });
 
   it("contains analytics page scaffold", () => {
     const source = read("analytics/page.tsx");
-    expect(source).toContain("Blast Analytics");
+    expect(source).toContain("Review Blast Performance");
     expect(source).toContain("Recipient Activity Log");
   });
 

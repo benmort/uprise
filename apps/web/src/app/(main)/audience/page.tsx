@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createAudience,
@@ -13,6 +13,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
+import { fuzzyIncludes } from "@/lib/fuzzy";
 
 type AudienceRow = {
   id: string;
@@ -30,10 +35,15 @@ type UploadState = {
   status: "UPLOADING" | "PROCESSING" | "COMPLETED" | "FAILED";
 };
 
+const AUDIENCE_SEARCH_KEY = "yarns.audience.search";
+
 export default function AudiencePage() {
   const router = useRouter();
+  const { showToast } = useToast();
+  const filterRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<AudienceRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState("");
   const [filter, setFilter] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [audienceName, setAudienceName] = useState("");
@@ -42,16 +52,23 @@ export default function AudiencePage() {
   const [selectedListId, setSelectedListId] = useState("");
   const [listSearchMessage, setListSearchMessage] = useState("");
   const [listsLoading, setListsLoading] = useState(false);
+  const [listPage, setListPage] = useState(0);
   const [tablePage, setTablePage] = useState(0);
   const [syncMessage, setSyncMessage] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [uploadState, setUploadState] = useState<UploadState | null>(null);
+  const [validationMessage, setValidationMessage] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const refresh = async () => {
     setLoading(true);
     const res = await listAudiences({ limit: 200, offset: 0 });
     if (res.ok) {
       setRows(res.data.rows as AudienceRow[]);
+      setLoadingError("");
+      setLastUpdatedAt(new Date());
+    } else {
+      setLoadingError(res.error);
     }
     setLoading(false);
   };
@@ -61,26 +78,55 @@ export default function AudiencePage() {
     const result = await searchIntegrationLists(integrationType, "");
     if (result.ok) {
       setLists(result.data.lists);
+      setListPage(0);
       setSelectedListId("");
       setListSearchMessage(
         result.data.lists.length === 0 ? "No remote lists found for this connection." : "",
       );
     } else {
       setLists([]);
+      setListPage(0);
       setSelectedListId("");
       setListSearchMessage(result.error);
+      showToast({
+        tone: "error",
+        title: "Could not load integration lists",
+        description: result.error,
+      });
     }
     setListsLoading(false);
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setFilter(window.localStorage.getItem(AUDIENCE_SEARCH_KEY) || "");
+    }
     refresh();
     loadIntegrationLists();
   }, []);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(AUDIENCE_SEARCH_KEY, filter);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/") return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName.toLowerCase();
+      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
+      event.preventDefault();
+      filterRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const base = !q ? rows : rows.filter((row) => row.name.toLowerCase().includes(q));
+    const base = !q ? rows : rows.filter((row) => fuzzyIncludes(`${row.name} ${row.id}`, q));
     if (
       uploadState &&
       !base.some((row) => row.id === uploadState.audienceId) &&
@@ -102,13 +148,22 @@ export default function AudiencePage() {
 
   const pageSize = 8;
   const paged = filtered.slice(tablePage * pageSize, tablePage * pageSize + pageSize);
+  const listPageSize = 10;
+  const pagedLists = lists.slice(listPage * listPageSize, listPage * listPageSize + listPageSize);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-4xl font-semibold">Audience Management</h1>
+    <div className="page-stack">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold">Build and Manage Audience Segments</h1>
+          <p className="text-sm text-muted-foreground">
+            Import subscribers, sync remote lists, and prepare recipients for sends.
+          </p>
+        </div>
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card id="import-audience-card" className="lg:order-2">
           <CardHeader>
             <CardTitle>Import Subscribers</CardTitle>
           </CardHeader>
@@ -126,12 +181,25 @@ export default function AudiencePage() {
               />
               <Button
                 onClick={async () => {
-                  if (!audienceName.trim() || !csvFile) return;
+                  if (!audienceName.trim()) {
+                    setValidationMessage("Audience name is required before upload.");
+                    return;
+                  }
+                  if (!csvFile) {
+                    setValidationMessage("Choose a CSV file before upload.");
+                    return;
+                  }
+                  setValidationMessage("");
                   const trimmedName = audienceName.trim();
                   setImportMessage("");
                   const created = await createAudience({ name: trimmedName, source: "CSV" });
                   if (!created.ok) {
                     setImportMessage(created.error);
+                    showToast({
+                      tone: "error",
+                      title: "Could not create audience",
+                      description: created.error,
+                    });
                     return;
                   }
                   const audienceId = String((created.data as any).id);
@@ -174,6 +242,11 @@ export default function AudiencePage() {
                       status: "COMPLETED",
                     });
                     setImportMessage(`Imported ${importedRows.toLocaleString()} subscribers.`);
+                    showToast({
+                      tone: "success",
+                      title: "Audience import completed",
+                      description: `${importedRows.toLocaleString()} subscribers imported.`,
+                    });
                     setAudienceName("");
                     setCsvFile(null);
                     await refresh();
@@ -190,6 +263,11 @@ export default function AudiencePage() {
                       ),
                     );
                     setImportMessage(imported.error);
+                    showToast({
+                      tone: "error",
+                      title: "Audience import failed",
+                      description: imported.error,
+                    });
                   }
                 }}
                 disabled={!audienceName.trim() || !csvFile}
@@ -208,72 +286,108 @@ export default function AudiencePage() {
             >
               Download example CSV
             </a>
+            {validationMessage && <p className="text-xs text-error">{validationMessage}</p>}
             {importMessage && <p className="text-xs text-muted-foreground">{importMessage}</p>}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:order-1">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Sync Integrations</CardTitle>
-            <Button size="sm" variant="outline" onClick={loadIntegrationLists} disabled={listsLoading}>
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={loadIntegrationLists} disabled={listsLoading}>
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  if (!selectedListId) return;
+                  const selectedList = lists.find((list) => String(list.id) === selectedListId);
+                  const selectedListName = String(selectedList?.name || "").trim();
+                  const audienceNameForSync =
+                    integrationType === "ACTION_NETWORK"
+                      ? `Action Network: ${selectedListName || "Unnamed list"}`
+                      : `${integrationType === "ACTION_NETWORK" ? "Action Network" : "Internal"}: ${selectedListName || selectedListId}`;
+                  const synced = await syncIntegrationList({
+                    type: integrationType,
+                    listId: selectedListId,
+                    listName: selectedListName || undefined,
+                    audienceName: audienceNameForSync,
+                  });
+                  if (synced.ok) {
+                    const stats = (synced.data as any).stats as Record<string, unknown> | undefined;
+                    const skippedNoPhone = Number((stats?.skippedNoPhone as number) || 0);
+                    const skippedInvalidPhone = Number((stats?.skippedInvalidPhone as number) || 0);
+                    const nonContactableTotal = skippedNoPhone + skippedInvalidPhone;
+                    setSyncMessage(
+                      `Synced ${String((synced.data as any).syncedCount)} contacts${
+                        nonContactableTotal > 0 ? ` (${nonContactableTotal} marked non-contactable)` : ""
+                      }`,
+                    );
+                    showToast({
+                      tone: "success",
+                      title: "Integration sync completed",
+                      description: `Synced ${String((synced.data as any).syncedCount)} contacts.`,
+                    });
+                    await refresh();
+                  } else {
+                    setSyncMessage(synced.error);
+                    showToast({
+                      tone: "error",
+                      title: "Integration sync failed",
+                      description: synced.error,
+                    });
+                  }
+                }}
+                disabled={!selectedListId}
+              >
+                Sync Selected List
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="max-h-36 overflow-y-auto rounded border border-border">
-              {lists.map((list) => (
+            <div className="min-h-[220px] max-h-[260px] overflow-y-auto rounded border border-border">
+              {pagedLists.map((list) => {
+                const listId = String(list.id);
+                const isSelected = selectedListId === listId;
+                return (
                 <button
-                  key={String(list.id)}
-                  type="button"
-                  className={`flex w-full items-center justify-between border-b border-border px-3 py-2 text-left text-sm last:border-0 ${
-                    selectedListId === String(list.id) ? "bg-primary-container/30" : ""
-                  }`}
-                  onClick={() => setSelectedListId(String(list.id))}
-                >
-                  <span>{String(list.name || "Unnamed list")}</span>
-                  <span className="text-xs text-muted-foreground">{String(list.count || "—")}</span>
-                </button>
-              ))}
-              {lists.length === 0 && (
-                <p className="px-3 py-2 text-xs text-muted-foreground">
-                  {listsLoading ? "Loading remote lists..." : listSearchMessage || "No remote lists loaded."}
-                </p>
-              )}
+                    key={listId}
+                    type="button"
+                    className={`flex min-h-11 w-full items-center justify-between border-b border-border px-3 py-2 text-left text-sm last:border-0 ${
+                      isSelected ? "bg-primary-container/30" : ""
+                    }`}
+                    onClick={() => setSelectedListId((prev) => (prev === listId ? "" : listId))}
+                  >
+                    <span>{String(list.name || "Unnamed list")}</span>
+                    <span className="text-xs text-muted-foreground">{String(list.count || "—")}</span>
+                  </button>
+                );
+              })}
+              {lists.length === 0 &&
+                (listsLoading ? (
+                  <div className="space-y-2 p-3">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    {listSearchMessage || "No remote lists loaded."}
+                  </p>
+                ))}
             </div>
-            <Button
-              onClick={async () => {
-                if (!selectedListId) return;
-                const selectedList = lists.find((list) => String(list.id) === selectedListId);
-                const selectedListName = String(selectedList?.name || "").trim();
-                const audienceNameForSync =
-                  integrationType === "ACTION_NETWORK"
-                    ? `Action Network: ${selectedListName || "Unnamed list"}`
-                    : `${integrationType === "ACTION_NETWORK" ? "Action Network" : "Internal"}: ${selectedListName || selectedListId}`;
-                const synced = await syncIntegrationList({
-                  type: integrationType,
-                  listId: selectedListId,
-                  listName: selectedListName || undefined,
-                  audienceName: audienceNameForSync,
-                });
-                if (synced.ok) {
-                  const stats = (synced.data as any).stats as Record<string, unknown> | undefined;
-                  const skippedNoPhone = Number((stats?.skippedNoPhone as number) || 0);
-                  const skippedInvalidPhone = Number((stats?.skippedInvalidPhone as number) || 0);
-                  const nonContactableTotal = skippedNoPhone + skippedInvalidPhone;
-                  setSyncMessage(
-                    `Synced ${String((synced.data as any).syncedCount)} contacts${
-                      nonContactableTotal > 0 ? ` (${nonContactableTotal} marked non-contactable)` : ""
-                    }`,
-                  );
-                  await refresh();
-                } else {
-                  setSyncMessage(synced.error);
-                }
-              }}
-              disabled={!selectedListId}
-            >
-              Sync Selected List
-            </Button>
+            <div className="flex justify-end">
+              <PaginationControls
+                page={listPage}
+                pageSize={listPageSize}
+                total={lists.length}
+                onPrev={() => setListPage((prev) => Math.max(0, prev - 1))}
+                onNext={() => setListPage((prev) => prev + 1)}
+              />
+            </div>
             {syncMessage && <p className="text-xs text-muted-foreground">{syncMessage}</p>}
           </CardContent>
         </Card>
@@ -284,15 +398,30 @@ export default function AudiencePage() {
           <CardTitle>Segmented Audiences</CardTitle>
           <div className="flex gap-2">
             <Input
+              ref={filterRef}
               placeholder="Filter lists..."
               value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setTablePage(0);
+              }}
             />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading audiences...</p>
+            <div className="space-y-2">
+              <Skeleton className="h-12" />
+              <Skeleton className="h-12" />
+              <Skeleton className="h-12" />
+            </div>
+          ) : loadingError ? (
+            <EmptyState
+              title="We couldn't load audiences"
+              description={loadingError}
+              ctaLabel="Retry"
+              onCta={() => void refresh()}
+            />
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -305,6 +434,7 @@ export default function AudiencePage() {
                       <th className="py-2 pr-4">Last Sync</th>
                       <th className="py-2 pr-4">Upload Progress</th>
                       <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">Quick Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -313,7 +443,7 @@ export default function AudiencePage() {
                       return (
                         <tr
                           key={row.id}
-                          className="cursor-pointer border-b border-border/70 hover:bg-primary-container/10"
+                          className="group cursor-pointer border-b border-border/70 hover:bg-primary-container/10"
                           onClick={() => router.push(`/audience/${row.id}`)}
                         >
                           <td className="py-3 pr-4">
@@ -351,34 +481,45 @@ export default function AudiencePage() {
                           <td className="py-3 pr-4">
                             <StatusBadge status={isUploading ? uploadState.status : row.status} />
                           </td>
+                          <td className="py-3 pr-4">
+                            <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  router.push(`/audience/${row.id}`);
+                                }}
+                              >
+                                View
+                              </Button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}
+                    {paged.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                          No audiences match your current filters.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
                   Showing {paged.length} of {filtered.length} audiences
+                  {lastUpdatedAt ? ` • Updated ${lastUpdatedAt.toLocaleTimeString()}` : ""}
                 </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={tablePage === 0}
-                    onClick={() => setTablePage((p) => Math.max(0, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={(tablePage + 1) * pageSize >= filtered.length}
-                    onClick={() => setTablePage((p) => p + 1)}
-                  >
-                    Next
-                  </Button>
-                </div>
+                <PaginationControls
+                  page={tablePage}
+                  pageSize={pageSize}
+                  total={filtered.length}
+                  onPrev={() => setTablePage((p) => Math.max(0, p - 1))}
+                  onNext={() => setTablePage((p) => p + 1)}
+                />
               </div>
             </>
           )}

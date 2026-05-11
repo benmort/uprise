@@ -1,11 +1,16 @@
-import { Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MainLoading() {
   return (
-    <div className="flex min-h-[calc(100vh-56px)] items-center justify-center">
-      <div className="flex items-center gap-2 text-sm font-label text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Loading ..</span>
+    <div className="page-stack min-h-[calc(100vh-80px)] py-6">
+      <div className="section-stack">
+        <Skeleton className="h-10 w-72" />
+        <div className="grid gap-4 md:grid-cols-3">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+        <Skeleton className="h-80" />
       </div>
     </div>
   );

@@ -130,11 +130,11 @@ describe("workflow e2e-style", () => {
       .mockRejectedValueOnce(new Error("twilio timeout"));
 
     const dispatched = await service.dispatchDueScheduled(5);
-    expect(sendSpy).toHaveBeenCalledWith("blast_ok");
-    expect(sendSpy).toHaveBeenCalledWith("blast_fail");
+    expect(sendSpy).toHaveBeenCalledWith("blast_ok", 5);
+    expect(sendSpy).toHaveBeenCalledWith("blast_fail", 5);
     expect(dispatched.processed).toBe(2);
     expect(dispatched.results).toEqual([
-      expect.objectContaining({ blastId: "blast_ok", ok: true }),
+      expect.objectContaining({ blastId: "blast_ok", ok: true, batchSize: 50 }),
       expect.objectContaining({ blastId: "blast_fail", ok: false }),
     ]);
   });

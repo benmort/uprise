@@ -8,14 +8,30 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+const INSTALL_PROMPT_SNOOZE_KEY = "yarns.installPrompt.snoozeUntil";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    const snoozeUntilRaw = window.localStorage.getItem(INSTALL_PROMPT_SNOOZE_KEY);
+    const snoozeUntil = Number(snoozeUntilRaw || "0");
+    if (Number.isFinite(snoozeUntil) && snoozeUntil > Date.now()) {
+      setDismissed(true);
+      return;
+    }
+    window.localStorage.removeItem(INSTALL_PROMPT_SNOOZE_KEY);
+  }, []);
+
+  useEffect(() => {
     const handler = (event: Event) => {
       event.preventDefault();
       setDeferredPrompt(event as BeforeInstallPromptEvent);
+      const snoozeUntilRaw = window.localStorage.getItem(INSTALL_PROMPT_SNOOZE_KEY);
+      const snoozeUntil = Number(snoozeUntilRaw || "0");
+      setDismissed(Number.isFinite(snoozeUntil) && snoozeUntil > Date.now());
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
@@ -33,7 +49,13 @@ export function PWAInstallPrompt() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setDismissed(true)}
+            onClick={() => {
+              setDismissed(true);
+              window.localStorage.setItem(
+                INSTALL_PROMPT_SNOOZE_KEY,
+                String(Date.now() + ONE_DAY_MS),
+              );
+            }}
           >
             Later
           </Button>
@@ -42,6 +64,7 @@ export function PWAInstallPrompt() {
             onClick={async () => {
               await deferredPrompt.prompt();
               await deferredPrompt.userChoice;
+              window.localStorage.removeItem(INSTALL_PROMPT_SNOOZE_KEY);
               setDeferredPrompt(null);
             }}
           >
