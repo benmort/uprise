@@ -5,6 +5,8 @@ describe("InboxService", () => {
   const prisma = {
     organization: { upsert: jest.fn() },
     blast: { findMany: jest.fn() },
+    outboundMessage: { create: jest.fn() },
+    conversationState: { upsert: jest.fn() },
   } as any;
   const config = {
     get: jest.fn((key: string, fallback?: string) => {
@@ -133,5 +135,30 @@ describe("InboxService", () => {
       (row: any) => row.id === "SM_DUP" || row.sid === "SM_DUP",
     );
     expect(sidMessages).toHaveLength(1);
+  });
+
+  it("clears unread count when replying to a conversation", async () => {
+    twilio.sendMessage.mockResolvedValue({
+      to: "+15550000001",
+      from: "+15550000000",
+      body: "Thanks",
+      sid: "SM_REPLY_1",
+      dateSent: "2026-05-08T10:03:00.000Z",
+      dateCreated: "2026-05-08T10:03:00.000Z",
+    });
+    prisma.outboundMessage.create.mockResolvedValue({
+      sentAt: new Date("2026-05-08T10:03:00.000Z"),
+    });
+    prisma.conversationState.upsert.mockResolvedValue({});
+
+    await service.reply("+15550000001", "Thanks");
+
+    expect(prisma.conversationState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          unreadCount: 0,
+        }),
+      }),
+    );
   });
 });

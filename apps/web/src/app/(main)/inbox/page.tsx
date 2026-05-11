@@ -21,8 +21,8 @@ import { useToast } from "@/components/ui/toast";
 import { fuzzyIncludes } from "@/lib/fuzzy";
 import { parseSmsReaction } from "@/lib/sms-reactions";
 
-type InboxFilter = "all" | "unresolved" | "responded" | "priority";
-const FILTER_KEYS: InboxFilter[] = ["all", "unresolved", "responded", "priority"];
+type InboxFilter = "all" | "unresolved" | "awaiting-response" | "responded" | "priority";
+const FILTER_KEYS: InboxFilter[] = ["all", "unresolved", "awaiting-response", "responded", "priority"];
 const INBOX_ROUTE_STATE_KEY = "yarns.inbox.routeState";
 
 type ConversationRow = {
@@ -60,13 +60,15 @@ type BlastContext = {
 };
 
 function parseFilter(value: string | null): InboxFilter {
-  if (value === "unresolved" || value === "responded" || value === "priority") return value;
+  if (value === "unresolved" || value === "awaiting-response" || value === "responded" || value === "priority")
+    return value;
   return "all";
 }
 
 function matchesConversationFilter(row: ConversationRow, filter: InboxFilter) {
   if (filter === "all") return true;
   if (filter === "unresolved") return !row.resolved;
+  if (filter === "awaiting-response") return row.unreadCount > 0 && !row.resolved;
   if (filter === "responded") return row.unreadCount === 0 && !row.resolved;
   if (filter === "priority") return row.unreadCount >= 3 && !row.resolved;
   return true;
@@ -393,7 +395,7 @@ export default function InboxPage() {
         tone: "success",
         title: "Reply sent",
       });
-      patchConversationRow(routeContact, { lastMessageAt: replyAt });
+      patchConversationRow(routeContact, { lastMessageAt: replyAt, unreadCount: 0 });
       void loadConversations(false);
     }
     await loadThread(routeContact, false);

@@ -50,6 +50,7 @@ export type ValidatedEnv = {
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
+  TWILIO_STATUS_CALLBACK_URL: string;
   ACTION_NETWORK_API_BASE_URL: string;
   ACTION_NETWORK_API_KEY: string;
   INTERNAL_SOURCE_API_BASE_URL: string;
@@ -90,6 +91,7 @@ export function validateEnv(config: Env): ValidatedEnv {
     TWILIO_ACCOUNT_SID: required(config, "TWILIO_ACCOUNT_SID", errors),
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),
+    TWILIO_STATUS_CALLBACK_URL: config.TWILIO_STATUS_CALLBACK_URL?.trim() || "",
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
     ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),

@@ -115,7 +115,9 @@ export default function BlastComposerPage() {
   );
   const [savingBlast, setSavingBlast] = useState(false);
   const [deletingBlast, setDeletingBlast] = useState(false);
+  const [sendingBlast, setSendingBlast] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSendDialog, setShowSendDialog] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -337,6 +339,35 @@ export default function BlastComposerPage() {
     }
   };
 
+  const sendBlastNow = async () => {
+    if (!validateDraft()) return;
+    setSendingBlast(true);
+    try {
+      const id = await ensureBlast();
+      if (!id) return;
+      const proofed = await markBlastProofed(id);
+      if (!proofed.ok) {
+        setActionMessage(proofed.error);
+        return;
+      }
+      const sent = await sendBlast(id);
+      if (!sent.ok) {
+        setActionMessage(sent.error);
+        return;
+      }
+      setStatus(String((sent.data as any).blast?.status || "SENT"));
+      setActionMessage(`Blast dispatched: ${(sent.data as any).sent || 0} sent`);
+      showToast({
+        tone: "success",
+        title: "Blast sent",
+        description: `${(sent.data as any).sent || 0} recipients queued.`,
+      });
+      router.push(`/blasts/${encodeURIComponent(id)}`);
+    } finally {
+      setSendingBlast(false);
+    }
+  };
+
   const insertTagIntoTemplate = (tag: string) => {
     const textarea = templateRef.current;
     if (!textarea) {
@@ -433,26 +464,11 @@ export default function BlastComposerPage() {
               Send Proof
             </Button>
             <Button
-              disabled={deletingBlast}
-              onClick={async () => {
-                if (!validateDraft()) return;
-                const id = await ensureBlast();
-                if (!id) return;
-                const proofed = await markBlastProofed(id);
-                if (!proofed.ok) return setActionMessage(proofed.error);
-                const sent = await sendBlast(id);
-                if (!sent.ok) return setActionMessage(sent.error);
-                setStatus(String((sent.data as any).blast?.status || "SENT"));
-                setActionMessage(`Blast dispatched: ${(sent.data as any).sent || 0} sent`);
-                showToast({
-                  tone: "success",
-                  title: "Blast sent",
-                  description: `${(sent.data as any).sent || 0} recipients queued.`,
-                });
-              }}
+              disabled={deletingBlast || sendingBlast}
+              onClick={() => setShowSendDialog(true)}
             >
               <Send className="mr-2 h-4 w-4" />
-              Send Now
+              {sendingBlast ? "Sending..." : "Send Now"}
             </Button>
           </div>
         </div>
@@ -659,6 +675,18 @@ export default function BlastComposerPage() {
         onConfirm={async () => {
           setShowDeleteDialog(false);
           await deleteCurrentBlast();
+        }}
+      />
+      <ConfirmDialog
+        open={showSendDialog}
+        title="Send blast now?"
+        description="This will start sending messages to your selected audience immediately."
+        confirmLabel="Send Blast"
+        busy={sendingBlast}
+        onCancel={() => setShowSendDialog(false)}
+        onConfirm={async () => {
+          setShowSendDialog(false);
+          await sendBlastNow();
         }}
       />
     </div>

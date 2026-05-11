@@ -384,6 +384,7 @@ export class InboxService {
         },
       },
       update: {
+        unreadCount: 0,
         lastMessageAt: row.sentAt,
       },
       create: {

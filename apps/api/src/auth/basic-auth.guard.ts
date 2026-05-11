@@ -76,7 +76,9 @@ export class BasicAuthGuard implements CanActivate {
   private isPublicWebhookPath(request: Request): boolean {
     const allowedPaths = new Set([
       "/inbound-text-message-hook",
+      "/twilio-status-callback",
       "/api/v1/inbound-text-message-hook",
+      "/api/v1/twilio-status-callback",
     ]);
     const candidates = [request.path, request.originalUrl, request.url]
       .filter((value): value is string => Boolean(value))

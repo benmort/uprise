@@ -1,4 +1,5 @@
 import { ConfigService } from "@nestjs/config";
+import { BlastRecipientStatus } from "../../src/generated/prisma";
 import { BlastsService } from "./blasts.service";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";
@@ -206,5 +207,132 @@ describe("BlastsService integration-like flow", () => {
         errorMessage: "Skipped duplicate recipient: message already sent for this blast.",
       },
     });
+  });
+
+  it("marks delivered from callback and preserves responded recipient status", async () => {
+    const prismaMock: any = {
+      blastRecipient: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: "recipient_sent",
+            status: BlastRecipientStatus.SENT,
+            deliveredAt: null,
+            errorCode: null,
+            errorMessage: null,
+          },
+          {
+            id: "recipient_responded",
+            status: BlastRecipientStatus.RESPONDED,
+            deliveredAt: null,
+            errorCode: null,
+            errorMessage: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      outboundMessage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: "outbound_1",
+            status: BlastRecipientStatus.SENT,
+            errorCode: null,
+            errorMessage: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      { sendMessage: jest.fn() } as unknown as TwilioService,
+      eventsMock,
+    );
+
+    const result = await service.handleTwilioStatusCallback({
+      messageSid: "SM_DELIVERED_1",
+      messageStatus: "delivered",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        messageSid: "SM_DELIVERED_1",
+        status: "delivered",
+        recipientUpdates: 2,
+        outboundUpdates: 1,
+      }),
+    );
+    expect(prismaMock.blastRecipient.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "recipient_sent" },
+      data: {
+        status: BlastRecipientStatus.DELIVERED,
+        deliveredAt: expect.any(Date),
+      },
+    });
+    expect(prismaMock.blastRecipient.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "recipient_responded" },
+      data: {
+        deliveredAt: expect.any(Date),
+      },
+    });
+    expect(prismaMock.outboundMessage.update).toHaveBeenCalledWith({
+      where: { id: "outbound_1" },
+      data: {
+        status: BlastRecipientStatus.DELIVERED,
+      },
+    });
+  });
+
+  it("treats duplicate delivered callbacks as idempotent updates", async () => {
+    const firstDeliveredAt = new Date("2026-05-11T09:30:00.000Z");
+    const prismaMock: any = {
+      blastRecipient: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: "recipient_delivered",
+            status: BlastRecipientStatus.DELIVERED,
+            deliveredAt: firstDeliveredAt,
+            errorCode: null,
+            errorMessage: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      outboundMessage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: "outbound_delivered",
+            status: BlastRecipientStatus.DELIVERED,
+            errorCode: null,
+            errorMessage: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      { sendMessage: jest.fn() } as unknown as TwilioService,
+      eventsMock,
+    );
+
+    const result = await service.handleTwilioStatusCallback({
+      messageSid: "SM_DELIVERED_1",
+      messageStatus: "delivered",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        recipientUpdates: 0,
+        outboundUpdates: 0,
+      }),
+    );
+    expect(prismaMock.blastRecipient.update).not.toHaveBeenCalled();
+    expect(prismaMock.outboundMessage.update).not.toHaveBeenCalled();
   });
 });

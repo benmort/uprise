@@ -37,7 +37,7 @@ export class AnalyticsService {
       }),
       this.prisma.blastRecipient.count({ where: { blastId, status: BlastRecipientStatus.SENT } }),
       this.prisma.blastRecipient.count({
-        where: { blastId, status: BlastRecipientStatus.DELIVERED },
+        where: { blastId, deliveredAt: { not: null } },
       }),
       this.prisma.blastRecipient.count({
         where: { blastId, status: BlastRecipientStatus.RESPONDED },

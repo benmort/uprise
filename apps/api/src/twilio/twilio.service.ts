@@ -68,6 +68,14 @@ export class TwilioService {
     return this.client;
   }
 
+  private getStatusCallbackUrl(): string | null {
+    const explicit = this.config.get<string>("TWILIO_STATUS_CALLBACK_URL", "").trim();
+    if (explicit) return explicit;
+    const apiBaseUrl = this.config.get<string>("API_BASE_URL", "").trim();
+    if (!apiBaseUrl) return null;
+    return `${apiBaseUrl.replace(/\/+$/, "")}/api/v1/twilio-status-callback`;
+  }
+
   async getMessagesPage(opts: { pageSize: number; pageToken?: string | null }): Promise<MessagesPage> {
     const client = this.getClient();
     const pageSize = Math.min(Math.max(1, opts.pageSize || 20), 100);
@@ -149,12 +157,14 @@ export class TwilioService {
     if (!from?.trim()) {
       throw new ServiceUnavailableException("TWILIO_PHONE_NUMBER is not set.");
     }
+    const statusCallback = this.getStatusCallbackUrl();
     const created = await withRetry(
       () =>
         client.messages.create({
           from: from.trim(),
           to: to.trim(),
           body: body.trim(),
+          ...(statusCallback ? { statusCallback } : {}),
         }),
       { retries: 2 },
     );

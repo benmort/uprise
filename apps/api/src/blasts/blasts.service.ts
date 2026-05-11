@@ -22,11 +22,34 @@ type RecipientSeed = {
   metadata: Record<string, unknown>;
 };
 
+type TwilioStatusCallbackPayload = {
+  messageSid: string;
+  messageStatus: string;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+};
+
 const SENT_RECIPIENT_STATUSES: BlastRecipientStatus[] = [
   BlastRecipientStatus.SENT,
   BlastRecipientStatus.DELIVERED,
   BlastRecipientStatus.RESPONDED,
 ];
+
+const SEND_PHASE_RECIPIENT_STATUSES: BlastRecipientStatus[] = [
+  BlastRecipientStatus.PENDING,
+  BlastRecipientStatus.QUEUED,
+  BlastRecipientStatus.SENT,
+  BlastRecipientStatus.DELIVERED,
+];
+
+const FAILED_TRANSITIONABLE_STATUSES: BlastRecipientStatus[] = [
+  BlastRecipientStatus.PENDING,
+  BlastRecipientStatus.QUEUED,
+  BlastRecipientStatus.SENT,
+];
+
+const TWILIO_DELIVERY_CONFIRMED_STATUSES = new Set(["delivered", "read"]);
+const TWILIO_DELIVERY_FAILED_STATUSES = new Set(["failed", "undelivered"]);
 
 const SKIPPED_DUPLICATE_ERROR =
   "Skipped duplicate recipient: message already sent for this blast.";
@@ -287,6 +310,114 @@ export class BlastsService {
         bucketAt: new Date(toUtcMinuteBucket(new Date())),
       },
     });
+  }
+
+  async handleTwilioStatusCallback(payload: TwilioStatusCallbackPayload) {
+    const messageSid = String(payload.messageSid || "").trim();
+    const status = String(payload.messageStatus || "").trim().toLowerCase();
+    const errorCode = payload.errorCode ? String(payload.errorCode).trim() : null;
+    const errorMessage = payload.errorMessage ? String(payload.errorMessage).trim() : null;
+    if (!messageSid || !status) {
+      return {
+        messageSid,
+        status,
+        recipientUpdates: 0,
+        outboundUpdates: 0,
+        ignored: true,
+      };
+    }
+
+    const callbackAt = new Date();
+    const [recipients, outboundRows] = await Promise.all([
+      this.prisma.blastRecipient.findMany({
+        where: { twilioMessageSid: messageSid },
+        select: {
+          id: true,
+          status: true,
+          deliveredAt: true,
+          errorCode: true,
+          errorMessage: true,
+        },
+      }),
+      this.prisma.outboundMessage.findMany({
+        where: { twilioMessageSid: messageSid },
+        select: {
+          id: true,
+          status: true,
+          errorCode: true,
+          errorMessage: true,
+        },
+      }),
+    ]);
+
+    let recipientUpdates = 0;
+    let outboundUpdates = 0;
+
+    for (const recipient of recipients) {
+      const data: Prisma.BlastRecipientUpdateInput = {};
+      if (TWILIO_DELIVERY_CONFIRMED_STATUSES.has(status)) {
+        if (!recipient.deliveredAt) data.deliveredAt = callbackAt;
+        if (
+          SEND_PHASE_RECIPIENT_STATUSES.includes(recipient.status) &&
+          recipient.status !== BlastRecipientStatus.DELIVERED
+        ) {
+          data.status = BlastRecipientStatus.DELIVERED;
+        }
+        if (recipient.errorCode || recipient.errorMessage) {
+          data.errorCode = null;
+          data.errorMessage = null;
+        }
+      } else if (TWILIO_DELIVERY_FAILED_STATUSES.has(status)) {
+        if (FAILED_TRANSITIONABLE_STATUSES.includes(recipient.status)) {
+          data.status = BlastRecipientStatus.FAILED;
+        }
+        if (errorCode && errorCode !== recipient.errorCode) data.errorCode = errorCode;
+        if (errorMessage && errorMessage !== recipient.errorMessage) data.errorMessage = errorMessage;
+      } else {
+        continue;
+      }
+      if (Object.keys(data).length === 0) continue;
+      await this.prisma.blastRecipient.update({
+        where: { id: recipient.id },
+        data,
+      });
+      recipientUpdates += 1;
+    }
+
+    for (const outbound of outboundRows) {
+      const data: Prisma.OutboundMessageUpdateInput = {};
+      if (TWILIO_DELIVERY_CONFIRMED_STATUSES.has(status)) {
+        if (outbound.status !== BlastRecipientStatus.DELIVERED) {
+          data.status = BlastRecipientStatus.DELIVERED;
+        }
+        if (outbound.errorCode || outbound.errorMessage) {
+          data.errorCode = null;
+          data.errorMessage = null;
+        }
+      } else if (TWILIO_DELIVERY_FAILED_STATUSES.has(status)) {
+        if (outbound.status !== BlastRecipientStatus.FAILED) {
+          data.status = BlastRecipientStatus.FAILED;
+        }
+        if (errorCode && errorCode !== outbound.errorCode) data.errorCode = errorCode;
+        if (errorMessage && errorMessage !== outbound.errorMessage) data.errorMessage = errorMessage;
+      } else {
+        continue;
+      }
+      if (Object.keys(data).length === 0) continue;
+      await this.prisma.outboundMessage.update({
+        where: { id: outbound.id },
+        data,
+      });
+      outboundUpdates += 1;
+    }
+
+    return {
+      messageSid,
+      status,
+      recipientUpdates,
+      outboundUpdates,
+      ignored: false,
+    };
   }
 
   async sendNow(id: string, requestedBatchSize?: number) {

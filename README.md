@@ -90,6 +90,7 @@ Optional:
 - `BLAST_SEND_BATCH_SIZE` (default: `50`)
 - `BLAST_DISPATCH_BATCH_SIZE` (default: `5`, used by scheduled dispatch)
 - `BLAST_SEND_MAX_RUN_MS` (default: `22000`, runtime guard for single send cycle)
+- `TWILIO_STATUS_CALLBACK_URL` (optional override; defaults to `<API_BASE_URL>/api/v1/twilio-status-callback`)
 - `CORS_ALLOWED_ORIGINS` (comma-separated allowlist, recommended in production)
   - example: `https://yarns.org.au,https://www.yarns.org.au`
 - `RATE_LIMIT_WINDOW_MS` (default: `60000`)

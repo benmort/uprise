@@ -22,6 +22,8 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 
+type TrendWindow = "all" | "15" | "60" | "240";
+
 export default function BlastDetailsPage() {
   const params = useParams<{ id: string }>();
   const blastId = typeof params?.id === "string" ? params.id : "";
@@ -32,19 +34,20 @@ export default function BlastDetailsPage() {
   const [activity, setActivity] = useState<Array<Record<string, unknown>>>([]);
   const [activityTotal, setActivityTotal] = useState(0);
   const [activityPage, setActivityPage] = useState(0);
-  const [timeframeMinutes, setTimeframeMinutes] = useState(60);
+  const [trendWindow, setTrendWindow] = useState<TrendWindow>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [statusDistribution, setStatusDistribution] = useState<Array<Record<string, unknown>>>([]);
   const [streamStatus, setStreamStatus] = useState("idle");
   const activityPageSize = 20;
+  const trendRange: number | "all" = trendWindow === "all" ? "all" : Number(trendWindow);
 
   const loadForBlast = async (id: string, page = activityPage) => {
     setError("");
     const [kpiRes, trendRes, activityRes, statusRes] = await Promise.all([
       getBlastKpis(id),
-      getBlastTrend(id, timeframeMinutes),
+      getBlastTrend(id, trendRange),
       getBlastActivity(id, activityPageSize, page * activityPageSize),
       getBlastStatusDistribution(id),
     ]);
@@ -84,7 +87,7 @@ export default function BlastDetailsPage() {
     void loadForBlast(blastId, activityPage);
     const id = setInterval(() => void loadForBlast(blastId, activityPage), 8000);
     return () => clearInterval(id);
-  }, [blastId, activityPage, timeframeMinutes]);
+  }, [blastId, activityPage, trendWindow]);
 
   useEffect(() => {
     if (!blastId) return;
@@ -169,7 +172,7 @@ export default function BlastDetailsPage() {
       clearTimers();
       closeSource();
     };
-  }, [blastId, activityPage, timeframeMinutes]);
+  }, [blastId, activityPage, trendWindow]);
 
   const maxTrend = useMemo(() => {
     return Math.max(
@@ -242,9 +245,10 @@ export default function BlastDetailsPage() {
             <TooltipHint label="Time window for the trend chart." />
             <select
               className="h-11 rounded border border-input bg-background px-3 text-sm"
-              value={timeframeMinutes}
-              onChange={(event) => setTimeframeMinutes(Number(event.target.value))}
+              value={trendWindow}
+              onChange={(event) => setTrendWindow(event.target.value as TrendWindow)}
             >
+              <option value="all">All time</option>
               <option value={15}>Last 15m</option>
               <option value={60}>Last 60m</option>
               <option value={240}>Last 4h</option>

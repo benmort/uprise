@@ -71,6 +71,15 @@ describe("BasicAuthGuard", () => {
     expect(guard.canActivate(context)).toBe(true);
   });
 
+  it("allows twilio status callback webhook without auth", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/twilio-status-callback",
+      headers: {},
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
   it("rejects non-webhook requests without authorization", () => {
     const guard = createGuard();
     const context = executionContextWithRequest({
