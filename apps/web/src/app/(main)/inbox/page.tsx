@@ -70,6 +70,7 @@ export default function InboxPage() {
   const pathname = usePathname();
   const params = useSearchParams();
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const conversationFetchKeyRef = useRef<string | null>(null);
   const routeContact = params.get("contact") || "";
   const routeQuery = params.get("q") || "";
   const routeBlastId = params.get("blastId") || "";
@@ -252,12 +253,16 @@ export default function InboxPage() {
   }, [routeContact]);
 
   useEffect(() => {
-    void loadConversations(true);
+    const fetchKey = JSON.stringify([routeQuery, routeBlastId, routeAudienceId]);
+    const shouldShowLoading =
+      conversationFetchKeyRef.current === null || conversationFetchKeyRef.current !== fetchKey;
+    conversationFetchKeyRef.current = fetchKey;
+    void loadConversations(shouldShowLoading);
     const id = setInterval(() => {
       void loadConversations(false);
     }, 6000);
     return () => clearInterval(id);
-  }, [loadConversations]);
+  }, [loadConversations, routeQuery, routeBlastId, routeAudienceId]);
 
   useEffect(() => {
     if (!routeContact) {
