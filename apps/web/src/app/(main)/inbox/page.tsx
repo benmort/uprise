@@ -403,7 +403,7 @@ export default function InboxPage() {
     <div className="page-stack h-[calc(100vh-8rem)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">Inboxgi</h1>
+          <h1 className="text-3xl font-semibold">Inbox</h1>
           <p className="text-sm text-muted-foreground">
             Use filters, AI suggestions, and quick actions to resolve incoming conversations.
           </p>
