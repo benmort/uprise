@@ -66,6 +66,8 @@ export class BasicAuthGuard implements CanActivate {
     const allowedPaths = new Set([
       "/blasts/dispatch-due",
       "/api/v1/blasts/dispatch-due",
+      "/audiences/dispatch-imports",
+      "/api/v1/audiences/dispatch-imports",
     ]);
     const candidates = [request.path, request.originalUrl, request.url]
       .filter((value): value is string => Boolean(value))

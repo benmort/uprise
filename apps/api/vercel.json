@@ -9,6 +9,10 @@
     {
       "path": "/api/v1/blasts/dispatch-due",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/v1/audiences/dispatch-imports",
+      "schedule": "* * * * *"
     }
   ],
   "routes": [

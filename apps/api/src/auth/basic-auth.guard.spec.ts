@@ -127,6 +127,15 @@ describe("BasicAuthGuard", () => {
     expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
   });
 
+  it("allows audience import dispatch with valid bearer token", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/audiences/dispatch-imports",
+      headers: { authorization: "Bearer cron-secret" },
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
   it("allows analytics stream requests with a valid signed stream token", () => {
     const guard = createGuard();
     const streamToken = createStreamToken("stream-secret", 300).token;

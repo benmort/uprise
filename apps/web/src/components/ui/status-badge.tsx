@@ -20,10 +20,12 @@ const STATUS_STYLES: Record<string, string> = {
   ACTIVE: "bg-success-container text-success",
   ARCHIVED: "bg-surface-variant text-foreground",
   UPLOADING: "bg-primary-container text-foreground",
-  PROCESSING: "bg-warning-container text-warning-foreground",
+  PROCESSING: "bg-primary-container text-foreground",
   COMPLETED: "bg-success-container text-success",
   RESPONDED: "bg-warning-container text-warning-foreground",
   DELIVERED: "bg-primary-container text-foreground",
+  SLA_WARNING: "bg-warning-container text-warning-foreground",
+  SLA_BREACH: "bg-error-container text-error",
 };
 
 const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -40,6 +42,8 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   COMPLETED: CheckCircle2,
   RESPONDED: MessageCircleMore,
   DELIVERED: CheckCircle2,
+  SLA_WARNING: Clock3,
+  SLA_BREACH: AlertCircle,
 };
 
 export function StatusBadge({

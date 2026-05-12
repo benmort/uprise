@@ -3,17 +3,24 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   LayoutDashboard,
   LogOut,
   Mail,
   MessageSquareText,
+  Settings,
   Users,
 } from "lucide-react";
-import { createBlast } from "@/lib/api";
+import { createBlast, listConversations } from "@/lib/api";
 import { clearCredentials, getCredentials } from "@/lib/auth";
+import {
+  loadPushNotificationsEnabled,
+  registerForPush,
+  registerPushToken,
+} from "@/lib/push";
+import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -26,6 +33,7 @@ const NAV_ITEMS = [
   { href: "/audience", label: "Audience", icon: Users },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/inbox", label: "Inbox", icon: Mail },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function MainLayout({
@@ -37,6 +45,8 @@ export default function MainLayout({
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [creatingBlast, setCreatingBlast] = useState(false);
+  const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
+  const inboxUnreadRef = useRef(0);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -46,6 +56,63 @@ export default function MainLayout({
     }
     setReady(true);
   }, [pathname, router]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+
+    const syncInboxUnread = async () => {
+      const res = await listConversations();
+      if (!res.ok || cancelled) return;
+      const unread = (res.data || []).reduce((total, row) => {
+        const unresolved = !Boolean((row as any).resolved);
+        const unreadCount = Number((row as any).unreadCount || 0);
+        return unresolved ? total + unreadCount : total;
+      }, 0);
+      const previous = inboxUnreadRef.current;
+      inboxUnreadRef.current = unread;
+      setInboxUnreadCount(unread);
+      if (unread > previous && !String(pathname || "").startsWith("/inbox")) {
+        const settings = loadResponderAlertSettings();
+        if (settings.outsideInboxSound) {
+          playResponderAlertSound(settings.defaultProfile, settings);
+        }
+      }
+    };
+
+    void syncInboxUnread();
+    const id = window.setInterval(() => {
+      void syncInboxUnread();
+    }, 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [ready, pathname]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    if (!loadPushNotificationsEnabled()) return;
+    const setupPush = async () => {
+      const registered = await registerForPush();
+      if ("error" in registered) return;
+      if (cancelled) return;
+      const persisted = await registerPushToken(registered.token);
+      if (!persisted.ok) {
+        showToast({
+          tone: "warning",
+          title: "Push registration incomplete",
+          description: persisted.error,
+          durationMs: 2500,
+        });
+      }
+    };
+    void setupPush();
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, showToast]);
 
   const handleCreateBlast = useCallback(async () => {
     if (creatingBlast) return;
@@ -139,7 +206,12 @@ export default function MainLayout({
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.href === "/inbox" && inboxUnreadCount > 0 ? (
+                    <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                      {inboxUnreadCount}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

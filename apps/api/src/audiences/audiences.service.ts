@@ -1,5 +1,10 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { AudienceSource, AudienceStatus, Prisma } from "../../src/generated/prisma";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+  AudienceImportStatus,
+  AudienceSource,
+  AudienceStatus,
+  Prisma,
+} from "../../src/generated/prisma";
 import { parse } from "csv-parse/sync";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
@@ -8,6 +13,22 @@ import { ConfigService } from "@nestjs/config";
 import { CreateAudienceDto, ListAudiencesDto } from "./dto/audience.dto";
 
 type CsvRow = Record<string, string | undefined>;
+type ImportErrorRow = { row: number; message: string };
+type AudienceImportProgress = {
+  importId: string;
+  audienceId: string;
+  status: AudienceImportStatus;
+  fileName: string;
+  cursor: number;
+  totalRows: number;
+  importedRows: number;
+  failedRows: number;
+  errorSummary: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  remainingRows: number;
+};
 
 function parseSyncStats(summary: string | null | undefined): Record<string, unknown> | null {
   if (!summary) return null;
@@ -22,6 +43,8 @@ function parseSyncStats(summary: string | null | undefined): Record<string, unkn
 
 @Injectable()
 export class AudiencesService {
+  private readonly logger = new Logger(AudiencesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -149,7 +172,66 @@ export class AudiencesService {
     }) as CsvRow[];
   }
 
-  async importCsv(audienceId: string, fileName: string, csvRaw: string) {
+  private getImportBatchSize(requestedBatchSize?: number): number {
+    const envBatchSize = Number(this.config.get<string>("AUDIENCE_IMPORT_BATCH_SIZE", "200"));
+    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 200;
+    const effective = requestedBatchSize ?? fallback;
+    return Math.min(Math.max(1, Math.trunc(effective)), 2000);
+  }
+
+  private getImportDispatchBatchSize(): number {
+    const envBatchSize = Number(this.config.get<string>("AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE", "100"));
+    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 100;
+    return Math.min(Math.max(1, Math.trunc(fallback)), 500);
+  }
+
+  private getImportTimeBudgetMs(): number {
+    const envBudgetMs = Number(this.config.get<string>("AUDIENCE_IMPORT_MAX_RUN_MS", "22000"));
+    const fallback = Number.isFinite(envBudgetMs) ? envBudgetMs : 22000;
+    return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
+  }
+
+  private getStoredImportErrors(
+    existing: Prisma.JsonValue | null | undefined,
+    newRows: ImportErrorRow[],
+  ): ImportErrorRow[] {
+    const current = Array.isArray(existing) ? (existing as ImportErrorRow[]) : [];
+    const merged = [...current, ...newRows];
+    return merged.slice(-500);
+  }
+
+  private mapImportProgress(job: {
+    id: string;
+    audienceId: string;
+    status: AudienceImportStatus;
+    fileName: string;
+    cursor: number;
+    totalRows: number;
+    importedRows: number;
+    failedRows: number;
+    errorSummary: string | null;
+    createdAt: Date;
+    startedAt: Date | null;
+    completedAt: Date | null;
+  }): AudienceImportProgress {
+    return {
+      importId: job.id,
+      audienceId: job.audienceId,
+      status: job.status,
+      fileName: job.fileName,
+      cursor: job.cursor,
+      totalRows: job.totalRows,
+      importedRows: job.importedRows,
+      failedRows: job.failedRows,
+      errorSummary: job.errorSummary,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      remainingRows: Math.max(0, job.totalRows - job.cursor),
+    };
+  }
+
+  async startCsvImport(audienceId: string, fileName: string, csvRaw: string) {
     const org = await this.ensureOrganization();
     const audience = await this.prisma.audience.findFirst({
       where: { id: audienceId, organizationId: org.id },
@@ -157,13 +239,131 @@ export class AudiencesService {
     if (!audience) throw new NotFoundException("Audience not found");
 
     const rows = this.parseCsvRows(csvRaw);
-    const errors: Array<{ row: number; message: string }> = [];
-    let importedRows = 0;
-    for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i];
+
+    const created = await this.prisma.audienceImport.create({
+      data: {
+        organizationId: org.id,
+        audienceId,
+        fileName,
+        totalRows: rows.length,
+        importedRows: 0,
+        failedRows: 0,
+        cursor: 0,
+        csvRaw,
+        status: AudienceImportStatus.QUEUED,
+        errors: [] as Prisma.InputJsonValue,
+        startedAt: null,
+        completedAt: null,
+        errorSummary: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return this.processImportBatch(created.id);
+  }
+
+  async getImportStatus(audienceId: string, importId: string) {
+    const org = await this.ensureOrganization();
+    const job = await this.prisma.audienceImport.findFirst({
+      where: {
+        id: importId,
+        audienceId,
+        organizationId: org.id,
+      },
+      select: {
+        id: true,
+        audienceId: true,
+        status: true,
+        fileName: true,
+        cursor: true,
+        totalRows: true,
+        importedRows: true,
+        failedRows: true,
+        errorSummary: true,
+        createdAt: true,
+        startedAt: true,
+        completedAt: true,
+      },
+    });
+    if (!job) throw new NotFoundException("Audience import job not found");
+    return this.mapImportProgress(job);
+  }
+
+  async processImportBatch(importId: string, requestedBatchSize?: number) {
+    const org = await this.ensureOrganization();
+    const job = await this.prisma.audienceImport.findFirst({
+      where: {
+        id: importId,
+        organizationId: org.id,
+      },
+      select: {
+        id: true,
+        audienceId: true,
+        fileName: true,
+        status: true,
+        cursor: true,
+        totalRows: true,
+        importedRows: true,
+        failedRows: true,
+        errors: true,
+        csvRaw: true,
+        errorSummary: true,
+        createdAt: true,
+        startedAt: true,
+        completedAt: true,
+      },
+    });
+    if (!job) throw new NotFoundException("Audience import job not found");
+    if (job.status === AudienceImportStatus.SUCCEEDED || job.status === AudienceImportStatus.FAILED) {
+      return this.mapImportProgress(job);
+    }
+
+    const audience = await this.prisma.audience.findFirst({
+      where: { id: job.audienceId, organizationId: org.id },
+      select: { id: true },
+    });
+    if (!audience) {
+      await this.prisma.audienceImport.update({
+        where: { id: job.id },
+        data: {
+          status: AudienceImportStatus.FAILED,
+          errorSummary: "Audience not found",
+          completedAt: new Date(),
+          startedAt: job.startedAt ?? new Date(),
+        },
+      });
+      throw new NotFoundException("Audience not found");
+    }
+
+    const batchSize = this.getImportBatchSize(requestedBatchSize);
+    const runBudgetMs = this.getImportTimeBudgetMs();
+    const startedAtMs = Date.now();
+    const rows = this.parseCsvRows(job.csvRaw || "");
+    const initialCursor = Math.min(Math.max(0, job.cursor), rows.length);
+    let cursor = initialCursor;
+    let importedDelta = 0;
+    let failedDelta = 0;
+    const errorsForBatch: ImportErrorRow[] = [];
+    let processedInBatch = 0;
+
+    while (cursor < rows.length && processedInBatch < batchSize) {
+      const elapsedMs = Date.now() - startedAtMs;
+      if (elapsedMs >= runBudgetMs) {
+        this.logger.warn(
+          `Stopping audience import batch due to runtime budget (importId=${job.id}, cursor=${cursor}, elapsedMs=${elapsedMs}, budgetMs=${runBudgetMs})`,
+        );
+        break;
+      }
+      const row = rows[cursor];
+      const rowNumber = cursor + 1;
       const phoneRaw = row.phone || row.phone_number || row.mobile;
       if (!phoneRaw) {
-        errors.push({ row: i + 1, message: "Missing phone" });
+        errorsForBatch.push({ row: rowNumber, message: "Missing phone" });
+        failedDelta += 1;
+        cursor += 1;
+        processedInBatch += 1;
         continue;
       }
       try {
@@ -173,7 +373,7 @@ export class AudiencesService {
         await this.prisma.audienceContact.upsert({
           where: {
             audienceId_phoneE164: {
-              audienceId,
+              audienceId: job.audienceId,
               phoneE164: phone,
             },
           },
@@ -184,44 +384,118 @@ export class AudiencesService {
           },
           create: {
             organizationId: org.id,
-            audienceId,
+            audienceId: job.audienceId,
             phoneE164: phone,
             fullName,
             metadata,
             source: AudienceSource.CSV,
           },
         });
-        importedRows += 1;
+        importedDelta += 1;
       } catch (error) {
-        errors.push({ row: i + 1, message: String(error) });
+        errorsForBatch.push({ row: rowNumber, message: String(error) });
+        failedDelta += 1;
+      }
+      cursor += 1;
+      processedInBatch += 1;
+    }
+
+    const done = cursor >= rows.length;
+    const nextStatus = done ? AudienceImportStatus.SUCCEEDED : AudienceImportStatus.RUNNING;
+    const importedRows = job.importedRows + importedDelta;
+    const failedRows = job.failedRows + failedDelta;
+    const storedErrors = this.getStoredImportErrors(job.errors, errorsForBatch);
+    const errorSummary = done
+      ? failedRows > 0
+        ? `Completed with ${failedRows} failed rows`
+        : null
+      : job.errorSummary;
+
+    const updated = await this.prisma.audienceImport.update({
+      where: { id: job.id },
+      data: {
+        status: nextStatus,
+        cursor,
+        totalRows: rows.length,
+        importedRows,
+        failedRows,
+        errors: storedErrors as Prisma.InputJsonValue,
+        errorSummary,
+        startedAt: job.startedAt ?? new Date(),
+        completedAt: done ? new Date() : null,
+      },
+      select: {
+        id: true,
+        audienceId: true,
+        status: true,
+        fileName: true,
+        cursor: true,
+        totalRows: true,
+        importedRows: true,
+        failedRows: true,
+        errorSummary: true,
+        createdAt: true,
+        startedAt: true,
+        completedAt: true,
+      },
+    });
+
+    if (done) {
+      await this.prisma.audience.update({
+        where: { id: job.audienceId },
+        data: {
+          source: AudienceSource.CSV,
+          syncedAt: new Date(),
+        },
+      });
+    }
+
+    return this.mapImportProgress(updated);
+  }
+
+  async dispatchPendingImports(limit = 1) {
+    const org = await this.ensureOrganization();
+    const boundedLimit = Math.min(Math.max(1, Math.trunc(limit || 1)), 25);
+    const batchSize = this.getImportDispatchBatchSize();
+    const due = await this.prisma.audienceImport.findMany({
+      where: {
+        organizationId: org.id,
+        status: { in: [AudienceImportStatus.QUEUED, AudienceImportStatus.RUNNING] },
+      },
+      orderBy: [{ createdAt: "asc" }, { updatedAt: "asc" }],
+      take: boundedLimit,
+      select: { id: true, audienceId: true },
+    });
+
+    const results: Array<Record<string, unknown>> = [];
+    for (const job of due) {
+      try {
+        const outcome = await this.processImportBatch(job.id, batchSize);
+        results.push({
+          importId: job.id,
+          audienceId: job.audienceId,
+          ok: true,
+          status: outcome.status,
+          cursor: outcome.cursor,
+          totalRows: outcome.totalRows,
+          importedRows: outcome.importedRows,
+          failedRows: outcome.failedRows,
+          remainingRows: outcome.remainingRows,
+        });
+      } catch (error) {
+        results.push({
+          importId: job.id,
+          audienceId: job.audienceId,
+          ok: false,
+          error: String(error),
+        });
       }
     }
 
-    await this.prisma.audienceImport.create({
-      data: {
-        organizationId: org.id,
-        audienceId,
-        fileName,
-        totalRows: rows.length,
-        importedRows,
-        failedRows: errors.length,
-        errors,
-      },
-    });
-
-    await this.prisma.audience.update({
-      where: { id: audienceId },
-      data: {
-        source: AudienceSource.CSV,
-        syncedAt: new Date(),
-      },
-    });
-
     return {
-      totalRows: rows.length,
-      importedRows,
-      failedRows: errors.length,
-      errors,
+      processed: due.length,
+      batchSize,
+      results,
     };
   }
 

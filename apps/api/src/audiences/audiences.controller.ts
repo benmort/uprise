@@ -46,6 +46,13 @@ export class AudiencesController {
     return this.audiences.listAudiences(dto);
   }
 
+  @Get("dispatch-imports")
+  @Post("dispatch-imports")
+  dispatchImports(@Query("limit") limit?: string) {
+    const parsedLimit = limit ? Number(limit) : undefined;
+    return this.audiences.dispatchPendingImports(parsedLimit);
+  }
+
   @Get(":id")
   getOne(@Param("id") id: string) {
     return this.audiences.getAudience(id);
@@ -73,7 +80,15 @@ export class AudiencesController {
     @UploadedFile() file: any,
   ) {
     this.validateCsvUpload(file);
-    return this.audiences.importCsv(id, file.originalname || "contacts.csv", file.buffer.toString("utf8"));
+    return this.audiences.startCsvImport(id, file.originalname || "contacts.csv", file.buffer.toString("utf8"));
+  }
+
+  @Get(":id/imports/:importId")
+  importStatus(
+    @Param("id") id: string,
+    @Param("importId") importId: string,
+  ) {
+    return this.audiences.getImportStatus(id, importId);
   }
 
   @Get(":id/contacts")

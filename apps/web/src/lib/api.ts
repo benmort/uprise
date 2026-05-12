@@ -143,6 +143,18 @@ export async function importAudienceCsv(
   file: File,
   onProgress?: (percent: number) => void,
 ) {
+  type AudienceImportProgress = {
+    importId: string;
+    audienceId: string;
+    status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+    fileName: string;
+    cursor: number;
+    totalRows: number;
+    importedRows: number;
+    failedRows: number;
+    errorSummary: string | null;
+    remainingRows: number;
+  };
   const apiUrl = getApiUrl();
   const credentials = getCredentials();
   if (!credentials) return { ok: false as const, error: "Not authenticated" };
@@ -152,7 +164,7 @@ export async function importAudienceCsv(
 
   if (onProgress && typeof window !== "undefined" && typeof XMLHttpRequest !== "undefined") {
     return new Promise<
-      | { ok: true; data: Record<string, unknown> }
+      | { ok: true; data: AudienceImportProgress }
       | { ok: false; error: string }
     >((resolve) => {
       const xhr = new XMLHttpRequest();
@@ -175,7 +187,7 @@ export async function importAudienceCsv(
           }
         }
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve({ ok: true, data: (json?.data ?? json) as Record<string, unknown> });
+          resolve({ ok: true, data: (json?.data ?? json) as AudienceImportProgress });
           return;
         }
         resolve({
@@ -197,10 +209,25 @@ export async function importAudienceCsv(
     });
     const json = (await res.json().catch(() => null)) as any;
     if (!res.ok) return { ok: false as const, error: json?.error?.message || json?.message || "Upload failed" };
-    return { ok: true as const, data: json?.data ?? json };
+    return { ok: true as const, data: (json?.data ?? json) as AudienceImportProgress };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export async function getAudienceImportStatus(audienceId: string, importId: string) {
+  return request<{
+    importId: string;
+    audienceId: string;
+    status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+    fileName: string;
+    cursor: number;
+    totalRows: number;
+    importedRows: number;
+    failedRows: number;
+    errorSummary: string | null;
+    remainingRows: number;
+  }>(`/audiences/${encodeURIComponent(audienceId)}/imports/${encodeURIComponent(importId)}`);
 }
 
 export async function searchIntegrationLists(type: "ACTION_NETWORK" | "INTERNAL", query: string) {

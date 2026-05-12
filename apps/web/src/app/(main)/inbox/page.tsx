@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { SendHorizontal } from "lucide-react";
 import {
+  getApiUrl,
   getAiSuggestions,
   getConversation,
+  getRealtimeStreamToken,
   listConversations,
   markConversation,
   sendInboxReply,
@@ -20,6 +23,21 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { fuzzyIncludes } from "@/lib/fuzzy";
 import { parseSmsReaction } from "@/lib/sms-reactions";
+import {
+  type AlertSoundProfile,
+  type BlastWatchSettings,
+  type ResponderAlertSettings,
+  DEFAULT_RESPONDER_ALERT_SETTINGS,
+  loadBlastWatchSettings,
+  loadOwnershipMap,
+  loadResponderAlertSettings,
+  loadSnoozeMap,
+  playResponderAlertSound,
+  saveBlastWatchSettings,
+  saveOwnershipMap,
+  saveResponderAlertSettings,
+  saveSnoozeMap,
+} from "@/lib/responder-alerts";
 
 type InboxFilter = "all" | "unresolved" | "awaiting-response" | "responded" | "priority";
 const FILTER_KEYS: InboxFilter[] = ["all", "unresolved", "awaiting-response", "responded", "priority"];
@@ -31,6 +49,7 @@ type ConversationRow = {
   unreadCount: number;
   resolved: boolean;
   lastMessageAt?: string;
+  owner?: string | null;
 };
 
 type ThreadMessage = {
@@ -87,6 +106,21 @@ function sortConversations(rows: ConversationRow[]) {
   });
 }
 
+type SlaState = "none" | "ok" | "warning" | "breach";
+
+function getUnreadAgeMinutes(row: ConversationRow) {
+  if (row.resolved || row.unreadCount <= 0 || !row.lastMessageAt) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(row.lastMessageAt).getTime()) / 60000));
+}
+
+function getSlaState(row: ConversationRow, settings: ResponderAlertSettings): SlaState {
+  if (row.resolved || row.unreadCount <= 0) return "none";
+  const age = getUnreadAgeMinutes(row);
+  if (age >= settings.slaBreachMinutes) return "breach";
+  if (age >= settings.slaWarningMinutes) return "warning";
+  return "ok";
+}
+
 export default function InboxPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -112,6 +146,21 @@ export default function InboxPage() {
   const [conversationPage, setConversationPage] = useState(0);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showBlastHistory, setShowBlastHistory] = useState(false);
+  const [streamStatus, setStreamStatus] = useState("idle");
+  const [alertSettings, setAlertSettings] = useState<ResponderAlertSettings>(
+    DEFAULT_RESPONDER_ALERT_SETTINGS,
+  );
+  const [blastWatch, setBlastWatch] = useState<BlastWatchSettings>(() => ({
+    blastId: "",
+    enabled: false,
+    profile: "alert",
+  }));
+  const [ownershipMap, setOwnershipMap] = useState<Record<string, string>>({});
+  const [snoozeMap, setSnoozeMap] = useState<Record<string, number>>({});
+  const previousAlertSnapshotRef = useRef<
+    Record<string, { unreadCount: number; slaState: SlaState }>
+  >({});
+  const alertsPrimedRef = useRef(false);
 
   const setInboxRoute = useCallback(
     (
@@ -190,6 +239,29 @@ export default function InboxPage() {
   }, [routeContact, routeQuery, routeFilter, routeBlastId, routeAudienceId]);
 
   useEffect(() => {
+    setAlertSettings(loadResponderAlertSettings());
+    setBlastWatch(loadBlastWatchSettings());
+    setOwnershipMap(loadOwnershipMap());
+    setSnoozeMap(loadSnoozeMap());
+  }, []);
+
+  useEffect(() => {
+    saveResponderAlertSettings(alertSettings);
+  }, [alertSettings]);
+
+  useEffect(() => {
+    saveBlastWatchSettings(blastWatch);
+  }, [blastWatch]);
+
+  useEffect(() => {
+    saveOwnershipMap(ownershipMap);
+  }, [ownershipMap]);
+
+  useEffect(() => {
+    saveSnoozeMap(snoozeMap);
+  }, [snoozeMap]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const navigable = conversations.filter(
         (row) => matchesConversationSearch(row, routeQuery) && matchesConversationFilter(row, routeFilter),
@@ -255,6 +327,46 @@ export default function InboxPage() {
     if (withLoadingState) setLoadingThread(false);
   }, []);
 
+  const isSnoozed = useCallback(
+    (contactPhone: string) => {
+      const until = Number(snoozeMap[contactPhone] || 0);
+      return until > Date.now();
+    },
+    [snoozeMap],
+  );
+
+  const isAlertOwnedByCurrentAgent = useCallback(
+    (contactPhone: string) => {
+      const owner = (ownershipMap[contactPhone] || "").trim();
+      if (!owner) return true;
+      return owner.toLowerCase() === alertSettings.currentAgent.trim().toLowerCase();
+    },
+    [ownershipMap, alertSettings.currentAgent],
+  );
+
+  const resolveAlertProfile = useCallback(
+    (incomingBlastId?: string | null): AlertSoundProfile => {
+      const activeBlastId = incomingBlastId || routeBlastId || "";
+      if (
+        blastWatch.enabled &&
+        blastWatch.blastId &&
+        activeBlastId &&
+        blastWatch.blastId === activeBlastId
+      ) {
+        return blastWatch.profile;
+      }
+      return alertSettings.defaultProfile;
+    },
+    [alertSettings.defaultProfile, blastWatch, routeBlastId],
+  );
+
+  const snoozeContact = useCallback((contactPhone: string, minutes = 10) => {
+    setSnoozeMap((prev) => ({
+      ...prev,
+      [contactPhone]: Date.now() + minutes * 60 * 1000,
+    }));
+  }, []);
+
   useEffect(() => {
     setShowBlastHistory(false);
   }, [routeContact]);
@@ -285,6 +397,104 @@ export default function InboxPage() {
     }, 4000);
     return () => clearInterval(id);
   }, [routeContact, loadThread]);
+
+  useEffect(() => {
+    let source: EventSource | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
+    let reconnectAttempts = 0;
+
+    const clearTimers = () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const closeSource = () => {
+      source?.close();
+      source = null;
+    };
+
+    const scheduleReconnect = (delayMs: number, connect: () => void) => {
+      if (cancelled) return;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, delayMs);
+    };
+
+    const connect = async () => {
+      if (cancelled) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      closeSource();
+      const tokenRes = await getRealtimeStreamToken();
+      if (cancelled) return;
+      if (!tokenRes.ok) {
+        setStreamStatus("auth_failed");
+        scheduleReconnect(10000, () => {
+          void connect();
+        });
+        return;
+      }
+      const expiresAtMs = Date.parse(tokenRes.data.expiresAt);
+      if (Number.isFinite(expiresAtMs)) {
+        const refreshInMs = Math.max(5000, expiresAtMs - Date.now() - 30000);
+        refreshTimer = setTimeout(() => {
+          if (cancelled) return;
+          setStreamStatus("refreshing");
+          closeSource();
+          void connect();
+        }, refreshInMs);
+      }
+      const streamUrl = new URL(`${getApiUrl()}/analytics/stream`);
+      streamUrl.searchParams.set("token", tokenRes.data.token);
+      source = new EventSource(streamUrl.toString(), { withCredentials: false });
+      source.onopen = () => {
+        if (!cancelled) setStreamStatus("live");
+        reconnectAttempts = 0;
+      };
+      source.onerror = () => {
+        if (!cancelled) setStreamStatus("reconnecting");
+        closeSource();
+        reconnectAttempts += 1;
+        const delayMs = Math.min(15000, 1000 * 2 ** Math.min(reconnectAttempts, 4));
+        scheduleReconnect(delayMs, () => {
+          void connect();
+        });
+      };
+      source.onmessage = (event) => {
+        let eventType = "";
+        let payload: Record<string, unknown> = {};
+        try {
+          const parsed = JSON.parse(event.data || "{}") as { type?: string; payload?: Record<string, unknown> };
+          eventType = String(parsed.type || "");
+          payload = parsed.payload || {};
+        } catch {
+          eventType = "";
+        }
+        if (eventType && eventType !== "inbox.inbound" && eventType !== "inbox.reply") return;
+        void loadConversations(false);
+        const incomingContact = String(payload.contactPhone || "");
+        if (routeContact && incomingContact && routeContact === incomingContact) {
+          void loadThread(routeContact, false);
+        }
+      };
+    };
+
+    void connect();
+    return () => {
+      cancelled = true;
+      clearTimers();
+      closeSource();
+    };
+  }, [loadConversations, loadThread, routeContact]);
 
   useEffect(() => {
     if (!draftReply.trim()) {
@@ -364,6 +574,110 @@ export default function InboxPage() {
     [selectedConversation],
   );
 
+  useEffect(() => {
+    const previous = previousAlertSnapshotRef.current;
+    const next: Record<string, { unreadCount: number; slaState: SlaState }> = {};
+    const responderAlerts: ConversationRow[] = [];
+    const slaAlerts: Array<{ row: ConversationRow; state: SlaState }> = [];
+
+    for (const row of conversations) {
+      const slaState = getSlaState(row, alertSettings);
+      const prev = previous[row.contactPhone];
+      if (alertsPrimedRef.current) {
+        const prevUnread = prev?.unreadCount ?? 0;
+        if (!row.resolved && row.unreadCount > prevUnread) {
+          responderAlerts.push(row);
+        }
+        if (prev && prev.slaState !== slaState && (slaState === "warning" || slaState === "breach")) {
+          slaAlerts.push({ row, state: slaState });
+        }
+      }
+      next[row.contactPhone] = {
+        unreadCount: row.unreadCount,
+        slaState,
+      };
+    }
+
+    previousAlertSnapshotRef.current = next;
+    if (!alertsPrimedRef.current) {
+      alertsPrimedRef.current = true;
+      return;
+    }
+
+    for (const row of responderAlerts) {
+      if (isSnoozed(row.contactPhone)) continue;
+      const assignedOwner = (ownershipMap[row.contactPhone] || "").trim();
+      const ownerMatches = isAlertOwnedByCurrentAgent(row.contactPhone);
+      if (ownerMatches) {
+        playResponderAlertSound(resolveAlertProfile(routeBlastId || null), alertSettings);
+      }
+      showToast({
+        tone: ownerMatches ? "warning" : "info",
+        title: ownerMatches ? "New responder needs follow-up" : `Assigned to ${assignedOwner || "another agent"}`,
+        description: row.contactName || row.contactPhone,
+        actions: [
+          {
+            label: "Open thread",
+            onClick: () => {
+              setInboxRoute({ contact: row.contactPhone, filter: routeFilter }, false);
+            },
+          },
+          {
+            label: "Mark resolved",
+            onClick: () => {
+              void (async () => {
+                const marked = await markConversation(row.contactPhone, true);
+                if (!marked.ok) {
+                  showToast({
+                    tone: "error",
+                    title: "Unable to resolve conversation",
+                    description: marked.error,
+                  });
+                  return;
+                }
+                patchConversationRow(row.contactPhone, { resolved: true, unreadCount: 0 });
+              })();
+            },
+          },
+          {
+            label: "Snooze 10m",
+            onClick: () => {
+              snoozeContact(row.contactPhone, 10);
+            },
+          },
+        ],
+      });
+    }
+
+    for (const alert of slaAlerts) {
+      if (isSnoozed(alert.row.contactPhone)) continue;
+      if (!isAlertOwnedByCurrentAgent(alert.row.contactPhone)) continue;
+      playResponderAlertSound(alert.state === "breach" ? "alert" : "subtle", alertSettings);
+      showToast({
+        tone: alert.state === "breach" ? "error" : "warning",
+        title: alert.state === "breach" ? "Responder SLA breached" : "Responder SLA warning",
+        description: `${alert.row.contactName || alert.row.contactPhone} has been waiting ${getUnreadAgeMinutes(alert.row)}m`,
+        action: {
+          label: "Open thread",
+          onClick: () => setInboxRoute({ contact: alert.row.contactPhone, filter: routeFilter }, false),
+        },
+      });
+    }
+  }, [
+    conversations,
+    alertSettings,
+    isAlertOwnedByCurrentAgent,
+    isSnoozed,
+    ownershipMap,
+    patchConversationRow,
+    resolveAlertProfile,
+    routeBlastId,
+    routeFilter,
+    setInboxRoute,
+    showToast,
+    snoozeContact,
+  ]);
+
   const handleSendReply = async () => {
     if (!routeContact || !draftReply.trim() || sending) return;
     setSending(true);
@@ -409,7 +723,13 @@ export default function InboxPage() {
           <p className="text-sm text-muted-foreground">
             Use filters, AI suggestions, and quick actions to resolve incoming conversations.
           </p>
+          {alertSettings.reducedAudio || !alertSettings.soundEnabled ? (
+            <p className="mt-1 text-xs text-warning-foreground">
+              Visual fallback mode is active. Alerts rely on badges/toasts instead of chimes.
+            </p>
+          ) : null}
         </div>
+        <StatusBadge status={streamStatus === "live" ? "ACTIVE" : "SENDING"} className="capitalize" />
       </div>
       <div className="grid h-full gap-4 xl:grid-cols-[360px_1fr]">
         <Card className="flex h-full flex-col overflow-hidden">
@@ -451,6 +771,45 @@ export default function InboxPage() {
                 </Button>
               ))}
             </div>
+            {routeBlastId ? (
+              <div className="rounded border border-border bg-surface p-2 text-xs">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="font-medium">Blast Watch Mode</p>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={blastWatch.enabled && blastWatch.blastId === routeBlastId}
+                      onChange={(event) =>
+                        setBlastWatch({
+                          blastId: routeBlastId,
+                          enabled: event.target.checked,
+                          profile: blastWatch.profile,
+                        })
+                      }
+                    />
+                    Watch this blast
+                  </label>
+                </div>
+                <label className="flex items-center gap-2">
+                  Blast sound profile
+                  <select
+                    className="h-8 rounded border border-input bg-background px-2"
+                    value={blastWatch.profile}
+                    onChange={(event) =>
+                      setBlastWatch((prev) => ({
+                        ...prev,
+                        blastId: routeBlastId,
+                        profile: event.target.value as AlertSoundProfile,
+                      }))
+                    }
+                  >
+                    <option value="off">Off</option>
+                    <option value="subtle">Subtle</option>
+                    <option value="alert">Alert</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
             {(routeBlastId || routeAudienceId) && (
               <div className="flex flex-wrap gap-2">
                 {routeBlastId && (
@@ -499,6 +858,11 @@ export default function InboxPage() {
                           {row.contactName && (
                             <p className="text-xs text-muted-foreground">{row.contactPhone}</p>
                           )}
+                          {ownershipMap[row.contactPhone] ? (
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              Owner: {ownershipMap[row.contactPhone]}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2">
                           {row.unreadCount > 0 && (
@@ -506,6 +870,35 @@ export default function InboxPage() {
                               {row.unreadCount}
                             </span>
                           )}
+                          {getSlaState(row, alertSettings) === "warning" ? (
+                            <StatusBadge status="SLA_WARNING" />
+                          ) : null}
+                          {getSlaState(row, alertSettings) === "breach" ? (
+                            <StatusBadge status="SLA_BREACH" />
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="opacity-0 transition group-hover:opacity-100"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOwnershipMap((prev) => {
+                                const next = { ...prev };
+                                const owner = (next[row.contactPhone] || "").trim();
+                                if (owner && owner.toLowerCase() === alertSettings.currentAgent.trim().toLowerCase()) {
+                                  delete next[row.contactPhone];
+                                } else {
+                                  next[row.contactPhone] = alertSettings.currentAgent.trim() || "Agent";
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            {ownershipMap[row.contactPhone]?.toLowerCase() ===
+                            alertSettings.currentAgent.trim().toLowerCase()
+                              ? "Unclaim"
+                              : "Claim"}
+                          </Button>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -602,6 +995,92 @@ export default function InboxPage() {
             {selectedConversation?.contactName && routeContact && (
               <p className="text-xs text-muted-foreground">{routeContact}</p>
             )}
+            {routeContact ? (
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-muted-foreground">
+                  Owner: {ownershipMap[routeContact] || "Unassigned"}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!routeContact}
+                  onClick={async () => {
+                    if (!routeContact) return;
+                    const marked = await markConversation(routeContact, true);
+                    if (!marked.ok) {
+                      showToast({
+                        tone: "error",
+                        title: "Unable to resolve conversation",
+                        description: marked.error,
+                      });
+                      return;
+                    }
+                    patchConversationRow(routeContact, {
+                      resolved: true,
+                      unreadCount: 0,
+                    });
+                    showToast({
+                      tone: "success",
+                      title: "Conversation resolved",
+                      action: {
+                        label: "Undo",
+                        onClick: () => {
+                          void (async () => {
+                            const unmarked = await markConversation(routeContact, false);
+                            if (!unmarked.ok) {
+                              showToast({
+                                tone: "error",
+                                title: "Undo failed",
+                                description: unmarked.error,
+                              });
+                              return;
+                            }
+                            patchConversationRow(routeContact, {
+                              resolved: false,
+                              unreadCount: 0,
+                            });
+                            void loadConversations(false);
+                          })();
+                        },
+                      },
+                    });
+                    void loadConversations(false);
+                  }}
+                >
+                  Mark Resolved
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setOwnershipMap((prev) => {
+                      const next = { ...prev };
+                      if (
+                        ownershipMap[routeContact]?.toLowerCase() ===
+                        alertSettings.currentAgent.trim().toLowerCase()
+                      ) {
+                        delete next[routeContact];
+                      } else {
+                        next[routeContact] = alertSettings.currentAgent.trim() || "Agent";
+                      }
+                      return next;
+                    })
+                  }
+                >
+                  {ownershipMap[routeContact]?.toLowerCase() ===
+                  alertSettings.currentAgent.trim().toLowerCase()
+                    ? "Release"
+                    : "Claim"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => snoozeContact(routeContact, 10)}
+                >
+                  Snooze 10m
+                </Button>
+              </div>
+            ) : null}
             {blastContext && (
               <div className="rounded border border-border bg-surface px-3 py-2 text-xs">
                 Replying to blast: <strong>{String(blastContext.title || blastContext.blastId)}</strong>{" "}
@@ -799,63 +1278,14 @@ export default function InboxPage() {
                   ))}
                 </div>
               )}
-              <div className="mt-3 flex items-center justify-between">
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!routeContact}
-                    onClick={async () => {
-                      if (!routeContact) return;
-                      const marked = await markConversation(routeContact, true);
-                      if (!marked.ok) {
-                        showToast({
-                          tone: "error",
-                          title: "Unable to resolve conversation",
-                          description: marked.error,
-                        });
-                        return;
-                      }
-                      patchConversationRow(routeContact, {
-                        resolved: true,
-                        unreadCount: 0,
-                      });
-                      showToast({
-                        tone: "success",
-                        title: "Conversation resolved",
-                        action: {
-                          label: "Undo",
-                          onClick: () => {
-                            void (async () => {
-                              const unmarked = await markConversation(routeContact, false);
-                              if (!unmarked.ok) {
-                                showToast({
-                                  tone: "error",
-                                  title: "Undo failed",
-                                  description: unmarked.error,
-                                });
-                                return;
-                              }
-                              patchConversationRow(routeContact, {
-                                resolved: false,
-                                unreadCount: 0,
-                              });
-                              void loadConversations(false);
-                            })();
-                          },
-                        },
-                      });
-                      void loadConversations(false);
-                    }}
-                  >
-                    Mark Resolved
-                  </Button>
-                </div>
+              <div className="mt-3 flex items-center justify-end">
                 <Button
                   size="sm"
+                  className="gap-1.5"
                   disabled={!routeContact || !draftReply.trim() || sending}
                   onClick={() => void handleSendReply()}
                 >
+                  <SendHorizontal className="h-4 w-4" />
                   {sending ? "Sending..." : "Send"}
                 </Button>
               </div>

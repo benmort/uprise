@@ -90,6 +90,9 @@ Optional:
 - `BLAST_SEND_BATCH_SIZE` (default: `50`)
 - `BLAST_DISPATCH_BATCH_SIZE` (default: `5`, used by scheduled dispatch)
 - `BLAST_SEND_MAX_RUN_MS` (default: `22000`, runtime guard for single send cycle)
+- `AUDIENCE_IMPORT_BATCH_SIZE` (default: `200`)
+- `AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE` (default: `100`, used by import dispatch)
+- `AUDIENCE_IMPORT_MAX_RUN_MS` (default: `22000`, runtime guard for single import cycle)
 - `TWILIO_STATUS_CALLBACK_URL` (optional override; defaults to `<API_BASE_URL>/api/v1/twilio-status-callback`)
 - `CORS_ALLOWED_ORIGINS` (comma-separated allowlist, recommended in production)
   - example: `https://yarns.org.au,https://www.yarns.org.au`
@@ -100,7 +103,7 @@ Optional:
 - `FEATURE_BLAST_SCHEDULER_ENABLED`
 - Firebase admin vars (`GOOGLE_APPLICATION_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT_JSON(_B64)`)
 
-Scheduled dispatch runs via Vercel Cron (`/api/v1/blasts/dispatch-due`) every minute and expects `Authorization: Bearer <CRON_SECRET>`.
+Scheduled dispatch runs via Vercel Cron (`/api/v1/blasts/dispatch-due` and `/api/v1/audiences/dispatch-imports`) every minute and expects `Authorization: Bearer <CRON_SECRET>`.
 
 ### 2) Deploy Web (`apps/web`)
 

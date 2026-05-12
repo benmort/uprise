@@ -18,6 +18,7 @@ type ToastItem = {
   title: string;
   description?: string;
   action?: ToastAction;
+  actions?: ToastAction[];
 };
 
 type ToastInput = Omit<ToastItem, "id"> & { durationMs?: number };
@@ -101,6 +102,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     >
                       {toast.action.label}
                     </Button>
+                  ) : null}
+                  {toast.actions && toast.actions.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {toast.actions.map((action) => (
+                        <Button
+                          key={action.label}
+                          size="sm"
+                          variant="ghost"
+                          className="h-9 px-2 text-xs"
+                          onClick={action.onClick}
+                        >
+                          {action.label}
+                        </Button>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
                 <button

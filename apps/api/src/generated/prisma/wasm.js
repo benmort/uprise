@@ -171,11 +171,18 @@ exports.Prisma.AudienceImportScalarFieldEnum = {
   organizationId: 'organizationId',
   audienceId: 'audienceId',
   fileName: 'fileName',
+  status: 'status',
+  cursor: 'cursor',
   totalRows: 'totalRows',
   importedRows: 'importedRows',
   failedRows: 'failedRows',
+  csvRaw: 'csvRaw',
   errors: 'errors',
-  createdAt: 'createdAt'
+  errorSummary: 'errorSummary',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.AudienceSegmentScalarFieldEnum = {
@@ -350,6 +357,13 @@ exports.AudienceSource = exports.$Enums.AudienceSource = {
 exports.AudienceStatus = exports.$Enums.AudienceStatus = {
   ACTIVE: 'ACTIVE',
   ARCHIVED: 'ARCHIVED'
+};
+
+exports.AudienceImportStatus = exports.$Enums.AudienceImportStatus = {
+  QUEUED: 'QUEUED',
+  RUNNING: 'RUNNING',
+  SUCCEEDED: 'SUCCEEDED',
+  FAILED: 'FAILED'
 };
 
 exports.BlastStatus = exports.$Enums.BlastStatus = {

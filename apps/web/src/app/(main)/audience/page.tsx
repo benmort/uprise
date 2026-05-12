@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createAudience,
+  getAudienceImportStatus,
   importAudienceCsv,
   listAudiences,
   searchIntegrationLists,
@@ -31,6 +32,7 @@ type AudienceRow = {
 type UploadState = {
   audienceId: string;
   audienceName: string;
+  importId?: string;
   progress: number;
   status: "UPLOADING" | "PROCESSING" | "COMPLETED" | "FAILED";
 };
@@ -234,23 +236,83 @@ export default function AudiencePage() {
                     });
                   });
                   if (imported.ok) {
-                    const importedRows = Number((imported.data as any)?.importedRows || 0);
+                    const initialStatus = String((imported.data as any)?.status || "RUNNING");
+                    const importId = String((imported.data as any)?.importId || "");
                     setUploadState({
                       audienceId,
                       audienceName: trimmedName,
-                      progress: 100,
-                      status: "COMPLETED",
+                      importId,
+                      progress: initialStatus === "SUCCEEDED" ? 100 : 95,
+                      status:
+                        initialStatus === "SUCCEEDED"
+                          ? "COMPLETED"
+                          : initialStatus === "FAILED"
+                            ? "FAILED"
+                            : "PROCESSING",
                     });
-                    setImportMessage(`Imported ${importedRows.toLocaleString()} subscribers.`);
-                    showToast({
-                      tone: "success",
-                      title: "Audience import completed",
-                      description: `${importedRows.toLocaleString()} subscribers imported.`,
-                    });
+
+                    let terminal = imported.data as any;
+                    if (importId && initialStatus !== "SUCCEEDED" && initialStatus !== "FAILED") {
+                      for (let attempt = 0; attempt < 120; attempt += 1) {
+                        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+                        const statusRes = await getAudienceImportStatus(audienceId, importId);
+                        if (!statusRes.ok) {
+                          if (attempt === 119) {
+                            setImportMessage(statusRes.error);
+                          }
+                          continue;
+                        }
+                        terminal = statusRes.data as any;
+                        const status = String(terminal.status || "RUNNING");
+                        setUploadState((prev) => {
+                          if (!prev || prev.audienceId !== audienceId) return prev;
+                          return {
+                            ...prev,
+                            status:
+                              status === "SUCCEEDED"
+                                ? "COMPLETED"
+                                : status === "FAILED"
+                                  ? "FAILED"
+                                  : "PROCESSING",
+                            progress: status === "SUCCEEDED" || status === "FAILED" ? 100 : 95,
+                          };
+                        });
+                        if (status === "SUCCEEDED" || status === "FAILED") break;
+                      }
+                    }
+
+                    const terminalStatus = String(terminal.status || "");
+                    if (terminalStatus === "FAILED") {
+                      const summary = String(terminal.errorSummary || "Import failed.");
+                      setImportMessage(summary);
+                      showToast({
+                        tone: "error",
+                        title: "Audience import failed",
+                        description: summary,
+                      });
+                    } else if (terminalStatus === "SUCCEEDED") {
+                      const importedRows = Number(terminal.importedRows || 0);
+                      const failedRows = Number(terminal.failedRows || 0);
+                      setImportMessage(
+                        `Imported ${importedRows.toLocaleString()} subscribers${
+                          failedRows > 0 ? ` (${failedRows.toLocaleString()} failed rows)` : ""
+                        }.`,
+                      );
+                      showToast({
+                        tone: "success",
+                        title: "Audience import completed",
+                        description: `${importedRows.toLocaleString()} subscribers imported.`,
+                      });
+                    } else {
+                      setImportMessage("Import is still processing in the background. Refresh to check latest status.");
+                    }
+
                     setAudienceName("");
                     setCsvFile(null);
                     await refresh();
-                    setUploadState(null);
+                    if (terminalStatus === "SUCCEEDED" || terminalStatus === "FAILED") {
+                      setUploadState(null);
+                    }
                   } else {
                     setUploadState((prev) =>
                       prev && prev.audienceId === audienceId
@@ -459,19 +521,23 @@ export default function AudiencePage() {
                             {isUploading ? (
                               <div className="w-36 space-y-1">
                                 <div className="h-2 rounded-full bg-surface-variant">
-                                  <div
-                                    className={`h-2 rounded-full transition-all ${
-                                      uploadState.status === "FAILED" ? "bg-error" : "bg-primary"
-                                    }`}
-                                    style={{ width: `${Math.max(4, uploadState.progress)}%` }}
-                                  />
+                                  {uploadState.status === "FAILED" ? (
+                                    <div
+                                      className="h-2 rounded-full bg-error transition-all"
+                                      style={{ width: "100%" }}
+                                    />
+                                  ) : (
+                                    <div className="h-2 w-full rounded-full bg-primary animate-pulse" />
+                                  )}
                                 </div>
                                 <p className="text-xs text-muted-foreground">
                                   {uploadState.status === "PROCESSING"
                                     ? "Processing..."
                                     : uploadState.status === "FAILED"
                                       ? "Failed"
-                                      : `${uploadState.progress}%`}
+                                      : uploadState.status === "UPLOADING"
+                                        ? "Uploading..."
+                                        : "Working..."}
                                 </p>
                               </div>
                             ) : (

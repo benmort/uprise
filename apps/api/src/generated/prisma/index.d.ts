@@ -111,6 +111,16 @@ export const AudienceStatus: {
 export type AudienceStatus = (typeof AudienceStatus)[keyof typeof AudienceStatus]
 
 
+export const AudienceImportStatus: {
+  QUEUED: 'QUEUED',
+  RUNNING: 'RUNNING',
+  SUCCEEDED: 'SUCCEEDED',
+  FAILED: 'FAILED'
+};
+
+export type AudienceImportStatus = (typeof AudienceImportStatus)[keyof typeof AudienceImportStatus]
+
+
 export const BlastStatus: {
   DRAFTED: 'DRAFTED',
   PROOFED: 'PROOFED',
@@ -170,6 +180,10 @@ export const AudienceSource: typeof $Enums.AudienceSource
 export type AudienceStatus = $Enums.AudienceStatus
 
 export const AudienceStatus: typeof $Enums.AudienceStatus
+
+export type AudienceImportStatus = $Enums.AudienceImportStatus
+
+export const AudienceImportStatus: typeof $Enums.AudienceImportStatus
 
 export type BlastStatus = $Enums.BlastStatus
 
@@ -6675,12 +6689,14 @@ export namespace Prisma {
   }
 
   export type AudienceImportAvgAggregateOutputType = {
+    cursor: number | null
     totalRows: number | null
     importedRows: number | null
     failedRows: number | null
   }
 
   export type AudienceImportSumAggregateOutputType = {
+    cursor: number | null
     totalRows: number | null
     importedRows: number | null
     failedRows: number | null
@@ -6691,10 +6707,17 @@ export namespace Prisma {
     organizationId: string | null
     audienceId: string | null
     fileName: string | null
+    status: $Enums.AudienceImportStatus | null
+    cursor: number | null
     totalRows: number | null
     importedRows: number | null
     failedRows: number | null
+    csvRaw: string | null
+    errorSummary: string | null
+    startedAt: Date | null
+    completedAt: Date | null
     createdAt: Date | null
+    updatedAt: Date | null
   }
 
   export type AudienceImportMaxAggregateOutputType = {
@@ -6702,10 +6725,17 @@ export namespace Prisma {
     organizationId: string | null
     audienceId: string | null
     fileName: string | null
+    status: $Enums.AudienceImportStatus | null
+    cursor: number | null
     totalRows: number | null
     importedRows: number | null
     failedRows: number | null
+    csvRaw: string | null
+    errorSummary: string | null
+    startedAt: Date | null
+    completedAt: Date | null
     createdAt: Date | null
+    updatedAt: Date | null
   }
 
   export type AudienceImportCountAggregateOutputType = {
@@ -6713,22 +6743,31 @@ export namespace Prisma {
     organizationId: number
     audienceId: number
     fileName: number
+    status: number
+    cursor: number
     totalRows: number
     importedRows: number
     failedRows: number
+    csvRaw: number
     errors: number
+    errorSummary: number
+    startedAt: number
+    completedAt: number
     createdAt: number
+    updatedAt: number
     _all: number
   }
 
 
   export type AudienceImportAvgAggregateInputType = {
+    cursor?: true
     totalRows?: true
     importedRows?: true
     failedRows?: true
   }
 
   export type AudienceImportSumAggregateInputType = {
+    cursor?: true
     totalRows?: true
     importedRows?: true
     failedRows?: true
@@ -6739,10 +6778,17 @@ export namespace Prisma {
     organizationId?: true
     audienceId?: true
     fileName?: true
+    status?: true
+    cursor?: true
     totalRows?: true
     importedRows?: true
     failedRows?: true
+    csvRaw?: true
+    errorSummary?: true
+    startedAt?: true
+    completedAt?: true
     createdAt?: true
+    updatedAt?: true
   }
 
   export type AudienceImportMaxAggregateInputType = {
@@ -6750,10 +6796,17 @@ export namespace Prisma {
     organizationId?: true
     audienceId?: true
     fileName?: true
+    status?: true
+    cursor?: true
     totalRows?: true
     importedRows?: true
     failedRows?: true
+    csvRaw?: true
+    errorSummary?: true
+    startedAt?: true
+    completedAt?: true
     createdAt?: true
+    updatedAt?: true
   }
 
   export type AudienceImportCountAggregateInputType = {
@@ -6761,11 +6814,18 @@ export namespace Prisma {
     organizationId?: true
     audienceId?: true
     fileName?: true
+    status?: true
+    cursor?: true
     totalRows?: true
     importedRows?: true
     failedRows?: true
+    csvRaw?: true
     errors?: true
+    errorSummary?: true
+    startedAt?: true
+    completedAt?: true
     createdAt?: true
+    updatedAt?: true
     _all?: true
   }
 
@@ -6860,11 +6920,18 @@ export namespace Prisma {
     organizationId: string
     audienceId: string
     fileName: string
+    status: $Enums.AudienceImportStatus
+    cursor: number
     totalRows: number
     importedRows: number
     failedRows: number
+    csvRaw: string
     errors: JsonValue | null
+    errorSummary: string | null
+    startedAt: Date | null
+    completedAt: Date | null
     createdAt: Date
+    updatedAt: Date
     _count: AudienceImportCountAggregateOutputType | null
     _avg: AudienceImportAvgAggregateOutputType | null
     _sum: AudienceImportSumAggregateOutputType | null
@@ -6891,11 +6958,18 @@ export namespace Prisma {
     organizationId?: boolean
     audienceId?: boolean
     fileName?: boolean
+    status?: boolean
+    cursor?: boolean
     totalRows?: boolean
     importedRows?: boolean
     failedRows?: boolean
+    csvRaw?: boolean
     errors?: boolean
+    errorSummary?: boolean
+    startedAt?: boolean
+    completedAt?: boolean
     createdAt?: boolean
+    updatedAt?: boolean
     audience?: boolean | AudienceDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["audienceImport"]>
 
@@ -6904,11 +6978,18 @@ export namespace Prisma {
     organizationId?: boolean
     audienceId?: boolean
     fileName?: boolean
+    status?: boolean
+    cursor?: boolean
     totalRows?: boolean
     importedRows?: boolean
     failedRows?: boolean
+    csvRaw?: boolean
     errors?: boolean
+    errorSummary?: boolean
+    startedAt?: boolean
+    completedAt?: boolean
     createdAt?: boolean
+    updatedAt?: boolean
     audience?: boolean | AudienceDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["audienceImport"]>
 
@@ -6917,11 +6998,18 @@ export namespace Prisma {
     organizationId?: boolean
     audienceId?: boolean
     fileName?: boolean
+    status?: boolean
+    cursor?: boolean
     totalRows?: boolean
     importedRows?: boolean
     failedRows?: boolean
+    csvRaw?: boolean
     errors?: boolean
+    errorSummary?: boolean
+    startedAt?: boolean
+    completedAt?: boolean
     createdAt?: boolean
+    updatedAt?: boolean
   }
 
   export type AudienceImportInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -6941,11 +7029,18 @@ export namespace Prisma {
       organizationId: string
       audienceId: string
       fileName: string
+      status: $Enums.AudienceImportStatus
+      cursor: number
       totalRows: number
       importedRows: number
       failedRows: number
+      csvRaw: string
       errors: Prisma.JsonValue | null
+      errorSummary: string | null
+      startedAt: Date | null
+      completedAt: Date | null
       createdAt: Date
+      updatedAt: Date
     }, ExtArgs["result"]["audienceImport"]>
     composites: {}
   }
@@ -7344,11 +7439,18 @@ export namespace Prisma {
     readonly organizationId: FieldRef<"AudienceImport", 'String'>
     readonly audienceId: FieldRef<"AudienceImport", 'String'>
     readonly fileName: FieldRef<"AudienceImport", 'String'>
+    readonly status: FieldRef<"AudienceImport", 'AudienceImportStatus'>
+    readonly cursor: FieldRef<"AudienceImport", 'Int'>
     readonly totalRows: FieldRef<"AudienceImport", 'Int'>
     readonly importedRows: FieldRef<"AudienceImport", 'Int'>
     readonly failedRows: FieldRef<"AudienceImport", 'Int'>
+    readonly csvRaw: FieldRef<"AudienceImport", 'String'>
     readonly errors: FieldRef<"AudienceImport", 'Json'>
+    readonly errorSummary: FieldRef<"AudienceImport", 'String'>
+    readonly startedAt: FieldRef<"AudienceImport", 'DateTime'>
+    readonly completedAt: FieldRef<"AudienceImport", 'DateTime'>
     readonly createdAt: FieldRef<"AudienceImport", 'DateTime'>
+    readonly updatedAt: FieldRef<"AudienceImport", 'DateTime'>
   }
     
 
@@ -18095,11 +18197,18 @@ export namespace Prisma {
     organizationId: 'organizationId',
     audienceId: 'audienceId',
     fileName: 'fileName',
+    status: 'status',
+    cursor: 'cursor',
     totalRows: 'totalRows',
     importedRows: 'importedRows',
     failedRows: 'failedRows',
+    csvRaw: 'csvRaw',
     errors: 'errors',
-    createdAt: 'createdAt'
+    errorSummary: 'errorSummary',
+    startedAt: 'startedAt',
+    completedAt: 'completedAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
   };
 
   export type AudienceImportScalarFieldEnum = (typeof AudienceImportScalarFieldEnum)[keyof typeof AudienceImportScalarFieldEnum]
@@ -18381,6 +18490,20 @@ export namespace Prisma {
    * Reference to a field of type 'Json'
    */
   export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+  /**
+   * Reference to a field of type 'AudienceImportStatus'
+   */
+  export type EnumAudienceImportStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AudienceImportStatus'>
+    
+
+
+  /**
+   * Reference to a field of type 'AudienceImportStatus[]'
+   */
+  export type ListEnumAudienceImportStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AudienceImportStatus[]'>
     
 
 
@@ -18823,11 +18946,18 @@ export namespace Prisma {
     organizationId?: StringFilter<"AudienceImport"> | string
     audienceId?: StringFilter<"AudienceImport"> | string
     fileName?: StringFilter<"AudienceImport"> | string
+    status?: EnumAudienceImportStatusFilter<"AudienceImport"> | $Enums.AudienceImportStatus
+    cursor?: IntFilter<"AudienceImport"> | number
     totalRows?: IntFilter<"AudienceImport"> | number
     importedRows?: IntFilter<"AudienceImport"> | number
     failedRows?: IntFilter<"AudienceImport"> | number
+    csvRaw?: StringFilter<"AudienceImport"> | string
     errors?: JsonNullableFilter<"AudienceImport">
+    errorSummary?: StringNullableFilter<"AudienceImport"> | string | null
+    startedAt?: DateTimeNullableFilter<"AudienceImport"> | Date | string | null
+    completedAt?: DateTimeNullableFilter<"AudienceImport"> | Date | string | null
     createdAt?: DateTimeFilter<"AudienceImport"> | Date | string
+    updatedAt?: DateTimeFilter<"AudienceImport"> | Date | string
     audience?: XOR<AudienceRelationFilter, AudienceWhereInput>
   }
 
@@ -18836,11 +18966,18 @@ export namespace Prisma {
     organizationId?: SortOrder
     audienceId?: SortOrder
     fileName?: SortOrder
+    status?: SortOrder
+    cursor?: SortOrder
     totalRows?: SortOrder
     importedRows?: SortOrder
     failedRows?: SortOrder
+    csvRaw?: SortOrder
     errors?: SortOrderInput | SortOrder
+    errorSummary?: SortOrderInput | SortOrder
+    startedAt?: SortOrderInput | SortOrder
+    completedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
     audience?: AudienceOrderByWithRelationInput
   }
 
@@ -18852,11 +18989,18 @@ export namespace Prisma {
     organizationId?: StringFilter<"AudienceImport"> | string
     audienceId?: StringFilter<"AudienceImport"> | string
     fileName?: StringFilter<"AudienceImport"> | string
+    status?: EnumAudienceImportStatusFilter<"AudienceImport"> | $Enums.AudienceImportStatus
+    cursor?: IntFilter<"AudienceImport"> | number
     totalRows?: IntFilter<"AudienceImport"> | number
     importedRows?: IntFilter<"AudienceImport"> | number
     failedRows?: IntFilter<"AudienceImport"> | number
+    csvRaw?: StringFilter<"AudienceImport"> | string
     errors?: JsonNullableFilter<"AudienceImport">
+    errorSummary?: StringNullableFilter<"AudienceImport"> | string | null
+    startedAt?: DateTimeNullableFilter<"AudienceImport"> | Date | string | null
+    completedAt?: DateTimeNullableFilter<"AudienceImport"> | Date | string | null
     createdAt?: DateTimeFilter<"AudienceImport"> | Date | string
+    updatedAt?: DateTimeFilter<"AudienceImport"> | Date | string
     audience?: XOR<AudienceRelationFilter, AudienceWhereInput>
   }, "id">
 
@@ -18865,11 +19009,18 @@ export namespace Prisma {
     organizationId?: SortOrder
     audienceId?: SortOrder
     fileName?: SortOrder
+    status?: SortOrder
+    cursor?: SortOrder
     totalRows?: SortOrder
     importedRows?: SortOrder
     failedRows?: SortOrder
+    csvRaw?: SortOrder
     errors?: SortOrderInput | SortOrder
+    errorSummary?: SortOrderInput | SortOrder
+    startedAt?: SortOrderInput | SortOrder
+    completedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
     _count?: AudienceImportCountOrderByAggregateInput
     _avg?: AudienceImportAvgOrderByAggregateInput
     _max?: AudienceImportMaxOrderByAggregateInput
@@ -18885,11 +19036,18 @@ export namespace Prisma {
     organizationId?: StringWithAggregatesFilter<"AudienceImport"> | string
     audienceId?: StringWithAggregatesFilter<"AudienceImport"> | string
     fileName?: StringWithAggregatesFilter<"AudienceImport"> | string
+    status?: EnumAudienceImportStatusWithAggregatesFilter<"AudienceImport"> | $Enums.AudienceImportStatus
+    cursor?: IntWithAggregatesFilter<"AudienceImport"> | number
     totalRows?: IntWithAggregatesFilter<"AudienceImport"> | number
     importedRows?: IntWithAggregatesFilter<"AudienceImport"> | number
     failedRows?: IntWithAggregatesFilter<"AudienceImport"> | number
+    csvRaw?: StringWithAggregatesFilter<"AudienceImport"> | string
     errors?: JsonNullableWithAggregatesFilter<"AudienceImport">
+    errorSummary?: StringNullableWithAggregatesFilter<"AudienceImport"> | string | null
+    startedAt?: DateTimeNullableWithAggregatesFilter<"AudienceImport"> | Date | string | null
+    completedAt?: DateTimeNullableWithAggregatesFilter<"AudienceImport"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"AudienceImport"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"AudienceImport"> | Date | string
   }
 
   export type AudienceSegmentWhereInput = {
@@ -19181,6 +19339,7 @@ export namespace Prisma {
 
   export type BlastRecipientWhereUniqueInput = Prisma.AtLeast<{
     id?: string
+    blastId_phoneE164?: BlastRecipientBlastIdPhoneE164CompoundUniqueInput
     AND?: BlastRecipientWhereInput | BlastRecipientWhereInput[]
     OR?: BlastRecipientWhereInput[]
     NOT?: BlastRecipientWhereInput | BlastRecipientWhereInput[]
@@ -19200,7 +19359,7 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"BlastRecipient"> | Date | string
     updatedAt?: DateTimeFilter<"BlastRecipient"> | Date | string
     blast?: XOR<BlastRelationFilter, BlastWhereInput>
-  }, "id">
+  }, "id" | "blastId_phoneE164">
 
   export type BlastRecipientOrderByWithAggregationInput = {
     id?: SortOrder
@@ -20114,11 +20273,18 @@ export namespace Prisma {
     id?: string
     organizationId: string
     fileName: string
+    status?: $Enums.AudienceImportStatus
+    cursor?: number
     totalRows?: number
     importedRows?: number
     failedRows?: number
+    csvRaw: string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
     audience: AudienceCreateNestedOneWithoutImportsInput
   }
 
@@ -20127,22 +20293,36 @@ export namespace Prisma {
     organizationId: string
     audienceId: string
     fileName: string
+    status?: $Enums.AudienceImportStatus
+    cursor?: number
     totalRows?: number
     importedRows?: number
     failedRows?: number
+    csvRaw: string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type AudienceImportUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     organizationId?: StringFieldUpdateOperationsInput | string
     fileName?: StringFieldUpdateOperationsInput | string
+    status?: EnumAudienceImportStatusFieldUpdateOperationsInput | $Enums.AudienceImportStatus
+    cursor?: IntFieldUpdateOperationsInput | number
     totalRows?: IntFieldUpdateOperationsInput | number
     importedRows?: IntFieldUpdateOperationsInput | number
     failedRows?: IntFieldUpdateOperationsInput | number
+    csvRaw?: StringFieldUpdateOperationsInput | string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     audience?: AudienceUpdateOneRequiredWithoutImportsNestedInput
   }
 
@@ -20151,11 +20331,18 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     audienceId?: StringFieldUpdateOperationsInput | string
     fileName?: StringFieldUpdateOperationsInput | string
+    status?: EnumAudienceImportStatusFieldUpdateOperationsInput | $Enums.AudienceImportStatus
+    cursor?: IntFieldUpdateOperationsInput | number
     totalRows?: IntFieldUpdateOperationsInput | number
     importedRows?: IntFieldUpdateOperationsInput | number
     failedRows?: IntFieldUpdateOperationsInput | number
+    csvRaw?: StringFieldUpdateOperationsInput | string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AudienceImportCreateManyInput = {
@@ -20163,22 +20350,36 @@ export namespace Prisma {
     organizationId: string
     audienceId: string
     fileName: string
+    status?: $Enums.AudienceImportStatus
+    cursor?: number
     totalRows?: number
     importedRows?: number
     failedRows?: number
+    csvRaw: string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type AudienceImportUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
     organizationId?: StringFieldUpdateOperationsInput | string
     fileName?: StringFieldUpdateOperationsInput | string
+    status?: EnumAudienceImportStatusFieldUpdateOperationsInput | $Enums.AudienceImportStatus
+    cursor?: IntFieldUpdateOperationsInput | number
     totalRows?: IntFieldUpdateOperationsInput | number
     importedRows?: IntFieldUpdateOperationsInput | number
     failedRows?: IntFieldUpdateOperationsInput | number
+    csvRaw?: StringFieldUpdateOperationsInput | string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AudienceImportUncheckedUpdateManyInput = {
@@ -20186,11 +20387,18 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     audienceId?: StringFieldUpdateOperationsInput | string
     fileName?: StringFieldUpdateOperationsInput | string
+    status?: EnumAudienceImportStatusFieldUpdateOperationsInput | $Enums.AudienceImportStatus
+    cursor?: IntFieldUpdateOperationsInput | number
     totalRows?: IntFieldUpdateOperationsInput | number
     importedRows?: IntFieldUpdateOperationsInput | number
     failedRows?: IntFieldUpdateOperationsInput | number
+    csvRaw?: StringFieldUpdateOperationsInput | string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AudienceSegmentCreateInput = {
@@ -21595,6 +21803,13 @@ export namespace Prisma {
     _max?: NestedJsonNullableFilter<$PrismaModel>
   }
 
+  export type EnumAudienceImportStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceImportStatus | EnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceImportStatusFilter<$PrismaModel> | $Enums.AudienceImportStatus
+  }
+
   export type IntFilter<$PrismaModel = never> = {
     equals?: number | IntFieldRefInput<$PrismaModel>
     in?: number[] | ListIntFieldRefInput<$PrismaModel>
@@ -21611,14 +21826,22 @@ export namespace Prisma {
     organizationId?: SortOrder
     audienceId?: SortOrder
     fileName?: SortOrder
+    status?: SortOrder
+    cursor?: SortOrder
     totalRows?: SortOrder
     importedRows?: SortOrder
     failedRows?: SortOrder
+    csvRaw?: SortOrder
     errors?: SortOrder
+    errorSummary?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type AudienceImportAvgOrderByAggregateInput = {
+    cursor?: SortOrder
     totalRows?: SortOrder
     importedRows?: SortOrder
     failedRows?: SortOrder
@@ -21629,10 +21852,17 @@ export namespace Prisma {
     organizationId?: SortOrder
     audienceId?: SortOrder
     fileName?: SortOrder
+    status?: SortOrder
+    cursor?: SortOrder
     totalRows?: SortOrder
     importedRows?: SortOrder
     failedRows?: SortOrder
+    csvRaw?: SortOrder
+    errorSummary?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type AudienceImportMinOrderByAggregateInput = {
@@ -21640,16 +21870,34 @@ export namespace Prisma {
     organizationId?: SortOrder
     audienceId?: SortOrder
     fileName?: SortOrder
+    status?: SortOrder
+    cursor?: SortOrder
     totalRows?: SortOrder
     importedRows?: SortOrder
     failedRows?: SortOrder
+    csvRaw?: SortOrder
+    errorSummary?: SortOrder
+    startedAt?: SortOrder
+    completedAt?: SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type AudienceImportSumOrderByAggregateInput = {
+    cursor?: SortOrder
     totalRows?: SortOrder
     importedRows?: SortOrder
     failedRows?: SortOrder
+  }
+
+  export type EnumAudienceImportStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceImportStatus | EnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceImportStatusWithAggregatesFilter<$PrismaModel> | $Enums.AudienceImportStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAudienceImportStatusFilter<$PrismaModel>
+    _max?: NestedEnumAudienceImportStatusFilter<$PrismaModel>
   }
 
   export type IntWithAggregatesFilter<$PrismaModel = never> = {
@@ -21881,6 +22129,11 @@ export namespace Prisma {
     in?: $Enums.BlastRecipientStatus[] | ListEnumBlastRecipientStatusFieldRefInput<$PrismaModel>
     notIn?: $Enums.BlastRecipientStatus[] | ListEnumBlastRecipientStatusFieldRefInput<$PrismaModel>
     not?: NestedEnumBlastRecipientStatusFilter<$PrismaModel> | $Enums.BlastRecipientStatus
+  }
+
+  export type BlastRecipientBlastIdPhoneE164CompoundUniqueInput = {
+    blastId: string
+    phoneE164: string
   }
 
   export type BlastRecipientCountOrderByAggregateInput = {
@@ -22999,6 +23252,10 @@ export namespace Prisma {
     connect?: AudienceWhereUniqueInput
   }
 
+  export type EnumAudienceImportStatusFieldUpdateOperationsInput = {
+    set?: $Enums.AudienceImportStatus
+  }
+
   export type IntFieldUpdateOperationsInput = {
     set?: number
     increment?: number
@@ -23707,6 +23964,23 @@ export namespace Prisma {
     gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
     gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
+
+  export type NestedEnumAudienceImportStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceImportStatus | EnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceImportStatusFilter<$PrismaModel> | $Enums.AudienceImportStatus
+  }
+
+  export type NestedEnumAudienceImportStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceImportStatus | EnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceImportStatus[] | ListEnumAudienceImportStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceImportStatusWithAggregatesFilter<$PrismaModel> | $Enums.AudienceImportStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAudienceImportStatusFilter<$PrismaModel>
+    _max?: NestedEnumAudienceImportStatusFilter<$PrismaModel>
   }
 
   export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
@@ -24723,22 +24997,36 @@ export namespace Prisma {
     id?: string
     organizationId: string
     fileName: string
+    status?: $Enums.AudienceImportStatus
+    cursor?: number
     totalRows?: number
     importedRows?: number
     failedRows?: number
+    csvRaw: string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type AudienceImportUncheckedCreateWithoutAudienceInput = {
     id?: string
     organizationId: string
     fileName: string
+    status?: $Enums.AudienceImportStatus
+    cursor?: number
     totalRows?: number
     importedRows?: number
     failedRows?: number
+    csvRaw: string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type AudienceImportCreateOrConnectWithoutAudienceInput = {
@@ -24959,11 +25247,18 @@ export namespace Prisma {
     organizationId?: StringFilter<"AudienceImport"> | string
     audienceId?: StringFilter<"AudienceImport"> | string
     fileName?: StringFilter<"AudienceImport"> | string
+    status?: EnumAudienceImportStatusFilter<"AudienceImport"> | $Enums.AudienceImportStatus
+    cursor?: IntFilter<"AudienceImport"> | number
     totalRows?: IntFilter<"AudienceImport"> | number
     importedRows?: IntFilter<"AudienceImport"> | number
     failedRows?: IntFilter<"AudienceImport"> | number
+    csvRaw?: StringFilter<"AudienceImport"> | string
     errors?: JsonNullableFilter<"AudienceImport">
+    errorSummary?: StringNullableFilter<"AudienceImport"> | string | null
+    startedAt?: DateTimeNullableFilter<"AudienceImport"> | Date | string | null
+    completedAt?: DateTimeNullableFilter<"AudienceImport"> | Date | string | null
     createdAt?: DateTimeFilter<"AudienceImport"> | Date | string
+    updatedAt?: DateTimeFilter<"AudienceImport"> | Date | string
   }
 
   export type AudienceSegmentUpsertWithWhereUniqueWithoutAudienceInput = {
@@ -27339,11 +27634,18 @@ export namespace Prisma {
     id?: string
     organizationId: string
     fileName: string
+    status?: $Enums.AudienceImportStatus
+    cursor?: number
     totalRows?: number
     importedRows?: number
     failedRows?: number
+    csvRaw: string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: string | null
+    startedAt?: Date | string | null
+    completedAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type AudienceSegmentCreateManyAudienceInput = {
@@ -27411,33 +27713,54 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     organizationId?: StringFieldUpdateOperationsInput | string
     fileName?: StringFieldUpdateOperationsInput | string
+    status?: EnumAudienceImportStatusFieldUpdateOperationsInput | $Enums.AudienceImportStatus
+    cursor?: IntFieldUpdateOperationsInput | number
     totalRows?: IntFieldUpdateOperationsInput | number
     importedRows?: IntFieldUpdateOperationsInput | number
     failedRows?: IntFieldUpdateOperationsInput | number
+    csvRaw?: StringFieldUpdateOperationsInput | string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AudienceImportUncheckedUpdateWithoutAudienceInput = {
     id?: StringFieldUpdateOperationsInput | string
     organizationId?: StringFieldUpdateOperationsInput | string
     fileName?: StringFieldUpdateOperationsInput | string
+    status?: EnumAudienceImportStatusFieldUpdateOperationsInput | $Enums.AudienceImportStatus
+    cursor?: IntFieldUpdateOperationsInput | number
     totalRows?: IntFieldUpdateOperationsInput | number
     importedRows?: IntFieldUpdateOperationsInput | number
     failedRows?: IntFieldUpdateOperationsInput | number
+    csvRaw?: StringFieldUpdateOperationsInput | string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AudienceImportUncheckedUpdateManyWithoutAudienceInput = {
     id?: StringFieldUpdateOperationsInput | string
     organizationId?: StringFieldUpdateOperationsInput | string
     fileName?: StringFieldUpdateOperationsInput | string
+    status?: EnumAudienceImportStatusFieldUpdateOperationsInput | $Enums.AudienceImportStatus
+    cursor?: IntFieldUpdateOperationsInput | number
     totalRows?: IntFieldUpdateOperationsInput | number
     importedRows?: IntFieldUpdateOperationsInput | number
     failedRows?: IntFieldUpdateOperationsInput | number
+    csvRaw?: StringFieldUpdateOperationsInput | string
     errors?: NullableJsonNullValueInput | InputJsonValue
+    errorSummary?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AudienceSegmentUpdateWithoutAudienceInput = {

@@ -47,6 +47,9 @@ export type ValidatedEnv = {
   STREAM_TOKEN_SECRET: string;
   STREAM_TOKEN_TTL_SECONDS: number;
   BLAST_SEND_BATCH_SIZE: number;
+  AUDIENCE_IMPORT_BATCH_SIZE: number;
+  AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE: number;
+  AUDIENCE_IMPORT_MAX_RUN_MS: number;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
@@ -88,6 +91,30 @@ export function validateEnv(config: Env): ValidatedEnv {
       errors,
     ),
     BLAST_SEND_BATCH_SIZE: numberInRange(config, "BLAST_SEND_BATCH_SIZE", 1, 500, 50, errors),
+    AUDIENCE_IMPORT_BATCH_SIZE: numberInRange(
+      config,
+      "AUDIENCE_IMPORT_BATCH_SIZE",
+      1,
+      2000,
+      200,
+      errors,
+    ),
+    AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE: numberInRange(
+      config,
+      "AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE",
+      1,
+      500,
+      100,
+      errors,
+    ),
+    AUDIENCE_IMPORT_MAX_RUN_MS: numberInRange(
+      config,
+      "AUDIENCE_IMPORT_MAX_RUN_MS",
+      1000,
+      28000,
+      22000,
+      errors,
+    ),
     TWILIO_ACCOUNT_SID: required(config, "TWILIO_ACCOUNT_SID", errors),
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),

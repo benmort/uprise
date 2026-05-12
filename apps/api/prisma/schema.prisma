@@ -20,6 +20,13 @@ enum AudienceSource {
   INTERNAL
 }
 
+enum AudienceImportStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
 enum BlastStatus {
   DRAFTED
   PROOFED
@@ -124,16 +131,25 @@ model AudienceContact {
 }
 
 model AudienceImport {
-  id             String    @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
   audienceId     String
   fileName       String
-  totalRows      Int       @default(0)
-  importedRows   Int       @default(0)
-  failedRows     Int       @default(0)
+  status         AudienceImportStatus @default(QUEUED)
+  cursor         Int                  @default(0)
+  totalRows      Int                  @default(0)
+  importedRows   Int                  @default(0)
+  failedRows     Int                  @default(0)
+  csvRaw         String               @db.Text
   errors         Json?
-  createdAt      DateTime  @default(now())
-  audience       Audience  @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  errorSummary   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  audience       Audience             @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
 }
 
 model AudienceSegment {
