@@ -33,14 +33,13 @@ export default function AnalyticsPage() {
   const [activity, setActivity] = useState<Array<Record<string, unknown>>>([]);
   const [activityTotal, setActivityTotal] = useState(0);
   const [activityPage, setActivityPage] = useState(0);
+  const [activityPageSize, setActivityPageSize] = useState(10);
   const [trendWindow, setTrendWindow] = useState<TrendWindow>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [statusDistribution, setStatusDistribution] = useState<Array<Record<string, unknown>>>([]);
   const [streamStatus, setStreamStatus] = useState("idle");
-
-  const activityPageSize = 20;
   const trendRange: number | "all" = trendWindow === "all" ? "all" : Number(trendWindow);
 
   const loadForBlast = async (blastId: string, page = activityPage) => {
@@ -92,7 +91,7 @@ export default function AnalyticsPage() {
     void loadForBlast(selectedBlastId, activityPage);
     const id = setInterval(() => void loadForBlast(selectedBlastId, activityPage), 8000);
     return () => clearInterval(id);
-  }, [selectedBlastId, activityPage, trendWindow]);
+  }, [selectedBlastId, activityPage, trendWindow, activityPageSize]);
 
   useEffect(() => {
     if (!selectedBlastId) {
@@ -180,7 +179,7 @@ export default function AnalyticsPage() {
       clearTimers();
       closeSource();
     };
-  }, [selectedBlastId, activityPage, trendWindow]);
+  }, [selectedBlastId, activityPage, trendWindow, activityPageSize]);
 
   const maxTrend = useMemo(() => {
     return Math.max(
@@ -400,13 +399,32 @@ export default function AnalyticsPage() {
               Showing {activity.length} of {activityTotal} recipients
               {lastUpdatedAt ? ` • Updated ${lastUpdatedAt.toLocaleTimeString()}` : ""}
             </p>
-            <PaginationControls
-              page={activityPage}
-              pageSize={activityPageSize}
-              total={activityTotal}
-              onPrev={() => setActivityPage((prev) => Math.max(0, prev - 1))}
-              onNext={() => setActivityPage((prev) => prev + 1)}
-            />
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                Rows
+                <select
+                  className="h-9 rounded border border-input bg-background px-2 text-xs"
+                  value={activityPageSize}
+                  onChange={(event) => {
+                    setActivityPage(0);
+                    setActivityPageSize(Number(event.target.value));
+                  }}
+                >
+                  {[10, 20, 50, 100].map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <PaginationControls
+                page={activityPage}
+                pageSize={activityPageSize}
+                total={activityTotal}
+                onPrev={() => setActivityPage((prev) => Math.max(0, prev - 1))}
+                onNext={() => setActivityPage((prev) => prev + 1)}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
