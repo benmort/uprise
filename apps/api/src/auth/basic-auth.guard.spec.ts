@@ -5,9 +5,18 @@ import { BasicAuthGuard } from "./basic-auth.guard";
 import { createStreamToken } from "./stream-token";
 
 function executionContextWithRequest(request: Partial<Request>): ExecutionContext {
+  const normalizedRequest: Partial<Request> = { ...request };
+  const path = normalizedRequest.path;
+  if (!normalizedRequest.url && typeof path === "string") {
+    normalizedRequest.url = path;
+  }
+  if (!normalizedRequest.originalUrl && typeof path === "string") {
+    normalizedRequest.originalUrl = path;
+  }
+
   return {
     switchToHttp: () => ({
-      getRequest: () => request,
+      getRequest: () => normalizedRequest,
     }),
   } as unknown as ExecutionContext;
 }

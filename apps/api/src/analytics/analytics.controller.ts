@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, Sse } from "@nestjs/common";
-import { map, Observable } from "rxjs";
+import { map, Observable, takeUntil, timer } from "rxjs";
 import { AnalyticsService } from "./analytics.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
@@ -63,12 +63,16 @@ export class AnalyticsController {
 
   @Sse("stream")
   stream(): Observable<MessageEvent> {
+    const maxConnectionMs = 25_000;
+
     if (!this.flags.isRealtimeEnabled()) {
       return new Observable<MessageEvent>((subscriber) => {
         subscriber.next({ data: { type: "realtime.disabled" } } as MessageEvent);
+        subscriber.complete();
       });
     }
-    return this.realtime.stream.pipe(
+
+    const events$ = this.realtime.stream.pipe(
       map(
         (event) =>
           ({
@@ -76,5 +80,8 @@ export class AnalyticsController {
           }) as MessageEvent,
       ),
     );
+
+    // Close the SSE stream before Vercel's 30s function timeout.
+    return events$.pipe(takeUntil(timer(maxConnectionMs)));
   }
 }

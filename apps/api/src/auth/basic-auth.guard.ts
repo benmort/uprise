@@ -18,14 +18,18 @@ export class BasicAuthGuard implements CanActivate {
 
   constructor(private readonly config: ConfigService) {}
 
+  private requestPathCandidates(request: Request): string[] {
+    return [request.originalUrl, request.url]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.split("?")[0]);
+  }
+
   private isAnalyticsStreamPath(request: Request): boolean {
     const allowedPaths = new Set([
       "/analytics/stream",
       "/api/v1/analytics/stream",
     ]);
-    const candidates = [request.path, request.originalUrl, request.url]
-      .filter((value): value is string => Boolean(value))
-      .map((value) => value.split("?")[0]);
+    const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
   }
 
@@ -69,9 +73,7 @@ export class BasicAuthGuard implements CanActivate {
       "/audiences/dispatch-imports",
       "/api/v1/audiences/dispatch-imports",
     ]);
-    const candidates = [request.path, request.originalUrl, request.url]
-      .filter((value): value is string => Boolean(value))
-      .map((value) => value.split("?")[0]);
+    const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
   }
 
@@ -82,9 +84,7 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/inbound-text-message-hook",
       "/api/v1/twilio-status-callback",
     ]);
-    const candidates = [request.path, request.originalUrl, request.url]
-      .filter((value): value is string => Boolean(value))
-      .map((value) => value.split("?")[0]);
+    const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
   }
 
