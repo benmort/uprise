@@ -200,13 +200,16 @@ describe("BlastsService integration-like flow", () => {
     expect(sent.sent).toBe(0);
     expect(sent.skipped).toBe(1);
     expect(twilioMock.sendMessage).not.toHaveBeenCalled();
-    expect(prismaMock.blastRecipient.update).toHaveBeenCalledWith({
-      where: { id: "recipient_duplicate" },
-      data: {
-        status: "SKIPPED",
-        errorMessage: "Skipped duplicate recipient: message already sent for this blast.",
-      },
-    });
+    expect(prismaMock.blastRecipient.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "recipient_duplicate" },
+        data: expect.objectContaining({
+          status: "SKIPPED",
+          failureCategory: "DUPLICATE_RECIPIENT",
+          errorMessage: "Skipped duplicate recipient: message already sent for this blast.",
+        }),
+      }),
+    );
   });
 
   it("marks delivered from callback and preserves responded recipient status", async () => {
@@ -264,19 +267,27 @@ describe("BlastsService integration-like flow", () => {
         outboundUpdates: 1,
       }),
     );
-    expect(prismaMock.blastRecipient.update).toHaveBeenNthCalledWith(1, {
-      where: { id: "recipient_sent" },
-      data: {
-        status: BlastRecipientStatus.DELIVERED,
-        deliveredAt: expect.any(Date),
-      },
-    });
-    expect(prismaMock.blastRecipient.update).toHaveBeenNthCalledWith(2, {
-      where: { id: "recipient_responded" },
-      data: {
-        deliveredAt: expect.any(Date),
-      },
-    });
+    expect(prismaMock.blastRecipient.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { id: "recipient_sent" },
+        data: expect.objectContaining({
+          status: BlastRecipientStatus.DELIVERED,
+          deliveredAt: expect.any(Date),
+          metadata: expect.any(Object),
+        }),
+      }),
+    );
+    expect(prismaMock.blastRecipient.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: "recipient_responded" },
+        data: expect.objectContaining({
+          deliveredAt: expect.any(Date),
+          metadata: expect.any(Object),
+        }),
+      }),
+    );
     expect(prismaMock.outboundMessage.update).toHaveBeenCalledWith({
       where: { id: "outbound_1" },
       data: {

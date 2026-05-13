@@ -502,10 +502,12 @@ function getRecipientReason(row: Record<string, unknown>): string | null {
   const code = getTextOrNull(row.errorCode);
   const codeDescription = getTwilioErrorCodeDescription(code);
   const message = getTextOrNull(row.errorMessage);
+  const trace = getLatestTraceSummary(row);
   const details = [
     category ? `Category: ${category}` : null,
     code ? `Code: ${code}${codeDescription ? ` (${codeDescription})` : ""}` : null,
     message,
+    trace ? `Trace: ${trace}` : null,
   ].filter((part): part is string => Boolean(part));
   return details.length > 0 ? details.join(" | ") : null;
 }
@@ -520,4 +522,28 @@ function getLastActionLabel(row: Record<string, unknown>): string {
   if (status === "FAILED") return String(row.failureCategory || "Failed");
   if (status === "SKIPPED") return "Skipped";
   return String(row.failureCategory || "Message Sent");
+}
+
+function getLatestTraceSummary(row: Record<string, unknown>): string | null {
+  const metadata =
+    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : null;
+  if (!metadata) return null;
+  const trace = Array.isArray(metadata.trace) ? metadata.trace : [];
+  if (trace.length === 0) return null;
+  const latest = trace[trace.length - 1];
+  if (!latest || typeof latest !== "object" || Array.isArray(latest)) return null;
+  const entry = latest as Record<string, unknown>;
+  const source = getTextOrNull(entry.source);
+  const reason = getTextOrNull(entry.reason);
+  const detail = getTextOrNull(entry.detail);
+  const code = getTextOrNull(entry.code);
+  const fields = [
+    source ? `source=${source}` : null,
+    reason ? `reason=${reason}` : null,
+    code ? `code=${code}` : null,
+    detail ? `detail=${detail}` : null,
+  ].filter((part): part is string => Boolean(part));
+  return fields.length > 0 ? fields.join(", ") : null;
 }

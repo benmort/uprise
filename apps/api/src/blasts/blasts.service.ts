@@ -54,6 +54,14 @@ const TWILIO_DELIVERY_FAILED_STATUSES = new Set(["failed", "undelivered"]);
 const SKIPPED_DUPLICATE_ERROR =
   "Skipped duplicate recipient: message already sent for this blast.";
 
+type RecipientTraceInput = {
+  status: BlastRecipientStatus;
+  source: string;
+  reason?: string | null;
+  code?: string | null;
+  detail?: string | null;
+};
+
 @Injectable()
 export class BlastsService {
   private readonly logger = new Logger(BlastsService.name);
@@ -249,6 +257,17 @@ export class BlastsService {
       const normalizedPhone = normalizePhoneE164(recipient.phoneE164);
       const renderedBody = this.renderer.render(blast.bodyTemplate, context);
       const compliance = this.compliance.validateMessageForSend(renderedBody);
+      const recipientMetadata = this.appendRecipientTrace(
+        {
+          complianceWarnings: compliance.warnings,
+          context,
+        } as Prisma.InputJsonValue,
+        {
+          status: BlastRecipientStatus.PENDING,
+          source: "seed",
+          reason: "Recipient seeded from audience",
+        },
+      );
       try {
         await this.prisma.blastRecipient.create({
           data: {
@@ -257,10 +276,7 @@ export class BlastsService {
             phoneE164: normalizedPhone,
             renderedBody,
             status: BlastRecipientStatus.PENDING,
-            metadata: {
-              complianceWarnings: compliance.warnings,
-              context,
-            } as Prisma.InputJsonValue,
+            metadata: recipientMetadata,
           },
         });
       } catch (error) {
@@ -287,6 +303,31 @@ export class BlastsService {
     if (/auth|401|403/i.test(text)) return "AUTH";
     if (/timeout|network|fetch/i.test(text)) return "NETWORK";
     return "UNKNOWN";
+  }
+
+  private appendRecipientTrace(
+    metadata: unknown,
+    input: RecipientTraceInput,
+    at: Date = new Date(),
+  ): Prisma.InputJsonValue {
+    const base =
+      metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? ({ ...(metadata as Record<string, unknown>) } as Record<string, unknown>)
+        : {};
+    const existingRaw = base.trace;
+    const existingTrace = Array.isArray(existingRaw)
+      ? existingRaw.filter((item) => item && typeof item === "object" && !Array.isArray(item))
+      : [];
+    const entry: Record<string, unknown> = {
+      at: at.toISOString(),
+      status: input.status,
+      source: input.source,
+    };
+    if (input.reason) entry.reason = input.reason;
+    if (input.code) entry.code = input.code;
+    if (input.detail) entry.detail = input.detail;
+    base.trace = [...existingTrace.slice(-49), entry];
+    return base as Prisma.InputJsonValue;
   }
 
   private isBlastRecipientUniqueConflict(error: unknown): boolean {
@@ -335,8 +376,10 @@ export class BlastsService {
           id: true,
           status: true,
           deliveredAt: true,
+          failureCategory: true,
           errorCode: true,
           errorMessage: true,
+          metadata: true,
         },
       }),
       this.prisma.outboundMessage.findMany({
@@ -356,23 +399,62 @@ export class BlastsService {
     for (const recipient of recipients) {
       const data: Prisma.BlastRecipientUpdateInput = {};
       if (TWILIO_DELIVERY_CONFIRMED_STATUSES.has(status)) {
-        if (!recipient.deliveredAt) data.deliveredAt = callbackAt;
-        if (
+        const shouldSetDeliveredAt = !recipient.deliveredAt;
+        const shouldSetDeliveredStatus =
           SEND_PHASE_RECIPIENT_STATUSES.includes(recipient.status) &&
-          recipient.status !== BlastRecipientStatus.DELIVERED
-        ) {
+          recipient.status !== BlastRecipientStatus.DELIVERED;
+        const shouldClearError = Boolean(recipient.errorCode || recipient.errorMessage);
+        if (shouldSetDeliveredAt) data.deliveredAt = callbackAt;
+        if (shouldSetDeliveredStatus) {
           data.status = BlastRecipientStatus.DELIVERED;
         }
-        if (recipient.errorCode || recipient.errorMessage) {
+        if (shouldClearError) {
           data.errorCode = null;
           data.errorMessage = null;
         }
+        if (shouldSetDeliveredAt || shouldSetDeliveredStatus || shouldClearError) {
+          data.metadata = this.appendRecipientTrace(
+            recipient.metadata,
+            {
+              status: BlastRecipientStatus.DELIVERED,
+              source: "twilio_callback",
+              reason: `Delivery confirmed (${status})`,
+              detail: messageSid,
+            },
+            callbackAt,
+          );
+        }
       } else if (TWILIO_DELIVERY_FAILED_STATUSES.has(status)) {
-        if (FAILED_TRANSITIONABLE_STATUSES.includes(recipient.status)) {
+        const shouldSetFailedStatus = FAILED_TRANSITIONABLE_STATUSES.includes(recipient.status);
+        if (shouldSetFailedStatus) {
           data.status = BlastRecipientStatus.FAILED;
         }
-        if (errorCode && errorCode !== recipient.errorCode) data.errorCode = errorCode;
-        if (errorMessage && errorMessage !== recipient.errorMessage) data.errorMessage = errorMessage;
+        const nextFailureCode = errorCode || recipient.errorCode || null;
+        const nextFailureMessage = errorMessage || recipient.errorMessage || null;
+        const nextFailureCategory = this.classifyFailure(
+          `${status} ${nextFailureCode || ""} ${nextFailureMessage || ""}`,
+        );
+        const shouldSetCategory = nextFailureCategory !== recipient.failureCategory;
+        if (shouldSetCategory) {
+          data.failureCategory = nextFailureCategory;
+        }
+        const shouldSetCode = Boolean(errorCode && errorCode !== recipient.errorCode);
+        const shouldSetMessage = Boolean(errorMessage && errorMessage !== recipient.errorMessage);
+        if (shouldSetCode) data.errorCode = errorCode;
+        if (shouldSetMessage) data.errorMessage = errorMessage;
+        if (shouldSetFailedStatus || shouldSetCategory || shouldSetCode || shouldSetMessage) {
+          data.metadata = this.appendRecipientTrace(
+            recipient.metadata,
+            {
+              status: BlastRecipientStatus.FAILED,
+              source: "twilio_callback",
+              reason: `Delivery failed (${status})`,
+              code: nextFailureCode,
+              detail: nextFailureMessage || messageSid,
+            },
+            callbackAt,
+          );
+        }
       } else {
         continue;
       }
@@ -481,7 +563,14 @@ export class BlastsService {
           where: { id: recipient.id },
           data: {
             status: BlastRecipientStatus.SKIPPED,
+            failureCategory: "DUPLICATE_RECIPIENT",
             errorMessage: SKIPPED_DUPLICATE_ERROR,
+            metadata: this.appendRecipientTrace(recipient.metadata, {
+              status: BlastRecipientStatus.SKIPPED,
+              source: "send_now",
+              reason: "Skipped duplicate phone in blast send batch",
+              detail: SKIPPED_DUPLICATE_ERROR,
+            }),
           },
         });
         this.logger.warn(
@@ -491,7 +580,14 @@ export class BlastsService {
       }
       await this.prisma.blastRecipient.update({
         where: { id: recipient.id },
-        data: { status: BlastRecipientStatus.QUEUED },
+        data: {
+          status: BlastRecipientStatus.QUEUED,
+          metadata: this.appendRecipientTrace(recipient.metadata, {
+            status: BlastRecipientStatus.QUEUED,
+            source: "send_now",
+            reason: "Recipient queued for send",
+          }),
+        },
       });
       try {
         const message = await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
@@ -503,6 +599,12 @@ export class BlastsService {
             status: BlastRecipientStatus.SENT,
             twilioMessageSid: message.sid,
             sentAt: new Date(message.dateSent || message.dateCreated),
+            metadata: this.appendRecipientTrace(recipient.metadata, {
+              status: BlastRecipientStatus.SENT,
+              source: "send_now",
+              reason: "Message accepted by Twilio for delivery",
+              detail: message.sid,
+            }),
           },
         });
         await this.prisma.outboundMessage.create({
@@ -520,12 +622,20 @@ export class BlastsService {
         });
       } catch (error) {
         failed += 1;
+        const failureCategory = this.classifyFailure(error);
+        const failureText = String(error);
         await this.prisma.blastRecipient.update({
           where: { id: recipient.id },
           data: {
             status: BlastRecipientStatus.FAILED,
-            failureCategory: this.classifyFailure(error),
-            errorMessage: String(error),
+            failureCategory,
+            errorMessage: failureText,
+            metadata: this.appendRecipientTrace(recipient.metadata, {
+              status: BlastRecipientStatus.FAILED,
+              source: "send_now",
+              reason: "Send attempt failed before delivery callback",
+              detail: failureText,
+            }),
           },
         });
       }
@@ -650,15 +760,29 @@ export class BlastsService {
             sentAt: new Date(sent.dateSent || sent.dateCreated),
             failureCategory: null,
             errorMessage: null,
+            metadata: this.appendRecipientTrace(recipient.metadata, {
+              status: BlastRecipientStatus.SENT,
+              source: "retry_failed",
+              reason: "Retry send succeeded",
+              detail: sent.sid,
+            }),
           },
         });
       } catch (error) {
+        const failureCategory = this.classifyFailure(error);
+        const failureText = String(error);
         await this.prisma.blastRecipient.update({
           where: { id: recipient.id },
           data: {
             status: BlastRecipientStatus.FAILED,
-            failureCategory: this.classifyFailure(error),
-            errorMessage: String(error),
+            failureCategory,
+            errorMessage: failureText,
+            metadata: this.appendRecipientTrace(recipient.metadata, {
+              status: BlastRecipientStatus.FAILED,
+              source: "retry_failed",
+              reason: "Retry send failed",
+              detail: failureText,
+            }),
           },
         });
       }
