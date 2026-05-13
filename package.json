@@ -3,7 +3,6 @@
   "private": true,
   "scripts": {
     "dev:all": "pnpm -r --parallel run dev",
-    "firebase:b64": "node -e \"console.log(require('fs').readFileSync('firebase-admin-sdk.json').toString('base64'))\"",
     "lint": "pnpm --filter api run lint && pnpm --filter web run lint",
     "typecheck": "pnpm --filter api run typecheck && pnpm --filter web run typecheck",
     "test": "pnpm --filter api run test && pnpm --filter web run test",

@@ -101,7 +101,6 @@ Optional:
 - `FEATURE_REALTIME_ENABLED`
 - `FEATURE_AI_ASSIST_ENABLED`
 - `FEATURE_BLAST_SCHEDULER_ENABLED`
-- Firebase admin vars (`GOOGLE_APPLICATION_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT_JSON(_B64)`)
 
 Scheduled dispatch runs via Vercel Cron (`/api/v1/blasts/dispatch-due` and `/api/v1/audiences/dispatch-imports`) every minute and expects `Authorization: Bearer <CRON_SECRET>`.
 
@@ -115,7 +114,6 @@ Set web env vars:
   - example: `https://yarns-api.vercel.app/api/v1`
 - `NEXT_PUBLIC_ACTION_NETWORK_BASE_URL` (optional override)
 - `NEXT_PUBLIC_INTERNAL_SOURCE_BASE_URL` (optional UI default)
-- optional Firebase web vars
 
 ### 3) Database migration workflow
 

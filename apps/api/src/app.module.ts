@@ -8,7 +8,6 @@ import { AuthScopeService } from "./auth/auth-scope.service";
 import { PrismaModule } from "./prisma/prisma.module";
 import { TwilioModule } from "./twilio/twilio.module";
 import { MessagesModule } from "./messages/messages.module";
-import { PushModule } from "./push/push.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { AudiencesModule } from "./audiences/audiences.module";
@@ -35,7 +34,6 @@ import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middlew
     EventsModule,
     TwilioModule,
     MessagesModule,
-    PushModule,
     WebhooksModule,
     IntegrationsModule,
     AudiencesModule,

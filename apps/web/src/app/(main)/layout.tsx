@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3,
   LayoutDashboard,
   LogOut,
   Mail,
@@ -13,13 +12,14 @@ import {
   Settings,
   Users,
 } from "lucide-react";
-import { createBlast, listAudiences, listConversations } from "@/lib/api";
-import { clearCredentials, getCredentials } from "@/lib/auth";
 import {
-  loadPushNotificationsEnabled,
-  registerForPush,
-  registerPushToken,
-} from "@/lib/push";
+  createBlast,
+  getApiUrl,
+  getRealtimeStreamToken,
+  listAudiences,
+  listConversations,
+} from "@/lib/api";
+import { clearCredentials, getCredentials } from "@/lib/auth";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,6 @@ const DEFAULT_BLAST_TEMPLATE =
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/audience", label: "Audience", icon: Users },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/inbox", label: "Inbox", icon: Mail },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -69,15 +68,8 @@ export default function MainLayout({
         const unreadCount = Number((row as any).unreadCount || 0);
         return unresolved ? total + unreadCount : total;
       }, 0);
-      const previous = inboxUnreadRef.current;
       inboxUnreadRef.current = unread;
       setInboxUnreadCount(unread);
-      if (unread > previous && !String(pathname || "").startsWith("/inbox")) {
-        const settings = loadResponderAlertSettings();
-        if (settings.outsideInboxSound) {
-          playResponderAlertSound(settings.defaultProfile, settings);
-        }
-      }
     };
 
     void syncInboxUnread();
@@ -92,27 +84,119 @@ export default function MainLayout({
 
   useEffect(() => {
     if (!ready) return;
+    let source: EventSource | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
-    if (!loadPushNotificationsEnabled()) return;
-    const setupPush = async () => {
-      const registered = await registerForPush();
-      if ("error" in registered) return;
-      if (cancelled) return;
-      const persisted = await registerPushToken(registered.token);
-      if (!persisted.ok) {
-        showToast({
-          tone: "warning",
-          title: "Push registration incomplete",
-          description: persisted.error,
-          durationMs: 2500,
-        });
+    let reconnectAttempts = 0;
+
+    const clearTimers = () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
       }
     };
-    void setupPush();
+
+    const closeSource = () => {
+      source?.close();
+      source = null;
+    };
+
+    const scheduleReconnect = (delayMs: number, connect: () => void) => {
+      if (cancelled) return;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, delayMs);
+    };
+
+    const connect = async () => {
+      if (cancelled) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      closeSource();
+      const tokenRes = await getRealtimeStreamToken();
+      if (cancelled) return;
+      if (!tokenRes.ok) {
+        scheduleReconnect(10000, () => {
+          void connect();
+        });
+        return;
+      }
+      const expiresAtMs = Date.parse(tokenRes.data.expiresAt);
+      if (Number.isFinite(expiresAtMs)) {
+        const refreshInMs = Math.max(5000, expiresAtMs - Date.now() - 30000);
+        refreshTimer = setTimeout(() => {
+          if (cancelled) return;
+          closeSource();
+          void connect();
+        }, refreshInMs);
+      }
+      const streamUrl = new URL(`${getApiUrl()}/analytics/stream`);
+      streamUrl.searchParams.set("token", tokenRes.data.token);
+      source = new EventSource(streamUrl.toString(), { withCredentials: false });
+      source.onopen = () => {
+        reconnectAttempts = 0;
+      };
+      source.onerror = () => {
+        closeSource();
+        reconnectAttempts += 1;
+        const delayMs = Math.min(15000, 1000 * 2 ** Math.min(reconnectAttempts, 4));
+        scheduleReconnect(delayMs, () => {
+          void connect();
+        });
+      };
+      source.onmessage = (event) => {
+        let eventType = "";
+        let payload: Record<string, unknown> = {};
+        try {
+          const parsed = JSON.parse(event.data || "{}") as {
+            type?: string;
+            payload?: Record<string, unknown>;
+          };
+          eventType = String(parsed.type || "");
+          payload = parsed.payload || {};
+        } catch {
+          eventType = "";
+        }
+        if (eventType !== "inbox.inbound") return;
+        if (String(pathname || "").startsWith("/inbox")) return;
+
+        const fromPhone = String(payload.contactPhone || "");
+        const messageBody = String(payload.body || "").trim();
+        const settings = loadResponderAlertSettings();
+        if (settings.outsideInboxSound) {
+          playResponderAlertSound(settings.defaultProfile, settings);
+        }
+        showToast({
+          tone: "info",
+          title: "New inbound message",
+          description: fromPhone
+            ? `From ${fromPhone}${messageBody ? `: ${messageBody}` : ""}`
+            : messageBody || "Open Inbox to review the latest message.",
+          action: {
+            label: "Open Inbox",
+            onClick: () => {
+              const target = fromPhone ? `/inbox?contact=${encodeURIComponent(fromPhone)}` : "/inbox";
+              router.push(target);
+            },
+          },
+          durationMs: 5000,
+        });
+      };
+    };
+
+    void connect();
     return () => {
       cancelled = true;
+      clearTimers();
+      closeSource();
     };
-  }, [ready, showToast]);
+  }, [ready, pathname, router, showToast]);
 
   const handleCreateBlast = useCallback(async () => {
     if (creatingBlast) return;
@@ -186,9 +270,9 @@ export default function MainLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex w-full">
-        <aside className="sticky top-0 flex h-screen w-[220px] flex-col border-r border-border bg-white p-4">
+    <div className="h-screen overflow-hidden bg-background">
+      <div className="flex h-full w-full">
+        <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-y-auto border-r border-border bg-white p-4">
           <div className="mb-6">
             <Image
               src="/images/yarns-logo-full.png"
@@ -209,7 +293,7 @@ export default function MainLayout({
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    "flex min-h-11 items-center gap-2 rounded px-3 py-2 text-sm font-label",
+                    "flex min-h-11 items-center gap-2 rounded px-3 py-2 text-sm font-label font-bold",
                     isActive
                       ? "bg-primary-container text-primary-foreground"
                       : "text-foreground hover:bg-surface-variant",
@@ -242,15 +326,15 @@ export default function MainLayout({
           </div>
         </aside>
 
-        <div className="flex min-h-screen flex-1 flex-col">
-          <header className="flex h-16 items-center justify-between border-b border-border bg-white px-6">
+        <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-white px-6">
             <div />
             <Button type="button" disabled={creatingBlast} onClick={handleCreateBlast} className="gap-2">
               <MessageSquareText className="h-4 w-4" />
               {creatingBlast ? "Creating..." : "Create Blast"}
             </Button>
           </header>
-          <main className="flex-1 p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto p-6">{children}</main>
         </div>
       </div>
     </div>

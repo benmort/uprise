@@ -1,17 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
-import {
-  loadPushNotificationsEnabled,
-  registerForPush,
-  registerPushToken,
-  savePushNotificationsEnabled,
-} from "@/lib/push";
 import {
   type AlertSoundProfile,
   type ResponderAlertSettings,
@@ -21,96 +15,19 @@ import {
   saveResponderAlertSettings,
 } from "@/lib/responder-alerts";
 
-type BrowserPermissionState = NotificationPermission | "unsupported";
-
-function getBrowserPermissionState(): BrowserPermissionState {
-  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
-  return Notification.permission;
-}
-
 export default function SettingsPage() {
   const { showToast } = useToast();
   const [alertSettings, setAlertSettings] = useState<ResponderAlertSettings>(
     DEFAULT_RESPONDER_ALERT_SETTINGS,
   );
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [permission, setPermission] = useState<BrowserPermissionState>("default");
-  const [registeringPush, setRegisteringPush] = useState(false);
 
   useEffect(() => {
     setAlertSettings(loadResponderAlertSettings());
-    setPushEnabled(loadPushNotificationsEnabled());
-    setPermission(getBrowserPermissionState());
   }, []);
 
   useEffect(() => {
     saveResponderAlertSettings(alertSettings);
   }, [alertSettings]);
-
-  const refreshPermission = useCallback(() => {
-    setPermission(getBrowserPermissionState());
-  }, []);
-
-  const handleEnablePush = useCallback(async () => {
-    if (registeringPush) return;
-    setRegisteringPush(true);
-    savePushNotificationsEnabled(true);
-    setPushEnabled(true);
-
-    try {
-      const registered = await registerForPush();
-      if ("error" in registered) {
-        showToast({
-          tone: "warning",
-          title: "Push notifications not enabled",
-          description: registered.error,
-          durationMs: 3000,
-        });
-        return;
-      }
-
-      const persisted = await registerPushToken(registered.token);
-      if (!persisted.ok) {
-        showToast({
-          tone: "warning",
-          title: "Push registration incomplete",
-          description: persisted.error,
-          durationMs: 3000,
-        });
-        return;
-      }
-
-      showToast({
-        tone: "success",
-        title: "Push notifications enabled",
-        description: "This device is now registered for inbox alerts.",
-        durationMs: 2200,
-      });
-    } finally {
-      setRegisteringPush(false);
-      refreshPermission();
-    }
-  }, [refreshPermission, registeringPush, showToast]);
-
-  const handleDisablePush = useCallback(() => {
-    savePushNotificationsEnabled(false);
-    setPushEnabled(false);
-    refreshPermission();
-    showToast({
-      tone: "info",
-      title: "Auto push setup disabled",
-      description: "Yarns will stop auto-registering this browser for push notifications.",
-      durationMs: 2800,
-    });
-  }, [refreshPermission, showToast]);
-
-  const pushStatus = useMemo(() => {
-    if (!pushEnabled) return "ARCHIVED";
-    if (permission === "unsupported") return "ARCHIVED";
-    if (permission === "granted") return "ACTIVE";
-    if (permission === "denied") return "FAILED";
-    return "PROCESSING";
-  }, [permission, pushEnabled]);
 
   return (
     <div className="page-stack">
@@ -126,48 +43,15 @@ export default function SettingsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Notifications</CardTitle>
-          <StatusBadge status={pushStatus} />
+          <StatusBadge status="ACTIVE" />
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={pushEnabled}
-              onChange={(event) => {
-                if (event.target.checked) {
-                  void handleEnablePush();
-                  return;
-                }
-                handleDisablePush();
-              }}
-            />
-            Enable push notifications on this device
-          </label>
-
           <p className="text-muted-foreground">
-            Browser permission:{" "}
-            <span className="font-medium text-foreground">
-              {permission === "unsupported" ? "Not supported" : permission}
-            </span>
+            Yarns now uses in-app notifications only. New inbound messages appear while this app is open.
           </p>
-
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void handleEnablePush()} disabled={registeringPush}>
-              {registeringPush ? "Registering..." : "Enable & Register"}
-            </Button>
-            <Button variant="outline" onClick={handleDisablePush} disabled={!pushEnabled}>
-              Disable Auto Setup
-            </Button>
-            <Button variant="ghost" onClick={refreshPermission}>
-              Refresh Permission
-            </Button>
-          </div>
-
-          {permission === "denied" ? (
-            <p className="text-xs text-warning-foreground">
-              Permission is blocked in this browser. Re-enable notifications in browser site settings.
-            </p>
-          ) : null}
+          <p className="text-muted-foreground">
+            Background/browser push has been removed; keep this tab open to receive live inbox alerts.
+          </p>
         </CardContent>
       </Card>
 

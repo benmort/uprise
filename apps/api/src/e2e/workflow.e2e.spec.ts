@@ -43,7 +43,14 @@ describe("workflow e2e-style", () => {
   let service: BlastsService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    (config.get as jest.Mock).mockImplementation((key: string, fallback?: string) => {
+      if (key === "DEFAULT_ORGANIZATION_SLUG") return "default";
+      if (key === "BLAST_SEND_BATCH_SIZE") return "1";
+      return fallback;
+    });
+    renderer.render.mockImplementation((template: string) => template);
+    compliance.validateMessageForSend.mockImplementation(() => ({ warnings: [] }));
     service = new BlastsService(
       prisma,
       config,
@@ -56,14 +63,40 @@ describe("workflow e2e-style", () => {
 
   it("schedules and sends a blast in bounded batches", async () => {
     const scheduledFor = new Date("2026-05-09T10:00:00.000Z");
-    prisma.blast.findUnique.mockResolvedValue({
-      id: "blast_1",
-      status: BlastStatus.PROOFED,
-      audienceId: "aud_1",
-      bodyTemplate: "Hi there",
-      organizationId: "org_1",
-      startedAt: null,
-    });
+    prisma.blast.findUnique
+      .mockResolvedValueOnce({
+        id: "blast_1",
+        status: BlastStatus.PROOFED,
+        audienceId: "aud_1",
+        bodyTemplate: "Hi there",
+        organizationId: "org_1",
+        startedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: "blast_1",
+        status: BlastStatus.SCHEDULED,
+        audienceId: "aud_1",
+        bodyTemplate: "Hi there",
+        organizationId: "org_1",
+        startedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: "blast_1",
+        status: BlastStatus.SENDING,
+        audienceId: "aud_1",
+        bodyTemplate: "Hi there",
+        organizationId: "org_1",
+        startedAt: new Date(),
+        completedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: "blast_1",
+        status: BlastStatus.SENDING,
+        audienceId: "aud_1",
+        bodyTemplate: "Hi there",
+        organizationId: "org_1",
+        startedAt: new Date(),
+      });
     prisma.blast.update
       .mockResolvedValueOnce({
         id: "blast_1",
@@ -80,15 +113,17 @@ describe("workflow e2e-style", () => {
       });
     prisma.blastRecipient.count
       .mockResolvedValueOnce(2) // existing recipients, skip seeding
-      .mockResolvedValueOnce(1) // remaining
-      .mockResolvedValueOnce(0); // failed
-    prisma.blastRecipient.findMany.mockResolvedValueOnce([
-      {
-        id: "recipient_1",
-        phoneE164: "+15551234567",
-        renderedBody: "Hi there",
-      },
-    ]);
+      .mockResolvedValueOnce(1); // remaining
+    prisma.blastRecipient.findMany
+      .mockResolvedValueOnce([
+        {
+          id: "recipient_1",
+          phoneE164: "+15551234567",
+          renderedBody: "Hi there",
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
     twilio.sendMessage.mockResolvedValue({
       sid: "SM123",
       body: "Hi there",
@@ -140,21 +175,39 @@ describe("workflow e2e-style", () => {
   });
 
   it("seeds recipients from audience contacts when none exist yet", async () => {
-    prisma.blast.findUnique.mockResolvedValue({
-      id: "blast_seed",
-      status: BlastStatus.PROOFED,
-      audienceId: "aud_seed",
-      bodyTemplate: "Hello {{first_name}}",
-      organizationId: "org_1",
-      startedAt: null,
-    });
+    prisma.blast.findUnique
+      .mockResolvedValueOnce({
+        id: "blast_seed",
+        status: BlastStatus.PROOFED,
+        audienceId: "aud_seed",
+        bodyTemplate: "Hello {{first_name}}",
+        organizationId: "org_1",
+        startedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: "blast_seed",
+        status: BlastStatus.SENDING,
+        audienceId: "aud_seed",
+        bodyTemplate: "Hello {{first_name}}",
+        organizationId: "org_1",
+        startedAt: new Date(),
+        completedAt: null,
+      })
+      .mockResolvedValueOnce({
+        id: "blast_seed",
+        status: BlastStatus.SENT,
+        audienceId: "aud_seed",
+        bodyTemplate: "Hello {{first_name}}",
+        organizationId: "org_1",
+        startedAt: new Date(),
+      });
     prisma.blast.update
       .mockResolvedValueOnce({ id: "blast_seed", status: BlastStatus.SENDING })
       .mockResolvedValueOnce({ id: "blast_seed", status: BlastStatus.SENT });
     prisma.blastRecipient.count
       .mockResolvedValueOnce(0) // no existing recipients
-      .mockResolvedValueOnce(0) // remaining
-      .mockResolvedValueOnce(0); // failed
+      .mockResolvedValueOnce(1) // count after seeding
+      .mockResolvedValueOnce(0); // remaining
     prisma.audienceContact.findMany.mockResolvedValue([
       {
         id: "contact_1",
@@ -163,7 +216,10 @@ describe("workflow e2e-style", () => {
       },
     ]);
     prisma.blastRecipient.create.mockResolvedValue({});
-    prisma.blastRecipient.findMany.mockResolvedValue([]);
+    prisma.blastRecipient.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
     prisma.analyticsSnapshot.create.mockResolvedValue({});
 
     const result = await service.sendNow("blast_seed");

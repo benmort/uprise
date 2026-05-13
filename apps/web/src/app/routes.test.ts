@@ -11,7 +11,7 @@ function read(relative: string): string {
 describe("major route files", () => {
   it("contains dashboard page scaffold", () => {
     const source = read("dashboard/page.tsx");
-    expect(source).toContain("Performance Pulse");
+    expect(source).toContain("Track Campaign Performance");
     expect(source).toContain("Blast Campaigns");
   });
 

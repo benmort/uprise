@@ -9,7 +9,6 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
 import twilio from "twilio";
-import { PushService } from "../push";
 import { InboxService } from "../inbox/inbox.service";
 import { BlastsService } from "../blasts/blasts.service";
 
@@ -19,7 +18,6 @@ const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>
 export class WebhooksController {
   constructor(
     private readonly config: ConfigService,
-    private readonly push: PushService,
     private readonly inbox: InboxService,
     private readonly blasts: BlastsService,
   ) {}
@@ -65,15 +63,6 @@ export class WebhooksController {
       body: text,
       messageSid,
     });
-    await this.push.sendToAll(
-      { title: "New message", body: `From ${from}: ${text || "(no body)"}` },
-      {
-        sms_from: from,
-        sms_to: to,
-        messageSid,
-        url: `/inbox?contact=${encodeURIComponent(from)}`,
-      },
-    );
     return TWIML_EMPTY;
   }
 

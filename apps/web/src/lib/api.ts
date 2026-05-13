@@ -390,11 +390,3 @@ export async function getAiSuggestions(message: string) {
   const q = new URLSearchParams({ message });
   return request<{ suggestions: string[] }>(`/inbox/ai-suggestions?${q}`);
 }
-
-export async function registerPushToken(token: string) {
-  return request<Record<string, unknown>>("/push/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-}

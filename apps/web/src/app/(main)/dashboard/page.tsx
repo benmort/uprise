@@ -6,14 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { getDashboardPerformance, getRecentBlasts } from "@/lib/api";
+import { getRecentBlasts } from "@/lib/api";
 import { fuzzyIncludes } from "@/lib/fuzzy";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TooltipHint } from "@/components/ui/tooltip-hint";
 
-const RECENT_SEARCHES_KEY = "yarns.dashboard.recentSearches";
 const DASHBOARD_SEARCH_KEY = "yarns.dashboard.search";
 
 export default function DashboardPage() {
@@ -22,31 +20,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [performance, setPerformance] = useState({
-    totalSent: 0,
-    totalContacted: 0,
-    totalResponded: 0,
-    responseRate: 0,
-    activeDrafts: 0,
-  });
   const [blasts, setBlasts] = useState<Array<Record<string, unknown>>>([]);
 
   const run = async () => {
     setError("");
-    const [perfRes, blastsRes] = await Promise.all([getDashboardPerformance(), getRecentBlasts()]);
-    if (!perfRes.ok) {
-      setError(perfRes.error);
-    } else {
-      setPerformance({
-        ...perfRes.data,
-        totalContacted: Number(perfRes.data.totalContacted ?? perfRes.data.totalSent ?? 0),
-      });
-    }
+    const blastsRes = await getRecentBlasts();
     if (!blastsRes.ok) {
-      setError((prev) => prev || blastsRes.error);
+      setError(blastsRes.error);
     } else {
       setBlasts(blastsRes.data);
     }
@@ -57,7 +39,6 @@ export default function DashboardPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     setSearch(window.localStorage.getItem(DASHBOARD_SEARCH_KEY) || "");
-    setRecentSearches(JSON.parse(window.localStorage.getItem(RECENT_SEARCHES_KEY) || "[]") as string[]);
   }, []);
 
   useEffect(() => {
@@ -112,81 +93,27 @@ export default function DashboardPage() {
     if (page * pageSize >= filteredBlasts.length) setPage(0);
   }, [filteredBlasts.length, page]);
 
-  const rememberSearch = () => {
-    const q = search.trim();
-    if (!q || typeof window === "undefined") return;
-    const next = [q, ...recentSearches.filter((item) => item !== q)].slice(0, 5);
-    setRecentSearches(next);
-    window.localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
-  };
-
   return (
     <div className="page-stack">
       <div className="section-stack">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-semibold">Track Campaign Performance</h1>
+            <h1 className="text-3xl font-semibold">Blast Campaigns</h1>
             <p className="text-sm text-muted-foreground">
               Monitor sends, replies, and unresolved work in one place.
             </p>
           </div>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance Pulse</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="grid gap-4 sm:grid-cols-3">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <div
-                    key={`performance-skeleton-${index}`}
-                    className="rounded-lg border border-border bg-surface p-4"
-                  >
-                    <Skeleton className="h-3 w-28" />
-                    <Skeleton className="mt-3 h-9 w-20" />
-                    <Skeleton className="mt-2 h-3 w-24" />
-                  </div>
-                ))}
-              </div>
-            ) : error ? (
-              <EmptyState
-                title="We couldn't load dashboard metrics"
-                description={error}
-                ctaLabel="Retry"
-                onCta={() => void run()}
-              />
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Metric
-                  label="Total Contacted"
-                  value={performance.totalContacted.toLocaleString()}
-                  tooltip="Unique recipients reached by sent, delivered, failed, or responded outcomes."
-                />
-                <Metric
-                  label="Response Rate"
-                  value={`${performance.responseRate}%`}
-                  sub={`${performance.totalResponded.toLocaleString()} replies`}
-                  tooltip="Responded recipients divided by total contacted recipients."
-                />
-                <Metric label="Active Drafts" value={String(performance.activeDrafts)} sub="ready for review" />
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Blast Campaigns</CardTitle>
           <div className="flex w-full max-w-md gap-2">
             <Input
               ref={searchRef}
               placeholder="Search campaigns (press /)..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onBlur={rememberSearch}
             />
             <Button variant="outline" onClick={() => setSearch("")}>
               Clear
@@ -194,14 +121,13 @@ export default function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {recentSearches.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {recentSearches.map((query) => (
-                <Button key={query} variant="ghost" size="sm" onClick={() => setSearch(query)}>
-                  {query}
-                </Button>
-              ))}
-            </div>
+          {error ? (
+            <EmptyState
+              title="We couldn't load recent blasts"
+              description={error}
+              ctaLabel="Retry"
+              onCta={() => void run()}
+            />
           ) : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] border-collapse text-sm">
@@ -303,29 +229,6 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  sub,
-  tooltip,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tooltip?: string;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-surface p-4">
-      <p className="inline-flex items-center gap-1 text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-        {tooltip ? <TooltipHint label={tooltip} /> : null}
-      </p>
-      <p className="mt-2 text-3xl font-headline font-semibold">{value}</p>
-      {sub ? <p className="mt-1 text-xs text-muted-foreground">{sub}</p> : null}
     </div>
   );
 }
