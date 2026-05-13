@@ -15,6 +15,7 @@ import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
 import { BlastStatus as FlowBlastStatus } from "../common/enums/blast-status.enum";
+import { classifyFailureScope, scopeFromStoredFailure } from "./twilio-failure-scope";
 
 type RecipientSeed = {
   contactId?: string;
@@ -57,6 +58,8 @@ const SKIPPED_DUPLICATE_ERROR =
 type RecipientTraceInput = {
   status: BlastRecipientStatus;
   source: string;
+  scope?: "INTERNAL" | "EXTERNAL" | null;
+  category?: string | null;
   reason?: string | null;
   code?: string | null;
   detail?: string | null;
@@ -297,12 +300,18 @@ export class BlastsService {
     });
   }
 
-  private classifyFailure(error: unknown): string {
-    const text = String(error);
-    if (/carrier|30007|30008|30003/i.test(text)) return "CARRIER_REJECTION";
-    if (/auth|401|403/i.test(text)) return "AUTH";
-    if (/timeout|network|fetch/i.test(text)) return "NETWORK";
-    return "UNKNOWN";
+  private isRecipientFailureInternal(recipient: {
+    failureCategory: string | null;
+    errorCode: string | null;
+    errorMessage: string | null;
+  }): boolean {
+    return (
+      scopeFromStoredFailure({
+        failureCategory: recipient.failureCategory,
+        errorCode: recipient.errorCode,
+        errorMessage: recipient.errorMessage,
+      }) === "INTERNAL"
+    );
   }
 
   private appendRecipientTrace(
@@ -323,6 +332,8 @@ export class BlastsService {
       status: input.status,
       source: input.source,
     };
+    if (input.scope) entry.scope = input.scope;
+    if (input.category) entry.category = input.category;
     if (input.reason) entry.reason = input.reason;
     if (input.code) entry.code = input.code;
     if (input.detail) entry.detail = input.detail;
@@ -353,6 +364,66 @@ export class BlastsService {
     });
   }
 
+  private async recalculateBlastStatus(blastId: string) {
+    const blast = await this.prisma.blast.findUnique({
+      where: { id: blastId },
+      select: {
+        id: true,
+        status: true,
+        completedAt: true,
+      },
+    });
+    if (!blast) {
+      throw new NotFoundException("Blast not found");
+    }
+
+    const [remaining, failedRecipients] = await Promise.all([
+      this.prisma.blastRecipient.count({
+        where: {
+          blastId,
+          status: { in: [BlastRecipientStatus.PENDING, BlastRecipientStatus.QUEUED] },
+        },
+      }),
+      this.prisma.blastRecipient.findMany({
+        where: { blastId, status: BlastRecipientStatus.FAILED },
+        select: {
+          failureCategory: true,
+          errorCode: true,
+          errorMessage: true,
+        },
+      }),
+    ]);
+
+    const internalFailures = failedRecipients.reduce((count, recipient) => {
+      return count + (this.isRecipientFailureInternal(recipient) ? 1 : 0);
+    }, 0);
+
+    const status =
+      remaining > 0
+        ? BlastStatus.SENDING
+        : internalFailures > 0
+          ? BlastStatus.FAILED
+          : BlastStatus.SENT;
+
+    const shouldUpdateStatus = blast.status !== status;
+    const shouldSetCompletedAt = status !== BlastStatus.SENDING && !blast.completedAt;
+    if (shouldUpdateStatus || shouldSetCompletedAt) {
+      await this.prisma.blast.update({
+        where: { id: blastId },
+        data:
+          status === BlastStatus.SENDING
+            ? { status: BlastStatus.SENDING }
+            : { status, completedAt: blast.completedAt ?? new Date() },
+      });
+    }
+
+    return {
+      status,
+      remaining,
+      internalFailures,
+    };
+  }
+
   async handleTwilioStatusCallback(payload: TwilioStatusCallbackPayload) {
     const messageSid = String(payload.messageSid || "").trim();
     const status = String(payload.messageStatus || "").trim().toLowerCase();
@@ -374,6 +445,7 @@ export class BlastsService {
         where: { twilioMessageSid: messageSid },
         select: {
           id: true,
+          blastId: true,
           status: true,
           deliveredAt: true,
           failureCategory: true,
@@ -395,6 +467,7 @@ export class BlastsService {
 
     let recipientUpdates = 0;
     let outboundUpdates = 0;
+    const affectedBlastIds = new Set<string>();
 
     for (const recipient of recipients) {
       const data: Prisma.BlastRecipientUpdateInput = {};
@@ -425,23 +498,29 @@ export class BlastsService {
           );
         }
       } else if (TWILIO_DELIVERY_FAILED_STATUSES.has(status)) {
+        const nextFailureCodeRaw = errorCode || recipient.errorCode || null;
+        const nextFailureMessage = errorMessage || recipient.errorMessage || null;
+        const classification = classifyFailureScope({
+          errorCode: nextFailureCodeRaw,
+          errorMessage: nextFailureMessage,
+          messageStatus: status,
+        });
         const shouldSetFailedStatus = FAILED_TRANSITIONABLE_STATUSES.includes(recipient.status);
         if (shouldSetFailedStatus) {
           data.status = BlastRecipientStatus.FAILED;
         }
-        const nextFailureCode = errorCode || recipient.errorCode || null;
-        const nextFailureMessage = errorMessage || recipient.errorMessage || null;
-        const nextFailureCategory = this.classifyFailure(
-          `${status} ${nextFailureCode || ""} ${nextFailureMessage || ""}`,
-        );
+        const nextFailureCode = classification.code || nextFailureCodeRaw;
+        const nextFailureCategory = classification.normalizedCategory;
         const shouldSetCategory = nextFailureCategory !== recipient.failureCategory;
         if (shouldSetCategory) {
           data.failureCategory = nextFailureCategory;
         }
-        const shouldSetCode = Boolean(errorCode && errorCode !== recipient.errorCode);
-        const shouldSetMessage = Boolean(errorMessage && errorMessage !== recipient.errorMessage);
-        if (shouldSetCode) data.errorCode = errorCode;
-        if (shouldSetMessage) data.errorMessage = errorMessage;
+        const shouldSetCode = Boolean(nextFailureCode && nextFailureCode !== recipient.errorCode);
+        const shouldSetMessage = Boolean(
+          nextFailureMessage && nextFailureMessage !== recipient.errorMessage,
+        );
+        if (shouldSetCode) data.errorCode = nextFailureCode;
+        if (shouldSetMessage) data.errorMessage = nextFailureMessage;
         if (shouldSetFailedStatus || shouldSetCategory || shouldSetCode || shouldSetMessage) {
           data.metadata = this.appendRecipientTrace(
             recipient.metadata,
@@ -449,6 +528,8 @@ export class BlastsService {
               status: BlastRecipientStatus.FAILED,
               source: "twilio_callback",
               reason: `Delivery failed (${status})`,
+              scope: classification.scope,
+              category: classification.normalizedCategory,
               code: nextFailureCode,
               detail: nextFailureMessage || messageSid,
             },
@@ -463,6 +544,7 @@ export class BlastsService {
         where: { id: recipient.id },
         data,
       });
+      affectedBlastIds.add(recipient.blastId);
       recipientUpdates += 1;
     }
 
@@ -493,11 +575,33 @@ export class BlastsService {
       outboundUpdates += 1;
     }
 
+    const blastStatusUpdates: Array<{
+      blastId: string;
+      status: BlastStatus;
+      remaining: number;
+      internalFailures: number;
+    }> = [];
+    for (const blastId of affectedBlastIds) {
+      const statusUpdate = await this.recalculateBlastStatus(blastId);
+      blastStatusUpdates.push({
+        blastId,
+        ...statusUpdate,
+      });
+      this.events.emit("blast.updated", {
+        blastId,
+        status: statusUpdate.status,
+        remaining: statusUpdate.remaining,
+        internalFailures: statusUpdate.internalFailures,
+        source: "twilio_callback",
+      });
+    }
+
     return {
       messageSid,
       status,
       recipientUpdates,
       outboundUpdates,
+      blastStatusUpdates,
       ignored: false,
     };
   }
@@ -563,11 +667,13 @@ export class BlastsService {
           where: { id: recipient.id },
           data: {
             status: BlastRecipientStatus.SKIPPED,
-            failureCategory: "DUPLICATE_RECIPIENT",
+            failureCategory: "EXTERNAL_DUPLICATE_RECIPIENT",
             errorMessage: SKIPPED_DUPLICATE_ERROR,
             metadata: this.appendRecipientTrace(recipient.metadata, {
               status: BlastRecipientStatus.SKIPPED,
               source: "send_now",
+              scope: "EXTERNAL",
+              category: "EXTERNAL_DUPLICATE_RECIPIENT",
               reason: "Skipped duplicate phone in blast send batch",
               detail: SKIPPED_DUPLICATE_ERROR,
             }),
@@ -612,8 +718,8 @@ export class BlastsService {
             organizationId: blast.organizationId,
             blastId: blast.id,
             recipientId: recipient.id,
-            toPhone: message.to,
-            fromPhone: message.from,
+            toPhone: normalizePhoneE164(message.to),
+            fromPhone: normalizePhoneE164(message.from),
             body: message.body || recipient.renderedBody,
             status: BlastRecipientStatus.SENT,
             twilioMessageSid: message.sid,
@@ -622,17 +728,24 @@ export class BlastsService {
         });
       } catch (error) {
         failed += 1;
-        const failureCategory = this.classifyFailure(error);
         const failureText = String(error);
+        const classification = classifyFailureScope({
+          error: failureText,
+          errorMessage: failureText,
+        });
         await this.prisma.blastRecipient.update({
           where: { id: recipient.id },
           data: {
             status: BlastRecipientStatus.FAILED,
-            failureCategory,
+            failureCategory: classification.normalizedCategory,
+            ...(classification.code ? { errorCode: classification.code } : {}),
             errorMessage: failureText,
             metadata: this.appendRecipientTrace(recipient.metadata, {
               status: BlastRecipientStatus.FAILED,
               source: "send_now",
+              scope: classification.scope,
+              category: classification.normalizedCategory,
+              code: classification.code,
               reason: "Send attempt failed before delivery callback",
               detail: failureText,
             }),
@@ -646,42 +759,19 @@ export class BlastsService {
       );
     }
 
-    const [remaining, totalFailed] = await Promise.all([
-      this.prisma.blastRecipient.count({
-        where: {
-          blastId: blast.id,
-          status: { in: [BlastRecipientStatus.PENDING, BlastRecipientStatus.QUEUED] },
-        },
-      }),
-      this.prisma.blastRecipient.count({
-        where: { blastId: blast.id, status: BlastRecipientStatus.FAILED },
-      }),
-    ]);
-
-    const finalStatus =
-      remaining > 0
-        ? BlastStatus.SENDING
-        : totalFailed > 0
-          ? BlastStatus.FAILED
-          : BlastStatus.SENT;
-
-    const updated = await this.prisma.blast.update({
-      where: { id: blast.id },
-      data:
-        finalStatus === BlastStatus.SENDING
-          ? { status: BlastStatus.SENDING }
-          : { status: finalStatus, completedAt: new Date() },
-    });
+    const statusUpdate = await this.recalculateBlastStatus(blast.id);
+    const updated = await this.getBlastOrThrow(blast.id);
 
     await this.writeSnapshot(blast.organizationId, blast.id, "sent", sent);
     await this.writeSnapshot(blast.organizationId, blast.id, "failed", failed);
     this.events.emit("blast.updated", {
       blastId: blast.id,
-      status: finalStatus,
+      status: statusUpdate.status,
       sent,
       failed,
       skipped: skippedDuplicates,
-      remaining,
+      remaining: statusUpdate.remaining,
+      internalFailures: statusUpdate.internalFailures,
     });
 
     return {
@@ -689,7 +779,7 @@ export class BlastsService {
       sent,
       failed,
       skipped: skippedDuplicates,
-      remaining,
+      remaining: statusUpdate.remaining,
       batchSize,
     };
   }
@@ -759,6 +849,7 @@ export class BlastsService {
             twilioMessageSid: sent.sid,
             sentAt: new Date(sent.dateSent || sent.dateCreated),
             failureCategory: null,
+            errorCode: null,
             errorMessage: null,
             metadata: this.appendRecipientTrace(recipient.metadata, {
               status: BlastRecipientStatus.SENT,
@@ -769,17 +860,24 @@ export class BlastsService {
           },
         });
       } catch (error) {
-        const failureCategory = this.classifyFailure(error);
         const failureText = String(error);
+        const classification = classifyFailureScope({
+          error: failureText,
+          errorMessage: failureText,
+        });
         await this.prisma.blastRecipient.update({
           where: { id: recipient.id },
           data: {
             status: BlastRecipientStatus.FAILED,
-            failureCategory,
+            failureCategory: classification.normalizedCategory,
+            ...(classification.code ? { errorCode: classification.code } : {}),
             errorMessage: failureText,
             metadata: this.appendRecipientTrace(recipient.metadata, {
               status: BlastRecipientStatus.FAILED,
               source: "retry_failed",
+              scope: classification.scope,
+              category: classification.normalizedCategory,
+              code: classification.code,
               reason: "Retry send failed",
               detail: failureText,
             }),
@@ -787,7 +885,20 @@ export class BlastsService {
         });
       }
     }
-    this.events.emit("blast.retry", { blastId: blast.id, retried });
+    const statusUpdate = await this.recalculateBlastStatus(blast.id);
+    this.events.emit("blast.retry", {
+      blastId: blast.id,
+      retried,
+      status: statusUpdate.status,
+      internalFailures: statusUpdate.internalFailures,
+    });
+    this.events.emit("blast.updated", {
+      blastId: blast.id,
+      status: statusUpdate.status,
+      remaining: statusUpdate.remaining,
+      internalFailures: statusUpdate.internalFailures,
+      source: "retry_failed",
+    });
     return { blastId: blast.id, retried };
   }
 

@@ -237,7 +237,6 @@ export default function DashboardPage() {
                         </td>
                         <td className="py-3 pr-4">
                           <div className="flex items-center gap-2">
-                            <Skeleton className="h-8 w-20" />
                             <Skeleton className="h-8 w-14" />
                           </div>
                         </td>
@@ -247,7 +246,7 @@ export default function DashboardPage() {
                       <tr
                         key={String(blast.id)}
                         className="group cursor-pointer border-b border-border/60 hover:bg-primary-container/10"
-                        onClick={() => router.push(`/blasts/${encodeURIComponent(String(blast.id))}/composer`)}
+                        onClick={() => router.push(`/blasts/${encodeURIComponent(String(blast.id))}`)}
                       >
                         <td className="py-3 pr-4">
                           <p className="font-medium">{String(blast.title || "Untitled Blast")}</p>
@@ -265,16 +264,6 @@ export default function DashboardPage() {
                         <td className="py-3 pr-4 text-muted-foreground">{String(blast.audienceId || "—")}</td>
                         <td className="py-3 pr-4">
                           <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                router.push(`/blasts/${encodeURIComponent(String(blast.id))}`);
-                              }}
-                            >
-                              Analytics
-                            </Button>
                             <Button
                               size="sm"
                               variant="outline"

@@ -37,15 +37,19 @@ export class InboxService {
     const org = await this.ensureOrganization();
     const fromPhone = normalizePhoneE164(payload.from);
     const toPhone = normalizePhoneE164(payload.to);
-    const latestOutbound = await this.prisma.outboundMessage.findFirst({
-      where: { organizationId: org.id, toPhone: fromPhone },
-      orderBy: { sentAt: "desc" },
+    const attributedOutbound = await this.prisma.outboundMessage.findFirst({
+      where: {
+        organizationId: org.id,
+        toPhone: fromPhone,
+        OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
+      },
+      orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
     });
 
     const inbound = await this.prisma.inboundMessage.create({
       data: {
         organizationId: org.id,
-        blastId: latestOutbound?.blastId || null,
+        blastId: attributedOutbound?.blastId || null,
         fromPhone,
         toPhone,
         body: payload.body || "",
@@ -75,13 +79,13 @@ export class InboxService {
       },
     });
 
-    const recipientWhere = latestOutbound?.recipientId
+    const recipientWhere = attributedOutbound?.recipientId
       ? {
-          id: latestOutbound.recipientId,
+          id: attributedOutbound.recipientId,
         }
-      : latestOutbound?.blastId
+      : attributedOutbound?.blastId
         ? {
-            blastId: latestOutbound.blastId,
+            blastId: attributedOutbound.blastId,
             phoneE164: fromPhone,
           }
         : null;
@@ -103,7 +107,7 @@ export class InboxService {
         await this.prisma.analyticsSnapshot.create({
           data: {
             organizationId: org.id,
-            blastId: latestOutbound?.blastId || null,
+            blastId: attributedOutbound?.blastId || null,
             metricName: "responded",
             metricValue: 1,
             bucketAt: new Date(
@@ -124,7 +128,7 @@ export class InboxService {
 
     this.events.emit("inbox.inbound", {
       contactPhone: fromPhone,
-      blastId: latestOutbound?.blastId || null,
+      blastId: attributedOutbound?.blastId || null,
       body: payload.body || "",
     });
 
@@ -365,11 +369,13 @@ export class InboxService {
     const org = await this.ensureOrganization();
     const to = normalizePhoneE164(contactPhone);
     const sent = await this.twilio.sendMessage(to, body);
+    const normalizedTo = sent.to ? normalizePhoneE164(sent.to) : to;
+    const normalizedFrom = sent.from ? normalizePhoneE164(sent.from) : sent.from;
     const row = await this.prisma.outboundMessage.create({
       data: {
         organizationId: org.id,
-        toPhone: sent.to,
-        fromPhone: sent.from,
+        toPhone: normalizedTo,
+        fromPhone: normalizedFrom,
         body: sent.body || body,
         status: BlastRecipientStatus.SENT,
         twilioMessageSid: sent.sid,

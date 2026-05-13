@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus } from "../../src/generated/prisma";
+import { BlastRecipientStatus, BlastStatus } from "../../src/generated/prisma";
 import { BlastsService } from "./blasts.service";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";
@@ -14,6 +14,10 @@ describe("BlastsService integration-like flow", () => {
   const eventsMock = {
     emit: jest.fn(),
   } as unknown as RealtimeEventsService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
   it("creates and sends one recipient when audience includes duplicate phones", async () => {
     const prismaMock: any = {
@@ -78,6 +82,7 @@ describe("BlastsService integration-like flow", () => {
               renderedBody: "Hi Alice",
             },
           ])
+          .mockResolvedValueOnce([])
           .mockResolvedValueOnce([]),
         count: jest
           .fn()
@@ -171,7 +176,8 @@ describe("BlastsService integration-like flow", () => {
               renderedBody: "Hi Alice",
             },
           ])
-          .mockResolvedValueOnce([{ phoneE164: "+15551234567" }]),
+          .mockResolvedValueOnce([{ phoneE164: "+15551234567" }])
+          .mockResolvedValueOnce([]),
         update: jest.fn().mockResolvedValue({}),
       },
       outboundMessage: {
@@ -205,7 +211,7 @@ describe("BlastsService integration-like flow", () => {
         where: { id: "recipient_duplicate" },
         data: expect.objectContaining({
           status: "SKIPPED",
-          failureCategory: "DUPLICATE_RECIPIENT",
+          failureCategory: "EXTERNAL_DUPLICATE_RECIPIENT",
           errorMessage: "Skipped duplicate recipient: message already sent for this blast.",
         }),
       }),
@@ -214,23 +220,37 @@ describe("BlastsService integration-like flow", () => {
 
   it("marks delivered from callback and preserves responded recipient status", async () => {
     const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_1",
+          status: BlastStatus.SENT,
+          completedAt: new Date("2026-05-13T10:00:00.000Z"),
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       blastRecipient: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            id: "recipient_sent",
-            status: BlastRecipientStatus.SENT,
-            deliveredAt: null,
-            errorCode: null,
-            errorMessage: null,
-          },
-          {
-            id: "recipient_responded",
-            status: BlastRecipientStatus.RESPONDED,
-            deliveredAt: null,
-            errorCode: null,
-            errorMessage: null,
-          },
-        ]),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "recipient_sent",
+              blastId: "blast_1",
+              status: BlastRecipientStatus.SENT,
+              deliveredAt: null,
+              errorCode: null,
+              errorMessage: null,
+            },
+            {
+              id: "recipient_responded",
+              blastId: "blast_1",
+              status: BlastRecipientStatus.RESPONDED,
+              deliveredAt: null,
+              errorCode: null,
+              errorMessage: null,
+            },
+          ])
+          .mockResolvedValueOnce([]),
+        count: jest.fn().mockResolvedValue(0),
         update: jest.fn().mockResolvedValue({}),
       },
       outboundMessage: {
@@ -345,5 +365,305 @@ describe("BlastsService integration-like flow", () => {
     );
     expect(prismaMock.blastRecipient.update).not.toHaveBeenCalled();
     expect(prismaMock.outboundMessage.update).not.toHaveBeenCalled();
+  });
+
+  it("keeps blast status SENT when only external failures exist", async () => {
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_external",
+          organizationId: "org_1",
+          audienceId: "aud_1",
+          bodyTemplate: "Hi {{first_name}}",
+          title: "Campaign",
+          status: BlastStatus.PROOFED,
+          proofedAt: new Date(),
+          startedAt: null,
+          completedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      blastRecipient: {
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "recipient_1",
+              phoneE164: "+15551234567",
+              renderedBody: "Hi Alice",
+              metadata: {},
+            },
+          ])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              failureCategory: "EXTERNAL_CARRIER_OR_DESTINATION",
+              errorCode: "30008",
+              errorMessage: "Unknown destination handset",
+            },
+          ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      outboundMessage: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+      analyticsSnapshot: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+
+    const twilioMock = {
+      sendMessage: jest.fn().mockRejectedValue(new Error("Twilio send failed: code 30008")),
+    } as unknown as TwilioService;
+
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      twilioMock,
+      eventsMock,
+    );
+
+    await service.sendNow("blast_external");
+
+    expect(prismaMock.blast.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "blast_external" },
+        data: expect.objectContaining({ status: BlastStatus.SENT }),
+      }),
+    );
+    expect(prismaMock.blast.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "blast_external" },
+        data: expect.objectContaining({ status: BlastStatus.FAILED }),
+      }),
+    );
+  });
+
+  it("marks blast status FAILED when internal failures are present", async () => {
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_internal",
+          organizationId: "org_1",
+          audienceId: "aud_1",
+          bodyTemplate: "Hi {{first_name}}",
+          title: "Campaign",
+          status: BlastStatus.PROOFED,
+          proofedAt: new Date(),
+          startedAt: null,
+          completedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      blastRecipient: {
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "recipient_1",
+              phoneE164: "+15551234567",
+              renderedBody: "Hi Alice",
+              metadata: {},
+            },
+          ])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              failureCategory: "INTERNAL_NETWORK",
+              errorCode: null,
+              errorMessage: "network timeout",
+            },
+          ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      outboundMessage: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+      analyticsSnapshot: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+
+    const twilioMock = {
+      sendMessage: jest.fn().mockRejectedValue(new Error("network timeout while sending")),
+    } as unknown as TwilioService;
+
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      twilioMock,
+      eventsMock,
+    );
+
+    await service.sendNow("blast_internal");
+
+    expect(prismaMock.blast.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "blast_internal" },
+        data: expect.objectContaining({ status: BlastStatus.FAILED }),
+      }),
+    );
+  });
+
+  it("treats unknown no-code failures as internal for blast status", async () => {
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_unknown",
+          organizationId: "org_1",
+          audienceId: "aud_1",
+          bodyTemplate: "Hi {{first_name}}",
+          title: "Campaign",
+          status: BlastStatus.PROOFED,
+          proofedAt: new Date(),
+          startedAt: null,
+          completedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      blastRecipient: {
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "recipient_1",
+              phoneE164: "+15551234567",
+              renderedBody: "Hi Alice",
+              metadata: {},
+            },
+          ])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([
+            {
+              failureCategory: null,
+              errorCode: null,
+              errorMessage: "unexpected upstream failure",
+            },
+          ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      outboundMessage: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+      analyticsSnapshot: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+
+    const twilioMock = {
+      sendMessage: jest.fn().mockRejectedValue(new Error("unexpected upstream failure")),
+    } as unknown as TwilioService;
+
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      twilioMock,
+      eventsMock,
+    );
+
+    await service.sendNow("blast_unknown");
+
+    expect(prismaMock.blast.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "blast_unknown" },
+        data: expect.objectContaining({ status: BlastStatus.FAILED }),
+      }),
+    );
+  });
+
+  it("recalculates blast status on callbacks using failure scope", async () => {
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_callback",
+          status: BlastStatus.SENDING,
+          completedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      blastRecipient: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "recipient_callback",
+              blastId: "blast_callback",
+              status: BlastRecipientStatus.SENT,
+              deliveredAt: null,
+              failureCategory: null,
+              errorCode: null,
+              errorMessage: null,
+              metadata: {},
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              failureCategory: "EXTERNAL_CARRIER_OR_DESTINATION",
+              errorCode: "30008",
+              errorMessage: "Unknown destination handset",
+            },
+          ]),
+        count: jest.fn().mockResolvedValue(0),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      outboundMessage: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: "outbound_callback",
+            status: BlastRecipientStatus.SENT,
+            errorCode: null,
+            errorMessage: null,
+          },
+        ]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      { sendMessage: jest.fn() } as unknown as TwilioService,
+      eventsMock,
+    );
+
+    const result = await service.handleTwilioStatusCallback({
+      messageSid: "SM_FAILED_1",
+      messageStatus: "failed",
+      errorCode: "30008",
+      errorMessage: "Unknown destination handset",
+    });
+
+    expect(prismaMock.blastRecipient.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "recipient_callback" },
+        data: expect.objectContaining({
+          status: BlastRecipientStatus.FAILED,
+          failureCategory: "EXTERNAL_CARRIER_OR_DESTINATION",
+          errorCode: "30008",
+        }),
+      }),
+    );
+    expect(prismaMock.blast.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "blast_callback" },
+        data: expect.objectContaining({ status: BlastStatus.SENT }),
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        recipientUpdates: 1,
+        outboundUpdates: 1,
+      }),
+    );
   });
 });

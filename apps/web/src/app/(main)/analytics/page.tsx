@@ -536,11 +536,15 @@ function getLatestTraceSummary(row: Record<string, unknown>): string | null {
   if (!latest || typeof latest !== "object" || Array.isArray(latest)) return null;
   const entry = latest as Record<string, unknown>;
   const source = getTextOrNull(entry.source);
+  const scope = getTextOrNull(entry.scope);
+  const category = getTextOrNull(entry.category);
   const reason = getTextOrNull(entry.reason);
   const detail = getTextOrNull(entry.detail);
   const code = getTextOrNull(entry.code);
   const fields = [
     source ? `source=${source}` : null,
+    scope ? `scope=${scope}` : null,
+    category ? `category=${category}` : null,
     reason ? `reason=${reason}` : null,
     code ? `code=${code}` : null,
     detail ? `detail=${detail}` : null,

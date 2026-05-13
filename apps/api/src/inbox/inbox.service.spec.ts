@@ -1,11 +1,15 @@
 import { ConfigService } from "@nestjs/config";
+import { BlastRecipientStatus } from "../../src/generated/prisma";
 import { InboxService } from "./inbox.service";
 
 describe("InboxService", () => {
   const prisma = {
     organization: { upsert: jest.fn() },
     blast: { findMany: jest.fn() },
-    outboundMessage: { create: jest.fn() },
+    outboundMessage: { create: jest.fn(), findFirst: jest.fn() },
+    inboundMessage: { create: jest.fn() },
+    blastRecipient: { updateMany: jest.fn() },
+    analyticsSnapshot: { create: jest.fn() },
     conversationState: { upsert: jest.fn() },
   } as any;
   const config = {
@@ -35,8 +39,131 @@ describe("InboxService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.organization.upsert.mockResolvedValue({ id: "org_1", slug: "default" });
+    prisma.outboundMessage.findFirst.mockResolvedValue(null);
+    prisma.inboundMessage.create.mockResolvedValue({
+      id: "inbound_1",
+      receivedAt: new Date("2026-05-08T10:00:00.000Z"),
+    });
+    prisma.blastRecipient.updateMany.mockResolvedValue({ count: 0 });
+    prisma.analyticsSnapshot.create.mockResolvedValue({});
+    prisma.conversationState.upsert.mockResolvedValue({});
     repo.listContactNamesByPhones.mockResolvedValue([]);
     service = new InboxService(prisma, config, twilio, events, repo, ai);
+  });
+
+  it("attributes inbound reply to latest blast-linked outbound and records responded snapshot", async () => {
+    prisma.outboundMessage.findFirst.mockResolvedValue({
+      id: "outbound_blast_1",
+      blastId: "blast_1",
+      recipientId: "recipient_1",
+      sentAt: new Date("2026-05-08T09:55:00.000Z"),
+      createdAt: new Date("2026-05-08T09:55:00.000Z"),
+    });
+    const receivedAt = new Date("2026-05-08T10:01:00.000Z");
+    prisma.inboundMessage.create.mockResolvedValue({
+      id: "inbound_2",
+      receivedAt,
+    });
+    prisma.blastRecipient.updateMany.mockResolvedValue({ count: 1 });
+
+    await service.recordInbound({
+      from: "+1 (555) 000-0001",
+      to: "+1 (555) 000-0000",
+      body: "Yes, I am interested",
+      messageSid: "SM_INBOUND_1",
+    });
+
+    expect(prisma.outboundMessage.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: "org_1",
+        toPhone: "+15550000001",
+        OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
+      },
+      orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+    });
+    expect(prisma.inboundMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          blastId: "blast_1",
+          fromPhone: "+15550000001",
+          toPhone: "+15550000000",
+          twilioMessageSid: "SM_INBOUND_1",
+        }),
+      }),
+    );
+    expect(prisma.blastRecipient.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "recipient_1",
+        status: { not: BlastRecipientStatus.RESPONDED },
+      },
+      data: {
+        status: BlastRecipientStatus.RESPONDED,
+        respondedAt: receivedAt,
+      },
+    });
+    expect(prisma.analyticsSnapshot.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          organizationId: "org_1",
+          blastId: "blast_1",
+          metricName: "responded",
+          metricValue: 1,
+        }),
+      }),
+    );
+    expect(events.emit).toHaveBeenCalledWith("inbox.inbound", {
+      contactPhone: "+15550000001",
+      blastId: "blast_1",
+      body: "Yes, I am interested",
+    });
+  });
+
+  it("does not write duplicate responded snapshot when recipient already responded", async () => {
+    prisma.outboundMessage.findFirst.mockResolvedValue({
+      id: "outbound_blast_1",
+      blastId: "blast_1",
+      recipientId: "recipient_1",
+      sentAt: new Date("2026-05-08T09:55:00.000Z"),
+      createdAt: new Date("2026-05-08T09:55:00.000Z"),
+    });
+    prisma.blastRecipient.updateMany.mockResolvedValue({ count: 0 });
+
+    await service.recordInbound({
+      from: "+15550000001",
+      to: "+15550000000",
+      body: "Checking in",
+      messageSid: "SM_INBOUND_2",
+    });
+
+    expect(prisma.blastRecipient.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.analyticsSnapshot.create).not.toHaveBeenCalled();
+  });
+
+  it("does not mark responded when inbound cannot be linked to a blast outbound", async () => {
+    prisma.outboundMessage.findFirst.mockResolvedValue(null);
+
+    await service.recordInbound({
+      from: "+15550000009",
+      to: "+15550000000",
+      body: "Hello",
+      messageSid: "SM_INBOUND_3",
+    });
+
+    expect(prisma.inboundMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          blastId: null,
+          fromPhone: "+15550000009",
+        }),
+      }),
+    );
+    expect(prisma.blastRecipient.updateMany).not.toHaveBeenCalled();
+    expect(prisma.analyticsSnapshot.create).not.toHaveBeenCalled();
+    expect(events.emit).toHaveBeenCalledWith("inbox.inbound", {
+      contactPhone: "+15550000009",
+      blastId: null,
+      body: "Hello",
+    });
   });
 
   it("merges conversation state with message recipients from db and twilio", async () => {
