@@ -70,6 +70,18 @@ describe("AudiencesService integration-like flow", () => {
     expect(resumed.cursor).toBe(2);
     expect(resumed.importedRows).toBe(2);
     expect(prismaMock.audienceContact.upsert).toHaveBeenCalledTimes(2);
+    for (const [callArg] of prismaMock.audienceContact.upsert.mock.calls) {
+      expect(callArg.create.metadata).toEqual(
+        expect.objectContaining({
+          contactable: true,
+        }),
+      );
+      expect(callArg.update.metadata).toEqual(
+        expect.objectContaining({
+          contactable: true,
+        }),
+      );
+    }
     expect(prismaMock.audience.update).toHaveBeenCalled();
   });
 

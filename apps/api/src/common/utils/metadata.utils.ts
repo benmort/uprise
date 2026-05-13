@@ -23,3 +23,15 @@ export function sanitizeMetadata(
   }
   return out;
 }
+
+export function withDefaultContactable(
+  metadata: MetadataRecord,
+): MetadataRecord {
+  if (metadata.contactable === undefined || metadata.contactable === null) {
+    return {
+      ...metadata,
+      contactable: true,
+    };
+  }
+  return metadata;
+}

@@ -10,7 +10,7 @@ import {
 } from "../../src/generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
-import { sanitizeMetadata } from "../common/utils/metadata.utils";
+import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
 import { CredentialCryptoService } from "./credential-crypto.service";
 import { ActionNetworkConnector } from "./action-network.connector";
 import { InternalSourceConnector } from "./internal-source.connector";
@@ -280,7 +280,7 @@ export class IntegrationsService {
       contactable: true,
       nonContactableReason: null,
       metadata:
-        sanitizeMetadata(rawMetadata) as Prisma.InputJsonValue,
+        withDefaultContactable(sanitizeMetadata(rawMetadata)) as Prisma.InputJsonValue,
     };
   }
 

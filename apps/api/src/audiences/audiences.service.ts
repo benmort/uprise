@@ -8,7 +8,7 @@ import {
 import { parse } from "csv-parse/sync";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
-import { sanitizeMetadata } from "../common/utils/metadata.utils";
+import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
 import { ConfigService } from "@nestjs/config";
 import { CreateAudienceDto, ListAudiencesDto } from "./dto/audience.dto";
 
@@ -369,7 +369,7 @@ export class AudiencesService {
       try {
         const phone = normalizePhoneE164(phoneRaw);
         const fullName = row.name || row.full_name || row.first_name || null;
-        const metadata = sanitizeMetadata(row);
+        const metadata = withDefaultContactable(sanitizeMetadata(row));
         await this.prisma.audienceContact.upsert({
           where: {
             audienceId_phoneE164: {
