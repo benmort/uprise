@@ -331,6 +331,23 @@ export default function AnalyticsPage() {
       </Card>
 
       <Card>
+        <CardHeader>
+          <CardTitle>Status Distribution</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {statusDistribution.map((row) => (
+            <div key={String(row.status)} className="rounded border border-border bg-surface px-3 py-2">
+              <StatusBadge status={String(row.status)} />
+              <span className="ml-2 text-sm">{String((row as any)._count)}</span>
+            </div>
+          ))}
+          {statusDistribution.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No status data yet.</p>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Recipient Activity Log</CardTitle>
           <Button
@@ -358,7 +375,12 @@ export default function AnalyticsPage() {
                   <td className="py-3 pr-3">
                     <StatusBadge status={String(row.status)} />
                   </td>
-                  <td className="py-3 pr-3 text-muted-foreground">{String(row.failureCategory || "Message Sent")}</td>
+                  <td className="py-3 pr-3 text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      {getLastActionLabel(row)}
+                      {shouldShowReasonPopover(row) ? <TooltipHint label={getRecipientReason(row) || ""} /> : null}
+                    </span>
+                  </td>
                   <td className="py-3 pr-3 text-muted-foreground">
                     {formatDate(row.sentAt || row.updatedAt)}
                   </td>
@@ -428,23 +450,6 @@ export default function AnalyticsPage() {
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Status Distribution</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {statusDistribution.map((row) => (
-            <div key={String(row.status)} className="rounded border border-border bg-surface px-3 py-2">
-              <StatusBadge status={String(row.status)} />
-              <span className="ml-2 text-sm">{String((row as any)._count)}</span>
-            </div>
-          ))}
-          {statusDistribution.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No status data yet.</p>
-          ) : null}
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -483,4 +488,34 @@ function formatDate(value: unknown) {
   } catch {
     return String(value);
   }
+}
+
+function getTextOrNull(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function getRecipientReason(row: Record<string, unknown>): string | null {
+  const category = getTextOrNull(row.failureCategory);
+  const code = getTextOrNull(row.errorCode);
+  const message = getTextOrNull(row.errorMessage);
+  const details = [
+    category ? `Category: ${category}` : null,
+    code ? `Code: ${code}` : null,
+    message,
+  ].filter((part): part is string => Boolean(part));
+  return details.length > 0 ? details.join(" | ") : null;
+}
+
+function shouldShowReasonPopover(row: Record<string, unknown>): boolean {
+  const status = String(row.status || "");
+  return (status === "FAILED" || status === "SKIPPED") && Boolean(getRecipientReason(row));
+}
+
+function getLastActionLabel(row: Record<string, unknown>): string {
+  const status = String(row.status || "");
+  if (status === "FAILED") return String(row.failureCategory || "Failed");
+  if (status === "SKIPPED") return "Skipped";
+  return String(row.failureCategory || "Message Sent");
 }
