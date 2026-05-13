@@ -20,6 +20,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { useToast } from "@/components/ui/toast";
+import { getTwilioErrorCodeDescription } from "@/lib/twilio-error-codes";
 
 type BlastOption = { id: string; title: string; status: string };
 type TrendWindow = "all" | "15" | "60" | "240";
@@ -499,10 +500,11 @@ function getTextOrNull(value: unknown) {
 function getRecipientReason(row: Record<string, unknown>): string | null {
   const category = getTextOrNull(row.failureCategory);
   const code = getTextOrNull(row.errorCode);
+  const codeDescription = getTwilioErrorCodeDescription(code);
   const message = getTextOrNull(row.errorMessage);
   const details = [
     category ? `Category: ${category}` : null,
-    code ? `Code: ${code}` : null,
+    code ? `Code: ${code}${codeDescription ? ` (${codeDescription})` : ""}` : null,
     message,
   ].filter((part): part is string => Boolean(part));
   return details.length > 0 ? details.join(" | ") : null;
