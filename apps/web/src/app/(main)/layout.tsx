@@ -13,7 +13,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
-import { createBlast, listConversations } from "@/lib/api";
+import { createBlast, listAudiences, listConversations } from "@/lib/api";
 import { clearCredentials, getCredentials } from "@/lib/auth";
 import {
   loadPushNotificationsEnabled,
@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
 const DEFAULT_BLAST_TEMPLATE =
-  "Hi {{first_name}}! It's been a while since we saw you in {{city}}. Your membership is expiring soon. Renew today with code {{discount_code}}. Reply STOP to opt out.";
+  "Hi {{first_name}}! We're building our volunteer team in {{city}} and would love your help at an upcoming community action. Can we count you in? Reply YES to volunteer or STOP to opt out.";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -118,9 +118,19 @@ export default function MainLayout({
     if (creatingBlast) return;
     setCreatingBlast(true);
     try {
+      let latestAudienceId: string | undefined;
+      const audienceResult = await listAudiences({ limit: 1, offset: 0 });
+      if (audienceResult.ok) {
+        const latest = audienceResult.data.rows?.[0] as Record<string, unknown> | undefined;
+        if (latest && typeof latest.id === "string") {
+          latestAudienceId = latest.id;
+        }
+      }
+
       const created = await createBlast({
         title: "New Blast",
         bodyTemplate: DEFAULT_BLAST_TEMPLATE,
+        audienceId: latestAudienceId,
       });
       if (!created.ok) {
         showToast({
