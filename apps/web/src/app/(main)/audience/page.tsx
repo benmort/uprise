@@ -355,7 +355,7 @@ export default function AudiencePage() {
 
         <Card className="lg:order-1">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <CardTitle>Sync Integrations</CardTitle>
+            <CardTitle>Action Network List Sync</CardTitle>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={loadIntegrationLists} disabled={listsLoading}>
                 Refresh

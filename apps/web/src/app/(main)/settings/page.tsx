@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
   type AlertSoundProfile,
@@ -34,31 +33,13 @@ export default function SettingsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold">Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage responder alerts, quiet times, and device notification preferences.
-          </p>
+          <p className="text-sm text-muted-foreground">Manage responder alerts and quiet times.</p>
         </div>
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Notifications</CardTitle>
-          <StatusBadge status="ACTIVE" />
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          <p className="text-muted-foreground">
-            Yarns now uses in-app notifications only. New inbound messages appear while this app is open.
-          </p>
-          <p className="text-muted-foreground">
-            Background/browser push has been removed; keep this tab open to receive live inbox alerts.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardHeader>
           <CardTitle>Responder Alert Settings</CardTitle>
-          <StatusBadge status={alertSettings.soundEnabled ? "ACTIVE" : "ARCHIVED"} />
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 text-sm sm:grid-cols-2">

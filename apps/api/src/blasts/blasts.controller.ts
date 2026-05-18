@@ -44,7 +44,7 @@ export class BlastsController {
 
   @Post(":id/send")
   sendNow(@Param("id") id: string) {
-    return this.blasts.sendNow(id);
+    return this.blasts.requestSendNow(id);
   }
 
   @Get("dispatch-due")
@@ -56,7 +56,7 @@ export class BlastsController {
 
   @Post(":id/retry-failed")
   retryFailed(@Param("id") id: string) {
-    return this.blasts.retryFailed(id);
+    return this.blasts.requestRetryFailed(id);
   }
 
   @Get()

@@ -16,4 +16,12 @@ export class FeatureFlagsService {
   isBlastSchedulerEnabled(): boolean {
     return this.config.get<boolean>("FEATURE_BLAST_SCHEDULER_ENABLED", true);
   }
+
+  isBullmqUploadEnabled(): boolean {
+    return this.config.get<boolean>("FEATURE_BULLMQ_UPLOAD_ENABLED", false);
+  }
+
+  isBullmqBlastEnabled(): boolean {
+    return this.config.get<boolean>("FEATURE_BULLMQ_BLAST_ENABLED", false);
+  }
 }

@@ -134,7 +134,7 @@ export class AnalyticsService {
 
   async recentBlasts(limit = 20) {
     const org = await this.ensureOrganization();
-    return this.prisma.blast.findMany({
+    const blasts = await this.prisma.blast.findMany({
       where: { organizationId: org.id },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
@@ -144,5 +144,35 @@ export class AnalyticsService {
         },
       },
     });
+
+    const blastIds = blasts.map((blast) => blast.id);
+    if (blastIds.length === 0) return blasts;
+
+    const recipientCounts = await this.prisma.blastRecipient.groupBy({
+      by: ["blastId", "status"],
+      where: {
+        blastId: { in: blastIds },
+        status: {
+          in: [
+            BlastRecipientStatus.SENT,
+            BlastRecipientStatus.DELIVERED,
+            BlastRecipientStatus.RESPONDED,
+          ],
+        },
+      },
+      _count: true,
+    });
+
+    const awaitingByBlastId = new Map<string, number>();
+    for (const row of recipientCounts) {
+      if (row.status === BlastRecipientStatus.RESPONDED) continue;
+      const current = awaitingByBlastId.get(row.blastId) || 0;
+      awaitingByBlastId.set(row.blastId, current + row._count);
+    }
+
+    return blasts.map((blast) => ({
+      ...blast,
+      awaitingResponseCount: awaitingByBlastId.get(blast.id) || 0,
+    }));
   }
 }

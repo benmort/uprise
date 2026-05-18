@@ -1,17 +1,20 @@
 import { Module } from "@nestjs/common";
 import { LoggingModule } from "../logging/logging.module";
-import { InMemoryDispatchQueue } from "./in-memory-dispatch.queue";
+import { BullmqDispatchQueue } from "./bullmq-dispatch.queue";
 import { DispatchQueue } from "./dispatch-queue";
+import { QueueConfigService } from "./queue-config.service";
+import { DISPATCH_QUEUE_TOKEN } from "./queue.tokens";
 
 @Module({
   imports: [LoggingModule],
   providers: [
+    QueueConfigService,
     {
-      provide: "DispatchQueue",
-      useClass: InMemoryDispatchQueue,
+      provide: DISPATCH_QUEUE_TOKEN,
+      useClass: BullmqDispatchQueue,
     },
   ],
-  exports: ["DispatchQueue"],
+  exports: [QueueConfigService, DISPATCH_QUEUE_TOKEN],
 })
 export class QueueModule {}
 

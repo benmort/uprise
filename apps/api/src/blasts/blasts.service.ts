@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   BlastRecipientStatus,
   BlastStatus,
@@ -16,6 +16,16 @@ import { RealtimeEventsService } from "../common/events/realtime-events.service"
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
 import { BlastStatus as FlowBlastStatus } from "../common/enums/blast-status.enum";
 import { classifyFailureScope, scopeFromStoredFailure } from "./twilio-failure-scope";
+import { FeatureFlagsService } from "../common/flags/feature-flags.service";
+import { DispatchQueue } from "../common/queue/dispatch-queue";
+import {
+  getBlastRetryJobId,
+  getBlastSendJobId,
+  QUEUE_JOB_TYPES,
+  QUEUE_NAMES,
+} from "../common/queue/queue.constants";
+import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
+import { BlastRetryFailedJobPayload, BlastSendBatchJobPayload } from "../common/queue/queue.payloads";
 
 type RecipientSeed = {
   contactId?: string;
@@ -68,6 +78,8 @@ type RecipientTraceInput = {
 @Injectable()
 export class BlastsService {
   private readonly logger = new Logger(BlastsService.name);
+  private readonly flags: Pick<FeatureFlagsService, "isBullmqBlastEnabled">;
+  private readonly queue: DispatchQueue;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -76,7 +88,16 @@ export class BlastsService {
     private readonly compliance: ComplianceService,
     private readonly twilio: TwilioService,
     private readonly events: RealtimeEventsService,
-  ) {}
+    flags?: FeatureFlagsService,
+    @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+  ) {
+    this.flags = flags ?? {
+      isBullmqBlastEnabled: () => false,
+    };
+    this.queue = queue ?? {
+      enqueue: async (job) => ({ jobId: job.id, queued: true }),
+    };
+  }
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
@@ -203,7 +224,35 @@ export class BlastsService {
         scheduledFor: runAt,
       },
     });
+    if (this.isBullmqBlastEnabled()) {
+      await this.enqueueBlastSendBatch({ blastId: id }, runAt);
+    }
     return updated;
+  }
+
+  async requestSendNow(id: string) {
+    if (!this.isBullmqBlastEnabled()) {
+      return this.sendNow(id);
+    }
+    const queued = await this.enqueueBlastSendBatch({ blastId: id });
+    const blast = await this.getBlastOrThrow(id);
+    return {
+      queued: queued.queued,
+      jobId: queued.jobId,
+      blast,
+    };
+  }
+
+  async requestRetryFailed(id: string) {
+    if (!this.isBullmqBlastEnabled()) {
+      return this.retryFailed(id);
+    }
+    const queued = await this.enqueueBlastRetryFailed({ blastId: id });
+    return {
+      blastId: id,
+      queued: queued.queued,
+      jobId: queued.jobId,
+    };
   }
 
   private async getBlastRecipients(blast: { audienceId: string | null; id: string }): Promise<RecipientSeed[]> {
@@ -241,6 +290,44 @@ export class BlastsService {
     const envBudgetMs = Number(this.config.get<string>("BLAST_SEND_MAX_RUN_MS", "22000"));
     const fallback = Number.isFinite(envBudgetMs) ? envBudgetMs : 22000;
     return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
+  }
+
+  private isBullmqBlastEnabled(): boolean {
+    return this.flags.isBullmqBlastEnabled();
+  }
+
+  private async enqueueBlastSendBatch(
+    payload: BlastSendBatchJobPayload,
+    runAt?: Date,
+  ): Promise<{ jobId: string; queued: boolean }> {
+    return this.queue.enqueue({
+      id: getBlastSendJobId(payload.blastId),
+      queue: QUEUE_NAMES.BLAST_SEND,
+      type: QUEUE_JOB_TYPES.BLAST_SEND_BATCH,
+      payload,
+      runAt,
+      removeOnComplete: true,
+    });
+  }
+
+  private async enqueueBlastRetryFailed(
+    payload: BlastRetryFailedJobPayload,
+  ): Promise<{ jobId: string; queued: boolean }> {
+    return this.queue.enqueue({
+      id: getBlastRetryJobId(payload.blastId),
+      queue: QUEUE_NAMES.BLAST_RETRY,
+      type: QUEUE_JOB_TYPES.BLAST_RETRY_FAILED,
+      payload,
+      removeOnComplete: true,
+    });
+  }
+
+  async processBlastSendQueueJob(payload: BlastSendBatchJobPayload) {
+    return this.sendNow(payload.blastId, payload.requestedBatchSize);
+  }
+
+  async processBlastRetryQueueJob(payload: BlastRetryFailedJobPayload) {
+    return this.retryFailed(payload.blastId, true);
   }
 
   private async ensureBlastRecipientRecords(blast: {
@@ -805,6 +892,19 @@ export class BlastsService {
 
     const results: Array<Record<string, unknown>> = [];
     for (const blast of due) {
+      if (this.isBullmqBlastEnabled()) {
+        const queued = await this.enqueueBlastSendBatch(
+          { blastId: blast.id, requestedBatchSize: dispatchBatchSize },
+          blast.scheduledFor && blast.scheduledFor > new Date() ? blast.scheduledFor : undefined,
+        );
+        results.push({
+          blastId: blast.id,
+          ok: true,
+          queued: queued.queued,
+          jobId: queued.jobId,
+        });
+        continue;
+      }
       try {
         const outcome = await this.sendNow(blast.id, dispatchBatchSize);
         results.push({
@@ -832,7 +932,7 @@ export class BlastsService {
     };
   }
 
-  async retryFailed(id: string) {
+  async retryFailed(id: string, _fromQueue = false) {
     const blast = await this.getBlastOrThrow(id);
     const failedRecipients = await this.prisma.blastRecipient.findMany({
       where: { blastId: id, status: BlastRecipientStatus.FAILED },

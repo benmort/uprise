@@ -666,4 +666,61 @@ describe("BlastsService integration-like flow", () => {
       }),
     );
   });
+
+  it("enqueues blast send and retry jobs when BullMQ blast flag is enabled", async () => {
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_1",
+          status: BlastStatus.PROOFED,
+          audienceId: "aud_1",
+          bodyTemplate: "Hi there",
+          organizationId: "org_1",
+          startedAt: null,
+        }),
+        findMany: jest.fn().mockResolvedValue([{ id: "blast_1", scheduledFor: new Date() }]),
+      },
+    };
+    const flags = { isBullmqBlastEnabled: () => true } as any;
+    const queue = {
+      enqueue: jest.fn().mockResolvedValue({ jobId: "blast-send:blast_1", queued: true }),
+    };
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      { sendMessage: jest.fn() } as unknown as TwilioService,
+      eventsMock,
+      flags,
+      queue as any,
+    );
+
+    const sendResult = await service.requestSendNow("blast_1");
+    expect(sendResult).toEqual(
+      expect.objectContaining({
+        queued: true,
+        jobId: "blast-send:blast_1",
+      }),
+    );
+
+    const retryResult = await service.requestRetryFailed("blast_1");
+    expect(retryResult).toEqual(
+      expect.objectContaining({
+        blastId: "blast_1",
+        queued: true,
+      }),
+    );
+
+    const dispatched = await service.dispatchDueScheduled(1);
+    expect(dispatched.processed).toBe(1);
+    expect(dispatched.results[0]).toEqual(
+      expect.objectContaining({
+        blastId: "blast_1",
+        ok: true,
+        queued: true,
+      }),
+    );
+    expect(queue.enqueue).toHaveBeenCalled();
+  });
 });

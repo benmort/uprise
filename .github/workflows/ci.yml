@@ -58,3 +58,6 @@ jobs:
 
       - name: Web build
         run: pnpm --filter web run build
+
+      - name: Worker build
+        run: pnpm --filter worker run build

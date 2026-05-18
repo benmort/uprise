@@ -11,14 +11,14 @@ function read(relative: string): string {
 describe("major route files", () => {
   it("contains dashboard page scaffold", () => {
     const source = read("dashboard/page.tsx");
-    expect(source).toContain("Track Campaign Performance");
+    expect(source).toContain("Monitor sends, replies, and unresolved work in one place.");
     expect(source).toContain("Blast Campaigns");
   });
 
   it("contains audience page scaffold", () => {
     const source = read("audience/page.tsx");
     expect(source).toContain("Build and Manage Audience Segments");
-    expect(source).toContain("Sync Integrations");
+    expect(source).toContain("Upload CSV");
   });
 
   it("keeps legacy composer route as a redirect shim", () => {

@@ -127,6 +127,8 @@ export default function InboxPage() {
   const pathname = usePathname();
   const params = useSearchParams();
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const threadScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingInitialScrollContactRef = useRef<string | null>(null);
   const conversationFetchKeyRef = useRef<string | null>(null);
   const routeContact = params.get("contact") || "";
   const routeQuery = params.get("q") || "";
@@ -146,7 +148,7 @@ export default function InboxPage() {
   const [conversationPage, setConversationPage] = useState(0);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showBlastHistory, setShowBlastHistory] = useState(false);
-  const [streamStatus, setStreamStatus] = useState("idle");
+  const [, setStreamStatus] = useState("idle");
   const [alertSettings, setAlertSettings] = useState<ResponderAlertSettings>(
     DEFAULT_RESPONDER_ALERT_SETTINGS,
   );
@@ -367,8 +369,21 @@ export default function InboxPage() {
     }));
   }, []);
 
+  const scrollThreadToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const container = threadScrollRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior,
+    });
+  }, []);
+
   useEffect(() => {
     setShowBlastHistory(false);
+  }, [routeContact]);
+
+  useEffect(() => {
+    pendingInitialScrollContactRef.current = routeContact || null;
   }, [routeContact]);
 
   useEffect(() => {
@@ -397,6 +412,23 @@ export default function InboxPage() {
     }, 4000);
     return () => clearInterval(id);
   }, [routeContact, loadThread]);
+
+  useEffect(() => {
+    if (loadingThread || !routeContact) return;
+    if (pendingInitialScrollContactRef.current !== routeContact) return;
+    let frameA = 0;
+    let frameB = 0;
+    frameA = window.requestAnimationFrame(() => {
+      frameB = window.requestAnimationFrame(() => {
+        scrollThreadToBottom("auto");
+        pendingInitialScrollContactRef.current = null;
+      });
+    });
+    return () => {
+      if (frameA) window.cancelAnimationFrame(frameA);
+      if (frameB) window.cancelAnimationFrame(frameB);
+    };
+  }, [loadingThread, routeContact, thread, scrollThreadToBottom]);
 
   useEffect(() => {
     let source: EventSource | null = null;
@@ -729,7 +761,6 @@ export default function InboxPage() {
             </p>
           ) : null}
         </div>
-        <StatusBadge status={streamStatus === "live" ? "ACTIVE" : "SENDING"} className="capitalize" />
       </div>
       <div className="grid h-full gap-4 xl:grid-cols-[360px_1fr]">
         <Card className="flex h-full flex-col overflow-hidden">
@@ -1202,7 +1233,10 @@ export default function InboxPage() {
                 }}
               />
             ) : null}
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded border border-border bg-surface p-3">
+            <div
+              ref={threadScrollRef}
+              className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded border border-border bg-surface p-3"
+            >
               {loadingThread ? (
                 <div className="space-y-2">
                   <Skeleton className="h-12 w-3/4" />

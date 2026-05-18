@@ -6,6 +6,8 @@
 - **Request tracing:** `x-request-id` header
 - **Structured logs:** domain-tagged logs via `DomainLogger`
 - **Realtime stream:** `/api/v1/analytics/stream`
+- **Worker health:** `GET /health` on worker service
+- **Queue metrics:** `GET /metrics` on worker service
 
 ## Suggested Dashboards
 
@@ -29,6 +31,12 @@
    - Unread conversation count
    - Median first-reply time
 
+5. **BullMQ Queue Health**
+   - Queue completed/failed/stalled counters (`audience-import`, `blast-send`, `blast-retry`)
+   - Waiting/delayed backlog trend
+   - Worker active-job concurrency
+   - Failed-job backlog size (DLQ)
+
 ## Recommended Alerts
 
 - **Health endpoint down** for >2 minutes
@@ -36,6 +44,10 @@
 - **Blast failure ratio >10%** on active sends
 - **Integration sync failure** for two consecutive runs
 - **DB connectivity check false** in `/health`
+- **Queue stalled jobs > 0** for 5 minutes
+- **Queue failed/completed ratio > 5%** for 10 minutes
+- **Queue backlog (waiting + delayed) grows for 15 minutes**
+- **Worker health endpoint unavailable** for >2 minutes
 
 ## Incident Triage Checklist
 

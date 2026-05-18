@@ -47,9 +47,18 @@ export type ValidatedEnv = {
   STREAM_TOKEN_SECRET: string;
   STREAM_TOKEN_TTL_SECONDS: number;
   BLAST_SEND_BATCH_SIZE: number;
+  BLAST_DISPATCH_BATCH_SIZE: number;
+  BLAST_SEND_MAX_RUN_MS: number;
   AUDIENCE_IMPORT_BATCH_SIZE: number;
   AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE: number;
   AUDIENCE_IMPORT_MAX_RUN_MS: number;
+  BULLMQ_REDIS_URL: string;
+  BULLMQ_PREFIX: string;
+  BULLMQ_DEFAULT_ATTEMPTS: number;
+  BULLMQ_DEFAULT_BACKOFF_MS: number;
+  BULLMQ_UPLOAD_QUEUE_CONCURRENCY: number;
+  BULLMQ_BLAST_QUEUE_CONCURRENCY: number;
+  WORKER_HEALTH_PORT: number;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
@@ -66,6 +75,8 @@ export type ValidatedEnv = {
   FEATURE_REALTIME_ENABLED: boolean;
   FEATURE_AI_ASSIST_ENABLED: boolean;
   FEATURE_BLAST_SCHEDULER_ENABLED: boolean;
+  FEATURE_BULLMQ_UPLOAD_ENABLED: boolean;
+  FEATURE_BULLMQ_BLAST_ENABLED: boolean;
 };
 
 export function validateEnv(config: Env): ValidatedEnv {
@@ -91,6 +102,8 @@ export function validateEnv(config: Env): ValidatedEnv {
       errors,
     ),
     BLAST_SEND_BATCH_SIZE: numberInRange(config, "BLAST_SEND_BATCH_SIZE", 1, 500, 50, errors),
+    BLAST_DISPATCH_BATCH_SIZE: numberInRange(config, "BLAST_DISPATCH_BATCH_SIZE", 1, 100, 5, errors),
+    BLAST_SEND_MAX_RUN_MS: numberInRange(config, "BLAST_SEND_MAX_RUN_MS", 1000, 28000, 22000, errors),
     AUDIENCE_IMPORT_BATCH_SIZE: numberInRange(
       config,
       "AUDIENCE_IMPORT_BATCH_SIZE",
@@ -115,6 +128,34 @@ export function validateEnv(config: Env): ValidatedEnv {
       22000,
       errors,
     ),
+    BULLMQ_REDIS_URL: config.BULLMQ_REDIS_URL?.trim() || "",
+    BULLMQ_PREFIX: config.BULLMQ_PREFIX?.trim() || "yarns",
+    BULLMQ_DEFAULT_ATTEMPTS: numberInRange(config, "BULLMQ_DEFAULT_ATTEMPTS", 1, 20, 4, errors),
+    BULLMQ_DEFAULT_BACKOFF_MS: numberInRange(
+      config,
+      "BULLMQ_DEFAULT_BACKOFF_MS",
+      0,
+      600000,
+      2000,
+      errors,
+    ),
+    BULLMQ_UPLOAD_QUEUE_CONCURRENCY: numberInRange(
+      config,
+      "BULLMQ_UPLOAD_QUEUE_CONCURRENCY",
+      1,
+      50,
+      2,
+      errors,
+    ),
+    BULLMQ_BLAST_QUEUE_CONCURRENCY: numberInRange(
+      config,
+      "BULLMQ_BLAST_QUEUE_CONCURRENCY",
+      1,
+      100,
+      5,
+      errors,
+    ),
+    WORKER_HEALTH_PORT: numberInRange(config, "WORKER_HEALTH_PORT", 1024, 65535, 3210, errors),
     TWILIO_ACCOUNT_SID: required(config, "TWILIO_ACCOUNT_SID", errors),
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),
@@ -132,7 +173,16 @@ export function validateEnv(config: Env): ValidatedEnv {
     FEATURE_REALTIME_ENABLED: boolish(config, "FEATURE_REALTIME_ENABLED", true),
     FEATURE_AI_ASSIST_ENABLED: boolish(config, "FEATURE_AI_ASSIST_ENABLED", true),
     FEATURE_BLAST_SCHEDULER_ENABLED: boolish(config, "FEATURE_BLAST_SCHEDULER_ENABLED", true),
+    FEATURE_BULLMQ_UPLOAD_ENABLED: boolish(config, "FEATURE_BULLMQ_UPLOAD_ENABLED", false),
+    FEATURE_BULLMQ_BLAST_ENABLED: boolish(config, "FEATURE_BULLMQ_BLAST_ENABLED", false),
   };
+
+  if (
+    (output.FEATURE_BULLMQ_UPLOAD_ENABLED || output.FEATURE_BULLMQ_BLAST_ENABLED) &&
+    !output.BULLMQ_REDIS_URL
+  ) {
+    errors.push("BULLMQ_REDIS_URL is required when FEATURE_BULLMQ_UPLOAD_ENABLED or FEATURE_BULLMQ_BLAST_ENABLED is true");
+  }
 
   if (errors.length > 0) {
     throw new Error(`Environment validation failed:\n- ${errors.join("\n- ")}`);

@@ -8,10 +8,11 @@ Yarns is a Twilio-powered SMS blast platform with five primary surfaces:
 - Analytics
 - Inbox
 
-This repository is now configured for **Vercel-only deployment**:
+This repository is configured for **Vercel + BullMQ worker deployment**:
 
 - `apps/web` (Next.js) -> Vercel project #1
 - `apps/api` (NestJS serverless function) -> Vercel project #2
+- `apps/worker` (BullMQ worker) -> always-on worker host (for example Render/Fly/Railway)
 
 ## Architecture
 
@@ -25,6 +26,12 @@ This repository is now configured for **Vercel-only deployment**:
   - Runs on Vercel via `api/index.ts` serverless handler
   - Global prefix `/api/v1`
   - Endpoints for audiences, blasts, analytics, inbox, integrations, webhooks
+  - BullMQ producers enqueue upload/blast jobs when feature flags are enabled
+
+- **Worker (`apps/worker`)**
+  - Long-running BullMQ consumers
+  - Processes `audience-import`, `blast-send`, and `blast-retry` queues
+  - Exposes `/health` and `/metrics` for operational monitoring
 
 ## Local Development
 
@@ -56,10 +63,16 @@ pnpm --filter api prisma:migrate
 pnpm dev:all
 ```
 
+6. Start worker:
+
+```bash
+pnpm --filter worker start
+```
+
 - API local URL: `http://localhost:3001/api/v1`
 - Web local URL: `http://localhost:3000`
 
-## Vercel Deployment
+## Deployment
 
 ### 1) Deploy API (`apps/api`)
 
@@ -101,8 +114,16 @@ Optional:
 - `FEATURE_REALTIME_ENABLED`
 - `FEATURE_AI_ASSIST_ENABLED`
 - `FEATURE_BLAST_SCHEDULER_ENABLED`
+- `BULLMQ_REDIS_URL` (required when BullMQ feature flags are enabled)
+- `BULLMQ_PREFIX` (default: `yarns`)
+- `BULLMQ_DEFAULT_ATTEMPTS` (default: `4`)
+- `BULLMQ_DEFAULT_BACKOFF_MS` (default: `2000`)
+- `BULLMQ_UPLOAD_QUEUE_CONCURRENCY` (default: `2`)
+- `BULLMQ_BLAST_QUEUE_CONCURRENCY` (default: `5`)
+- `FEATURE_BULLMQ_UPLOAD_ENABLED` (default: `false`)
+- `FEATURE_BULLMQ_BLAST_ENABLED` (default: `false`)
 
-Scheduled dispatch runs via Vercel Cron (`/api/v1/blasts/dispatch-due` and `/api/v1/audiences/dispatch-imports`) every minute and expects `Authorization: Bearer <CRON_SECRET>`.
+Scheduled dispatch runs via Vercel Cron (`/api/v1/blasts/dispatch-due` and `/api/v1/audiences/dispatch-imports`) every minute and expects `Authorization: Bearer <CRON_SECRET>`. When BullMQ flags are enabled, these endpoints enqueue queue jobs instead of executing full send/import loops inline.
 
 ### 2) Deploy Web (`apps/web`)
 
@@ -115,7 +136,24 @@ Set web env vars:
 - `NEXT_PUBLIC_ACTION_NETWORK_BASE_URL` (optional override)
 - `NEXT_PUBLIC_INTERNAL_SOURCE_BASE_URL` (optional UI default)
 
-### 3) Database migration workflow
+### 3) Deploy Worker (`apps/worker`)
+
+Deploy `apps/worker` to a long-running runtime (non-serverless). Required env vars:
+
+- `DATABASE_URL`
+- `DEFAULT_ORGANIZATION_SLUG`
+- `BULLMQ_REDIS_URL`
+- `BULLMQ_PREFIX`
+- `BULLMQ_DEFAULT_ATTEMPTS`
+- `BULLMQ_DEFAULT_BACKOFF_MS`
+- `BULLMQ_UPLOAD_QUEUE_CONCURRENCY`
+- `BULLMQ_BLAST_QUEUE_CONCURRENCY`
+- `WORKER_HEALTH_PORT`
+- `FEATURE_BULLMQ_UPLOAD_ENABLED`
+- `FEATURE_BULLMQ_BLAST_ENABLED`
+- all Twilio/auth/integration vars needed by underlying send/import services
+
+### 4) Database migration workflow
 
 Before promoting API builds, run:
 
@@ -146,3 +184,5 @@ pnpm --filter web build
 - Migration and rollback: `docs/migration-runbook.md`
 - Observability and alerting: `docs/observability.md`
 - Launch gates: `docs/launch-checklist.md`
+- BullMQ deployment details: `docs/bullmq-deployment.md`
+- BullMQ rollout and shadow validation: `docs/bullmq-rollout.md`

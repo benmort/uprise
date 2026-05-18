@@ -142,4 +142,59 @@ describe("AudiencesService integration-like flow", () => {
       }),
     );
   });
+
+  it("enqueues imports when BullMQ upload flag is enabled", async () => {
+    const job = {
+      id: "import_queued",
+      audienceId: "aud_1",
+      fileName: "contacts.csv",
+      status: AudienceImportStatus.QUEUED,
+      cursor: 0,
+      totalRows: 1,
+      importedRows: 0,
+      failedRows: 0,
+      errors: [],
+      csvRaw: "name,phone\nAlice,+15551234567",
+      errorSummary: null,
+      createdAt: new Date("2026-05-12T00:00:00.000Z"),
+      startedAt: null as Date | null,
+      completedAt: null as Date | null,
+    };
+    const prismaMock: any = {
+      organization: {
+        upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
+      },
+      audience: {
+        findFirst: jest.fn().mockResolvedValue({ id: "aud_1", organizationId: "org_1" }),
+      },
+      audienceImport: {
+        create: jest.fn().mockResolvedValue({ id: "import_queued" }),
+        findFirst: jest.fn().mockResolvedValue(job),
+        findMany: jest.fn().mockResolvedValue([{ id: "import_queued", audienceId: "aud_1" }]),
+      },
+    };
+    const configMock = {
+      get: (_key: string, fallback?: string) => fallback ?? "default",
+    } as ConfigService;
+    const flags = { isBullmqUploadEnabled: () => true } as any;
+    const queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "audience-import:import_queued", queued: true }) };
+
+    const service = new AudiencesService(prismaMock, configMock, flags, queue as any);
+    const started = await service.startCsvImport(
+      "aud_1",
+      "contacts.csv",
+      "name,phone\nAlice,+15551234567",
+    );
+    expect(started.status).toBe(AudienceImportStatus.QUEUED);
+
+    const dispatched = await service.dispatchPendingImports(1);
+    expect(dispatched.results[0]).toEqual(
+      expect.objectContaining({
+        importId: "import_queued",
+        ok: true,
+        queued: true,
+      }),
+    );
+    expect(queue.enqueue).toHaveBeenCalled();
+  });
 });

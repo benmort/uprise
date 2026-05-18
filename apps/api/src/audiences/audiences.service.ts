@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   AudienceImportStatus,
   AudienceSource,
@@ -11,6 +11,15 @@ import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
 import { ConfigService } from "@nestjs/config";
 import { CreateAudienceDto, ListAudiencesDto } from "./dto/audience.dto";
+import { FeatureFlagsService } from "../common/flags/feature-flags.service";
+import { DispatchQueue } from "../common/queue/dispatch-queue";
+import {
+  getAudienceImportJobId,
+  QUEUE_JOB_TYPES,
+  QUEUE_NAMES,
+} from "../common/queue/queue.constants";
+import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
+import { AudienceImportBatchJobPayload } from "../common/queue/queue.payloads";
 
 type CsvRow = Record<string, string | undefined>;
 type ImportErrorRow = { row: number; message: string };
@@ -44,11 +53,22 @@ function parseSyncStats(summary: string | null | undefined): Record<string, unkn
 @Injectable()
 export class AudiencesService {
   private readonly logger = new Logger(AudiencesService.name);
+  private readonly flags: Pick<FeatureFlagsService, "isBullmqUploadEnabled">;
+  private readonly queue: DispatchQueue;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-  ) {}
+    flags?: FeatureFlagsService,
+    @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+  ) {
+    this.flags = flags ?? {
+      isBullmqUploadEnabled: () => false,
+    };
+    this.queue = queue ?? {
+      enqueue: async (job) => ({ jobId: job.id, queued: true }),
+    };
+  }
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
@@ -191,6 +211,28 @@ export class AudiencesService {
     return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
   }
 
+  private isBullmqUploadEnabled(): boolean {
+    return this.flags.isBullmqUploadEnabled();
+  }
+
+  private async enqueueImportBatch(
+    payload: AudienceImportBatchJobPayload,
+    runAt?: Date,
+  ): Promise<{ jobId: string; queued: boolean }> {
+    return this.queue.enqueue({
+      id: getAudienceImportJobId(payload.importId),
+      queue: QUEUE_NAMES.AUDIENCE_IMPORT,
+      type: QUEUE_JOB_TYPES.AUDIENCE_IMPORT_BATCH,
+      payload,
+      runAt,
+      removeOnComplete: true,
+    });
+  }
+
+  async processImportQueueJob(payload: AudienceImportBatchJobPayload) {
+    return this.processImportBatch(payload.importId, payload.requestedBatchSize);
+  }
+
   private getStoredImportErrors(
     existing: Prisma.JsonValue | null | undefined,
     newRows: ImportErrorRow[],
@@ -260,6 +302,11 @@ export class AudiencesService {
         id: true,
       },
     });
+
+    if (this.isBullmqUploadEnabled()) {
+      await this.enqueueImportBatch({ importId: created.id });
+      return this.getImportStatus(audienceId, created.id);
+    }
 
     return this.processImportBatch(created.id);
   }
@@ -469,6 +516,20 @@ export class AudiencesService {
 
     const results: Array<Record<string, unknown>> = [];
     for (const job of due) {
+      if (this.isBullmqUploadEnabled()) {
+        const queued = await this.enqueueImportBatch({
+          importId: job.id,
+          requestedBatchSize: batchSize,
+        });
+        results.push({
+          importId: job.id,
+          audienceId: job.audienceId,
+          ok: true,
+          queued: queued.queued,
+          jobId: queued.jobId,
+        });
+        continue;
+      }
       try {
         const outcome = await this.processImportBatch(job.id, batchSize);
         results.push({

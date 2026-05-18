@@ -12,6 +12,9 @@
 - [ ] Internal source connection validated
 - [ ] Stream token secret configured and consistent across all API instances
 - [ ] Compliance defaults confirmed (quiet hours, opt-out policy)
+- [ ] Redis configured (`BULLMQ_REDIS_URL`)
+- [ ] Worker service healthy (`/health`)
+- [ ] BullMQ feature flags configured per environment
 
 ## Release Sequence
 
@@ -22,6 +25,7 @@
 5. Verify dashboard/audience/analytics/inbox navigation and blast detail/composer routes.
 6. Run a small canary blast to a test audience.
 7. Verify analytics and inbox updates.
+8. Confirm worker queue metrics (`/metrics`) show completed jobs and no stalled spikes.
 
 ## Rollback Gates
 
@@ -31,10 +35,12 @@ Rollback immediately if any of:
 - Blast failure category spikes unexpectedly
 - DB migration causes query timeout or lock contention
 - Authentication failures across all endpoints
+- Worker health check failures or queue backlog growth
 
 Rollback actions:
 
 1. Pause send operations.
+2. Disable BullMQ feature flags (`FEATURE_BULLMQ_UPLOAD_ENABLED`, `FEATURE_BULLMQ_BLAST_ENABLED`).
 2. Revert API/web images to previous versions.
 3. Restore DB snapshot if schema incompatibility is confirmed.
 4. Validate with health and canary checks before resuming sends.

@@ -98,7 +98,7 @@ export default function DashboardPage() {
       <div className="section-stack">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-semibold">Blast Campaigns</h1>
+            <h1 className="text-3xl font-semibold">Dashboard</h1>
             <p className="text-sm text-muted-foreground">
               Monitor sends, replies, and unresolved work in one place.
             </p>
@@ -107,7 +107,8 @@ export default function DashboardPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>Blast Campaigns</CardTitle>
           <div className="flex w-full max-w-md gap-2">
             <Input
               ref={searchRef}
@@ -130,13 +131,14 @@ export default function DashboardPage() {
             />
           ) : null}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-sm">
+            <table className="w-full min-w-[940px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                   <th className="py-2 pr-4">Blast Name</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Created</th>
                   <th className="py-2 pr-4">Recipients</th>
+                  <th className="py-2 pr-4">Awaiting Response</th>
                   <th className="py-2 pr-4">Audience</th>
                   <th className="py-2 pr-4">Quick Actions</th>
                 </tr>
@@ -154,6 +156,9 @@ export default function DashboardPage() {
                         </td>
                         <td className="py-3 pr-4">
                           <Skeleton className="h-4 w-32" />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Skeleton className="h-4 w-16" />
                         </td>
                         <td className="py-3 pr-4">
                           <Skeleton className="h-4 w-16" />
@@ -187,6 +192,9 @@ export default function DashboardPage() {
                         <td className="py-3 pr-4">
                           {Number((blast as any)._count?.recipients || 0).toLocaleString()}
                         </td>
+                        <td className="py-3 pr-4">
+                          {Number((blast as any).awaitingResponseCount || 0).toLocaleString()}
+                        </td>
                         <td className="py-3 pr-4 text-muted-foreground">{String(blast.audienceId || "—")}</td>
                         <td className="py-3 pr-4">
                           <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
@@ -206,7 +214,7 @@ export default function DashboardPage() {
                     ))}
                 {!loading && pagedBlasts.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                    <td colSpan={7} className="py-6 text-center text-muted-foreground">
                       No matching blasts. Try a broader search or create a new campaign.
                     </td>
                   </tr>

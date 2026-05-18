@@ -20,6 +20,7 @@ import { FlagsModule } from "./common/flags/flags.module";
 import { EventsModule } from "./common/events/events.module";
 import { RequestIdMiddleware } from "./common/http/request-id.middleware";
 import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middleware";
+import { QueueModule } from "./common/queue/queue.module";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middlew
     LoggingModule,
     FlagsModule,
     EventsModule,
+    QueueModule,
     TwilioModule,
     MessagesModule,
     WebhooksModule,
