@@ -58,7 +58,6 @@ export type ValidatedEnv = {
   BULLMQ_DEFAULT_BACKOFF_MS: number;
   BULLMQ_UPLOAD_QUEUE_CONCURRENCY: number;
   BULLMQ_BLAST_QUEUE_CONCURRENCY: number;
-  WORKER_HEALTH_PORT: number;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
@@ -155,7 +154,6 @@ export function validateEnv(config: Env): ValidatedEnv {
       5,
       errors,
     ),
-    WORKER_HEALTH_PORT: numberInRange(config, "WORKER_HEALTH_PORT", 1024, 65535, 3210, errors),
     TWILIO_ACCOUNT_SID: required(config, "TWILIO_ACCOUNT_SID", errors),
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),

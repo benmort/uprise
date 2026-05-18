@@ -1,9 +1,9 @@
 import "reflect-metadata";
 import { resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { config as dotenvConfig } from "dotenv";
 import { NestFactory } from "@nestjs/core";
 import { Job, QueueEvents, Worker } from "bullmq";
-import { AppModule } from "../../api/src/app.module";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { DomainLogger } from "../../api/src/common/logging/domain-logger.service";
@@ -14,12 +14,31 @@ import {
   isBlastSendBatchJobPayload,
 } from "../../api/src/common/queue/queue.payloads";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES } from "../../api/src/common/queue/queue.constants";
-import { createWorkerHealthServer, WorkerQueueMetrics } from "./worker-health";
 
-dotenvConfig({ path: resolve(process.cwd(), "../api/.env") });
-dotenvConfig();
+type WorkerQueueMetrics = {
+  queue: string;
+  completed: number;
+  failed: number;
+  active: number;
+  waiting: number;
+  delayed: number;
+  stalled: number;
+  lastError?: string;
+};
+
+const envFileCandidates = [
+  resolve(process.cwd(), "apps/worker/.env"),
+  resolve(process.cwd(), ".env"),
+  resolve(process.cwd(), "apps/api/.env"),
+  resolve(process.cwd(), "../api/.env"),
+];
+for (const envPath of envFileCandidates) {
+  if (!existsSync(envPath)) continue;
+  dotenvConfig({ path: envPath, override: false });
+}
 
 async function bootstrap(): Promise<void> {
+  const { AppModule } = await import("../../api/src/app.module");
   const app = await NestFactory.createApplicationContext(AppModule);
   const queueConfig = app.get(QueueConfigService);
   const audiences = app.get(AudiencesService);
@@ -28,7 +47,6 @@ async function bootstrap(): Promise<void> {
 
   const connection = queueConfig.queueConnection;
   const prefix = queueConfig.queuePrefix;
-  const startedAt = new Date().toISOString();
   const metricsMap = new Map<string, WorkerQueueMetrics>();
 
   const ensureMetrics = (queue: string): WorkerQueueMetrics => {
@@ -119,22 +137,16 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  const healthServer = createWorkerHealthServer(queueConfig.workerHealthPort, () => ({
-    startedAt,
-    queues: Array.from(metricsMap.values()),
-  }));
-
   logger.log("worker", "BullMQ worker booted", {
     prefix,
     queues: workers.map((worker) => worker.name),
-    healthPort: queueConfig.workerHealthPort,
+    queueMetricsTracked: Array.from(metricsMap.keys()),
   });
 
   const shutdown = async () => {
     logger.warn("worker", "Shutting down BullMQ worker");
     await Promise.all(workers.map((worker) => worker.close()));
     await Promise.all(queueEvents.map((events) => events.close()));
-    await new Promise<void>((resolveClose) => healthServer.close(() => resolveClose()));
     await app.close();
     process.exit(0);
   };

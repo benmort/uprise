@@ -13,7 +13,7 @@
 - [ ] Stream token secret configured and consistent across all API instances
 - [ ] Compliance defaults confirmed (quiet hours, opt-out policy)
 - [ ] Redis configured (`BULLMQ_REDIS_URL`)
-- [ ] Worker service healthy (`/health`)
+- [ ] Worker service starts cleanly and stays running
 - [ ] BullMQ feature flags configured per environment
 
 ## Release Sequence
@@ -25,7 +25,7 @@
 5. Verify dashboard/audience/analytics/inbox navigation and blast detail/composer routes.
 6. Run a small canary blast to a test audience.
 7. Verify analytics and inbox updates.
-8. Confirm worker queue metrics (`/metrics`) show completed jobs and no stalled spikes.
+8. Confirm worker logs show completed queue jobs and no stalled spikes.
 
 ## Rollback Gates
 

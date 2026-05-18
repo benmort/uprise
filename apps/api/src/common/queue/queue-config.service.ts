@@ -29,10 +29,6 @@ export class QueueConfigService {
     return Number(this.config.get<string>("BULLMQ_BLAST_QUEUE_CONCURRENCY", "5"));
   }
 
-  get workerHealthPort(): number {
-    return Number(this.config.get<string>("WORKER_HEALTH_PORT", "3210"));
-  }
-
   get hasRedisConfigured(): boolean {
     return this.redisUrl.length > 0;
   }

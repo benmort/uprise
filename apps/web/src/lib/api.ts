@@ -97,6 +97,37 @@ export async function getRecentBlasts() {
   return request<Array<Record<string, unknown>>>("/analytics/dashboard/recent-blasts");
 }
 
+export type QueueStatsResponse = {
+  at: string;
+  queuePrefix: string;
+  queues: Array<{
+    name: string;
+    counts: {
+      waiting: number;
+      active: number;
+      completed: number;
+      failed: number;
+      delayed: number;
+      paused: number;
+    };
+    error: string | null;
+  }>;
+  redis: {
+    configured: boolean;
+    connected: boolean;
+    pingMs: number | null;
+    version: string | null;
+    connectedClients: number | null;
+    usedMemoryBytes: number | null;
+    usedMemoryHuman: string | null;
+    error: string | null;
+  };
+};
+
+export async function getQueueStats() {
+  return request<QueueStatsResponse>("/system/queue-stats");
+}
+
 export async function listAudiences(params?: { status?: string; source?: string; limit?: number; offset?: number }) {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);

@@ -6,7 +6,7 @@
 - Confirm `.env` has a correct `DATABASE_URL`.
 - Confirm API image includes latest Prisma schema and migrations.
 - Confirm Redis is reachable via `BULLMQ_REDIS_URL`.
-- Confirm worker service is deployed and `/health` returns `ok: true`.
+- Confirm worker service is deployed and process logs show successful startup.
 
 ## Deploy Migration
 
@@ -28,7 +28,7 @@ pnpm --filter api prisma:deploy
 3. Validate:
 - `GET /api/v1/health` returns `ok: true`.
 - Critical reads/writes for audiences, blasts, analytics, inbox succeed.
-- Worker `GET /metrics` shows queue activity and no startup errors.
+- Worker logs show queue activity and no startup errors.
 - `dispatch-due` and `dispatch-imports` endpoints return queue enqueue results when BullMQ flags are enabled.
 
 ## BullMQ Feature-Flag Cutover

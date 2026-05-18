@@ -6,8 +6,7 @@
 - **Request tracing:** `x-request-id` header
 - **Structured logs:** domain-tagged logs via `DomainLogger`
 - **Realtime stream:** `/api/v1/analytics/stream`
-- **Worker health:** `GET /health` on worker service
-- **Queue metrics:** `GET /metrics` on worker service
+- **Worker logs:** startup, queue events, and error logs from the worker runtime
 
 ## Suggested Dashboards
 
@@ -47,7 +46,7 @@
 - **Queue stalled jobs > 0** for 5 minutes
 - **Queue failed/completed ratio > 5%** for 10 minutes
 - **Queue backlog (waiting + delayed) grows for 15 minutes**
-- **Worker health endpoint unavailable** for >2 minutes
+- **Worker process crash/restart loops** in host logs
 
 ## Incident Triage Checklist
 

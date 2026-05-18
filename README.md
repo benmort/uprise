@@ -31,7 +31,6 @@ This repository is configured for **Vercel + BullMQ worker deployment**:
 - **Worker (`apps/worker`)**
   - Long-running BullMQ consumers
   - Processes `audience-import`, `blast-send`, and `blast-retry` queues
-  - Exposes `/health` and `/metrics` for operational monitoring
 
 ## Local Development
 
@@ -148,7 +147,6 @@ Deploy `apps/worker` to a long-running runtime (non-serverless). Required env va
 - `BULLMQ_DEFAULT_BACKOFF_MS`
 - `BULLMQ_UPLOAD_QUEUE_CONCURRENCY`
 - `BULLMQ_BLAST_QUEUE_CONCURRENCY`
-- `WORKER_HEALTH_PORT`
 - `FEATURE_BULLMQ_UPLOAD_ENABLED`
 - `FEATURE_BULLMQ_BLAST_ENABLED`
 - all Twilio/auth/integration vars needed by underlying send/import services

@@ -5,22 +5,8 @@ BullMQ worker runtime for queue consumers.
 ## Run locally
 
 ```bash
-pnpm --filter worker build
 pnpm --filter worker start
 ```
-
-For live-reload development:
-
-```bash
-pnpm --filter worker dev
-```
-
-## Health endpoints
-
-- `/health`
-- `/metrics`
-
-Port is controlled by `WORKER_HEALTH_PORT` (default `3210`).
 
 ## Queue admin commands
 
