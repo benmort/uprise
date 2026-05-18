@@ -10,7 +10,7 @@ import { assertValidBlastTransition } from "./blast-state.machine";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";
 import { CreateBlastDto, ProofBlastDto, ScheduleBlastDto, UpdateBlastDto } from "./dto/blast.dto";
-import { TwilioService } from "../twilio/twilio.service";
+import { TwilioMessage, TwilioService } from "../twilio/twilio.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
@@ -64,6 +64,7 @@ const TWILIO_DELIVERY_FAILED_STATUSES = new Set(["failed", "undelivered"]);
 
 const SKIPPED_DUPLICATE_ERROR =
   "Skipped duplicate recipient: message already sent for this blast.";
+const BLAST_DRY_RUN_SID_PREFIX = "DRYRUN";
 
 type RecipientTraceInput = {
   status: BlastRecipientStatus;
@@ -185,7 +186,15 @@ export class BlastsService {
     const proofNumber = typeof dto.proofNumber === "string" ? dto.proofNumber.trim() : "";
     if (proofNumber && previews[0]?.rendered) {
       const to = normalizePhoneE164(proofNumber);
-      const proofMessage = await this.twilio.sendMessage(to, previews[0].rendered);
+      const dryRunEnabled = this.isBlastDryRunEnabled();
+      const proofMessage = dryRunEnabled
+        ? this.createDryRunMessage(to, previews[0].rendered, `proof-${blast.id}`)
+        : await this.twilio.sendMessage(to, previews[0].rendered);
+      if (dryRunEnabled) {
+        this.logger.warn(
+          `BLAST_DRY_RUN enabled: simulating proof send (blastId=${blast.id}, to=${proofMessage.to})`,
+        );
+      }
       proofDispatch = {
         to: proofMessage.to,
         sid: proofMessage.sid,
@@ -294,6 +303,31 @@ export class BlastsService {
 
   private isBullmqBlastEnabled(): boolean {
     return this.flags.isBullmqBlastEnabled();
+  }
+
+  private isBlastDryRunEnabled(): boolean {
+    return this.config.get<boolean>("BLAST_DRY_RUN", false);
+  }
+
+  private createDryRunMessage(to: string, body: string, context: string): TwilioMessage {
+    const now = new Date().toISOString();
+    const configuredFrom = this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
+    const from = /^\+\d{7,15}$/.test(configuredFrom) ? configuredFrom : "+15550000000";
+    return {
+      sid: `${BLAST_DRY_RUN_SID_PREFIX}-${context}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      body,
+      from,
+      to: normalizePhoneE164(to),
+      dateCreated: now,
+      dateSent: now,
+      dateUpdated: now,
+      direction: "outbound-api",
+      status: "sent",
+      errorCode: null,
+      errorMessage: null,
+      numMedia: "0",
+      numSegments: "1",
+    };
   }
 
   private async enqueueBlastSendBatch(
@@ -739,6 +773,12 @@ export class BlastsService {
       distinct: ["phoneE164"],
     });
     const sentPhones = new Set(sentRecipients.map((recipient) => recipient.phoneE164));
+    const dryRunEnabled = this.isBlastDryRunEnabled();
+    if (dryRunEnabled && pendingRecipients.length > 0) {
+      this.logger.warn(
+        `BLAST_DRY_RUN enabled: simulating blast sends (blastId=${blast.id}, batchSize=${pendingRecipients.length})`,
+      );
+    }
 
     for (const recipient of pendingRecipients) {
       const elapsedMs = Date.now() - startedAtMs;
@@ -783,7 +823,9 @@ export class BlastsService {
         },
       });
       try {
-        const message = await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
+        const message = dryRunEnabled
+          ? this.createDryRunMessage(recipient.phoneE164, recipient.renderedBody, `send-${recipient.id}`)
+          : await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
         sent += 1;
         sentPhones.add(recipient.phoneE164);
         await this.prisma.blastRecipient.update({
@@ -795,7 +837,9 @@ export class BlastsService {
             metadata: this.appendRecipientTrace(recipient.metadata, {
               status: BlastRecipientStatus.SENT,
               source: "send_now",
-              reason: "Message accepted by Twilio for delivery",
+              reason: dryRunEnabled
+                ? "Dry run: simulated Twilio acceptance"
+                : "Message accepted by Twilio for delivery",
               detail: message.sid,
             }),
           },
@@ -937,10 +981,18 @@ export class BlastsService {
     const failedRecipients = await this.prisma.blastRecipient.findMany({
       where: { blastId: id, status: BlastRecipientStatus.FAILED },
     });
+    const dryRunEnabled = this.isBlastDryRunEnabled();
+    if (dryRunEnabled && failedRecipients.length > 0) {
+      this.logger.warn(
+        `BLAST_DRY_RUN enabled: simulating retry sends (blastId=${blast.id}, recipients=${failedRecipients.length})`,
+      );
+    }
     let retried = 0;
     for (const recipient of failedRecipients) {
       try {
-        const sent = await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
+        const sent = dryRunEnabled
+          ? this.createDryRunMessage(recipient.phoneE164, recipient.renderedBody, `retry-${recipient.id}`)
+          : await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
         retried += 1;
         await this.prisma.blastRecipient.update({
           where: { id: recipient.id },
@@ -954,7 +1006,7 @@ export class BlastsService {
             metadata: this.appendRecipientTrace(recipient.metadata, {
               status: BlastRecipientStatus.SENT,
               source: "retry_failed",
-              reason: "Retry send succeeded",
+              reason: dryRunEnabled ? "Dry run: simulated retry send success" : "Retry send succeeded",
               detail: sent.sid,
             }),
           },

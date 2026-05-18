@@ -5,8 +5,12 @@ import { ConfigService } from "@nestjs/config";
 export class QueueConfigService {
   constructor(private readonly config: ConfigService) {}
 
+  private getTrimmed(key: string): string {
+    return this.config.get<string>(key, "").trim();
+  }
+
   get redisUrl(): string {
-    return this.config.get<string>("BULLMQ_REDIS_URL", "").trim();
+    return this.getTrimmed("BULLMQ_REDIS_URL") || this.getTrimmed("REDIS_URL");
   }
 
   get queuePrefix(): string {
@@ -35,7 +39,7 @@ export class QueueConfigService {
 
   get queueConnection(): { url: string } {
     if (!this.redisUrl) {
-      throw new Error("BULLMQ_REDIS_URL is required when BullMQ is enabled");
+      throw new Error("BULLMQ_REDIS_URL or REDIS_URL is required when BullMQ is enabled");
     }
     return { url: this.redisUrl };
   }

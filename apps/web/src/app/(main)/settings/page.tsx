@@ -7,7 +7,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { getQueueStats, type QueueStatsResponse } from "@/lib/api";
+import {
+  getFeatureFlags,
+  getQueueStats,
+  type FeatureFlagsResponse,
+  type QueueStatsResponse,
+} from "@/lib/api";
 import {
   type AlertSoundProfile,
   type ResponderAlertSettings,
@@ -26,6 +31,11 @@ export default function SettingsPage() {
   const [queueStatsLoading, setQueueStatsLoading] = useState(true);
   const [queueStatsError, setQueueStatsError] = useState("");
   const [queueStatsRefreshedAt, setQueueStatsRefreshedAt] = useState<Date | null>(null);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlagsResponse | null>(null);
+  const [featureFlagsLoading, setFeatureFlagsLoading] = useState(true);
+  const [featureFlagsError, setFeatureFlagsError] = useState("");
+  const [featureFlagsRefreshedAt, setFeatureFlagsRefreshedAt] = useState<Date | null>(null);
+  const isBlastDryRunEnabled = featureFlags?.BLAST_DRY_RUN === true;
 
   useEffect(() => {
     setAlertSettings(loadResponderAlertSettings());
@@ -60,13 +70,40 @@ export default function SettingsPage() {
     [showToast],
   );
 
+  const refreshFeatureFlags = useCallback(
+    async (options?: { notifyOnError?: boolean }) => {
+      setFeatureFlagsLoading(true);
+      setFeatureFlagsError("");
+      const response = await getFeatureFlags();
+      if (!response.ok) {
+        setFeatureFlagsError(response.error);
+        setFeatureFlagsLoading(false);
+        if (options?.notifyOnError) {
+          showToast({
+            tone: "error",
+            title: "Feature toggles unavailable",
+            description: response.error,
+            durationMs: 3000,
+          });
+        }
+        return;
+      }
+      setFeatureFlags(response.data);
+      setFeatureFlagsRefreshedAt(new Date());
+      setFeatureFlagsLoading(false);
+    },
+    [showToast],
+  );
+
   useEffect(() => {
     void refreshQueueStats();
+    void refreshFeatureFlags();
     const timer = window.setInterval(() => {
       void refreshQueueStats();
+      void refreshFeatureFlags();
     }, 15000);
     return () => window.clearInterval(timer);
-  }, [refreshQueueStats]);
+  }, [refreshFeatureFlags, refreshQueueStats]);
 
   return (
     <div className="page-stack">
@@ -260,6 +297,86 @@ export default function SettingsPage() {
               Reset to Defaults
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>Feature Toggles</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={featureFlagsLoading}
+            onClick={() => void refreshFeatureFlags({ notifyOnError: true })}
+          >
+            Refresh Toggles
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {featureFlagsError && !featureFlags ? (
+            <EmptyState
+              title="Feature toggles are unavailable"
+              description={featureFlagsError}
+              ctaLabel="Retry"
+              onCta={() => void refreshFeatureFlags({ notifyOnError: true })}
+            />
+          ) : null}
+
+          {featureFlagsLoading && !featureFlags ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={`feature-flags-skeleton-${index}`}
+                  className="rounded-md border border-border p-3"
+                >
+                  <Skeleton className="h-3 w-36" />
+                  <Skeleton className="mt-2 h-6 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {featureFlags ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Last refresh: {featureFlagsRefreshedAt?.toLocaleTimeString() ?? "n/a"}
+              </p>
+              {isBlastDryRunEnabled ? (
+                <div className="rounded-md border border-warning-container bg-warning-container/20 px-3 py-2">
+                  <p className="text-sm font-semibold text-warning-foreground">DRY RUN ACTIVE</p>
+                  <p className="mt-1 text-xs text-warning-foreground">
+                    BLAST_DRY_RUN is enabled. Blast sends are simulated and no real SMS will be sent.
+                  </p>
+                </div>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(featureFlags).map(([name, enabled]) => (
+                  <div
+                    key={name}
+                    className={`rounded-md border p-3 ${
+                      name === "BLAST_DRY_RUN" && enabled
+                        ? "border-warning-container bg-warning-container/20"
+                        : "border-border"
+                    }`}
+                  >
+                    <p className="text-xs text-muted-foreground">{name}</p>
+                    <p
+                      className={`mt-1 text-sm font-medium ${
+                        name === "BLAST_DRY_RUN" && enabled ? "text-warning-foreground" : ""
+                      }`}
+                    >
+                      {enabled ? "Enabled" : "Disabled"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {featureFlagsError ? (
+                <p className="text-xs text-warning-foreground">
+                  Latest refresh issue: {featureFlagsError}
+                </p>
+              ) : null}
+            </>
+          ) : null}
         </CardContent>
       </Card>
 

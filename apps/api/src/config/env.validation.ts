@@ -74,12 +74,14 @@ export type ValidatedEnv = {
   FEATURE_REALTIME_ENABLED: boolean;
   FEATURE_AI_ASSIST_ENABLED: boolean;
   FEATURE_BLAST_SCHEDULER_ENABLED: boolean;
+  BLAST_DRY_RUN: boolean;
   FEATURE_BULLMQ_UPLOAD_ENABLED: boolean;
   FEATURE_BULLMQ_BLAST_ENABLED: boolean;
 };
 
 export function validateEnv(config: Env): ValidatedEnv {
   const errors: string[] = [];
+  const resolvedBullmqRedisUrl = config.BULLMQ_REDIS_URL?.trim() || config.REDIS_URL?.trim() || "";
   const output: ValidatedEnv = {
     NODE_ENV: config.NODE_ENV?.trim() || "development",
     PORT: numberInRange(config, "PORT", 1, 65535, 3001, errors),
@@ -127,7 +129,7 @@ export function validateEnv(config: Env): ValidatedEnv {
       22000,
       errors,
     ),
-    BULLMQ_REDIS_URL: config.BULLMQ_REDIS_URL?.trim() || "",
+    BULLMQ_REDIS_URL: resolvedBullmqRedisUrl,
     BULLMQ_PREFIX: config.BULLMQ_PREFIX?.trim() || "yarns",
     BULLMQ_DEFAULT_ATTEMPTS: numberInRange(config, "BULLMQ_DEFAULT_ATTEMPTS", 1, 20, 4, errors),
     BULLMQ_DEFAULT_BACKOFF_MS: numberInRange(
@@ -171,6 +173,7 @@ export function validateEnv(config: Env): ValidatedEnv {
     FEATURE_REALTIME_ENABLED: boolish(config, "FEATURE_REALTIME_ENABLED", true),
     FEATURE_AI_ASSIST_ENABLED: boolish(config, "FEATURE_AI_ASSIST_ENABLED", true),
     FEATURE_BLAST_SCHEDULER_ENABLED: boolish(config, "FEATURE_BLAST_SCHEDULER_ENABLED", true),
+    BLAST_DRY_RUN: boolish(config, "BLAST_DRY_RUN", false),
     FEATURE_BULLMQ_UPLOAD_ENABLED: boolish(config, "FEATURE_BULLMQ_UPLOAD_ENABLED", false),
     FEATURE_BULLMQ_BLAST_ENABLED: boolish(config, "FEATURE_BULLMQ_BLAST_ENABLED", false),
   };
@@ -179,7 +182,9 @@ export function validateEnv(config: Env): ValidatedEnv {
     (output.FEATURE_BULLMQ_UPLOAD_ENABLED || output.FEATURE_BULLMQ_BLAST_ENABLED) &&
     !output.BULLMQ_REDIS_URL
   ) {
-    errors.push("BULLMQ_REDIS_URL is required when FEATURE_BULLMQ_UPLOAD_ENABLED or FEATURE_BULLMQ_BLAST_ENABLED is true");
+    errors.push(
+      "BULLMQ_REDIS_URL (or REDIS_URL) is required when FEATURE_BULLMQ_UPLOAD_ENABLED or FEATURE_BULLMQ_BLAST_ENABLED is true",
+    );
   }
 
   if (errors.length > 0) {

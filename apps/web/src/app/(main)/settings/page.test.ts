@@ -4,7 +4,19 @@ import { join } from "node:path";
 
 const sourcePath = join(process.cwd(), "src", "app", "(main)", "settings", "page.tsx");
 
-describe("settings page queue stats", () => {
+describe("settings page observability sections", () => {
+  it("renders feature toggles section", () => {
+    const source = readFileSync(sourcePath, "utf8");
+    expect(source).toContain("Feature Toggles");
+    expect(source).toContain("Refresh Toggles");
+    expect(source).toContain("DRY RUN ACTIVE");
+    expect(source).toContain("BLAST_DRY_RUN is enabled");
+    expect(source).toContain("featureFlagsLoading");
+    expect(source).toContain("featureFlagsError");
+    expect(source).toContain("refreshFeatureFlags");
+    expect(source).toContain("getFeatureFlags");
+  });
+
   it("renders queue and redis stats section", () => {
     const source = readFileSync(sourcePath, "utf8");
     expect(source).toContain("Queue & Redis Stats");

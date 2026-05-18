@@ -128,6 +128,19 @@ export async function getQueueStats() {
   return request<QueueStatsResponse>("/system/queue-stats");
 }
 
+export type FeatureFlagsResponse = {
+  FEATURE_REALTIME_ENABLED: boolean;
+  FEATURE_AI_ASSIST_ENABLED: boolean;
+  FEATURE_BLAST_SCHEDULER_ENABLED: boolean;
+  FEATURE_BULLMQ_UPLOAD_ENABLED: boolean;
+  FEATURE_BULLMQ_BLAST_ENABLED: boolean;
+  BLAST_DRY_RUN: boolean;
+};
+
+export async function getFeatureFlags() {
+  return request<FeatureFlagsResponse>("/system/feature-flags");
+}
+
 export async function listAudiences(params?: { status?: string; source?: string; limit?: number; offset?: number }) {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);

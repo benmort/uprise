@@ -76,7 +76,7 @@ describe("QueueStatsService", () => {
     expect(stats.queues).toEqual([]);
     expect(stats.redis.configured).toBe(false);
     expect(stats.redis.connected).toBe(false);
-    expect(stats.redis.error).toContain("BULLMQ_REDIS_URL");
+    expect(stats.redis.error).toContain("BULLMQ_REDIS_URL or REDIS_URL");
     expect(Queue).not.toHaveBeenCalled();
   });
 

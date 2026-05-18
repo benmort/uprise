@@ -78,7 +78,7 @@ export class QueueStatsService {
           connectedClients: null,
           usedMemoryBytes: null,
           usedMemoryHuman: null,
-          error: "BULLMQ_REDIS_URL is not configured",
+          error: "BULLMQ_REDIS_URL or REDIS_URL is not configured",
         },
       };
     }

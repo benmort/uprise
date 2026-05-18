@@ -667,6 +667,144 @@ describe("BlastsService integration-like flow", () => {
     );
   });
 
+  it("simulates sendNow delivery without calling Twilio when BLAST_DRY_RUN is enabled", async () => {
+    const dryRunConfigMock = {
+      get: (key: string, fallback?: unknown) => {
+        if (key === "BLAST_DRY_RUN") return true;
+        if (key === "TWILIO_PHONE_NUMBER") return "+15550000000";
+        return fallback;
+      },
+    } as ConfigService;
+
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_dry",
+          organizationId: "org_1",
+          audienceId: "aud_1",
+          bodyTemplate: "Hi {{first_name}}",
+          title: "Dry Run Campaign",
+          status: BlastStatus.PROOFED,
+          proofedAt: new Date(),
+          startedAt: null,
+          completedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      blastRecipient: {
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0),
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "recipient_dry",
+              phoneE164: "+15551234567",
+              renderedBody: "Hi Alice",
+              metadata: {},
+            },
+          ])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      outboundMessage: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+      analyticsSnapshot: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const twilioMock = {
+      sendMessage: jest.fn(),
+    } as unknown as TwilioService;
+
+    const service = new BlastsService(
+      prismaMock,
+      dryRunConfigMock,
+      new TemplateRendererService(),
+      new ComplianceService(dryRunConfigMock),
+      twilioMock,
+      eventsMock,
+    );
+
+    const result = await service.sendNow("blast_dry");
+
+    expect(result.sent).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(twilioMock.sendMessage).not.toHaveBeenCalled();
+    expect(prismaMock.outboundMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          twilioMessageSid: expect.stringMatching(/^DRYRUN-/),
+        }),
+      }),
+    );
+  });
+
+  it("simulates retryFailed delivery without calling Twilio when BLAST_DRY_RUN is enabled", async () => {
+    const dryRunConfigMock = {
+      get: (key: string, fallback?: unknown) => {
+        if (key === "BLAST_DRY_RUN") return true;
+        if (key === "TWILIO_PHONE_NUMBER") return "+15550000000";
+        return fallback;
+      },
+    } as ConfigService;
+
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_retry_dry",
+          status: BlastStatus.SENDING,
+          completedAt: null,
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      blastRecipient: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([
+            {
+              id: "recipient_retry_dry",
+              blastId: "blast_retry_dry",
+              status: BlastRecipientStatus.FAILED,
+              phoneE164: "+15551234567",
+              renderedBody: "Retry message",
+              metadata: {},
+            },
+          ])
+          .mockResolvedValueOnce([]),
+        count: jest.fn().mockResolvedValue(0),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const twilioMock = {
+      sendMessage: jest.fn(),
+    } as unknown as TwilioService;
+
+    const service = new BlastsService(
+      prismaMock,
+      dryRunConfigMock,
+      new TemplateRendererService(),
+      new ComplianceService(dryRunConfigMock),
+      twilioMock,
+      eventsMock,
+    );
+
+    const result = await service.retryFailed("blast_retry_dry");
+
+    expect(result).toEqual({ blastId: "blast_retry_dry", retried: 1 });
+    expect(twilioMock.sendMessage).not.toHaveBeenCalled();
+    expect(prismaMock.blastRecipient.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "recipient_retry_dry" },
+        data: expect.objectContaining({
+          status: BlastRecipientStatus.SENT,
+          twilioMessageSid: expect.stringMatching(/^DRYRUN-/),
+        }),
+      }),
+    );
+  });
+
   it("enqueues blast send and retry jobs when BullMQ blast flag is enabled", async () => {
     const prismaMock: any = {
       blast: {

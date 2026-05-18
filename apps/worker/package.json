@@ -4,13 +4,13 @@
   "private": true,
   "scripts": {
     "start": "node scripts/copy-prisma-generated.mjs && node dist/worker/src/main.js",
-    "dev": "tsx watch src/main.ts",
+    "dev": "TS_NODE_PROJECT=tsconfig.dev.json node --watch -r ts-node/register src/main.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "pnpm run typecheck",
     "build": "tsc -p tsconfig.json && node scripts/copy-prisma-generated.mjs",
-    "queue:inspect-failed": "tsx src/admin/queue-admin.ts inspect-failed",
-    "queue:replay-failed": "tsx src/admin/queue-admin.ts replay-failed",
-    "queue:drain": "tsx src/admin/queue-admin.ts drain"
+    "queue:inspect-failed": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts inspect-failed",
+    "queue:replay-failed": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts replay-failed",
+    "queue:drain": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts drain"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",
@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.17.9",
+    "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
     "typescript": "^5.6.3"
   }
