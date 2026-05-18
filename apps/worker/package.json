@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "tsx src/main.ts",
+    "start": "node dist/worker/src/main.js",
     "dev": "tsx watch src/main.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "pnpm run typecheck",

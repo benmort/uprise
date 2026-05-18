@@ -5,7 +5,14 @@ BullMQ worker runtime for queue consumers.
 ## Run locally
 
 ```bash
+pnpm --filter worker build
 pnpm --filter worker start
+```
+
+For live-reload development:
+
+```bash
+pnpm --filter worker dev
 ```
 
 ## Health endpoints
