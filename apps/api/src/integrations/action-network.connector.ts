@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   IntegrationAuthError,
   IntegrationConnectionError,
@@ -268,6 +269,128 @@ function pickPhone(person: Record<string, unknown>, item: Record<string, unknown
 
 @Injectable()
 export class ActionNetworkConnector implements IntegrationConnector {
+  private nextAllowedAtMs = 0;
+
+  constructor(private readonly config?: ConfigService) {}
+
+  private getNumber(name: string, fallback: number, min: number, max: number): number {
+    const raw = this.config?.get<string>(name);
+    const parsed = Number(raw ?? fallback);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, Math.trunc(parsed)));
+  }
+
+  private getPerPage(): number {
+    return this.getNumber("ACTION_NETWORK_SYNC_PER_PAGE", 95, 1, 100);
+  }
+
+  private getRequestRatePerSecond(): number {
+    return this.getNumber("ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND", 190, 1, 200);
+  }
+
+  private getRetryCount(): number {
+    return this.getNumber("ACTION_NETWORK_SYNC_MAX_RETRIES", 9, 0, 10);
+  }
+
+  private getIdentifierBatchSize(): number {
+    return this.getNumber("ACTION_NETWORK_SYNC_IDENTIFIER_BATCH_SIZE", 47, 1, 50);
+  }
+
+  private getPersonHrefConcurrency(): number {
+    return this.getNumber("ACTION_NETWORK_SYNC_PERSON_HREF_CONCURRENCY", 19, 1, 20);
+  }
+
+  private getMaxPagesPerRun(requested?: number): number {
+    const envMaxPages = this.getNumber("ACTION_NETWORK_SYNC_MAX_PAGES", 9500, 1, 10000);
+    if (requested === undefined) return envMaxPages;
+    return Math.min(envMaxPages, Math.max(1, Math.trunc(requested)));
+  }
+
+  private getRunBudgetMs(): number {
+    return this.getNumber("ACTION_NETWORK_SYNC_RUN_BUDGET_MS", 114000, 1000, 120000);
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    if (ms <= 0) return;
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async throttleRequest(): Promise<void> {
+    const ratePerSecond = this.getRequestRatePerSecond();
+    const minIntervalMs = Math.max(1, Math.ceil(1000 / ratePerSecond));
+    const now = Date.now();
+    const waitMs = Math.max(0, this.nextAllowedAtMs - now);
+    this.nextAllowedAtMs = Math.max(this.nextAllowedAtMs, now) + minIntervalMs;
+    if (waitMs > 0) {
+      await this.sleep(waitMs);
+    }
+  }
+
+  private parseRetryAfterMs(headers: Headers): number | null {
+    const retryAfterRaw = headers.get("retry-after");
+    if (!retryAfterRaw) return null;
+    const retryAfterSeconds = Number(retryAfterRaw);
+    if (Number.isFinite(retryAfterSeconds)) {
+      return Math.max(0, Math.trunc(retryAfterSeconds * 1000));
+    }
+    const retryAt = Date.parse(retryAfterRaw);
+    if (!Number.isFinite(retryAt)) return null;
+    return Math.max(0, retryAt - Date.now());
+  }
+
+  private shouldRetryStatus(status: number): boolean {
+    return status === 429 || status >= 500;
+  }
+
+  private async requestJson(
+    requestUrl: string,
+    apiKey: string,
+    errorMessage: string,
+    options?: { allow404?: boolean },
+  ): Promise<Record<string, unknown> | null> {
+    const maxRetries = this.getRetryCount();
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      try {
+        await this.throttleRequest();
+        const res = await fetch(requestUrl, {
+          headers: {
+            "OSDI-API-Token": apiKey,
+          },
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new IntegrationAuthError("Action Network API key rejected");
+        }
+        if (options?.allow404 && res.status === 404) {
+          return null;
+        }
+        if (!res.ok) {
+          if (attempt < maxRetries && this.shouldRetryStatus(res.status)) {
+            const retryAfterMs = this.parseRetryAfterMs(res.headers);
+            const backoffMs = retryAfterMs ?? Math.min(10000, 500 * 2 ** attempt);
+            const jitterMs = Math.floor(Math.random() * 150);
+            await this.sleep(backoffMs + jitterMs);
+            continue;
+          }
+          throw new IntegrationConnectionError(errorMessage, { status: res.status });
+        }
+        const json = (await res.json()) as unknown;
+        if (!json || typeof json !== "object") return {};
+        return json as Record<string, unknown>;
+      } catch (error) {
+        if (error instanceof IntegrationAuthError || error instanceof IntegrationConnectionError) {
+          throw error;
+        }
+        if (attempt >= maxRetries) {
+          throw new IntegrationConnectionError(errorMessage, { cause: String(error) });
+        }
+        const backoffMs = Math.min(10000, 500 * 2 ** attempt);
+        const jitterMs = Math.floor(Math.random() * 150);
+        await this.sleep(backoffMs + jitterMs);
+      }
+    }
+    throw new IntegrationConnectionError(errorMessage);
+  }
+
   private async fetchPeopleByIdentifiers(
     apiKey: string,
     identifiers: string[],
@@ -275,25 +398,16 @@ export class ActionNetworkConnector implements IntegrationConnector {
   ): Promise<Map<string, Record<string, unknown>>> {
     const unique = Array.from(new Set(identifiers.map((id) => normalizeActionNetworkPersonId(id)).filter(Boolean)));
     const out = new Map<string, Record<string, unknown>>();
-    const chunkSize = 20;
+    const chunkSize = this.getIdentifierBatchSize();
+    const perPage = this.getPerPage();
     for (let i = 0; i < unique.length; i += chunkSize) {
       const chunk = unique.slice(i, i + chunkSize);
       const filter = chunk
         .map((id) => `identifier eq 'action_network:${id}'`)
         .join(" or ");
-      const requestUrl = `${baseUrl}/people?per_page=25&filter=${encodeURIComponent(filter)}`;
-      const res = await fetch(requestUrl, {
-        headers: {
-          "OSDI-API-Token": apiKey,
-        },
-      });
-      if (res.status === 401 || res.status === 403) {
-        throw new IntegrationAuthError("Action Network API key rejected");
-      }
-      if (!res.ok) {
-        throw new IntegrationConnectionError("Action Network people batch fetch failed", { status: res.status });
-      }
-      const json = (await res.json()) as Record<string, unknown>;
+      const requestUrl = `${baseUrl}/people?per_page=${perPage}&filter=${encodeURIComponent(filter)}`;
+      const json = await this.requestJson(requestUrl, apiKey, "Action Network people batch fetch failed");
+      if (!json) continue;
       const embedded = asRecord(json._embedded);
       const people = asArray<Record<string, unknown>>(embedded["osdi:people"]);
       for (const person of people) {
@@ -316,36 +430,40 @@ export class ActionNetworkConnector implements IntegrationConnector {
       return undefined;
     }
 
-    const res = await fetch(requestUrl, {
-      headers: {
-        "OSDI-API-Token": apiKey,
-      },
+    const json = await this.requestJson(requestUrl, apiKey, "Action Network person fetch failed", {
+      allow404: true,
     });
-    if (res.status === 401 || res.status === 403) {
-      throw new IntegrationAuthError("Action Network API key rejected");
-    }
-    if (res.status === 404) return undefined;
-    if (!res.ok) {
-      throw new IntegrationConnectionError("Action Network person fetch failed", { status: res.status });
-    }
-    const json = (await res.json()) as unknown;
-    return json && typeof json === "object" ? (json as Record<string, unknown>) : undefined;
+    return json ?? undefined;
+  }
+
+  private async fetchPeopleByHrefs(
+    apiKey: string,
+    hrefs: string[],
+    baseUrl: string,
+    personCache: Map<string, Promise<Record<string, unknown> | undefined>>,
+  ): Promise<Array<Record<string, unknown> | undefined>> {
+    const out: Array<Record<string, unknown> | undefined> = new Array(hrefs.length);
+    const concurrency = this.getPersonHrefConcurrency();
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < hrefs.length) {
+        const index = cursor;
+        cursor += 1;
+        const href = hrefs[index];
+        let fetchPromise = personCache.get(href);
+        if (!fetchPromise) {
+          fetchPromise = this.fetchPersonByHref(apiKey, href, baseUrl);
+          personCache.set(href, fetchPromise);
+        }
+        out[index] = await fetchPromise;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));
+    return out;
   }
 
   async testConnection(apiKey: string, baseUrl = "https://actionnetwork.org/api/v2"): Promise<{ ok: boolean; message?: string }> {
-    const res = await fetch(`${baseUrl}/lists?per_page=1`, {
-      headers: {
-        "OSDI-API-Token": apiKey,
-      },
-    });
-    if (res.status === 401 || res.status === 403) {
-      throw new IntegrationAuthError("Action Network API key rejected");
-    }
-    if (!res.ok) {
-      throw new IntegrationConnectionError("Action Network connection failed", {
-        status: res.status,
-      });
-    }
+    await this.requestJson(`${baseUrl}/lists?per_page=1`, apiKey, "Action Network connection failed");
     return { ok: true };
   }
 
@@ -353,14 +471,8 @@ export class ActionNetworkConnector implements IntegrationConnector {
     const perPage = Math.min(25, input.limit ?? 20);
     const query = encodeURIComponent(input.query || "");
     const requestUrl = `${baseUrl}/lists?per_page=${perPage}&filter=${query}`;
-    const res = await fetch(requestUrl, {
-      headers: {
-        "OSDI-API-Token": apiKey,
-      },
-    });
-    if (res.status === 401 || res.status === 403) throw new IntegrationAuthError("Action Network API key rejected");
-    if (!res.ok) throw new IntegrationConnectionError("Action Network list search failed", { status: res.status });
-    const json = (await res.json()) as Record<string, unknown>;
+    const json = await this.requestJson(requestUrl, apiKey, "Action Network list search failed");
+    if (!json) return [];
     const embedded = (json._embedded ?? {}) as Record<string, unknown>;
     const lists = asArray<Record<string, unknown>>(embedded["osdi:lists"]);
     const mapped: RemoteAudienceList[] = lists.map((row) => ({
@@ -373,33 +485,33 @@ export class ActionNetworkConnector implements IntegrationConnector {
   }
 
   async sampleListContacts(apiKey: string, listId: string, baseUrl = "https://actionnetwork.org/api/v2"): Promise<RemoteContact[]> {
-    return this.syncList(apiKey, { listId }, baseUrl).then((rows) => rows.contacts.slice(0, 10));
+    return this.syncList(apiKey, { listId, maxPages: 2 }, baseUrl).then((rows) => rows.contacts.slice(0, 10));
   }
 
   async syncList(apiKey: string, input: SyncListInput, baseUrl = "https://actionnetwork.org/api/v2"): Promise<SyncListResult> {
+    const startedAtMs = Date.now();
     const out: RemoteContact[] = [];
     const seenUrls = new Set<string>();
     const personCache = new Map<string, Promise<Record<string, unknown> | undefined>>();
     const normalizedListId = normalizeActionNetworkListId(input.listId);
-    let nextUrl: string | undefined = `${baseUrl}/lists/${encodeURIComponent(normalizedListId)}/items?per_page=25`;
+    const perPage = this.getPerPage();
+    const maxPages = this.getMaxPagesPerRun(input.maxPages);
+    const runBudgetMs = this.getRunBudgetMs();
+    let nextUrl: string | undefined =
+      input.cursorUrl?.trim() || `${baseUrl}/lists/${encodeURIComponent(normalizedListId)}/items?per_page=${perPage}`;
     let pagesFetched = 0;
     let processedItems = 0;
     let skippedNoPhone = 0;
     const reasonCounts: Record<string, number> = {};
 
-    while (nextUrl && !seenUrls.has(nextUrl) && pagesFetched < 200) {
+    while (nextUrl && !seenUrls.has(nextUrl) && pagesFetched < maxPages) {
+      if (Date.now() - startedAtMs >= runBudgetMs) {
+        break;
+      }
       seenUrls.add(nextUrl);
       pagesFetched += 1;
-      const res = await fetch(nextUrl, {
-        headers: {
-          "OSDI-API-Token": apiKey,
-        },
-      });
-      if (res.status === 401 || res.status === 403) throw new IntegrationAuthError("Action Network API key rejected");
-      if (!res.ok) {
-        throw new IntegrationConnectionError("Action Network people sync failed", { status: res.status });
-      }
-      const json = (await res.json()) as Record<string, unknown>;
+      const json = await this.requestJson(nextUrl, apiKey, "Action Network people sync failed");
+      if (!json) break;
       const embedded = (json._embedded ?? {}) as Record<string, unknown>;
       const items = asArray<Record<string, unknown>>(embedded["osdi:items"]);
       const people = new Array<Record<string, unknown> | undefined>(items.length);
@@ -433,15 +545,11 @@ export class ActionNetworkConnector implements IntegrationConnector {
       }
 
       if (missingByHref.length > 0) {
-        const fallbackPeople = await Promise.all(
-          missingByHref.map(async (row) => {
-            let fetchPromise = personCache.get(row.personHref);
-            if (!fetchPromise) {
-              fetchPromise = this.fetchPersonByHref(apiKey, row.personHref, baseUrl);
-              personCache.set(row.personHref, fetchPromise);
-            }
-            return fetchPromise;
-          }),
+        const fallbackPeople = await this.fetchPeopleByHrefs(
+          apiKey,
+          missingByHref.map((row) => row.personHref),
+          baseUrl,
+          personCache,
         );
         for (let idx = 0; idx < missingByHref.length; idx += 1) {
           const row = missingByHref[idx];
@@ -493,6 +601,8 @@ export class ActionNetworkConnector implements IntegrationConnector {
         returnedContacts: out.length,
         skippedNoPhone,
         reasonCounts,
+        nextCursorUrl: nextUrl ?? null,
+        fetchDurationMs: Date.now() - startedAtMs,
       },
     };
   }

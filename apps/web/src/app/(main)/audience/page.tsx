@@ -9,6 +9,7 @@ import {
   listAudiences,
   searchIntegrationLists,
   syncIntegrationList,
+  type AudienceImportProgress,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,9 +36,67 @@ type UploadState = {
   importId?: string;
   progress: number;
   status: "UPLOADING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  workerStatus?: AudienceImportProgress["status"];
+  processedRows?: number;
+  totalRows?: number;
+  failedRows?: number;
 };
 
 const AUDIENCE_SEARCH_KEY = "yarns.audience.search";
+const FILE_UPLOAD_PROGRESS_WEIGHT = 10;
+
+function clampProgress(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function getImportProgress(importProgress: AudienceImportProgress): number {
+  if (importProgress.status === "SUCCEEDED" || importProgress.status === "FAILED") return 100;
+  if (importProgress.totalRows <= 0) return FILE_UPLOAD_PROGRESS_WEIGHT;
+  const processedRatio = Math.max(0, Math.min(1, importProgress.cursor / importProgress.totalRows));
+  return clampProgress(FILE_UPLOAD_PROGRESS_WEIGHT + processedRatio * (100 - FILE_UPLOAD_PROGRESS_WEIGHT));
+}
+
+function getUploadStatus(importStatus: AudienceImportProgress["status"]): UploadState["status"] {
+  if (importStatus === "SUCCEEDED") return "COMPLETED";
+  if (importStatus === "FAILED") return "FAILED";
+  return "PROCESSING";
+}
+
+function getUploadStateFromImport(
+  audienceId: string,
+  audienceName: string,
+  importProgress: AudienceImportProgress,
+  previousProgress = 0,
+): UploadState {
+  const nextProgress = getImportProgress(importProgress);
+  return {
+    audienceId,
+    audienceName,
+    importId: importProgress.importId,
+    progress: Math.max(previousProgress, nextProgress),
+    status: getUploadStatus(importProgress.status),
+    workerStatus: importProgress.status,
+    processedRows: importProgress.cursor,
+    totalRows: importProgress.totalRows,
+    failedRows: importProgress.failedRows,
+  };
+}
+
+function getUploadProgressLabel(uploadState: UploadState): string {
+  if (uploadState.status === "FAILED") return "Failed";
+  if (uploadState.status === "COMPLETED") return "Import complete";
+  if (uploadState.workerStatus === "QUEUED") return "Queued for worker";
+  if (uploadState.status === "PROCESSING") return "Processing rows";
+  return "Uploading file";
+}
+
+function getUploadProgressDetails(uploadState: UploadState): string {
+  if (uploadState.totalRows == null) return "";
+  const processedRows = uploadState.processedRows ?? 0;
+  const failedRows = uploadState.failedRows ?? 0;
+  const rowSummary = `${processedRows.toLocaleString()} of ${uploadState.totalRows.toLocaleString()} rows`;
+  return failedRows > 0 ? `${rowSummary} (${failedRows.toLocaleString()} failed)` : rowSummary;
+}
 
 export default function AudiencePage() {
   const router = useRouter();
@@ -225,33 +284,36 @@ export default function AudiencePage() {
                   const imported = await importAudienceCsv(audienceId, csvFile, (percent) => {
                     setUploadState((prev) => {
                       if (!prev || prev.audienceId !== audienceId) return prev;
+                      const progress = clampProgress((percent / 100) * FILE_UPLOAD_PROGRESS_WEIGHT);
                       if (percent >= 100) {
-                        return { ...prev, status: "PROCESSING", progress: 95 };
+                        return {
+                          ...prev,
+                          status: "PROCESSING",
+                          progress: Math.max(prev.progress, FILE_UPLOAD_PROGRESS_WEIGHT),
+                        };
                       }
                       return {
                         ...prev,
                         status: "UPLOADING",
-                        progress: Math.max(prev.progress, percent),
+                        progress: Math.max(prev.progress, progress),
                       };
                     });
                   });
                   if (imported.ok) {
-                    const initialStatus = String((imported.data as any)?.status || "RUNNING");
-                    const importId = String((imported.data as any)?.importId || "");
-                    setUploadState({
-                      audienceId,
-                      audienceName: trimmedName,
-                      importId,
-                      progress: initialStatus === "SUCCEEDED" ? 100 : 95,
-                      status:
-                        initialStatus === "SUCCEEDED"
-                          ? "COMPLETED"
-                          : initialStatus === "FAILED"
-                            ? "FAILED"
-                            : "PROCESSING",
+                    const initialImport = imported.data as AudienceImportProgress;
+                    const initialStatus = initialImport.status || "RUNNING";
+                    const importId = initialImport.importId || "";
+                    setUploadState((prev) => {
+                      const previousProgress = prev?.audienceId === audienceId ? prev.progress : 0;
+                      return getUploadStateFromImport(
+                        audienceId,
+                        trimmedName,
+                        initialImport,
+                        previousProgress,
+                      );
                     });
 
-                    let terminal = imported.data as any;
+                    let terminal = initialImport;
                     if (importId && initialStatus !== "SUCCEEDED" && initialStatus !== "FAILED") {
                       for (let attempt = 0; attempt < 120; attempt += 1) {
                         await new Promise((resolve) => window.setTimeout(resolve, 1500));
@@ -262,26 +324,22 @@ export default function AudiencePage() {
                           }
                           continue;
                         }
-                        terminal = statusRes.data as any;
-                        const status = String(terminal.status || "RUNNING");
+                        terminal = statusRes.data;
+                        const status = terminal.status || "RUNNING";
                         setUploadState((prev) => {
                           if (!prev || prev.audienceId !== audienceId) return prev;
-                          return {
-                            ...prev,
-                            status:
-                              status === "SUCCEEDED"
-                                ? "COMPLETED"
-                                : status === "FAILED"
-                                  ? "FAILED"
-                                  : "PROCESSING",
-                            progress: status === "SUCCEEDED" || status === "FAILED" ? 100 : 95,
-                          };
+                          return getUploadStateFromImport(
+                            audienceId,
+                            trimmedName,
+                            terminal,
+                            prev.progress,
+                          );
                         });
                         if (status === "SUCCEEDED" || status === "FAILED") break;
                       }
                     }
 
-                    const terminalStatus = String(terminal.status || "");
+                    const terminalStatus = terminal.status || "";
                     if (terminalStatus === "FAILED") {
                       const summary = String(terminal.errorSummary || "Import failed.");
                       setImportMessage(summary);
@@ -377,20 +435,33 @@ export default function AudiencePage() {
                     audienceName: audienceNameForSync,
                   });
                   if (synced.ok) {
-                    const stats = (synced.data as any).stats as Record<string, unknown> | undefined;
-                    const skippedNoPhone = Number((stats?.skippedNoPhone as number) || 0);
-                    const skippedInvalidPhone = Number((stats?.skippedInvalidPhone as number) || 0);
-                    const nonContactableTotal = skippedNoPhone + skippedInvalidPhone;
-                    setSyncMessage(
-                      `Synced ${String((synced.data as any).syncedCount)} contacts${
-                        nonContactableTotal > 0 ? ` (${nonContactableTotal} marked non-contactable)` : ""
-                      }`,
-                    );
-                    showToast({
-                      tone: "success",
-                      title: "Integration sync completed",
-                      description: `Synced ${String((synced.data as any).syncedCount)} contacts.`,
-                    });
+                    const response = (synced.data || {}) as Record<string, unknown>;
+                    if (response.queued || response.status === "QUEUED" || response.syncJobId) {
+                      const syncJobId = String(response.syncJobId || "").trim();
+                      setSyncMessage(
+                        `Sync queued${syncJobId ? ` (job ${syncJobId.slice(0, 8)})` : ""}. It will continue in the background.`,
+                      );
+                      showToast({
+                        tone: "success",
+                        title: "Integration sync queued",
+                        description: "The worker will process this list in the background.",
+                      });
+                    } else {
+                      const stats = response.stats as Record<string, unknown> | undefined;
+                      const skippedNoPhone = Number((stats?.skippedNoPhone as number) || 0);
+                      const skippedInvalidPhone = Number((stats?.skippedInvalidPhone as number) || 0);
+                      const nonContactableTotal = skippedNoPhone + skippedInvalidPhone;
+                      setSyncMessage(
+                        `Synced ${String(response.syncedCount)} contacts${
+                          nonContactableTotal > 0 ? ` (${nonContactableTotal} marked non-contactable)` : ""
+                        }`,
+                      );
+                      showToast({
+                        tone: "success",
+                        title: "Integration sync completed",
+                        description: `Synced ${String(response.syncedCount)} contacts.`,
+                      });
+                    }
                     await refresh();
                   } else {
                     setSyncMessage(synced.error);
@@ -502,6 +573,8 @@ export default function AudiencePage() {
                   <tbody>
                     {paged.map((row) => {
                       const isUploading = uploadState?.audienceId === row.id;
+                      const progressPercent = uploadState ? clampProgress(uploadState.progress) : 0;
+                      const progressDetails = uploadState ? getUploadProgressDetails(uploadState) : "";
                       return (
                         <tr
                           key={row.id}
@@ -519,26 +592,36 @@ export default function AudiencePage() {
                           </td>
                           <td className="py-3 pr-4">
                             {isUploading ? (
-                              <div className="w-36 space-y-1">
-                                <div className="h-2 rounded-full bg-surface-variant">
+                              <div className="w-44 space-y-1">
+                                <div
+                                  className="h-2 rounded-full bg-surface-variant"
+                                  role="progressbar"
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={progressPercent}
+                                  aria-label="Audience import progress"
+                                >
                                   {uploadState.status === "FAILED" ? (
                                     <div
                                       className="h-2 rounded-full bg-error transition-all"
                                       style={{ width: "100%" }}
                                     />
                                   ) : (
-                                    <div className="h-2 w-full rounded-full bg-primary animate-pulse" />
+                                    <div
+                                      className={`h-2 rounded-full transition-all ${
+                                        uploadState.status === "COMPLETED" ? "bg-success" : "bg-primary"
+                                      }`}
+                                      style={{ width: `${progressPercent}%` }}
+                                    />
                                   )}
                                 </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {uploadState.status === "PROCESSING"
-                                    ? "Processing..."
-                                    : uploadState.status === "FAILED"
-                                      ? "Failed"
-                                      : uploadState.status === "UPLOADING"
-                                        ? "Uploading..."
-                                        : "Working..."}
-                                </p>
+                                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                  <span>{getUploadProgressLabel(uploadState)}</span>
+                                  <span>{progressPercent}%</span>
+                                </div>
+                                {progressDetails && (
+                                  <p className="text-xs text-muted-foreground">{progressDetails}</p>
+                                )}
                               </div>
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>

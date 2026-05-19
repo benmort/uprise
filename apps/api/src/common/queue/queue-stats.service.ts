@@ -83,11 +83,7 @@ export class QueueStatsService {
       };
     }
 
-    const queueNames = [
-      QUEUE_NAMES.AUDIENCE_IMPORT,
-      QUEUE_NAMES.BLAST_SEND,
-      QUEUE_NAMES.BLAST_RETRY,
-    ];
+    const queueNames = Object.values(QUEUE_NAMES);
     const queues = queueNames.map(
       (name) =>
         new Queue(name, {

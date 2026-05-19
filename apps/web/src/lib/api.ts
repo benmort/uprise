@@ -26,6 +26,19 @@ function getAuthHeaders(credentials: Credentials): HeadersInit {
 
 type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
+export type AudienceImportProgress = {
+  importId: string;
+  audienceId: string;
+  status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  fileName: string;
+  cursor: number;
+  totalRows: number;
+  importedRows: number;
+  failedRows: number;
+  errorSummary: string | null;
+  remainingRows: number;
+};
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -187,18 +200,6 @@ export async function importAudienceCsv(
   file: File,
   onProgress?: (percent: number) => void,
 ) {
-  type AudienceImportProgress = {
-    importId: string;
-    audienceId: string;
-    status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
-    fileName: string;
-    cursor: number;
-    totalRows: number;
-    importedRows: number;
-    failedRows: number;
-    errorSummary: string | null;
-    remainingRows: number;
-  };
   const apiUrl = getApiUrl();
   const credentials = getCredentials();
   if (!credentials) return { ok: false as const, error: "Not authenticated" };
@@ -260,18 +261,9 @@ export async function importAudienceCsv(
 }
 
 export async function getAudienceImportStatus(audienceId: string, importId: string) {
-  return request<{
-    importId: string;
-    audienceId: string;
-    status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
-    fileName: string;
-    cursor: number;
-    totalRows: number;
-    importedRows: number;
-    failedRows: number;
-    errorSummary: string | null;
-    remainingRows: number;
-  }>(`/audiences/${encodeURIComponent(audienceId)}/imports/${encodeURIComponent(importId)}`);
+  return request<AudienceImportProgress>(
+    `/audiences/${encodeURIComponent(audienceId)}/imports/${encodeURIComponent(importId)}`,
+  );
 }
 
 export async function searchIntegrationLists(type: "ACTION_NETWORK" | "INTERNAL", query: string) {

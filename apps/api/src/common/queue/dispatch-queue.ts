@@ -1,4 +1,8 @@
-export type DispatchQueueName = "audience-import" | "blast-send" | "blast-retry";
+export type DispatchQueueName =
+  | "audience-import"
+  | "blast-send"
+  | "blast-retry"
+  | "integration-sync";
 
 export type DispatchQueueJob<TPayload> = {
   id: string;

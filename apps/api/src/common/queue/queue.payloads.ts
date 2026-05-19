@@ -12,6 +12,17 @@ export type BlastRetryFailedJobPayload = {
   blastId: string;
 };
 
+export type IntegrationSyncJobPayload = {
+  syncJobId: string;
+  type: "ACTION_NETWORK" | "INTERNAL";
+  listId: string;
+  audienceName: string;
+  listName?: string;
+  query?: string;
+  cursorUrl?: string;
+  run?: number;
+};
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -38,4 +49,18 @@ export function isBlastRetryFailedJobPayload(value: unknown): value is BlastRetr
   if (!value || typeof value !== "object") return false;
   const payload = value as Record<string, unknown>;
   return isNonEmptyString(payload.blastId);
+}
+
+export function isIntegrationSyncJobPayload(value: unknown): value is IntegrationSyncJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  if (!isNonEmptyString(payload.syncJobId)) return false;
+  if (!isNonEmptyString(payload.listId)) return false;
+  if (!isNonEmptyString(payload.audienceName)) return false;
+  if (payload.type !== "ACTION_NETWORK" && payload.type !== "INTERNAL") return false;
+  if (payload.listName !== undefined && typeof payload.listName !== "string") return false;
+  if (payload.query !== undefined && typeof payload.query !== "string") return false;
+  if (payload.cursorUrl !== undefined && typeof payload.cursorUrl !== "string") return false;
+  if (payload.run !== undefined && !Number.isFinite(payload.run)) return false;
+  return true;
 }

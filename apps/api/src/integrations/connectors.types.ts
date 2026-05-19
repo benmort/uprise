@@ -21,6 +21,8 @@ export type SyncListInput = {
   listId: string;
   query?: string;
   listName?: string;
+  cursorUrl?: string;
+  maxPages?: number;
 };
 
 export type SyncListStats = {
@@ -32,6 +34,8 @@ export type SyncListStats = {
   returnedContacts: number;
   skippedNoPhone: number;
   reasonCounts: Record<string, number>;
+  nextCursorUrl?: string | null;
+  fetchDurationMs?: number;
 };
 
 export type SyncListResult = {

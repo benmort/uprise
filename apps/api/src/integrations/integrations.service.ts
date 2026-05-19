@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHash } from "crypto";
 import {
@@ -23,6 +23,10 @@ import {
 } from "./dto/integration.dto";
 import { IntegrationValidationError } from "./integration.errors";
 import { DomainLogger } from "../common/logging/domain-logger.service";
+import { DispatchQueue } from "../common/queue/dispatch-queue";
+import { getIntegrationSyncJobId, QUEUE_JOB_TYPES, QUEUE_NAMES } from "../common/queue/queue.constants";
+import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
+import { IntegrationSyncJobPayload } from "../common/queue/queue.payloads";
 
 type IntegrationConnectionType = "ACTION_NETWORK" | "INTERNAL";
 type SyncReasonCounts = Record<string, number>;
@@ -36,8 +40,27 @@ type MappedExternalContact = {
   nonContactableReason: string | null;
 };
 
+type SyncCheckpointState = {
+  provider: IntegrationConnectionType;
+  listId: string;
+  listName?: string;
+  audienceName: string;
+  pagesFetched: number;
+  processedItems: number;
+  returnedContacts: number;
+  skippedNoPhone: number;
+  skippedInvalidPhone: number;
+  failedPersist: number;
+  reasonCounts: SyncReasonCounts;
+  sampleErrors: string[];
+  nextCursorUrl?: string | null;
+  runCount: number;
+};
+
 @Injectable()
 export class IntegrationsService {
+  private readonly queue: DispatchQueue;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
@@ -45,7 +68,12 @@ export class IntegrationsService {
     private readonly actionNetwork: ActionNetworkConnector,
     private readonly internalSource: InternalSourceConnector,
     private readonly logger: DomainLogger,
-  ) {}
+    @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+  ) {
+    this.queue = queue ?? {
+      enqueue: async (job) => ({ jobId: job.id, queued: true }),
+    };
+  }
 
   private connector(type: IntegrationConnectionType) {
     return type === "ACTION_NETWORK" ? this.actionNetwork : this.internalSource;
@@ -308,64 +336,247 @@ export class IntegrationsService {
     return "persistence_error";
   }
 
+  private getSyncPagesPerRun(): number {
+    const envPages = Number(this.config.get<string>("ACTION_NETWORK_SYNC_PAGES_PER_RUN", "950"));
+    const fallback = Number.isFinite(envPages) ? envPages : 950;
+    return Math.min(Math.max(1, Math.trunc(fallback)), 1000);
+  }
+
+  private buildAudienceName(dto: {
+    type: IntegrationConnectionType;
+    listId: string;
+    listName?: string;
+    audienceName?: string;
+  }): string {
+    if (dto.type === "ACTION_NETWORK") {
+      const candidate = dto.listName?.trim() || dto.audienceName?.trim() || dto.listId;
+      const cleaned = candidate.replace(/^Action Network:\s*/i, "").trim() || dto.listId;
+      return `Action Network: ${cleaned}`;
+    }
+    return dto.audienceName?.trim() || dto.listName?.trim() || `Internal: ${dto.listId}`;
+  }
+
+  private createInitialCheckpointState(payload: IntegrationSyncJobPayload): SyncCheckpointState {
+    return {
+      provider: payload.type,
+      listId: payload.listId,
+      listName: payload.listName,
+      audienceName: payload.audienceName,
+      pagesFetched: 0,
+      processedItems: 0,
+      returnedContacts: 0,
+      skippedNoPhone: 0,
+      skippedInvalidPhone: 0,
+      failedPersist: 0,
+      reasonCounts: {},
+      sampleErrors: [],
+      nextCursorUrl: payload.cursorUrl ?? null,
+      runCount: payload.run ?? 0,
+    };
+  }
+
+  private parseCheckpointState(
+    raw: string | null | undefined,
+    fallbackPayload: IntegrationSyncJobPayload,
+  ): SyncCheckpointState {
+    const fallback = this.createInitialCheckpointState(fallbackPayload);
+    if (!raw) return fallback;
+    try {
+      const parsed = JSON.parse(raw) as Partial<SyncCheckpointState>;
+      if (!parsed || typeof parsed !== "object") return fallback;
+      return {
+        ...fallback,
+        ...parsed,
+        reasonCounts:
+          parsed.reasonCounts && typeof parsed.reasonCounts === "object"
+            ? { ...parsed.reasonCounts }
+            : fallback.reasonCounts,
+        sampleErrors: Array.isArray(parsed.sampleErrors)
+          ? parsed.sampleErrors.map((item) => String(item))
+          : fallback.sampleErrors,
+      };
+    } catch {
+      return fallback;
+    }
+  }
+
+  private mergeReasonCounts(base: SyncReasonCounts, addition?: Record<string, number>): SyncReasonCounts {
+    const merged = { ...base };
+    for (const [reason, count] of Object.entries(addition || {})) {
+      merged[reason] = (merged[reason] || 0) + Number(count || 0);
+    }
+    return merged;
+  }
+
+  private chunkKeyForPayload(payload: IntegrationSyncJobPayload): string {
+    const raw = `${payload.run ?? 0}:${payload.cursorUrl || "start"}`;
+    return createHash("sha1").update(raw).digest("hex").slice(0, 12);
+  }
+
+  private async enqueueSyncChunk(payload: IntegrationSyncJobPayload): Promise<{ jobId: string; queued: boolean }> {
+    const chunkKey = this.chunkKeyForPayload(payload);
+    return this.queue.enqueue({
+      id: getIntegrationSyncJobId(payload.syncJobId, chunkKey),
+      queue: QUEUE_NAMES.INTEGRATION_SYNC,
+      type: QUEUE_JOB_TYPES.INTEGRATION_SYNC_LIST,
+      payload,
+      removeOnComplete: true,
+    });
+  }
+
   async syncList(dto: SyncIntegrationListDto) {
+    return this.requestSyncList(dto);
+  }
+
+  async requestSyncList(dto: SyncIntegrationListDto) {
     const org = await this.ensureOrganization();
     const connection = await this.ensureConnection(dto.type);
+    const audienceName = this.buildAudienceName({
+      type: dto.type,
+      listId: dto.listId,
+      listName: dto.listName,
+      audienceName: dto.audienceName,
+    });
+
+    const initialPayload: IntegrationSyncJobPayload = {
+      syncJobId: "",
+      type: dto.type,
+      listId: dto.listId,
+      audienceName,
+      listName: dto.listName,
+      query: dto.query,
+      run: 1,
+    };
+    const initialState = this.createInitialCheckpointState(initialPayload);
 
     const syncJob = await this.prisma.integrationSyncJob.create({
       data: {
         organizationId: org.id,
         integrationConnectionId: connection.id,
-        status: IntegrationJobStatus.RUNNING,
+        status: IntegrationJobStatus.QUEUED,
         query: dto.query,
         remoteListId: dto.listId,
-        startedAt: new Date(),
+        errorSummary: JSON.stringify(initialState),
       },
     });
 
+    const payload: IntegrationSyncJobPayload = {
+      ...initialPayload,
+      syncJobId: syncJob.id,
+    };
+    let queued: { jobId: string; queued: boolean };
     try {
-      const remoteSync = await this.connector(dto.type).syncList(
-        connection.apiKey,
-        { listId: dto.listId, query: dto.query, listName: dto.listName },
-        connection.baseUrl,
-      );
-      const remoteContacts = remoteSync.contacts;
-      const reasonCounts: SyncReasonCounts = {
-        ...(remoteSync.stats.reasonCounts || {}),
-      };
-
-      const audienceName = (() => {
-        if (dto.type === "ACTION_NETWORK") {
-          const candidate = dto.listName?.trim() || dto.audienceName?.trim() || dto.listId;
-          const cleaned = candidate.replace(/^Action Network:\s*/i, "").trim() || dto.listId;
-          return `Action Network: ${cleaned}`;
-        }
-        return (
-          dto.audienceName?.trim() ||
-          dto.listName?.trim() ||
-          `Internal: ${dto.listId}`
-        );
-      })();
-      const audience = await this.prisma.audience.create({
+      queued = await this.enqueueSyncChunk(payload);
+    } catch (error) {
+      await this.prisma.integrationSyncJob.update({
+        where: { id: syncJob.id },
         data: {
-          organizationId: org.id,
-          name: audienceName,
-          source:
-            dto.type === "ACTION_NETWORK" ? AudienceSource.ACTION_NETWORK : AudienceSource.INTERNAL,
-          externalListId: dto.listId,
-          status: "ACTIVE",
-          syncedAt: new Date(),
+          status: IntegrationJobStatus.FAILED,
+          completedAt: new Date(),
+          errorSummary: JSON.stringify({
+            ...initialState,
+            failedAt: new Date().toISOString(),
+            error: String(error),
+          }),
         },
       });
+      throw error;
+    }
+    return {
+      syncJobId: syncJob.id,
+      queued: queued.queued,
+      queueJobId: queued.jobId,
+      status: IntegrationJobStatus.QUEUED,
+      audienceName,
+      listId: dto.listId,
+      type: dto.type,
+    };
+  }
 
-      let syncedCount = 0;
-      let failedCount = 0;
+  async processSyncQueueJob(payload: IntegrationSyncJobPayload) {
+    const syncJob = await this.prisma.integrationSyncJob.findUnique({
+      where: { id: payload.syncJobId },
+      include: {
+        connection: {
+          select: {
+            id: true,
+            type: true,
+            encryptedCredential: true,
+            settings: true,
+          },
+        },
+      },
+    });
+    if (!syncJob) {
+      throw new NotFoundException("Integration sync job not found");
+    }
+    if (syncJob.status === IntegrationJobStatus.SUCCEEDED) {
+      return {
+        syncJobId: syncJob.id,
+        status: syncJob.status,
+        syncedCount: syncJob.syncedCount,
+        failedCount: syncJob.failedCount,
+      };
+    }
+
+    const connectionType = syncJob.connection.type as IntegrationConnectionType;
+    const baseUrl = this.baseUrlFromSettings(syncJob.connection.settings) || this.envCredentials(connectionType).baseUrl;
+    const apiKey = this.crypto.decrypt(syncJob.connection.encryptedCredential);
+    const checkpoint = this.parseCheckpointState(syncJob.errorSummary, payload);
+    const cursorUrl = payload.cursorUrl || checkpoint.nextCursorUrl || undefined;
+    const startedAt = syncJob.startedAt ?? new Date();
+    await this.prisma.integrationSyncJob.update({
+      where: { id: syncJob.id },
+      data: {
+        status: IntegrationJobStatus.RUNNING,
+        startedAt,
+        completedAt: null,
+      },
+    });
+
+    const audienceId = syncJob.audienceId;
+    let ensuredAudienceId = audienceId;
+    try {
+      const remoteSync = await this.connector(connectionType).syncList(
+        apiKey,
+        {
+          listId: payload.listId,
+          query: payload.query,
+          listName: payload.listName,
+          cursorUrl,
+          maxPages: this.getSyncPagesPerRun(),
+        },
+        baseUrl,
+      );
+      const remoteContacts = remoteSync.contacts;
+      if (!ensuredAudienceId) {
+        const audience = await this.prisma.audience.create({
+          data: {
+            organizationId: syncJob.organizationId,
+            name: checkpoint.audienceName,
+            source:
+              connectionType === "ACTION_NETWORK"
+                ? AudienceSource.ACTION_NETWORK
+                : AudienceSource.INTERNAL,
+            externalListId: payload.listId,
+            status: "ACTIVE",
+          },
+        });
+        ensuredAudienceId = audience.id;
+      }
+
+      let syncedDelta = 0;
+      let failedDelta = 0;
       let skippedInvalidPhone = 0;
       let failedPersist = 0;
       const errors: string[] = [];
+      const reasonCounts = this.mergeReasonCounts(
+        checkpoint.reasonCounts,
+        remoteSync.stats.reasonCounts,
+      );
       for (const contact of remoteContacts) {
         try {
-          const mapped = this.mapExternalContact(dto.type, contact);
+          const mapped = this.mapExternalContact(connectionType, contact);
           if (!mapped.contactable && mapped.nonContactableReason) {
             if (mapped.nonContactableReason === "invalid_phone_format") {
               this.bumpReason(reasonCounts, mapped.nonContactableReason);
@@ -375,7 +586,7 @@ export class IntegrationsService {
           await this.prisma.audienceContact.upsert({
             where: {
               audienceId_phoneE164: {
-                audienceId: audience.id,
+                audienceId: ensuredAudienceId,
                 phoneE164: mapped.phoneE164,
               },
             },
@@ -386,8 +597,8 @@ export class IntegrationsService {
               source: mapped.source,
             },
             create: {
-              organizationId: org.id,
-              audienceId: audience.id,
+              organizationId: syncJob.organizationId,
+              audienceId: ensuredAudienceId,
               phoneE164: mapped.phoneE164,
               fullName: mapped.fullName,
               metadata: mapped.metadata,
@@ -395,9 +606,9 @@ export class IntegrationsService {
               source: mapped.source,
             },
           });
-          syncedCount += 1;
+          syncedDelta += 1;
         } catch (error) {
-          failedCount += 1;
+          failedDelta += 1;
           const reason = this.classifySyncError(error);
           this.bumpReason(reasonCounts, reason);
           if (reason === "invalid_phone_format") skippedInvalidPhone += 1;
@@ -406,46 +617,101 @@ export class IntegrationsService {
         }
       }
 
-      const stats = {
-        provider: dto.type,
-        listId: dto.listId,
-        listName: dto.listName || remoteSync.stats.listName || audienceName,
-        pagesFetched: remoteSync.stats.pagesFetched,
-        processedItems: remoteSync.stats.processedItems,
-        returnedContacts: remoteSync.stats.returnedContacts,
-        skippedNoPhone: remoteSync.stats.skippedNoPhone,
-        skippedInvalidPhone,
-        failedPersist,
+      const nextState: SyncCheckpointState = {
+        ...checkpoint,
+        provider: connectionType,
+        listId: payload.listId,
+        listName: payload.listName || remoteSync.stats.listName || checkpoint.listName,
+        pagesFetched: checkpoint.pagesFetched + remoteSync.stats.pagesFetched,
+        processedItems: checkpoint.processedItems + remoteSync.stats.processedItems,
+        returnedContacts: checkpoint.returnedContacts + remoteSync.stats.returnedContacts,
+        skippedNoPhone: checkpoint.skippedNoPhone + remoteSync.stats.skippedNoPhone,
+        skippedInvalidPhone: checkpoint.skippedInvalidPhone + skippedInvalidPhone,
+        failedPersist: checkpoint.failedPersist + failedPersist,
+        reasonCounts,
+        sampleErrors: [...checkpoint.sampleErrors, ...errors].slice(-20),
+        nextCursorUrl: remoteSync.stats.nextCursorUrl ?? null,
+        runCount: Math.max(checkpoint.runCount, payload.run ?? 0),
+      };
+      const syncedCount = syncJob.syncedCount + syncedDelta;
+      const failedCount = syncJob.failedCount + failedDelta;
+
+      if (nextState.nextCursorUrl) {
+        await this.prisma.integrationSyncJob.update({
+          where: { id: syncJob.id },
+          data: {
+            status: IntegrationJobStatus.RUNNING,
+            syncedCount,
+            failedCount,
+            errorSummary: JSON.stringify(nextState),
+            audienceId: ensuredAudienceId,
+          completedAt: null,
+          },
+        });
+
+        const nextPayload: IntegrationSyncJobPayload = {
+          ...payload,
+          cursorUrl: nextState.nextCursorUrl,
+          run: (payload.run ?? 1) + 1,
+        };
+        const queued = await this.enqueueSyncChunk(nextPayload);
+        return {
+          syncJobId: syncJob.id,
+          status: IntegrationJobStatus.RUNNING,
+          syncedCount,
+          failedCount,
+          queuedNext: queued.queued,
+          nextQueueJobId: queued.jobId,
+          nextCursorUrl: nextState.nextCursorUrl,
+        };
+      }
+
+      const finalStats = {
+        provider: connectionType,
+        listId: payload.listId,
+        listName: nextState.listName,
+        pagesFetched: nextState.pagesFetched,
+        processedItems: nextState.processedItems,
+        returnedContacts: nextState.returnedContacts,
+        skippedNoPhone: nextState.skippedNoPhone,
+        skippedInvalidPhone: nextState.skippedInvalidPhone,
+        failedPersist: nextState.failedPersist,
         syncedCount,
         failedCount,
-        reasonCounts,
-        sampleErrors: errors.slice(0, 5),
+        reasonCounts: nextState.reasonCounts,
+        sampleErrors: nextState.sampleErrors.slice(0, 10),
+        completedRuns: nextState.runCount,
       };
 
       await this.prisma.integrationSyncJob.update({
         where: { id: syncJob.id },
         data: {
-          status: failedCount > 0 ? IntegrationJobStatus.SUCCEEDED : IntegrationJobStatus.SUCCEEDED,
+          status: IntegrationJobStatus.SUCCEEDED,
           syncedCount,
           failedCount,
-          errorSummary: JSON.stringify(stats),
+          errorSummary: JSON.stringify(finalStats),
           completedAt: new Date(),
-          audienceId: audience.id,
+          audienceId: ensuredAudienceId,
         },
+      });
+      await this.prisma.audience.update({
+        where: { id: ensuredAudienceId },
+        data: { syncedAt: new Date() },
       });
 
       this.logger.log("integrations", "Sync finished", {
-        type: dto.type,
-        listId: dto.listId,
+        type: connectionType,
+        listId: payload.listId,
         syncedCount,
         failedCount,
       });
 
       return {
-        audienceId: audience.id,
+        audienceId: ensuredAudienceId,
+        syncJobId: syncJob.id,
         syncedCount,
         failedCount,
-        stats,
+        stats: finalStats,
       };
     } catch (error) {
       await this.prisma.integrationSyncJob.update({
@@ -453,7 +719,12 @@ export class IntegrationsService {
         data: {
           status: IntegrationJobStatus.FAILED,
           completedAt: new Date(),
-          errorSummary: String(error),
+          errorSummary: JSON.stringify({
+            ...checkpoint,
+            failedAt: new Date().toISOString(),
+            error: String(error),
+          }),
+          audienceId: ensuredAudienceId ?? undefined,
         },
       });
       throw error;

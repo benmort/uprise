@@ -341,14 +341,6 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">
                 Last refresh: {featureFlagsRefreshedAt?.toLocaleTimeString() ?? "n/a"}
               </p>
-              {isBlastDryRunEnabled ? (
-                <div className="rounded-md border border-warning-container bg-warning-container/20 px-3 py-2">
-                  <p className="text-sm font-semibold text-warning-foreground">DRY RUN ACTIVE</p>
-                  <p className="mt-1 text-xs text-warning-foreground">
-                    BLAST_DRY_RUN is enabled. Blast sends are simulated and no real SMS will be sent.
-                  </p>
-                </div>
-              ) : null}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(featureFlags).map(([name, enabled]) => (
                   <div

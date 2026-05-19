@@ -18,19 +18,23 @@ export class QueueConfigService {
   }
 
   get defaultAttempts(): number {
-    return Number(this.config.get<string>("BULLMQ_DEFAULT_ATTEMPTS", "4"));
+    return Number(this.config.get<string>("BULLMQ_DEFAULT_ATTEMPTS", "19"));
   }
 
   get defaultBackoffMs(): number {
-    return Number(this.config.get<string>("BULLMQ_DEFAULT_BACKOFF_MS", "2000"));
+    return Number(this.config.get<string>("BULLMQ_DEFAULT_BACKOFF_MS", "570000"));
   }
 
   get uploadQueueConcurrency(): number {
-    return Number(this.config.get<string>("BULLMQ_UPLOAD_QUEUE_CONCURRENCY", "2"));
+    return Number(this.config.get<string>("BULLMQ_UPLOAD_QUEUE_CONCURRENCY", "47"));
   }
 
   get blastQueueConcurrency(): number {
-    return Number(this.config.get<string>("BULLMQ_BLAST_QUEUE_CONCURRENCY", "5"));
+    return Number(this.config.get<string>("BULLMQ_BLAST_QUEUE_CONCURRENCY", "95"));
+  }
+
+  get integrationSyncQueueConcurrency(): number {
+    return Number(this.config.get<string>("BULLMQ_INTEGRATION_SYNC_CONCURRENCY", "47"));
   }
 
   get hasRedisConfigured(): boolean {

@@ -115,8 +115,8 @@ describe("QueueStatsService", () => {
 
     const audience = stats.queues.find((queue) => queue.name === QUEUE_NAMES.AUDIENCE_IMPORT);
     expect(audience?.counts.waiting).toBe(2);
-    expect(stats.queues).toHaveLength(3);
-    expect(queueClose).toHaveBeenCalledTimes(3);
+    expect(stats.queues).toHaveLength(Object.values(QUEUE_NAMES).length);
+    expect(queueClose).toHaveBeenCalledTimes(Object.values(QUEUE_NAMES).length);
     expect(redisQuit).toHaveBeenCalledTimes(1);
   });
 
@@ -145,7 +145,7 @@ describe("QueueStatsService", () => {
     expect(stats.redis.configured).toBe(true);
     expect(stats.redis.connected).toBe(false);
     expect(stats.redis.error).toContain("redis unavailable");
-    expect(stats.queues).toHaveLength(3);
+    expect(stats.queues).toHaveLength(Object.values(QUEUE_NAMES).length);
     const erroredQueue = stats.queues.find((queue) => queue.name === QUEUE_NAMES.BLAST_SEND);
     expect(erroredQueue?.error).toContain("queue down");
   });

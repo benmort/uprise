@@ -48,9 +48,11 @@ export type ValidatedEnv = {
   STREAM_TOKEN_TTL_SECONDS: number;
   BLAST_SEND_BATCH_SIZE: number;
   BLAST_DISPATCH_BATCH_SIZE: number;
+  BLAST_DISPATCH_LIMIT: number;
   BLAST_SEND_MAX_RUN_MS: number;
   AUDIENCE_IMPORT_BATCH_SIZE: number;
   AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE: number;
+  AUDIENCE_IMPORT_DISPATCH_LIMIT: number;
   AUDIENCE_IMPORT_MAX_RUN_MS: number;
   BULLMQ_REDIS_URL: string;
   BULLMQ_PREFIX: string;
@@ -58,12 +60,24 @@ export type ValidatedEnv = {
   BULLMQ_DEFAULT_BACKOFF_MS: number;
   BULLMQ_UPLOAD_QUEUE_CONCURRENCY: number;
   BULLMQ_BLAST_QUEUE_CONCURRENCY: number;
+  BULLMQ_INTEGRATION_SYNC_CONCURRENCY: number;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
   TWILIO_STATUS_CALLBACK_URL: string;
+  TWILIO_SEND_RATE_PER_SECOND: number;
+  TWILIO_SEND_MAX_CONCURRENT: number;
+  TWILIO_RATE_LIMIT_COOLDOWN_MS: number;
   ACTION_NETWORK_API_BASE_URL: string;
   ACTION_NETWORK_API_KEY: string;
+  ACTION_NETWORK_SYNC_PER_PAGE: number;
+  ACTION_NETWORK_SYNC_MAX_PAGES: number;
+  ACTION_NETWORK_SYNC_PAGES_PER_RUN: number;
+  ACTION_NETWORK_SYNC_RUN_BUDGET_MS: number;
+  ACTION_NETWORK_SYNC_IDENTIFIER_BATCH_SIZE: number;
+  ACTION_NETWORK_SYNC_PERSON_HREF_CONCURRENCY: number;
+  ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND: number;
+  ACTION_NETWORK_SYNC_MAX_RETRIES: number;
   INTERNAL_SOURCE_API_BASE_URL: string;
   INTERNAL_SOURCE_API_KEY: string;
   INTEGRATION_CREDENTIAL_SECRET: string;
@@ -102,15 +116,16 @@ export function validateEnv(config: Env): ValidatedEnv {
       43200,
       errors,
     ),
-    BLAST_SEND_BATCH_SIZE: numberInRange(config, "BLAST_SEND_BATCH_SIZE", 1, 500, 50, errors),
-    BLAST_DISPATCH_BATCH_SIZE: numberInRange(config, "BLAST_DISPATCH_BATCH_SIZE", 1, 100, 5, errors),
-    BLAST_SEND_MAX_RUN_MS: numberInRange(config, "BLAST_SEND_MAX_RUN_MS", 1000, 28000, 22000, errors),
+    BLAST_SEND_BATCH_SIZE: numberInRange(config, "BLAST_SEND_BATCH_SIZE", 1, 500, 475, errors),
+    BLAST_DISPATCH_BATCH_SIZE: numberInRange(config, "BLAST_DISPATCH_BATCH_SIZE", 1, 100, 95, errors),
+    BLAST_DISPATCH_LIMIT: numberInRange(config, "BLAST_DISPATCH_LIMIT", 1, 100, 95, errors),
+    BLAST_SEND_MAX_RUN_MS: numberInRange(config, "BLAST_SEND_MAX_RUN_MS", 1000, 28000, 26600, errors),
     AUDIENCE_IMPORT_BATCH_SIZE: numberInRange(
       config,
       "AUDIENCE_IMPORT_BATCH_SIZE",
       1,
       2000,
-      200,
+      1900,
       errors,
     ),
     AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE: numberInRange(
@@ -118,7 +133,15 @@ export function validateEnv(config: Env): ValidatedEnv {
       "AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE",
       1,
       500,
+      475,
+      errors,
+    ),
+    AUDIENCE_IMPORT_DISPATCH_LIMIT: numberInRange(
+      config,
+      "AUDIENCE_IMPORT_DISPATCH_LIMIT",
+      1,
       100,
+      95,
       errors,
     ),
     AUDIENCE_IMPORT_MAX_RUN_MS: numberInRange(
@@ -126,18 +149,18 @@ export function validateEnv(config: Env): ValidatedEnv {
       "AUDIENCE_IMPORT_MAX_RUN_MS",
       1000,
       28000,
-      22000,
+      26600,
       errors,
     ),
     BULLMQ_REDIS_URL: resolvedBullmqRedisUrl,
     BULLMQ_PREFIX: config.BULLMQ_PREFIX?.trim() || "yarns",
-    BULLMQ_DEFAULT_ATTEMPTS: numberInRange(config, "BULLMQ_DEFAULT_ATTEMPTS", 1, 20, 4, errors),
+    BULLMQ_DEFAULT_ATTEMPTS: numberInRange(config, "BULLMQ_DEFAULT_ATTEMPTS", 1, 20, 19, errors),
     BULLMQ_DEFAULT_BACKOFF_MS: numberInRange(
       config,
       "BULLMQ_DEFAULT_BACKOFF_MS",
       0,
       600000,
-      2000,
+      570000,
       errors,
     ),
     BULLMQ_UPLOAD_QUEUE_CONCURRENCY: numberInRange(
@@ -145,7 +168,7 @@ export function validateEnv(config: Env): ValidatedEnv {
       "BULLMQ_UPLOAD_QUEUE_CONCURRENCY",
       1,
       50,
-      2,
+      47,
       errors,
     ),
     BULLMQ_BLAST_QUEUE_CONCURRENCY: numberInRange(
@@ -153,16 +176,91 @@ export function validateEnv(config: Env): ValidatedEnv {
       "BULLMQ_BLAST_QUEUE_CONCURRENCY",
       1,
       100,
-      5,
+      95,
+      errors,
+    ),
+    BULLMQ_INTEGRATION_SYNC_CONCURRENCY: numberInRange(
+      config,
+      "BULLMQ_INTEGRATION_SYNC_CONCURRENCY",
+      1,
+      50,
+      47,
       errors,
     ),
     TWILIO_ACCOUNT_SID: required(config, "TWILIO_ACCOUNT_SID", errors),
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),
     TWILIO_STATUS_CALLBACK_URL: config.TWILIO_STATUS_CALLBACK_URL?.trim() || "",
+    TWILIO_SEND_RATE_PER_SECOND: numberInRange(config, "TWILIO_SEND_RATE_PER_SECOND", 1, 500, 475, errors),
+    TWILIO_SEND_MAX_CONCURRENT: numberInRange(config, "TWILIO_SEND_MAX_CONCURRENT", 1, 50, 47, errors),
+    TWILIO_RATE_LIMIT_COOLDOWN_MS: numberInRange(
+      config,
+      "TWILIO_RATE_LIMIT_COOLDOWN_MS",
+      0,
+      120000,
+      114000,
+      errors,
+    ),
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
     ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),
+    ACTION_NETWORK_SYNC_PER_PAGE: numberInRange(config, "ACTION_NETWORK_SYNC_PER_PAGE", 1, 100, 95, errors),
+    ACTION_NETWORK_SYNC_MAX_PAGES: numberInRange(
+      config,
+      "ACTION_NETWORK_SYNC_MAX_PAGES",
+      1,
+      10000,
+      9500,
+      errors,
+    ),
+    ACTION_NETWORK_SYNC_PAGES_PER_RUN: numberInRange(
+      config,
+      "ACTION_NETWORK_SYNC_PAGES_PER_RUN",
+      1,
+      1000,
+      950,
+      errors,
+    ),
+    ACTION_NETWORK_SYNC_RUN_BUDGET_MS: numberInRange(
+      config,
+      "ACTION_NETWORK_SYNC_RUN_BUDGET_MS",
+      1000,
+      120000,
+      114000,
+      errors,
+    ),
+    ACTION_NETWORK_SYNC_IDENTIFIER_BATCH_SIZE: numberInRange(
+      config,
+      "ACTION_NETWORK_SYNC_IDENTIFIER_BATCH_SIZE",
+      1,
+      50,
+      47,
+      errors,
+    ),
+    ACTION_NETWORK_SYNC_PERSON_HREF_CONCURRENCY: numberInRange(
+      config,
+      "ACTION_NETWORK_SYNC_PERSON_HREF_CONCURRENCY",
+      1,
+      20,
+      19,
+      errors,
+    ),
+    ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND: numberInRange(
+      config,
+      "ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND",
+      1,
+      200,
+      190,
+      errors,
+    ),
+    ACTION_NETWORK_SYNC_MAX_RETRIES: numberInRange(
+      config,
+      "ACTION_NETWORK_SYNC_MAX_RETRIES",
+      0,
+      10,
+      9,
+      errors,
+    ),
     INTERNAL_SOURCE_API_BASE_URL: required(config, "INTERNAL_SOURCE_API_BASE_URL", errors),
     INTERNAL_SOURCE_API_KEY: required(config, "INTERNAL_SOURCE_API_KEY", errors),
     INTEGRATION_CREDENTIAL_SECRET: required(config, "INTEGRATION_CREDENTIAL_SECRET", errors),

@@ -49,14 +49,78 @@ function toMessage(m: any): TwilioMessage {
   };
 }
 
+function parseRetryAfterMs(error: unknown): number | null {
+  const maybeHeaders = (error as { headers?: Record<string, string> })?.headers;
+  if (maybeHeaders && typeof maybeHeaders["retry-after"] === "string") {
+    const retryAfter = Number(maybeHeaders["retry-after"]);
+    if (Number.isFinite(retryAfter)) return Math.max(0, Math.trunc(retryAfter * 1000));
+  }
+  const message = String((error as { message?: string })?.message || "");
+  const retryAfterMatch = message.match(/retry[- ]after[:= ]+(\d+)/i);
+  if (retryAfterMatch) {
+    return Math.max(0, Number(retryAfterMatch[1]) * 1000);
+  }
+  return null;
+}
+
+function twilioStatusCode(error: unknown): number | null {
+  const status = (error as { status?: unknown })?.status;
+  if (typeof status === "number" && Number.isFinite(status)) return status;
+  const code = (error as { statusCode?: unknown })?.statusCode;
+  if (typeof code === "number" && Number.isFinite(code)) return code;
+  return null;
+}
+
+function twilioErrorCode(error: unknown): number | null {
+  const code = (error as { code?: unknown })?.code;
+  if (typeof code === "number" && Number.isFinite(code)) return code;
+  return null;
+}
+
+function isTwilioRateLimitError(error: unknown): boolean {
+  const status = twilioStatusCode(error);
+  const code = twilioErrorCode(error);
+  if (status === 429) return true;
+  if (code === 20429 || code === 14107) return true;
+  const text = String((error as { message?: string })?.message || "").toLowerCase();
+  return text.includes("rate limit") || text.includes("too many requests");
+}
+
+function isRetryableTwilioError(error: unknown): boolean {
+  if (isTwilioRateLimitError(error)) return true;
+  const status = twilioStatusCode(error);
+  if (status === null) return true;
+  return status >= 500 || status === 408;
+}
+
 @Injectable()
 export class TwilioService {
   private readonly client: Twilio.Twilio | null;
+  private readonly sendRatePerSecond: number;
+  private readonly maxConcurrentSends: number;
+  private readonly defaultCooldownMs: number;
+  private availableTokens: number;
+  private tokenLastRefillAt = Date.now();
+  private inFlightSends = 0;
+  private cooldownUntilMs = 0;
 
   constructor(private readonly config: ConfigService) {
     const sid = this.config.get<string>("TWILIO_ACCOUNT_SID");
     const token = this.config.get<string>("TWILIO_AUTH_TOKEN");
     this.client = sid && token ? Twilio(sid, token) : null;
+    this.sendRatePerSecond = Math.max(
+      1,
+      Number(this.config.get<string>("TWILIO_SEND_RATE_PER_SECOND", "475")) || 475,
+    );
+    this.maxConcurrentSends = Math.max(
+      1,
+      Number(this.config.get<string>("TWILIO_SEND_MAX_CONCURRENT", "47")) || 47,
+    );
+    this.defaultCooldownMs = Math.max(
+      0,
+      Number(this.config.get<string>("TWILIO_RATE_LIMIT_COOLDOWN_MS", "114000")) || 114000,
+    );
+    this.availableTokens = this.sendRatePerSecond;
   }
 
   private getClient(): Twilio.Twilio {
@@ -74,6 +138,48 @@ export class TwilioService {
     const apiBaseUrl = this.config.get<string>("API_BASE_URL", "").trim();
     if (!apiBaseUrl) return null;
     return `${apiBaseUrl.replace(/\/+$/, "")}/api/v1/twilio-status-callback`;
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    if (ms <= 0) return;
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private refillTokens(nowMs: number): void {
+    const elapsedMs = Math.max(0, nowMs - this.tokenLastRefillAt);
+    if (elapsedMs <= 0) return;
+    const refill = (elapsedMs / 1000) * this.sendRatePerSecond;
+    this.availableTokens = Math.min(this.sendRatePerSecond, this.availableTokens + refill);
+    this.tokenLastRefillAt = nowMs;
+  }
+
+  private async acquireSendPermit(): Promise<void> {
+    while (true) {
+      const now = Date.now();
+      const cooldownWait = Math.max(0, this.cooldownUntilMs - now);
+      if (cooldownWait > 0) {
+        await this.sleep(Math.min(cooldownWait, 250));
+        continue;
+      }
+      this.refillTokens(now);
+      if (this.inFlightSends < this.maxConcurrentSends && this.availableTokens >= 1) {
+        this.availableTokens -= 1;
+        this.inFlightSends += 1;
+        return;
+      }
+      const tokenWaitMs =
+        this.availableTokens >= 1 ? 0 : Math.ceil(((1 - this.availableTokens) / this.sendRatePerSecond) * 1000);
+      await this.sleep(Math.max(20, tokenWaitMs));
+    }
+  }
+
+  private releaseSendPermit(): void {
+    this.inFlightSends = Math.max(0, this.inFlightSends - 1);
+  }
+
+  private triggerRateLimitCooldown(error: unknown): void {
+    const retryAfterMs = parseRetryAfterMs(error) ?? this.defaultCooldownMs;
+    this.cooldownUntilMs = Math.max(this.cooldownUntilMs, Date.now() + retryAfterMs);
   }
 
   async getMessagesPage(opts: { pageSize: number; pageToken?: string | null }): Promise<MessagesPage> {
@@ -158,16 +264,34 @@ export class TwilioService {
       throw new ServiceUnavailableException("TWILIO_PHONE_NUMBER is not set.");
     }
     const statusCallback = this.getStatusCallbackUrl();
-    const created = await withRetry(
-      () =>
-        client.messages.create({
-          from: from.trim(),
-          to: to.trim(),
-          body: body.trim(),
-          ...(statusCallback ? { statusCallback } : {}),
-        }),
-      { retries: 2 },
-    );
-    return toMessage(created);
+    await this.acquireSendPermit();
+    try {
+      const created = await withRetry(
+        async () => {
+          try {
+            return await client.messages.create({
+              from: from.trim(),
+              to: to.trim(),
+              body: body.trim(),
+              ...(statusCallback ? { statusCallback } : {}),
+            });
+          } catch (error) {
+            if (isTwilioRateLimitError(error)) {
+              this.triggerRateLimitCooldown(error);
+            }
+            throw error;
+          }
+        },
+        {
+          retries: 4,
+          baseDelayMs: 400,
+          maxDelayMs: 10000,
+          shouldRetry: (error) => isRetryableTwilioError(error),
+        },
+      );
+      return toMessage(created);
+    } finally {
+      this.releaseSendPermit();
+    }
   }
 }

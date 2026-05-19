@@ -6,12 +6,14 @@ import { NestFactory } from "@nestjs/core";
 import { Job, QueueEvents, Worker } from "bullmq";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
+import { IntegrationsService } from "../../api/src/integrations/integrations.service";
 import { DomainLogger } from "../../api/src/common/logging/domain-logger.service";
 import { QueueConfigService } from "../../api/src/common/queue/queue-config.service";
 import {
   isAudienceImportBatchJobPayload,
   isBlastRetryFailedJobPayload,
   isBlastSendBatchJobPayload,
+  isIntegrationSyncJobPayload,
 } from "../../api/src/common/queue/queue.payloads";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES } from "../../api/src/common/queue/queue.constants";
 
@@ -43,6 +45,7 @@ async function bootstrap(): Promise<void> {
   const queueConfig = app.get(QueueConfigService);
   const audiences = app.get(AudiencesService);
   const blasts = app.get(BlastsService);
+  const integrations = app.get(IntegrationsService);
   const logger = app.get(DomainLogger);
 
   const connection = queueConfig.queueConnection;
@@ -99,6 +102,17 @@ async function bootstrap(): Promise<void> {
       },
       { connection, prefix, concurrency: 1 },
     ),
+    new Worker(
+      QUEUE_NAMES.INTEGRATION_SYNC,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.INTEGRATION_SYNC_LIST) return null;
+        if (!isIntegrationSyncJobPayload(job.data)) {
+          throw new Error(`Invalid integration sync job payload for job ${job.id}`);
+        }
+        return integrations.processSyncQueueJob(job.data);
+      },
+      { connection, prefix, concurrency: queueConfig.integrationSyncQueueConcurrency },
+    ),
   ];
 
   for (const worker of workers) {
@@ -124,6 +138,7 @@ async function bootstrap(): Promise<void> {
     new QueueEvents(QUEUE_NAMES.AUDIENCE_IMPORT, { connection, prefix }),
     new QueueEvents(QUEUE_NAMES.BLAST_SEND, { connection, prefix }),
     new QueueEvents(QUEUE_NAMES.BLAST_RETRY, { connection, prefix }),
+    new QueueEvents(QUEUE_NAMES.INTEGRATION_SYNC, { connection, prefix }),
   ];
 
   await Promise.all(queueEvents.map((events) => events.waitUntilReady()));

@@ -283,21 +283,27 @@ export class BlastsService {
   }
 
   private getSendBatchSize(requestedBatchSize?: number): number {
-    const envBatchSize = Number(this.config.get<string>("BLAST_SEND_BATCH_SIZE", "50"));
-    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 50;
+    const envBatchSize = Number(this.config.get<string>("BLAST_SEND_BATCH_SIZE", "475"));
+    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 475;
     const effective = requestedBatchSize ?? fallback;
     return Math.min(Math.max(1, Math.trunc(effective)), 500);
   }
 
   private getDispatchBatchSize(): number {
-    const envBatchSize = Number(this.config.get<string>("BLAST_DISPATCH_BATCH_SIZE", "5"));
-    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 5;
-    return Math.min(Math.max(1, Math.trunc(fallback)), 25);
+    const envBatchSize = Number(this.config.get<string>("BLAST_DISPATCH_BATCH_SIZE", "95"));
+    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 95;
+    return Math.min(Math.max(1, Math.trunc(fallback)), 100);
+  }
+
+  private getDispatchLimit(): number {
+    const envLimit = Number(this.config.get<string>("BLAST_DISPATCH_LIMIT", "95"));
+    const fallback = Number.isFinite(envLimit) ? envLimit : 95;
+    return Math.min(Math.max(1, Math.trunc(fallback)), 100);
   }
 
   private getSendTimeBudgetMs(): number {
-    const envBudgetMs = Number(this.config.get<string>("BLAST_SEND_MAX_RUN_MS", "22000"));
-    const fallback = Number.isFinite(envBudgetMs) ? envBudgetMs : 22000;
+    const envBudgetMs = Number(this.config.get<string>("BLAST_SEND_MAX_RUN_MS", "26600"));
+    const fallback = Number.isFinite(envBudgetMs) ? envBudgetMs : 26600;
     return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
   }
 
@@ -333,9 +339,10 @@ export class BlastsService {
   private async enqueueBlastSendBatch(
     payload: BlastSendBatchJobPayload,
     runAt?: Date,
+    chunkKey?: string,
   ): Promise<{ jobId: string; queued: boolean }> {
     return this.queue.enqueue({
-      id: getBlastSendJobId(payload.blastId),
+      id: getBlastSendJobId(payload.blastId, chunkKey),
       queue: QUEUE_NAMES.BLAST_SEND,
       type: QUEUE_JOB_TYPES.BLAST_SEND_BATCH,
       payload,
@@ -892,6 +899,21 @@ export class BlastsService {
 
     const statusUpdate = await this.recalculateBlastStatus(blast.id);
     const updated = await this.getBlastOrThrow(blast.id);
+    const elapsedMs = Math.max(1, Date.now() - startedAtMs);
+    const sendsPerSecond = Number(((sent / elapsedMs) * 1000).toFixed(2));
+
+    let continuation:
+      | {
+          queued: boolean;
+          jobId: string;
+        }
+      | undefined;
+    if (this.isBullmqBlastEnabled() && statusUpdate.remaining > 0) {
+      continuation = await this.enqueueBlastSendBatch({
+        blastId: blast.id,
+        requestedBatchSize: batchSize,
+      }, undefined, `cursor-${statusUpdate.remaining}-${Date.now()}`);
+    }
 
     await this.writeSnapshot(blast.organizationId, blast.id, "sent", sent);
     await this.writeSnapshot(blast.organizationId, blast.id, "failed", failed);
@@ -912,11 +934,16 @@ export class BlastsService {
       skipped: skippedDuplicates,
       remaining: statusUpdate.remaining,
       batchSize,
+      elapsedMs,
+      sendsPerSecond,
+      continued: continuation?.queued ?? false,
+      continuationJobId: continuation?.jobId,
     };
   }
 
-  async dispatchDueScheduled(limit = 1) {
-    const boundedLimit = Math.min(Math.max(1, Math.trunc(limit || 1)), 25);
+  async dispatchDueScheduled(limit?: number) {
+    const effectiveLimit = limit ?? this.getDispatchLimit();
+    const boundedLimit = Math.min(Math.max(1, Math.trunc(effectiveLimit || 1)), 100);
     const dispatchBatchSize = this.getDispatchBatchSize();
     const due = await this.prisma.blast.findMany({
       where: {
@@ -972,6 +999,8 @@ export class BlastsService {
 
     return {
       processed: due.length,
+      dispatchBatchSize,
+      dispatchLimit: boundedLimit,
       results,
     };
   }

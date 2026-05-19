@@ -2,6 +2,7 @@ import {
   isAudienceImportBatchJobPayload,
   isBlastRetryFailedJobPayload,
   isBlastSendBatchJobPayload,
+  isIntegrationSyncJobPayload,
 } from "./queue.payloads";
 
 describe("queue payload contracts", () => {
@@ -23,5 +24,41 @@ describe("queue payload contracts", () => {
     expect(isBlastRetryFailedJobPayload({ blastId: "blast_1" })).toBe(true);
     expect(isBlastRetryFailedJobPayload({ blastId: "" })).toBe(false);
     expect(isBlastRetryFailedJobPayload({})).toBe(false);
+  });
+
+  it("validates integration sync payloads", () => {
+    expect(
+      isIntegrationSyncJobPayload({
+        syncJobId: "sync_1",
+        type: "ACTION_NETWORK",
+        listId: "list_1",
+        audienceName: "Action Network: Main List",
+      }),
+    ).toBe(true);
+    expect(
+      isIntegrationSyncJobPayload({
+        syncJobId: "sync_1",
+        type: "INTERNAL",
+        listId: "list_1",
+        audienceName: "Internal: Main List",
+        run: 2,
+      }),
+    ).toBe(true);
+    expect(
+      isIntegrationSyncJobPayload({
+        syncJobId: "",
+        type: "ACTION_NETWORK",
+        listId: "list_1",
+        audienceName: "x",
+      }),
+    ).toBe(false);
+    expect(
+      isIntegrationSyncJobPayload({
+        syncJobId: "sync_1",
+        type: "ACTION_NETWORK",
+        listId: "",
+        audienceName: "x",
+      }),
+    ).toBe(false);
   });
 });

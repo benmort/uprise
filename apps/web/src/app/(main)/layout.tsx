@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   LayoutDashboard,
   LogOut,
   Mail,
@@ -16,7 +15,6 @@ import {
 import {
   createBlast,
   getApiUrl,
-  getFeatureFlags,
   getRealtimeStreamToken,
   listAudiences,
   listConversations,
@@ -47,7 +45,6 @@ export default function MainLayout({
   const [ready, setReady] = useState(false);
   const [creatingBlast, setCreatingBlast] = useState(false);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
-  const [blastDryRunEnabled, setBlastDryRunEnabled] = useState(false);
   const inboxUnreadRef = useRef(0);
   const { showToast } = useToast();
 
@@ -84,26 +81,6 @@ export default function MainLayout({
       window.clearInterval(id);
     };
   }, [ready, pathname]);
-
-  useEffect(() => {
-    if (!ready) return;
-    let cancelled = false;
-
-    const syncFeatureFlags = async () => {
-      const response = await getFeatureFlags();
-      if (cancelled || !response.ok) return;
-      setBlastDryRunEnabled(Boolean(response.data.BLAST_DRY_RUN));
-    };
-
-    void syncFeatureFlags();
-    const id = window.setInterval(() => {
-      void syncFeatureFlags();
-    }, 15000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
-  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -351,14 +328,7 @@ export default function MainLayout({
 
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-white px-6">
-            <div>
-              {blastDryRunEnabled ? (
-                <div className="inline-flex items-center gap-1 rounded-full border border-warning-container bg-warning-container/20 px-2 py-1 text-xs font-semibold text-warning-foreground">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  <span>DRY RUN ACTIVE</span>
-                </div>
-              ) : null}
-            </div>
+            <div />
             <Button type="button" disabled={creatingBlast} onClick={handleCreateBlast} className="gap-2">
               <MessageSquareText className="h-4 w-4" />
               {creatingBlast ? "Creating..." : "Create Blast"}

@@ -5,9 +5,10 @@ import { IntegrationsService } from "./integrations.service";
 import { CredentialCryptoService } from "./credential-crypto.service";
 import { ActionNetworkConnector } from "./action-network.connector";
 import { InternalSourceConnector } from "./internal-source.connector";
+import { QueueModule } from "../common/queue/queue.module";
 
 @Module({
-  imports: [LoggingModule],
+  imports: [LoggingModule, QueueModule],
   controllers: [IntegrationsController],
   providers: [
     IntegrationsService,

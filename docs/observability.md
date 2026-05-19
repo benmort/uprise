@@ -31,10 +31,36 @@
    - Median first-reply time
 
 5. **BullMQ Queue Health**
-   - Queue completed/failed/stalled counters (`audience-import`, `blast-send`, `blast-retry`)
+   - Queue completed/failed/stalled counters (`audience-import`, `blast-send`, `blast-retry`, `integration-sync`)
    - Waiting/delayed backlog trend
    - Worker active-job concurrency
    - Failed-job backlog size (DLQ)
+
+## Baseline Throughput Capture
+
+Use the load script in canary mode before and after every tuning change:
+
+```bash
+BASIC_AUTH_USERNAME=... \
+BASIC_AUTH_PASSWORD=... \
+LOAD_BASE_URL=https://api.example.com \
+LOAD_ENDPOINT=/api/v1/audiences/dispatch-imports?limit=20 \
+LOAD_REQUESTS=120 \
+LOAD_CONCURRENCY=6 \
+LOAD_CAPTURE_QUEUE_STATS=true \
+pnpm node scripts/load/queue-dispatch-load.mjs
+```
+
+Repeat for:
+
+- `LOAD_ENDPOINT=/api/v1/blasts/dispatch-due?limit=20`
+- `LOAD_METHOD=GET LOAD_ENDPOINT=/api/v1/integrations/sync-jobs?limit=50`
+
+Track these from each run artifact:
+
+- `requestsPerSecond`, `p95Ms`, `failed`
+- queue backlog deltas from `queueBefore`/`queueAfter`
+- provider-specific 429/error ratio from logs (Twilio and Action Network)
 
 ## Recommended Alerts
 
@@ -47,6 +73,8 @@
 - **Queue failed/completed ratio > 5%** for 10 minutes
 - **Queue backlog (waiting + delayed) grows for 15 minutes**
 - **Worker process crash/restart loops** in host logs
+- **Twilio 429/20429/14107 spikes >2%** for 10 minutes
+- **Action Network 429/5xx spikes >2%** for 10 minutes
 
 ## Incident Triage Checklist
 

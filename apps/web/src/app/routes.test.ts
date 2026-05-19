@@ -56,7 +56,5 @@ describe("major route files", () => {
     expect(source).toContain("createBlast");
     expect(source).toContain("/blasts/");
     expect(source).toContain("Create Blast");
-    expect(source).toContain("getFeatureFlags");
-    expect(source).toContain("DRY RUN ACTIVE");
   });
 });

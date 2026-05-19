@@ -193,21 +193,27 @@ export class AudiencesService {
   }
 
   private getImportBatchSize(requestedBatchSize?: number): number {
-    const envBatchSize = Number(this.config.get<string>("AUDIENCE_IMPORT_BATCH_SIZE", "200"));
-    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 200;
+    const envBatchSize = Number(this.config.get<string>("AUDIENCE_IMPORT_BATCH_SIZE", "1900"));
+    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 1900;
     const effective = requestedBatchSize ?? fallback;
     return Math.min(Math.max(1, Math.trunc(effective)), 2000);
   }
 
   private getImportDispatchBatchSize(): number {
-    const envBatchSize = Number(this.config.get<string>("AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE", "100"));
-    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 100;
+    const envBatchSize = Number(this.config.get<string>("AUDIENCE_IMPORT_DISPATCH_BATCH_SIZE", "475"));
+    const fallback = Number.isFinite(envBatchSize) ? envBatchSize : 475;
     return Math.min(Math.max(1, Math.trunc(fallback)), 500);
   }
 
+  private getImportDispatchLimit(): number {
+    const envLimit = Number(this.config.get<string>("AUDIENCE_IMPORT_DISPATCH_LIMIT", "95"));
+    const fallback = Number.isFinite(envLimit) ? envLimit : 95;
+    return Math.min(Math.max(1, Math.trunc(fallback)), 100);
+  }
+
   private getImportTimeBudgetMs(): number {
-    const envBudgetMs = Number(this.config.get<string>("AUDIENCE_IMPORT_MAX_RUN_MS", "22000"));
-    const fallback = Number.isFinite(envBudgetMs) ? envBudgetMs : 22000;
+    const envBudgetMs = Number(this.config.get<string>("AUDIENCE_IMPORT_MAX_RUN_MS", "26600"));
+    const fallback = Number.isFinite(envBudgetMs) ? envBudgetMs : 26600;
     return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
   }
 
@@ -218,9 +224,10 @@ export class AudiencesService {
   private async enqueueImportBatch(
     payload: AudienceImportBatchJobPayload,
     runAt?: Date,
+    chunkKey?: string,
   ): Promise<{ jobId: string; queued: boolean }> {
     return this.queue.enqueue({
-      id: getAudienceImportJobId(payload.importId),
+      id: getAudienceImportJobId(payload.importId, chunkKey),
       queue: QUEUE_NAMES.AUDIENCE_IMPORT,
       type: QUEUE_JOB_TYPES.AUDIENCE_IMPORT_BATCH,
       payload,
@@ -495,14 +502,32 @@ export class AudiencesService {
           syncedAt: new Date(),
         },
       });
+    } else if (this.isBullmqUploadEnabled()) {
+      await this.enqueueImportBatch(
+        {
+          importId: job.id,
+          requestedBatchSize: batchSize,
+        },
+        undefined,
+        `cursor-${cursor}`,
+      );
     }
 
-    return this.mapImportProgress(updated);
+    const progress = this.mapImportProgress(updated);
+    const elapsedMs = Math.max(1, Date.now() - startedAtMs);
+    return {
+      ...progress,
+      batchSize,
+      processedInBatch,
+      elapsedMs,
+      rowsPerSecond: Number(((processedInBatch / elapsedMs) * 1000).toFixed(2)),
+    };
   }
 
-  async dispatchPendingImports(limit = 1) {
+  async dispatchPendingImports(limit?: number) {
     const org = await this.ensureOrganization();
-    const boundedLimit = Math.min(Math.max(1, Math.trunc(limit || 1)), 25);
+    const effectiveLimit = limit ?? this.getImportDispatchLimit();
+    const boundedLimit = Math.min(Math.max(1, Math.trunc(effectiveLimit || 1)), 100);
     const batchSize = this.getImportDispatchBatchSize();
     const due = await this.prisma.audienceImport.findMany({
       where: {
@@ -555,6 +580,7 @@ export class AudiencesService {
 
     return {
       processed: due.length,
+      dispatchLimit: boundedLimit,
       batchSize,
       results,
     };
