@@ -19,6 +19,34 @@ describe("BlastsService integration-like flow", () => {
     jest.clearAllMocks();
   });
 
+  it("treats markProofed as idempotent when blast is already proofed", async () => {
+    const alreadyProofedAt = new Date("2026-05-19T10:30:00.000Z");
+    const prismaMock: any = {
+      blast: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "blast_proofed",
+          status: BlastStatus.PROOFED,
+          proofedAt: alreadyProofedAt,
+        }),
+        update: jest.fn(),
+      },
+    };
+
+    const service = new BlastsService(
+      prismaMock,
+      configMock,
+      new TemplateRendererService(),
+      new ComplianceService(configMock),
+      { sendMessage: jest.fn() } as unknown as TwilioService,
+      eventsMock,
+    );
+
+    const result = await service.markProofed("blast_proofed");
+    expect(result.status).toBe(BlastStatus.PROOFED);
+    expect(result.proofedAt).toEqual(alreadyProofedAt);
+    expect(prismaMock.blast.update).not.toHaveBeenCalled();
+  });
+
   it("creates and sends one recipient when audience includes duplicate phones", async () => {
     const prismaMock: any = {
       organization: {

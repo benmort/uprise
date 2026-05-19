@@ -206,6 +206,9 @@ export class BlastsService {
 
   async markProofed(id: string) {
     const blast = await this.getBlastOrThrow(id);
+    if (blast.status === BlastStatus.PROOFED) {
+      return blast;
+    }
     assertValidBlastTransition(
       blast.status as unknown as FlowBlastStatus,
       FlowBlastStatus.PROOFED,
