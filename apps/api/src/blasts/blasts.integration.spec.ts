@@ -849,7 +849,7 @@ describe("BlastsService integration-like flow", () => {
     };
     const flags = { isBullmqBlastEnabled: () => true } as any;
     const queue = {
-      enqueue: jest.fn().mockResolvedValue({ jobId: "blast-send:blast_1", queued: true }),
+      enqueue: jest.fn().mockResolvedValue({ jobId: "blast-send_blast_1", queued: true }),
     };
     const service = new BlastsService(
       prismaMock,
@@ -866,7 +866,7 @@ describe("BlastsService integration-like flow", () => {
     expect(sendResult).toEqual(
       expect.objectContaining({
         queued: true,
-        jobId: "blast-send:blast_1",
+        jobId: "blast-send_blast_1",
       }),
     );
 

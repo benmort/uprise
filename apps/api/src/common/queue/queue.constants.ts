@@ -13,19 +13,19 @@ export const QUEUE_JOB_TYPES = {
 } as const;
 
 export function getAudienceImportJobId(importId: string, chunkKey?: string): string {
-  return chunkKey ? `audience-import:${importId}:${chunkKey}` : `audience-import:${importId}`;
+  return chunkKey ? `audience-import_${importId}_${chunkKey}` : `audience-import_${importId}`;
 }
 
 export function getBlastSendJobId(blastId: string, chunkKey?: string): string {
-  return chunkKey ? `blast-send:${blastId}:${chunkKey}` : `blast-send:${blastId}`;
+  return chunkKey ? `blast-send_${blastId}_${chunkKey}` : `blast-send_${blastId}`;
 }
 
 export function getBlastRetryJobId(blastId: string): string {
-  return `blast-retry:${blastId}`;
+  return `blast-retry_${blastId}`;
 }
 
 export function getIntegrationSyncJobId(syncJobId: string, chunkKey?: string): string {
   return chunkKey
-    ? `integration-sync:${syncJobId}:${chunkKey}`
-    : `integration-sync:${syncJobId}`;
+    ? `integration-sync_${syncJobId}_${chunkKey}`
+    : `integration-sync_${syncJobId}`;
 }

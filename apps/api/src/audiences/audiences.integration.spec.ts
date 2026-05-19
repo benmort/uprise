@@ -177,7 +177,7 @@ describe("AudiencesService integration-like flow", () => {
       get: (_key: string, fallback?: string) => fallback ?? "default",
     } as ConfigService;
     const flags = { isBullmqUploadEnabled: () => true } as any;
-    const queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "audience-import:import_queued", queued: true }) };
+    const queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "audience-import_import_queued", queued: true }) };
 
     const service = new AudiencesService(prismaMock, configMock, flags, queue as any);
     const started = await service.startCsvImport(
