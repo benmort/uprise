@@ -12,6 +12,8 @@ import {
   listConversations,
   markConversation,
   sendInboxReply,
+  type CannedSuggestion,
+  type MessageChannel,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +52,7 @@ type ConversationRow = {
   resolved: boolean;
   lastMessageAt?: string;
   owner?: string | null;
+  channel?: MessageChannel;
 };
 
 type ThreadMessage = {
@@ -60,7 +63,17 @@ type ThreadMessage = {
   from: string;
   to: string;
   blastId?: string | null;
+  channel?: MessageChannel;
 };
+
+function ChannelBadge({ channel }: { channel?: MessageChannel }) {
+  if (channel !== "WHATSAPP") return null;
+  return (
+    <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b]">
+      WhatsApp
+    </span>
+  );
+}
 
 type BlastHistoryItem = {
   blastId: string;
@@ -137,6 +150,8 @@ export default function InboxPage() {
   const routeFilter = parseFilter(params.get("filter"));
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [thread, setThread] = useState<ThreadMessage[]>([]);
+  const [sessionOpen, setSessionOpen] = useState(true);
+  const [threadChannel, setThreadChannel] = useState<MessageChannel>("SMS");
   const [blastContext, setBlastContext] = useState<BlastContext | null>(null);
   const [blastHistory, setBlastHistory] = useState<BlastHistoryItem[]>([]);
   const [draftReply, setDraftReply] = useState("");
@@ -146,7 +161,7 @@ export default function InboxPage() {
   const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [conversationPage, setConversationPage] = useState(0);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<CannedSuggestion[]>([]);
   const [showBlastHistory, setShowBlastHistory] = useState(false);
   const [, setStreamStatus] = useState("idle");
   const [alertSettings, setAlertSettings] = useState<ResponderAlertSettings>(
@@ -312,9 +327,16 @@ export default function InboxPage() {
     if (withLoadingState) setLoadingConversations(false);
   }, [routeQuery, routeBlastId, routeAudienceId]);
 
+  const conversationsRef = useRef<ConversationRow[]>([]);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
   const loadThread = useCallback(async (contactPhone: string, withLoadingState = true) => {
     if (withLoadingState) setLoadingThread(true);
-    const res = await getConversation(contactPhone);
+    const channel =
+      conversationsRef.current.find((row) => row.contactPhone === contactPhone)?.channel || "SMS";
+    const res = await getConversation(contactPhone, channel);
     if (!res.ok) {
       setError(res.error);
       if (withLoadingState) setLoadingThread(false);
@@ -322,6 +344,8 @@ export default function InboxPage() {
     }
     setError("");
     setThread((res.data.messages || []) as ThreadMessage[]);
+    setThreadChannel(((res.data as any).channel as MessageChannel) || channel);
+    setSessionOpen((res.data as any).sessionOpen !== false);
     setBlastContext((res.data.blastContext as BlastContext) || null);
     setBlastHistory(
       (Array.isArray((res.data as any).blastHistory) ? (res.data as any).blastHistory : []) as BlastHistoryItem[],
@@ -658,7 +682,7 @@ export default function InboxPage() {
             label: "Mark resolved",
             onClick: () => {
               void (async () => {
-                const marked = await markConversation(row.contactPhone, true);
+                const marked = await markConversation(row.contactPhone, true, row.channel);
                 if (!marked.ok) {
                   showToast({
                     tone: "error",
@@ -727,14 +751,18 @@ export default function InboxPage() {
         to: routeContact,
       },
     ]);
-    const sent = await sendInboxReply(routeContact, body);
+    const sent = await sendInboxReply(routeContact, body, threadChannel);
     setSending(false);
     if (!sent.ok) {
       setDraftReply(body);
+      const windowClosed = /SESSION_WINDOW_CLOSED/i.test(sent.error);
+      if (windowClosed) setSessionOpen(false);
       showToast({
         tone: "error",
-        title: "Send failed",
-        description: sent.error,
+        title: windowClosed ? "WhatsApp session expired" : "Send failed",
+        description: windowClosed
+          ? "The 24-hour window has closed. Send an approved template blast to re-open the conversation."
+          : sent.error,
       });
     } else {
       showToast({
@@ -763,7 +791,7 @@ export default function InboxPage() {
         </div>
       </div>
       <div className="grid h-full gap-4 xl:grid-cols-[360px_1fr]">
-        <Card className="flex h-full flex-col overflow-hidden">
+        <Card id="tour-inbox-list" className="flex h-full flex-col overflow-hidden">
           <CardHeader>
             <CardTitle>Active Conversations ({filtered.length})</CardTitle>
           </CardHeader>
@@ -782,7 +810,7 @@ export default function InboxPage() {
                 setConversationPage(0);
               }}
             />
-            <div className="flex flex-wrap gap-2">
+            <div id="tour-inbox-filters" className="flex flex-wrap gap-2">
               {FILTER_KEYS.map((key) => (
                 <Button
                   key={key}
@@ -885,7 +913,10 @@ export default function InboxPage() {
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className="font-medium">{row.contactName || row.contactPhone}</p>
+                          <p className="flex items-center gap-1.5 font-medium">
+                            {row.contactName || row.contactPhone}
+                            <ChannelBadge channel={row.channel} />
+                          </p>
                           {row.contactName && (
                             <p className="text-xs text-muted-foreground">{row.contactPhone}</p>
                           )}
@@ -936,7 +967,7 @@ export default function InboxPage() {
                             className="opacity-0 transition group-hover:opacity-100"
                             onClick={async (event) => {
                               event.stopPropagation();
-                              const marked = await markConversation(row.contactPhone, true);
+                              const marked = await markConversation(row.contactPhone, true, row.channel);
                               if (!marked.ok) {
                                 showToast({
                                   tone: "error",
@@ -956,7 +987,7 @@ export default function InboxPage() {
                                   label: "Undo",
                                   onClick: () => {
                                     void (async () => {
-                                      const unmarked = await markConversation(row.contactPhone, false);
+                                      const unmarked = await markConversation(row.contactPhone, false, row.channel);
                                       if (!unmarked.ok) {
                                         showToast({
                                           tone: "error",
@@ -1022,7 +1053,10 @@ export default function InboxPage() {
 
         <Card className="flex h-full flex-col overflow-hidden">
           <CardHeader className="border-b border-border">
-            <CardTitle>{selectedConversation?.contactName || routeContact || "Select a conversation"}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {selectedConversation?.contactName || routeContact || "Select a conversation"}
+              {routeContact ? <ChannelBadge channel={threadChannel} /> : null}
+            </CardTitle>
             {selectedConversation?.contactName && routeContact && (
               <p className="text-xs text-muted-foreground">{routeContact}</p>
             )}
@@ -1037,7 +1071,7 @@ export default function InboxPage() {
                   disabled={!routeContact}
                   onClick={async () => {
                     if (!routeContact) return;
-                    const marked = await markConversation(routeContact, true);
+                    const marked = await markConversation(routeContact, true, threadChannel);
                     if (!marked.ok) {
                       showToast({
                         tone: "error",
@@ -1057,7 +1091,7 @@ export default function InboxPage() {
                         label: "Undo",
                         onClick: () => {
                           void (async () => {
-                            const unmarked = await markConversation(routeContact, false);
+                            const unmarked = await markConversation(routeContact, false, threadChannel);
                             if (!unmarked.ok) {
                               showToast({
                                 tone: "error",
@@ -1246,7 +1280,10 @@ export default function InboxPage() {
               ) : (
                 <>
                   {thread.map((message) => {
-                    const reaction = message.type === "inbound" ? parseSmsReaction(message.body) : null;
+                    const isWa = message.channel === "WHATSAPP";
+                    // WhatsApp reactions arrive natively; only SMS encodes them in the body.
+                    const reaction =
+                      message.type === "inbound" && !isWa ? parseSmsReaction(message.body) : null;
                     return (
                       <div
                         key={message.id}
@@ -1255,8 +1292,12 @@ export default function InboxPage() {
                         <div
                           className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
                             message.type === "outbound"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-white text-foreground"
+                              ? isWa
+                                ? "bg-[#dcf8c6] text-[#111b21]"
+                                : "bg-primary text-primary-foreground"
+                              : isWa
+                                ? "bg-[#f0f0f0] text-[#111b21]"
+                                : "bg-white text-foreground"
                           }`}
                         >
                           {reaction ? (
@@ -1285,11 +1326,21 @@ export default function InboxPage() {
               )}
             </div>
 
-            <div className="rounded border border-border p-3">
+            {(() => {
+              const waClosed = threadChannel === "WHATSAPP" && !sessionOpen;
+              return (
+            <div id="tour-inbox-reply" className="rounded border border-border p-3">
+              {waClosed ? (
+                <div className="mb-2 rounded border border-warning/40 bg-warning-container px-3 py-2 text-xs text-warning-foreground">
+                  WhatsApp 24-hour session has closed. Free-text replies are blocked — send an
+                  approved template blast to re-open this conversation.
+                </div>
+              ) : null}
               <textarea
-                className="min-h-[80px] w-full rounded border border-input bg-background p-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
-                placeholder="Type your response..."
+                className="min-h-[80px] w-full rounded border border-input bg-background p-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/35 disabled:opacity-50"
+                placeholder={waClosed ? "Session expired — template required" : "Type your response..."}
                 value={draftReply}
+                disabled={waClosed}
                 onChange={(e) => setDraftReply(e.target.value)}
                 onKeyDown={(event) => {
                   if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -1302,12 +1353,13 @@ export default function InboxPage() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   {suggestions.map((suggestion) => (
                     <button
-                      key={suggestion}
+                      key={suggestion.id}
                       type="button"
                       className="rounded border border-border bg-surface px-2 py-1 text-xs hover:bg-surface-variant"
-                      onClick={() => setDraftReply(suggestion)}
+                      onClick={() => setDraftReply(suggestion.body)}
+                      title={suggestion.title}
                     >
-                      {suggestion}
+                      {suggestion.body}
                     </button>
                   ))}
                 </div>
@@ -1316,7 +1368,7 @@ export default function InboxPage() {
                 <Button
                   size="sm"
                   className="gap-1.5"
-                  disabled={!routeContact || !draftReply.trim() || sending}
+                  disabled={!routeContact || !draftReply.trim() || sending || waClosed}
                   onClick={() => void handleSendReply()}
                 >
                   <SendHorizontal className="h-4 w-4" />
@@ -1324,6 +1376,8 @@ export default function InboxPage() {
                 </Button>
               </div>
             </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>

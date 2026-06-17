@@ -24,7 +24,7 @@ function getAuthHeaders(credentials: Credentials): HeadersInit {
   };
 }
 
-type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export type AudienceImportProgress = {
   importId: string;
@@ -39,7 +39,7 @@ export type AudienceImportProgress = {
   remainingRows: number;
 };
 
-async function request<T>(
+export async function request<T>(
   path: string,
   init?: RequestInit,
   withAuth = true,
@@ -73,7 +73,16 @@ async function request<T>(
   }
 }
 
-export async function login(username: string, password: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export type AuthPrincipal = {
+  id: string;
+  role: "ORGANISER" | "CANVASSER";
+  organizationId: string | null;
+};
+
+export async function login(
+  username: string,
+  password: string,
+): Promise<{ ok: true; user: AuthPrincipal | null } | { ok: false; error: string }> {
   try {
     const headers = getAuthHeaders({ username, password });
     const res = await fetch(`${getApiUrl()}/auth/check`, { headers });
@@ -83,7 +92,8 @@ export async function login(username: string, password: string): Promise<{ ok: t
         error: res.status === 401 ? "Invalid username or password." : `Request failed (${res.status})`,
       };
     }
-    return { ok: true };
+    const body = (await res.json().catch(() => ({}))) as { user?: AuthPrincipal | null };
+    return { ok: true, user: body.user ?? null };
   } catch (error) {
     return {
       ok: false,
@@ -147,6 +157,7 @@ export type FeatureFlagsResponse = {
   FEATURE_BLAST_SCHEDULER_ENABLED: boolean;
   FEATURE_BULLMQ_UPLOAD_ENABLED: boolean;
   FEATURE_BULLMQ_BLAST_ENABLED: boolean;
+  FEATURE_WHATSAPP_ENABLED: boolean;
   BLAST_DRY_RUN: boolean;
 };
 
@@ -298,7 +309,16 @@ export async function upsertIntegrationConnection(input: {
   });
 }
 
-export async function createBlast(input: { title: string; audienceId?: string; bodyTemplate: string }) {
+export type MessageChannel = "SMS" | "WHATSAPP";
+
+export async function createBlast(input: {
+  title: string;
+  audienceId?: string;
+  bodyTemplate: string;
+  channel?: MessageChannel;
+  contentSid?: string;
+  contentVariableMap?: Record<string, string>;
+}) {
   return request<Record<string, unknown>>("/blasts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -308,7 +328,14 @@ export async function createBlast(input: { title: string; audienceId?: string; b
 
 export async function updateBlast(
   blastId: string,
-  input: { title?: string; audienceId?: string; bodyTemplate?: string },
+  input: {
+    title?: string;
+    audienceId?: string;
+    bodyTemplate?: string;
+    channel?: MessageChannel;
+    contentSid?: string;
+    contentVariableMap?: Record<string, string>;
+  },
 ) {
   return request<Record<string, unknown>>(`/blasts/${blastId}`, {
     method: "PATCH",
@@ -365,6 +392,29 @@ export async function listBlasts() {
   return request<Array<Record<string, unknown>>>("/blasts");
 }
 
+export type WhatsappTemplate = {
+  id: string;
+  contentSid: string;
+  friendlyName: string;
+  category: string;
+  language: string;
+  status: string;
+  variables?: string[] | null;
+  bodyPreview?: string | null;
+};
+
+export async function listWhatsappTemplates(status = "approved") {
+  const q = new URLSearchParams();
+  if (status) q.set("status", status);
+  return request<WhatsappTemplate[]>(`/whatsapp/templates?${q}`);
+}
+
+export async function syncWhatsappTemplates() {
+  return request<{ synced: number; templates: WhatsappTemplate[] }>("/whatsapp/templates/sync", {
+    method: "POST",
+  });
+}
+
 export async function getBlastKpis(blastId: string) {
   return request<Record<string, unknown>>(`/analytics/blasts/${blastId}/kpi`);
 }
@@ -402,27 +452,328 @@ export async function listConversations(params?: {
   return request<Array<Record<string, unknown>>>(`/inbox/conversations?${q}`);
 }
 
-export async function getConversation(contactPhone: string) {
-  return request<Record<string, unknown>>(`/inbox/conversations/${encodeURIComponent(contactPhone)}`);
+export async function getConversation(contactPhone: string, channel?: MessageChannel) {
+  const q = new URLSearchParams();
+  if (channel) q.set("channel", channel);
+  const suffix = q.toString() ? `?${q}` : "";
+  return request<Record<string, unknown>>(
+    `/inbox/conversations/${encodeURIComponent(contactPhone)}${suffix}`,
+  );
 }
 
-export async function sendInboxReply(contactPhone: string, body: string) {
+export async function sendInboxReply(
+  contactPhone: string,
+  body: string,
+  channel?: MessageChannel,
+) {
   return request<Record<string, unknown>>("/inbox/reply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contactPhone, body }),
+    body: JSON.stringify({ contactPhone, body, channel }),
   });
 }
 
-export async function markConversation(contactPhone: string, resolved: boolean) {
+export async function markConversation(
+  contactPhone: string,
+  resolved: boolean,
+  channel?: MessageChannel,
+) {
   return request<Record<string, unknown>>(`/inbox/conversations/${encodeURIComponent(contactPhone)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ resolved }),
+    body: JSON.stringify({ resolved, channel }),
   });
 }
 
 export async function getAiSuggestions(message: string) {
   const q = new URLSearchParams({ message });
-  return request<{ suggestions: string[] }>(`/inbox/ai-suggestions?${q}`);
+  return request<{ suggestions: CannedSuggestion[] }>(`/inbox/ai-suggestions?${q}`);
+}
+
+// ── Shared engagement ────────────────────────────────────────────────────
+
+export type CannedSuggestion = {
+  id: string;
+  title: string;
+  body: string;
+  dispositionCode: string | null;
+  autoSend: boolean;
+};
+
+export type DispositionDef = {
+  id: string;
+  organizationId: string | null;
+  code: string;
+  label: string;
+  layer: "CONTACT_RESULT" | "TERMINAL" | "DATA_QUALITY";
+  channel: "DOOR" | "SMS" | "BOTH";
+  isTerminal: boolean;
+  isLocked: boolean;
+  orderIndex: number;
+};
+
+export async function listDispositions(channel?: "DOOR" | "SMS") {
+  const q = channel ? `?channel=${channel}` : "";
+  return request<DispositionDef[]>(`/engagement/dispositions${q}`);
+}
+
+export async function listCannedResponses(channel?: "DOOR" | "SMS", ownerId?: string) {
+  const params = new URLSearchParams();
+  if (channel) params.set("channel", channel);
+  if (ownerId) params.set("ownerId", ownerId);
+  const q = params.toString();
+  return request<Array<Record<string, unknown>>>(`/engagement/canned-responses${q ? `?${q}` : ""}`);
+}
+
+// ── Engagement authoring (organiser) ───────────────────────────────────────
+
+export async function createDispositionDef(input: {
+  code: string;
+  label: string;
+  channel?: "DOOR" | "SMS" | "BOTH";
+}) {
+  return request<DispositionDef>("/engagement/disposition-defs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateDispositionDef(
+  id: string,
+  input: { label?: string; channel?: "DOOR" | "SMS" | "BOTH"; orderIndex?: number },
+) {
+  return request<DispositionDef>(`/engagement/disposition-defs/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteDispositionDef(id: string) {
+  return request<{ deleted: boolean }>(`/engagement/disposition-defs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export type CannedVisibility = "ORG" | "PERSONAL" | "AUTO_SEND";
+
+export type CannedResponseItem = {
+  id: string;
+  title: string;
+  body: string;
+  channel: "SMS" | "DOOR" | "BOTH";
+  visibility: CannedVisibility;
+  dispositionCode: string | null;
+  ownerId: string | null;
+};
+
+export async function createCannedResponse(input: {
+  title: string;
+  body: string;
+  channel?: "SMS" | "DOOR" | "BOTH";
+  visibility?: CannedVisibility;
+  dispositionCode?: string;
+}) {
+  return request<CannedResponseItem>("/engagement/canned-responses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateCannedResponse(
+  id: string,
+  input: {
+    title?: string;
+    body?: string;
+    channel?: "SMS" | "DOOR" | "BOTH";
+    visibility?: CannedVisibility;
+    dispositionCode?: string;
+  },
+) {
+  return request<CannedResponseItem>(`/engagement/canned-responses/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCannedResponse(id: string) {
+  return request<{ archived: boolean }>(`/engagement/canned-responses/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+// ── Canvassing ───────────────────────────────────────────────────────────
+
+export type CanvassAssignment = {
+  turfId: string;
+  lockedUntil: string | null;
+  turf: { id: string; name: string; geometry: unknown };
+  walkLists: Array<{
+    id: string;
+    name: string;
+    items: Array<{
+      id: string;
+      orderIndex: number;
+      status: "PENDING" | "VISITED" | "SKIPPED";
+      contact: Record<string, unknown>;
+    }>;
+  }>;
+};
+
+export type DoorKnockInput = {
+  contactId: string;
+  canvasserId: string;
+  localId: string;
+  dispositionCode?: string;
+  lat?: number;
+  lng?: number;
+  notes?: string;
+  clientCapturedAt?: string;
+  walkListItemId?: string;
+};
+
+export type TurfSummary = {
+  id: string;
+  name: string;
+  campaignId: string | null;
+  geometry: unknown;
+  contactCount: number;
+  walkListCount: number;
+  totalStops: number;
+  visitedStops: number;
+  assignedTo: { canvasserId: string; name: string } | null;
+};
+
+export async function listTurfs(campaignId?: string) {
+  const q = campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : "";
+  return request<TurfSummary[]>(`/canvass/turfs${q}`);
+}
+
+export async function getCanvassAssignments(canvasserId: string) {
+  const q = new URLSearchParams({ canvasserId });
+  return request<CanvassAssignment[]>(`/canvass/assignments?${q}`);
+}
+
+export async function submitDoorKnock(input: DoorKnockInput) {
+  return request<Record<string, unknown>>("/canvass/door-knocks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function releaseTurf(turfId: string, canvasserId: string) {
+  return request<{ count: number }>(`/canvass/turfs/${encodeURIComponent(turfId)}/release`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ canvasserId }),
+  });
+}
+
+export async function assignTurf(turfId: string, canvasserId: string, lockedUntil?: string) {
+  return request<Record<string, unknown>>("/canvass/turfs/assign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ turfId, canvasserId, lockedUntil }),
+  });
+}
+
+export async function createTurf(name: string, geometry: unknown, campaignId?: string) {
+  return request<Record<string, unknown>>("/canvass/turfs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, geometry, campaignId }),
+  });
+}
+
+export async function createWalkList(
+  name: string,
+  contactIds: string[],
+  turfId?: string,
+  campaignId?: string,
+  listType?: "STATIC" | "DYNAMIC",
+) {
+  return request<Record<string, unknown>>("/canvass/walk-lists", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, contactIds, turfId, campaignId, listType }),
+  });
+}
+
+export async function updateTurf(
+  turfId: string,
+  input: { name?: string; geometry?: unknown },
+) {
+  return request<Record<string, unknown>>(`/canvass/turfs/${encodeURIComponent(turfId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function rebucketTurf(turfId: string) {
+  return request<{ added: number; removed: number; total: number }>(
+    `/canvass/turfs/${encodeURIComponent(turfId)}/rebucket`,
+    { method: "POST" },
+  );
+}
+
+export type TurfContact = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+export async function listTurfContacts(turfId: string) {
+  return request<TurfContact[]>(`/canvass/turfs/${encodeURIComponent(turfId)}/contacts`);
+}
+
+export async function listCanvassers() {
+  return request<Array<{ id: string; displayName: string; email: string | null; role: string }>>(
+    "/canvass/canvassers",
+  );
+}
+
+export async function createCanvasser(input: {
+  displayName: string;
+  email: string;
+  password: string;
+  role?: "ORGANISER" | "CANVASSER";
+}) {
+  return request<{ id: string; displayName: string; email: string | null; role: string }>(
+    "/canvass/canvassers",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export type WalkListSummary = {
+  id: string;
+  name: string;
+  turfId: string | null;
+  campaignId: string | null;
+  listType: "STATIC" | "DYNAMIC";
+  stopCount: number;
+  visitedCount: number;
+  assignedTo: {
+    canvasserId: string;
+    name: string;
+    lockedSince: string;
+    lockedUntil: string | null;
+  } | null;
+  createdAt: string;
+};
+
+export async function listWalkLists(turfId?: string) {
+  const q = turfId ? `?turfId=${encodeURIComponent(turfId)}` : "";
+  return request<WalkListSummary[]>(`/canvass/walk-lists${q}`);
 }

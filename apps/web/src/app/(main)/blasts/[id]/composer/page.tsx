@@ -7,13 +7,17 @@ import {
   createBlast,
   deleteBlast,
   getAudienceContacts,
+  getFeatureFlags,
   listBlasts,
   listAudiences,
+  listWhatsappTemplates,
   markBlastProofed,
   proofBlast,
   scheduleBlast,
   sendBlast,
   updateBlast,
+  type MessageChannel,
+  type WhatsappTemplate,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -102,6 +106,11 @@ export default function BlastComposerPage() {
   const [audiences, setAudiences] = useState<Array<Record<string, unknown>>>([]);
   const [audienceId, setAudienceId] = useState("");
   const [template, setTemplate] = useState("");
+  const [channel, setChannel] = useState<MessageChannel>("SMS");
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [waTemplates, setWaTemplates] = useState<WhatsappTemplate[]>([]);
+  const [contentSid, setContentSid] = useState("");
+  const [contentVariableMap, setContentVariableMap] = useState<Record<string, string>>({});
   const [blastId, setBlastId] = useState<string | null>(null);
   const [status, setStatus] = useState("DRAFTED");
   const [proof, setProof] = useState("");
@@ -121,6 +130,19 @@ export default function BlastComposerPage() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    getFeatureFlags().then((res) => {
+      if (res.ok) setWhatsappEnabled(Boolean(res.data.FEATURE_WHATSAPP_ENABLED));
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!whatsappEnabled) return;
+    listWhatsappTemplates("approved").then((res) => {
+      if (res.ok) setWaTemplates(res.data);
+    });
+  }, [whatsappEnabled]);
 
   useEffect(() => {
     listAudiences({ limit: 200, offset: 0 }).then((res) => {
@@ -150,6 +172,13 @@ export default function BlastComposerPage() {
       setAudienceId(String(blast.audienceId || ""));
       setTemplate(String(blast.bodyTemplate || ""));
       setStatus(String(blast.status || "DRAFTED"));
+      setChannel((blast.channel as MessageChannel) || "SMS");
+      setContentSid(String(blast.contentSid || ""));
+      setContentVariableMap(
+        blast.contentVariableMap && typeof blast.contentVariableMap === "object"
+          ? (blast.contentVariableMap as Record<string, string>)
+          : {},
+      );
     });
   }, [blastIdFromRoute]);
 
@@ -197,18 +226,49 @@ export default function BlastComposerPage() {
 
   const characterCount = template.length;
   const maxCharacters = 160;
+  const isWhatsapp = channel === "WHATSAPP";
+
+  const selectedTemplate = useMemo(
+    () => waTemplates.find((t) => t.contentSid === contentSid) || null,
+    [waTemplates, contentSid],
+  );
+
+  const templateSlots = useMemo<string[]>(() => {
+    const vars = selectedTemplate?.variables;
+    if (Array.isArray(vars)) return vars.map((v) => String(v));
+    if (vars && typeof vars === "object") return Object.keys(vars as Record<string, unknown>);
+    return [];
+  }, [selectedTemplate]);
+
+  const whatsappPreview = useMemo(() => {
+    let rendered = selectedTemplate?.bodyPreview || template;
+    for (const [slot, key] of Object.entries(contentVariableMap)) {
+      const value = previewContext[key];
+      rendered = rendered.replaceAll(`{{${slot}}}`, value == null ? "" : String(value));
+    }
+    return rendered;
+  }, [selectedTemplate, template, contentVariableMap, previewContext]);
 
   const validateDraft = () => {
     const nextErrors: string[] = [];
     if (!campaignName.trim()) nextErrors.push("Campaign name is required.");
     if (!audienceId.trim()) nextErrors.push("Select an audience before sending.");
-    if (!template.trim()) nextErrors.push("Message content cannot be empty.");
+    if (isWhatsapp) {
+      if (!contentSid) nextErrors.push("Select an approved WhatsApp template.");
+    } else if (!template.trim()) {
+      nextErrors.push("Message content cannot be empty.");
+    }
     setValidationErrors(nextErrors);
     return nextErrors.length === 0;
   };
 
   const evaluateCompliance = (body: string) => {
     const warnings: string[] = [];
+    if (isWhatsapp) {
+      warnings.push("WhatsApp requires recorded opt-in. Only opted-in contacts will receive this blast.");
+      setComplianceWarnings(warnings);
+      return;
+    }
     if (!/reply\s+stop/i.test(body)) {
       warnings.push("Missing opt-out language. Include 'Reply STOP to opt out'.");
     }
@@ -220,18 +280,15 @@ export default function BlastComposerPage() {
 
   useEffect(() => {
     evaluateCompliance(template);
-  }, [template]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, channel]);
 
   useEffect(() => {
     if (!blastId) return;
     if (!campaignName.trim() && !template.trim()) return;
     setSaveState("saving");
     const timeout = window.setTimeout(async () => {
-      const updated = await updateBlast(blastId, {
-        title: campaignName,
-        audienceId: audienceId || undefined,
-        bodyTemplate: template,
-      });
+      const updated = await updateBlast(blastId, blastPayload());
       if (!updated.ok) {
         setSaveState("error");
         setActionMessage(updated.error);
@@ -242,15 +299,22 @@ export default function BlastComposerPage() {
       setLastSavedAt(new Date());
     }, 1200);
     return () => window.clearTimeout(timeout);
-  }, [blastId, campaignName, audienceId, template]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blastId, campaignName, audienceId, template, channel, contentSid, contentVariableMap]);
+
+  const blastPayload = () => ({
+    title: campaignName,
+    audienceId: audienceId || undefined,
+    bodyTemplate: template,
+    channel,
+    ...(channel === "WHATSAPP"
+      ? { contentSid: contentSid || undefined, contentVariableMap }
+      : {}),
+  });
 
   const ensureBlast = async () => {
     if (blastId) return blastId;
-    const created = await createBlast({
-      title: campaignName,
-      audienceId: audienceId || undefined,
-      bodyTemplate: template,
-    });
+    const created = await createBlast(blastPayload());
     if (!created.ok) {
       setActionMessage(created.error);
       return null;
@@ -279,11 +343,7 @@ export default function BlastComposerPage() {
         });
         return;
       }
-      const updated = await updateBlast(blastId, {
-        title: campaignName,
-        audienceId: audienceId || undefined,
-        bodyTemplate: template,
-      });
+      const updated = await updateBlast(blastId, blastPayload());
       if (!updated.ok) {
         setActionMessage(updated.error);
         setSaveState("error");
@@ -464,6 +524,7 @@ export default function BlastComposerPage() {
               Send Proof
             </Button>
             <Button
+              id="tour-composer-send"
               disabled={deletingBlast || sendingBlast}
               onClick={() => setShowSendDialog(true)}
             >
@@ -486,7 +547,30 @@ export default function BlastComposerPage() {
             <StatusBadge status={status} />
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
+            {whatsappEnabled ? (
+              <div id="tour-composer-channel" className="space-y-1 md:col-span-2">
+                <label className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
+                  Channel
+                </label>
+                <div className="inline-flex rounded border border-input p-0.5">
+                  {(["SMS", "WHATSAPP"] as MessageChannel[]).map((ch) => (
+                    <button
+                      key={ch}
+                      type="button"
+                      onClick={() => setChannel(ch)}
+                      className={`rounded px-4 py-1.5 text-sm font-medium transition ${
+                        channel === ch
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {ch === "WHATSAPP" ? "WhatsApp" : "SMS"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div id="tour-composer-name" className="space-y-1">
               <label className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                 Campaign Name
               </label>
@@ -496,7 +580,7 @@ export default function BlastComposerPage() {
                 placeholder="Campaign name"
               />
             </div>
-            <div className="space-y-1">
+            <div id="tour-composer-audience" className="space-y-1">
               <label className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                 Audience
               </label>
@@ -518,17 +602,79 @@ export default function BlastComposerPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="inline-flex items-center gap-1">
-              Message Content
+              {isWhatsapp ? "WhatsApp Template" : "Message Content"}
               <TooltipHint label="Use merge tags such as {{first_name}}. Drag chips into the message body." />
             </CardTitle>
-            <span
-              className={`rounded px-2 py-1 text-xs font-label ${characterCount > maxCharacters ? "bg-error-container text-error-foreground" : "bg-warning-container text-warning-foreground"}`}
-            >
-              {characterCount} / {maxCharacters} chars
-            </span>
+            {isWhatsapp ? null : (
+              <span
+                className={`rounded px-2 py-1 text-xs font-label ${characterCount > maxCharacters ? "bg-error-container text-error-foreground" : "bg-warning-container text-warning-foreground"}`}
+              >
+                {characterCount} / {maxCharacters} chars
+              </span>
+            )}
           </CardHeader>
+          {isWhatsapp ? (
+            <CardContent className="space-y-4">
+              {waTemplates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No approved WhatsApp templates found. Sync templates from Twilio, then refresh.
+                </p>
+              ) : (
+                <div id="tour-composer-wa-template" className="space-y-1">
+                  <label className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
+                    Approved template
+                  </label>
+                  <select
+                    className="h-11 w-full rounded border border-input bg-background px-3 py-2 text-sm"
+                    value={contentSid}
+                    onChange={(e) => {
+                      setContentSid(e.target.value);
+                      setContentVariableMap({});
+                    }}
+                  >
+                    <option value="">Select a template…</option>
+                    {waTemplates.map((t) => (
+                      <option key={t.contentSid} value={t.contentSid}>
+                        {t.friendlyName} ({t.language} · {t.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {templateSlots.length > 0 ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
+                    Map template variables
+                  </label>
+                  {templateSlots.map((slot) => (
+                    <div key={slot} className="flex items-center gap-2">
+                      <span className="w-16 shrink-0 text-sm text-muted-foreground">{`{{${slot}}}`}</span>
+                      <select
+                        className="h-10 w-full rounded border border-input bg-background px-2 text-sm"
+                        value={contentVariableMap[slot] || ""}
+                        onChange={(e) =>
+                          setContentVariableMap((prev) => ({ ...prev, [slot]: e.target.value }))
+                        }
+                      >
+                        <option value="">— pick a field —</option>
+                        {availableTags.map((tag) => {
+                          const key = tag.replace(/[{}]/g, "");
+                          return (
+                            <option key={key} value={key}>
+                              {key}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </CardContent>
+          ) : (
           <CardContent className="space-y-3">
             <textarea
+              id="tour-composer-message"
               ref={templateRef}
               className="min-h-[180px] w-full rounded border border-input bg-background p-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
               value={template}
@@ -541,7 +687,7 @@ export default function BlastComposerPage() {
               }}
               onDragOver={(event) => event.preventDefault()}
             />
-            <div className="flex flex-wrap gap-2">
+            <div id="tour-composer-tags" className="flex flex-wrap gap-2">
               {availableTags.map((tag) => (
                 <TagChip
                   key={tag}
@@ -554,9 +700,10 @@ export default function BlastComposerPage() {
               ))}
             </div>
           </CardContent>
+          )}
         </Card>
 
-        <Card>
+        <Card id="tour-composer-proof">
           <CardHeader>
             <CardTitle>Advanced Delivery Settings</CardTitle>
           </CardHeader>
@@ -615,7 +762,7 @@ export default function BlastComposerPage() {
       </div>
 
       <div className="space-y-4">
-        <Card>
+        <Card id="tour-composer-preview">
           <CardHeader>
             <CardTitle>Live Preview</CardTitle>
           </CardHeader>
@@ -628,9 +775,24 @@ export default function BlastComposerPage() {
                       <div className="mx-auto mt-[6px] h-3 w-3 rounded-full bg-[#0f172a]" />
                     </div>
                   </div>
-                  <div className="flex h-full items-start justify-end p-5 pt-14">
-                    <div className="max-w-[86%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm leading-relaxed text-primary-foreground shadow-sm">
-                      {proof || renderedPreview || "Your message preview will appear here."}
+                  <div
+                    className={`flex h-full items-start justify-end p-5 pt-14 ${isWhatsapp ? "bg-[#e5ddd5]" : ""}`}
+                  >
+                    <div
+                      className={`max-w-[86%] px-3 py-2 text-sm leading-relaxed shadow-sm ${
+                        isWhatsapp
+                          ? "rounded-lg rounded-tr-sm bg-[#dcf8c6] text-[#111b21]"
+                          : "rounded-2xl rounded-br-md bg-primary text-primary-foreground"
+                      }`}
+                    >
+                      {proof ||
+                        (isWhatsapp ? whatsappPreview : renderedPreview) ||
+                        (isWhatsapp
+                          ? "Select a template to preview the WhatsApp message."
+                          : "Your message preview will appear here.")}
+                      {isWhatsapp ? (
+                        <span className="ml-1 align-bottom text-[10px] text-[#34b7f1]">✓✓</span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -639,7 +801,7 @@ export default function BlastComposerPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="tour-composer-compliance">
           <CardHeader>
             <CardTitle>Privacy Compliance</CardTitle>
           </CardHeader>

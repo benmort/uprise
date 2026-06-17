@@ -7,6 +7,8 @@ export type SystemFeatureFlags = {
   FEATURE_BLAST_SCHEDULER_ENABLED: boolean;
   FEATURE_BULLMQ_UPLOAD_ENABLED: boolean;
   FEATURE_BULLMQ_BLAST_ENABLED: boolean;
+  FEATURE_JOURNEYS_ENABLED: boolean;
+  FEATURE_WHATSAPP_ENABLED: boolean;
   BLAST_DRY_RUN: boolean;
 };
 
@@ -34,6 +36,14 @@ export class FeatureFlagsService {
     return this.config.get<boolean>("FEATURE_BULLMQ_BLAST_ENABLED", false);
   }
 
+  isJourneysEnabled(): boolean {
+    return this.config.get<boolean>("FEATURE_JOURNEYS_ENABLED", false);
+  }
+
+  isWhatsappEnabled(): boolean {
+    return this.config.get<boolean>("FEATURE_WHATSAPP_ENABLED", false);
+  }
+
   isBlastDryRunEnabled(): boolean {
     return this.config.get<boolean>("BLAST_DRY_RUN", false);
   }
@@ -45,6 +55,8 @@ export class FeatureFlagsService {
       FEATURE_BLAST_SCHEDULER_ENABLED: this.isBlastSchedulerEnabled(),
       FEATURE_BULLMQ_UPLOAD_ENABLED: this.isBullmqUploadEnabled(),
       FEATURE_BULLMQ_BLAST_ENABLED: this.isBullmqBlastEnabled(),
+      FEATURE_JOURNEYS_ENABLED: this.isJourneysEnabled(),
+      FEATURE_WHATSAPP_ENABLED: this.isWhatsappEnabled(),
       BLAST_DRY_RUN: this.isBlastDryRunEnabled(),
     };
   }

@@ -130,11 +130,30 @@ exports.Prisma.OrganizationScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.ContactScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  phoneE164: 'phoneE164',
+  addressNorm: 'addressNorm',
+  firstName: 'firstName',
+  lastName: 'lastName',
+  email: 'email',
+  address: 'address',
+  lat: 'lat',
+  lng: 'lng',
+  turfId: 'turfId',
+  metadata: 'metadata',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.AppUserScalarFieldEnum = {
   id: 'id',
   organizationId: 'organizationId',
   email: 'email',
   displayName: 'displayName',
+  passwordHash: 'passwordHash',
+  role: 'role',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -157,6 +176,7 @@ exports.Prisma.AudienceContactScalarFieldEnum = {
   id: 'id',
   organizationId: 'organizationId',
   audienceId: 'audienceId',
+  contactId: 'contactId',
   externalId: 'externalId',
   phoneE164: 'phoneE164',
   fullName: 'fullName',
@@ -202,6 +222,9 @@ exports.Prisma.BlastScalarFieldEnum = {
   createdById: 'createdById',
   title: 'title',
   bodyTemplate: 'bodyTemplate',
+  channel: 'channel',
+  contentSid: 'contentSid',
+  contentVariableMap: 'contentVariableMap',
   status: 'status',
   scheduledFor: 'scheduledFor',
   proofedAt: 'proofedAt',
@@ -225,6 +248,7 @@ exports.Prisma.BlastRecipientScalarFieldEnum = {
   blastId: 'blastId',
   contactId: 'contactId',
   phoneE164: 'phoneE164',
+  channel: 'channel',
   renderedBody: 'renderedBody',
   status: 'status',
   failureCategory: 'failureCategory',
@@ -243,9 +267,13 @@ exports.Prisma.InboundMessageScalarFieldEnum = {
   id: 'id',
   organizationId: 'organizationId',
   blastId: 'blastId',
+  contactId: 'contactId',
+  channel: 'channel',
   fromPhone: 'fromPhone',
   toPhone: 'toPhone',
   body: 'body',
+  mediaUrl: 'mediaUrl',
+  mediaContentType: 'mediaContentType',
   twilioMessageSid: 'twilioMessageSid',
   receivedAt: 'receivedAt',
   threadKey: 'threadKey',
@@ -257,15 +285,45 @@ exports.Prisma.OutboundMessageScalarFieldEnum = {
   organizationId: 'organizationId',
   blastId: 'blastId',
   recipientId: 'recipientId',
+  contactId: 'contactId',
+  channel: 'channel',
   toPhone: 'toPhone',
   fromPhone: 'fromPhone',
   body: 'body',
+  mediaUrl: 'mediaUrl',
+  mediaContentType: 'mediaContentType',
   status: 'status',
   twilioMessageSid: 'twilioMessageSid',
   sentAt: 'sentAt',
   errorCode: 'errorCode',
   errorMessage: 'errorMessage',
   createdAt: 'createdAt'
+};
+
+exports.Prisma.ContactConsentScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  contactId: 'contactId',
+  phoneE164: 'phoneE164',
+  channel: 'channel',
+  state: 'state',
+  source: 'source',
+  updatedAt: 'updatedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.WhatsappTemplateScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  contentSid: 'contentSid',
+  friendlyName: 'friendlyName',
+  category: 'category',
+  language: 'language',
+  status: 'status',
+  variables: 'variables',
+  bodyPreview: 'bodyPreview',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.IntegrationConnectionScalarFieldEnum = {
@@ -310,12 +368,263 @@ exports.Prisma.AnalyticsSnapshotScalarFieldEnum = {
 exports.Prisma.ConversationStateScalarFieldEnum = {
   id: 'id',
   organizationId: 'organizationId',
+  contactId: 'contactId',
   contactPhone: 'contactPhone',
+  channel: 'channel',
   unreadCount: 'unreadCount',
   resolved: 'resolved',
   lastMessageAt: 'lastMessageAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ScriptScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  name: 'name',
+  channel: 'channel',
+  campaignId: 'campaignId',
+  isArchived: 'isArchived',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ScriptStepScalarFieldEnum = {
+  id: 'id',
+  scriptId: 'scriptId',
+  parentStepId: 'parentStepId',
+  outcomeKey: 'outcomeKey',
+  bodyText: 'bodyText',
+  orderIndex: 'orderIndex'
+};
+
+exports.Prisma.SurveyScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  name: 'name',
+  campaignId: 'campaignId',
+  isArchived: 'isArchived',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.QuestionScalarFieldEnum = {
+  id: 'id',
+  surveyId: 'surveyId',
+  prompt: 'prompt',
+  type: 'type',
+  orderIndex: 'orderIndex',
+  required: 'required',
+  scaleMin: 'scaleMin',
+  scaleMax: 'scaleMax'
+};
+
+exports.Prisma.QuestionOptionScalarFieldEnum = {
+  id: 'id',
+  questionId: 'questionId',
+  value: 'value',
+  label: 'label',
+  orderIndex: 'orderIndex',
+  dispositionCode: 'dispositionCode',
+  supportLevel: 'supportLevel',
+  cannedReplyText: 'cannedReplyText'
+};
+
+exports.Prisma.QuestionResponseScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  contactId: 'contactId',
+  questionId: 'questionId',
+  optionId: 'optionId',
+  valueText: 'valueText',
+  channel: 'channel',
+  campaignId: 'campaignId',
+  blastId: 'blastId',
+  recordedById: 'recordedById',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.DispositionDefScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  code: 'code',
+  label: 'label',
+  layer: 'layer',
+  channel: 'channel',
+  isTerminal: 'isTerminal',
+  isLocked: 'isLocked',
+  orderIndex: 'orderIndex'
+};
+
+exports.Prisma.DispositionScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  contactId: 'contactId',
+  code: 'code',
+  layer: 'layer',
+  channel: 'channel',
+  campaignId: 'campaignId',
+  blastId: 'blastId',
+  scriptStepId: 'scriptStepId',
+  cannedResponseId: 'cannedResponseId',
+  supportLevel: 'supportLevel',
+  recordedById: 'recordedById',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.CannedResponseScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  ownerId: 'ownerId',
+  title: 'title',
+  body: 'body',
+  channel: 'channel',
+  visibility: 'visibility',
+  dispositionCode: 'dispositionCode',
+  surveyOptionId: 'surveyOptionId',
+  isArchived: 'isArchived',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.JourneyScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  name: 'name',
+  status: 'status',
+  triggerType: 'triggerType',
+  triggerConfig: 'triggerConfig',
+  reentryCooldownMinutes: 'reentryCooldownMinutes',
+  maxActivePerContact: 'maxActivePerContact',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.JourneyRungScalarFieldEnum = {
+  id: 'id',
+  journeyId: 'journeyId',
+  rungIndex: 'rungIndex',
+  type: 'type',
+  config: 'config'
+};
+
+exports.Prisma.JourneyEnrolmentScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  journeyId: 'journeyId',
+  contactId: 'contactId',
+  currentRungIndex: 'currentRungIndex',
+  state: 'state',
+  context: 'context',
+  resumeAt: 'resumeAt',
+  lastRungAt: 'lastRungAt',
+  rungExecCount: 'rungExecCount',
+  enrolledAt: 'enrolledAt',
+  completedAt: 'completedAt'
+};
+
+exports.Prisma.CanvassCampaignScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  name: 'name',
+  status: 'status',
+  surveyId: 'surveyId',
+  scriptId: 'scriptId',
+  goals: 'goals',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.TurfScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  campaignId: 'campaignId',
+  name: 'name',
+  geometry: 'geometry',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.TurfAssignmentScalarFieldEnum = {
+  id: 'id',
+  turfId: 'turfId',
+  canvasserId: 'canvasserId',
+  status: 'status',
+  lockedUntil: 'lockedUntil',
+  assignedAt: 'assignedAt',
+  releasedAt: 'releasedAt'
+};
+
+exports.Prisma.WalkListScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  campaignId: 'campaignId',
+  turfId: 'turfId',
+  name: 'name',
+  listType: 'listType',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.WalkListItemScalarFieldEnum = {
+  id: 'id',
+  walkListId: 'walkListId',
+  contactId: 'contactId',
+  orderIndex: 'orderIndex',
+  status: 'status'
+};
+
+exports.Prisma.DoorKnockScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  contactId: 'contactId',
+  canvasserId: 'canvasserId',
+  walkListItemId: 'walkListItemId',
+  localId: 'localId',
+  dispositionCode: 'dispositionCode',
+  lat: 'lat',
+  lng: 'lng',
+  notes: 'notes',
+  photoUrl: 'photoUrl',
+  safetyFlag: 'safetyFlag',
+  clientCapturedAt: 'clientCapturedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.ShiftScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  campaignId: 'campaignId',
+  turfId: 'turfId',
+  canvasserId: 'canvasserId',
+  name: 'name',
+  location: 'location',
+  startsAt: 'startsAt',
+  endsAt: 'endsAt',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SuppressionScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  phoneE164: 'phoneE164',
+  email: 'email',
+  reason: 'reason',
+  source: 'source',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.PushSubscriptionScalarFieldEnum = {
+  id: 'id',
+  organizationId: 'organizationId',
+  userId: 'userId',
+  endpoint: 'endpoint',
+  p256dh: 'p256dh',
+  auth: 'auth',
+  userAgent: 'userAgent',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -337,16 +646,21 @@ exports.Prisma.QueryMode = {
   insensitive: 'insensitive'
 };
 
-exports.Prisma.NullsOrder = {
-  first: 'first',
-  last: 'last'
-};
-
 exports.Prisma.JsonNullValueFilter = {
   DbNull: Prisma.DbNull,
   JsonNull: Prisma.JsonNull,
   AnyNull: Prisma.AnyNull
 };
+
+exports.Prisma.NullsOrder = {
+  first: 'first',
+  last: 'last'
+};
+exports.AppUserRole = exports.$Enums.AppUserRole = {
+  ORGANISER: 'ORGANISER',
+  CANVASSER: 'CANVASSER'
+};
+
 exports.AudienceSource = exports.$Enums.AudienceSource = {
   MANUAL: 'MANUAL',
   CSV: 'CSV',
@@ -366,6 +680,11 @@ exports.AudienceImportStatus = exports.$Enums.AudienceImportStatus = {
   FAILED: 'FAILED'
 };
 
+exports.MessageChannel = exports.$Enums.MessageChannel = {
+  SMS: 'SMS',
+  WHATSAPP: 'WHATSAPP'
+};
+
 exports.BlastStatus = exports.$Enums.BlastStatus = {
   DRAFTED: 'DRAFTED',
   PROOFED: 'PROOFED',
@@ -380,9 +699,16 @@ exports.BlastRecipientStatus = exports.$Enums.BlastRecipientStatus = {
   QUEUED: 'QUEUED',
   SENT: 'SENT',
   DELIVERED: 'DELIVERED',
+  READ: 'READ',
   RESPONDED: 'RESPONDED',
   FAILED: 'FAILED',
   SKIPPED: 'SKIPPED'
+};
+
+exports.ConsentState = exports.$Enums.ConsentState = {
+  UNKNOWN: 'UNKNOWN',
+  OPTED_IN: 'OPTED_IN',
+  OPTED_OUT: 'OPTED_OUT'
 };
 
 exports.IntegrationType = exports.$Enums.IntegrationType = {
@@ -402,8 +728,94 @@ exports.IntegrationJobStatus = exports.$Enums.IntegrationJobStatus = {
   FAILED: 'FAILED'
 };
 
+exports.EngagementChannel = exports.$Enums.EngagementChannel = {
+  DOOR: 'DOOR',
+  SMS: 'SMS',
+  BOTH: 'BOTH'
+};
+
+exports.QuestionType = exports.$Enums.QuestionType = {
+  yes_no: 'yes_no',
+  single_choice: 'single_choice',
+  multi_choice: 'multi_choice',
+  text: 'text',
+  scale: 'scale'
+};
+
+exports.SupportLevel = exports.$Enums.SupportLevel = {
+  STRONG_SUPPORT: 'STRONG_SUPPORT',
+  LEAN_SUPPORT: 'LEAN_SUPPORT',
+  UNDECIDED: 'UNDECIDED',
+  LEAN_OPPOSE: 'LEAN_OPPOSE',
+  STRONG_OPPOSE: 'STRONG_OPPOSE'
+};
+
+exports.DispositionLayer = exports.$Enums.DispositionLayer = {
+  CONTACT_RESULT: 'CONTACT_RESULT',
+  TERMINAL: 'TERMINAL',
+  DATA_QUALITY: 'DATA_QUALITY'
+};
+
+exports.CannedVisibility = exports.$Enums.CannedVisibility = {
+  ORG: 'ORG',
+  PERSONAL: 'PERSONAL',
+  AUTO_SEND: 'AUTO_SEND'
+};
+
+exports.JourneyStatus = exports.$Enums.JourneyStatus = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  PAUSED: 'PAUSED',
+  ARCHIVED: 'ARCHIVED'
+};
+
+exports.JourneyTriggerType = exports.$Enums.JourneyTriggerType = {
+  disposition_set: 'disposition_set',
+  message_received: 'message_received',
+  tag_added: 'tag_added',
+  survey_answer: 'survey_answer',
+  no_answer_after: 'no_answer_after'
+};
+
+exports.JourneyRungType = exports.$Enums.JourneyRungType = {
+  wait: 'wait',
+  condition: 'condition',
+  action: 'action'
+};
+
+exports.JourneyEnrolmentState = exports.$Enums.JourneyEnrolmentState = {
+  ACTIVE: 'ACTIVE',
+  WAITING: 'WAITING',
+  COMPLETED: 'COMPLETED',
+  EXITED: 'EXITED',
+  FAILED: 'FAILED'
+};
+
+exports.CanvassCampaignStatus = exports.$Enums.CanvassCampaignStatus = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  ARCHIVED: 'ARCHIVED'
+};
+
+exports.TurfAssignmentStatus = exports.$Enums.TurfAssignmentStatus = {
+  ASSIGNED: 'ASSIGNED',
+  RELEASED: 'RELEASED'
+};
+
+exports.WalkListItemListType = exports.$Enums.WalkListItemListType = {
+  STATIC: 'STATIC',
+  DYNAMIC: 'DYNAMIC'
+};
+
+exports.WalkListItemStatus = exports.$Enums.WalkListItemStatus = {
+  PENDING: 'PENDING',
+  VISITED: 'VISITED',
+  SKIPPED: 'SKIPPED'
+};
+
 exports.Prisma.ModelName = {
   Organization: 'Organization',
+  Contact: 'Contact',
   AppUser: 'AppUser',
   Audience: 'Audience',
   AudienceContact: 'AudienceContact',
@@ -414,10 +826,33 @@ exports.Prisma.ModelName = {
   BlastRecipient: 'BlastRecipient',
   InboundMessage: 'InboundMessage',
   OutboundMessage: 'OutboundMessage',
+  ContactConsent: 'ContactConsent',
+  WhatsappTemplate: 'WhatsappTemplate',
   IntegrationConnection: 'IntegrationConnection',
   IntegrationSyncJob: 'IntegrationSyncJob',
   AnalyticsSnapshot: 'AnalyticsSnapshot',
-  ConversationState: 'ConversationState'
+  ConversationState: 'ConversationState',
+  Script: 'Script',
+  ScriptStep: 'ScriptStep',
+  Survey: 'Survey',
+  Question: 'Question',
+  QuestionOption: 'QuestionOption',
+  QuestionResponse: 'QuestionResponse',
+  DispositionDef: 'DispositionDef',
+  Disposition: 'Disposition',
+  CannedResponse: 'CannedResponse',
+  Journey: 'Journey',
+  JourneyRung: 'JourneyRung',
+  JourneyEnrolment: 'JourneyEnrolment',
+  CanvassCampaign: 'CanvassCampaign',
+  Turf: 'Turf',
+  TurfAssignment: 'TurfAssignment',
+  WalkList: 'WalkList',
+  WalkListItem: 'WalkListItem',
+  DoorKnock: 'DoorKnock',
+  Shift: 'Shift',
+  Suppression: 'Suppression',
+  PushSubscription: 'PushSubscription'
 };
 
 /**

@@ -109,7 +109,7 @@ export default function DashboardPage() {
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>Blast Campaigns</CardTitle>
-          <div className="flex w-full max-w-md gap-2">
+          <div id="tour-dashboard-search" className="flex w-full max-w-md gap-2">
             <Input
               ref={searchRef}
               placeholder="Search campaigns (press /)..."
@@ -130,12 +130,13 @@ export default function DashboardPage() {
               onCta={() => void run()}
             />
           ) : null}
-          <div className="overflow-x-auto">
+          <div id="tour-dashboard-table" className="overflow-x-auto">
             <table className="w-full min-w-[940px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                   <th className="py-2 pr-4">Blast Name</th>
                   <th className="py-2 pr-4">Status</th>
+                  <th className="py-2 pr-4">Channel</th>
                   <th className="py-2 pr-4">Created</th>
                   <th className="py-2 pr-4">Recipients</th>
                   <th className="py-2 pr-4">Awaiting Response</th>
@@ -153,6 +154,9 @@ export default function DashboardPage() {
                         </td>
                         <td className="py-3 pr-4">
                           <Skeleton className="h-7 w-24 rounded-full" />
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Skeleton className="h-4 w-16" />
                         </td>
                         <td className="py-3 pr-4">
                           <Skeleton className="h-4 w-32" />
@@ -186,6 +190,15 @@ export default function DashboardPage() {
                         <td className="py-3 pr-4">
                           <StatusBadge status={String(blast.status || "DRAFTED")} />
                         </td>
+                        <td className="py-3 pr-4">
+                          {String(blast.channel) === "WHATSAPP" ? (
+                            <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b]">
+                              WhatsApp
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">SMS</span>
+                          )}
+                        </td>
                         <td className="py-3 pr-4 text-muted-foreground">
                           {formatDate(blast.createdAt)}
                         </td>
@@ -214,7 +227,7 @@ export default function DashboardPage() {
                     ))}
                 {!loading && pagedBlasts.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                    <td colSpan={8} className="py-6 text-center text-muted-foreground">
                       No matching blasts. Try a broader search or create a new campaign.
                     </td>
                   </tr>

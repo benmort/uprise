@@ -2,6 +2,8 @@ import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   BlastRecipientStatus,
   BlastStatus,
+  ConsentState,
+  MessageChannel,
   Prisma,
 } from "../../src/generated/prisma";
 import { ConfigService } from "@nestjs/config";
@@ -10,7 +12,8 @@ import { assertValidBlastTransition } from "./blast-state.machine";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";
 import { CreateBlastDto, ProofBlastDto, ScheduleBlastDto, UpdateBlastDto } from "./dto/blast.dto";
-import { TwilioMessage, TwilioService } from "../twilio/twilio.service";
+import { SendOptions, TwilioMessage, TwilioService } from "../twilio/twilio.service";
+import { ConsentService } from "../messaging/consent.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
@@ -43,9 +46,12 @@ type TwilioStatusCallbackPayload = {
 const SENT_RECIPIENT_STATUSES: BlastRecipientStatus[] = [
   BlastRecipientStatus.SENT,
   BlastRecipientStatus.DELIVERED,
+  BlastRecipientStatus.READ,
   BlastRecipientStatus.RESPONDED,
 ];
 
+// Statuses that a delivery/read callback may transition. READ is excluded so a
+// late `delivered` callback can't downgrade a recipient already marked READ.
 const SEND_PHASE_RECIPIENT_STATUSES: BlastRecipientStatus[] = [
   BlastRecipientStatus.PENDING,
   BlastRecipientStatus.QUEUED,
@@ -89,6 +95,7 @@ export class BlastsService {
     private readonly compliance: ComplianceService,
     private readonly twilio: TwilioService,
     private readonly events: RealtimeEventsService,
+    private readonly consent: ConsentService,
     flags?: FeatureFlagsService,
     @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
   ) {
@@ -132,6 +139,9 @@ export class BlastsService {
         title: dto.title,
         audienceId: dto.audienceId || null,
         bodyTemplate: dto.bodyTemplate,
+        channel: (dto.channel as MessageChannel) ?? MessageChannel.SMS,
+        contentSid: dto.contentSid ?? null,
+        contentVariableMap: (dto.contentVariableMap ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         status: BlastStatus.DRAFTED,
       },
     });
@@ -163,6 +173,13 @@ export class BlastsService {
         title: dto.title ?? blast.title,
         audienceId: dto.audienceId ?? blast.audienceId,
         bodyTemplate: dto.bodyTemplate ?? blast.bodyTemplate,
+        ...(dto.channel ? { channel: dto.channel as MessageChannel } : {}),
+        ...(dto.contentSid !== undefined ? { contentSid: dto.contentSid || null } : {}),
+        ...(dto.contentVariableMap !== undefined
+          ? {
+              contentVariableMap: (dto.contentVariableMap ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            }
+          : {}),
       },
     });
   }
@@ -187,9 +204,13 @@ export class BlastsService {
     if (proofNumber && previews[0]?.rendered) {
       const to = normalizePhoneE164(proofNumber);
       const dryRunEnabled = this.isBlastDryRunEnabled();
+      const sendOptions = this.buildSendOptions(
+        blast,
+        previews[0].recipient as Record<string, unknown>,
+      );
       const proofMessage = dryRunEnabled
-        ? this.createDryRunMessage(to, previews[0].rendered, `proof-${blast.id}`)
-        : await this.twilio.sendMessage(to, previews[0].rendered);
+        ? this.createDryRunMessage(to, previews[0].rendered, `proof-${blast.id}`, blast.channel)
+        : await this.twilio.sendMessage(to, previews[0].rendered, sendOptions);
       if (dryRunEnabled) {
         this.logger.warn(
           `BLAST_DRY_RUN enabled: simulating proof send (blastId=${blast.id}, to=${proofMessage.to})`,
@@ -267,7 +288,12 @@ export class BlastsService {
     };
   }
 
-  private async getBlastRecipients(blast: { audienceId: string | null; id: string }): Promise<RecipientSeed[]> {
+  private async getBlastRecipients(blast: {
+    audienceId: string | null;
+    id: string;
+    organizationId: string;
+    channel: MessageChannel;
+  }): Promise<RecipientSeed[]> {
     if (!blast.audienceId) return [];
     const contacts = await this.prisma.audienceContact.findMany({
       where: { audienceId: blast.audienceId },
@@ -277,10 +303,33 @@ export class BlastsService {
     for (const contact of contacts) {
       if (!this.isContactable(contact)) continue;
       dedup.set(contact.phoneE164, {
-        contactId: contact.id,
+        // Point at the persistent Contact spine, not the per-audience row.
+        // Null until backfill populates AudienceContact.contactId.
+        contactId: contact.contactId ?? undefined,
         phoneE164: contact.phoneE164,
         metadata: (contact.metadata as Record<string, unknown>) || {},
       });
+    }
+
+    // Consent gating: SMS skips explicit opt-outs; WhatsApp also requires opt-in.
+    const phones = Array.from(dedup.keys());
+    const consentStates = await this.consent.getStatesForPhones(
+      blast.organizationId,
+      blast.channel,
+      phones,
+    );
+    let skippedConsent = 0;
+    for (const phone of phones) {
+      const state = consentStates.get(phone) ?? ConsentState.UNKNOWN;
+      if (!this.consent.canSend(state, blast.channel)) {
+        dedup.delete(phone);
+        skippedConsent += 1;
+      }
+    }
+    if (skippedConsent > 0) {
+      this.logger.warn(
+        `Skipped ${skippedConsent} recipient(s) on consent (blastId=${blast.id}, channel=${blast.channel})`,
+      );
     }
     return Array.from(dedup.values());
   }
@@ -318,9 +367,60 @@ export class BlastsService {
     return this.config.get<boolean>("BLAST_DRY_RUN", false);
   }
 
-  private createDryRunMessage(to: string, body: string, context: string): TwilioMessage {
+  /** Pull the rendering context (contact metadata) back off a stored recipient row. */
+  private extractRecipientContext(metadata: Prisma.JsonValue | null): Record<string, unknown> {
+    if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+      const ctx = (metadata as Record<string, unknown>).context;
+      if (ctx && typeof ctx === "object" && !Array.isArray(ctx)) {
+        return ctx as Record<string, unknown>;
+      }
+    }
+    return {};
+  }
+
+  /** Resolve template variable values from the contact context (WhatsApp sends). */
+  private buildContentVariables(
+    map: Prisma.JsonValue | null | undefined,
+    context: Record<string, unknown>,
+  ): Record<string, string> | undefined {
+    if (!map || typeof map !== "object" || Array.isArray(map)) return undefined;
+    const out: Record<string, string> = {};
+    for (const [slot, key] of Object.entries(map as Record<string, unknown>)) {
+      const value = context[String(key)];
+      out[slot] = value == null ? "" : String(value);
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  /** Build channel-aware send options for a blast recipient. */
+  private buildSendOptions(
+    blast: { channel: MessageChannel; contentSid: string | null; contentVariableMap: Prisma.JsonValue | null },
+    context: Record<string, unknown>,
+  ): SendOptions {
+    if (blast.channel !== MessageChannel.WHATSAPP) return { channel: MessageChannel.SMS };
+    return {
+      channel: MessageChannel.WHATSAPP,
+      ...(blast.contentSid
+        ? {
+            contentSid: blast.contentSid,
+            contentVariables: this.buildContentVariables(blast.contentVariableMap, context),
+          }
+        : {}),
+    };
+  }
+
+  private createDryRunMessage(
+    to: string,
+    body: string,
+    context: string,
+    channel: MessageChannel = MessageChannel.SMS,
+  ): TwilioMessage {
     const now = new Date().toISOString();
-    const configuredFrom = this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
+    const fromKey = channel === MessageChannel.WHATSAPP ? "TWILIO_WHATSAPP_FROM" : "TWILIO_PHONE_NUMBER";
+    const configuredFrom = this.config
+      .get<string>(fromKey, "")
+      .trim()
+      .replace(/^whatsapp:/i, "");
     const from = /^\+\d{7,15}$/.test(configuredFrom) ? configuredFrom : "+15550000000";
     return {
       sid: `${BLAST_DRY_RUN_SID_PREFIX}-${context}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -378,6 +478,8 @@ export class BlastsService {
     id: string;
     audienceId: string | null;
     bodyTemplate: string;
+    organizationId: string;
+    channel: MessageChannel;
   }): Promise<number> {
     const existingCount = await this.prisma.blastRecipient.count({
       where: { blastId: blast.id },
@@ -603,14 +705,16 @@ export class BlastsService {
     for (const recipient of recipients) {
       const data: Prisma.BlastRecipientUpdateInput = {};
       if (TWILIO_DELIVERY_CONFIRMED_STATUSES.has(status)) {
+        const confirmedStatus =
+          status === "read" ? BlastRecipientStatus.READ : BlastRecipientStatus.DELIVERED;
         const shouldSetDeliveredAt = !recipient.deliveredAt;
         const shouldSetDeliveredStatus =
           SEND_PHASE_RECIPIENT_STATUSES.includes(recipient.status) &&
-          recipient.status !== BlastRecipientStatus.DELIVERED;
+          recipient.status !== confirmedStatus;
         const shouldClearError = Boolean(recipient.errorCode || recipient.errorMessage);
         if (shouldSetDeliveredAt) data.deliveredAt = callbackAt;
         if (shouldSetDeliveredStatus) {
-          data.status = BlastRecipientStatus.DELIVERED;
+          data.status = confirmedStatus;
         }
         if (shouldClearError) {
           data.errorCode = null;
@@ -620,7 +724,7 @@ export class BlastsService {
           data.metadata = this.appendRecipientTrace(
             recipient.metadata,
             {
-              status: BlastRecipientStatus.DELIVERED,
+              status: confirmedStatus,
               source: "twilio_callback",
               reason: `Delivery confirmed (${status})`,
               detail: messageSid,
@@ -682,8 +786,13 @@ export class BlastsService {
     for (const outbound of outboundRows) {
       const data: Prisma.OutboundMessageUpdateInput = {};
       if (TWILIO_DELIVERY_CONFIRMED_STATUSES.has(status)) {
-        if (outbound.status !== BlastRecipientStatus.DELIVERED) {
-          data.status = BlastRecipientStatus.DELIVERED;
+        const confirmedStatus =
+          status === "read" ? BlastRecipientStatus.READ : BlastRecipientStatus.DELIVERED;
+        if (
+          outbound.status !== confirmedStatus &&
+          outbound.status !== BlastRecipientStatus.READ
+        ) {
+          data.status = confirmedStatus;
         }
         if (outbound.errorCode || outbound.errorMessage) {
           data.errorCode = null;
@@ -757,6 +866,8 @@ export class BlastsService {
       id: blast.id,
       audienceId: blast.audienceId,
       bodyTemplate: blast.bodyTemplate,
+      organizationId: blast.organizationId,
+      channel: blast.channel,
     });
 
     const batchSize = this.getSendBatchSize(requestedBatchSize);
@@ -833,9 +944,18 @@ export class BlastsService {
         },
       });
       try {
+        const sendOptions = this.buildSendOptions(
+          blast,
+          this.extractRecipientContext(recipient.metadata),
+        );
         const message = dryRunEnabled
-          ? this.createDryRunMessage(recipient.phoneE164, recipient.renderedBody, `send-${recipient.id}`)
-          : await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
+          ? this.createDryRunMessage(
+              recipient.phoneE164,
+              recipient.renderedBody,
+              `send-${recipient.id}`,
+              blast.channel,
+            )
+          : await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody, sendOptions);
         sent += 1;
         sentPhones.add(recipient.phoneE164);
         await this.prisma.blastRecipient.update({
@@ -1022,9 +1142,18 @@ export class BlastsService {
     let retried = 0;
     for (const recipient of failedRecipients) {
       try {
+        const sendOptions = this.buildSendOptions(
+          blast,
+          this.extractRecipientContext(recipient.metadata),
+        );
         const sent = dryRunEnabled
-          ? this.createDryRunMessage(recipient.phoneE164, recipient.renderedBody, `retry-${recipient.id}`)
-          : await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody);
+          ? this.createDryRunMessage(
+              recipient.phoneE164,
+              recipient.renderedBody,
+              `retry-${recipient.id}`,
+              blast.channel,
+            )
+          : await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody, sendOptions);
         retried += 1;
         await this.prisma.blastRecipient.update({
           where: { id: recipient.id },

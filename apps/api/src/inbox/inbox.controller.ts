@@ -16,13 +16,16 @@ export class InboxController {
   }
 
   @Get("conversations/:contactPhone")
-  getThread(@Param("contactPhone") contactPhone: string) {
-    return this.inbox.getThread(contactPhone);
+  getThread(
+    @Param("contactPhone") contactPhone: string,
+    @Query("channel") channel?: string,
+  ) {
+    return this.inbox.getThread(contactPhone, channel);
   }
 
   @Post("reply")
   reply(@Body() dto: ReplyDto) {
-    return this.inbox.reply(dto.contactPhone, dto.body);
+    return this.inbox.reply(dto.contactPhone, dto.body, dto.channel);
   }
 
   @Patch("conversations/:contactPhone")
@@ -30,7 +33,7 @@ export class InboxController {
     @Param("contactPhone") contactPhone: string,
     @Body() dto: MarkConversationDto,
   ) {
-    return this.inbox.markConversation(contactPhone, Boolean(dto.resolved));
+    return this.inbox.markConversation(contactPhone, Boolean(dto.resolved), dto.channel);
   }
 
   @Get("ai-suggestions")

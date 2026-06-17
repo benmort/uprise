@@ -24,6 +24,9 @@ const EXTERNAL_CODE_CATEGORY: Record<string, string> = {
   "21612": "ROUTING_COMBINATION_BLOCK",
   "21614": "INVALID_MOBILE_DESTINATION",
   "63033": "RECIPIENT_OPTOUT",
+  // WhatsApp-specific (Twilio 63xxx channel errors)
+  "63016": "WHATSAPP_SESSION_WINDOW_CLOSED", // free-form sent outside the 24h window
+  "63051": "WHATSAPP_RECIPIENT_UNAVAILABLE",
 };
 
 function normalizeErrorCode(raw: string | null | undefined): string | null {
@@ -46,6 +49,10 @@ function classifyExternalByCode(code: string): string | null {
   if (Number.isFinite(numeric) && numeric >= 30000 && numeric <= 39999) {
     return "CARRIER_OR_DESTINATION";
   }
+  // WhatsApp channel errors (Twilio 63xxx) are destination/channel-side, not our fault.
+  if (Number.isFinite(numeric) && numeric >= 63000 && numeric <= 63999) {
+    return "WHATSAPP_CHANNEL";
+  }
   return null;
 }
 
@@ -59,6 +66,9 @@ function classifyExternalByText(text: string): string | null {
   }
   if (/(opted out|unsubscribed recipient|reply stop)/i.test(text)) {
     return "RECIPIENT_OPTOUT";
+  }
+  if (/(outside the allowed window|session window|24.?hour window|re-?engagement)/i.test(text)) {
+    return "WHATSAPP_SESSION_WINDOW_CLOSED";
   }
   if (/(short code|not a valid mobile|invalid 'to' phone number|'to' phone number cannot be reached)/i.test(text)) {
     return "INVALID_DESTINATION";

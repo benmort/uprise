@@ -1,10 +1,23 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus } from "../../src/generated/prisma";
+import {
+  BlastRecipientStatus,
+  ConsentState,
+  JourneyTriggerType,
+  MessageChannel,
+} from "../../src/generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { TwilioService } from "../twilio/twilio.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
+import { ContactsService } from "../contacts/contacts.service";
+import { ConsentService, classifyConsentKeyword } from "../messaging/consent.service";
+import { SessionWindowService } from "../messaging/session-window.service";
+import { coerceChannel } from "../messaging/message-channel.util";
+import {
+  JOURNEY_TRIGGER_PORT,
+  JourneyTriggerPort,
+} from "../journeys/journey-trigger.port";
 import { InboxRepository } from "./inbox.repository";
 import { AiSuggestionsService } from "./ai-suggestions.service";
 
@@ -15,8 +28,12 @@ export class InboxService {
     private readonly config: ConfigService,
     private readonly twilio: TwilioService,
     private readonly events: RealtimeEventsService,
+    private readonly contacts: ContactsService,
     private readonly repo: InboxRepository,
     private readonly ai: AiSuggestionsService,
+    private readonly consent: ConsentService,
+    private readonly sessionWindow: SessionWindowService,
+    @Optional() @Inject(JOURNEY_TRIGGER_PORT) private readonly journeys?: JourneyTriggerPort,
   ) {}
 
   private async ensureOrganization() {
@@ -33,14 +50,20 @@ export class InboxService {
     to: string;
     body: string;
     messageSid?: string;
+    channel?: MessageChannel;
+    mediaUrl?: string | null;
+    mediaContentType?: string | null;
   }) {
     const org = await this.ensureOrganization();
     const fromPhone = normalizePhoneE164(payload.from);
     const toPhone = normalizePhoneE164(payload.to);
+    const channel = payload.channel ?? MessageChannel.SMS;
+    const contact = await this.contacts.getOrCreateByPhone(org.id, fromPhone);
     const attributedOutbound = await this.prisma.outboundMessage.findFirst({
       where: {
         organizationId: org.id,
         toPhone: fromPhone,
+        channel,
         OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
       },
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
@@ -50,29 +73,62 @@ export class InboxService {
       data: {
         organizationId: org.id,
         blastId: attributedOutbound?.blastId || null,
+        contactId: contact.id,
+        channel,
         fromPhone,
         toPhone,
         body: payload.body || "",
+        mediaUrl: payload.mediaUrl ?? null,
+        mediaContentType: payload.mediaContentType ?? null,
         twilioMessageSid: payload.messageSid || null,
-        threadKey: fromPhone,
+        threadKey: channel === MessageChannel.WHATSAPP ? `whatsapp:${fromPhone}` : fromPhone,
       },
     });
 
+    // An inbound message implies opt-in (and opens the WhatsApp window); STOP/START
+    // keywords override. STOP records opt-out across both channels for this contact.
+    const keyword = classifyConsentKeyword(payload.body || "");
+    if (keyword === ConsentState.OPTED_OUT) {
+      for (const ch of [MessageChannel.SMS, MessageChannel.WHATSAPP]) {
+        await this.consent.setState({
+          organizationId: org.id,
+          phoneE164: fromPhone,
+          channel: ch,
+          state: ConsentState.OPTED_OUT,
+          contactId: contact.id,
+          source: "stop_keyword",
+        });
+      }
+    } else {
+      await this.consent.setState({
+        organizationId: org.id,
+        phoneE164: fromPhone,
+        channel,
+        state: ConsentState.OPTED_IN,
+        contactId: contact.id,
+        source: keyword === ConsentState.OPTED_IN ? "start_keyword" : "inbound",
+      });
+    }
+
     await this.prisma.conversationState.upsert({
       where: {
-        organizationId_contactPhone: {
+        organizationId_contactPhone_channel: {
           organizationId: org.id,
           contactPhone: fromPhone,
+          channel,
         },
       },
       update: {
+        contactId: contact.id,
         unreadCount: { increment: 1 },
         resolved: false,
         lastMessageAt: inbound.receivedAt,
       },
       create: {
         organizationId: org.id,
+        contactId: contact.id,
         contactPhone: fromPhone,
+        channel,
         unreadCount: 1,
         resolved: false,
         lastMessageAt: inbound.receivedAt,
@@ -130,7 +186,24 @@ export class InboxService {
       contactPhone: fromPhone,
       blastId: attributedOutbound?.blastId || null,
       body: payload.body || "",
+      channel,
     });
+
+    if (this.journeys) {
+      try {
+        await this.journeys.handleTrigger(JourneyTriggerType.message_received, {
+          organizationId: org.id,
+          contactId: contact.id,
+          blastId: attributedOutbound?.blastId || null,
+        });
+      } catch (error) {
+        // Journey failures must never break inbound recording.
+        this.events.emit("journey.trigger_error", {
+          type: JourneyTriggerType.message_received,
+          error: String(error),
+        });
+      }
+    }
 
     return inbound;
   }
@@ -155,6 +228,7 @@ export class InboxService {
 
     type ConversationRow = {
       contactPhone: string;
+      channel: MessageChannel;
       unreadCount: number;
       resolved: boolean;
       lastMessageAt?: Date | null;
@@ -162,11 +236,16 @@ export class InboxService {
       updatedAt?: Date;
     };
 
+    // Conversations are keyed per (phone, channel) so SMS and WhatsApp threads
+    // for the same person stay distinct.
+    const keyOf = (phone: string, channel: MessageChannel) => `${phone}|${channel}`;
     const merged = new Map<string, ConversationRow>();
     for (const row of rows) {
       const phone = normalizePhoneE164(row.contactPhone);
-      merged.set(phone, {
+      const channel = (row.channel as MessageChannel) ?? MessageChannel.SMS;
+      merged.set(keyOf(phone, channel), {
         contactPhone: phone,
+        channel,
         unreadCount: row.unreadCount,
         resolved: row.resolved,
         lastMessageAt: row.lastMessageAt,
@@ -177,10 +256,13 @@ export class InboxService {
 
     for (const row of contactsFromMessages) {
       const phone = normalizePhoneE164(row.contactPhone);
-      const existing = merged.get(phone);
+      const channel = (row.channel as MessageChannel) ?? MessageChannel.SMS;
+      const key = keyOf(phone, channel);
+      const existing = merged.get(key);
       if (!existing) {
-        merged.set(phone, {
+        merged.set(key, {
           contactPhone: phone,
+          channel,
           unreadCount: 0,
           resolved: false,
           lastMessageAt: row.lastMessageAt,
@@ -193,15 +275,18 @@ export class InboxService {
       }
     }
 
+    // Twilio's live message API only surfaces SMS history.
     for (const [rawPhone, summary] of Object.entries(twilioContacts || {})) {
       const phone = normalizePhoneE164(rawPhone);
+      const key = keyOf(phone, MessageChannel.SMS);
       const parsedAt = summary?.date ? new Date(summary.date) : null;
       const lastMessageAt =
         parsedAt && Number.isFinite(parsedAt.getTime()) ? parsedAt : null;
-      const existing = merged.get(phone);
+      const existing = merged.get(key);
       if (!existing) {
-        merged.set(phone, {
+        merged.set(key, {
           contactPhone: phone,
+          channel: MessageChannel.SMS,
           unreadCount: 0,
           resolved: false,
           lastMessageAt,
@@ -255,24 +340,31 @@ export class InboxService {
     });
   }
 
-  async getThread(contactPhone: string) {
+  async getThread(contactPhone: string, channelInput?: MessageChannel | string) {
     const org = await this.ensureOrganization();
     const phone = normalizePhoneE164(contactPhone);
+    const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
+    // Twilio's live message API only covers SMS; skip it for WhatsApp threads.
     const [[inboundRows, outboundRows], twilioMessages] = await Promise.all([
-      this.repo.getThread(org.id, phone),
-      this.twilio
-        .getMessagesForPhoneNumber(phone, 200)
-        .then((payload) => payload.messages)
-        .catch(() => []),
+      this.repo.getThread(org.id, phone, channel),
+      channel === MessageChannel.SMS
+        ? this.twilio
+            .getMessagesForPhoneNumber(phone, 200)
+            .then((payload) => payload.messages)
+            .catch(() => [])
+        : Promise.resolve([]),
     ]);
+    const sessionOpen = await this.sessionWindow.isOpen(org.id, phone, channel);
 
     const messages = [
       ...inboundRows.map((row) => ({
         id: row.id,
         sid: row.twilioMessageSid || undefined,
         type: "inbound" as const,
+        channel: (row.channel as MessageChannel) ?? MessageChannel.SMS,
         at: row.receivedAt.toISOString(),
         body: row.body,
+        mediaUrl: row.mediaUrl ?? null,
         from: row.fromPhone,
         to: row.toPhone,
         blastId: row.blastId,
@@ -281,8 +373,10 @@ export class InboxService {
         id: row.id,
         sid: row.twilioMessageSid || undefined,
         type: "outbound" as const,
+        channel: (row.channel as MessageChannel) ?? MessageChannel.SMS,
         at: row.sentAt.toISOString(),
         body: row.body,
+        mediaUrl: row.mediaUrl ?? null,
         from: row.fromPhone,
         to: row.toPhone,
         blastId: row.blastId,
@@ -293,8 +387,10 @@ export class InboxService {
         type: String(row.direction || "").toLowerCase().startsWith("inbound")
           ? ("inbound" as const)
           : ("outbound" as const),
+        channel: MessageChannel.SMS,
         at: String(row.dateSent || row.dateCreated),
         body: String(row.body || ""),
+        mediaUrl: null,
         from: String(row.from || ""),
         to: String(row.to || ""),
         blastId: null,
@@ -359,21 +455,42 @@ export class InboxService {
     return {
       contactPhone: phone,
       contactName,
+      channel,
+      sessionOpen,
       blastContext,
       blastHistory,
       messages: deduped,
     };
   }
 
-  async reply(contactPhone: string, body: string) {
+  async reply(contactPhone: string, body: string, channelInput?: MessageChannel | string) {
     const org = await this.ensureOrganization();
     const to = normalizePhoneE164(contactPhone);
-    const sent = await this.twilio.sendMessage(to, body);
-    const normalizedTo = sent.to ? normalizePhoneE164(sent.to) : to;
-    const normalizedFrom = sent.from ? normalizePhoneE164(sent.from) : sent.from;
+    const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
+    const contact = await this.contacts.getOrCreateByPhone(org.id, to);
+
+    // A free-text WhatsApp reply is only valid inside the 24h session window.
+    if (channel === MessageChannel.WHATSAPP) {
+      const open = await this.sessionWindow.isOpen(org.id, to, channel);
+      if (!open) {
+        throw new BadRequestException({
+          code: "SESSION_WINDOW_CLOSED",
+          message:
+            "WhatsApp's 24-hour window has closed for this contact. Send an approved template to re-open the conversation.",
+        });
+      }
+    }
+
+    const sent = await this.twilio.sendMessage(to, body, { channel });
+    const normalizedTo = sent.to ? normalizePhoneE164(sent.to.replace(/^whatsapp:/i, "")) : to;
+    const normalizedFrom = sent.from
+      ? normalizePhoneE164(sent.from.replace(/^whatsapp:/i, ""))
+      : sent.from;
     const row = await this.prisma.outboundMessage.create({
       data: {
         organizationId: org.id,
+        contactId: contact.id,
+        channel,
         toPhone: normalizedTo,
         fromPhone: normalizedFrom,
         body: sent.body || body,
@@ -384,35 +501,45 @@ export class InboxService {
     });
     await this.prisma.conversationState.upsert({
       where: {
-        organizationId_contactPhone: {
+        organizationId_contactPhone_channel: {
           organizationId: org.id,
           contactPhone: to,
+          channel,
         },
       },
       update: {
+        contactId: contact.id,
         unreadCount: 0,
         lastMessageAt: row.sentAt,
       },
       create: {
         organizationId: org.id,
+        contactId: contact.id,
         contactPhone: to,
+        channel,
         unreadCount: 0,
         resolved: false,
         lastMessageAt: row.sentAt,
       },
     });
-    this.events.emit("inbox.reply", { contactPhone: to });
+    this.events.emit("inbox.reply", { contactPhone: to, channel });
     return row;
   }
 
-  async markConversation(contactPhone: string, resolved: boolean) {
+  async markConversation(
+    contactPhone: string,
+    resolved: boolean,
+    channelInput?: MessageChannel | string,
+  ) {
     const org = await this.ensureOrganization();
     const phone = normalizePhoneE164(contactPhone);
+    const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     return this.prisma.conversationState.upsert({
       where: {
-        organizationId_contactPhone: {
+        organizationId_contactPhone_channel: {
           organizationId: org.id,
           contactPhone: phone,
+          channel,
         },
       },
       update: {
@@ -422,13 +549,16 @@ export class InboxService {
       create: {
         organizationId: org.id,
         contactPhone: phone,
+        channel,
         unreadCount: 0,
         resolved,
       },
     });
   }
 
-  suggest(message: string) {
-    return { suggestions: this.ai.suggestReplies(message) };
+  async suggest(message: string) {
+    const org = await this.ensureOrganization();
+    const suggestions = await this.ai.suggestReplies({ organizationId: org.id, message });
+    return { suggestions };
   }
 }

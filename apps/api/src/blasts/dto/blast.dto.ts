@@ -1,11 +1,15 @@
 import {
   IsDateString,
+  IsIn,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
 } from "class-validator";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+
+const CHANNELS = ["SMS", "WHATSAPP"] as const;
 
 export class CreateBlastDto {
   @IsString()
@@ -20,6 +24,20 @@ export class CreateBlastDto {
   @IsString()
   @MinLength(1)
   bodyTemplate!: string;
+
+  @IsOptional()
+  @IsIn(CHANNELS)
+  channel?: (typeof CHANNELS)[number];
+
+  /** WhatsApp: approved Content template SID (HX...). */
+  @IsOptional()
+  @IsString()
+  contentSid?: string;
+
+  /** WhatsApp: template slot -> personalization key, e.g. { "1": "first_name" }. */
+  @IsOptional()
+  @IsObject()
+  contentVariableMap?: Record<string, string>;
 }
 
 export class UpdateBlastDto {
@@ -36,6 +54,18 @@ export class UpdateBlastDto {
   @IsOptional()
   @IsString()
   bodyTemplate?: string;
+
+  @IsOptional()
+  @IsIn(CHANNELS)
+  channel?: (typeof CHANNELS)[number];
+
+  @IsOptional()
+  @IsString()
+  contentSid?: string;
+
+  @IsOptional()
+  @IsObject()
+  contentVariableMap?: Record<string, string>;
 }
 
 export class ProofBlastDto {
