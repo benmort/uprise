@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import Map, { Layer, Marker, Source, type MapProps } from "react-map-gl/mapbox";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import Map, { Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import { bbox } from "@turf/turf";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 export type MapStop = { id: string; lat: number; lng: number; status?: string };
@@ -30,14 +31,45 @@ export function TurfMap({
   userPosition?: LngLat | null;
   onStopTap?: (id: string) => void;
 }) {
+  const mapRef = useRef<MapRef | null>(null);
+
+  // Bounding box of the turf/division polygon, if one is supplied.
+  const bounds = useMemo<[number, number, number, number] | null>(() => {
+    if (!turfGeometry) return null;
+    try {
+      const [minX, minY, maxX, maxY] = bbox({ type: "Feature", geometry: turfGeometry, properties: {} });
+      if ([minX, minY, maxX, maxY].some((n) => !Number.isFinite(n))) return null;
+      return [minX, minY, maxX, maxY];
+    } catch {
+      return null;
+    }
+  }, [turfGeometry]);
+
   const initialViewState = useMemo<MapProps["initialViewState"]>(() => {
+    if (bounds) {
+      return { bounds: [[bounds[0], bounds[1]], [bounds[2], bounds[3]]], fitBoundsOptions: { padding: 32 } };
+    }
     const focus = userPosition ?? stops[0];
     return {
       latitude: focus?.lat ?? -33.8688,
       longitude: focus?.lng ?? 151.2093,
       zoom: 14,
     };
-  }, [stops, userPosition]);
+  }, [bounds, stops, userPosition]);
+
+  // initialViewState only applies on mount; refit when the division changes
+  // without a remount (e.g. navigating between division detail pages).
+  const fitToBounds = useCallback(() => {
+    if (!bounds) return;
+    mapRef.current?.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], {
+      padding: 32,
+      duration: 600,
+    });
+  }, [bounds]);
+
+  useEffect(() => {
+    fitToBounds();
+  }, [fitToBounds]);
 
   const stopsGeoJson = useMemo(
     () => ({
@@ -65,10 +97,12 @@ export function TurfMap({
 
   return (
     <Map
+      ref={mapRef}
       mapboxAccessToken={TOKEN}
       initialViewState={initialViewState}
       mapStyle="mapbox://styles/mapbox/streets-v12"
       style={{ width: "100%", height: "100%" }}
+      onLoad={fitToBounds}
       onClick={(e) => {
         const feature = e.features?.[0];
         const id = feature?.properties?.id;

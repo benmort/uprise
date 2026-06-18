@@ -42,10 +42,12 @@ export class GeoService {
   async divisionDetail(organizationId: string, type: string, code: string) {
     const { table, col } = this.table(type);
     const rows = (await this.prisma.$queryRawUnsafe(
+      // COUNT(DISTINCT …): the Contact join fans out address rows whenever an
+      // address has one (or more) contacts, so a plain COUNT over-counts.
       `SELECT d.code, d.name, d.state, ST_AsGeoJSON(d.geom) AS geojson,
-              COUNT(ar.gnaf_pid)::int AS "addressCount",
-              COUNT(c."gnafPid")::int AS "contactCount",
-              (COUNT(ar.gnaf_pid) - COUNT(c."gnafPid"))::int AS "withoutContacts"
+              COUNT(DISTINCT ar.gnaf_pid)::int AS "addressCount",
+              COUNT(DISTINCT c."gnafPid")::int AS "contactCount",
+              (COUNT(DISTINCT ar.gnaf_pid) - COUNT(DISTINCT c."gnafPid"))::int AS "withoutContacts"
        FROM ${table} d
        LEFT JOIN geo.address_region ar ON ar.${col} = d.code
        LEFT JOIN "Contact" c ON c."gnafPid" = ar.gnaf_pid AND c."organizationId" = $1
