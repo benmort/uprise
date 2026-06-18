@@ -15,7 +15,10 @@
     "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy"
+    "prisma:deploy": "prisma migrate deploy",
+    "backfill:contacts": "ts-node src/scripts/backfill-contacts.ts",
+    "seed:demo": "ts-node src/scripts/seed-demo.ts",
+    "seed:clear": "ts-node src/scripts/seed-demo.ts --clear"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

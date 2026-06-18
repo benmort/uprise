@@ -36,8 +36,22 @@
     --on-success: 0 0% 100%;
     --success-container: 138 41% 91%;
 
-    --warning-container: var(--tertiary-container);
-    --warning-foreground: var(--on-tertiary);
+    /* Design-system amber (handoff README → Warning: #b45309 on #fef3e2),
+       not the tertiary alias (which rendered salmon/red and read as an error). */
+    --warning-container: 37 89% 94%;
+    --warning-foreground: 26 90% 37%;
+
+    /* Canvassing: door/knock accent (purple #7c3aed on #f3eafe) */
+    --knock: 262 83% 58%;
+    --knock-foreground: 0 0% 100%;
+    --knock-container: 268 80% 96%;
+
+    /* Support-level scale (campaign-defined), strong → strong-oppose */
+    --support-strong: 142 71% 36%; /* #16a34a */
+    --support-lean: 174 84% 32%; /* #0e9488 */
+    --support-undecided: 215 16% 65%; /* #94a3b8 */
+    --support-lean-oppose: 32 89% 37%; /* #b45309 */
+    --support-strong-oppose: 0 72% 51%; /* #dc2626 */
 
     --radius-sm: 0.125rem;
     --radius: 0.25rem;
@@ -58,6 +72,7 @@
 @layer components {
   .page-stack {
     @apply mx-auto flex w-full max-w-page flex-col gap-6;
+    animation: fadeUp 0.28s ease both;
   }
 
   .section-stack {
@@ -70,5 +85,62 @@
 
   .surface-muted {
     @apply rounded-md border border-border bg-surface;
+  }
+}
+
+/* Design-system motion (handoff README → Motion). Snappy ease-out, no bounce. */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-stack,
+  .animate-fade-up,
+  .animate-pop-in {
+    animation: none !important;
+  }
+}
+
+@layer utilities {
+  /* Numerals on anything counted (doors, %, IDs, times). */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Design-system motion utilities. */
+  .animate-fade-up {
+    animation: fadeUp 0.28s ease both;
+  }
+  .animate-pop-in {
+    animation: popIn 0.2s ease both;
+  }
+
+  /* Design-system elevation (handoff README → Shadow). */
+  .shadow-card {
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  }
+  .shadow-elevated {
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.1);
+  }
+  .shadow-float {
+    box-shadow: 0 8px 28px rgba(16, 24, 40, 0.18);
   }
 }
