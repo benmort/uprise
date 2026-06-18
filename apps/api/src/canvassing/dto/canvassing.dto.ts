@@ -158,6 +158,22 @@ export class CreateDoorContactDto {
   lng?: number;
 }
 
+export class CreateTurfFromDivisionDto {
+  @IsIn(["ced", "sed", "lga"])
+  type!: "ced" | "sed" | "lga";
+
+  @IsString()
+  code!: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
+}
+
 export class CreateShiftDto {
   @IsString()
   campaignId!: string;

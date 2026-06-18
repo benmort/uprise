@@ -135,6 +135,7 @@ exports.Prisma.ContactScalarFieldEnum = {
   organizationId: 'organizationId',
   phoneE164: 'phoneE164',
   addressNorm: 'addressNorm',
+  gnafPid: 'gnafPid',
   firstName: 'firstName',
   lastName: 'lastName',
   email: 'email',

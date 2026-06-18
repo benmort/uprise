@@ -24,6 +24,7 @@ import {
   CreateDoorContactDto,
   CreateShiftDto,
   CreateTurfDto,
+  CreateTurfFromDivisionDto,
   CreateWalkListDto,
   RecordDoorKnockDto,
   ReleaseTurfDto,
@@ -92,6 +93,13 @@ export class CanvassingController {
   async updateTurf(@Param("id") id: string, @Body() dto: UpdateTurfDto) {
     const org = await this.ensureOrganization();
     return this.canvassing.updateTurf(org.id, id, dto);
+  }
+
+  @Post("turfs/from-division")
+  @Roles(AppUserRole.ORGANISER)
+  async createTurfFromDivision(@Body() dto: CreateTurfFromDivisionDto) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.createTurfFromDivision(org.id, dto);
   }
 
   @Post("turfs/:id/rebucket")

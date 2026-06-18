@@ -323,6 +323,26 @@ export class CanvassingService {
     });
   }
 
+  /** Cut a turf straight from an electoral/LGA division boundary (geo schema). */
+  async createTurfFromDivision(
+    organizationId: string,
+    input: { type: "ced" | "sed" | "lga"; code: string; name?: string; campaignId?: string | null },
+  ) {
+    const table = { ced: "geo.ced", sed: "geo.sed", lga: "geo.lga" }[input.type];
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT name, ST_AsGeoJSON(geom) AS geojson FROM ${table} WHERE code = $1`,
+      input.code,
+    )) as Array<{ name: string; geojson: string | null }>;
+    if (rows.length === 0 || !rows[0].geojson) {
+      throw new ApiHttpException("DIVISION_NOT_FOUND", "Division boundary not found");
+    }
+    return this.createTurf(organizationId, {
+      name: input.name || rows[0].name,
+      geometry: JSON.parse(rows[0].geojson),
+      campaignId: input.campaignId ?? null,
+    });
+  }
+
   async createTurf(organizationId: string, input: { name: string; geometry: unknown; campaignId?: string | null }) {
     return this.prisma.turf.create({
       data: {

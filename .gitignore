@@ -34,3 +34,6 @@ pnpm-debug.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Geo ETL downloads (multi-GB G-NAF + ABS/AEC shapefiles)
+/data/geo/

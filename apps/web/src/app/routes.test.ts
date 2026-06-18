@@ -11,8 +11,8 @@ function read(relative: string): string {
 describe("major route files", () => {
   it("contains dashboard page scaffold", () => {
     const source = read("dashboard/page.tsx");
-    expect(source).toContain("Monitor sends, replies, and unresolved work in one place.");
-    expect(source).toContain("Blast Campaigns");
+    expect(source).toContain("Command centre");
+    expect(source).toContain("Recent activity");
   });
 
   it("contains audience page scaffold", () => {
@@ -53,8 +53,10 @@ describe("major route files", () => {
 
   it("wires the header create blast CTA to create-and-redirect flow", () => {
     const source = read("layout.tsx");
-    expect(source).toContain("createBlast");
-    expect(source).toContain("/blasts/");
+    expect(source).toContain("createBlastAndOpen");
     expect(source).toContain("Create Blast");
+    // The create-and-redirect itself lives in the shared helper.
+    const helper = read("../../lib/blasts.ts");
+    expect(helper).toContain("/blasts/");
   });
 });

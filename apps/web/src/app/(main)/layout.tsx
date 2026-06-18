@@ -10,6 +10,7 @@ import {
   LogOut,
   Mail,
   MapPin,
+  MessageCircle,
   MessageSquareText,
   Settings,
   ShieldCheck,
@@ -19,12 +20,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
-  createBlast,
   getApiUrl,
   getRealtimeStreamToken,
-  listAudiences,
   listConversations,
+  type MessageChannel,
 } from "@/lib/api";
+import { createBlastAndOpen } from "@/lib/blasts";
 import { clearCredentials, getCredentials } from "@/lib/auth";
 import { listCampaigns } from "@/lib/api/campaigns";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
@@ -33,8 +34,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
 
-const DEFAULT_BLAST_TEMPLATE =
-  "Hi {{first_name}}! We're building our volunteer team in {{city}} and would love your help at an upcoming community action. Can we count you in? Reply YES to volunteer or STOP to opt out.";
 
 type NavMatch = (pathname: string) => boolean;
 type NavChild = { label: string; href: string; match: NavMatch };
@@ -50,8 +49,14 @@ function buildNav(campaignId: string): NavNode[] {
     campaignId ? `/canvass/${campaignId}/${suffix}` : "/canvass";
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
-    { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience") },
     { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox") },
+    {
+      type: "group", key: "channels", label: "Channels", icon: MessageSquareText, match: (p) => p.startsWith("/channels"),
+      children: [
+        { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text") },
+        { label: "WhatsApp", href: "/channels/whatsapp", match: (p) => p.startsWith("/channels/whatsapp") },
+      ],
+    },
     {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin, match: (p) => p.startsWith("/canvass"),
       children: [
@@ -60,12 +65,15 @@ function buildNav(campaignId: string): NavNode[] {
         { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists") },
         { label: "Live", href: scoped("live"), match: (p) => p.includes("/live") },
         { label: "Canvassers", href: "/canvass/canvassers", match: (p) => p.startsWith("/canvass/canvassers") },
+        { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions") },
         { label: "Results", href: scoped("results"), match: (p) => p.includes("/results") },
       ],
     },
     {
-      type: "group", key: "engagement", label: "Engagement", icon: Sparkles, match: (p) => p.startsWith("/engagement"),
+      type: "group", key: "engagement", label: "Engagement", icon: Sparkles,
+      match: (p) => p.startsWith("/engagement") || p.startsWith("/audience"),
       children: [
+        { label: "Audience", href: "/audience", match: (p) => p.startsWith("/audience") },
         { label: "Surveys", href: "/engagement/surveys", match: (p) => p.startsWith("/engagement/surveys") },
         { label: "Scripts", href: "/engagement/scripts", match: (p) => p.startsWith("/engagement/scripts") },
         { label: "Dispositions", href: "/engagement/dispositions", match: (p) => p.startsWith("/engagement/dispositions") },
@@ -80,6 +88,7 @@ function buildNav(campaignId: string): NavNode[] {
         { label: "General", href: "/settings", match: (p) => p === "/settings" },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
         { label: "Roles", href: "/settings/roles", match: (p) => p.startsWith("/settings/roles") },
+        { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
       ],
     },
   ];
@@ -248,43 +257,18 @@ export default function MainLayout({
     };
   }, [ready, pathname, router, showToast]);
 
-  const handleCreateBlast = useCallback(async () => {
-    if (creatingBlast) return;
-    setCreatingBlast(true);
-    try {
-      let latestAudienceId: string | undefined;
-      const audienceResult = await listAudiences({ limit: 1, offset: 0 });
-      if (audienceResult.ok) {
-        const latest = audienceResult.data.rows?.[0] as Record<string, unknown> | undefined;
-        if (latest && typeof latest.id === "string") {
-          latestAudienceId = latest.id;
-        }
+  const handleCreateBlast = useCallback(
+    async (channel?: MessageChannel) => {
+      if (creatingBlast) return;
+      setCreatingBlast(true);
+      try {
+        await createBlastAndOpen(router, showToast, channel ? { channel } : undefined);
+      } finally {
+        setCreatingBlast(false);
       }
-
-      const created = await createBlast({
-        title: "New Blast",
-        bodyTemplate: DEFAULT_BLAST_TEMPLATE,
-        audienceId: latestAudienceId,
-      });
-      if (!created.ok) {
-        showToast({
-          tone: "error",
-          title: "Could not create blast",
-          description: created.error,
-        });
-        return;
-      }
-      const id = String((created.data as any).id);
-      showToast({
-        tone: "success",
-        title: "Blast draft created",
-        description: "Opening the composer now.",
-      });
-      router.push(`/blasts/${encodeURIComponent(id)}/composer`);
-    } finally {
-      setCreatingBlast(false);
-    }
-  }, [creatingBlast, router, showToast]);
+    },
+    [creatingBlast, router, showToast],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -452,16 +436,46 @@ export default function MainLayout({
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-white px-6">
             <div />
-            <Button
-              id="tour-create-blast"
-              type="button"
-              disabled={creatingBlast}
-              onClick={handleCreateBlast}
-              className="gap-2"
-            >
-              <MessageSquareText className="h-4 w-4" />
-              {creatingBlast ? "Creating..." : "Create Blast"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="gap-2" asChild>
+                <Link href="/audience">
+                  <Users className="h-4 w-4" />
+                  New audience
+                </Link>
+              </Button>
+              <Button variant="ghost" size="sm" className="gap-2" asChild>
+                <Link href="/inbox">
+                  <Mail className="h-4 w-4" />
+                  Open inbox
+                  {inboxUnreadCount > 0 ? (
+                    <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
+                      {inboxUnreadCount}
+                    </span>
+                  ) : null}
+                </Link>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled={creatingBlast}
+                onClick={() => handleCreateBlast("WHATSAPP")}
+              >
+                <MessageCircle className="h-4 w-4" />
+                New WhatsApp blast
+              </Button>
+              <Button
+                id="tour-create-blast"
+                type="button"
+                size="sm"
+                className="gap-2"
+                disabled={creatingBlast}
+                onClick={() => handleCreateBlast("SMS")}
+              >
+                <MessageSquareText className="h-4 w-4" />
+                {creatingBlast ? "Creating…" : "New text blast"}
+              </Button>
+            </div>
           </header>
           <main className="flex-1 overflow-y-auto p-6">{children}</main>
         </div>

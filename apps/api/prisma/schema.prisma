@@ -207,6 +207,7 @@ model Contact {
   organizationId   String
   phoneE164        String?
   addressNorm      String?
+  gnafPid          String?           // links to geo.gnaf_address (the G-NAF address universe)
   firstName        String?
   lastName         String?
   email            String?
@@ -238,6 +239,7 @@ model Contact {
   @@index([organizationId, phoneE164])
   @@index([organizationId, addressNorm])
   @@index([organizationId, turfId])
+  @@index([organizationId, gnafPid])
 }
 
 model AppUser {

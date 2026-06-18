@@ -256,6 +256,8 @@ export class SeedService {
       }
     }
 
+    await this.seedGeo(organizationId, contactIds);
+
     this.logger.log(`Demo seed complete for org ${organizationId}.`);
     return {
       organizationId,
@@ -275,6 +277,93 @@ export class SeedService {
     };
   }
 
+  /**
+   * Minimal geo fixture so /canvass/divisions + /settings/data render in demo without the
+   * national G-NAF load: one demo federal/state/LGA division over the Glebe turf, the demo
+   * contacts as G-NAF addresses (inside) plus a few cold doors, and the mapping. Idempotent.
+   * Skips silently if PostGIS/geo isn't present.
+   */
+  private async seedGeo(organizationId: string, contactIds: string[]): Promise<void> {
+    const poly =
+      "MULTIPOLYGON(((151.183 -33.878,151.197 -33.878,151.197 -33.890,151.183 -33.890,151.183 -33.878)))";
+    const contacts = buildDemoContacts();
+    try {
+      for (const [tbl, code, name] of [
+        ["geo.ced", "DEMO-FED", "Demo Federal Division"],
+        ["geo.sed", "DEMO-STATE", "Demo State Electorate"],
+        ["geo.lga", "DEMO-LGA", "Demo City Council"],
+      ] as const) {
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO ${tbl} (code,name,state,geom) VALUES ($1,$2,'NSW',ST_GeomFromText($3,4326))
+           ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, geom=EXCLUDED.geom`,
+          code,
+          name,
+          poly,
+        );
+      }
+      // Demo contacts → G-NAF addresses (inside the division), linked back to the Contact.
+      for (let i = 0; i < contacts.length; i += 1) {
+        const c = contacts[i];
+        const pid = `demo:gnaf:${i}`;
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO geo.gnaf_address (gnaf_pid,address_label,lat,lng,state,mb_code,geom)
+           VALUES ($1,$2,$3,$4,'NSW','DEMO-MB',ST_SetSRID(ST_MakePoint($4,$3),4326))
+           ON CONFLICT (gnaf_pid) DO NOTHING`,
+          pid,
+          c.address,
+          c.lat,
+          c.lng,
+        );
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO geo.address_region (gnaf_pid,mb_code,lga_code,ced_code,sed_code)
+           VALUES ($1,'DEMO-MB','DEMO-LGA','DEMO-FED','DEMO-STATE') ON CONFLICT (gnaf_pid) DO NOTHING`,
+          pid,
+        );
+        if (contactIds[i]) {
+          await this.prisma.$executeRawUnsafe(`UPDATE "Contact" SET "gnafPid"=$1 WHERE id=$2`, pid, contactIds[i]);
+        }
+      }
+      // A few cold doors (no contact) so "without contacts" > 0.
+      for (let i = 0; i < 6; i += 1) {
+        const pid = `demo:gnaf:cold:${i}`;
+        const lng = 151.186 + i * 0.0015;
+        const lat = -33.881 - i * 0.0008;
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO geo.gnaf_address (gnaf_pid,address_label,lat,lng,state,mb_code,geom)
+           VALUES ($1,$2,$3,$4,'NSW','DEMO-MB',ST_SetSRID(ST_MakePoint($4,$3),4326))
+           ON CONFLICT (gnaf_pid) DO NOTHING`,
+          pid,
+          `${10 + i} Cold Door St`,
+          lat,
+          lng,
+        );
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO geo.address_region (gnaf_pid,mb_code,lga_code,ced_code,sed_code)
+           VALUES ($1,'DEMO-MB','DEMO-LGA','DEMO-FED','DEMO-STATE') ON CONFLICT (gnaf_pid) DO NOTHING`,
+          pid,
+        );
+      }
+      for (const [key, label] of [
+        ["gnaf", "G-NAF addresses (demo)"],
+        ["ced", "Federal divisions (demo)"],
+        ["sed", "State electorates (demo)"],
+        ["lga", "Local government areas (demo)"],
+      ] as const) {
+        const count = key === "gnaf" ? contacts.length + 6 : 1;
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO geo.dataset_meta (key,label,source_url,release_date,licence,row_count,status,last_ingested)
+           VALUES ($1,$2,'(demo seed)','demo','demo',$3,'loaded',now())
+           ON CONFLICT (key) DO UPDATE SET row_count=EXCLUDED.row_count, status='loaded', last_ingested=now()`,
+          key,
+          label,
+          count,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(`geo demo seed skipped (PostGIS/geo not available?): ${String(err)}`);
+    }
+  }
+
   /** Best-effort removal of demo-labelled rows (FK-safe order). */
   async clearDemo(): Promise<void> {
     const organizationId = await this.org();
@@ -292,6 +381,16 @@ export class SeedService {
     await this.prisma.appUser.deleteMany({
       where: { organizationId, email: { in: [DEMO_LOGINS.organiser.email, DEMO_LOGINS.canvasser.email] } },
     });
+    try {
+      await this.prisma.$executeRawUnsafe(`DELETE FROM geo.address_region WHERE gnaf_pid LIKE 'demo:gnaf:%'`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM geo.gnaf_address WHERE gnaf_pid LIKE 'demo:gnaf:%'`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM geo.ced WHERE code='DEMO-FED'`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM geo.sed WHERE code='DEMO-STATE'`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM geo.lga WHERE code='DEMO-LGA'`);
+      await this.prisma.$executeRawUnsafe(`DELETE FROM geo.dataset_meta WHERE source_url='(demo seed)'`);
+    } catch {
+      /* geo not present — fine */
+    }
     this.logger.log(`Demo seed cleared for org ${organizationId}.`);
   }
 }

@@ -6906,6 +6906,7 @@ export namespace Prisma {
     organizationId: string | null
     phoneE164: string | null
     addressNorm: string | null
+    gnafPid: string | null
     firstName: string | null
     lastName: string | null
     email: string | null
@@ -6922,6 +6923,7 @@ export namespace Prisma {
     organizationId: string | null
     phoneE164: string | null
     addressNorm: string | null
+    gnafPid: string | null
     firstName: string | null
     lastName: string | null
     email: string | null
@@ -6938,6 +6940,7 @@ export namespace Prisma {
     organizationId: number
     phoneE164: number
     addressNorm: number
+    gnafPid: number
     firstName: number
     lastName: number
     email: number
@@ -6967,6 +6970,7 @@ export namespace Prisma {
     organizationId?: true
     phoneE164?: true
     addressNorm?: true
+    gnafPid?: true
     firstName?: true
     lastName?: true
     email?: true
@@ -6983,6 +6987,7 @@ export namespace Prisma {
     organizationId?: true
     phoneE164?: true
     addressNorm?: true
+    gnafPid?: true
     firstName?: true
     lastName?: true
     email?: true
@@ -6999,6 +7004,7 @@ export namespace Prisma {
     organizationId?: true
     phoneE164?: true
     addressNorm?: true
+    gnafPid?: true
     firstName?: true
     lastName?: true
     email?: true
@@ -7103,6 +7109,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164: string | null
     addressNorm: string | null
+    gnafPid: string | null
     firstName: string | null
     lastName: string | null
     email: string | null
@@ -7139,6 +7146,7 @@ export namespace Prisma {
     organizationId?: boolean
     phoneE164?: boolean
     addressNorm?: boolean
+    gnafPid?: boolean
     firstName?: boolean
     lastName?: boolean
     email?: boolean
@@ -7170,6 +7178,7 @@ export namespace Prisma {
     organizationId?: boolean
     phoneE164?: boolean
     addressNorm?: boolean
+    gnafPid?: boolean
     firstName?: boolean
     lastName?: boolean
     email?: boolean
@@ -7189,6 +7198,7 @@ export namespace Prisma {
     organizationId?: boolean
     phoneE164?: boolean
     addressNorm?: boolean
+    gnafPid?: boolean
     firstName?: boolean
     lastName?: boolean
     email?: boolean
@@ -7244,6 +7254,7 @@ export namespace Prisma {
       organizationId: string
       phoneE164: string | null
       addressNorm: string | null
+      gnafPid: string | null
       firstName: string | null
       lastName: string | null
       email: string | null
@@ -7664,6 +7675,7 @@ export namespace Prisma {
     readonly organizationId: FieldRef<"Contact", 'String'>
     readonly phoneE164: FieldRef<"Contact", 'String'>
     readonly addressNorm: FieldRef<"Contact", 'String'>
+    readonly gnafPid: FieldRef<"Contact", 'String'>
     readonly firstName: FieldRef<"Contact", 'String'>
     readonly lastName: FieldRef<"Contact", 'String'>
     readonly email: FieldRef<"Contact", 'String'>
@@ -46658,6 +46670,7 @@ export namespace Prisma {
     organizationId: 'organizationId',
     phoneE164: 'phoneE164',
     addressNorm: 'addressNorm',
+    gnafPid: 'gnafPid',
     firstName: 'firstName',
     lastName: 'lastName',
     email: 'email',
@@ -47863,6 +47876,7 @@ export namespace Prisma {
     organizationId?: StringFilter<"Contact"> | string
     phoneE164?: StringNullableFilter<"Contact"> | string | null
     addressNorm?: StringNullableFilter<"Contact"> | string | null
+    gnafPid?: StringNullableFilter<"Contact"> | string | null
     firstName?: StringNullableFilter<"Contact"> | string | null
     lastName?: StringNullableFilter<"Contact"> | string | null
     email?: StringNullableFilter<"Contact"> | string | null
@@ -47893,6 +47907,7 @@ export namespace Prisma {
     organizationId?: SortOrder
     phoneE164?: SortOrderInput | SortOrder
     addressNorm?: SortOrderInput | SortOrder
+    gnafPid?: SortOrderInput | SortOrder
     firstName?: SortOrderInput | SortOrder
     lastName?: SortOrderInput | SortOrder
     email?: SortOrderInput | SortOrder
@@ -47926,6 +47941,7 @@ export namespace Prisma {
     organizationId?: StringFilter<"Contact"> | string
     phoneE164?: StringNullableFilter<"Contact"> | string | null
     addressNorm?: StringNullableFilter<"Contact"> | string | null
+    gnafPid?: StringNullableFilter<"Contact"> | string | null
     firstName?: StringNullableFilter<"Contact"> | string | null
     lastName?: StringNullableFilter<"Contact"> | string | null
     email?: StringNullableFilter<"Contact"> | string | null
@@ -47956,6 +47972,7 @@ export namespace Prisma {
     organizationId?: SortOrder
     phoneE164?: SortOrderInput | SortOrder
     addressNorm?: SortOrderInput | SortOrder
+    gnafPid?: SortOrderInput | SortOrder
     firstName?: SortOrderInput | SortOrder
     lastName?: SortOrderInput | SortOrder
     email?: SortOrderInput | SortOrder
@@ -47981,6 +47998,7 @@ export namespace Prisma {
     organizationId?: StringWithAggregatesFilter<"Contact"> | string
     phoneE164?: StringNullableWithAggregatesFilter<"Contact"> | string | null
     addressNorm?: StringNullableWithAggregatesFilter<"Contact"> | string | null
+    gnafPid?: StringNullableWithAggregatesFilter<"Contact"> | string | null
     firstName?: StringNullableWithAggregatesFilter<"Contact"> | string | null
     lastName?: StringNullableWithAggregatesFilter<"Contact"> | string | null
     email?: StringNullableWithAggregatesFilter<"Contact"> | string | null
@@ -51323,6 +51341,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -51352,6 +51371,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -51379,6 +51399,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51408,6 +51429,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51436,6 +51458,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -51452,6 +51475,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -51468,6 +51492,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -55347,6 +55372,7 @@ export namespace Prisma {
     organizationId?: SortOrder
     phoneE164?: SortOrder
     addressNorm?: SortOrder
+    gnafPid?: SortOrder
     firstName?: SortOrder
     lastName?: SortOrder
     email?: SortOrder
@@ -55369,6 +55395,7 @@ export namespace Prisma {
     organizationId?: SortOrder
     phoneE164?: SortOrder
     addressNorm?: SortOrder
+    gnafPid?: SortOrder
     firstName?: SortOrder
     lastName?: SortOrder
     email?: SortOrder
@@ -55385,6 +55412,7 @@ export namespace Prisma {
     organizationId?: SortOrder
     phoneE164?: SortOrder
     addressNorm?: SortOrder
+    gnafPid?: SortOrder
     firstName?: SortOrder
     lastName?: SortOrder
     email?: SortOrder
@@ -62779,6 +62807,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -62806,6 +62835,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -63687,6 +63717,7 @@ export namespace Prisma {
     organizationId?: StringFilter<"Contact"> | string
     phoneE164?: StringNullableFilter<"Contact"> | string | null
     addressNorm?: StringNullableFilter<"Contact"> | string | null
+    gnafPid?: StringNullableFilter<"Contact"> | string | null
     firstName?: StringNullableFilter<"Contact"> | string | null
     lastName?: StringNullableFilter<"Contact"> | string | null
     email?: StringNullableFilter<"Contact"> | string | null
@@ -65938,6 +65969,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -65966,6 +65998,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -66053,6 +66086,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -66081,6 +66115,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67023,6 +67058,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -67051,6 +67087,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -67152,6 +67189,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67180,6 +67218,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67328,6 +67367,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -67356,6 +67396,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -67532,6 +67573,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67560,6 +67602,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67708,6 +67751,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -67736,6 +67780,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -67912,6 +67957,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -67940,6 +67986,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -68035,6 +68082,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -68063,6 +68111,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -68180,6 +68229,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -68208,6 +68258,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -68986,6 +69037,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -69014,6 +69066,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -69131,6 +69184,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -69159,6 +69213,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70104,6 +70159,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -70132,6 +70188,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -70305,6 +70362,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70333,6 +70391,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70640,6 +70699,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -70668,6 +70728,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -70785,6 +70846,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -70813,6 +70875,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71337,6 +71400,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -71365,6 +71429,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -71446,6 +71511,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71474,6 +71540,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -71898,6 +71965,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -71926,6 +71994,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -72667,6 +72736,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -72695,6 +72765,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -72770,6 +72841,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -72798,6 +72870,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -72893,6 +72966,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -72921,6 +72995,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -73071,6 +73146,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -73099,6 +73175,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -73804,6 +73881,7 @@ export namespace Prisma {
     id?: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -74419,6 +74497,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74446,6 +74525,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -74473,6 +74553,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -76947,6 +77028,7 @@ export namespace Prisma {
     organizationId: string
     phoneE164?: string | null
     addressNorm?: string | null
+    gnafPid?: string | null
     firstName?: string | null
     lastName?: string | null
     email?: string | null
@@ -76981,6 +77063,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -77009,6 +77092,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
@@ -77036,6 +77120,7 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     phoneE164?: NullableStringFieldUpdateOperationsInput | string | null
     addressNorm?: NullableStringFieldUpdateOperationsInput | string | null
+    gnafPid?: NullableStringFieldUpdateOperationsInput | string | null
     firstName?: NullableStringFieldUpdateOperationsInput | string | null
     lastName?: NullableStringFieldUpdateOperationsInput | string | null
     email?: NullableStringFieldUpdateOperationsInput | string | null
