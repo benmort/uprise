@@ -31,6 +31,16 @@ screenshots (they're the same app). The fixes below are the genuine drifts found
 - **D Journeys** — node-flow builder (Trigger→Wait→Action), palette, dry-run/activate.
 - **Dashboard / Inbox / Audience** — match the 3 reference screenshots exactly.
 
+## 2026-06-18 refresh (post amber fix + cascade + deferred gaps)
+
+Re-captured all surfaces against a clean prod build. Confirmed:
+- **A3 door pad** now renders the design: green "Spoke to …", neutral no-contact grid,
+  **amber** Terminal/Data-quality row (was red).
+- **Cascade sidebar** (`sidebar-cascade.png`) matches the prototype (groups + rail + dots).
+- The three deferred gaps now built: **E2** server-owned inbox ownership (claim/release),
+  **G3** door photo upload (`@vercel/blob`, gated on `BLOB_READ_WRITE_TOKEN`), **G14**
+  push-to-field (web-push + VAPID + SW handler + `/field/me` enable + live-room "Notify field").
+
 ## Notes
 
 - A transient "1 error" dev indicator appeared on field captures; a clean reload with

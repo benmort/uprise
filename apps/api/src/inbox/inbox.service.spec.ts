@@ -10,7 +10,8 @@ describe("InboxService", () => {
     inboundMessage: { create: jest.fn() },
     blastRecipient: { updateMany: jest.fn() },
     analyticsSnapshot: { create: jest.fn() },
-    conversationState: { upsert: jest.fn() },
+    conversationState: { upsert: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
+    appUser: { findMany: jest.fn() },
   } as any;
   const config = {
     get: jest.fn((key: string, fallback?: string) => {
@@ -61,6 +62,9 @@ describe("InboxService", () => {
     prisma.blastRecipient.updateMany.mockResolvedValue({ count: 0 });
     prisma.analyticsSnapshot.create.mockResolvedValue({});
     prisma.conversationState.upsert.mockResolvedValue({});
+    prisma.conversationState.updateMany.mockResolvedValue({ count: 1 });
+    prisma.conversationState.findUnique.mockResolvedValue(null);
+    prisma.appUser.findMany.mockResolvedValue([]);
     repo.listContactNamesByPhones.mockResolvedValue([]);
     consent.canSend.mockReturnValue(true);
     sessionWindow.isOpen.mockResolvedValue(true);
@@ -316,5 +320,24 @@ describe("InboxService", () => {
         }),
       }),
     );
+  });
+
+  describe("ownership (E2)", () => {
+    it("claims a conversation for a user and resolves the owner name", async () => {
+      prisma.appUser.findMany.mockResolvedValue([{ id: "u1", displayName: "Ada", email: "a@b.c" }]);
+      const res = await service.claimConversation("+15550000001", "u1", "SMS");
+      expect(prisma.conversationState.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ update: expect.objectContaining({ ownerId: "u1" }) }),
+      );
+      expect(res.owner).toEqual({ id: "u1", name: "Ada" });
+    });
+
+    it("releases a conversation (clears the owner)", async () => {
+      const res = await service.releaseConversation("+15550000001", "SMS");
+      expect(prisma.conversationState.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { ownerId: null, claimedAt: null } }),
+      );
+      expect(res.owner).toBeNull();
+    });
   });
 });

@@ -544,6 +544,8 @@ model ConversationState {
   channel        MessageChannel @default(SMS)
   unreadCount    Int            @default(0)
   resolved       Boolean        @default(false)
+  ownerId        String? // AppUser id that has claimed this conversation (server-owned)
+  claimedAt      DateTime?
   lastMessageAt  DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -552,6 +554,7 @@ model ConversationState {
 
   @@unique([organizationId, contactPhone, channel])
   @@index([contactId])
+  @@index([organizationId, ownerId])
 }
 
 // ── Shared engagement layer ──────────────────────────────────────────────

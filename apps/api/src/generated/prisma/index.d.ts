@@ -24131,6 +24131,8 @@ export namespace Prisma {
     channel: $Enums.MessageChannel | null
     unreadCount: number | null
     resolved: boolean | null
+    ownerId: string | null
+    claimedAt: Date | null
     lastMessageAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -24144,6 +24146,8 @@ export namespace Prisma {
     channel: $Enums.MessageChannel | null
     unreadCount: number | null
     resolved: boolean | null
+    ownerId: string | null
+    claimedAt: Date | null
     lastMessageAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -24157,6 +24161,8 @@ export namespace Prisma {
     channel: number
     unreadCount: number
     resolved: number
+    ownerId: number
+    claimedAt: number
     lastMessageAt: number
     createdAt: number
     updatedAt: number
@@ -24180,6 +24186,8 @@ export namespace Prisma {
     channel?: true
     unreadCount?: true
     resolved?: true
+    ownerId?: true
+    claimedAt?: true
     lastMessageAt?: true
     createdAt?: true
     updatedAt?: true
@@ -24193,6 +24201,8 @@ export namespace Prisma {
     channel?: true
     unreadCount?: true
     resolved?: true
+    ownerId?: true
+    claimedAt?: true
     lastMessageAt?: true
     createdAt?: true
     updatedAt?: true
@@ -24206,6 +24216,8 @@ export namespace Prisma {
     channel?: true
     unreadCount?: true
     resolved?: true
+    ownerId?: true
+    claimedAt?: true
     lastMessageAt?: true
     createdAt?: true
     updatedAt?: true
@@ -24306,6 +24318,8 @@ export namespace Prisma {
     channel: $Enums.MessageChannel
     unreadCount: number
     resolved: boolean
+    ownerId: string | null
+    claimedAt: Date | null
     lastMessageAt: Date | null
     createdAt: Date
     updatedAt: Date
@@ -24338,6 +24352,8 @@ export namespace Prisma {
     channel?: boolean
     unreadCount?: boolean
     resolved?: boolean
+    ownerId?: boolean
+    claimedAt?: boolean
     lastMessageAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -24353,6 +24369,8 @@ export namespace Prisma {
     channel?: boolean
     unreadCount?: boolean
     resolved?: boolean
+    ownerId?: boolean
+    claimedAt?: boolean
     lastMessageAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -24368,6 +24386,8 @@ export namespace Prisma {
     channel?: boolean
     unreadCount?: boolean
     resolved?: boolean
+    ownerId?: boolean
+    claimedAt?: boolean
     lastMessageAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -24396,6 +24416,8 @@ export namespace Prisma {
       channel: $Enums.MessageChannel
       unreadCount: number
       resolved: boolean
+      ownerId: string | null
+      claimedAt: Date | null
       lastMessageAt: Date | null
       createdAt: Date
       updatedAt: Date
@@ -24801,6 +24823,8 @@ export namespace Prisma {
     readonly channel: FieldRef<"ConversationState", 'MessageChannel'>
     readonly unreadCount: FieldRef<"ConversationState", 'Int'>
     readonly resolved: FieldRef<"ConversationState", 'Boolean'>
+    readonly ownerId: FieldRef<"ConversationState", 'String'>
+    readonly claimedAt: FieldRef<"ConversationState", 'DateTime'>
     readonly lastMessageAt: FieldRef<"ConversationState", 'DateTime'>
     readonly createdAt: FieldRef<"ConversationState", 'DateTime'>
     readonly updatedAt: FieldRef<"ConversationState", 'DateTime'>
@@ -46920,6 +46944,8 @@ export namespace Prisma {
     channel: 'channel',
     unreadCount: 'unreadCount',
     resolved: 'resolved',
+    ownerId: 'ownerId',
+    claimedAt: 'claimedAt',
     lastMessageAt: 'lastMessageAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -49380,6 +49406,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFilter<"ConversationState"> | $Enums.MessageChannel
     unreadCount?: IntFilter<"ConversationState"> | number
     resolved?: BoolFilter<"ConversationState"> | boolean
+    ownerId?: StringNullableFilter<"ConversationState"> | string | null
+    claimedAt?: DateTimeNullableFilter<"ConversationState"> | Date | string | null
     lastMessageAt?: DateTimeNullableFilter<"ConversationState"> | Date | string | null
     createdAt?: DateTimeFilter<"ConversationState"> | Date | string
     updatedAt?: DateTimeFilter<"ConversationState"> | Date | string
@@ -49395,6 +49423,8 @@ export namespace Prisma {
     channel?: SortOrder
     unreadCount?: SortOrder
     resolved?: SortOrder
+    ownerId?: SortOrderInput | SortOrder
+    claimedAt?: SortOrderInput | SortOrder
     lastMessageAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -49414,6 +49444,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFilter<"ConversationState"> | $Enums.MessageChannel
     unreadCount?: IntFilter<"ConversationState"> | number
     resolved?: BoolFilter<"ConversationState"> | boolean
+    ownerId?: StringNullableFilter<"ConversationState"> | string | null
+    claimedAt?: DateTimeNullableFilter<"ConversationState"> | Date | string | null
     lastMessageAt?: DateTimeNullableFilter<"ConversationState"> | Date | string | null
     createdAt?: DateTimeFilter<"ConversationState"> | Date | string
     updatedAt?: DateTimeFilter<"ConversationState"> | Date | string
@@ -49429,6 +49461,8 @@ export namespace Prisma {
     channel?: SortOrder
     unreadCount?: SortOrder
     resolved?: SortOrder
+    ownerId?: SortOrderInput | SortOrder
+    claimedAt?: SortOrderInput | SortOrder
     lastMessageAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -49450,6 +49484,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelWithAggregatesFilter<"ConversationState"> | $Enums.MessageChannel
     unreadCount?: IntWithAggregatesFilter<"ConversationState"> | number
     resolved?: BoolWithAggregatesFilter<"ConversationState"> | boolean
+    ownerId?: StringNullableWithAggregatesFilter<"ConversationState"> | string | null
+    claimedAt?: DateTimeNullableWithAggregatesFilter<"ConversationState"> | Date | string | null
     lastMessageAt?: DateTimeNullableWithAggregatesFilter<"ConversationState"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"ConversationState"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"ConversationState"> | Date | string
@@ -53006,6 +53042,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -53021,6 +53059,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -53032,6 +53072,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53047,6 +53089,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53060,6 +53104,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -53071,6 +53117,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53084,6 +53132,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56524,6 +56574,8 @@ export namespace Prisma {
     channel?: SortOrder
     unreadCount?: SortOrder
     resolved?: SortOrder
+    ownerId?: SortOrder
+    claimedAt?: SortOrder
     lastMessageAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -56541,6 +56593,8 @@ export namespace Prisma {
     channel?: SortOrder
     unreadCount?: SortOrder
     resolved?: SortOrder
+    ownerId?: SortOrder
+    claimedAt?: SortOrder
     lastMessageAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -56554,6 +56608,8 @@ export namespace Prisma {
     channel?: SortOrder
     unreadCount?: SortOrder
     resolved?: SortOrder
+    ownerId?: SortOrder
+    claimedAt?: SortOrder
     lastMessageAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -62619,6 +62675,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -62632,6 +62690,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -63532,6 +63592,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFilter<"ConversationState"> | $Enums.MessageChannel
     unreadCount?: IntFilter<"ConversationState"> | number
     resolved?: BoolFilter<"ConversationState"> | boolean
+    ownerId?: StringNullableFilter<"ConversationState"> | string | null
+    claimedAt?: DateTimeNullableFilter<"ConversationState"> | Date | string | null
     lastMessageAt?: DateTimeNullableFilter<"ConversationState"> | Date | string | null
     createdAt?: DateTimeFilter<"ConversationState"> | Date | string
     updatedAt?: DateTimeFilter<"ConversationState"> | Date | string
@@ -64329,6 +64391,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -64342,6 +64406,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -73703,6 +73769,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -74239,6 +74307,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -74252,6 +74322,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -74264,6 +74336,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -74996,6 +75070,8 @@ export namespace Prisma {
     channel?: $Enums.MessageChannel
     unreadCount?: number
     resolved?: boolean
+    ownerId?: string | null
+    claimedAt?: Date | string | null
     lastMessageAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -75284,6 +75360,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -75297,6 +75375,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -75309,6 +75389,8 @@ export namespace Prisma {
     channel?: EnumMessageChannelFieldUpdateOperationsInput | $Enums.MessageChannel
     unreadCount?: IntFieldUpdateOperationsInput | number
     resolved?: BoolFieldUpdateOperationsInput | boolean
+    ownerId?: NullableStringFieldUpdateOperationsInput | string | null
+    claimedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastMessageAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string

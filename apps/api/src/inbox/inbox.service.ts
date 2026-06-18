@@ -231,6 +231,7 @@ export class InboxService {
       channel: MessageChannel;
       unreadCount: number;
       resolved: boolean;
+      ownerId?: string | null;
       lastMessageAt?: Date | null;
       createdAt?: Date;
       updatedAt?: Date;
@@ -248,6 +249,7 @@ export class InboxService {
         channel,
         unreadCount: row.unreadCount,
         resolved: row.resolved,
+        ownerId: row.ownerId,
         lastMessageAt: row.lastMessageAt,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -327,9 +329,14 @@ export class InboxService {
       contactNameByPhone.set(phone, fullName);
     }
 
+    const ownerById = await this.resolveOwners(
+      org.id,
+      sortedRows.map((row) => row.ownerId),
+    );
     const withNames = sortedRows.map((row) => ({
       ...row,
       contactName: contactNameByPhone.get(row.contactPhone) || null,
+      owner: row.ownerId ? ownerById.get(row.ownerId) ?? null : null,
     }));
 
     if (!input?.query?.trim()) return withNames;
@@ -338,6 +345,21 @@ export class InboxService {
       if (row.contactPhone.toLowerCase().includes(q)) return true;
       return (row.contactName || "").toLowerCase().includes(q);
     });
+  }
+
+  /** Resolve claimed-conversation owner ids to { id, name } (batched). */
+  private async resolveOwners(organizationId: string, ownerIds: Array<string | null | undefined>) {
+    const ids = [...new Set(ownerIds.filter((id): id is string => Boolean(id)))];
+    const map = new Map<string, { id: string; name: string }>();
+    if (ids.length === 0) return map;
+    const users = await this.prisma.appUser.findMany({
+      where: { id: { in: ids }, organizationId },
+      select: { id: true, displayName: true, email: true },
+    });
+    for (const u of users) map.set(u.id, { id: u.id, name: u.displayName || u.email });
+    // The env super-admin isn't an AppUser row; label it sensibly.
+    for (const id of ids) if (!map.has(id)) map.set(id, { id, name: id === "env-admin" ? "Admin" : "Unknown" });
+    return map;
   }
 
   async getThread(contactPhone: string, channelInput?: MessageChannel | string) {
@@ -452,11 +474,22 @@ export class InboxService {
         ? contactNames[0].fullName.trim()
         : null;
 
+    const convo = await this.prisma.conversationState.findUnique({
+      where: {
+        organizationId_contactPhone_channel: { organizationId: org.id, contactPhone: phone, channel },
+      },
+      select: { ownerId: true },
+    });
+    const owner = convo?.ownerId
+      ? (await this.resolveOwners(org.id, [convo.ownerId])).get(convo.ownerId) ?? null
+      : null;
+
     return {
       contactPhone: phone,
       contactName,
       channel,
       sessionOpen,
+      owner,
       blastContext,
       blastHistory,
       messages: deduped,
@@ -554,6 +587,38 @@ export class InboxService {
         resolved,
       },
     });
+  }
+
+  /** Claim a conversation for the given user (server-owned ownership). */
+  async claimConversation(
+    contactPhone: string,
+    ownerId: string,
+    channelInput?: MessageChannel | string,
+  ) {
+    const org = await this.ensureOrganization();
+    const phone = normalizePhoneE164(contactPhone);
+    const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
+    await this.prisma.conversationState.upsert({
+      where: {
+        organizationId_contactPhone_channel: { organizationId: org.id, contactPhone: phone, channel },
+      },
+      update: { ownerId, claimedAt: new Date() },
+      create: { organizationId: org.id, contactPhone: phone, channel, ownerId, claimedAt: new Date() },
+    });
+    const owner = (await this.resolveOwners(org.id, [ownerId])).get(ownerId) ?? null;
+    return { contactPhone: phone, channel, owner };
+  }
+
+  /** Release a conversation (clear its owner). */
+  async releaseConversation(contactPhone: string, channelInput?: MessageChannel | string) {
+    const org = await this.ensureOrganization();
+    const phone = normalizePhoneE164(contactPhone);
+    const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
+    await this.prisma.conversationState.updateMany({
+      where: { organizationId: org.id, contactPhone: phone, channel },
+      data: { ownerId: null, claimedAt: null },
+    });
+    return { contactPhone: phone, channel, owner: null };
   }
 
   async suggest(message: string) {

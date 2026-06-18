@@ -1,0 +1,32 @@
+import { chromium } from "playwright";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+const env = readFileSync("apps/api/.env", "utf8");
+const U = env.match(/^BASIC_AUTH_USERNAME=(.*)$/m)[1].trim();
+const P = env.match(/^BASIC_AUTH_PASSWORD=(.*)$/m)[1].trim();
+const h = "Basic " + Buffer.from(`${U}:${P}`).toString("base64");
+const api = async (p) => (await (await fetch("http://localhost:3001/api/v1" + p, { headers: { Authorization: h } })).json()).data;
+const cv = (await api("/canvass/canvassers")).find((u) => u.email === "demo.canvasser@yarns.test");
+const a = (await api(`/canvass/assignments?canvasserId=${cv.id}`))[0];
+const OUT = resolve("docs/ui-audit/dev");
+const b = await chromium.launch({ channel: "chrome" });
+const auth = ([u, p]) => sessionStorage.setItem("yarn_auth_credentials", JSON.stringify({ username: u, password: p }));
+
+const ctx2 = await b.newContext({ storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "yarns.canvasserId", value: cv.id }, { name: "yarns.fieldOnboarded", value: "true" }] }] } });
+await ctx2.addInitScript(auth, [U, P]);
+const m = await ctx2.newPage();
+await m.setViewportSize({ width: 392, height: 812 });
+await m.goto(`http://localhost:3000/field/${a.turfId}/door/${a.walkLists[0].items[4].id}`, { waitUntil: "networkidle", timeout: 30000 });
+await m.waitForTimeout(1500);
+await m.screenshot({ path: resolve(OUT, "A3-door.png"), fullPage: true });
+console.log("A3 done");
+
+const ctx = await b.newContext({ storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "yarns.canvasserId", value: cv.id }] }] } });
+await ctx.addInitScript(auth, [U, P]);
+const d = await ctx.newPage();
+await d.setViewportSize({ width: 1280, height: 900 });
+await d.goto(`http://localhost:3000/journeys`, { waitUntil: "networkidle", timeout: 30000 });
+await d.waitForTimeout(1500);
+await d.screenshot({ path: resolve(OUT, "D-journeys.png"), fullPage: true });
+console.log("D done");
+await b.close();

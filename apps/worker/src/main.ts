@@ -7,6 +7,7 @@ import { Job, QueueEvents, Worker } from "bullmq";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { IntegrationsService } from "../../api/src/integrations/integrations.service";
+import { JourneysService } from "../../api/src/journeys/journeys.service";
 import { DomainLogger } from "../../api/src/common/logging/domain-logger.service";
 import { QueueConfigService } from "../../api/src/common/queue/queue-config.service";
 import {
@@ -14,6 +15,7 @@ import {
   isBlastRetryFailedJobPayload,
   isBlastSendBatchJobPayload,
   isIntegrationSyncJobPayload,
+  isJourneyRunRungJobPayload,
 } from "../../api/src/common/queue/queue.payloads";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES } from "../../api/src/common/queue/queue.constants";
 
@@ -46,6 +48,7 @@ async function bootstrap(): Promise<void> {
   const audiences = app.get(AudiencesService);
   const blasts = app.get(BlastsService);
   const integrations = app.get(IntegrationsService);
+  const journeys = app.get(JourneysService);
   const logger = app.get(DomainLogger);
 
   const connection = queueConfig.queueConnection;
@@ -112,6 +115,17 @@ async function bootstrap(): Promise<void> {
         return integrations.processSyncQueueJob(job.data);
       },
       { connection, prefix, concurrency: queueConfig.integrationSyncQueueConcurrency },
+    ),
+    new Worker(
+      QUEUE_NAMES.JOURNEY_RUN,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.JOURNEY_RUN_RUNG) return null;
+        if (!isJourneyRunRungJobPayload(job.data)) {
+          throw new Error(`Invalid journey run job payload for job ${job.id}`);
+        }
+        return journeys.processRungJob(job.data);
+      },
+      { connection, prefix, concurrency: queueConfig.journeyQueueConcurrency },
     ),
   ];
 

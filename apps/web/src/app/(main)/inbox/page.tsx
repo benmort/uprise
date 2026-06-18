@@ -9,6 +9,8 @@ import {
   getAiSuggestions,
   getConversation,
   getRealtimeStreamToken,
+  claimConversation,
+  releaseConversation,
   listConversations,
   markConversation,
   sendInboxReply,
@@ -18,6 +20,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ContactDoorContext } from "@/components/inbox/contact-door-context";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -31,12 +34,10 @@ import {
   type ResponderAlertSettings,
   DEFAULT_RESPONDER_ALERT_SETTINGS,
   loadBlastWatchSettings,
-  loadOwnershipMap,
   loadResponderAlertSettings,
   loadSnoozeMap,
   playResponderAlertSound,
   saveBlastWatchSettings,
-  saveOwnershipMap,
   saveResponderAlertSettings,
   saveSnoozeMap,
 } from "@/lib/responder-alerts";
@@ -258,7 +259,6 @@ export default function InboxPage() {
   useEffect(() => {
     setAlertSettings(loadResponderAlertSettings());
     setBlastWatch(loadBlastWatchSettings());
-    setOwnershipMap(loadOwnershipMap());
     setSnoozeMap(loadSnoozeMap());
   }, []);
 
@@ -269,10 +269,6 @@ export default function InboxPage() {
   useEffect(() => {
     saveBlastWatchSettings(blastWatch);
   }, [blastWatch]);
-
-  useEffect(() => {
-    saveOwnershipMap(ownershipMap);
-  }, [ownershipMap]);
 
   useEffect(() => {
     saveSnoozeMap(snoozeMap);
@@ -321,8 +317,17 @@ export default function InboxPage() {
       return;
     }
     setError("");
-    const rows = res.data as ConversationRow[];
+    const raw = res.data as Array<Record<string, unknown>>;
+    const rows = raw as unknown as ConversationRow[];
     setConversations(sortConversations(rows));
+    // Ownership is now server-owned: derive the (phone -> owner name) map from the
+    // conversation payloads instead of localStorage.
+    const owners: Record<string, string> = {};
+    for (const r of raw) {
+      const o = r.owner as { name?: string } | null | undefined;
+      if (o?.name) owners[String(r.contactPhone)] = o.name;
+    }
+    setOwnershipMap(owners);
     setLastUpdatedAt(new Date());
     if (withLoadingState) setLoadingConversations(false);
   }, [routeQuery, routeBlastId, routeAudienceId]);
@@ -942,24 +947,20 @@ export default function InboxPage() {
                             size="sm"
                             variant="ghost"
                             className="opacity-0 transition group-hover:opacity-100"
-                            onClick={(event) => {
+                            onClick={async (event) => {
                               event.stopPropagation();
-                              setOwnershipMap((prev) => {
-                                const next = { ...prev };
-                                const owner = (next[row.contactPhone] || "").trim();
-                                if (owner && owner.toLowerCase() === alertSettings.currentAgent.trim().toLowerCase()) {
-                                  delete next[row.contactPhone];
-                                } else {
-                                  next[row.contactPhone] = alertSettings.currentAgent.trim() || "Agent";
-                                }
-                                return next;
-                              });
+                              const owned = Boolean(ownershipMap[row.contactPhone]);
+                              const res = owned
+                                ? await releaseConversation(row.contactPhone, row.channel)
+                                : await claimConversation(row.contactPhone, row.channel);
+                              if (!res.ok) {
+                                showToast({ tone: "error", title: "Couldn't update owner", description: res.error });
+                                return;
+                              }
+                              void loadConversations(false);
                             }}
                           >
-                            {ownershipMap[row.contactPhone]?.toLowerCase() ===
-                            alertSettings.currentAgent.trim().toLowerCase()
-                              ? "Unclaim"
-                              : "Claim"}
+                            {ownershipMap[row.contactPhone] ? "Release" : "Claim"}
                           </Button>
                           <Button
                             size="sm"
@@ -1060,6 +1061,7 @@ export default function InboxPage() {
             {selectedConversation?.contactName && routeContact && (
               <p className="text-xs text-muted-foreground">{routeContact}</p>
             )}
+            {routeContact ? <ContactDoorContext phone={routeContact} /> : null}
             {routeContact ? (
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-muted-foreground">
@@ -1117,25 +1119,19 @@ export default function InboxPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() =>
-                    setOwnershipMap((prev) => {
-                      const next = { ...prev };
-                      if (
-                        ownershipMap[routeContact]?.toLowerCase() ===
-                        alertSettings.currentAgent.trim().toLowerCase()
-                      ) {
-                        delete next[routeContact];
-                      } else {
-                        next[routeContact] = alertSettings.currentAgent.trim() || "Agent";
-                      }
-                      return next;
-                    })
-                  }
+                  onClick={async () => {
+                    const owned = Boolean(ownershipMap[routeContact]);
+                    const res = owned
+                      ? await releaseConversation(routeContact, threadChannel)
+                      : await claimConversation(routeContact, threadChannel);
+                    if (!res.ok) {
+                      showToast({ tone: "error", title: "Couldn't update owner", description: res.error });
+                      return;
+                    }
+                    void loadConversations(false);
+                  }}
                 >
-                  {ownershipMap[routeContact]?.toLowerCase() ===
-                  alertSettings.currentAgent.trim().toLowerCase()
-                    ? "Release"
-                    : "Claim"}
+                  {ownershipMap[routeContact] ? "Release" : "Claim"}
                 </Button>
                 <Button
                   size="sm"

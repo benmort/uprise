@@ -19,6 +19,7 @@ import {
   type MessageChannel,
   type WhatsappTemplate,
 } from "@/lib/api";
+import { tourComposerIntent } from "@/lib/tours/yarns-tour";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -137,10 +138,30 @@ export default function BlastComposerPage() {
     });
   }, []);
 
+  // Bridge for the WhatsApp guided tour: lets a tour step flip this composer into
+  // WhatsApp mode (and auto-pick a template) so the WhatsApp-only UI is revealed.
+  const waTemplatesRef = useRef<WhatsappTemplate[]>([]);
+  useEffect(() => {
+    tourComposerIntent.setChannel = (ch) => {
+      setChannel(ch);
+      if (ch === "WHATSAPP") {
+        setWhatsappEnabled(true);
+        const first = waTemplatesRef.current[0];
+        if (first) setContentSid((sid) => sid || first.contentSid);
+      }
+    };
+    return () => {
+      tourComposerIntent.setChannel = () => {};
+    };
+  }, []);
+
   useEffect(() => {
     if (!whatsappEnabled) return;
     listWhatsappTemplates("approved").then((res) => {
-      if (res.ok) setWaTemplates(res.data);
+      if (res.ok) {
+        setWaTemplates(res.data);
+        waTemplatesRef.current = res.data;
+      }
     });
   }, [whatsappEnabled]);
 
@@ -614,7 +635,7 @@ export default function BlastComposerPage() {
             )}
           </CardHeader>
           {isWhatsapp ? (
-            <CardContent className="space-y-4">
+            <CardContent id="tour-composer-wa" className="space-y-4">
               {waTemplates.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No approved WhatsApp templates found. Sync templates from Twilio, then refresh.

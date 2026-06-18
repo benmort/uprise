@@ -73,6 +73,10 @@ export type ValidatedEnv = {
   FEATURE_WHATSAPP_ENABLED: boolean;
   TWILIO_CONTENT_API_ENABLED: boolean;
   WHATSAPP_SESSION_WINDOW_HOURS: number;
+  FEATURE_PUSH_ENABLED: boolean;
+  VAPID_PUBLIC_KEY: string;
+  VAPID_PRIVATE_KEY: string;
+  VAPID_SUBJECT: string;
   ACTION_NETWORK_API_BASE_URL: string;
   ACTION_NETWORK_API_KEY: string;
   ACTION_NETWORK_SYNC_PER_PAGE: number;
@@ -219,6 +223,10 @@ export function validateEnv(config: Env): ValidatedEnv {
       24,
       errors,
     ),
+    FEATURE_PUSH_ENABLED: boolish(config, "FEATURE_PUSH_ENABLED", false),
+    VAPID_PUBLIC_KEY: config.VAPID_PUBLIC_KEY?.trim() || "",
+    VAPID_PRIVATE_KEY: config.VAPID_PRIVATE_KEY?.trim() || "",
+    VAPID_SUBJECT: config.VAPID_SUBJECT?.trim() || "mailto:hello@yarns.app",
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
     ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),

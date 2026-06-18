@@ -3,6 +3,7 @@ export const QUEUE_NAMES = {
   BLAST_SEND: "blast-send",
   BLAST_RETRY: "blast-retry",
   INTEGRATION_SYNC: "integration-sync",
+  JOURNEY_RUN: "journey-run",
 } as const;
 
 export const QUEUE_JOB_TYPES = {
@@ -10,6 +11,7 @@ export const QUEUE_JOB_TYPES = {
   BLAST_SEND_BATCH: "blast.send.batch",
   BLAST_RETRY_FAILED: "blast.retry.failed",
   INTEGRATION_SYNC_LIST: "integration.sync.list",
+  JOURNEY_RUN_RUNG: "journey.run.rung",
 } as const;
 
 export function getAudienceImportJobId(importId: string, chunkKey?: string): string {
@@ -28,4 +30,8 @@ export function getIntegrationSyncJobId(syncJobId: string, chunkKey?: string): s
   return chunkKey
     ? `integration-sync_${syncJobId}_${chunkKey}`
     : `integration-sync_${syncJobId}`;
+}
+
+export function getJourneyRungJobId(enrolmentId: string, rungIndex: number): string {
+  return `journey-run_${enrolmentId}_${rungIndex}`;
 }

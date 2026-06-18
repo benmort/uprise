@@ -114,12 +114,12 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <Card>
+      <Card id="tour-settings">
         <CardHeader>
           <CardTitle>Responder Alert Settings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 text-sm sm:grid-cols-2">
+          <div id="tour-settings-alerts" className="grid gap-3 text-sm sm:grid-cols-2">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"

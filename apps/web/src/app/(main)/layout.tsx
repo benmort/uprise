@@ -5,12 +5,18 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
   LayoutDashboard,
   LogOut,
   Mail,
+  MapPin,
   MessageSquareText,
   Settings,
+  ShieldCheck,
+  Sparkles,
   Users,
+  Workflow,
+  type LucideIcon,
 } from "lucide-react";
 import {
   createBlast,
@@ -20,20 +26,64 @@ import {
   listConversations,
 } from "@/lib/api";
 import { clearCredentials, getCredentials } from "@/lib/auth";
+import { listCampaigns } from "@/lib/api/campaigns";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
 
 const DEFAULT_BLAST_TEMPLATE =
   "Hi {{first_name}}! We're building our volunteer team in {{city}} and would love your help at an upcoming community action. Can we count you in? Reply YES to volunteer or STOP to opt out.";
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/audience", label: "Audience", icon: Users },
-  { href: "/inbox", label: "Inbox", icon: Mail },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+type NavMatch = (pathname: string) => boolean;
+type NavChild = { label: string; href: string; match: NavMatch };
+type NavNode =
+  | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch }
+  | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavChild[] };
+
+// Cascade sidebar model (matches the design prototype): leaf items + expandable
+// groups whose children appear on an indented rail. Campaign-scoped children use
+// the current campaign id when one exists, else fall back to the canvass overview.
+function buildNav(campaignId: string): NavNode[] {
+  const scoped = (suffix: string) =>
+    campaignId ? `/canvass/${campaignId}/${suffix}` : "/canvass";
+  return [
+    { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
+    { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience") },
+    { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox") },
+    {
+      type: "group", key: "canvass", label: "Canvass", icon: MapPin, match: (p) => p.startsWith("/canvass"),
+      children: [
+        { label: "Overview", href: "/canvass", match: (p) => p === "/canvass" },
+        { label: "Turf map", href: scoped("turf"), match: (p) => p.includes("/turf") },
+        { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists") },
+        { label: "Live", href: scoped("live"), match: (p) => p.includes("/live") },
+        { label: "Canvassers", href: "/canvass/canvassers", match: (p) => p.startsWith("/canvass/canvassers") },
+        { label: "Results", href: scoped("results"), match: (p) => p.includes("/results") },
+      ],
+    },
+    {
+      type: "group", key: "engagement", label: "Engagement", icon: Sparkles, match: (p) => p.startsWith("/engagement"),
+      children: [
+        { label: "Surveys", href: "/engagement/surveys", match: (p) => p.startsWith("/engagement/surveys") },
+        { label: "Scripts", href: "/engagement/scripts", match: (p) => p.startsWith("/engagement/scripts") },
+        { label: "Dispositions", href: "/engagement/dispositions", match: (p) => p.startsWith("/engagement/dispositions") },
+        { label: "Canned responses", href: "/engagement/canned-responses", match: (p) => p.startsWith("/engagement/canned-responses") },
+      ],
+    },
+    { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys") },
+    { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance") },
+    {
+      type: "group", key: "settings", label: "Settings", icon: Settings, match: (p) => p.startsWith("/settings"),
+      children: [
+        { label: "General", href: "/settings", match: (p) => p === "/settings" },
+        { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
+        { label: "Roles", href: "/settings/roles", match: (p) => p.startsWith("/settings/roles") },
+      ],
+    },
+  ];
+}
 
 export default function MainLayout({
   children,
@@ -254,12 +304,28 @@ export default function MainLayout({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [router, handleCreateBlast]);
 
-  const activeHref = useMemo(() => {
-    if (!pathname) return "/dashboard";
-    if (pathname.startsWith("/blasts")) return "/analytics";
-    const match = NAV_ITEMS.find((item) => pathname.startsWith(item.href));
-    return match?.href || "/dashboard";
-  }, [pathname]);
+  // Current campaign for the campaign-scoped Canvass children in the cascade nav.
+  const [campaignId, setCampaignId] = useState("");
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    void (async () => {
+      const res = await listCampaigns();
+      if (alive && res.ok && res.data[0]) setCampaignId(res.data[0].id);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [ready]);
+
+  const nav = useMemo(() => buildNav(campaignId), [campaignId]);
+  const p = pathname || "";
+  // Groups toggle independently (prototype: openGroups array). Default-open is the
+  // active group, plus Canvass (prototype seeds openGroups:['canvass']); an explicit
+  // user toggle overrides the default.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const isGroupOpen = (node: Extract<NavNode, { type: "group" }>) =>
+    openGroups[node.key] ?? (node.match(p) || node.key === "canvass");
 
   if (!ready) {
     return (
@@ -270,10 +336,11 @@ export default function MainLayout({
   }
 
   return (
+    <TourRoot>
     <div className="h-screen overflow-hidden bg-background">
       <div className="flex h-full w-full">
         <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-y-auto border-r border-border bg-white p-4">
-          <div className="mb-6">
+          <div id="tour-logo" className="mb-6">
             <Image
               src="/images/yarns-logo-full.png"
               alt="Yarns"
@@ -284,34 +351,90 @@ export default function MainLayout({
             />
           </div>
 
-          <nav className="space-y-1">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeHref === item.href;
+          <nav id="tour-nav" className="space-y-1">
+            {nav.map((node) => {
+              const Icon = node.icon;
+              if (node.type === "leaf") {
+                const active = node.match(p);
+                return (
+                  <Link
+                    key={node.key}
+                    href={node.href}
+                    className={cn(
+                      "flex min-h-11 items-center gap-2.5 rounded-[11px] px-3 py-2 text-[14.5px] font-label",
+                      active
+                        ? "bg-[#eef2fd] font-bold text-primary"
+                        : "font-semibold text-foreground hover:bg-surface-variant",
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px]" />
+                    <span>{node.label}</span>
+                    {node.href === "/inbox" && inboxUnreadCount > 0 ? (
+                      <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                        {inboxUnreadCount}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              }
+              const groupActive = node.match(p);
+              const open = isGroupOpen(node);
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex min-h-11 items-center gap-2 rounded px-3 py-2 text-sm font-label font-bold",
-                    isActive
-                      ? "bg-primary-container text-primary-foreground"
-                      : "text-foreground hover:bg-surface-variant",
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
-                  {item.href === "/inbox" && inboxUnreadCount > 0 ? (
-                    <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-                      {inboxUnreadCount}
-                    </span>
+                <div key={node.key}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroups((o) => ({ ...o, [node.key]: !open }))}
+                    aria-expanded={open}
+                    className={cn(
+                      "flex min-h-11 w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[14.5px] font-label",
+                      groupActive
+                        ? "bg-[#eef2fd] font-bold text-primary"
+                        : "font-semibold text-foreground hover:bg-surface-variant",
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px]" />
+                    <span>{node.label}</span>
+                    <ChevronDown
+                      className={cn(
+                        "ml-auto h-4 w-4 text-muted-foreground transition-transform",
+                        open ? "rotate-0" : "-rotate-90",
+                      )}
+                    />
+                  </button>
+                  {open ? (
+                    <div className="ml-[19px] mb-1.5 mt-px space-y-0.5 border-l-[1.5px] border-[#eef0f3] pl-[11px]">
+                      {node.children.map((child) => {
+                        const childActive = child.match(p);
+                        return (
+                          <Link
+                            key={child.href + child.label}
+                            href={child.href}
+                            className={cn(
+                              "flex min-h-9 items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-[14px]",
+                              childActive
+                                ? "bg-[#eef2fd] font-bold text-primary"
+                                : "font-medium text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "h-1.5 w-1.5 shrink-0 rounded-full",
+                                childActive ? "bg-primary" : "bg-muted-foreground/40",
+                              )}
+                            />
+                            <span>{child.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   ) : null}
-                </Link>
+                </div>
               );
             })}
           </nav>
 
-          <div className="mt-auto pt-4">
+          <div className="mt-auto space-y-1 pt-4">
+            <TourMenuButton />
             <Button
               variant="outline"
               className="w-full justify-start"
@@ -329,7 +452,13 @@ export default function MainLayout({
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-white px-6">
             <div />
-            <Button type="button" disabled={creatingBlast} onClick={handleCreateBlast} className="gap-2">
+            <Button
+              id="tour-create-blast"
+              type="button"
+              disabled={creatingBlast}
+              onClick={handleCreateBlast}
+              className="gap-2"
+            >
               <MessageSquareText className="h-4 w-4" />
               {creatingBlast ? "Creating..." : "Create Blast"}
             </Button>
@@ -338,5 +467,6 @@ export default function MainLayout({
         </div>
       </div>
     </div>
+    </TourRoot>
   );
 }

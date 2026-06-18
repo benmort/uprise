@@ -42,4 +42,9 @@ export class IntegrationsController {
     const n = Number(limit || "20");
     return this.integrations.getSyncJobs(Number.isFinite(n) ? n : 20);
   }
+
+  @Get("connections")
+  listConnections() {
+    return this.integrations.listConnections();
+  }
 }

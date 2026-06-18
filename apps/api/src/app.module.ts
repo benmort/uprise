@@ -23,6 +23,7 @@ import { JourneysModule } from "./journeys/journeys.module";
 import { CanvassingModule } from "./canvassing/canvassing.module";
 import { ComplianceModule } from "./compliance/compliance.module";
 import { SharedSeedModule } from "./shared-seed/shared-seed.module";
+import { PushModule } from "./push/push.module";
 import { HealthModule } from "./health/health.module";
 import { LoggingModule } from "./common/logging/logging.module";
 import { FlagsModule } from "./common/flags/flags.module";
@@ -58,6 +59,7 @@ import { QueueModule } from "./common/queue/queue.module";
     CanvassingModule,
     ComplianceModule,
     SharedSeedModule,
+    PushModule,
     InboxModule,
     HealthModule,
   ],

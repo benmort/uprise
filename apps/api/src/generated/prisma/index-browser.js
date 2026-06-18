@@ -373,6 +373,8 @@ exports.Prisma.ConversationStateScalarFieldEnum = {
   channel: 'channel',
   unreadCount: 'unreadCount',
   resolved: 'resolved',
+  ownerId: 'ownerId',
+  claimedAt: 'claimedAt',
   lastMessageAt: 'lastMessageAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

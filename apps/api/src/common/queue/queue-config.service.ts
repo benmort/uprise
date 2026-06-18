@@ -37,6 +37,10 @@ export class QueueConfigService {
     return Number(this.config.get<string>("BULLMQ_INTEGRATION_SYNC_CONCURRENCY", "47"));
   }
 
+  get journeyQueueConcurrency(): number {
+    return Number(this.config.get<string>("BULLMQ_JOURNEY_QUEUE_CONCURRENCY", "25"));
+  }
+
   get hasRedisConfigured(): boolean {
     return this.redisUrl.length > 0;
   }
