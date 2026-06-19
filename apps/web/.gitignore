@@ -5,3 +5,5 @@ public/sw.js.map
 public/workbox-*.js
 public/workbox-*.js.map
 .vercel
+public/worker-*.js
+public/fallback-*.js
