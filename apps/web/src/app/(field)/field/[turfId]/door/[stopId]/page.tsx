@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Camera, ShieldAlert, UserPlus } from "lucide-react";
 import {
@@ -46,6 +46,7 @@ export default function DoorEntryPage() {
   const [safetyFlag, setSafetyFlag] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -126,36 +127,74 @@ export default function DoorEntryPage() {
 
   async function record(code: string, answers?: SurveyAnswer[]) {
     if (!stop) return;
+    // Guard against a double-tap recording two knocks (distinct localIds) before
+    // the first enqueue completes — the server would accept both as separate knocks.
+    if (submittingRef.current) return;
+    // A knock without a canvasser id is rejected server-side as a terminal CONFLICT,
+    // stranding it in the sync centre. Bail with a clear message instead.
+    const canvasserId = getCanvasserId();
+    if (!canvasserId) {
+      showToast({
+        tone: "error",
+        title: "Not signed in",
+        description: "Your canvasser session was lost — sign in again to record knocks.",
+      });
+      return;
+    }
+    submittingRef.current = true;
     setSaving(true);
     const gps = await capture(); // one-shot GPS at the door
     // One id for both the outbox key and the payload, so a re-synced knock is
     // deduped server-side (DoorKnock unique on (org, localId)).
     const localId = newLocalId();
     const capturedAt = new Date().toISOString();
-    await enqueue(
-      localId,
-      {
-        contactId: stop.contact.id as string,
-        canvasserId: getCanvasserId() ?? "",
+    try {
+      await enqueue(
         localId,
-        dispositionCode: code,
-        walkListItemId: stop.id,
-        lat: gps?.lat,
-        lng: gps?.lng,
-        notes: notes.trim() || undefined,
-        safetyFlag: safetyFlag || undefined,
-        photoUrl: photoUrl || undefined,
-        surveyAnswers: answers?.length ? answers : undefined,
-        clientCapturedAt: capturedAt,
-      },
-      capturedAt,
-    );
+        {
+          contactId: stop.contact.id as string,
+          canvasserId,
+          localId,
+          dispositionCode: code,
+          walkListItemId: stop.id,
+          lat: gps?.lat,
+          lng: gps?.lng,
+          notes: notes.trim() || undefined,
+          safetyFlag: safetyFlag || undefined,
+          photoUrl: photoUrl || undefined,
+          surveyAnswers: answers?.length ? answers : undefined,
+          clientCapturedAt: capturedAt,
+        },
+        capturedAt,
+      );
+    } catch (error) {
+      // IDB write failed — let the canvasser retry rather than silently lose the knock.
+      submittingRef.current = false;
+      setSaving(false);
+      showToast({
+        tone: "error",
+        title: "Couldn't save knock",
+        description: error instanceof Error ? error.message : "Try again.",
+      });
+      return;
+    }
     showToast({ tone: "success", title: "Knock saved", description: "Will sync when online." });
     router.push(`/field/${turfId}`);
   }
 
   if (loading) return <Skeleton className="h-64 w-full" />;
-  if (!stop) return <Card className="p-4">Stop not found.</Card>;
+  if (!stop) {
+    return (
+      <Card className="space-y-3 p-4">
+        <p className="text-sm text-muted-foreground">
+          This stop isn’t in your current walk list — the turf may have been reassigned or updated.
+        </p>
+        <Button className="w-full" onClick={() => router.push(`/field/${turfId}`)}>
+          Back to walk list
+        </Button>
+      </Card>
+    );
+  }
 
   const contact = stop.contact as Record<string, unknown>;
   const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Resident";

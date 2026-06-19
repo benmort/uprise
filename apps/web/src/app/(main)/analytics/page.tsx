@@ -219,7 +219,9 @@ export default function AnalyticsPage() {
       clearTimers();
       closeSource();
     };
-  }, [selectedBlastId, activityPage, trendWindow, activityPageSize]);
+    // channelFilter included so the realtime onmessage closure reloads with the
+    // current channel after the filter changes (else it'd refetch the old channel).
+  }, [selectedBlastId, activityPage, trendWindow, activityPageSize, channelFilter]);
 
   const maxTrend = useMemo(() => {
     return Math.max(

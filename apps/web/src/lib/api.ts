@@ -1,4 +1,13 @@
-import { getBasicAuthHeader, getCredentials, type Credentials } from "./auth";
+import { clearCredentials, getBasicAuthHeader, getCredentials, type Credentials } from "./auth";
+
+/** On a true auth failure (401), drop stale credentials and bounce to /login once. */
+function handleUnauthorized(): void {
+  if (typeof window === "undefined") return;
+  clearCredentials();
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign(`/login?from=${encodeURIComponent(window.location.pathname)}`);
+  }
+}
 
 export function getApiUrl(): string {
   if (typeof window !== "undefined") {
@@ -59,6 +68,10 @@ export async function request<T>(
       | { ok?: boolean; data?: T; error?: { message?: string }; message?: string }
       | null;
     if (!res.ok) {
+      // 401 = the session is invalid (expired/revoked creds): clear + redirect to
+      // login so the user isn't stuck on a page making failing calls. 403 is a
+      // permission error for a valid session — surface it, don't log the user out.
+      if (res.status === 401 && withAuth) handleUnauthorized();
       const message =
         json?.error?.message || json?.message || `Request failed (${res.status})`;
       return { ok: false, error: message };

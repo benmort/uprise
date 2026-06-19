@@ -13,11 +13,19 @@ import { ProgressBar } from "@/components/canvass/progress-bar";
 import { SupportLevelBar } from "@/components/canvass/support-level-bar";
 import type { SupportLevel } from "@/components/canvass/support-level";
 
+// RFC-4180 quote: wrap in double quotes and double any internal quotes, so a code
+// containing a comma/quote/newline can't break the CSV layout.
+function csv(value: unknown): string {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
 function toCsv(r: CampaignResults): string {
-  const lines = ["section,key,value"];
-  r.dispositionBreakdown.forEach((d) => lines.push(`disposition,${d.code},${d.count}`));
-  r.supportDistribution.forEach((s) => lines.push(`support,${s.supportLevel},${s.count}`));
-  Object.entries(r.funnel).forEach(([k, v]) => lines.push(`funnel,${k},${v}`));
+  const row = (section: string, key: unknown, value: unknown) =>
+    [csv(section), csv(key), csv(value)].join(",");
+  const lines = [row("section", "key", "value")];
+  r.dispositionBreakdown.forEach((d) => lines.push(row("disposition", d.code, d.count)));
+  r.supportDistribution.forEach((s) => lines.push(row("support", s.supportLevel, s.count)));
+  Object.entries(r.funnel).forEach(([k, v]) => lines.push(row("funnel", k, v)));
   return lines.join("\n");
 }
 

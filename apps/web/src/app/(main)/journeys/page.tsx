@@ -91,8 +91,15 @@ export default function JourneysPage() {
 
   const addRung = (type: JourneyRungType) => {
     if (!draft) return;
+    // Defaults match the backend's expected config shape (journeys.service.ts:
+    // executeAction kinds p2p_text/to_inbox/door_task/tag; evaluateCondition
+    // kinds disposition/answered) so an unedited rung isn't silently a no-op.
     const config: Record<string, unknown> =
-      type === "wait" ? { minutes: 60 } : type === "action" ? { kind: "send_text" } : { expr: "interested" };
+      type === "wait"
+        ? { minutes: 60 }
+        : type === "action"
+          ? { kind: "p2p_text", body: "" }
+          : { kind: "disposition", code: "" };
     setDraft({
       ...draft,
       rungs: [...draft.rungs, { rungIndex: draft.rungs.length, type, config }],
@@ -117,6 +124,14 @@ export default function JourneysPage() {
 
   const handleSave = useCallback(async () => {
     if (!draft) return;
+    // Validate before persisting — the backend accepts any rung array, so a broken
+    // config (no steps, non-positive wait, empty text/condition) would save and then
+    // silently fail at run time.
+    const problem = validateRungs(draft.rungs);
+    if (problem) {
+      showToast({ tone: "error", title: "Can't save journey", description: problem });
+      return;
+    }
     setBusy(true);
     const res = await updateJourney(draft.id, {
       name: draft.name,
@@ -136,19 +151,26 @@ export default function JourneysPage() {
     if (!draft) return;
     const next = draft.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
     const res = await setJourneyStatus(draft.id, next);
-    if (res.ok) await load();
-  }, [draft, load]);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't change status", description: res.error });
+      return;
+    }
+    await load();
+    showToast({ tone: "success", title: next === "ACTIVE" ? "Journey activated" : "Journey paused" });
+  }, [draft, load, showToast]);
 
   const handleDryRun = useCallback(async () => {
     if (!draft) return;
     const res = await dryRunJourney(draft.id);
-    if (res.ok) {
-      setPreview([
-        `Trigger: ${res.data.trigger.type}`,
-        ...res.data.steps.map((s) => `${s.rungIndex + 1}. ${s.label}`),
-      ]);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Dry run failed", description: res.error });
+      return;
     }
-  }, [draft]);
+    setPreview([
+      `Trigger: ${res.data.trigger.type}`,
+      ...res.data.steps.map((s) => `${s.rungIndex + 1}. ${s.label}`),
+    ]);
+  }, [draft, showToast]);
 
   const handleDelete = useCallback(async () => {
     if (!draft || !window.confirm(`Delete “${draft.name}”?`)) return;
@@ -159,6 +181,7 @@ export default function JourneysPage() {
     }
     setSelectedId("");
     await load();
+    showToast({ tone: "success", title: "Journey deleted" });
   }, [draft, load, showToast]);
 
   if (loading) return <div className="page-stack"><Skeleton className="h-64 w-full" /></div>;
@@ -338,26 +361,93 @@ function RungConfigEditor({
     );
   }
   if (rung.type === "action") {
+    const kind = String(rung.config.kind ?? "p2p_text");
     return (
-      <select
-        value={String(rung.config.kind ?? "send_text")}
-        onChange={(e) => onChange({ kind: e.target.value })}
-        className="mt-1 h-7 rounded border border-border px-2 text-xs"
-      >
-        <option value="send_text">Queue P2P text</option>
-        <option value="create_door_task">Create door task</option>
-        <option value="hand_to_inbox">Hand to inbox</option>
-      </select>
+      <div className="mt-1 space-y-1">
+        <select
+          value={kind}
+          onChange={(e) => onChange({ ...rung.config, kind: e.target.value })}
+          className="h-7 rounded border border-border px-2 text-xs"
+          aria-label="Action kind"
+        >
+          <option value="p2p_text">Queue P2P text</option>
+          <option value="to_inbox">Hand to inbox</option>
+          <option value="door_task">Create door task</option>
+          <option value="tag">Add tag</option>
+        </select>
+        {kind === "p2p_text" ? (
+          <textarea
+            value={String(rung.config.body ?? "")}
+            onChange={(e) => onChange({ ...rung.config, body: e.target.value })}
+            placeholder="Message body"
+            rows={2}
+            className="w-full rounded border border-border px-2 py-1 text-xs"
+            aria-label="Text message body"
+          />
+        ) : null}
+        {kind === "tag" ? (
+          <input
+            type="text"
+            value={String(rung.config.tag ?? "")}
+            onChange={(e) => onChange({ ...rung.config, tag: e.target.value })}
+            placeholder="Tag"
+            className="h-7 w-full rounded border border-border px-2 text-xs"
+            aria-label="Tag"
+          />
+        ) : null}
+      </div>
     );
   }
+  // Condition: backend evaluateCondition switches on `kind` (disposition | answered).
+  const ckind = String(rung.config.kind ?? "disposition");
   return (
-    <input
-      type="text"
-      value={String(rung.config.expr ?? "")}
-      onChange={(e) => onChange({ expr: e.target.value })}
-      placeholder="e.g. interested"
-      className="mt-1 h-7 w-full rounded border border-border px-2 text-xs"
-      aria-label="Condition expression"
-    />
+    <div className="mt-1 space-y-1">
+      <select
+        value={ckind}
+        onChange={(e) => onChange({ ...rung.config, kind: e.target.value })}
+        className="h-7 rounded border border-border px-2 text-xs"
+        aria-label="Condition kind"
+      >
+        <option value="disposition">Has disposition</option>
+        <option value="answered">Answered a question</option>
+      </select>
+      {ckind === "disposition" ? (
+        <input
+          type="text"
+          value={String(rung.config.code ?? "")}
+          onChange={(e) => onChange({ ...rung.config, code: e.target.value })}
+          placeholder="disposition code, e.g. spoke_to_target"
+          className="h-7 w-full rounded border border-border px-2 text-xs"
+          aria-label="Disposition code"
+        />
+      ) : (
+        <input
+          type="text"
+          value={String(rung.config.questionId ?? "")}
+          onChange={(e) => onChange({ ...rung.config, questionId: e.target.value })}
+          placeholder="question id (optional — any answer if blank)"
+          className="h-7 w-full rounded border border-border px-2 text-xs"
+          aria-label="Question id"
+        />
+      )}
+    </div>
   );
+}
+
+/** Validate rungs before save — returns a human message if invalid, else null. */
+function validateRungs(rungs: JourneyRung[]): string | null {
+  if (!rungs.length) return "Add at least one step (wait, condition or action) before saving.";
+  for (let i = 0; i < rungs.length; i += 1) {
+    const { type, config } = rungs[i];
+    const at = `Step ${i + 1}`;
+    if (type === "wait" && !(Number(config.minutes) >= 1)) return `${at}: wait must be at least 1 minute.`;
+    if (type === "action") {
+      const kind = String(config.kind ?? "");
+      if (!kind) return `${at}: choose an action.`;
+      if (kind === "p2p_text" && !String(config.body ?? "").trim()) return `${at}: enter the text message body.`;
+      if (kind === "tag" && !String(config.tag ?? "").trim()) return `${at}: enter a tag.`;
+    }
+    if (type === "condition" && !String(config.kind ?? "").trim()) return `${at}: choose a condition.`;
+  }
+  return null;
 }
