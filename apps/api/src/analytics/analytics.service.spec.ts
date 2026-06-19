@@ -38,4 +38,24 @@ describe("AnalyticsService", () => {
       failed: 1,
     });
   });
+
+  it("narrows the KPI queries by channel when one is given", async () => {
+    prisma.blastRecipient.count.mockResolvedValue(0);
+
+    await service.kpiSummary("blast_123", "WHATSAPP");
+
+    for (const call of prisma.blastRecipient.count.mock.calls) {
+      expect(call[0].where).toMatchObject({ blastId: "blast_123", channel: "WHATSAPP" });
+    }
+  });
+
+  it("ignores an invalid channel value (no channel filter applied)", async () => {
+    prisma.blastRecipient.count.mockResolvedValue(0);
+
+    await service.kpiSummary("blast_123", "carrier-pigeon");
+
+    for (const call of prisma.blastRecipient.count.mock.calls) {
+      expect(call[0].where).not.toHaveProperty("channel");
+    }
+  });
 });

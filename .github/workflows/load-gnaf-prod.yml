@@ -1,0 +1,48 @@
+name: Load G-NAF + map divisions (prod)
+
+# Manual, re-runnable loader for the national G-NAF address universe on the prod Neon
+# DB. Runs on a GitHub cloud runner, which has full TCP 5432 egress to Neon
+# (ap-southeast-2) and the bandwidth to pull the ~1.6 GB G-NAF zip directly — so it
+# sidesteps a blocked/throttled local 5432 link entirely.
+#
+# One-time setup (GitHub web UI):
+#   Settings → Secrets and variables → Actions → New repository secret:
+#     PROD_DATABASE_URL = the DIRECT (unpooled, not -pooler) Neon connection string.
+#       ?sslmode=require is fine; PGSSLMODE=require is also set below.
+#   Boundaries (CED + SED) must already be loaded on prod — they are; this only loads
+#   addresses + builds the mapping. Ensure the Neon plan has ~10-15 GB storage free.
+#
+# Run it: Actions → "Load G-NAF + map divisions (prod)" → Run workflow.
+# Idempotent: address inserts use ON CONFLICT DO NOTHING; the mapping is rebuilt each run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      gnaf_url:
+        description: G-NAF national PSV zip URL
+        required: true
+        default: "https://data.gov.au/data/dataset/19432f89-dc3a-4ef3-b943-5326ef1dbecc/resource/f8666213-4079-44da-bede-ebda3a4363e0/download/g-naf_may26_allstates_gda2020_psv_1023.zip"
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PGSSLMODE: require
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Download G-NAF
+        run: curl -L -C - -o "$RUNNER_TEMP/gnaf.zip" "${{ github.event.inputs.gnaf_url }}"
+
+      - name: Load + map
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          if [ -z "$PROD_DATABASE_URL" ]; then echo "::error::PROD_DATABASE_URL secret is not set"; exit 1; fi
+          export PGURL="${PROD_DATABASE_URL%%\?*}"
+          export GNAF_ZIP="$RUNNER_TEMP/gnaf.zip"
+          bash apps/api/src/scripts/geo/load-prod.sh

@@ -12,6 +12,7 @@ import {
   type DispositionDef,
 } from "@/lib/api";
 import { getContactProfile, type ContactProfile } from "@/lib/api/contacts";
+import { getSurvey, listSurveys } from "@/lib/api/engagement";
 import { getCanvasserId, newLocalId } from "@/lib/canvass/canvasser";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { useSyncQueue } from "@/hooks/use-sync-queue";
@@ -36,6 +37,7 @@ export default function DoorEntryPage() {
 
   const [assignment, setAssignment] = useState<CanvassAssignment | null>(null);
   const [dispositions, setDispositions] = useState<DispositionDef[]>([]);
+  const [survey, setSurvey] = useState<SurveySchema | null>(null);
   const [profile, setProfile] = useState<ContactProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [chosenCode, setChosenCode] = useState<string | null>(null);
@@ -68,6 +70,46 @@ export default function DoorEntryPage() {
     return items.find((it) => it.id === stopId) ?? null;
   }, [assignment, stopId]);
 
+  // Load the campaign's survey (real question/option ids) so answers persist as
+  // QuestionResponses. No survey on the campaign → door is disposition-only.
+  const campaignId = assignment?.turf.campaignId ?? null;
+  useEffect(() => {
+    if (!campaignId) {
+      setSurvey(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const list = await listSurveys();
+      if (!alive || !list.ok) return;
+      const match = list.data.find((s) => s.campaignId === campaignId);
+      if (!match) {
+        setSurvey(null);
+        return;
+      }
+      const full = await getSurvey(match.id);
+      if (!alive || !full.ok) return;
+      setSurvey({
+        questions: full.data.questions
+          .filter((q) => q.id)
+          .map((q) => ({
+            id: String(q.id),
+            prompt: q.prompt,
+            type: q.type,
+            required: q.required,
+            scaleMin: q.scaleMin ?? undefined,
+            scaleMax: q.scaleMax ?? undefined,
+            options: q.options
+              ?.filter((o) => o.id)
+              .map((o) => ({ id: String(o.id), value: o.value, label: o.label })),
+          })),
+      });
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [campaignId]);
+
   // The informed knock: pull this resident's recent contact history.
   const contactId = stop?.contact.id as string | undefined;
   useEffect(() => {
@@ -82,7 +124,7 @@ export default function DoorEntryPage() {
     };
   }, [contactId]);
 
-  async function record(code: string, _answers?: SurveyAnswer[]) {
+  async function record(code: string, answers?: SurveyAnswer[]) {
     if (!stop) return;
     setSaving(true);
     const gps = await capture(); // one-shot GPS at the door
@@ -103,6 +145,7 @@ export default function DoorEntryPage() {
         notes: notes.trim() || undefined,
         safetyFlag: safetyFlag || undefined,
         photoUrl: photoUrl || undefined,
+        surveyAnswers: answers?.length ? answers : undefined,
         clientCapturedAt: capturedAt,
       },
       capturedAt,
@@ -116,20 +159,8 @@ export default function DoorEntryPage() {
 
   const contact = stop.contact as Record<string, unknown>;
   const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Resident";
-  const showSurvey = chosenCode && SURVEY_TRIGGER_CODES.has(chosenCode);
-
-  // A campaign survey would come from the assignment; a minimal default here.
-  const survey: SurveySchema = {
-    questions: [
-      {
-        id: "support",
-        prompt: "How likely are they to support?",
-        type: "scale",
-        scaleMin: 1,
-        scaleMax: 5,
-      },
-    ],
-  };
+  const hasSurvey = Boolean(survey && survey.questions.length > 0);
+  const showSurvey = Boolean(chosenCode && hasSurvey);
 
   return (
     <div className="space-y-4">
@@ -150,14 +181,16 @@ export default function DoorEntryPage() {
           options={dispositions}
           disabled={saving}
           onSelect={(code) => {
-            if (SURVEY_TRIGGER_CODES.has(code)) setChosenCode(code);
+            // "Spoke to someone" reveals the survey — but only if the campaign has
+            // one; otherwise it's a plain disposition-only knock.
+            if (SURVEY_TRIGGER_CODES.has(code) && hasSurvey) setChosenCode(code);
             else void record(code);
           }}
         />
       ) : (
         <Card className="p-4">
           <SurveyRunner
-            schema={survey}
+            schema={survey!}
             onCancel={() => setChosenCode(null)}
             onComplete={(answers) => void record(chosenCode!, answers)}
           />

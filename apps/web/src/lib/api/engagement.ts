@@ -25,7 +25,13 @@ export type SurveyQuestion = {
 };
 
 export type Survey = { id: string; name: string; questions: SurveyQuestion[] };
-export type SurveyListItem = { id: string; name: string; questionCount: number; updatedAt: string };
+export type SurveyListItem = {
+  id: string;
+  name: string;
+  campaignId: string | null;
+  questionCount: number;
+  updatedAt: string;
+};
 
 export async function listSurveys() {
   return request<SurveyListItem[]>("/engagement/surveys");

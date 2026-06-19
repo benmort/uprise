@@ -8,6 +8,7 @@ import {
   getBlastKpis,
   getBlastStatusDistribution,
   getBlastTrend,
+  getFeatureFlags,
   getRealtimeStreamToken,
   listBlasts,
   retryBlast,
@@ -24,11 +25,14 @@ import { getTwilioErrorCodeDescription } from "@/lib/twilio-error-codes";
 
 type BlastOption = { id: string; title: string; status: string; channel: string };
 type TrendWindow = "all" | "15" | "60" | "240";
+type ChannelFilter = "ALL" | "SMS" | "WHATSAPP";
 
 export default function AnalyticsPage() {
   const { showToast } = useToast();
   const [blasts, setBlasts] = useState<BlastOption[]>([]);
   const [selectedBlastId, setSelectedBlastId] = useState("");
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("ALL");
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [kpis, setKpis] = useState<Record<string, number>>({});
   const [trend, setTrend] = useState<Array<Record<string, unknown>>>([]);
   const [activity, setActivity] = useState<Array<Record<string, unknown>>>([]);
@@ -45,11 +49,12 @@ export default function AnalyticsPage() {
 
   const loadForBlast = async (blastId: string, page = activityPage) => {
     setError("");
+    const ch = channelFilter === "ALL" ? undefined : channelFilter;
     const [kpiRes, trendRes, activityRes, statusRes] = await Promise.all([
-      getBlastKpis(blastId),
+      getBlastKpis(blastId, ch),
       getBlastTrend(blastId, trendRange),
-      getBlastActivity(blastId, activityPageSize, page * activityPageSize),
-      getBlastStatusDistribution(blastId),
+      getBlastActivity(blastId, activityPageSize, page * activityPageSize, ch),
+      getBlastStatusDistribution(blastId, ch),
     ]);
     if (kpiRes.ok) setKpis(kpiRes.data as Record<string, number>);
     if (trendRes.ok) setTrend(trendRes.data);
@@ -69,6 +74,7 @@ export default function AnalyticsPage() {
   };
 
   useEffect(() => {
+    getFeatureFlags().then((r) => r.ok && setWhatsappEnabled(Boolean(r.data.FEATURE_WHATSAPP_ENABLED)));
     listBlasts().then((res) => {
       if (!res.ok) {
         setError(res.error);
@@ -87,13 +93,45 @@ export default function AnalyticsPage() {
     });
   }, []);
 
+  // Blasts shown in the selector, narrowed to the chosen channel.
+  const visibleBlasts = useMemo(
+    () => (channelFilter === "ALL" ? blasts : blasts.filter((b) => b.channel === channelFilter)),
+    [blasts, channelFilter],
+  );
+
+  // Keep the selection valid for the active channel filter. When the filter matches
+  // no blasts, clear the selection so the KPIs/selector don't show a stale blast from
+  // another channel (the loader effect below no-ops on an empty selectedBlastId).
   useEffect(() => {
-    if (!selectedBlastId) return;
+    if (visibleBlasts.length === 0) {
+      if (selectedBlastId) {
+        setActivityPage(0);
+        setSelectedBlastId("");
+      }
+      return;
+    }
+    if (!visibleBlasts.some((b) => b.id === selectedBlastId)) {
+      setActivityPage(0);
+      setSelectedBlastId(visibleBlasts[0].id);
+    }
+  }, [visibleBlasts, selectedBlastId]);
+
+  useEffect(() => {
+    if (!selectedBlastId) {
+      // No blast in the active channel filter — clear so stale KPIs aren't shown.
+      setKpis({});
+      setTrend([]);
+      setActivity([]);
+      setActivityTotal(0);
+      setStatusDistribution([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     void loadForBlast(selectedBlastId, activityPage);
     const id = setInterval(() => void loadForBlast(selectedBlastId, activityPage), 8000);
     return () => clearInterval(id);
-  }, [selectedBlastId, activityPage, trendWindow, activityPageSize]);
+  }, [selectedBlastId, activityPage, trendWindow, activityPageSize, channelFilter]);
 
   useEffect(() => {
     if (!selectedBlastId) {
@@ -200,18 +238,30 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <div id="tour-analytics-select" className="flex items-center gap-2">
+          {whatsappEnabled ? (
+            <select
+              className="h-11 rounded border border-input bg-background px-3 text-sm"
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value as ChannelFilter)}
+              aria-label="Filter by channel"
+            >
+              <option value="ALL">All channels</option>
+              <option value="SMS">SMS</option>
+              <option value="WHATSAPP">WhatsApp</option>
+            </select>
+          ) : null}
           <select
             className="h-11 rounded border border-input bg-background px-3 text-sm"
             value={selectedBlastId}
             onChange={(e) => setSelectedBlastId(e.target.value)}
           >
-            {blasts.map((blast) => (
+            {visibleBlasts.map((blast) => (
               <option key={blast.id} value={blast.id}>
                 {blast.title}
               </option>
             ))}
           </select>
-          {blasts.find((b) => b.id === selectedBlastId)?.channel === "WHATSAPP" ? (
+          {visibleBlasts.find((b) => b.id === selectedBlastId)?.channel === "WHATSAPP" ? (
             <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b]">
               WhatsApp
             </span>

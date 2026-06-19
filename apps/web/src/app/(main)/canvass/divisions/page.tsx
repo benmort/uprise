@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 const TABS: Array<{ type: DivisionType; label: string; soon?: boolean }> = [
   { type: "ced", label: "Federal" },
   { type: "sed", label: "State" },
-  { type: "lga", label: "Local (LGA)" },
+  { type: "lga", label: "Local (LGA)", soon: true }, // federal + state only; LGA not mapped
 ];
 
 export default function DivisionsPage() {

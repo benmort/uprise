@@ -27,34 +27,46 @@ async function main(): Promise<void> {
        LEFT JOIN geo.meshblock m ON m.mb_code = a.mb_code`,
     );
 
+    // Federal + state only (LGA mapping intentionally dropped). The point-in-polygon
+    // runs as a GIST-driven JOIN subquery (per-polygon index scan over the points),
+    // then updates address_region by primary key — far cheaper at national scale than
+    // a 3-table UPDATE…FROM, which the planner tends to turn into a giant cross join.
+    // Each UPDATE runs in its own transaction with SET LOCAL work_mem so the larger
+    // work_mem reliably applies on the SAME connection (a plain SET would be lost if a
+    // pooler hands the next statement a different backend), auto-resets on commit, and
+    // each join still commits independently (no one giant 30-min atomic write).
+    const HOUR_MS = 60 * 60 * 1000;
+    const spatialJoin = (label: string, sql: string) =>
+      prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL work_mem = '512MB'`);
+          await tx.$executeRawUnsafe(sql);
+        },
+        { timeout: HOUR_MS, maxWait: 10_000 },
+      ).then(() => log(`  ✓ ${label}`));
+
     log("Spatial join → federal CED…");
-    await prisma.$executeRawUnsafe(
-      `UPDATE geo.address_region ar SET ced_code = d.code
-       FROM geo.gnaf_address a, geo.ced d
-       WHERE ar.gnaf_pid = a.gnaf_pid AND ST_Contains(d.geom, a.geom)`,
+    await spatialJoin(
+      "CED",
+      `UPDATE geo.address_region ar SET ced_code = p.code
+       FROM (SELECT a.gnaf_pid, d.code FROM geo.ced d JOIN geo.gnaf_address a ON ST_Contains(d.geom, a.geom)) p
+       WHERE p.gnaf_pid = ar.gnaf_pid`,
     );
 
     log("Spatial join → state SED…");
-    await prisma.$executeRawUnsafe(
-      `UPDATE geo.address_region ar SET sed_code = d.code
-       FROM geo.gnaf_address a, geo.sed d
-       WHERE ar.gnaf_pid = a.gnaf_pid AND ST_Contains(d.geom, a.geom)`,
+    await spatialJoin(
+      "SED",
+      `UPDATE geo.address_region ar SET sed_code = p.code
+       FROM (SELECT a.gnaf_pid, d.code FROM geo.sed d JOIN geo.gnaf_address a ON ST_Contains(d.geom, a.geom)) p
+       WHERE p.gnaf_pid = ar.gnaf_pid`,
     );
 
-    // LGA: prefer the deterministic mesh-block nesting (set above); spatial-fill
-    // only where mesh blocks aren't loaded, so LGA works without ASGS mesh data.
-    log("Spatial join → LGA (fill gaps)…");
-    await prisma.$executeRawUnsafe(
-      `UPDATE geo.address_region ar SET lga_code = d.code
-       FROM geo.gnaf_address a, geo.lga d
-       WHERE ar.gnaf_pid = a.gnaf_pid AND ar.lga_code IS NULL AND ST_Contains(d.geom, a.geom)`,
-    );
-
-    // Refresh dataset_meta row counts.
+    // Refresh dataset_meta row counts (federal + state). LGA is dropped — clear its
+    // provenance row so /settings/data doesn't show a stale "loaded" LGA entry.
+    await prisma.$executeRawUnsafe(`DELETE FROM geo.dataset_meta WHERE key = 'lga'`);
     for (const [key, table] of [
       ["gnaf", "geo.gnaf_address"],
       ["asgs_mb", "geo.meshblock"],
-      ["lga", "geo.lga"],
       ["ced", "geo.ced"],
       ["sed", "geo.sed"],
     ] as const) {

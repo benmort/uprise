@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus } from "../../src/generated/prisma";
+import { BlastRecipientStatus, MessageChannel } from "../../src/generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
 
@@ -20,11 +20,21 @@ export class AnalyticsService {
     });
   }
 
-  async kpiSummary(blastId: string) {
+  /** A spreadable `{ channel }` fragment when a valid channel is given, else `{}`. */
+  private channelFilter(channel?: string | null): { channel?: MessageChannel } {
+    if (channel === MessageChannel.SMS || channel === MessageChannel.WHATSAPP) {
+      return { channel: channel as MessageChannel };
+    }
+    return {};
+  }
+
+  async kpiSummary(blastId: string, channel?: string | null) {
+    const ch = this.channelFilter(channel);
     const [totalContacted, sent, delivered, responded, failed] = await Promise.all([
       this.prisma.blastRecipient.count({
         where: {
           blastId,
+          ...ch,
           status: {
             in: [
               BlastRecipientStatus.SENT,
@@ -35,14 +45,14 @@ export class AnalyticsService {
           },
         },
       }),
-      this.prisma.blastRecipient.count({ where: { blastId, status: BlastRecipientStatus.SENT } }),
+      this.prisma.blastRecipient.count({ where: { blastId, ...ch, status: BlastRecipientStatus.SENT } }),
       this.prisma.blastRecipient.count({
-        where: { blastId, deliveredAt: { not: null } },
+        where: { blastId, ...ch, deliveredAt: { not: null } },
       }),
       this.prisma.blastRecipient.count({
-        where: { blastId, status: BlastRecipientStatus.RESPONDED },
+        where: { blastId, ...ch, status: BlastRecipientStatus.RESPONDED },
       }),
-      this.prisma.blastRecipient.count({ where: { blastId, status: BlastRecipientStatus.FAILED } }),
+      this.prisma.blastRecipient.count({ where: { blastId, ...ch, status: BlastRecipientStatus.FAILED } }),
     ]);
     return { totalContacted, sent, delivered, responded, failed };
   }
@@ -71,33 +81,36 @@ export class AnalyticsService {
     }));
   }
 
-  async recipientActivity(blastId: string, limit = 50, offset = 0) {
+  async recipientActivity(blastId: string, limit = 50, offset = 0, channel?: string | null) {
+    const ch = this.channelFilter(channel);
     const [rows, total] = await Promise.all([
       this.prisma.blastRecipient.findMany({
-        where: { blastId },
+        where: { blastId, ...ch },
         orderBy: { updatedAt: "desc" },
         take: Math.min(Math.max(1, limit), 200),
         skip: offset,
       }),
-      this.prisma.blastRecipient.count({ where: { blastId } }),
+      this.prisma.blastRecipient.count({ where: { blastId, ...ch } }),
     ]);
     return { rows, total };
   }
 
-  async statusDistribution(blastId: string) {
+  async statusDistribution(blastId: string, channel?: string | null) {
     return this.prisma.blastRecipient.groupBy({
       by: ["status"],
-      where: { blastId },
+      where: { blastId, ...this.channelFilter(channel) },
       _count: true,
     });
   }
 
-  async dashboardPerformance() {
+  async dashboardPerformance(channel?: string | null) {
     const org = await this.ensureOrganization();
+    const ch = this.channelFilter(channel);
     const [totalContacted, totalSent, totalResponded, activeDrafts] = await Promise.all([
       this.prisma.blastRecipient.count({
         where: {
           blast: { organizationId: org.id },
+          ...ch,
           status: {
             in: [
               BlastRecipientStatus.SENT,
@@ -109,14 +122,15 @@ export class AnalyticsService {
         },
       }),
       this.prisma.blastRecipient.count({
-        where: { blast: { organizationId: org.id }, status: BlastRecipientStatus.SENT },
+        where: { blast: { organizationId: org.id }, ...ch, status: BlastRecipientStatus.SENT },
       }),
       this.prisma.blastRecipient.count({
-        where: { blast: { organizationId: org.id }, status: BlastRecipientStatus.RESPONDED },
+        where: { blast: { organizationId: org.id }, ...ch, status: BlastRecipientStatus.RESPONDED },
       }),
       this.prisma.blast.count({
         where: {
           organizationId: org.id,
+          ...ch,
           status: { in: ["DRAFTED", "PROOFED", "SCHEDULED"] },
         },
       }),
@@ -132,10 +146,10 @@ export class AnalyticsService {
     };
   }
 
-  async recentBlasts(limit = 20) {
+  async recentBlasts(limit = 20, channel?: string | null) {
     const org = await this.ensureOrganization();
     const blasts = await this.prisma.blast.findMany({
-      where: { organizationId: org.id },
+      where: { organizationId: org.id, ...this.channelFilter(channel) },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
       include: {

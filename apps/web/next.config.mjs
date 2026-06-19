@@ -18,7 +18,9 @@ const withPWA = withPWAInit({
       handler: "CacheFirst",
       options: {
         cacheName: "mapbox",
-        expiration: { maxEntries: 2000, maxAgeSeconds: 60 * 60 * 24 * 14 },
+        // Headroom for a full per-region pre-download (lib/canvass/map-cache.ts):
+        // a turf at z13–16 can be several thousand vector tiles + glyphs/sprite.
+        expiration: { maxEntries: 8000, maxAgeSeconds: 60 * 60 * 24 * 14 },
         cacheableResponse: { statuses: [0, 200] },
       },
     },

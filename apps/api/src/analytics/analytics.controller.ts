@@ -13,8 +13,8 @@ export class AnalyticsController {
   ) {}
 
   @Get("blasts/:blastId/kpi")
-  kpi(@Param("blastId") blastId: string) {
-    return this.analytics.kpiSummary(blastId);
+  kpi(@Param("blastId") blastId: string, @Query("channel") channel?: string) {
+    return this.analytics.kpiSummary(blastId, channel);
   }
 
   @Get("blasts/:blastId/trend")
@@ -35,6 +35,7 @@ export class AnalyticsController {
     @Param("blastId") blastId: string,
     @Query("limit") limit?: string,
     @Query("offset") offset?: string,
+    @Query("channel") channel?: string,
   ) {
     const lim = Number(limit || "50");
     const off = Number(offset || "0");
@@ -42,23 +43,24 @@ export class AnalyticsController {
       blastId,
       Number.isFinite(lim) ? lim : 50,
       Number.isFinite(off) ? off : 0,
+      channel,
     );
   }
 
   @Get("blasts/:blastId/status-distribution")
-  statusDistribution(@Param("blastId") blastId: string) {
-    return this.analytics.statusDistribution(blastId);
+  statusDistribution(@Param("blastId") blastId: string, @Query("channel") channel?: string) {
+    return this.analytics.statusDistribution(blastId, channel);
   }
 
   @Get("dashboard/performance")
-  dashboardPerformance() {
-    return this.analytics.dashboardPerformance();
+  dashboardPerformance(@Query("channel") channel?: string) {
+    return this.analytics.dashboardPerformance(channel);
   }
 
   @Get("dashboard/recent-blasts")
-  recent(@Query("limit") limit?: string) {
+  recent(@Query("limit") limit?: string, @Query("channel") channel?: string) {
     const lim = Number(limit || "20");
-    return this.analytics.recentBlasts(Number.isFinite(lim) ? lim : 20);
+    return this.analytics.recentBlasts(Number.isFinite(lim) ? lim : 20, channel);
   }
 
   @Sse("stream")

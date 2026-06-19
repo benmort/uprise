@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
-import { DoorOpen } from "lucide-react";
+import { Check, DoorOpen, DownloadCloud, Loader2 } from "lucide-react";
 import { getCanvassAssignments, type CanvassAssignment } from "@/lib/api";
 import { getCanvasserId } from "@/lib/canvass/canvasser";
 import { optimiseRoute, type Stop } from "@/lib/canvass/route";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useGeolocation } from "@/hooks/use-geolocation";
+import { useTilePreCache } from "@/hooks/use-tile-pre-cache";
 import { WalkStopCard, type WalkStop } from "@/components/canvass/walk-stop-card";
 import { WalkModeToggle, type WalkMode } from "@/components/canvass/walk-mode-toggle";
 import { ProgressBar } from "@/components/canvass/progress-bar";
@@ -101,6 +102,11 @@ export default function WalkViewPage() {
 
       <ProgressBar value={doneCount} max={stops.length || 1} />
 
+      <OfflineMapsControl
+        turfId={turfId}
+        geometry={assignment.turf.geometry as GeoJSON.Geometry}
+      />
+
       {mode === "map" ? (
         <div className="relative min-h-[60vh] flex-1 overflow-hidden rounded-xl border border-border">
           <TurfMap
@@ -158,6 +164,64 @@ export default function WalkViewPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** "Download maps for offline" — pre-caches the turf's tiles so the map renders
+ *  with no signal. Hidden when no Mapbox token is configured. */
+function OfflineMapsControl({
+  turfId,
+  geometry,
+}: {
+  turfId: string;
+  geometry: GeoJSON.Geometry;
+}) {
+  const { available, status, done, total, capped, start, cancel } = useTilePreCache(turfId, geometry);
+  if (!available) return null;
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  if (status === "done") {
+    return (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-success">
+        <Check className="h-3.5 w-3.5" />
+        Maps saved for offline
+      </p>
+    );
+  }
+
+  if (status === "running") {
+    return (
+      <div className="space-y-1.5 rounded-xl border border-border bg-surface/60 p-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="flex items-center gap-1.5 font-medium text-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Saving maps for offline… {pct}%
+          </span>
+          <button type="button" className="underline text-muted-foreground" onClick={cancel}>
+            Cancel
+          </button>
+        </div>
+        <ProgressBar value={done} max={total || 1} />
+        <p className="tabular-nums text-[11px] text-muted-foreground">
+          {done} of {total} tiles{capped ? " (capped — large turf)" : ""}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <Button variant="outline" className="h-9 gap-1.5 text-sm" onClick={start}>
+        <DownloadCloud className="h-4 w-4" />
+        Download maps for offline
+      </Button>
+      {status === "error" ? (
+        <span className="text-xs text-error">Download failed — retry</span>
+      ) : status === "cancelled" ? (
+        <span className="text-xs text-muted-foreground">Download cancelled</span>
+      ) : null}
     </div>
   );
 }
