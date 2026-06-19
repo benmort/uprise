@@ -1,13 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { getFeatureFlags } from "@/lib/api";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 
 import {
   getTourById,
   resetExampleData,
   seedExampleData,
+  WHATSAPP_TOUR_ID,
   YARNS_TOURS,
   YARNS_TOUR_ID,
   type TourDefinition,
@@ -87,6 +89,25 @@ export function useYarnsTourState(): YarnsTourState {
   const [paused, setPaused] = useState(false);
   const [savedStep, setSavedStep] = useLocalStorage<number | null>(TOUR_PROGRESS_KEY, null);
   const [activeTourId, setActiveTourId] = useLocalStorage<string>(TOUR_ACTIVE_ID_KEY, YARNS_TOUR_ID);
+
+  // The WhatsApp tour walks composer/inbox controls that only render when the
+  // FEATURE_WHATSAPP_ENABLED flag is on. Hide it from the menu when the flag is off
+  // so steps never spotlight an element that will never appear.
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void getFeatureFlags().then((r) => {
+      if (alive && r.ok) setWhatsappEnabled(Boolean(r.data.FEATURE_WHATSAPP_ENABLED));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const tours = useMemo(
+    () => (whatsappEnabled ? YARNS_TOURS : YARNS_TOURS.filter((tour) => tour.id !== WHATSAPP_TOUR_ID)),
+    [whatsappEnabled],
+  );
 
   const steps = getTourById(activeTourId).steps;
   // Callbacks read the live step list through a ref so switching tours doesn't
@@ -187,7 +208,7 @@ export function useYarnsTourState(): YarnsTourState {
     paused,
     savedStep,
     canResume: savedStep != null && savedStep > 0 && savedStep < steps.length,
-    tours: YARNS_TOURS,
+    tours,
     activeTourId,
     startTour,
     start: startManual,
