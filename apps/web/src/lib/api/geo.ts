@@ -21,6 +21,9 @@ export type DivisionDetail = Division & {
 };
 export type UniverseAddress = { gnafPid: string; address: string | null; lat: number | null; lng: number | null };
 
+/** Which addresses a turf is populated with when it's cut. */
+export type TurfUniverse = "existing" | "none" | "hybrid";
+
 export async function getGeoStatus() {
   return request<GeoDataset[]>("/geo/status");
 }
@@ -58,6 +61,7 @@ export async function createTurfFromDivision(input: {
   code: string;
   name?: string;
   campaignId?: string;
+  universe?: TurfUniverse;
 }) {
   return request<{ id: string }>("/canvass/turfs/from-division", {
     method: "POST",

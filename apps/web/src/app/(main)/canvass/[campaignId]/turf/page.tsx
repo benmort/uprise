@@ -8,6 +8,7 @@ import { ArrowLeft, MapPin, Save } from "lucide-react";
 import {
   createTurf,
   listTurfs,
+  loadTurfUniverse,
   rebucketTurf,
   type TurfSummary,
 } from "@/lib/api";
@@ -79,18 +80,26 @@ export default function TurfCuttingPage() {
     }
     const turfId = (created.data as { id: string }).id;
     const bucketed = await rebucketTurf(turfId);
+    // Cold doors: pull "addresses without contacts" inside the polygon when the
+    // chosen universe wants them. Degrades to 0 when no geo data is loaded.
+    const cold =
+      universe === "existing" ? null : await loadTurfUniverse(turfId, universe);
     setSaving(false);
     setName("");
     setPolygon(null);
     await reload();
+    const existingCount = bucketed.ok ? bucketed.data.total : 0;
+    const coldCount = cold?.ok ? cold.data.materialised : 0;
     showToast({
       tone: "success",
       title: `Saved “${turfName}”`,
       description: bucketed.ok
-        ? `${bucketed.data.total} doors bucketed into this turf.`
+        ? coldCount > 0
+          ? `${existingCount} existing + ${coldCount} cold door${coldCount === 1 ? "" : "s"} loaded.`
+          : `${existingCount} door${existingCount === 1 ? "" : "s"} in this turf.`
         : "Turf saved; re-bucket the doors from the list.",
     });
-  }, [polygon, name, turfs.length, campaignId, reload, showToast]);
+  }, [polygon, name, universe, turfs.length, campaignId, reload, showToast]);
 
   return (
     <div className="page-stack">

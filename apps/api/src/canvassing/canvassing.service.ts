@@ -15,6 +15,10 @@ import { ApiHttpException } from "../common/http/api-response";
 import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
 import { hashPassword } from "../auth/password.util";
 import { EngagementService } from "../shared-engagement/engagement.service";
+import { GeoService } from "../geo/geo.service";
+
+/** Which addresses a turf should be populated with when it's cut. */
+export type TurfUniverse = "existing" | "none" | "hybrid";
 
 const SUPPORT_LEVELS: SupportLevel[] = [
   SupportLevel.STRONG_SUPPORT,
@@ -30,6 +34,12 @@ function startOfToday(): Date {
   return d;
 }
 
+export type SurveyAnswerInput = {
+  questionId: string;
+  optionId?: string | null;
+  valueText?: string | null;
+};
+
 export type RecordDoorKnockInput = {
   contactId: string;
   canvasserId: string;
@@ -42,6 +52,7 @@ export type RecordDoorKnockInput = {
   walkListItemId?: string | null;
   photoUrl?: string | null;
   safetyFlag?: boolean | null;
+  surveyAnswers?: SurveyAnswerInput[] | null;
 };
 
 @Injectable()
@@ -51,6 +62,7 @@ export class CanvassingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly engagement: EngagementService,
+    private readonly geo: GeoService,
   ) {}
 
   // ── Turf assignment (server-owned lock) ─────────────────────────
@@ -106,7 +118,7 @@ export class CanvassingService {
     return assignments.map((a) => ({
       turfId: a.turfId,
       lockedUntil: a.lockedUntil,
-      turf: { id: a.turf.id, name: a.turf.name, geometry: a.turf.geometry },
+      turf: { id: a.turf.id, name: a.turf.name, geometry: a.turf.geometry, campaignId: a.turf.campaignId },
       walkLists: a.turf.walkLists,
     }));
   }
@@ -217,6 +229,29 @@ export class CanvassingService {
       });
     }
 
+    // Persist survey answers collected at the door as structured QuestionResponses
+    // (each option that maps a disposition also records one). Runs only on first
+    // create — the idempotent-replay return above means a re-synced knock can't
+    // double-insert these.
+    if (input.surveyAnswers?.length) {
+      const contact = await this.prisma.contact.findFirst({
+        where: { id: input.contactId, organizationId },
+        select: { turf: { select: { campaignId: true } } },
+      });
+      const campaignId = contact?.turf?.campaignId ?? null;
+      for (const answer of input.surveyAnswers) {
+        await this.engagement.recordSurveyAnswer(organizationId, {
+          contactId: input.contactId,
+          questionId: answer.questionId,
+          optionId: answer.optionId ?? null,
+          valueText: answer.valueText ?? null,
+          channel: EngagementChannel.DOOR,
+          campaignId,
+          recordedById: input.canvasserId,
+        });
+      }
+    }
+
     return knock;
   }
 
@@ -323,10 +358,20 @@ export class CanvassingService {
     });
   }
 
-  /** Cut a turf straight from an electoral/LGA division boundary (geo schema). */
+  /**
+   * Cut a turf straight from an electoral/LGA division boundary (geo schema).
+   * When `universe` is "none"/"hybrid", cold doors inside the boundary are
+   * materialised into the turf (see loadUniverseIntoTurf).
+   */
   async createTurfFromDivision(
     organizationId: string,
-    input: { type: "ced" | "sed" | "lga"; code: string; name?: string; campaignId?: string | null },
+    input: {
+      type: "ced" | "sed" | "lga";
+      code: string;
+      name?: string;
+      campaignId?: string | null;
+      universe?: TurfUniverse;
+    },
   ) {
     const table = { ced: "geo.ced", sed: "geo.sed", lga: "geo.lga" }[input.type];
     const rows = (await this.prisma.$queryRawUnsafe(
@@ -336,11 +381,72 @@ export class CanvassingService {
     if (rows.length === 0 || !rows[0].geojson) {
       throw new ApiHttpException("DIVISION_NOT_FOUND", "Division boundary not found");
     }
-    return this.createTurf(organizationId, {
+    const turf = await this.createTurf(organizationId, {
       name: input.name || rows[0].name,
       geometry: JSON.parse(rows[0].geojson),
       campaignId: input.campaignId ?? null,
     });
+    if (input.universe && input.universe !== "existing") {
+      await this.loadUniverseIntoTurf(organizationId, turf.id, { universe: input.universe });
+    }
+    return turf;
+  }
+
+  /**
+   * Materialise the "addresses without contacts" universe for a turf: pull cold
+   * G-NAF addresses inside the turf polygon (via GeoService) and create Contact
+   * rows so they become canvassable stops in walk lists. Cold doors carry a
+   * `gnafPid` + `metadata.coldDoor`, so the geo "withoutContacts" filter excludes
+   * them on re-run — and we also skip any gnafPid already on a contact for the
+   * org, making this idempotent. Degrades to a no-op (0 materialised) when no geo
+   * data is loaded. "existing" never adds cold doors (rebucketTurf covers those).
+   */
+  async loadUniverseIntoTurf(
+    organizationId: string,
+    turfId: string,
+    opts: { universe: TurfUniverse; limit?: number },
+  ): Promise<{ materialised: number; total: number }> {
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, organizationId } });
+    if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
+
+    let materialised = 0;
+    if (opts.universe !== "existing") {
+      const addresses = (await this.geo.addresses(organizationId, {
+        turfId,
+        withoutContacts: true,
+        limit: opts.limit ?? 2000,
+      })) as Array<{ gnafPid: string; address: string | null; lat: number | null; lng: number | null }>;
+
+      const pids = addresses.map((a) => a.gnafPid).filter(Boolean);
+      const seen = new Set(
+        pids.length
+          ? (
+              await this.prisma.contact.findMany({
+                where: { organizationId, gnafPid: { in: pids } },
+                select: { gnafPid: true },
+              })
+            ).map((c) => c.gnafPid)
+          : [],
+      );
+      const fresh = addresses.filter((a) => a.gnafPid && !seen.has(a.gnafPid));
+      if (fresh.length) {
+        await this.prisma.contact.createMany({
+          data: fresh.map((a) => ({
+            organizationId,
+            turfId,
+            gnafPid: a.gnafPid,
+            address: a.address ?? null,
+            lat: a.lat ?? null,
+            lng: a.lng ?? null,
+            metadata: { coldDoor: true } as Prisma.InputJsonValue,
+          })),
+        });
+        materialised = fresh.length;
+      }
+    }
+
+    const total = await this.prisma.contact.count({ where: { organizationId, turfId } });
+    return { materialised, total };
   }
 
   async createTurf(organizationId: string, input: { name: string; geometry: unknown; campaignId?: string | null }) {

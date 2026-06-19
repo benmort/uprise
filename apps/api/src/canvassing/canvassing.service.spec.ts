@@ -11,6 +11,7 @@ function p2002(): Prisma.PrismaClientKnownRequestError {
 describe("CanvassingService", () => {
   let prisma: any;
   let engagement: any;
+  let geo: any;
   let service: CanvassingService;
 
   beforeEach(() => {
@@ -38,8 +39,12 @@ describe("CanvassingService", () => {
       },
       appUser: { create: jest.fn() },
     };
-    engagement = { recordDisposition: jest.fn().mockResolvedValue({ id: "disp1" }) };
-    service = new CanvassingService(prisma, engagement);
+    engagement = {
+      recordDisposition: jest.fn().mockResolvedValue({ id: "disp1" }),
+      recordSurveyAnswer: jest.fn().mockResolvedValue({ id: "qr1" }),
+    };
+    geo = { addresses: jest.fn().mockResolvedValue([]) };
+    service = new CanvassingService(prisma, engagement, geo);
   });
 
   describe("assignTurf", () => {
@@ -126,6 +131,52 @@ describe("CanvassingService", () => {
         "org1",
         expect.objectContaining({ contactId: "c1", code: "not_home", channel: "DOOR" }),
       );
+    });
+
+    it("persists each survey answer through the engagement layer with the campaign id", async () => {
+      prisma.doorKnock.findUnique.mockResolvedValue(null);
+      // One mock satisfies both the lock check (.turfId) and the campaign resolve (.turf.campaignId).
+      prisma.contact.findFirst.mockResolvedValue({ turfId: "t1", turf: { campaignId: "camp1" } });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ canvasserId: "u1" });
+
+      await service.recordDoorKnock("org1", {
+        ...baseInput,
+        dispositionCode: "spoke_to_target",
+        surveyAnswers: [
+          { questionId: "q1", optionId: "o1" },
+          { questionId: "q2", valueText: "4" },
+        ],
+      });
+
+      expect(engagement.recordSurveyAnswer).toHaveBeenCalledTimes(2);
+      expect(engagement.recordSurveyAnswer).toHaveBeenNthCalledWith(
+        1,
+        "org1",
+        expect.objectContaining({
+          contactId: "c1",
+          questionId: "q1",
+          optionId: "o1",
+          channel: "DOOR",
+          campaignId: "camp1",
+          recordedById: "u1",
+        }),
+      );
+      expect(engagement.recordSurveyAnswer).toHaveBeenNthCalledWith(
+        2,
+        "org1",
+        expect.objectContaining({ questionId: "q2", valueText: "4", campaignId: "camp1" }),
+      );
+    });
+
+    it("does not record survey answers on idempotent replay", async () => {
+      prisma.doorKnock.findUnique.mockResolvedValue({ id: "dk_existing" });
+
+      await service.recordDoorKnock("org1", {
+        ...baseInput,
+        surveyAnswers: [{ questionId: "q1", optionId: "o1" }],
+      });
+
+      expect(engagement.recordSurveyAnswer).not.toHaveBeenCalled();
     });
 
     it("allows a knock when the contact has no turf (no lock to enforce)", async () => {
@@ -257,6 +308,83 @@ describe("CanvassingService", () => {
     it("throws for an unknown turf", async () => {
       prisma.turf.findFirst.mockResolvedValue(null);
       await expect(service.rebucketTurf("org1", "missing")).rejects.toThrow();
+    });
+  });
+
+  describe("loadUniverseIntoTurf", () => {
+    const coldDoors = [
+      { gnafPid: "GA1", address: "1 St", lat: 1, lng: 1 },
+      { gnafPid: "GA2", address: "2 St", lat: 2, lng: 2 },
+    ];
+
+    it("is a no-op for the 'existing' universe (never queries geo)", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", organizationId: "org1" });
+      prisma.contact.count.mockResolvedValue(7);
+
+      const res = await service.loadUniverseIntoTurf("org1", "t1", { universe: "existing" });
+
+      expect(geo.addresses).not.toHaveBeenCalled();
+      expect(prisma.contact.createMany).toBeUndefined();
+      expect(res).toEqual({ materialised: 0, total: 7 });
+    });
+
+    it("materialises cold doors as contacts with gnafPid + coldDoor metadata", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", organizationId: "org1" });
+      prisma.contact.findMany.mockResolvedValue([]); // none seen yet
+      prisma.contact.createMany = jest.fn().mockResolvedValue({ count: 2 });
+      prisma.contact.count.mockResolvedValue(2);
+      geo.addresses.mockResolvedValue(coldDoors);
+
+      const res = await service.loadUniverseIntoTurf("org1", "t1", { universe: "hybrid" });
+
+      expect(geo.addresses).toHaveBeenCalledWith("org1", {
+        turfId: "t1",
+        withoutContacts: true,
+        limit: 2000,
+      });
+      const created = prisma.contact.createMany.mock.calls[0][0].data;
+      expect(created).toHaveLength(2);
+      expect(created[0]).toMatchObject({
+        organizationId: "org1",
+        turfId: "t1",
+        gnafPid: "GA1",
+        metadata: { coldDoor: true },
+      });
+      expect(res).toEqual({ materialised: 2, total: 2 });
+    });
+
+    it("skips gnafPids already on a contact (idempotent re-run)", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", organizationId: "org1" });
+      prisma.contact.findMany.mockResolvedValue([{ gnafPid: "GA1" }]); // GA1 already present
+      prisma.contact.createMany = jest.fn().mockResolvedValue({ count: 1 });
+      prisma.contact.count.mockResolvedValue(2);
+      geo.addresses.mockResolvedValue(coldDoors);
+
+      const res = await service.loadUniverseIntoTurf("org1", "t1", { universe: "none" });
+
+      const created = prisma.contact.createMany.mock.calls[0][0].data;
+      expect(created).toHaveLength(1);
+      expect(created[0].gnafPid).toBe("GA2");
+      expect(res.materialised).toBe(1);
+    });
+
+    it("degrades to 0 materialised when no geo addresses are returned", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", organizationId: "org1" });
+      prisma.contact.createMany = jest.fn();
+      prisma.contact.count.mockResolvedValue(0);
+      geo.addresses.mockResolvedValue([]);
+
+      const res = await service.loadUniverseIntoTurf("org1", "t1", { universe: "hybrid" });
+
+      expect(prisma.contact.createMany).not.toHaveBeenCalled();
+      expect(res).toEqual({ materialised: 0, total: 0 });
+    });
+
+    it("throws for an unknown turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue(null);
+      await expect(
+        service.loadUniverseIntoTurf("org1", "missing", { universe: "hybrid" }),
+      ).rejects.toThrow();
     });
   });
 

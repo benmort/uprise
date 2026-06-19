@@ -24,6 +24,7 @@ const ROOT = resolve(__dirname, "../../../../..");
 const LAYERS: Array<{ table: string; shp: string }> = [
   { table: "geo.ced", shp: "data/geo/ced/CED_2025_AUST_GDA2020.shp" },
   { table: "geo.sed", shp: "data/geo/sed/SED_2025_AUST_GDA2020.shp" },
+  { table: "geo.lga", shp: "data/geo/lga/LGA_2024_AUST_GDA2020.shp" },
 ];
 
 function pick(props: Record<string, unknown>, ...res: RegExp[]): string | null {

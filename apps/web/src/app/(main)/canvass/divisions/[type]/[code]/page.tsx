@@ -10,7 +10,9 @@ import {
   getDivision,
   type DivisionDetail,
   type DivisionType,
+  type TurfUniverse,
 } from "@/lib/api/geo";
+import { loadTurfUniverse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -31,6 +33,7 @@ export default function DivisionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [universe, setUniverse] = useState<TurfUniverse>("hybrid");
 
   useEffect(() => {
     let alive = true;
@@ -50,12 +53,19 @@ export default function DivisionDetailPage() {
     if (!d) return;
     setBusy(true);
     const res = await createTurfFromDivision({ type, code: d.code, name: d.name });
-    setBusy(false);
     if (!res.ok) {
+      setBusy(false);
       showToast({ tone: "error", title: "Couldn't cut turf", description: res.error });
       return;
     }
-    showToast({ tone: "success", title: `Turf cut from ${d.name}` });
+    const cold = universe === "existing" ? null : await loadTurfUniverse(res.data.id, universe);
+    setBusy(false);
+    const coldCount = cold?.ok ? cold.data.materialised : 0;
+    showToast({
+      tone: "success",
+      title: `Turf cut from ${d.name}`,
+      description: coldCount > 0 ? `${coldCount.toLocaleString()} cold doors loaded.` : undefined,
+    });
     router.push("/canvass");
   }
 
@@ -75,10 +85,22 @@ export default function DivisionDetailPage() {
         </Button>
         <h1 className="text-2xl font-extrabold">{d.name}</h1>
         <span className="text-sm text-muted-foreground tabular-nums">{d.code}{d.state ? ` · ${d.state}` : ""}</span>
-        <Button className="ml-auto" disabled={busy} onClick={cutTurf}>
-          <Scissors className="mr-1.5 h-4 w-4" />
-          {busy ? "Cutting…" : "Cut turf from division"}
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          <select
+            value={universe}
+            onChange={(e) => setUniverse(e.target.value as TurfUniverse)}
+            className="h-9 rounded-lg border border-border bg-white px-2 text-sm font-semibold text-foreground"
+            title="Which addresses land in the turf when you cut it"
+          >
+            <option value="hybrid">Existing + cold doors</option>
+            <option value="none">Cold doors only</option>
+            <option value="existing">Existing contacts only</option>
+          </select>
+          <Button disabled={busy} onClick={cutTurf}>
+            <Scissors className="mr-1.5 h-4 w-4" />
+            {busy ? "Cutting…" : "Cut turf from division"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

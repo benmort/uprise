@@ -41,6 +41,15 @@ async function main(): Promise<void> {
        WHERE ar.gnaf_pid = a.gnaf_pid AND ST_Contains(d.geom, a.geom)`,
     );
 
+    // LGA: prefer the deterministic mesh-block nesting (set above); spatial-fill
+    // only where mesh blocks aren't loaded, so LGA works without ASGS mesh data.
+    log("Spatial join → LGA (fill gaps)…");
+    await prisma.$executeRawUnsafe(
+      `UPDATE geo.address_region ar SET lga_code = d.code
+       FROM geo.gnaf_address a, geo.lga d
+       WHERE ar.gnaf_pid = a.gnaf_pid AND ar.lga_code IS NULL AND ST_Contains(d.geom, a.geom)`,
+    );
+
     // Refresh dataset_meta row counts.
     for (const [key, table] of [
       ["gnaf", "geo.gnaf_address"],

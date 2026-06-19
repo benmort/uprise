@@ -415,8 +415,9 @@ export async function syncWhatsappTemplates() {
   });
 }
 
-export async function getBlastKpis(blastId: string) {
-  return request<Record<string, unknown>>(`/analytics/blasts/${blastId}/kpi`);
+export async function getBlastKpis(blastId: string, channel?: string) {
+  const q = channel ? `?channel=${encodeURIComponent(channel)}` : "";
+  return request<Record<string, unknown>>(`/analytics/blasts/${blastId}/kpi${q}`);
 }
 
 export async function getBlastTrend(blastId: string, minutes: number | "all" = 60) {
@@ -429,15 +430,19 @@ export async function getBlastTrend(blastId: string, minutes: number | "all" = 6
   return request<Array<Record<string, unknown>>>(`/analytics/blasts/${blastId}/trend?${q}`);
 }
 
-export async function getBlastActivity(blastId: string, limit = 25, offset = 0) {
+export async function getBlastActivity(blastId: string, limit = 25, offset = 0, channel?: string) {
   const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (channel) q.set("channel", channel);
   return request<{ rows: Array<Record<string, unknown>>; total: number }>(
     `/analytics/blasts/${blastId}/activity?${q}`,
   );
 }
 
-export async function getBlastStatusDistribution(blastId: string) {
-  return request<Array<Record<string, unknown>>>(`/analytics/blasts/${blastId}/status-distribution`);
+export async function getBlastStatusDistribution(blastId: string, channel?: string) {
+  const q = channel ? `?channel=${encodeURIComponent(channel)}` : "";
+  return request<Array<Record<string, unknown>>>(
+    `/analytics/blasts/${blastId}/status-distribution${q}`,
+  );
 }
 
 export async function listConversations(params?: {
@@ -634,7 +639,7 @@ export async function deleteCannedResponse(id: string) {
 export type CanvassAssignment = {
   turfId: string;
   lockedUntil: string | null;
-  turf: { id: string; name: string; geometry: unknown };
+  turf: { id: string; name: string; geometry: unknown; campaignId: string | null };
   walkLists: Array<{
     id: string;
     name: string;
@@ -646,6 +651,8 @@ export type CanvassAssignment = {
     }>;
   }>;
 };
+
+export type DoorKnockSurveyAnswer = { questionId: string; optionId?: string; valueText?: string };
 
 export type DoorKnockInput = {
   contactId: string;
@@ -659,6 +666,7 @@ export type DoorKnockInput = {
   walkListItemId?: string;
   photoUrl?: string;
   safetyFlag?: boolean;
+  surveyAnswers?: DoorKnockSurveyAnswer[];
 };
 
 export type TurfSummary = {
@@ -744,6 +752,26 @@ export async function rebucketTurf(turfId: string) {
   return request<{ added: number; removed: number; total: number }>(
     `/canvass/turfs/${encodeURIComponent(turfId)}/rebucket`,
     { method: "POST" },
+  );
+}
+
+/**
+ * Materialise the "addresses without contacts" universe into a turf: creates
+ * cold-door contacts inside the boundary so they become walk-list stops.
+ * "existing" is a no-op. Returns how many were created + the new turf total.
+ */
+export async function loadTurfUniverse(
+  turfId: string,
+  universe: "existing" | "none" | "hybrid",
+  limit?: number,
+) {
+  return request<{ materialised: number; total: number }>(
+    `/canvass/turfs/${encodeURIComponent(turfId)}/load-universe`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ universe, limit }),
+    },
   );
 }
 

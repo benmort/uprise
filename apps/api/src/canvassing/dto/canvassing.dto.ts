@@ -6,7 +6,22 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  ValidateNested,
 } from "class-validator";
+import { Type } from "class-transformer";
+
+export class SurveyAnswerDto {
+  @IsString()
+  questionId!: string;
+
+  @IsOptional()
+  @IsString()
+  optionId?: string;
+
+  @IsOptional()
+  @IsString()
+  valueText?: string;
+}
 
 export class CreateTurfDto {
   @IsString()
@@ -124,6 +139,12 @@ export class RecordDoorKnockDto {
   @IsOptional()
   @IsBoolean()
   safetyFlag?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SurveyAnswerDto)
+  surveyAnswers?: SurveyAnswerDto[];
 }
 
 export class CreateDoorContactDto {
@@ -172,6 +193,19 @@ export class CreateTurfFromDivisionDto {
   @IsOptional()
   @IsString()
   campaignId?: string;
+
+  @IsOptional()
+  @IsIn(["existing", "none", "hybrid"])
+  universe?: "existing" | "none" | "hybrid";
+}
+
+export class LoadUniverseDto {
+  @IsIn(["existing", "none", "hybrid"])
+  universe!: "existing" | "none" | "hybrid";
+
+  @IsOptional()
+  @IsNumber()
+  limit?: number;
 }
 
 export class CreateShiftDto {

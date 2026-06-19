@@ -37,3 +37,6 @@ pnpm-debug.log*
 
 # Geo ETL downloads (multi-GB G-NAF + ABS/AEC shapefiles)
 /data/geo/
+
+# one-off prod migration secret (never committed)
+apps/api/.env.migrate

@@ -9,7 +9,9 @@ import {
   listDivisions,
   type Division,
   type DivisionType,
+  type TurfUniverse,
 } from "@/lib/api/geo";
+import { loadTurfUniverse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,7 +24,7 @@ import { cn } from "@/lib/utils";
 const TABS: Array<{ type: DivisionType; label: string; soon?: boolean }> = [
   { type: "ced", label: "Federal" },
   { type: "sed", label: "State" },
-  { type: "lga", label: "Local (LGA)", soon: true }, // boundaries not loaded yet
+  { type: "lga", label: "Local (LGA)" },
 ];
 
 export default function DivisionsPage() {
@@ -34,6 +36,7 @@ export default function DivisionsPage() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState("");
+  const [universe, setUniverse] = useState<TurfUniverse>("hybrid");
 
   const load = useCallback(async (t: DivisionType) => {
     setLoading(true);
@@ -54,15 +57,24 @@ export default function DivisionsPage() {
     async (d: Division) => {
       setBusy(d.code);
       const res = await createTurfFromDivision({ type, code: d.code, name: d.name });
-      setBusy("");
       if (!res.ok) {
+        setBusy("");
         showToast({ tone: "error", title: "Couldn't cut turf", description: res.error });
         return;
       }
-      showToast({ tone: "success", title: `Turf cut from ${d.name}` });
+      // Materialise cold doors inside the boundary when the universe wants them.
+      const cold =
+        universe === "existing" ? null : await loadTurfUniverse(res.data.id, universe);
+      setBusy("");
+      const coldCount = cold?.ok ? cold.data.materialised : 0;
+      showToast({
+        tone: "success",
+        title: `Turf cut from ${d.name}`,
+        description: coldCount > 0 ? `${coldCount.toLocaleString()} cold doors loaded.` : undefined,
+      });
       router.push("/canvass");
     },
-    [type, router, showToast],
+    [type, universe, router, showToast],
   );
 
   const filtered = rows.filter((r) => r.name.toLowerCase().includes(filter.trim().toLowerCase()));
@@ -116,6 +128,21 @@ export default function DivisionsPage() {
           placeholder="Filter divisions…"
           className="h-9 max-w-xs"
         />
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Cut with
+          </span>
+          <select
+            value={universe}
+            onChange={(e) => setUniverse(e.target.value as TurfUniverse)}
+            className="h-9 rounded-lg border border-border bg-white px-2 text-sm font-semibold text-foreground"
+            title="Which addresses land in the turf when you cut it"
+          >
+            <option value="hybrid">Existing + cold doors</option>
+            <option value="none">Cold doors only</option>
+            <option value="existing">Existing contacts only</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (

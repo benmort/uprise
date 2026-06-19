@@ -26,6 +26,7 @@ import {
   CreateTurfDto,
   CreateTurfFromDivisionDto,
   CreateWalkListDto,
+  LoadUniverseDto,
   RecordDoorKnockDto,
   ReleaseTurfDto,
   UpdateTurfDto,
@@ -107,6 +108,13 @@ export class CanvassingController {
   async rebucketTurf(@Param("id") id: string) {
     const org = await this.ensureOrganization();
     return this.canvassing.rebucketTurf(org.id, id);
+  }
+
+  @Post("turfs/:id/load-universe")
+  @Roles(AppUserRole.ORGANISER)
+  async loadUniverse(@Param("id") id: string, @Body() dto: LoadUniverseDto) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.loadUniverseIntoTurf(org.id, id, dto);
   }
 
   @Get("walk-lists")
