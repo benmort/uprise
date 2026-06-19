@@ -225,3 +225,45 @@ export class CreateShiftDto {
   @IsString()
   location?: string;
 }
+
+export class UpdateShiftDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsString()
+  startsAt?: string;
+
+  @IsOptional()
+  @IsString()
+  endsAt?: string;
+}
+
+export class UpdateWalkListDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsIn(["STATIC", "DYNAMIC"])
+  listType?: "STATIC" | "DYNAMIC";
+}
+
+export class UpdateCanvasserDto {
+  @IsOptional()
+  @IsString()
+  displayName?: string;
+
+  @IsOptional()
+  @IsIn(["ORGANISER", "CANVASSER"])
+  role?: "ORGANISER" | "CANVASSER";
+
+  @IsOptional()
+  @IsString()
+  password?: string;
+}

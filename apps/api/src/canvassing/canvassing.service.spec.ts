@@ -29,7 +29,15 @@ describe("CanvassingService", () => {
         findMany: jest.fn(),
       },
       walkListItem: { updateMany: jest.fn() },
-      walkList: { findMany: jest.fn() },
+      walkList: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(async ({ data }: any) => ({ id: "w1", ...data })),
+      },
+      shift: {
+        findFirst: jest.fn(),
+        update: jest.fn(async ({ data }: any) => ({ id: "s1", ...data })),
+      },
       contact: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -37,7 +45,11 @@ describe("CanvassingService", () => {
         count: jest.fn(),
         create: jest.fn(async ({ data }: any) => ({ id: "c_new", ...data })),
       },
-      appUser: { create: jest.fn() },
+      appUser: {
+        create: jest.fn(),
+        findFirst: jest.fn(),
+        update: jest.fn(async ({ data }: any) => ({ id: "u1", ...data })),
+      },
     };
     engagement = {
       recordDisposition: jest.fn().mockResolvedValue({ id: "disp1" }),
@@ -418,6 +430,60 @@ describe("CanvassingService", () => {
       expect(rows[0].stopCount).toBe(32);
       expect(rows[0].visitedCount).toBe(2);
       expect(rows[0].assignedTo?.name).toBe("Ada");
+    });
+  });
+
+  describe("updateWalkList", () => {
+    it("updates name + listType for an owned list", async () => {
+      prisma.walkList.findFirst.mockResolvedValue({ id: "w1", organizationId: "org1" });
+      await service.updateWalkList("org1", "w1", { name: "Renamed", listType: "DYNAMIC" as any });
+      expect(prisma.walkList.update).toHaveBeenCalledWith({
+        where: { id: "w1" },
+        data: { name: "Renamed", listType: "DYNAMIC" },
+      });
+    });
+
+    it("throws for an unknown walk list", async () => {
+      prisma.walkList.findFirst.mockResolvedValue(null);
+      await expect(service.updateWalkList("org1", "missing", { name: "x" })).rejects.toThrow();
+    });
+  });
+
+  describe("updateShift", () => {
+    it("updates fields + coerces dates", async () => {
+      prisma.shift.findFirst.mockResolvedValue({ id: "s1", organizationId: "org1" });
+      await service.updateShift("org1", "s1", { name: "AM", startsAt: "2026-07-01T09:00:00Z" });
+      const arg = prisma.shift.update.mock.calls[0][0];
+      expect(arg.where).toEqual({ id: "s1" });
+      expect(arg.data.name).toBe("AM");
+      expect(arg.data.startsAt).toBeInstanceOf(Date);
+    });
+
+    it("throws for an unknown shift", async () => {
+      prisma.shift.findFirst.mockResolvedValue(null);
+      await expect(service.updateShift("org1", "missing", { name: "x" })).rejects.toThrow();
+    });
+  });
+
+  describe("updateCanvasser", () => {
+    it("renames + re-hashes the password when provided", async () => {
+      prisma.appUser.findFirst.mockResolvedValue({ id: "u1", organizationId: "org1" });
+      await service.updateCanvasser("org1", "u1", { displayName: "Ada B", password: "supersecret" });
+      const arg = prisma.appUser.update.mock.calls[0][0];
+      expect(arg.data.displayName).toBe("Ada B");
+      expect(arg.data.passwordHash).toBeTruthy();
+      expect(arg.data.passwordHash).not.toBe("supersecret");
+    });
+
+    it("does not set passwordHash when no password given", async () => {
+      prisma.appUser.findFirst.mockResolvedValue({ id: "u1", organizationId: "org1" });
+      await service.updateCanvasser("org1", "u1", { displayName: "Ada" });
+      expect(prisma.appUser.update.mock.calls[0][0].data.passwordHash).toBeUndefined();
+    });
+
+    it("throws for an unknown user", async () => {
+      prisma.appUser.findFirst.mockResolvedValue(null);
+      await expect(service.updateCanvasser("org1", "missing", { displayName: "x" })).rejects.toThrow();
     });
   });
 });

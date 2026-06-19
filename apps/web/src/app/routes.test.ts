@@ -54,7 +54,7 @@ describe("major route files", () => {
   it("wires the header create blast CTA to create-and-redirect flow", () => {
     const source = read("layout.tsx");
     expect(source).toContain("createBlastAndOpen");
-    expect(source).toContain("Create Blast");
+    expect(source).toContain("New text blast");
     // The create-and-redirect itself lives in the shared helper.
     const helper = read("../../lib/blasts.ts");
     expect(helper).toContain("/blasts/");

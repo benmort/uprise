@@ -2,20 +2,30 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, Zap } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import {
   createCannedResponse,
   deleteCannedResponse,
   listCannedResponses,
+  listDispositions,
+  updateCannedResponse,
   type CannedResponseItem,
   type CannedVisibility,
+  type DispositionDef,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { FormDialog } from "@/components/ui/form-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/canvass/section-card";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+
+type Channel = "SMS" | "DOOR" | "BOTH";
 
 const COLUMNS: Array<{ key: CannedVisibility; title: string; note: string; tint?: string }> = [
   { key: "ORG", title: "Recommended", note: "Org-wide replies." },
@@ -28,18 +38,24 @@ const COLUMNS: Array<{ key: CannedVisibility; title: string; note: string; tint?
   },
 ];
 
+const EMPTY = { title: "", body: "", visibility: "ORG" as CannedVisibility, channel: "SMS" as Channel, dispositionCode: "" };
+
 export default function CannedResponsesPage() {
   const { showToast } = useToast();
   const [items, setItems] = useState<CannedResponseItem[]>([]);
+  const [dispositions, setDispositions] = useState<DispositionDef[]>([]);
   const [loading, setLoading] = useState(true);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [visibility, setVisibility] = useState<CannedVisibility>("ORG");
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<CannedResponseItem | null>(null);
+  const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CannedResponseItem | null>(null);
 
   const load = useCallback(async () => {
-    const res = await listCannedResponses("SMS");
+    const [res, disp] = await Promise.all([listCannedResponses("SMS"), listDispositions()]);
     if (res.ok) setItems(res.data as unknown as CannedResponseItem[]);
+    if (disp.ok) setDispositions(disp.data.filter((d) => d.layer === "CONTACT_RESULT"));
     setLoading(false);
   }, []);
 
@@ -47,33 +63,60 @@ export default function CannedResponsesPage() {
     void load();
   }, [load]);
 
-  const handleCreate = useCallback(async () => {
-    if (!title.trim() || !body.trim()) return;
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY);
+    setDialogOpen(true);
+  };
+
+  const openEdit = (item: CannedResponseItem) => {
+    setEditing(item);
+    setForm({
+      title: item.title,
+      body: item.body,
+      visibility: item.visibility,
+      channel: item.channel,
+      dispositionCode: item.dispositionCode ?? "",
+    });
+    setDialogOpen(true);
+  };
+
+  const submit = useCallback(async () => {
+    if (!form.title.trim() || !form.body.trim()) return;
     setBusy(true);
-    const res = await createCannedResponse({ title: title.trim(), body: body.trim(), visibility });
+    const payload = {
+      title: form.title.trim(),
+      body: form.body.trim(),
+      visibility: form.visibility,
+      channel: form.channel,
+      dispositionCode: form.dispositionCode || undefined,
+    };
+    const res = editing
+      ? await updateCannedResponse(editing.id, payload)
+      : await createCannedResponse(payload);
     setBusy(false);
     if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't add", description: res.error });
+      showToast({ tone: "error", title: editing ? "Couldn't update" : "Couldn't add", description: res.error });
       return;
     }
-    setTitle("");
-    setBody("");
+    setDialogOpen(false);
     await load();
-    showToast({ tone: "success", title: "Canned response added" });
-  }, [title, body, visibility, load, showToast]);
+    showToast({ tone: "success", title: editing ? "Canned response updated" : "Canned response added" });
+  }, [editing, form, load, showToast]);
 
-  const handleDelete = useCallback(
-    async (item: CannedResponseItem) => {
-      if (!window.confirm(`Delete “${item.title}”?`)) return;
-      const res = await deleteCannedResponse(item.id);
-      if (!res.ok) {
-        showToast({ tone: "error", title: "Couldn't delete", description: res.error });
-        return;
-      }
-      await load();
-    },
-    [load, showToast],
-  );
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setBusy(true);
+    const res = await deleteCannedResponse(deleteTarget.id);
+    setBusy(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't delete", description: res.error });
+      return;
+    }
+    setDeleteTarget(null);
+    await load();
+    showToast({ tone: "success", title: "Deleted" });
+  }, [deleteTarget, load, showToast]);
 
   return (
     <div className="page-stack">
@@ -85,34 +128,11 @@ export default function CannedResponsesPage() {
           </Link>
         </Button>
         <h1 className="text-2xl font-extrabold">Canned responses</h1>
+        <Button className="ml-auto" size="sm" onClick={openCreate}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          New canned response
+        </Button>
       </div>
-
-      <SectionCard title="New canned response">
-        <div className="space-y-2">
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Short title" />
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Message body…"
-            rows={3}
-            className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm"
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={visibility}
-              onChange={(e) => setVisibility(e.target.value as CannedVisibility)}
-              className="h-9 rounded-[11px] border border-border bg-white px-3 text-sm"
-            >
-              <option value="ORG">Recommended (org)</option>
-              <option value="AUTO_SEND">Auto-send</option>
-            </select>
-            <Button onClick={handleCreate} disabled={busy || !title.trim() || !body.trim()}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Add
-            </Button>
-          </div>
-        </div>
-      </SectionCard>
 
       {loading ? (
         <Skeleton className="h-48 w-full" />
@@ -140,14 +160,24 @@ export default function CannedResponsesPage() {
                       <li key={item.id} className="rounded-xl border border-border bg-white p-3">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-foreground">{item.title}</p>
-                          <button
-                            type="button"
-                            aria-label="Delete"
-                            onClick={() => handleDelete(item)}
-                            className="text-muted-foreground hover:text-error"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              aria-label="Edit"
+                              onClick={() => openEdit(item)}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label="Delete"
+                              onClick={() => setDeleteTarget(item)}
+                              className="text-muted-foreground hover:text-error"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">{item.body}</p>
                         {item.dispositionCode ? (
@@ -164,6 +194,83 @@ export default function CannedResponsesPage() {
           })}
         </div>
       )}
+
+      <FormDialog
+        open={dialogOpen}
+        title={editing ? "Edit canned response" : "New canned response"}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={submit}
+        submitLabel={editing ? "Save" : "Add"}
+        busy={busy}
+        submitDisabled={!form.title.trim() || !form.body.trim()}
+      >
+        <Field label="Title" htmlFor="cr-title" required>
+          <Input
+            id="cr-title"
+            value={form.title}
+            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            placeholder="Short title"
+            autoFocus
+          />
+        </Field>
+        <Field label="Message body" htmlFor="cr-body" required>
+          <Textarea
+            id="cr-body"
+            value={form.body}
+            onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+            placeholder="Message body…"
+            rows={4}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Visibility" htmlFor="cr-visibility">
+            <Select
+              id="cr-visibility"
+              value={form.visibility}
+              onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value as CannedVisibility }))}
+            >
+              <option value="ORG">Recommended (org)</option>
+              <option value="PERSONAL">Personal (mine)</option>
+              <option value="AUTO_SEND">Auto-send</option>
+            </Select>
+          </Field>
+          <Field label="Channel" htmlFor="cr-channel">
+            <Select
+              id="cr-channel"
+              value={form.channel}
+              onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value as Channel }))}
+            >
+              <option value="SMS">SMS</option>
+              <option value="DOOR">Door</option>
+              <option value="BOTH">Both</option>
+            </Select>
+          </Field>
+        </div>
+        <Field label="Logs disposition" htmlFor="cr-disp" hint="Using this reply records this disposition.">
+          <Select
+            id="cr-disp"
+            value={form.dispositionCode}
+            onChange={(e) => setForm((f) => ({ ...f, dispositionCode: e.target.value }))}
+          >
+            <option value="">— none —</option>
+            {dispositions.map((d) => (
+              <option key={d.id} value={d.code}>
+                {d.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </FormDialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete canned response"
+        description={deleteTarget ? `Delete “${deleteTarget.title}”?` : ""}
+        confirmLabel="Delete"
+        busy={busy}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

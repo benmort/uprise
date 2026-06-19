@@ -9,17 +9,30 @@ import {
   getSurvey,
   listSurveys,
   updateSurvey,
+  type QuestionType,
   type Survey,
   type SurveyListItem,
   type SurveyQuestion,
 } from "@/lib/api/engagement";
+import { listDispositions, type DispositionDef } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { FormDialog } from "@/components/ui/form-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/canvass/section-card";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+
+const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
+  { value: "single_choice", label: "Single choice" },
+  { value: "multi_choice", label: "Multiple choice" },
+  { value: "yes_no", label: "Yes / No" },
+  { value: "text", label: "Free text" },
+];
 
 function blankQuestion(): SurveyQuestion {
   return {
@@ -36,6 +49,11 @@ export default function SurveysPage() {
   const [draft, setDraft] = useState<Survey | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [dispositions, setDispositions] = useState<DispositionDef[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const loadList = useCallback(async () => {
     const res = await listSurveys();
@@ -48,6 +66,7 @@ export default function SurveysPage() {
 
   useEffect(() => {
     void loadList();
+    void listDispositions().then((r) => r.ok && setDispositions(r.data.filter((d) => d.layer === "CONTACT_RESULT")));
   }, [loadList]);
 
   useEffect(() => {
@@ -58,17 +77,24 @@ export default function SurveysPage() {
     void getSurvey(selectedId).then((r) => r.ok && setDraft(r.data));
   }, [selectedId]);
 
+  const openCreate = () => {
+    setNewName("");
+    setCreateOpen(true);
+  };
+
   const handleCreate = useCallback(async () => {
-    const name = window.prompt("Name this survey");
-    if (!name?.trim()) return;
-    const res = await createSurvey({ name: name.trim(), questions: [blankQuestion()] });
+    if (!newName.trim()) return;
+    setCreating(true);
+    const res = await createSurvey({ name: newName.trim(), questions: [blankQuestion()] });
+    setCreating(false);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't create", description: res.error });
       return;
     }
+    setCreateOpen(false);
     await loadList();
     setSelectedId(res.data.id);
-  }, [loadList, showToast]);
+  }, [newName, loadList, showToast]);
 
   const patchQuestion = (qi: number, patch: Partial<SurveyQuestion>) => {
     if (!draft) return;
@@ -97,11 +123,17 @@ export default function SurveysPage() {
   }, [draft, loadList, showToast]);
 
   const handleDelete = useCallback(async () => {
-    if (!draft || !window.confirm(`Delete “${draft.name}”?`)) return;
+    if (!draft) return;
+    setBusy(true);
     const res = await deleteSurvey(draft.id);
+    setBusy(false);
+    setDeleteOpen(false);
     if (res.ok) {
       setSelectedId("");
       await loadList();
+      showToast({ tone: "success", title: "Survey deleted" });
+    } else {
+      showToast({ tone: "error", title: "Couldn't delete", description: res.error });
     }
   }, [draft, loadList, showToast]);
 
@@ -117,7 +149,7 @@ export default function SurveysPage() {
           </Link>
         </Button>
         <h1 className="text-2xl font-extrabold">Surveys</h1>
-        <Button className="ml-auto" onClick={handleCreate}>
+        <Button className="ml-auto" onClick={openCreate}>
           <Plus className="mr-1.5 h-4 w-4" />
           New survey
         </Button>
@@ -128,7 +160,7 @@ export default function SurveysPage() {
           title="No surveys yet"
           description="Author once — each option becomes a door button and a text reply."
           ctaLabel="New survey"
-          onCta={handleCreate}
+          onCta={openCreate}
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
@@ -161,7 +193,7 @@ export default function SurveysPage() {
                 }
                 action={
                   <div className="flex gap-2">
-                    <Button size="sm" variant="ghost" className="text-error" onClick={handleDelete}>
+                    <Button size="sm" variant="ghost" className="text-error" onClick={() => setDeleteOpen(true)}>
                       <Trash2 className="mr-1 h-3.5 w-3.5" />
                       Delete
                     </Button>
@@ -181,6 +213,17 @@ export default function SurveysPage() {
                           onChange={(e) => patchQuestion(qi, { prompt: e.target.value })}
                           className="h-8 flex-1 font-semibold"
                         />
+                        <Select
+                          value={q.type}
+                          onChange={(e) => patchQuestion(qi, { type: e.target.value as QuestionType })}
+                          className="h-8 w-36"
+                        >
+                          {QUESTION_TYPES.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </Select>
                         <button
                           type="button"
                           aria-label="Remove question"
@@ -212,11 +255,18 @@ export default function SurveysPage() {
                               onChange={(e) => patchOption(qi, oi, { cannedReplyText: e.target.value })}
                               className="h-8"
                             />
-                            <Input
+                            <Select
                               value={o.dispositionCode ?? ""}
-                              onChange={(e) => patchOption(qi, oi, { dispositionCode: e.target.value })}
+                              onChange={(e) => patchOption(qi, oi, { dispositionCode: e.target.value || null })}
                               className="h-8"
-                            />
+                            >
+                              <option value="">— none —</option>
+                              {dispositions.map((d) => (
+                                <option key={d.id} value={d.code}>
+                                  {d.label}
+                                </option>
+                              ))}
+                            </Select>
                           </div>
                         ))}
                         <Button
@@ -282,6 +332,36 @@ export default function SurveysPage() {
           ) : null}
         </div>
       )}
+
+      <FormDialog
+        open={createOpen}
+        title="New survey"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+        submitLabel="Create"
+        busy={creating}
+        submitDisabled={!newName.trim()}
+      >
+        <Field label="Survey name" htmlFor="survey-name" required>
+          <Input
+            id="survey-name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. Doorstep issue ID"
+            autoFocus
+          />
+        </Field>
+      </FormDialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete survey"
+        description={draft ? `Delete “${draft.name}”? This can't be undone.` : ""}
+        confirmLabel="Delete"
+        busy={busy}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
     </div>
   );
 }

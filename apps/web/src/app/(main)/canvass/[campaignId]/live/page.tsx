@@ -9,6 +9,9 @@ import { broadcastPush } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Field } from "@/components/ui/field";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { useToast } from "@/components/ui/toast";
 import { KpiTile } from "@/components/canvass/kpi-tile";
 import { SectionCard } from "@/components/canvass/section-card";
@@ -27,15 +30,21 @@ export default function LiveWarRoomPage() {
   const [live, setLive] = useState<CampaignLive | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [broadcastOpen, setBroadcastOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
 
-  async function notifyField() {
-    const body = window.prompt("Message to send to canvassers out in the field:");
-    if (!body?.trim()) return;
-    const res = await broadcastPush({ title: "Message from your organiser", body: body.trim(), url: "/field" });
+  async function sendBroadcast() {
+    if (!message.trim()) return;
+    setSending(true);
+    const res = await broadcastPush({ title: "Message from your organiser", body: message.trim(), url: "/field" });
+    setSending(false);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't send", description: res.error });
       return;
     }
+    setBroadcastOpen(false);
+    setMessage("");
     showToast(
       res.data.enabled
         ? { tone: "success", title: `Sent to ${res.data.sent} device${res.data.sent === 1 ? "" : "s"}` }
@@ -87,7 +96,7 @@ export default function LiveWarRoomPage() {
           <Radio className="h-3.5 w-3.5 animate-pulse" />
           Live · {out} out
         </span>
-        <Button size="sm" variant="outline" className="ml-auto" onClick={notifyField}>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => setBroadcastOpen(true)}>
           <Bell className="mr-1.5 h-3.5 w-3.5" />
           Notify field
         </Button>
@@ -152,6 +161,28 @@ export default function LiveWarRoomPage() {
           )}
         </SectionCard>
       </div>
+
+      <FormDialog
+        open={broadcastOpen}
+        title="Message the field"
+        description="Sends a push notification to every canvasser with notifications on."
+        onClose={() => setBroadcastOpen(false)}
+        onSubmit={sendBroadcast}
+        submitLabel="Send"
+        busy={sending}
+        submitDisabled={!message.trim()}
+      >
+        <Field label="Message" htmlFor="broadcast-msg" required>
+          <Textarea
+            id="broadcast-msg"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="e.g. Great work — 30 mins left, push for the last doors!"
+            rows={3}
+            autoFocus
+          />
+        </Field>
+      </FormDialog>
     </div>
   );
 }

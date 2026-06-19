@@ -29,7 +29,10 @@ import {
   LoadUniverseDto,
   RecordDoorKnockDto,
   ReleaseTurfDto,
+  UpdateCanvasserDto,
+  UpdateShiftDto,
   UpdateTurfDto,
+  UpdateWalkListDto,
 } from "./dto/canvassing.dto";
 
 @Controller("canvass")
@@ -70,6 +73,16 @@ export class CanvassingController {
   async createCanvasser(@Body() dto: CreateCanvasserDto) {
     const org = await this.ensureOrganization();
     return this.canvassing.createCanvasser(org.id, {
+      ...dto,
+      role: dto.role as AppUserRole | undefined,
+    });
+  }
+
+  @Patch("canvassers/:id")
+  @Roles(AppUserRole.ORGANISER)
+  async updateCanvasser(@Param("id") id: string, @Body() dto: UpdateCanvasserDto) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.updateCanvasser(org.id, id, {
       ...dto,
       role: dto.role as AppUserRole | undefined,
     });
@@ -134,6 +147,16 @@ export class CanvassingController {
     });
   }
 
+  @Patch("walk-lists/:id")
+  @Roles(AppUserRole.ORGANISER)
+  async updateWalkList(@Param("id") id: string, @Body() dto: UpdateWalkListDto) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.updateWalkList(org.id, id, {
+      ...dto,
+      listType: dto.listType as WalkListItemListType | undefined,
+    });
+  }
+
   @Post("turfs/assign")
   @Roles(AppUserRole.ORGANISER)
   async assignTurf(@Body() dto: AssignTurfDto) {
@@ -190,6 +213,13 @@ export class CanvassingController {
   async createShift(@Body() dto: CreateShiftDto) {
     const org = await this.ensureOrganization();
     return this.canvassing.createShift(org.id, dto);
+  }
+
+  @Patch("shifts/:id")
+  @Roles(AppUserRole.ORGANISER)
+  async updateShift(@Param("id") id: string, @Body() dto: UpdateShiftDto) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.updateShift(org.id, id, dto);
   }
 
   @Delete("shifts/:id")

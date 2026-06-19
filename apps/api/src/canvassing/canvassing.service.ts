@@ -232,7 +232,11 @@ export class CanvassingService {
     // Persist survey answers collected at the door as structured QuestionResponses
     // (each option that maps a disposition also records one). Runs only on first
     // create — the idempotent-replay return above means a re-synced knock can't
-    // double-insert these.
+    // double-insert these. The knock + disposition are already committed above, so a
+    // single bad answer (e.g. a question/option deleted after offline capture, hitting
+    // a QuestionResponse FK) must NOT 500 the request and orphan the knock: we record
+    // each answer best-effort and log failures rather than abort. The web only sends
+    // ids from the live campaign survey, so this is an edge-case guard.
     if (input.surveyAnswers?.length) {
       const contact = await this.prisma.contact.findFirst({
         where: { id: input.contactId, organizationId },
@@ -240,15 +244,23 @@ export class CanvassingService {
       });
       const campaignId = contact?.turf?.campaignId ?? null;
       for (const answer of input.surveyAnswers) {
-        await this.engagement.recordSurveyAnswer(organizationId, {
-          contactId: input.contactId,
-          questionId: answer.questionId,
-          optionId: answer.optionId ?? null,
-          valueText: answer.valueText ?? null,
-          channel: EngagementChannel.DOOR,
-          campaignId,
-          recordedById: input.canvasserId,
-        });
+        try {
+          await this.engagement.recordSurveyAnswer(organizationId, {
+            contactId: input.contactId,
+            questionId: answer.questionId,
+            optionId: answer.optionId ?? null,
+            valueText: answer.valueText ?? null,
+            channel: EngagementChannel.DOOR,
+            campaignId,
+            recordedById: input.canvasserId,
+          });
+        } catch (error) {
+          this.logger.warn(
+            `Skipped survey answer for knock ${input.localId} (question ${answer.questionId}): ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
       }
     }
 
@@ -315,6 +327,26 @@ export class CanvassingService {
       }
       throw error;
     }
+  }
+
+  /** Edit a canvasser/organiser: rename, change role, or reset the password. */
+  async updateCanvasser(
+    organizationId: string,
+    id: string,
+    input: { displayName?: string; role?: AppUserRole; password?: string },
+  ) {
+    const existing = await this.prisma.appUser.findFirst({ where: { id, organizationId } });
+    if (!existing) throw new ApiHttpException("USER_NOT_FOUND", "User not found");
+    const data: Prisma.AppUserUpdateInput = {};
+    if (input.displayName !== undefined) data.displayName = input.displayName;
+    if (input.role !== undefined) data.role = input.role;
+    if (input.password) data.passwordHash = await hashPassword(input.password);
+    const user = await this.prisma.appUser.update({
+      where: { id },
+      data,
+      select: { id: true, displayName: true, email: true, role: true },
+    });
+    return user;
   }
 
   /** Contacts that fall in a turf, route-orderable for a walk list. */
@@ -485,6 +517,20 @@ export class CanvassingService {
     });
   }
 
+  /** Rename a walk list / switch its STATIC↔DYNAMIC mode. */
+  async updateWalkList(
+    organizationId: string,
+    id: string,
+    input: { name?: string; listType?: WalkListItemListType },
+  ) {
+    const existing = await this.prisma.walkList.findFirst({ where: { id, organizationId } });
+    if (!existing) throw new ApiHttpException("WALK_LIST_NOT_FOUND", "Walk list not found");
+    const data: Prisma.WalkListUpdateInput = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.listType !== undefined) data.listType = input.listType;
+    return this.prisma.walkList.update({ where: { id }, data });
+  }
+
   /** Rename / reshape a turf boundary. Geometry changes don't auto-rebucket. */
   async updateTurf(
     organizationId: string,
@@ -568,6 +614,21 @@ export class CanvassingService {
     const res = await this.prisma.shift.deleteMany({ where: { id, organizationId } });
     if (res.count === 0) throw new ApiHttpException("SHIFT_NOT_FOUND", "Shift not found");
     return { deleted: true };
+  }
+
+  async updateShift(
+    organizationId: string,
+    id: string,
+    input: { name?: string; location?: string | null; startsAt?: string; endsAt?: string },
+  ) {
+    const existing = await this.prisma.shift.findFirst({ where: { id, organizationId } });
+    if (!existing) throw new ApiHttpException("SHIFT_NOT_FOUND", "Shift not found");
+    const data: Prisma.ShiftUpdateInput = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.location !== undefined) data.location = input.location;
+    if (input.startsAt !== undefined) data.startsAt = new Date(input.startsAt);
+    if (input.endsAt !== undefined) data.endsAt = new Date(input.endsAt);
+    return this.prisma.shift.update({ where: { id }, data });
   }
 
   // ── QA review (G10): flag suspicious knocks ─────────────────────

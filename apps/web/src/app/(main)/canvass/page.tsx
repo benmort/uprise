@@ -3,16 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, Plus, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, Pencil, Plus, Target, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
   getCampaignSummary,
   listCampaigns,
+  updateCampaign,
   type CampaignKpis,
+  type CampaignStatus,
   type CampaignSummary,
 } from "@/lib/api/campaigns";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,6 +47,11 @@ export default function CanvassPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Campaign create/edit dialog.
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<CampaignSummary | null>(null);
+  const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, doors: "", conversations: "" });
 
   // Load the campaign list once, default to the first.
   useEffect(() => {
@@ -81,20 +92,49 @@ export default function CanvassPage() {
     };
   }, [activeId]);
 
-  const handleCreateCampaign = useCallback(async () => {
-    const name = window.prompt("Name this campaign");
-    if (!name?.trim()) return;
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ name: "", status: "ACTIVE", doors: "", conversations: "" });
+    setDialogOpen(true);
+  };
+
+  const openEdit = () => {
+    const c = campaigns.find((x) => x.id === activeId);
+    if (!c) return;
+    const goals = (c.goals ?? {}) as { doors?: number; conversations?: number };
+    setEditing(c);
+    setForm({
+      name: c.name,
+      status: c.status,
+      doors: goals.doors != null ? String(goals.doors) : "",
+      conversations: goals.conversations != null ? String(goals.conversations) : "",
+    });
+    setDialogOpen(true);
+  };
+
+  const submitCampaign = useCallback(async () => {
+    if (!form.name.trim()) return;
+    const goals =
+      form.doors || form.conversations
+        ? {
+            ...(form.doors ? { doors: Number(form.doors) } : {}),
+            ...(form.conversations ? { conversations: Number(form.conversations) } : {}),
+          }
+        : undefined;
     setCreating(true);
-    const res = await createCampaign({ name: name.trim() });
+    const res = editing
+      ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, goals })
+      : await createCampaign({ name: form.name.trim(), status: form.status, goals });
     setCreating(false);
     if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't create campaign", description: res.error });
+      showToast({ tone: "error", title: editing ? "Couldn't update" : "Couldn't create campaign", description: res.error });
       return;
     }
-    setCampaigns((cur) => [res.data, ...cur]);
+    setDialogOpen(false);
+    setCampaigns((cur) => (editing ? cur.map((c) => (c.id === res.data.id ? res.data : c)) : [res.data, ...cur]));
     setActiveId(res.data.id);
-    showToast({ tone: "success", title: "Campaign created", description: res.data.name });
-  }, [showToast]);
+    showToast({ tone: "success", title: editing ? "Campaign updated" : "Campaign created", description: res.data.name });
+  }, [editing, form, showToast]);
 
   if (loading) {
     return (
@@ -131,7 +171,7 @@ export default function CanvassPage() {
           title="No campaigns yet"
           description="A campaign holds your turf, walk lists and goals."
           ctaLabel="New campaign"
-          onCta={handleCreateCampaign}
+          onCta={openCreate}
         />
       </div>
     );
@@ -159,10 +199,15 @@ export default function CanvassPage() {
               </option>
             ))}
           </select>
-          <Button variant="outline" onClick={handleCreateCampaign} disabled={creating}>
+          <Button variant="outline" onClick={openCreate} disabled={creating}>
             <Plus className="mr-1.5 h-4 w-4" />
             New campaign
           </Button>
+          {activeId ? (
+            <Button variant="ghost" size="icon" aria-label="Edit campaign" onClick={openEdit}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+          ) : null}
           {activeId ? (
             <Button asChild>
               <Link href={`/canvass/${activeId}/turf`}>
@@ -281,6 +326,59 @@ export default function CanvassPage() {
           })}
         </div>
       )}
+
+      <FormDialog
+        open={dialogOpen}
+        title={editing ? "Edit campaign" : "New campaign"}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={submitCampaign}
+        submitLabel={editing ? "Save" : "Create"}
+        busy={creating}
+        submitDisabled={!form.name.trim()}
+      >
+        <Field label="Campaign name" htmlFor="camp-name" required>
+          <Input
+            id="camp-name"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="e.g. Spring doorknock"
+            autoFocus
+          />
+        </Field>
+        {editing ? (
+          <Field label="Status" htmlFor="camp-status">
+            <Select
+              id="camp-status"
+              value={form.status}
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as CampaignStatus }))}
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="DRAFT">Draft</option>
+              <option value="ARCHIVED">Archived</option>
+            </Select>
+          </Field>
+        ) : null}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Doors goal" htmlFor="camp-doors">
+            <Input
+              id="camp-doors"
+              type="number"
+              value={form.doors}
+              onChange={(e) => setForm((f) => ({ ...f, doors: e.target.value }))}
+              placeholder="Optional"
+            />
+          </Field>
+          <Field label="Conversations goal" htmlFor="camp-conv">
+            <Input
+              id="camp-conv"
+              type="number"
+              value={form.conversations}
+              onChange={(e) => setForm((f) => ({ ...f, conversations: e.target.value }))}
+              placeholder="Optional"
+            />
+          </Field>
+        </div>
+      </FormDialog>
     </div>
   );
 }

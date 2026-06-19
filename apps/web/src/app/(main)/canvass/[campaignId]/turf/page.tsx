@@ -10,13 +10,17 @@ import {
   listTurfs,
   loadTurfUniverse,
   rebucketTurf,
+  updateTurf,
   type TurfSummary,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Field } from "@/components/ui/field";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/canvass/section-card";
 import { useToast } from "@/components/ui/toast";
+import { Pencil } from "lucide-react";
 import type { ExistingTurf } from "@/components/canvass/turf-draw-map";
 
 // mapbox-gl + draw touch window: keep them out of SSR.
@@ -47,12 +51,34 @@ export default function TurfCuttingPage() {
   const [universe, setUniverse] = useState<Universe>("hybrid");
   const [polygon, setPolygon] = useState<GeoJSON.Polygon | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editingTurf, setEditingTurf] = useState<TurfSummary | null>(null);
+  const [turfName, setTurfName] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   const reload = useCallback(async () => {
     const res = await listTurfs(campaignId);
     if (res.ok) setTurfs(res.data);
     setLoading(false);
   }, [campaignId]);
+
+  const openRename = (t: TurfSummary) => {
+    setEditingTurf(t);
+    setTurfName(t.name);
+  };
+
+  const submitRename = useCallback(async () => {
+    if (!editingTurf || !turfName.trim()) return;
+    setRenaming(true);
+    const res = await updateTurf(editingTurf.id, { name: turfName.trim() });
+    setRenaming(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't rename turf", description: res.error });
+      return;
+    }
+    setEditingTurf(null);
+    await reload();
+    showToast({ tone: "success", title: "Turf renamed" });
+  }, [editingTurf, turfName, reload, showToast]);
 
   useEffect(() => {
     void reload();
@@ -177,6 +203,14 @@ export default function TurfCuttingPage() {
                     <span className="ml-auto tabular-nums text-muted-foreground">
                       {t.contactCount} doors
                     </span>
+                    <button
+                      type="button"
+                      aria-label="Rename turf"
+                      onClick={() => openRename(t)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -184,6 +218,19 @@ export default function TurfCuttingPage() {
           </SectionCard>
         </div>
       </div>
+
+      <FormDialog
+        open={!!editingTurf}
+        title="Rename turf"
+        onClose={() => setEditingTurf(null)}
+        onSubmit={submitRename}
+        busy={renaming}
+        submitDisabled={!turfName.trim()}
+      >
+        <Field label="Turf name" htmlFor="turf-name" required>
+          <Input id="turf-name" value={turfName} onChange={(e) => setTurfName(e.target.value)} autoFocus />
+        </Field>
+      </FormDialog>
     </div>
   );
 }

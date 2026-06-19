@@ -15,6 +15,11 @@ import {
 } from "@/lib/api/engagement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { FormDialog } from "@/components/ui/form-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/canvass/section-card";
@@ -28,6 +33,11 @@ export default function ScriptsPage() {
   const [draft, setDraft] = useState<Script | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newChannel, setNewChannel] = useState("BOTH");
+  const [creating, setCreating] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const loadList = useCallback(async () => {
     const res = await listScripts();
@@ -50,20 +60,29 @@ export default function ScriptsPage() {
     void getScript(selectedId).then((r) => r.ok && setDraft(r.data));
   }, [selectedId]);
 
+  const openCreate = () => {
+    setNewName("");
+    setNewChannel("BOTH");
+    setCreateOpen(true);
+  };
+
   const handleCreate = useCallback(async () => {
-    const name = window.prompt("Name this script");
-    if (!name?.trim()) return;
+    if (!newName.trim()) return;
+    setCreating(true);
     const res = await createScript({
-      name: name.trim(),
+      name: newName.trim(),
+      channel: newChannel,
       steps: [{ bodyText: "Hi, I'm a volunteer — do you have a moment?", orderIndex: 0 }],
     });
+    setCreating(false);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't create", description: res.error });
       return;
     }
+    setCreateOpen(false);
     await loadList();
     setSelectedId(res.data.id);
-  }, [loadList, showToast]);
+  }, [newName, newChannel, loadList, showToast]);
 
   const patchStep = (i: number, patch: Partial<ScriptStep>) => {
     if (!draft) return;
@@ -85,13 +104,19 @@ export default function ScriptsPage() {
   }, [draft, loadList, showToast]);
 
   const handleDelete = useCallback(async () => {
-    if (!draft || !window.confirm(`Delete “${draft.name}”?`)) return;
+    if (!draft) return;
+    setBusy(true);
     const res = await deleteScript(draft.id);
+    setBusy(false);
+    setDeleteOpen(false);
     if (res.ok) {
       setSelectedId("");
       await loadList();
+      showToast({ tone: "success", title: "Script deleted" });
+    } else {
+      showToast({ tone: "error", title: "Couldn't delete", description: res.error });
     }
-  }, [draft, loadList]);
+  }, [draft, loadList, showToast]);
 
   if (loading) return <div className="page-stack"><Skeleton className="h-64 w-full" /></div>;
 
@@ -105,7 +130,7 @@ export default function ScriptsPage() {
           </Link>
         </Button>
         <h1 className="text-2xl font-extrabold">Scripts</h1>
-        <Button className="ml-auto" onClick={handleCreate}>
+        <Button className="ml-auto" onClick={openCreate}>
           <Plus className="mr-1.5 h-4 w-4" />
           New script
         </Button>
@@ -116,7 +141,7 @@ export default function ScriptsPage() {
           title="No scripts yet"
           description="An opening line plus outcome-keyed branches for the conversation."
           ctaLabel="New script"
-          onCta={handleCreate}
+          onCta={openCreate}
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
@@ -148,7 +173,7 @@ export default function ScriptsPage() {
               }
               action={
                 <div className="flex gap-2">
-                  <Button size="sm" variant="ghost" className="text-error" onClick={handleDelete}>
+                  <Button size="sm" variant="ghost" className="text-error" onClick={() => setDeleteOpen(true)}>
                     <Trash2 className="mr-1 h-3.5 w-3.5" />
                     Delete
                   </Button>
@@ -181,11 +206,10 @@ export default function ScriptsPage() {
                         />
                       </div>
                     )}
-                    <textarea
+                    <Textarea
                       value={step.bodyText}
                       onChange={(e) => patchStep(i, { bodyText: e.target.value })}
                       rows={2}
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
                     />
                     {i > 0 ? (
                       <button
@@ -215,6 +239,43 @@ export default function ScriptsPage() {
           ) : null}
         </div>
       )}
+
+      <FormDialog
+        open={createOpen}
+        title="New script"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+        submitLabel="Create"
+        busy={creating}
+        submitDisabled={!newName.trim()}
+      >
+        <Field label="Script name" htmlFor="script-name" required>
+          <Input
+            id="script-name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. Doorstep opener"
+            autoFocus
+          />
+        </Field>
+        <Field label="Channel" htmlFor="script-channel" hint="Where this script is used.">
+          <Select id="script-channel" value={newChannel} onChange={(e) => setNewChannel(e.target.value)}>
+            <option value="BOTH">Both (door + SMS)</option>
+            <option value="DOOR">Door</option>
+            <option value="SMS">SMS</option>
+          </Select>
+        </Field>
+      </FormDialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete script"
+        description={draft ? `Delete “${draft.name}”? This can't be undone.` : ""}
+        confirmLabel="Delete"
+        busy={busy}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
     </div>
   );
 }

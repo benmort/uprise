@@ -737,6 +737,17 @@ export async function createWalkList(
   });
 }
 
+export async function updateWalkList(
+  id: string,
+  input: { name?: string; listType?: "STATIC" | "DYNAMIC" },
+) {
+  return request<Record<string, unknown>>(`/canvass/walk-lists/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
 export async function updateTurf(
   turfId: string,
   input: { name?: string; geometry?: unknown },
@@ -804,6 +815,20 @@ export async function createCanvasser(input: {
     "/canvass/canvassers",
     {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function updateCanvasser(
+  id: string,
+  input: { displayName?: string; role?: "ORGANISER" | "CANVASSER"; password?: string },
+) {
+  return request<{ id: string; displayName: string; email: string | null; role: string }>(
+    `/canvass/canvassers/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     },
@@ -951,6 +976,17 @@ export async function createShift(input: {
 }) {
   return request<Shift>("/canvass/shifts", {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateShift(
+  id: string,
+  input: { name?: string; location?: string; startsAt?: string; endsAt?: string },
+) {
+  return request<Shift>(`/canvass/shifts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });

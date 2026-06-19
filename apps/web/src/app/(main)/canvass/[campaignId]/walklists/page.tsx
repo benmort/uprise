@@ -11,6 +11,7 @@ import {
   listTurfContacts,
   listTurfs,
   listWalkLists,
+  updateWalkList,
   type TurfContact,
   type TurfSummary,
   type WalkListSummary,
@@ -18,9 +19,13 @@ import {
 import { optimiseRoute, type Stop } from "@/lib/canvass/route";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Field } from "@/components/ui/field";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionCard } from "@/components/canvass/section-card";
+import { Pencil } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
 type Canvasser = { id: string; displayName: string; email: string | null; role: string };
@@ -47,6 +52,10 @@ export default function WalkListBuilderPage() {
   const [selectedCanvasser, setSelectedCanvasser] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+
+  const [editingWl, setEditingWl] = useState<WalkListSummary | null>(null);
+  const [wlForm, setWlForm] = useState<{ name: string; listType: ListType }>({ name: "", listType: "STATIC" });
+  const [wlBusy, setWlBusy] = useState(false);
 
   const activeTurf = turfs.find((t) => t.id === turfId) ?? null;
 
@@ -114,6 +123,25 @@ export default function WalkListBuilderPage() {
     showToast({ tone: "success", title: `Built “${listName}”`, description: `${orderedContacts.length} stops.` });
   }, [turfId, orderedContacts, name, activeTurf, campaignId, listType, loadTurf, showToast]);
 
+  const openEditWl = (w: WalkListSummary) => {
+    setEditingWl(w);
+    setWlForm({ name: w.name, listType: w.listType });
+  };
+
+  const submitEditWl = useCallback(async () => {
+    if (!editingWl || !wlForm.name.trim()) return;
+    setWlBusy(true);
+    const res = await updateWalkList(editingWl.id, { name: wlForm.name.trim(), listType: wlForm.listType });
+    setWlBusy(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't update walk list", description: res.error });
+      return;
+    }
+    setEditingWl(null);
+    await loadTurf();
+    showToast({ tone: "success", title: "Walk list updated" });
+  }, [editingWl, wlForm, loadTurf, showToast]);
+
   const handleAssign = useCallback(async () => {
     if (!turfId || !selectedCanvasser) return;
     setBusy(true);
@@ -147,10 +175,10 @@ export default function WalkListBuilderPage() {
           </Link>
         </Button>
         <h1 className="text-2xl font-extrabold">Walk lists</h1>
-        <select
+        <Select
           value={turfId}
           onChange={(e) => setTurfId(e.target.value)}
-          className="ml-auto h-9 rounded-[11px] border border-border bg-white px-3 text-sm font-semibold"
+          className="ml-auto max-w-xs font-semibold"
           aria-label="Turf"
         >
           {turfs.map((t) => (
@@ -158,7 +186,7 @@ export default function WalkListBuilderPage() {
               {t.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {turfs.length === 0 ? (
@@ -265,10 +293,9 @@ export default function WalkListBuilderPage() {
                 </div>
               ) : (
                 <>
-                  <select
+                  <Select
                     value={selectedCanvasser}
                     onChange={(e) => setSelectedCanvasser(e.target.value)}
-                    className="h-9 w-full rounded-[11px] border border-border bg-white px-3 text-sm"
                   >
                     <option value="">Select a canvasser…</option>
                     {canvassers.map((c) => (
@@ -276,7 +303,7 @@ export default function WalkListBuilderPage() {
                         {c.displayName}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <Button
                     className="mt-3 w-full"
                     onClick={handleAssign}
@@ -300,6 +327,14 @@ export default function WalkListBuilderPage() {
                         <span className="tabular-nums text-muted-foreground">
                           {w.visitedCount}/{w.stopCount}
                         </span>
+                        <button
+                          type="button"
+                          aria-label="Edit walk list"
+                          onClick={() => openEditWl(w)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                       </span>
                     </li>
                   ))}
@@ -309,6 +344,34 @@ export default function WalkListBuilderPage() {
           </div>
         </div>
       )}
+
+      <FormDialog
+        open={!!editingWl}
+        title="Edit walk list"
+        onClose={() => setEditingWl(null)}
+        onSubmit={submitEditWl}
+        busy={wlBusy}
+        submitDisabled={!wlForm.name.trim()}
+      >
+        <Field label="Name" htmlFor="wl-name" required>
+          <Input
+            id="wl-name"
+            value={wlForm.name}
+            onChange={(e) => setWlForm((f) => ({ ...f, name: e.target.value }))}
+            autoFocus
+          />
+        </Field>
+        <Field label="List type" htmlFor="wl-type" hint="Dynamic auto-refreshes as the turf changes.">
+          <Select
+            id="wl-type"
+            value={wlForm.listType}
+            onChange={(e) => setWlForm((f) => ({ ...f, listType: e.target.value as ListType }))}
+          >
+            <option value="STATIC">Static</option>
+            <option value="DYNAMIC">Dynamic</option>
+          </Select>
+        </Field>
+      </FormDialog>
     </div>
   );
 }
