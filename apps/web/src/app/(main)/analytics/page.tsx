@@ -22,7 +22,7 @@ import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { useToast } from "@/components/ui/toast";
 import { getTwilioErrorCodeDescription } from "@/lib/twilio-error-codes";
 
-type BlastOption = { id: string; title: string; status: string };
+type BlastOption = { id: string; title: string; status: string; channel: string };
 type TrendWindow = "all" | "15" | "60" | "240";
 
 export default function AnalyticsPage() {
@@ -79,6 +79,7 @@ export default function AnalyticsPage() {
         id: String(row.id),
         title: String(row.title || "Untitled"),
         status: String(row.status || "DRAFTED"),
+        channel: String(row.channel || "SMS"),
       }));
       setBlasts(mapped);
       if (mapped[0]) setSelectedBlastId(mapped[0].id);
@@ -198,7 +199,7 @@ export default function AnalyticsPage() {
             Track delivery and response outcomes in near real time.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div id="tour-analytics-select" className="flex items-center gap-2">
           <select
             className="h-11 rounded border border-input bg-background px-3 text-sm"
             value={selectedBlastId}
@@ -210,6 +211,11 @@ export default function AnalyticsPage() {
               </option>
             ))}
           </select>
+          {blasts.find((b) => b.id === selectedBlastId)?.channel === "WHATSAPP" ? (
+            <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b]">
+              WhatsApp
+            </span>
+          ) : null}
           <Button onClick={() => selectedBlastId && loadForBlast(selectedBlastId, activityPage)}>
             Refresh Now
           </Button>
@@ -255,7 +261,7 @@ export default function AnalyticsPage() {
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div id="tour-analytics-kpis" className="grid gap-4 md:grid-cols-3">
           <KpiCard
             label="Total Contacted"
             value={String(kpis.totalContacted ?? kpis.sent ?? 0)}
@@ -271,7 +277,7 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      <Card>
+      <Card id="tour-analytics-trend">
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle>Engagement Over Time</CardTitle>
           <div className="flex items-center gap-2">
@@ -348,7 +354,7 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="tour-analytics-activity">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Recipient Activity Log</CardTitle>
           <Button

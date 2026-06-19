@@ -21,9 +21,10 @@ describe("api smoke flows", () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       status: 200,
+      json: async () => ({ user: null }),
     } as Response);
     const result = await login("admin", "secret");
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, user: null });
     expect(fetch).toHaveBeenCalledWith(
       "http://localhost:3001/api/v1/auth/check",
       expect.objectContaining({

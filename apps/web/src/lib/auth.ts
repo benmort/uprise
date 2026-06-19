@@ -53,6 +53,7 @@ export function clearCredentials(): void {
   if (!storage) return;
   storage.removeItem(KEY);
   window.localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
+  window.localStorage.removeItem("yarns.canvasserId");
 }
 
 export function getBasicAuthHeader(credentials: Credentials): string {

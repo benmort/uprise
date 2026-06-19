@@ -21,9 +21,17 @@ export class ReplyDto {
 
   @IsString()
   body!: string;
+
+  @IsOptional()
+  @IsString()
+  channel?: string;
 }
 
 export class MarkConversationDto {
   @IsOptional()
   resolved?: boolean;
+
+  @IsOptional()
+  @IsString()
+  channel?: string;
 }

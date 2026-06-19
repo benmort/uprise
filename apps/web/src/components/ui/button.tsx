@@ -14,6 +14,7 @@ const buttonVariants = cva(
         outline: "border border-border bg-background text-foreground hover:bg-surface-variant",
         ghost: "text-foreground hover:bg-surface-variant",
         warning: "bg-warning-container text-warning-foreground hover:opacity-90",
+        success: "bg-[hsl(var(--success))] text-white hover:opacity-90",
       },
       size: {
         default: "h-11 px-4 py-2",

@@ -187,4 +187,68 @@ describe("BasicAuthGuard", () => {
     });
     expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
   });
+
+  // Builds a context that returns THIS request object (no copy), so we can
+  // assert on the principal the guard attaches to request.user.
+  function contextSharing(request: any): ExecutionContext {
+    request.url = request.url ?? request.path;
+    request.originalUrl = request.originalUrl ?? request.path;
+    return {
+      switchToHttp: () => ({ getRequest: () => request }),
+    } as unknown as ExecutionContext;
+  }
+
+  it("attaches an ORGANISER principal for the env super-admin", () => {
+    const guard = createGuard();
+    const token = Buffer.from("admin:secret").toString("base64");
+    const request: any = { path: "/api/v1/blasts", headers: { authorization: `Basic ${token}` } };
+    expect(guard.canActivate(contextSharing(request))).toBe(true);
+    expect(request.user).toEqual(
+      expect.objectContaining({ id: "env-admin", role: "ORGANISER" }),
+    );
+  });
+
+  describe("per-user (AppUser) login when a DB is wired", () => {
+    const { hashPassword } = require("./password.util");
+
+    function createGuardWithUsers(users: Record<string, any>) {
+      const config = {
+        get: (key: string) => {
+          if (key === "BASIC_AUTH_USERNAME") return "admin";
+          if (key === "BASIC_AUTH_PASSWORD") return "secret";
+          return undefined;
+        },
+      } as ConfigService;
+      const prisma = {
+        appUser: { findUnique: async ({ where }: any) => users[where.email] ?? null },
+      } as any;
+      return new BasicAuthGuard(config, prisma);
+    }
+
+    it("authenticates a canvasser and attaches their role + org", async () => {
+      const passwordHash = await hashPassword("walkfast");
+      const guard = createGuardWithUsers({
+        "canv@org.au": { id: "u1", role: "CANVASSER", organizationId: "org1", email: "canv@org.au", passwordHash },
+      });
+      const token = Buffer.from("canv@org.au:walkfast").toString("base64");
+      const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
+      const result = await guard.canActivate(contextSharing(request));
+      expect(result).toBe(true);
+      expect(request.user).toEqual(
+        expect.objectContaining({ id: "u1", role: "CANVASSER", organizationId: "org1" }),
+      );
+    });
+
+    it("rejects a wrong AppUser password", async () => {
+      const passwordHash = await hashPassword("walkfast");
+      const guard = createGuardWithUsers({
+        "canv@org.au": { id: "u1", role: "CANVASSER", organizationId: "org1", email: "canv@org.au", passwordHash },
+      });
+      const token = Buffer.from("canv@org.au:wrong").toString("base64");
+      const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
+      await expect(guard.canActivate(contextSharing(request))).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
 });

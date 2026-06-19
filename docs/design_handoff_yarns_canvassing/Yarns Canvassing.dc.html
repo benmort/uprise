@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,400&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'Open Sans',system-ui,sans-serif;color:#16181d;background:#0f1115;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#cfd4dc;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-track{background:transparent}
+  @keyframes fadeUp{from{transform:translateY(9px)}to{transform:none}}
+  @keyframes popIn{from{transform:translateY(6px)}to{transform:none}}
+  @keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,.5)}70%{box-shadow:0 0 0 8px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
+  @keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+</style>
+</helmet>
+
+<div style="height:100vh;display:flex;flex-direction:column;overflow:hidden;background:#0f1115;">
+
+  <!-- ============ PROTOTYPE FLOW SWITCHER ============ -->
+  <div style="flex:0 0 auto;background:#16181d;color:#e7e9ee;display:flex;align-items:center;gap:16px;padding:0 16px;height:48px;border-bottom:1px solid #2a2d35;overflow-x:auto;">
+    <div style="display:flex;align-items:center;gap:8px;font-family:'Quicksand',sans-serif;font-weight:700;font-size:15px;color:#fff;flex:0 0 auto;">
+      <span style="display:inline-flex;color:#6f97ff;">{{ logoMark }}</span>Yarns<span style="font-family:'Open Sans';font-weight:400;font-size:11px;color:#8b909c;letter-spacing:.04em;text-transform:uppercase;border-left:1px solid #3a3e48;padding-left:10px;margin-left:2px;">Prototype</span>
+    </div>
+    <sc-for list="{{ navGroups }}" as="g" hint-placeholder-count="5">
+      <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;">
+        <span style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#6b7180;font-weight:700;">{{ g.label }}</span>
+        <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+          <button onClick="{{ it.go }}" style="{{ it.style }}">{{ it.label }}</button>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ============ STAGE ============ -->
+  <div style="flex:1 1 auto;overflow:hidden;position:relative;background:#eef0f3;">
+
+    <!-- ================= DESKTOP (ORGANISER) SHELL ================= -->
+    <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ true }}">
+    <div style="height:100%;display:flex;background:#f5f6f8;" key="{{ deskKey }}">
+      <!-- sidebar -->
+      <aside style="flex:0 0 230px;background:#fff;border-right:1px solid #e6e8ec;display:flex;flex-direction:column;padding:18px 14px;">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px 22px;font-family:'Quicksand',sans-serif;font-weight:700;font-size:26px;color:#16181d;">
+          <span style="display:inline-flex;color:#2f5bd6;">{{ logoMarkLg }}</span>Yarns
+        </div>
+        <nav style="display:flex;flex-direction:column;gap:4px;">
+          <sc-for list="{{ sideNav }}" as="n" hint-placeholder-count="5">
+            <button onClick="{{ n.go }}" style="{{ n.style }}"><span style="display:inline-flex;width:20px;">{{ n.icon }}</span>{{ n.label }}</button>
+          </sc-for>
+        </nav>
+        <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:16px;">
+          <button style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;background:none;color:#3a3f4a;font-size:14px;font-family:inherit;cursor:pointer;border-radius:10px;">{{ iconHelp }} Tour</button>
+          <button style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid #e6e8ec;background:#fff;color:#3a3f4a;font-size:14px;font-family:inherit;cursor:pointer;border-radius:10px;">{{ iconLogout }} Log out</button>
+        </div>
+      </aside>
+
+      <!-- main column -->
+      <div style="flex:1 1 auto;display:flex;flex-direction:column;min-width:0;">
+        <header style="flex:0 0 auto;height:66px;border-bottom:1px solid #e6e8ec;background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px;">
+          <div style="display:flex;align-items:center;gap:10px;color:#6b7280;font-size:13px;">
+            <sc-for list="{{ crumbs }}" as="c" hint-placeholder-count="2"><span style="{{ c.style }}">{{ c.label }}</span></sc-for>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button style="display:flex;align-items:center;gap:8px;padding:10px 16px;border:none;border-radius:10px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(16,24,40,.18);">{{ iconBlast }} Create blast</button>
+          </div>
+        </header>
+
+        <main style="flex:1 1 auto;overflow-y:auto;padding:30px 32px 56px;">
+
+          <!-- ---------- CANVASS OVERVIEW ---------- -->
+          <sc-if value="{{ isCanvass }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:6px;">
+              <div>
+                <h1 style="margin:0;font-size:30px;font-weight:800;letter-spacing:-.01em;">Canvass</h1>
+                <p style="margin:6px 0 0;color:#6b7280;font-size:15px;">Cut turf, build walk lists, assign canvassers, and watch the doors come in live.</p>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #e6e8ec;border-radius:10px;background:#fff;font-size:13px;font-weight:600;color:#3a3f4a;">{{ iconSwitch }} {{ campaignName }}</div>
+                <button onClick="{{ goTurf }}" style="display:flex;align-items:center;gap:8px;padding:10px 16px;border:none;border-radius:10px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">{{ iconScissors }} Cut new turf</button>
+              </div>
+            </div>
+
+            <!-- headline metrics -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:24px 0 26px;">
+              <sc-for list="{{ canvassKpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:18px 18px 16px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <div style="display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:12.5px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">{{ k.label }}</span>
+                    <span style="display:inline-flex;color:{{ k.color }};">{{ k.icon }}</span>
+                  </div>
+                  <div style="font-size:30px;font-weight:800;margin-top:10px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;">{{ k.value }}</div>
+                  <div style="font-size:12.5px;color:{{ k.deltaColor }};margin-top:4px;font-weight:600;">{{ k.delta }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <h2 style="margin:0 0 14px;font-size:18px;font-weight:800;">Turf</h2>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px;">
+              <sc-for list="{{ turfs }}" as="t" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <div style="height:118px;position:relative;background:{{ t.mapBg }};border-bottom:1px solid #e6e8ec;overflow:hidden;">
+                    <div style="position:absolute;inset:0;background-image:linear-gradient(#0000000a 1px,transparent 1px),linear-gradient(90deg,#0000000a 1px,transparent 1px);background-size:18px 18px;"></div>
+                    <svg viewBox="0 0 320 120" style="position:absolute;inset:0;width:100%;height:100%;"><path d="{{ t.shape }}" fill="{{ t.fill }}" stroke="{{ t.stroke }}" stroke-width="2"></path></svg>
+                    <span style="position:absolute;top:10px;left:12px;background:rgba(255,255,255,.92);padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;color:#3a3f4a;border:1px solid #e6e8ec;">{{ t.doors }} doors</span>
+                  </div>
+                  <div style="padding:14px 16px 16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                      <div style="font-weight:800;font-size:15.5px;">{{ t.name }}</div>
+                      <span style="{{ t.statusStyle }}">{{ t.statusLabel }}</span>
+                    </div>
+                    <div style="display:flex;gap:18px;margin:12px 0 14px;">
+                      <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Walk list</div><div style="font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;">{{ t.walklist }}</div></div>
+                      <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;font-weight:600;">Knocked</div><div style="font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;">{{ t.knocked }}</div></div>
+                      <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;">
+                        <div style="height:7px;border-radius:999px;background:#eef0f3;overflow:hidden;"><div style="height:100%;width:{{ t.pct }};background:#2f5bd6;border-radius:999px;"></div></div>
+                        <div style="font-size:11px;color:#6b7280;margin-top:5px;font-weight:600;">{{ t.pct }} complete</div>
+                      </div>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid #eef0f3;padding-top:12px;">
+                      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#3a3f4a;">
+                        <span style="width:24px;height:24px;border-radius:999px;background:{{ t.assigneeBg }};color:{{ t.assigneeColor }};display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">{{ t.assigneeInitials }}</span>
+                        {{ t.assignee }}
+                      </div>
+                      <button onClick="{{ goWalklists }}" style="display:flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid #e6e8ec;border-radius:9px;background:#fff;color:#2f5bd6;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">Manage {{ iconChevR }}</button>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- CONTACT TIMELINE ---------- -->
+          <sc-if value="{{ isContact }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <button onClick="{{ goCanvass }}" style="display:inline-flex;align-items:center;gap:6px;border:none;background:none;color:#6b7280;font-size:13px;font-family:inherit;cursor:pointer;margin-bottom:14px;padding:0;">{{ iconChevL }} Back to canvass</button>
+
+            <!-- contact header -->
+            <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:22px 24px;box-shadow:0 1px 2px rgba(16,24,40,.04);display:flex;gap:22px;align-items:flex-start;">
+              <div style="width:64px;height:64px;border-radius:16px;background:#eef2fd;color:#2f5bd6;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;flex:0 0 auto;">{{ contact.initials }}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                  <h1 style="margin:0;font-size:26px;font-weight:800;letter-spacing:-.01em;">{{ contact.name }}</h1>
+                  <span style="{{ contact.supportStyle }}">{{ contact.supportLabel }}</span>
+                  <sc-for list="{{ contact.tags }}" as="tg" hint-placeholder-count="2"><span style="font-size:12px;font-weight:600;color:#3a3f4a;background:#eef0f3;padding:3px 10px;border-radius:999px;">{{ tg }}</span></sc-for>
+                </div>
+                <div style="display:flex;gap:22px;margin-top:12px;flex-wrap:wrap;color:#3a3f4a;font-size:13.5px;">
+                  <span style="display:inline-flex;align-items:center;gap:7px;">{{ iconPin }} {{ contact.address }}</span>
+                  <span style="display:inline-flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums;">{{ iconPhone }} {{ contact.phone }}</span>
+                  <span style="display:inline-flex;align-items:center;gap:7px;">{{ iconUsers }} {{ contact.audiences }} audiences</span>
+                </div>
+              </div>
+              <div style="flex:0 0 168px;height:96px;border-radius:12px;background:#e9eef7;border:1px solid #d7e0f0;position:relative;overflow:hidden;">
+                <div style="position:absolute;inset:0;background-image:linear-gradient(#0000000a 1px,transparent 1px),linear-gradient(90deg,#0000000a 1px,transparent 1px);background-size:16px 16px;"></div>
+                <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);color:#2f5bd6;">{{ iconPinFill }}</span>
+              </div>
+            </div>
+
+            <!-- next action banner -->
+            <div style="display:flex;align-items:center;gap:14px;margin-top:14px;background:#eef2fd;border:1px solid #d4def9;border-radius:14px;padding:14px 18px;">
+              <span style="display:inline-flex;color:#2f5bd6;">{{ iconZap }}</span>
+              <div style="flex:1;"><span style="font-weight:700;font-size:14px;">Next action</span><span style="color:#3a3f4a;font-size:14px;"> &nbsp;·&nbsp; {{ contact.nextAction }}</span></div>
+              <div style="display:flex;gap:8px;">
+                <button onClick="{{ goInbox }}" style="display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid #c7d4f5;border-radius:9px;background:#fff;color:#2f5bd6;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ iconMsg }} Send text</button>
+                <button style="display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:none;border-radius:9px;background:#2f5bd6;color:#fff;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ iconDoor }} Queue door task</button>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;margin-top:20px;align-items:start;">
+              <!-- timeline -->
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 24px 26px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                  <h2 style="margin:0;font-size:17px;font-weight:800;">Timeline</h2>
+                  <div style="display:flex;gap:2px;background:#eef0f3;border-radius:9px;padding:3px;">
+                    <button onClick="{{ setTlUnified }}" style="{{ tlUnifiedStyle }}">Unified</button>
+                    <button onClick="{{ setTlDoor }}" style="{{ tlDoorStyle }}">Doors</button>
+                    <button onClick="{{ setTlText }}" style="{{ tlTextStyle }}">Texts</button>
+                  </div>
+                </div>
+                <p style="margin:0 0 18px;color:#6b7280;font-size:13px;">Every door knock, text and journey event for {{ contact.firstName }} — one record, never split by campaign.</p>
+                <div style="position:relative;padding-left:34px;">
+                  <div style="position:absolute;left:13px;top:6px;bottom:6px;width:2px;background:#eef0f3;"></div>
+                  <sc-for list="{{ timeline }}" as="ev" hint-placeholder-count="5">
+                    <div style="position:relative;margin-bottom:18px;animation:fadeUp .3s ease both;">
+                      <span style="position:absolute;left:-34px;top:0;width:28px;height:28px;border-radius:999px;background:{{ ev.iconBg }};color:{{ ev.iconColor }};display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 0 0 1px #e6e8ec;">{{ ev.icon }}</span>
+                      <div style="background:{{ ev.cardBg }};border:1px solid {{ ev.cardBorder }};border-radius:12px;padding:12px 15px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                          <span style="font-weight:700;font-size:14px;color:{{ ev.titleColor }};">{{ ev.title }}</span>
+                          <span style="font-size:12px;color:#8b909c;white-space:nowrap;font-variant-numeric:tabular-nums;">{{ ev.when }}</span>
+                        </div>
+                        <div style="font-size:13.5px;color:#3a3f4a;margin-top:5px;line-height:1.5;">{{ ev.body }}</div>
+                        <sc-if value="{{ ev.hasMeta }}" hint-placeholder-val="{{ false }}">
+                          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px dashed {{ ev.cardBorder }};font-size:12px;color:#6b7280;">
+                            <sc-for list="{{ ev.meta }}" as="m" hint-placeholder-count="2"><span style="display:inline-flex;align-items:center;gap:5px;">{{ m.icon }} {{ m.text }}</span></sc-for>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <!-- right rail -->
+              <div style="display:flex;flex-direction:column;gap:16px;">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px 18px 20px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <h3 style="margin:0 0 12px;font-size:14px;font-weight:800;">Latest survey</h3>
+                  <sc-for list="{{ contact.surveyAnswers }}" as="a" hint-placeholder-count="3">
+                    <div style="margin-bottom:11px;">
+                      <div style="font-size:12px;color:#6b7280;margin-bottom:3px;">{{ a.q }}</div>
+                      <div style="display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;color:{{ a.color }};">{{ a.dot }} {{ a.value }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <h3 style="margin:0 0 12px;font-size:14px;font-weight:800;">Disposition history</h3>
+                  <sc-for list="{{ contact.dispHistory }}" as="d" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:13px;">
+                      <span style="display:inline-flex;align-items:center;gap:7px;color:#3a3f4a;"><span style="width:8px;height:8px;border-radius:999px;background:{{ d.color }};"></span>{{ d.label }}</span>
+                      <span style="color:#8b909c;font-size:12px;">{{ d.when }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <h3 style="margin:0 0 10px;font-size:14px;font-weight:800;">Audiences</h3>
+                  <div style="display:flex;flex-wrap:wrap;gap:7px;">
+                    <sc-for list="{{ contact.audienceList }}" as="au" hint-placeholder-count="3"><span style="font-size:12px;font-weight:600;color:#2f5bd6;background:#eef2fd;padding:4px 10px;border-radius:999px;">{{ au }}</span></sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- TURF MAP ---------- -->
+          <sc-if value="{{ isTurf }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px;">
+              <div><h1 style="margin:0;font-size:28px;font-weight:800;">Turf map</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Draw, split and merge turf. Households auto-assign by point-in-polygon when you save.</p></div>
+              <div style="display:flex;gap:8px;"><button style="display:flex;align-items:center;gap:7px;padding:9px 14px;border:1px solid #e6e8ec;border-radius:10px;background:#fff;font-weight:700;font-size:13.5px;color:#3a3f4a;font-family:inherit;cursor:pointer;">{{ oLayers }} Even split by doors</button><button style="display:flex;align-items:center;gap:7px;padding:10px 16px;border:none;border-radius:10px;background:#2f5bd6;color:#fff;font-weight:700;font-size:13.5px;font-family:inherit;cursor:pointer;">{{ oCheck }} Save &amp; re-bucket</button></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start;">
+              <div style="position:relative;height:560px;border:1px solid #e6e8ec;border-radius:16px;overflow:hidden;background:#dde6ef;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="position:absolute;inset:0;background-image:linear-gradient(#9fb3cc33 1px,transparent 1px),linear-gradient(90deg,#9fb3cc33 1px,transparent 1px);background-size:38px 38px;"></div>
+                <svg viewBox="0 0 760 560" style="position:absolute;inset:0;width:100%;height:100%;">
+                  <path d="M60 60 L360 40 L380 280 L120 300 Z" fill="#2f5bd618" stroke="#2f5bd6" stroke-width="2.5"></path>
+                  <path d="M380 50 L700 70 L690 300 L390 285 Z" fill="#7c3aed18" stroke="#7c3aed" stroke-width="2.5"></path>
+                  <path d="M110 320 L380 300 L400 500 L150 520 Z" fill="#0e948818" stroke="#0e9488" stroke-width="2.5"></path>
+                  <path d="M400 305 L690 320 L680 510 L410 505 Z" fill="#b4530918" stroke="#b45309" stroke-width="2.5" stroke-dasharray="8 6"></path>
+                  <g fill="#2f5bd6" opacity=".5"><circle cx="160" cy="120" r="3"></circle><circle cx="220" cy="160" r="3"></circle><circle cx="300" cy="130" r="3"></circle><circle cx="250" cy="220" r="3"></circle><circle cx="520" cy="140" r="3"></circle><circle cx="600" cy="200" r="3"></circle><circle cx="560" cy="260" r="3"></circle><circle cx="250" cy="420" r="3"></circle><circle cx="320" cy="460" r="3"></circle><circle cx="520" cy="420" r="3"></circle></g>
+                </svg>
+                <div style="position:absolute;top:14px;left:14px;display:flex;flex-direction:column;gap:6px;background:#fff;border:1px solid #e6e8ec;border-radius:12px;padding:6px;box-shadow:0 4px 14px rgba(16,24,40,.1);">
+                  <button style="width:38px;height:38px;border-radius:9px;border:none;background:#eef2fd;color:#2f5bd6;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Draw">{{ oScissors }}</button>
+                  <button style="width:38px;height:38px;border-radius:9px;border:none;background:none;color:#6b7280;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Split">{{ oLayers }}</button>
+                  <button style="width:38px;height:38px;border-radius:9px;border:none;background:none;color:#6b7280;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="Add">{{ oPlus }}</button>
+                </div>
+                <div style="position:absolute;bottom:14px;left:14px;background:rgba(255,255,255,.94);border:1px solid #e6e8ec;border-radius:10px;padding:9px 12px;font-size:12px;color:#3a3f4a;display:flex;gap:14px;">
+                  <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:#2f5bd6;"></span>Contact density</span>
+                  <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:10px;height:10px;border-radius:3px;background:#fff;border:1.5px dashed #b45309;"></span>Unsaved edit</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <h3 style="margin:0 0 10px;font-size:14px;font-weight:800;">Universe</h3>
+                  <p style="margin:0 0 12px;font-size:12.5px;color:#6b7280;">Which households go into this turf.</p>
+                  <div style="display:flex;flex-direction:column;gap:9px;">
+                    <button onClick="{{ setUniExisting }}" style="{{ uniExisting }}"><div style="font-weight:700;font-size:13.5px;">Existing contacts only</div><div style="font-size:11.5px;color:#8b909c;margin-top:2px;">Knock people we already know</div></button>
+                    <button onClick="{{ setUniAddress }}" style="{{ uniAddress }}"><div style="font-weight:700;font-size:13.5px;">Addresses without contacts</div><div style="font-size:11.5px;color:#8b909c;margin-top:2px;">Canvasser creates the contact in field</div></button>
+                    <button onClick="{{ setUniHybrid }}" style="{{ uniHybrid }}"><div style="font-weight:700;font-size:13.5px;">Hybrid</div><div style="font-size:11.5px;color:#8b909c;margin-top:2px;">Both — recommended</div></button>
+                  </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <h3 style="margin:0 0 12px;font-size:14px;font-weight:800;">4 turfs drawn</h3>
+                  <sc-for list="{{ turfs }}" as="t" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f3f4f6;">
+                      <span style="width:12px;height:12px;border-radius:4px;background:{{ t.stroke }};flex:0 0 auto;"></span>
+                      <div style="flex:1;min-width:0;"><div style="font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.name }}</div><div style="font-size:11.5px;color:#8b909c;">{{ t.doors }} doors</div></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- WALK-LIST BUILDER ---------- -->
+          <sc-if value="{{ isWalklists }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:18px;">
+              <div><h1 style="margin:0;font-size:28px;font-weight:800;">Walk lists · Glenlyon Rd · East</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Route-optimised server-side, with a client TSP fallback for offline. Assign to a canvasser with a server-held lock.</p></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start;">
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #eef0f3;">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;">{{ oCheck }} Optimised · 32 stops · 2.1 km</div>
+                  <button style="font-size:12.5px;font-weight:700;color:#2f5bd6;background:none;border:none;cursor:pointer;font-family:inherit;">Re-optimise</button>
+                </div>
+                <sc-for list="{{ stops }}" as="s" hint-placeholder-count="6">
+                  <div style="display:flex;align-items:center;gap:13px;padding:12px 20px;border-bottom:1px solid #f3f4f6;">
+                    <span style="width:28px;height:28px;border-radius:8px;background:#eef0f3;color:#6b7280;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;flex:0 0 auto;">{{ s.order }}</span>
+                    <div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:14px;">{{ s.name }}</div><div style="font-size:12px;color:#8b909c;">{{ s.address }}</div></div>
+                    <span style="{{ s.badgeStyle }}">{{ s.statusLabel }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <h3 style="margin:0 0 12px;font-size:14px;font-weight:800;">Assignment</h3>
+                  <div style="display:flex;align-items:center;gap:11px;background:#eef2fd;border:1px solid #d4def9;border-radius:12px;padding:12px;">
+                    <span style="width:34px;height:34px;border-radius:999px;background:#2f5bd6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;">JN</span>
+                    <div style="flex:1;"><div style="font-size:13.5px;font-weight:700;">Jaynaya Newman</div><div style="font-size:11.5px;color:#2f5bd6;display:inline-flex;align-items:center;gap:4px;">{{ oLock }} Locked — held since 08:02</div></div>
+                  </div>
+                  <p style="margin:11px 0 0;font-size:11.5px;color:#8b909c;">The server lock prevents double-assignment — no two canvassers can hold this list.</p>
+                  <button style="width:100%;margin-top:12px;padding:11px;border:1px solid #e6e8ec;border-radius:11px;background:#fff;color:#3a3f4a;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">Reassign</button>
+                </div>
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <h3 style="margin:0 0 4px;font-size:14px;font-weight:800;">List type</h3>
+                  <div style="display:flex;background:#eef0f3;border-radius:10px;padding:3px;margin:12px 0 10px;"><button onClick="{{ setWlStatic }}" style="flex:1;{{ wlStaticStyle }}">Static</button><button onClick="{{ setWlDynamic }}" style="flex:1;{{ wlDynamicStyle }}">Dynamic</button></div>
+                  <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:#92600e;background:#fef3e2;border-radius:9px;padding:8px 10px;">{{ oSync }} Dynamic — auto-refreshes as households change</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- LIVE WAR ROOM ---------- -->
+          <sc-if value="{{ isLive }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;">
+              <h1 style="margin:0;font-size:28px;font-weight:800;">Live</h1>
+              <span style="display:inline-flex;align-items:center;gap:7px;background:#e7f6ec;color:#16a34a;font-weight:700;font-size:12.5px;padding:4px 11px;border-radius:999px;"><span style="width:8px;height:8px;border-radius:999px;background:#16a34a;animation:livePulse 2s infinite;"></span>Live · 12 canvassers out</span>
+            </div>
+            <p style="margin:6px 0 22px;color:#6b7280;font-size:14.5px;">Real-time positions, dispositions and turf completion streaming in over the analytics bus.</p>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;">
+              <sc-for list="{{ liveKpis }}" as="k" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:16px 18px;box-shadow:0 1px 2px rgba(16,24,40,.04);"><div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">{{ k.label }}</div><div style="font-size:28px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;color:{{ k.color }};">{{ k.value }}</div><div style="font-size:12px;color:#8b909c;margin-top:3px;">{{ k.sub }}</div></div>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 330px;gap:18px;align-items:start;">
+              <div style="position:relative;height:380px;border:1px solid #e6e8ec;border-radius:16px;overflow:hidden;background:#dde6ef;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="position:absolute;inset:0;background-image:linear-gradient(#9fb3cc33 1px,transparent 1px),linear-gradient(90deg,#9fb3cc33 1px,transparent 1px);background-size:36px 36px;"></div>
+                <svg viewBox="0 0 760 380" style="position:absolute;inset:0;width:100%;height:100%;"><path d="M60 50 L360 40 L370 200 L80 220 Z" fill="#16a34a14" stroke="#16a34a" stroke-width="2"></path><path d="M390 45 L700 60 L690 210 L400 200 Z" fill="#2f5bd614" stroke="#2f5bd6" stroke-width="2"></path><path d="M90 240 L380 225 L390 340 L120 350 Z" fill="#b4530914" stroke="#b45309" stroke-width="2"></path></svg>
+                <span style="position:absolute;left:24%;top:30%;width:16px;height:16px;border-radius:999px;background:#16a34a;border:3px solid #fff;animation:livePulse 2s infinite;"></span>
+                <span style="position:absolute;left:62%;top:34%;width:16px;height:16px;border-radius:999px;background:#16a34a;border:3px solid #fff;animation:livePulse 2.3s infinite;"></span>
+                <span style="position:absolute;left:30%;top:78%;width:16px;height:16px;border-radius:999px;background:#b45309;border:3px solid #fff;"></span>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 12px;font-size:14px;font-weight:800;">Alerts</h3>
+                <div style="display:flex;flex-direction:column;gap:9px;">
+                  <sc-for list="{{ liveAlerts }}" as="a" hint-placeholder-count="3">
+                    <div style="display:flex;gap:10px;align-items:flex-start;background:{{ a.bg }};border-radius:11px;padding:11px 12px;"><span style="color:{{ a.tone }};flex:0 0 auto;">{{ a.icon }}</span><span style="font-size:12.5px;color:#3a3f4a;line-height:1.4;">{{ a.text }}</span></div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;margin-top:18px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+              <div style="display:grid;grid-template-columns:1.4fr 1.4fr .6fr 1fr 1fr;gap:10px;padding:13px 20px;border-bottom:1px solid #eef0f3;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;"><span>Canvasser</span><span>Turf</span><span>Doors</span><span>Last</span><span>Status</span></div>
+              <sc-for list="{{ liveCanvassers }}" as="c" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:1.4fr 1.4fr .6fr 1fr 1fr;gap:10px;align-items:center;padding:13px 20px;border-bottom:1px solid #f3f4f6;font-size:13.5px;">
+                  <span style="display:inline-flex;align-items:center;gap:9px;font-weight:700;"><span style="width:28px;height:28px;border-radius:999px;background:#eef2fd;color:#2f5bd6;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">{{ c.initials }}</span>{{ c.name }}</span>
+                  <span style="color:#3a3f4a;">{{ c.turf }}</span>
+                  <span style="font-variant-numeric:tabular-nums;font-weight:700;">{{ c.doors }}</span>
+                  <span style="color:#8b909c;font-size:12.5px;">{{ c.last }}</span>
+                  <span style="{{ c.statusChip }}"><span style="width:7px;height:7px;border-radius:999px;background:{{ c.dotColor }};"></span>{{ c.statusLabel }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- CANVASSERS ---------- -->
+          <sc-if value="{{ isCanvassers }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1080px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:20px;">
+              <div><h1 style="margin:0;font-size:28px;font-weight:800;">Canvassers</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Invite canvassers, set roles, and see who holds which turf.</p></div>
+              <button style="display:flex;align-items:center;gap:8px;padding:10px 16px;border:none;border-radius:10px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">{{ oUserPlus }} Invite canvasser</button>
+            </div>
+            <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+              <div style="display:grid;grid-template-columns:1.6fr .8fr 1.4fr .6fr .6fr 1fr;gap:10px;padding:13px 22px;border-bottom:1px solid #eef0f3;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;"><span>Name</span><span>Role</span><span>Assignment</span><span>Doors</span><span>Surveys</span><span>Status</span></div>
+              <sc-for list="{{ canvassers }}" as="c" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:1.6fr .8fr 1.4fr .6fr .6fr 1fr;gap:10px;align-items:center;padding:14px 22px;border-bottom:1px solid #f3f4f6;font-size:13.5px;">
+                  <span style="display:inline-flex;align-items:center;gap:10px;font-weight:700;"><span style="width:30px;height:30px;border-radius:999px;background:#eef2fd;color:#2f5bd6;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;">{{ c.initials }}</span>{{ c.name }}</span>
+                  <span><span style="{{ c.roleChip }}">{{ c.role }}</span></span>
+                  <span style="color:#3a3f4a;">{{ c.assignment }}</span>
+                  <span style="font-variant-numeric:tabular-nums;font-weight:700;">{{ c.doors }}</span>
+                  <span style="font-variant-numeric:tabular-nums;font-weight:700;">{{ c.surveys }}</span>
+                  <span style="display:inline-flex;align-items:center;gap:7px;color:#3a3f4a;font-size:12.5px;"><span style="width:8px;height:8px;border-radius:999px;background:{{ c.statusDotColor }};"></span>{{ c.status }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- RESULTS ---------- -->
+          <sc-if value="{{ isResults }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:22px;">
+              <div><h1 style="margin:0;font-size:28px;font-weight:800;">Results</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Dispositions, support distribution, and the door + text funnel — with two-way VAN / Action Network sync.</p></div>
+              <div style="display:flex;gap:8px;"><button style="display:flex;align-items:center;gap:7px;padding:9px 14px;border:1px solid #e6e8ec;border-radius:10px;background:#fff;font-weight:700;font-size:13.5px;color:#3a3f4a;font-family:inherit;cursor:pointer;">{{ oExport }} Export CSV</button><button style="display:flex;align-items:center;gap:7px;padding:10px 16px;border:none;border-radius:10px;background:#2f5bd6;color:#fff;font-weight:700;font-size:13.5px;font-family:inherit;cursor:pointer;">{{ oSync }} Sync to VAN</button></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;">
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 16px;font-size:15px;font-weight:800;">Disposition breakdown</h3>
+                <sc-for list="{{ dispBreak }}" as="d" hint-placeholder-count="5">
+                  <div style="margin-bottom:13px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px;"><span style="color:#3a3f4a;font-weight:600;">{{ d.label }}</span><span style="color:#8b909c;font-variant-numeric:tabular-nums;">{{ d.count }}</span></div><div style="height:9px;border-radius:999px;background:#eef0f3;overflow:hidden;"><div style="height:100%;width:{{ d.pct }}%;background:{{ d.color }};border-radius:999px;"></div></div></div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 16px;font-size:15px;font-weight:800;">Support level</h3>
+                <div style="display:flex;height:18px;border-radius:999px;overflow:hidden;margin-bottom:16px;">
+                  <sc-for list="{{ supportDist }}" as="x" hint-placeholder-count="5"><div style="width:{{ x.pct }}%;background:{{ x.color }};"></div></sc-for>
+                </div>
+                <sc-for list="{{ supportDist }}" as="x" hint-placeholder-count="5">
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:13px;"><span style="display:inline-flex;align-items:center;gap:8px;color:#3a3f4a;"><span style="width:10px;height:10px;border-radius:3px;background:{{ x.color }};"></span>{{ x.label }}</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">{{ x.pct }}%</span></div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;">
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 16px;font-size:15px;font-weight:800;">Door + text funnel</h3>
+                <sc-for list="{{ funnel }}" as="f" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:14px;margin-bottom:11px;"><span style="width:130px;font-size:13px;color:#3a3f4a;font-weight:600;flex:0 0 auto;">{{ f.label }}</span><div style="flex:1;height:30px;border-radius:8px;background:#f3f4f6;overflow:hidden;position:relative;"><div style="height:100%;width:{{ f.pct }}%;background:{{ f.color }};border-radius:8px;display:flex;align-items:center;padding-left:12px;"><span style="font-size:13px;font-weight:800;color:#16181d;font-variant-numeric:tabular-nums;">{{ f.value }}</span></div></div></div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 14px;font-size:15px;font-weight:800;">VAN reconciliation</h3>
+                <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#16a34a;font-weight:700;margin-bottom:12px;">{{ oCheck }} Synced 4 min ago</div>
+                <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f3f4f6;font-size:13px;"><span style="color:#6b7280;">We recorded</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">3,552 contacts</span></div>
+                <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f3f4f6;font-size:13px;"><span style="color:#6b7280;">VAN shows</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">3,548 contacts</span></div>
+                <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:13px;"><span style="color:#6b7280;">To reconcile</span><span style="font-weight:700;color:#b45309;font-variant-numeric:tabular-nums;">4 records</span></div>
+                <button style="width:100%;margin-top:12px;padding:11px;border:1px solid #e6e8ec;border-radius:11px;background:#fff;color:#2f5bd6;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">Review differences</button>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- SURVEYS (dual channel authoring) ---------- -->
+          <sc-if value="{{ isSurveys }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:6px;">
+              <div><h1 style="margin:0;font-size:28px;font-weight:800;">Surveys &amp; questions</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Author once. Each answer carries a door button label, an SMS reply and a mapped disposition — rendered to both channels.</p></div>
+              <button style="display:flex;align-items:center;gap:8px;padding:10px 16px;border:none;border-radius:10px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">{{ oPlus }} New question</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1.55fr 1fr;gap:20px;margin-top:18px;align-items:start;">
+              <!-- editor -->
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:22px 24px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="font-size:11px;font-weight:700;color:#2f5bd6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Editing · scale question</div>
+                <div style="font-size:13px;font-weight:700;color:#3a3f4a;margin-bottom:6px;">Question text</div>
+                <div style="border:1px solid #e6e8ec;border-radius:11px;padding:13px 15px;font-size:15.5px;font-weight:600;margin-bottom:20px;">How concerned are you about climate change?</div>
+                <div style="display:grid;grid-template-columns:1.1fr 1.6fr 1fr;gap:10px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;padding:0 2px 8px;"><span>Door label</span><span>SMS reply</span><span>Disposition</span></div>
+                <sc-for list="{{ aOpts }}" as="o" hint-placeholder-count="4">
+                  <div style="display:grid;grid-template-columns:1.1fr 1.6fr 1fr;gap:10px;align-items:center;padding:10px 0;border-top:1px solid #f3f4f6;">
+                    <div style="font-weight:700;font-size:13.5px;">{{ o.label }}</div>
+                    <div style="font-size:12.5px;color:#3a3f4a;background:#f7f8fa;border-radius:8px;padding:7px 10px;line-height:1.4;">{{ o.sms }}</div>
+                    <div><span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:{{ o.color }};"><span style="width:9px;height:9px;border-radius:3px;background:{{ o.color }};"></span>{{ o.disp }}</span></div>
+                  </div>
+                </sc-for>
+                <button style="margin-top:14px;display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px dashed #cbd5e1;border-radius:10px;background:#fff;color:#6b7280;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ oPlus }} Add option</button>
+              </div>
+              <!-- dual preview -->
+              <div style="display:flex;flex-direction:column;gap:16px;">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <div style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:12px;">{{ oDoor }} At the door</div>
+                  <div style="font-size:14.5px;font-weight:700;margin-bottom:12px;">How concerned are you about climate change?</div>
+                  <div style="display:flex;flex-direction:column;gap:8px;">
+                    <sc-for list="{{ aOpts }}" as="o" hint-placeholder-count="4"><div style="border:1.5px solid #e6e8ec;border-radius:11px;padding:12px 14px;font-weight:700;font-size:14px;">{{ o.door }}</div></sc-for>
+                  </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                  <div style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#2f5bd6;margin-bottom:12px;">{{ oMsg }} As a text reply</div>
+                  <div style="display:flex;flex-direction:column;gap:9px;">
+                    <div style="align-self:flex-start;background:#eef0f3;border-radius:14px 14px 14px 4px;padding:9px 13px;font-size:13px;max-width:88%;">How concerned are you about climate change?</div>
+                    <div style="align-self:flex-end;background:#2f5bd6;color:#fff;border-radius:14px 14px 4px 14px;padding:9px 13px;font-size:13px;max-width:88%;">Great to hear you care about this — we'll keep you posted.</div>
+                    <div style="align-self:flex-end;font-size:11px;color:#8b909c;">picking "Very" → logs Strong support</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- SCRIPTS ---------- -->
+          <sc-if value="{{ isScripts }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:980px;animation:fadeUp .28s ease both;">
+            <div style="margin-bottom:20px;"><h1 style="margin:0;font-size:28px;font-weight:800;">Scripts</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Build the interaction tree: an opening line plus outcome-keyed follow-ups. One script drives a door workflow and a text journey.</p></div>
+            <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:24px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+              <div style="background:#eef2fd;border:1px solid #d4def9;border-radius:13px;padding:16px 18px;margin-bottom:8px;">
+                <div style="font-size:11px;font-weight:700;color:#2f5bd6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Opening line</div>
+                <div style="font-size:15px;line-height:1.5;">"Hi, I'm a local volunteer chatting to neighbours about the council's solar plan. Have you heard much about it?"</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px;padding-left:26px;border-left:2px solid #eef0f3;margin-left:14px;margin-top:14px;">
+                <div style="background:#f7f8fa;border:1px solid #e6e8ec;border-radius:12px;padding:14px 16px;"><div style="font-size:12px;font-weight:700;color:#16a34a;margin-bottom:5px;">If interested →</div><div style="font-size:14px;line-height:1.5;">"Brilliant. The plan would put panels on the community centre — can we count on your support at the next council meeting?"</div></div>
+                <div style="background:#f7f8fa;border:1px solid #e6e8ec;border-radius:12px;padding:14px 16px;"><div style="font-size:12px;font-weight:700;color:#b45309;margin-bottom:5px;">If unsure →</div><div style="font-size:14px;line-height:1.5;">"No worries — the short version is it saves the centre about $14k a year. Want me to text you the details?"</div></div>
+                <div style="background:#f7f8fa;border:1px solid #e6e8ec;border-radius:12px;padding:14px 16px;"><div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:5px;">If not interested →</div><div style="font-size:14px;line-height:1.5;">"All good, thanks for your time. Have a lovely evening."</div></div>
+                <button style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px dashed #cbd5e1;border-radius:10px;background:#fff;color:#6b7280;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ oPlus }} Add branch</button>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- DISPOSITIONS ---------- -->
+          <sc-if value="{{ isDispositions }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1080px;animation:fadeUp .28s ease both;">
+            <div style="margin-bottom:20px;"><h1 style="margin:0;font-size:28px;font-weight:800;">Dispositions</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">A shared taxonomy so results are comparable. Terminal / data-quality codes are locked system defaults.</p></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;">
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 14px;font-size:15px;font-weight:800;">Contact results <span style="font-weight:600;color:#8b909c;font-size:12px;">· editable</span></h3>
+                <sc-for list="{{ dispContact }}" as="d" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #f3f4f6;"><span style="width:12px;height:12px;border-radius:4px;background:{{ d.color }};flex:0 0 auto;"></span><div style="flex:1;"><div style="font-size:14px;font-weight:700;">{{ d.label }}</div><div style="font-size:12px;color:#8b909c;">{{ d.desc }}</div></div></div>
+                </sc-for>
+                <button style="margin-top:12px;display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px dashed #cbd5e1;border-radius:10px;background:#fff;color:#6b7280;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ oPlus }} Add code</button>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 14px;font-size:15px;font-weight:800;">Terminal / data quality <span style="font-weight:600;color:#92600e;font-size:12px;">· locked</span></h3>
+                <sc-for list="{{ dispTerminal }}" as="d" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #f3f4f6;"><span style="width:12px;height:12px;border-radius:4px;background:{{ d.color }};flex:0 0 auto;"></span><div style="flex:1;"><div style="font-size:14px;font-weight:700;">{{ d.label }}</div><div style="font-size:12px;color:#8b909c;">{{ d.desc }}</div></div><span style="color:#cbb072;">{{ oLock }}</span></div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+              <h3 style="margin:0 0 14px;font-size:15px;font-weight:800;">Support-level scale <span style="font-weight:600;color:#8b909c;font-size:12px;">· campaign-defined</span></h3>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <sc-for list="{{ supportScale }}" as="x" hint-placeholder-count="5"><div style="display:inline-flex;align-items:center;gap:8px;border:1px solid #e6e8ec;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:700;"><span style="width:11px;height:11px;border-radius:999px;background:{{ x.color }};"></span>{{ x.label }}</div></sc-for>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- CANNED RESPONSES ---------- -->
+          <sc-if value="{{ isCanned }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1080px;animation:fadeUp .28s ease both;">
+            <div style="margin-bottom:20px;"><h1 style="margin:0;font-size:28px;font-weight:800;">Canned responses</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">A three-tier library that powers the inbox suggestions. Sending one always logs its mapped disposition.</p></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start;">
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;"><span style="width:10px;height:10px;border-radius:3px;background:#2f5bd6;"></span><h3 style="margin:0;font-size:14.5px;font-weight:800;">Recommended</h3></div>
+                <sc-for list="{{ cannedRec }}" as="c" hint-placeholder-count="2">
+                  <div style="border:1px solid #eef0f3;border-radius:12px;padding:12px 13px;margin-bottom:10px;"><div style="font-size:13px;line-height:1.5;color:#16181d;">{{ c.text }}</div><div style="margin-top:9px;font-size:11px;font-weight:700;color:#16a34a;">logs · {{ c.disp }}</div></div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;"><span style="width:10px;height:10px;border-radius:3px;background:#0e9488;"></span><h3 style="margin:0;font-size:14.5px;font-weight:800;">Mine</h3></div>
+                <sc-for list="{{ cannedMine }}" as="c" hint-placeholder-count="2">
+                  <div style="border:1px solid #eef0f3;border-radius:12px;padding:12px 13px;margin-bottom:10px;"><div style="font-size:13px;line-height:1.5;color:#16181d;">{{ c.text }}</div><div style="margin-top:9px;font-size:11px;font-weight:700;color:#16a34a;">logs · {{ c.disp }}</div></div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;"><span style="width:10px;height:10px;border-radius:3px;background:#b45309;"></span><h3 style="margin:0;font-size:14.5px;font-weight:800;">Auto-send</h3></div>
+                <sc-for list="{{ cannedAuto }}" as="c" hint-placeholder-count="1">
+                  <div style="border:1px solid #f0dcb4;background:#fffaf0;border-radius:12px;padding:12px 13px;margin-bottom:10px;"><div style="font-size:13px;line-height:1.5;color:#16181d;">{{ c.text }}</div><div style="margin-top:9px;font-size:11px;font-weight:700;color:#b45309;">fires automatically on first reply</div></div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- JOURNEYS ---------- -->
+          <sc-if value="{{ isJourneys }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:6px;">
+              <div><h1 style="margin:0;font-size:28px;font-weight:800;">Journeys</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Door outcomes and texts as first-class triggers and actions. Nobody else does door + text automation natively.</p></div>
+              <button style="display:flex;align-items:center;gap:8px;padding:10px 16px;border:none;border-radius:10px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">{{ oPlus }} New journey</button>
+            </div>
+            <div style="display:grid;grid-template-columns:300px 1fr;gap:18px;margin-top:18px;align-items:start;">
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <h3 style="margin:0 0 12px;font-size:14px;font-weight:800;">Journeys</h3>
+                <sc-for list="{{ journeyList }}" as="j" hint-placeholder-count="4">
+                  <div style="border:1px solid #eef0f3;border-radius:12px;padding:12px;margin-bottom:9px;"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span style="font-size:13px;font-weight:700;line-height:1.35;">{{ j.name }}</span></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px;"><span style="font-size:11.5px;color:#8b909c;">{{ j.enrolled }} enrolled · {{ j.conv }}</span><span style="{{ j.statusChip }}">{{ j.status }}</span></div></div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:22px;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+                  <div style="font-size:15px;font-weight:800;">Not home ×2 → text → door</div>
+                  <button style="display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid #e6e8ec;border-radius:10px;background:#fff;color:#2f5bd6;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ oArrow }} Dry run</button>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:0;">
+                  <sc-for list="{{ journeyNodes }}" as="n" hint-placeholder-count="5">
+                    <div style="width:100%;max-width:420px;">
+                      <div style="display:flex;gap:13px;align-items:center;border:1.5px solid {{ n.bg }};border-radius:14px;padding:14px 16px;background:#fff;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                        <span style="width:38px;height:38px;border-radius:10px;background:{{ n.bg }};color:{{ n.color }};display:flex;align-items:center;justify-content:center;flex:0 0 auto;">{{ n.icon }}</span>
+                        <div style="flex:1;"><div style="font-size:10.5px;font-weight:700;color:{{ n.color }};text-transform:uppercase;letter-spacing:.05em;">{{ n.kind }}</div><div style="font-size:14px;font-weight:700;margin-top:1px;">{{ n.title }}</div><div style="font-size:12px;color:#8b909c;">{{ n.sub }}</div></div>
+                      </div>
+                      <div style="height:18px;width:2px;background:#d1d5db;margin:0 auto;"></div>
+                    </div>
+                  </sc-for>
+                  <button style="display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border:1px dashed #cbd5e1;border-radius:11px;background:#fff;color:#6b7280;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ oPlus }} Add step</button>
+                </div>
+                <div style="margin-top:22px;padding-top:18px;border-top:1px solid #eef0f3;">
+                  <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;">Drag in a trigger or action</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                    <sc-for list="{{ journeyPalette }}" as="p" hint-placeholder-count="6"><div style="display:inline-flex;align-items:center;gap:7px;border:1px solid #e6e8ec;border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;color:#3a3f4a;cursor:grab;"><span style="width:9px;height:9px;border-radius:3px;background:{{ p.color }};"></span>{{ p.label }}</div></sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ---------- INBOX (coupled) ---------- -->
+          <sc-if value="{{ isInbox }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:1180px;animation:fadeUp .28s ease both;height:calc(100vh - 180px);display:flex;flex-direction:column;">
+            <div style="margin-bottom:16px;"><h1 style="margin:0;font-size:28px;font-weight:800;">Inbox</h1><p style="margin:6px 0 0;color:#6b7280;font-size:14.5px;">Replies, AI suggestions and door-knock events from the same contact — now powered by the shared canned library.</p></div>
+            <div style="flex:1;display:grid;grid-template-columns:330px 1fr;gap:16px;min-height:0;">
+              <!-- conversation list -->
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:16px;display:flex;flex-direction:column;min-height:0;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:13px;"><sc-for list="{{ inboxFilters }}" as="f" hint-placeholder-count="5"><button onClick="{{ f.set }}" style="{{ f.style }}">{{ f.label }}</button></sc-for></div>
+                <div style="flex:1;overflow-y:auto;min-height:0;">
+                  <sc-for list="{{ convos }}" as="c" hint-placeholder-count="4">
+                    <button onClick="{{ c.select }}" style="{{ c.selStyle }}">
+                      <div style="display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:999px;background:{{ c.supDot }};flex:0 0 auto;"></span><span style="font-weight:700;font-size:14px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.title }}</span><span style="font-size:11px;color:#8b909c;flex:0 0 auto;">{{ c.when }}</span></div>
+                      <div style="font-size:12.5px;color:#6b7280;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.snippet }}</div>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+              <!-- thread -->
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;display:flex;flex-direction:column;min-height:0;overflow:hidden;box-shadow:0 1px 2px rgba(16,24,40,.04);">
+                <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid #eef0f3;">
+                  <div style="display:flex;align-items:center;gap:11px;"><span style="width:36px;height:36px;border-radius:999px;background:#eef2fd;color:#2f5bd6;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;">AR</span><div><div style="font-weight:800;font-size:15px;">{{ selConvo.title }}</div><div style="font-size:12px;color:#8b909c;">{{ selConvo.who }}</div></div></div>
+                  <div style="display:flex;gap:7px;"><button onClick="{{ goContact }}" style="display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border:1px solid #e6e8ec;border-radius:9px;background:#fff;color:#2f5bd6;font-weight:700;font-size:12.5px;font-family:inherit;cursor:pointer;">View contact</button><button style="padding:8px 13px;border:1px solid #e6e8ec;border-radius:9px;background:#fff;color:#3a3f4a;font-weight:700;font-size:12.5px;font-family:inherit;cursor:pointer;">Mark resolved</button></div>
+                </div>
+                <div style="flex:1;overflow-y:auto;min-height:0;padding:18px 20px;display:flex;flex-direction:column;gap:12px;">
+                  <sc-for list="{{ inboxThread }}" as="m" hint-placeholder-count="4">
+                    <div style="{{ m.wrapStyle }}">
+                      <sc-if value="{{ m.isEvent }}" hint-placeholder-val="{{ false }}">
+                      <div style="align-self:center;display:inline-flex;align-items:center;gap:8px;background:#f3eafe;border:1px solid #e6d8fb;color:#7c3aed;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:600;">{{ m.eventIcon }} {{ m.who }} · {{ m.text }} · {{ m.when }}</div>
+                      </sc-if>
+                      <sc-if value="{{ m.isBubble }}" hint-placeholder-val="{{ true }}">
+                      <div style="{{ m.bubbleStyle }}"><div style="font-size:13.5px;line-height:1.5;">{{ m.text }}</div><div style="{{ m.metaStyle }}">{{ m.who }} · {{ m.when }}</div></div>
+                      </sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="flex:0 0 auto;border-top:1px solid #eef0f3;padding:14px 20px;">
+                  <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px;">Suggested · from canned library</div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                    <sc-for list="{{ cannedSuggest }}" as="c" hint-placeholder-count="2"><button style="text-align:left;border:1px solid #d4def9;background:#eef2fd;border-radius:11px;padding:9px 13px;font-family:inherit;cursor:pointer;max-width:320px;"><div style="font-size:12.5px;color:#16181d;line-height:1.4;">{{ c.text }}</div><div style="font-size:10.5px;font-weight:700;color:#16a34a;margin-top:5px;">logs · {{ c.disp }}</div></button></sc-for>
+                  </div>
+                  <div style="display:flex;gap:10px;align-items:center;"><div style="flex:1;border:1px solid #e6e8ec;border-radius:12px;padding:12px 14px;color:#9ca3af;font-size:13.5px;">Type a reply…</div><button style="display:flex;align-items:center;gap:7px;padding:12px 18px;border:none;border-radius:12px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">{{ oSend }} Send</button></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- desktop placeholder for not-yet-built screens -->
+          <sc-if value="{{ isDeskStub }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:900px;animation:fadeUp .28s ease both;">
+            <h1 style="margin:0 0 6px;font-size:30px;font-weight:800;">{{ stubTitle }}</h1>
+            <p style="margin:0;color:#6b7280;font-size:15px;">{{ stubDesc }}</p>
+          </div>
+          </sc-if>
+
+        </main>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ================= MOBILE (CANVASSER) PWA ================= -->
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <div id="yfStage" style="height:100%;overflow-y:auto;display:flex;justify-content:center;align-items:flex-start;padding:18px 16px 24px;background:radial-gradient(120% 90% at 50% 0%,#f6f7fa 0%,#e7eaf0 100%);">
+      <div id="yfWrap" style="width:392px;flex:0 0 auto;">
+        <!-- device -->
+        <div id="yfDevice" style="position:relative;width:392px;height:812px;transform-origin:top center;background:#16181d;border-radius:46px;padding:11px;box-shadow:0 34px 80px rgba(16,24,40,.34);">
+          <div style="position:absolute;top:18px;left:50%;transform:translateX(-50%);width:120px;height:26px;background:#16181d;border-radius:999px;z-index:30;"></div>
+          <div style="width:100%;height:100%;background:#f5f6f8;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;position:relative;">
+            <!-- status bar -->
+            <div style="flex:0 0 auto;height:42px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 5px;font-size:13px;font-weight:700;color:#16181d;background:#fff;">
+              <span style="font-variant-numeric:tabular-nums;">9:41</span>
+              <span style="display:inline-flex;gap:6px;align-items:center;">{{ iconSignal }}{{ iconWifi }}{{ iconBattery }}</span>
+            </div>
+            <!-- offline banner -->
+            <div style="flex:0 0 auto;background:#fef3e2;border-bottom:1px solid #f6e2bf;color:#92600e;display:flex;align-items:center;gap:8px;padding:7px 16px;font-size:12.5px;font-weight:600;">
+              {{ iconOffline }} Offline — everything you log is saved on this phone
+              <span style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #f0dcb4;border-radius:999px;padding:2px 9px;font-size:11px;color:#92600e;">{{ iconSync }} {{ syncCount }} to sync</span>
+            </div>
+
+            <!-- ===== FIELD: ASSIGNMENTS ===== -->
+            <sc-if value="{{ isAssignments }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1 1 auto;overflow-y:auto;padding:18px 16px 28px;" key="m-assign">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                <div>
+                  <div style="font-size:12px;color:#6b7280;font-weight:600;white-space:nowrap;">Good morning, {{ canvasserFirst }}</div>
+                  <h1 style="margin:5px 0 0;font-size:24px;font-weight:800;letter-spacing:-.01em;line-height:1;">My turf</h1>
+                </div>
+                <button onClick="{{ goSync }}" style="width:42px;height:42px;border-radius:14px;border:1px solid #e6e8ec;background:#fff;display:flex;align-items:center;justify-content:center;color:#3a3f4a;cursor:pointer;">{{ iconUserCircle }}</button>
+              </div>
+              <div style="display:flex;gap:10px;margin:16px 0 18px;">
+                <div style="flex:1;background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:13px 14px;"><div style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;">{{ todayDoors }}</div><div style="font-size:11.5px;color:#6b7280;font-weight:600;">doors today</div></div>
+                <div style="flex:1;background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:13px 14px;"><div style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;">{{ todayConvos }}</div><div style="font-size:11.5px;color:#6b7280;font-weight:600;">conversations</div></div>
+                <div style="flex:1;background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:13px 14px;"><div style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;">{{ todaySurveys }}</div><div style="font-size:11.5px;color:#6b7280;font-weight:600;">surveys</div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <sc-for list="{{ turfs }}" as="t" hint-placeholder-count="2">
+                  <div style="background:#fff;border:1px solid #e6e8ec;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.05);">
+                    <div style="height:96px;position:relative;background:{{ t.mapBg }};">
+                      <div style="position:absolute;inset:0;background-image:linear-gradient(#0000000a 1px,transparent 1px),linear-gradient(90deg,#0000000a 1px,transparent 1px);background-size:18px 18px;"></div>
+                      <svg viewBox="0 0 360 96" style="position:absolute;inset:0;width:100%;height:100%;"><path d="{{ t.shapeM }}" fill="{{ t.fill }}" stroke="{{ t.stroke }}" stroke-width="2"></path></svg>
+                      <span style="position:absolute;top:10px;right:12px;display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.92);border:1px solid #e6e8ec;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;color:{{ t.syncColor }};">{{ t.syncIcon }} {{ t.syncLabel }}</span>
+                    </div>
+                    <div style="padding:14px 16px 16px;">
+                      <div style="font-weight:800;font-size:16px;">{{ t.name }}</div>
+                      <div style="font-size:12.5px;color:#6b7280;margin-top:2px;">{{ t.doors }} doors · {{ t.walklist }} on your walk list</div>
+                      <div style="display:flex;gap:9px;margin-top:14px;">
+                        <button onClick="{{ t.startWalk }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:13px;border:none;border-radius:13px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14.5px;font-family:inherit;cursor:pointer;">{{ iconWalk }} Start walking</button>
+                        <button style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:6px;padding:13px 14px;border:1px solid #e6e8ec;border-radius:13px;background:#fff;color:#3a3f4a;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer;">{{ iconDownload }}</button>
+                      </div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- ===== FIELD: WALK VIEW ===== -->
+            <sc-if value="{{ isWalk }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;min-height:0;" key="m-walk">
+              <!-- walk header -->
+              <div style="flex:0 0 auto;padding:14px 16px 12px;background:#fff;border-bottom:1px solid #e6e8ec;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <button onClick="{{ goAssignments }}" style="width:36px;height:36px;border-radius:11px;border:1px solid #e6e8ec;background:#fff;display:flex;align-items:center;justify-content:center;color:#3a3f4a;cursor:pointer;flex:0 0 auto;">{{ iconChevL }}</button>
+                  <div style="flex:1;min-width:0;">
+                    <div style="font-weight:800;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ activeTurf.name }}</div>
+                    <div style="font-size:12px;color:#6b7280;">{{ walkProgressLabel }}</div>
+                  </div>
+                  <div style="display:flex;background:#eef0f3;border-radius:11px;padding:3px;flex:0 0 auto;">
+                    <button onClick="{{ setWalkList }}" style="{{ walkListBtnStyle }}">{{ iconList }} List</button>
+                    <button onClick="{{ setWalkMap }}" style="{{ walkMapBtnStyle }}">{{ iconMap }} Map</button>
+                  </div>
+                </div>
+                <div style="height:7px;border-radius:999px;background:#eef0f3;overflow:hidden;margin-top:12px;"><div style="height:100%;width:{{ walkPct }};background:#16a34a;border-radius:999px;transition:width .4s;"></div></div>
+              </div>
+
+              <!-- LIST MODE -->
+              <sc-if value="{{ walkIsList }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1 1 auto;overflow-y:auto;padding:14px 14px 28px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#6b7280;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">{{ iconRoute }} Route-optimised · shortest path</div>
+                <sc-for list="{{ stops }}" as="s" hint-placeholder-count="5">
+                  <div style="{{ s.cardStyle }}">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                      <div style="{{ s.orderStyle }}">{{ s.order }}</div>
+                      <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:7px;">
+                          <span style="font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.name }}</span>
+                          <sc-if value="{{ s.hasPrior }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;color:#2f5bd6;flex:0 0 auto;" title="Prior contact">{{ iconHistory }}</span></sc-if>
+                        </div>
+                        <div style="font-size:12.5px;color:#6b7280;">{{ s.address }}</div>
+                        <sc-if value="{{ s.hasPrior }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:#2f5bd6;margin-top:3px;display:inline-flex;align-items:center;gap:5px;">{{ s.priorIcon }} {{ s.priorSummary }}</div></sc-if>
+                      </div>
+                      <span style="{{ s.badgeStyle }}">{{ s.statusLabel }}</span>
+                    </div>
+                    <sc-if value="{{ s.isNext }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ s.knock }}" style="width:100%;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border:none;border-radius:12px;background:#2f5bd6;color:#fff;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;">{{ iconDoor }} Knock — next stop</button>
+                    </sc-if>
+                    <sc-if value="{{ s.isPendingNotNext }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ s.knock }}" style="width:100%;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;border:1px solid #d4def9;border-radius:11px;background:#fff;color:#2f5bd6;font-weight:700;font-size:13.5px;font-family:inherit;cursor:pointer;">Knock here</button>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+              </sc-if>
+
+              <!-- MAP MODE -->
+              <sc-if value="{{ walkIsMap }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1 1 auto;position:relative;overflow:hidden;background:#dde6ef;">
+                <div style="position:absolute;inset:0;background-image:linear-gradient(#9fb3cc44 1px,transparent 1px),linear-gradient(90deg,#9fb3cc44 1px,transparent 1px);background-size:34px 34px;"></div>
+                <svg viewBox="0 0 360 560" style="position:absolute;inset:0;width:100%;height:100%;">
+                  <path d="M40 70 L320 50 L335 360 L300 520 L60 500 L30 300 Z" fill="#2f5bd611" stroke="#2f5bd6" stroke-width="2.5" stroke-dasharray="7 5"></path>
+                  <path d="M70 120 C150 140 180 260 250 300 S320 440 250 470" fill="none" stroke="#2f5bd6" stroke-width="3" stroke-linecap="round" opacity=".55"></path>
+                </svg>
+                <sc-for list="{{ mapPins }}" as="p" hint-placeholder-count="5">
+                  <button onClick="{{ p.knock }}" style="position:absolute;left:{{ p.x }};top:{{ p.y }};transform:translate(-50%,-100%);border:none;background:none;cursor:pointer;color:{{ p.color }};filter:drop-shadow(0 2px 3px rgba(16,24,40,.3));">{{ p.icon }}</button>
+                </sc-for>
+                <div style="position:absolute;left:50%;bottom:150px;transform:translate(-50%,50%);">
+                  <span style="display:block;width:18px;height:18px;border-radius:999px;background:#2f5bd6;border:3px solid #fff;animation:livePulse 2s infinite;"></span>
+                </div>
+                <!-- next-stop card -->
+                <div style="position:absolute;left:14px;right:14px;bottom:16px;background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:14px 16px;box-shadow:0 8px 28px rgba(16,24,40,.18);">
+                  <div style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;">{{ iconRoute }} Next stop · 40m away</div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:10px;">
+                    <div style="min-width:0;"><div style="font-weight:800;font-size:16px;">{{ nextStop.name }}</div><div style="font-size:12.5px;color:#6b7280;">{{ nextStop.address }}</div></div>
+                    <button onClick="{{ nextStop.knock }}" style="flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:12px 16px;border:none;border-radius:12px;background:#2f5bd6;color:#fff;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">{{ iconDoor }} Knock</button>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+            </div>
+            </sc-if>
+
+            <!-- ===== FIELD: DOOR ENTRY ===== -->
+            <sc-if value="{{ isDoor }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1 1 auto;display:flex;flex-direction:column;min-height:0;" key="m-door">
+              <!-- door header -->
+              <div style="flex:0 0 auto;padding:13px 16px;background:#fff;border-bottom:1px solid #e6e8ec;display:flex;align-items:center;gap:12px;">
+                <button onClick="{{ goWalk }}" style="width:36px;height:36px;border-radius:11px;border:1px solid #e6e8ec;background:#fff;display:flex;align-items:center;justify-content:center;color:#3a3f4a;cursor:pointer;flex:0 0 auto;">{{ iconChevL }}</button>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-weight:800;font-size:16px;">{{ doorStop.name }}</div>
+                  <div style="font-size:12px;color:#6b7280;">{{ doorStop.address }}</div>
+                </div>
+                <span style="{{ doorStop.supportChipStyle }}">{{ doorStop.supportShort }}</span>
+              </div>
+
+              <div style="flex:1 1 auto;overflow-y:auto;padding:14px 16px 16px;">
+                <!-- prior-contact strip -->
+                <sc-if value="{{ doorHasPrior }}" hint-placeholder-val="{{ true }}">
+                <div style="background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:13px 14px;margin-bottom:14px;">
+                  <div style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:#2f5bd6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;">{{ iconHistory }} Walk up informed · recent contact</div>
+                  <sc-for list="{{ doorPrior }}" as="p" hint-placeholder-count="2">
+                    <div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f3f4f6;">
+                      <span style="width:26px;height:26px;border-radius:8px;background:{{ p.bg }};color:{{ p.color }};display:flex;align-items:center;justify-content:center;flex:0 0 auto;">{{ p.icon }}</span>
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-size:12.5px;color:#16181d;line-height:1.45;">{{ p.text }}</div>
+                        <div style="font-size:11px;color:#8b909c;margin-top:2px;">{{ p.when }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                </sc-if>
+
+                <!-- DISPOSITION PAD -->
+                <sc-if value="{{ doorIsPad }}" hint-placeholder-val="{{ true }}">
+                <div style="animation:popIn .2s ease both;">
+                  <div style="font-size:13px;font-weight:700;color:#3a3f4a;margin:2px 0 12px;">What happened at the door?</div>
+                  <button onClick="{{ pickSpoke }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:9px;padding:18px;border:none;border-radius:16px;background:#16a34a;color:#fff;font-weight:800;font-size:17px;font-family:inherit;cursor:pointer;box-shadow:0 2px 6px rgba(22,163,74,.3);margin-bottom:12px;">{{ iconChat }} Spoke to someone</button>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <button onClick="{{ pickNotHome }}" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:18px 10px;border:1px solid #e6e8ec;border-radius:15px;background:#fff;color:#16181d;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;">{{ iconHomeOff }} Not home</button>
+                    <button onClick="{{ pickComeBack }}" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:18px 10px;border:1px solid #e6e8ec;border-radius:15px;background:#fff;color:#16181d;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;">{{ iconClock }} Come back later</button>
+                    <button onClick="{{ pickRefused }}" style="grid-column:span 2;display:flex;align-items:center;justify-content:center;gap:8px;padding:15px;border:1px solid #e6e8ec;border-radius:15px;background:#fff;color:#16181d;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;">{{ iconNo }} Refused</button>
+                  </div>
+                  <div style="font-size:11px;font-weight:700;color:#b45309;text-transform:uppercase;letter-spacing:.05em;margin:18px 0 9px;display:flex;align-items:center;gap:6px;">{{ iconWarn }} Data quality</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <button onClick="{{ pickMoved }}" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:13px;border:1px solid #f0dcb4;border-radius:13px;background:#fffaf0;color:#92600e;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">Moved</button>
+                    <button onClick="{{ pickWrong }}" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:13px;border:1px solid #f0dcb4;border-radius:13px;background:#fffaf0;color:#92600e;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">Wrong address</button>
+                  </div>
+                  <div style="text-align:center;font-size:11.5px;color:#8b909c;margin-top:16px;display:flex;align-items:center;justify-content:center;gap:6px;">{{ iconPin }} GPS captured automatically · one tap logs &amp; advances</div>
+                </div>
+                </sc-if>
+
+                <!-- SURVEY RUNNER -->
+                <sc-if value="{{ doorIsSurvey }}" hint-placeholder-val="{{ false }}">
+                <div style="animation:popIn .2s ease both;">
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <div style="flex:1;height:7px;border-radius:999px;background:#eef0f3;overflow:hidden;"><div style="height:100%;width:{{ surveyPct }};background:#2f5bd6;border-radius:999px;transition:width .3s;"></div></div>
+                    <span style="font-size:12px;color:#6b7280;font-weight:700;white-space:nowrap;">{{ surveyStepLabel }}</span>
+                  </div>
+                  <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:20px 18px 18px;">
+                    <div style="font-size:11px;font-weight:700;color:#2f5bd6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">{{ surveyQ.tag }}</div>
+                    <div style="font-size:20px;font-weight:800;line-height:1.3;margin-bottom:18px;letter-spacing:-.01em;">{{ surveyQ.text }}</div>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                      <sc-for list="{{ surveyQ.options }}" as="o" hint-placeholder-count="4">
+                        <button onClick="{{ o.choose }}" style="{{ o.style }}">
+                          <span style="display:flex;flex-direction:column;text-align:left;"><span style="font-weight:700;font-size:15.5px;">{{ o.label }}</span><span style="font-size:11.5px;color:#8b909c;margin-top:1px;">{{ o.sub }}</span></span>
+                          <span style="display:inline-flex;color:{{ o.tickColor }};">{{ o.tick }}</span>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:10px;margin-top:14px;">
+                    <button onClick="{{ surveyBack }}" style="flex:0 0 auto;padding:13px 16px;border:1px solid #e6e8ec;border-radius:12px;background:#fff;color:#3a3f4a;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">{{ iconChevL }}</button>
+                    <button onClick="{{ surveySkip }}" style="flex:1;padding:13px;border:1px dashed #d1d5db;border-radius:12px;background:#fff;color:#6b7280;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">Skip question</button>
+                  </div>
+                </div>
+                </sc-if>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- ===== FIELD: SYNC CENTRE ===== -->
+            <sc-if value="{{ isSync }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1 1 auto;overflow-y:auto;padding:16px 16px 28px;" key="m-sync">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+                <button onClick="{{ goAssignments }}" style="width:36px;height:36px;border-radius:11px;border:1px solid #e6e8ec;background:#fff;display:flex;align-items:center;justify-content:center;color:#3a3f4a;cursor:pointer;">{{ iconChevL }}</button>
+                <h1 style="margin:0;font-size:22px;font-weight:800;">{{ canvasserFirst }}'s day</h1>
+              </div>
+              <div style="display:flex;gap:10px;margin-bottom:18px;">
+                <div style="flex:1;background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:14px;"><div style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;">{{ todayDoors }}</div><div style="font-size:11.5px;color:#6b7280;font-weight:600;">doors knocked</div></div>
+                <div style="flex:1;background:#fff;border:1px solid #e6e8ec;border-radius:14px;padding:14px;"><div style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;">{{ todaySurveys }}</div><div style="font-size:11.5px;color:#6b7280;font-weight:600;">surveys done</div></div>
+              </div>
+              <div style="background:#fff;border:1px solid #e6e8ec;border-radius:16px;padding:16px;margin-bottom:16px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                  <h3 style="margin:0;font-size:15px;font-weight:800;">Unsynced records</h3>
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:#fef3e2;color:#92600e;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;">{{ syncCount }} pending</span>
+                </div>
+                <sc-for list="{{ syncQueue }}" as="q" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f3f4f6;">
+                    <span style="width:30px;height:30px;border-radius:9px;background:{{ q.bg }};color:{{ q.color }};display:flex;align-items:center;justify-content:center;">{{ q.icon }}</span>
+                    <div style="flex:1;"><div style="font-size:13.5px;font-weight:700;">{{ q.title }}</div><div style="font-size:11.5px;color:#8b909c;">{{ q.sub }}</div></div>
+                    <span style="display:inline-flex;color:#cbb072;">{{ iconCloudOff }}</span>
+                  </div>
+                </sc-for>
+                <button style="width:100%;margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border:none;border-radius:12px;background:#2f5bd6;color:#fff;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;">{{ iconSync }} Sync now</button>
+              </div>
+              <button style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:1px solid #f3c2c2;border-radius:13px;background:#fff;color:#dc2626;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;">Release turf when done</button>
+            </div>
+            </sc-if>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+  </div>
+
+  <!-- toast -->
+  <sc-if value="{{ toastShow }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;left:50%;bottom:30px;transform:translateX(-50%);z-index:90;background:#16181d;color:#fff;padding:12px 18px;border-radius:12px;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:9px;box-shadow:0 10px 30px rgba(16,24,40,.35);animation:toastIn .25s ease both;">
+    <span style="display:inline-flex;color:#5fe39a;">{{ iconCheck }}</span>{{ toastMsg }}
+  </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;campaignName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Climate Action 2026&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;canvasserName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Jaynaya&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state = {
+      screen: 'assignments',
+      density: props.density || 'comfortable',
+      walkView: 'list',
+      activeTurfId: 't1',
+      stops: this.seedStops(),
+      doorStopId: 's1',
+      doorStage: 'pad',
+      surveyStep: 0,
+      surveyAnswers: {},
+      tl: 'unified',
+      toast: null,
+      syncCount: 3,
+      tally: { doors: 14, convos: 6, surveys: 5 },
+      inboxSel: 'cv1', inboxFilter: 'all',
+      turfUniverse: 'hybrid', walklistMode: 'dynamic', authorQ: 0,
+    };
+    this._toastT = null;
+  }
+
+  // ---------- icons ----------
+  ic(p, sz){ const s = sz||18; return React.createElement('svg',{viewBox:'0 0 24 24',width:s,height:s,fill:'none',stroke:'currentColor','strokeWidth':1.8,'strokeLinecap':'round','strokeLinejoin':'round',dangerouslySetInnerHTML:{__html:p}}); }
+  knot(sz){ const s=sz||22; return React.createElement('svg',{viewBox:'0 0 32 32',width:s,height:s,fill:'none',stroke:'currentColor','strokeWidth':2.4,dangerouslySetInnerHTML:{__html:'<path d="M16 16c-5-6-13-2-9 4 3 4 9 0 9-4 0 4 6 8 9 4 4-6-4-10-9-4-3-4-9-4-9 1"/><circle cx="16" cy="22" r="1.6" fill="currentColor" stroke="none"/>'}}); }
+
+  // ---------- seed data ----------
+  seedStops(){
+    return [
+      { id:'s1', order:1, name:'Aisha Rahman', address:'14 Glenlyon Rd', status:'pending', support:'lean', hasPrior:true,
+        priorSummary:'Texted 3 May — keen on solar', priorKind:'text',
+        prior:[
+          {kind:'text-in', text:'"Yes keen to hear more about the solar program when you\u2019re round"', when:'Inbound text · 3 May'},
+          {kind:'knock', text:'Not home — left a flyer', when:'Door knock · 12 Apr'},
+        ] },
+      { id:'s2', order:2, name:'Tom Nguyen', address:'16 Glenlyon Rd', status:'pending', support:'undecided', hasPrior:false, prior:[] },
+      { id:'s3', order:3, name:'Margaret Doyle', address:'18 Glenlyon Rd', status:'visited', support:'strong', hasPrior:true,
+        priorSummary:'Spoke 9 Apr — strong support', priorKind:'knock', prior:[] },
+      { id:'s4', order:4, name:'The Patel household', address:'20 Glenlyon Rd', status:'pending', support:'undecided', hasPrior:true,
+        priorSummary:'Not home \u00d71', priorKind:'knock',
+        prior:[{kind:'knock', text:'Not home', when:'Door knock · 28 Mar'}] },
+      { id:'s5', order:5, name:'Daniel Okafor', address:'22 Glenlyon Rd', status:'pending', support:'leanopp', hasPrior:true,
+        priorSummary:'Texted 2 May — not interested', priorKind:'text',
+        prior:[{kind:'text-in', text:'"Please take me off your list"', when:'Inbound text · 2 May'}] },
+      { id:'s6', order:6, name:'Sofia Marchetti', address:'24 Glenlyon Rd', status:'skipped', support:'undecided', hasPrior:false, prior:[] },
+      { id:'s7', order:7, name:'James & Lin Carter', address:'26 Glenlyon Rd', status:'pending', support:'undecided', hasPrior:false, prior:[] },
+    ];
+  }
+  survey(){
+    return [
+      { id:'concern', tag:'Climate · question 1', text:'How concerned are you about climate change?', options:[
+        {id:'very', label:'Very concerned', sub:'Door: "Very" · SMS: "Great to hear you care"', support:'strong'},
+        {id:'somewhat', label:'Somewhat concerned', sub:'Door: "Somewhat" · SMS: "Thanks, good to know"', support:'lean'},
+        {id:'notmuch', label:'Not really', sub:'Door: "Not really"', support:'undecided'},
+        {id:'notatall', label:'Not at all', sub:'Door: "Not at all"', support:'leanopp'},
+      ]},
+      { id:'targets', tag:'Climate · question 2', text:'Would you back stronger national climate targets?', options:[
+        {id:'yes', label:'Yes', sub:'Maps to support +1', support:'strong'},
+        {id:'unsure', label:'Unsure', sub:'', support:'undecided'},
+        {id:'no', label:'No', sub:'', support:'leanopp'},
+      ]},
+      { id:'volunteer', tag:'Get involved · question 3', text:'Could we count on you to help out locally?', options:[
+        {id:'signup', label:'Yes, sign me up', sub:'Triggers volunteer journey', support:'strong'},
+        {id:'maybe', label:'Maybe later', sub:'', support:'lean'},
+        {id:'no', label:'Not right now', sub:'', support:'undecided'},
+      ]},
+    ];
+  }
+  SUP(k){ return ({
+    strong:{label:'Strong support',short:'Strong',c:'#16a34a',bg:'#e7f6ec'},
+    lean:{label:'Lean support',short:'Lean +',c:'#0e9488',bg:'#e0f4f1'},
+    undecided:{label:'Undecided',short:'Undecided',c:'#6b7280',bg:'#eef0f3'},
+    leanopp:{label:'Lean oppose',short:'Lean \u2212',c:'#b45309',bg:'#fbeedd'},
+    strongopp:{label:'Strong oppose',short:'Oppose',c:'#dc2626',bg:'#fdeaea'},
+  }[k] || {label:k,short:k,c:'#6b7280',bg:'#eef0f3'}); }
+
+  // ---------- phone fit ----------
+  fitPhone(){
+    const dev=document.getElementById('yfDevice'), wrap=document.getElementById('yfWrap'), stage=document.getElementById('yfStage');
+    if(!dev||!wrap||!stage) return;
+    const avail = stage.clientHeight - 36;
+    const scale = Math.min(1, avail/812);
+    dev.style.transform = scale<1 ? 'scale('+scale+')' : 'none';
+    wrap.style.height = Math.round(812*scale)+'px';
+    wrap.style.width = Math.round(392*scale)+'px';
+  }
+  componentDidMount(){ this._fit=()=>this.fitPhone(); window.addEventListener('resize',this._fit); requestAnimationFrame(()=>this.fitPhone()); }
+  componentDidUpdate(){ requestAnimationFrame(()=>this.fitPhone()); }
+  componentWillUnmount(){ if(this._fit) window.removeEventListener('resize',this._fit); }
+
+  // ---------- nav ----------
+  go(screen){ if(this._toastT) clearTimeout(this._toastT); this.setState({ screen }); }
+  toast(msg){ if(this._toastT) clearTimeout(this._toastT); this.setState({ toast: msg }); this._toastT = setTimeout(()=>this.setState({toast:null}), 2600); }
+
+  startWalk(){ this.setState({ screen:'walk', walkView:'list' }); }
+  openDoor(id){ this.setState({ screen:'door', doorStopId:id, doorStage:'pad', surveyStep:0, surveyAnswers:{} }); }
+
+  nextPending(){ const s=this.state.stops.find(x=>x.status==='pending'); return s; }
+
+  logOutcome(code, label, color){
+    const stops = this.state.stops.map(x=> x.id===this.state.doorStopId ? {...x, status: (code==='moved'||code==='wrong'||code==='refused')?'skipped':'visited', lastDisp:label} : x);
+    this.setState({ stops, syncCount:this.state.syncCount+1, tally:{...this.state.tally, doors:this.state.tally.doors+1}, screen:'walk' });
+    this.toast('Logged: '+label+' · saved offline');
+  }
+  finishSurvey(){
+    const stops = this.state.stops.map(x=> x.id===this.state.doorStopId ? {...x, status:'visited', lastDisp:'Spoke'} : x);
+    this.setState({ stops, syncCount:this.state.syncCount+1, tally:{doors:this.state.tally.doors+1, convos:this.state.tally.convos+1, surveys:this.state.tally.surveys+1}, screen:'walk' });
+    this.toast('Conversation + survey logged · saved offline');
+  }
+  answer(optId, support){
+    const q = this.survey()[this.state.surveyStep];
+    const ans = {...this.state.surveyAnswers, [q.id]:optId};
+    if(this.state.surveyStep >= this.survey().length-1){ this.setState({surveyAnswers:ans}); this.finishSurvey(); }
+    else this.setState({ surveyAnswers:ans, surveyStep:this.state.surveyStep+1 });
+  }
+  surveyBack(){ if(this.state.surveyStep===0) this.setState({doorStage:'pad'}); else this.setState({surveyStep:this.state.surveyStep-1}); }
+  surveySkip(){ if(this.state.surveyStep >= this.survey().length-1) this.finishSurvey(); else this.setState({surveyStep:this.state.surveyStep+1}); }
+
+  // ---------- organiser / engagement / journeys / inbox data ----------
+  orgData(s){
+    const chip=(c,bg)=>`display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:${c};background:${bg};padding:3px 10px;border-radius:999px;`;
+
+    // ----- LIVE war room -----
+    const liveKpis=[
+      {label:'Doors knocked today', value:'1,284', sub:'across 12 canvassers', color:'#2f5bd6'},
+      {label:'Contact rate', value:'34%', sub:'436 conversations', color:'#0e9488'},
+      {label:'Turf complete', value:'58%', sub:'9 of 16 turfs', color:'#7c3aed'},
+      {label:'New supporters', value:'212', sub:'+38 last hour', color:'#16a34a'},
+    ];
+    const liveCanvassers=[
+      {name:'Jaynaya N.', turf:'Glenlyon Rd · East', doors:38, status:'active', last:'Spoke · 2m ago', pct:'56%', initials:'JN', dotColor:'#16a34a'},
+      {name:'R. Singh', turf:'Edward St · South', doors:52, status:'active', last:'Not home · 1m ago', pct:'100%', initials:'RS', dotColor:'#16a34a'},
+      {name:'M. Lee', turf:'Albert St · Flats', doors:7, status:'idle', last:'idle 14m', pct:'13%', initials:'ML', dotColor:'#b45309'},
+      {name:'T. Brooks', turf:'Nicholson St · North', doors:29, status:'active', last:'Spoke · 4m ago', pct:'71%', initials:'TB', dotColor:'#16a34a'},
+      {name:'D. Owusu', turf:'Sydney Rd · Shops', doors:18, status:'active', last:'Refused · 6m ago', pct:'40%', initials:'DO', dotColor:'#16a34a'},
+    ].map(c=>({...c, statusChip: c.status==='active'?chip('#16a34a','#e7f6ec'):chip('#b45309','#fef3e2'), statusLabel:c.status==='active'?'Active':'Idle'}));
+    const liveAlerts=[
+      {icon:this.ic('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',16), text:'M. Lee idle 14 min on Albert St · Flats', tone:'#b45309', bg:'#fef3e2'},
+      {icon:this.ic('<path d="M21.8 10A10 10 0 1 1 12 2"/><path d="m9 11 3 3L22 4"/>',16), text:'Edward St · South is 100% complete — ready to reassign', tone:'#16a34a', bg:'#e7f6ec'},
+      {icon:this.ic('<path d="m13 2-3 7h4l-3 7"/><circle cx="12" cy="12" r="10"/>',16), text:'Hostile-contact flag raised at 22 Glenlyon Rd', tone:'#dc2626', bg:'#fdeaea'},
+    ];
+
+    // ----- CANVASSERS -----
+    const canvassers=[
+      {name:'Jaynaya Newman', role:'Canvasser', assignment:'Glenlyon Rd · East', doors:38, surveys:21, status:'Active now', initials:'JN', dot:'#16a34a'},
+      {name:'Raj Singh', role:'Canvasser', assignment:'Edward St · South', doors:52, surveys:30, status:'Active now', initials:'RS', dot:'#16a34a'},
+      {name:'Maya Lee', role:'Canvasser', assignment:'Albert St · Flats', doors:7, surveys:3, status:'Idle 14m', initials:'ML', dot:'#b45309'},
+      {name:'Tom Brooks', role:'Organiser', assignment:'—', doors:0, surveys:0, status:'Desk', initials:'TB', dot:'#6b7280'},
+      {name:'Dela Owusu', role:'Canvasser', assignment:'Sydney Rd · Shops', doors:18, surveys:9, status:'Active now', initials:'DO', dot:'#16a34a'},
+    ].map(c=>({...c, roleChip: c.role==='Organiser'?chip('#7c3aed','#f3eafe'):chip('#2f5bd6','#eef2fd'), statusDotColor:c.dot}));
+
+    // ----- RESULTS -----
+    const dispBreak=[
+      {label:'Not home', count:'1,640', pct:46, color:'#94a3b8'},
+      {label:'Spoke', count:'1,128', pct:32, color:'#2f5bd6'},
+      {label:'Refused', count:'430', pct:12, color:'#dc2626'},
+      {label:'Come back later', count:'214', pct:6, color:'#b45309'},
+      {label:'Moved / wrong', count:'140', pct:4, color:'#cbd5e1'},
+    ];
+    const supportDist=[
+      {label:'Strong support', pct:38, color:'#16a34a'},
+      {label:'Lean support', pct:24, color:'#0e9488'},
+      {label:'Undecided', pct:21, color:'#94a3b8'},
+      {label:'Lean oppose', pct:11, color:'#b45309'},
+      {label:'Strong oppose', pct:6, color:'#dc2626'},
+    ];
+    const funnel=[
+      {label:'Doors attempted', value:'3,552', pct:100, color:'#dbe3f7'},
+      {label:'Contacted', value:'1,128', pct:32, color:'#9db5ee'},
+      {label:'Surveyed', value:'864', pct:24, color:'#5d82e0'},
+      {label:'New supporters', value:'526', pct:15, color:'#2f5bd6'},
+    ];
+
+    // ----- SURVEYS authoring (dual channel) -----
+    const aOpts=[
+      {label:'Very concerned', door:'Very', sms:'Great to hear you care about this — we\u2019ll keep you posted.', disp:'Strong support', color:'#16a34a'},
+      {label:'Somewhat concerned', door:'Somewhat', sms:'Thanks, good to know where you stand.', disp:'Lean support', color:'#0e9488'},
+      {label:'Not really', door:'Not really', sms:'No worries, thanks for your time.', disp:'Undecided', color:'#94a3b8'},
+      {label:'Not at all', door:'Not at all', sms:'Understood — we won\u2019t bother you again.', disp:'Lean oppose', color:'#b45309'},
+    ];
+    const surveyLib=[
+      {name:'Climate concern', type:'Scale · 4', uses:'Door + SMS', live:true},
+      {name:'Stronger targets?', type:'Yes / No / Unsure', uses:'Door + SMS', live:true},
+      {name:'Volunteer interest', type:'Single choice', uses:'Door + SMS', live:true},
+      {name:'Preferred contact time', type:'Single choice', uses:'SMS only', live:false},
+    ];
+
+    // ----- DISPOSITIONS -----
+    const dispContact=[
+      {label:'Spoke', desc:'Had a conversation', color:'#2f5bd6', locked:false},
+      {label:'Not home', desc:'No answer', color:'#94a3b8', locked:false},
+      {label:'Refused', desc:'Declined to talk', color:'#dc2626', locked:false},
+      {label:'Come back later', desc:'Busy / try again', color:'#b45309', locked:false},
+    ];
+    const dispTerminal=[
+      {label:'Moved', desc:'No longer at address', color:'#92600e', locked:true},
+      {label:'Wrong address', desc:'Bad data', color:'#92600e', locked:true},
+      {label:'Deceased', desc:'System default', color:'#92600e', locked:true},
+      {label:'Do not contact', desc:'Hard suppression', color:'#dc2626', locked:true},
+    ];
+    const supportScale=supportDist.map(x=>({label:x.label, color:x.color}));
+
+    // ----- CANNED -----
+    const cannedRec=[
+      {text:'Thanks for chatting! Here\u2019s the link to our solar info night: yarn.org/solar', disp:'Lean support', auto:false},
+      {text:'Great to hear you\u2019re keen — a local organiser will be in touch this week.', disp:'Strong support', auto:false},
+    ];
+    const cannedMine=[
+      {text:'No worries, have a lovely evening!', disp:'Undecided', auto:false},
+      {text:'Totally understand. I\u2019ll take you off our list.', disp:'Lean oppose', auto:false},
+    ];
+    const cannedAuto=[
+      {text:'Thanks for your reply! Someone will get back to you shortly.', disp:'\u2014', auto:true},
+    ];
+
+    // ----- JOURNEYS -----
+    const journeyList=[
+      {name:'Not home ×2 → text → door', enrolled:842, conv:'18%', status:'Live', live:true},
+      {name:'Solar interest → door follow-up', enrolled:311, conv:'34%', status:'Live', live:true},
+      {name:'Refused → suppress 90 days', enrolled:430, conv:'—', status:'Live', live:true},
+      {name:'Survey complete → thank-you text', enrolled:864, conv:'—', status:'Draft', live:false},
+    ].map(j=>({...j, statusChip: j.live?chip('#16a34a','#e7f6ec'):chip('#6b7280','#eef0f3')}));
+    const journeyNodes=[
+      {kind:'Trigger', title:'Disposition: Not home ×2', sub:'Door channel', color:'#7c3aed', bg:'#f3eafe', icon:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',16)},
+      {kind:'Wait', title:'Wait 2 days', sub:'then continue', color:'#b45309', bg:'#fef3e2', icon:this.ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',16)},
+      {kind:'Action', title:'Queue P2P text', sub:'"Sorry we missed you…"', color:'#2f5bd6', bg:'#eef2fd', icon:this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',16)},
+      {kind:'Condition', title:'If reply = interested', sub:'branch', color:'#0e9488', bg:'#e0f4f1', icon:this.ic('<path d="M6 3v12M18 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 15a6 6 0 0 0 6-6h3"/>',16)},
+      {kind:'Action', title:'Create door-knock task', sub:'nearest canvasser', color:'#16a34a', bg:'#e7f6ec', icon:this.ic('<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',16)},
+    ];
+    const journeyPalette=[
+      {label:'Disposition set', color:'#7c3aed'}, {label:'Message received', color:'#2f5bd6'},
+      {label:'Survey answer', color:'#0e9488'}, {label:'Tag added', color:'#b45309'},
+      {label:'Queue P2P text', color:'#2f5bd6'}, {label:'Create door task', color:'#16a34a'},
+      {label:'Wait / delay', color:'#b45309'}, {label:'Hand to inbox', color:'#dc2626'},
+    ];
+
+    // ----- INBOX (coupled) -----
+    const convos=[
+      {id:'cv1', who:'+61 458 208 148', name:'Aisha Rahman', when:'08:24', snippet:'Yes keen to hear more about solar', state:'unresolved', sup:'lean'},
+      {id:'cv2', who:'+61 474 851 173', name:'Gadrian Hoosan', when:'Yest', snippet:'What time are you doorknocking?', state:'awaiting', sup:'undecided'},
+      {id:'cv3', who:'+61 451 655 202', name:'', when:'Yest', snippet:'Take me off the list please', state:'responded', sup:'leanopp'},
+      {id:'cv4', who:'+61 432 119 845', name:'Priya Anand', when:'Mon', snippet:'Happy to volunteer on the weekend', state:'unresolved', sup:'strong'},
+    ].map(c=>{ const su=this.SUP(c.sup); return {...c, selStyle:`width:100%;text-align:left;border:1px solid ${this.state.inboxSel===c.id?'#2f5bd6':'#e6e8ec'};background:${this.state.inboxSel===c.id?'#eef2fd':'#fff'};border-radius:13px;padding:12px 13px;cursor:pointer;font-family:inherit;margin-bottom:9px;`, supDot:su.c, title:c.name||c.who, sub:c.name?c.who:'', select:()=>this.setState({inboxSel:c.id}) }; });
+    const selConvo = convos.find(c=>c.id===this.state.inboxSel) || convos[0];
+    const doorEvIcon=this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',13);
+    const inboxThread=[
+      {kind:'door', who:'Door knock · R. Singh', text:'Not home — flyer left', when:'12 Apr', side:'event'},
+      {kind:'out', who:'You · May blast', text:'Hi Aisha, we\u2019re chatting to neighbours about the council solar plan — mind if we drop by this week?', when:'2 May 18:40', side:'out'},
+      {kind:'in', who:'Aisha', text:'Yes keen to hear more about the solar program when you\u2019re round', when:'3 May 09:12', side:'in'},
+      {kind:'door', who:'Door knock · Jaynaya N.', text:'Spoke — surveyed, strong support, will volunteer', when:'Today 14:32', side:'event'},
+    ].map(m=>{
+      const isEvent=m.side==='event', isOut=m.side==='out';
+      return {...m, isEvent, isBubble:!isEvent, eventIcon:doorEvIcon,
+        wrapStyle:`display:flex;flex-direction:column;${isEvent?'align-items:center;':isOut?'align-items:flex-end;':'align-items:flex-start;'}`,
+        bubbleStyle:`max-width:78%;padding:11px 14px;border-radius:${isOut?'15px 15px 4px 15px':'15px 15px 15px 4px'};${isOut?'background:#2f5bd6;color:#fff;':'background:#eef0f3;color:#16181d;'}`,
+        metaStyle:`font-size:11px;margin-top:5px;${isOut?'color:rgba(255,255,255,.75);':'color:#8b909c;'}`,
+      };
+    });
+    const cannedSuggest=[
+      {text:'Thanks Aisha! Here\u2019s our solar info night link: yarn.org/solar', disp:'Lean support'},
+      {text:'Great — a local organiser will be in touch this week.', disp:'Strong support'},
+    ];
+    const inboxFilters=['all','unresolved','awaiting','responded','priority'].map(f=>({label:f, style:`padding:6px 12px;border:none;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;${this.state.inboxFilter===f?'background:#2f5bd6;color:#fff;':'background:#eef0f3;color:#6b7280;'}`, set:()=>this.setState({inboxFilter:f})}));
+
+    const uniBtn=(on)=>`flex:1;text-align:left;border:1.5px solid ${on?'#2f5bd6':'#e6e8ec'};background:${on?'#eef2fd':'#fff'};border-radius:12px;padding:13px 15px;cursor:pointer;font-family:inherit;`;
+    const segBtn=(on)=>`padding:7px 13px;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;${on?'background:#fff;color:#16181d;box-shadow:0 1px 2px rgba(16,24,40,.12);':'background:none;color:#6b7280;'}`;
+
+    return {
+      // flags
+      isTurf:s==='turf', isWalklists:s==='walklists', isLive:s==='live', isCanvassers:s==='canvassers',
+      isResults:s==='results', isSurveys:s==='surveys', isScripts:s==='scripts', isDispositions:s==='dispositions',
+      isCanned:s==='canned', isJourneys:s==='journeys', isInbox:s==='inbox',
+      // shared icons
+      oScissors:this.ic('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/>',15),
+      oPlus:this.ic('<path d="M12 5v14M5 12h14"/>',15),
+      oLock:this.ic('<rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',13),
+      oDoor:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',15),
+      oMsg:this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',15),
+      oArrow:this.ic('<path d="M5 12h14M13 6l6 6-6 6"/>',16),
+      oSend:this.ic('<path d="m22 2-7 20-4-9-9-4Z"/>',16),
+      oExport:this.ic('<path d="M12 15V3m0 0 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',15),
+      oSync:this.ic('<path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>',15),
+      oCheck:this.ic('<path d="M20 6 9 17l-5-5"/>',14),
+      oLayers:this.ic('<path d="m12 2 9 5-9 5-9-5Z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/>',15),
+      oUserPlus:this.ic('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',15),
+      // data
+      liveKpis, liveCanvassers, liveAlerts, canvassers, dispBreak, supportDist, funnel,
+      aOpts, surveyLib, dispContact, dispTerminal, supportScale, cannedRec, cannedMine, cannedAuto,
+      journeyList, journeyNodes, journeyPalette,
+      convos, selConvo, inboxThread, cannedSuggest, inboxFilters,
+      // turf universe
+      uniExisting:uniBtn(this.state.turfUniverse==='existing'), uniAddress:uniBtn(this.state.turfUniverse==='address'), uniHybrid:uniBtn(this.state.turfUniverse==='hybrid'),
+      setUniExisting:()=>this.setState({turfUniverse:'existing'}), setUniAddress:()=>this.setState({turfUniverse:'address'}), setUniHybrid:()=>this.setState({turfUniverse:'hybrid'}),
+      wlStaticStyle:segBtn(this.state.walklistMode==='static'), wlDynamicStyle:segBtn(this.state.walklistMode==='dynamic'),
+      setWlStatic:()=>this.setState({walklistMode:'static'}), setWlDynamic:()=>this.setState({walklistMode:'dynamic'}),
+    };
+  }
+
+  // ---------- render ----------
+  renderVals(){
+    const s = this.state.screen;
+    const fieldScreens = ['assignments','walk','door','sync'];
+    const isMobile = fieldScreens.includes(s);
+    const builtDesktop = ['canvass','contact','turf','walklists','live','canvassers','results','surveys','scripts','dispositions','canned','journeys','inbox','dashboard'];
+    const isDeskStub = !isMobile && !builtDesktop.includes(s);
+
+    // toolbar groups
+    const pill = (active)=>`flex:0 0 auto;padding:5px 11px;border:none;border-radius:8px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;${active?'background:#2f5bd6;color:#fff;':'background:#23262e;color:#c2c6d0;'}`;
+    const mk = (id,label)=>({label, go:()=>this.go(id), style:pill(s===id)});
+    const navGroups = [
+      {label:'Field', items:[mk('assignments','Assignments'),mk('walk','Walk'),mk('door','Door'),mk('sync','Sync')]},
+      {label:'Organiser', items:[mk('canvass','Canvass'),mk('turf','Turf map'),mk('walklists','Walk-lists'),mk('live','Live'),mk('canvassers','Canvassers'),mk('results','Results')]},
+      {label:'Shared', items:[mk('surveys','Surveys'),mk('scripts','Scripts'),mk('dispositions','Dispositions'),mk('canned','Canned')]},
+      {label:'Auto', items:[mk('journeys','Journeys')]},
+      {label:'Spine', items:[mk('contact','Contact'),mk('inbox','Inbox')]},
+    ];
+
+    // sidebar
+    const sideActive = (s==='contact'||['canvass','turf','walklists','live','canvassers','results'].includes(s)) ? 'canvass'
+      : (s==='inbox'?'inbox':(['surveys','scripts','dispositions','canned','journeys'].includes(s)?'engagement':'dashboard'));
+    const sideStyle = (on)=>`display:flex;align-items:center;gap:11px;padding:11px 12px;border:none;border-radius:11px;font-family:inherit;font-size:14.5px;font-weight:${on?'700':'600'};cursor:pointer;text-align:left;${on?'background:#2f5bd6;color:#fff;':'background:none;color:#3a3f4a;'}`;
+    const sideNav = [
+      {label:'Dashboard', icon:this.ic('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'), go:()=>this.go('dashboard'), style:sideStyle(sideActive==='dashboard')},
+      {label:'Audience', icon:this.ic('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>'), go:()=>this.go('dashboard'), style:sideStyle(false)},
+      {label:'Inbox', icon:this.ic('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>'), go:()=>this.go('inbox'), style:sideStyle(sideActive==='inbox')},
+      {label:'Canvass', icon:this.ic('<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>'), go:()=>this.go('canvass'), style:sideStyle(sideActive==='canvass')},
+      {label:'Engagement', icon:this.ic('<path d="M4 4h16v12H7l-3 3Z"/><path d="M8 9h8M8 12h5"/>'), go:()=>this.go('surveys'), style:sideStyle(sideActive==='engagement')},
+      {label:'Settings', icon:this.ic('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.92.99V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.6 14H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 5 8.6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 10 5.6V5a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 2.92.99l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.4 12H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>'), go:()=>this.go('dashboard'), style:sideStyle(false)},
+    ];
+
+    const crumbMap = {
+      canvass:['Canvass'], contact:['Canvass','Aisha Rahman'], turf:['Canvass','Turf map'],
+      walklists:['Canvass','Walk lists'], live:['Canvass','Live'], canvassers:['Canvass','Canvassers'],
+      results:['Canvass','Results'], surveys:['Engagement','Surveys'], scripts:['Engagement','Scripts'],
+      dispositions:['Engagement','Dispositions'], canned:['Engagement','Canned responses'],
+      journeys:['Journeys'], inbox:['Inbox'], dashboard:['Dashboard'],
+    };
+    const cb = crumbMap[s] || ['Canvass'];
+    const crumbs = cb.map((c,i)=>({label:i<cb.length-1?c+'  ›':c, style:`${i===cb.length-1?'color:#16181d;font-weight:700;':'color:#6b7280;'}`}));
+
+    // ---- canvass overview data ----
+    const kpiC = '#2f5bd6';
+    const canvassKpis = [
+      {label:'Doors today', value:'1,284', delta:'+312 vs yesterday', deltaColor:'#16a34a', color:kpiC, icon:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/><rect x="10" y="13" width="4" height="7"/>')},
+      {label:'Turf complete', value:'58%', delta:'9 of 16 turfs done', deltaColor:'#6b7280', color:kpiC, icon:this.ic('<path d="M21.8 10A10 10 0 1 1 12 2"/><path d="m9 11 3 3L22 4"/>')},
+      {label:'Contact rate', value:'34%', delta:'+2.1pts this week', deltaColor:'#16a34a', color:kpiC, icon:this.ic('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>')},
+      {label:'Canvassers out', value:'12', delta:'live now', deltaColor:'#16a34a', color:'#16a34a', icon:this.ic('<circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><circle cx="18" cy="6" r="2"/>')},
+    ];
+    const statusChip = (txt,c,bg)=>`display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:${c};background:${bg};padding:3px 10px;border-radius:999px;`;
+    const initBadge = '#eef2fd';
+    const turfsRaw = [
+      {name:'Glenlyon Rd · East', doors:48, walklist:32, knocked:18, pct:'56%', status:'assigned', assignee:'You', initials:'JN', shape:'M20 86 L140 20 L300 36 L286 100 L40 104 Z', shapeM:'M24 78 L150 20 L330 30 L320 88 L40 92 Z', fill:'#2f5bd611', stroke:'#2f5bd6', mapBg:'#e9eef7', syncL:'Synced', syncC:'#16a34a'},
+      {name:'Lygon St · Apartments', doors:60, walklist:41, knocked:0, pct:'0%', status:'unassigned', assignee:'Unassigned', initials:'—', shape:'M30 30 L300 24 L290 96 L60 100 Z', shapeM:'M30 26 L330 22 L322 90 L40 92 Z', fill:'#7c3aed11', stroke:'#7c3aed', mapBg:'#efeafa', syncL:'Not downloaded', syncC:'#6b7280'},
+      {name:'Edward St · South', doors:38, walklist:29, knocked:29, pct:'100%', status:'assigned', assignee:'R. Singh', initials:'RS', shape:'M40 40 L280 30 L300 90 L36 96 Z', shapeM:'M30 30 L320 26 L330 90 L40 92 Z', fill:'#0e948811', stroke:'#0e9488', mapBg:'#e1f3f0', syncL:'Synced', syncC:'#16a34a'},
+      {name:'Albert St · Flats', doors:54, walklist:38, knocked:7, pct:'13%', status:'assigned', assignee:'M. Lee', initials:'ML', shape:'M30 28 L290 34 L300 96 L40 92 Z', shapeM:'M30 30 L320 30 L324 90 L40 90 Z', fill:'#b4530911', stroke:'#b45309', mapBg:'#faf0e2', syncL:'Synced', syncC:'#16a34a'},
+    ];
+    const turfsDesktop = turfsRaw.map(t=>({
+      name:t.name, doors:t.doors, walklist:t.walklist, knocked:t.knocked, pct:t.pct, shape:t.shape, shapeM:t.shapeM, fill:t.fill, stroke:t.stroke, mapBg:t.mapBg,
+      statusLabel: t.status==='unassigned'?'Unassigned':(t.pct==='100%'?'Complete':'In progress'),
+      statusStyle: t.status==='unassigned'?statusChip('Unassigned','#92600e','#fef3e2'):(t.pct==='100%'?statusChip('Complete','#16a34a','#e7f6ec'):statusChip('In progress','#2f5bd6','#eef2fd')),
+      assignee:t.assignee, assigneeInitials:t.initials, assigneeBg:t.assignee==='Unassigned'?'#eef0f3':'#eef2fd', assigneeColor:t.assignee==='Unassigned'?'#6b7280':'#2f5bd6',
+      goWalklists:()=>this.go('walklists'),
+    }));
+
+    // ---- mobile turf cards (assignments) ----
+    const syncMeta = {synced:{icon:this.ic('<path d="M20 6 9 17l-5-5"/>',13),color:'#16a34a',label:'Synced'}, pending:{icon:this.ic('<path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',13),color:'#92600e',label:'Download'}};
+    const turfsMobile = [
+      {id:'t1', name:'Glenlyon Rd · East', doors:48, walklist:32, fill:'#2f5bd611', stroke:'#2f5bd6', mapBg:'#e9eef7', shapeM:'M24 70 L150 18 L336 28 L322 84 L36 88 Z', sk:'synced'},
+      {id:'t2', name:'Lygon St · Apartments', doors:60, walklist:41, fill:'#7c3aed11', stroke:'#7c3aed', mapBg:'#efeafa', shapeM:'M30 24 L330 20 L322 84 L36 86 Z', sk:'pending'},
+    ].map(t=>{ const m=syncMeta[t.sk]; return {...t, syncIcon:m.icon, syncColor:m.color, syncLabel:m.label, startWalk:()=>{ this.setState({activeTurfId:t.id, screen:'walk', walkView:'list'}); }}; });
+
+    // ---- walk view ----
+    const activeTurf = turfsMobile.find(t=>t.id===this.state.activeTurfId) || turfsMobile[0];
+    const stops = this.state.stops;
+    const visited = stops.filter(x=>x.status!=='pending').length;
+    const walkPct = Math.round(visited/stops.length*100)+'%';
+    const nextP = this.nextPending();
+    const dense = this.state.density==='compact';
+    const stopsView = stops.map(x=>{
+      const sup = this.SUP(x.support);
+      const isNext = nextP && x.id===nextP.id;
+      const isPend = x.status==='pending';
+      const stCol = x.status==='visited'?{c:'#16a34a',bg:'#e7f6ec',l:'Visited'}: x.status==='skipped'?{c:'#92600e',bg:'#fef3e2',l:'Skipped'}:{c:'#6b7280',bg:'#eef0f3',l:'Pending'};
+      const priorIc = x.priorKind==='text'?this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',13):this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',13);
+      return {
+        name:x.name, address:x.address, order:x.order, hasPrior:x.hasPrior, priorSummary:x.priorSummary, priorIcon:priorIc,
+        isNext, isPendingNotNext: isPend && !isNext, statusLabel:stCol.l,
+        knock:()=>this.openDoor(x.id),
+        cardStyle:`background:#fff;border:1px solid ${isNext?'#2f5bd6':'#e6e8ec'};border-radius:16px;padding:${dense?'11px 13px':'14px 15px'};margin-bottom:10px;${isNext?'box-shadow:0 3px 12px rgba(47,91,214,.16);':'box-shadow:0 1px 2px rgba(16,24,40,.04);'}${x.status!=='pending'?'opacity:.66;':''}`,
+        orderStyle:`width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex:0 0 auto;${isNext?'background:#2f5bd6;color:#fff;':'background:#eef0f3;color:#6b7280;'}`,
+        badgeStyle:`flex:0 0 auto;font-size:11px;font-weight:700;color:${stCol.c};background:${stCol.bg};padding:3px 9px;border-radius:999px;`,
+      };
+    });
+    const mapPins = stops.map((x,i)=>{
+      const sup=this.SUP(x.support);
+      const xs=['22%','64%','40%','78%','30%','58%','48%'][i]||'50%';
+      const ys=['28%','24%','44%','46%','60%','64%','78%'][i]||'50%';
+      const col = x.status==='visited'?'#16a34a':x.status==='skipped'?'#92600e':'#2f5bd6';
+      return {x:xs,y:ys,color:col,knock:()=>this.openDoor(x.id),icon:this.ic('<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5" fill="#fff" stroke="none"/>',30)};
+    });
+    const nextStopObj = nextP?{name:nextP.name,address:nextP.address,knock:()=>this.openDoor(nextP.id)}:{name:'All done',address:'Great work',knock:()=>{}};
+
+    // ---- door ----
+    const doorStop = stops.find(x=>x.id===this.state.doorStopId) || stops[0];
+    const dsup = this.SUP(doorStop.support);
+    const priorKindMeta = (k)=> k==='text-in'?{icon:this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',15),bg:'#eef2fd',color:'#2f5bd6'} : k==='text-out'?{icon:this.ic('<path d="m22 2-7 20-4-9-9-4Z"/>',15),bg:'#eef2fd',color:'#2f5bd6'} : {icon:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',15),bg:'#f3eafe',color:'#7c3aed'};
+    const doorPrior = (doorStop.prior||[]).map(p=>{ const m=priorKindMeta(p.kind); return {text:p.text, when:p.when, icon:m.icon, bg:m.bg, color:m.color}; });
+
+    // survey current
+    const surv = this.survey();
+    const curQ = surv[this.state.surveyStep] || surv[0];
+    const optStyle = (sel)=>`width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px;border:1.5px solid ${sel?'#2f5bd6':'#e6e8ec'};border-radius:14px;background:${sel?'#eef2fd':'#fff'};font-family:inherit;cursor:pointer;`;
+    const surveyQ = {
+      tag:curQ.tag, text:curQ.text,
+      options: curQ.options.map(o=>{ const sel=this.state.surveyAnswers[curQ.id]===o.id; return {
+        label:o.label, sub:o.sub, style:optStyle(sel),
+        tick: sel?this.ic('<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>',20):this.ic('<circle cx="12" cy="12" r="9"/>',20),
+        tickColor: sel?'#2f5bd6':'#d1d5db',
+        choose:()=>this.answer(o.id,o.support),
+      };}),
+    };
+
+    // ---- contact timeline ----
+    const dot=(c)=>React.createElement('span',{style:{width:'8px',height:'8px',borderRadius:'999px',background:c,display:'inline-block'}});
+    const evMeta = {
+      knock:{bg:'#f3eafe',color:'#7c3aed',icon:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',15)},
+      textin:{bg:'#eef2fd',color:'#2f5bd6',icon:this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',15)},
+      textout:{bg:'#e7f6ec',color:'#16a34a',icon:this.ic('<path d="m22 2-7 20-4-9-9-4Z"/>',15)},
+      journey:{bg:'#fef3e2',color:'#b45309',icon:this.ic('<path d="M13 2 3 14h7l-1 8 10-12h-7Z"/>',15)},
+    };
+    const tlAll = [
+      {type:'knock', when:'Today · 14:32', title:'Door knock — Spoke', body:'Surveyed at the door. Marked very concerned about climate; backs stronger targets; happy to volunteer.', meta:[{icon:this.ic('<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',13),text:'14 Glenlyon Rd'},{icon:this.ic('<circle cx="12" cy="7" r="4"/><path d="M5.5 21a7 7 0 0 1 13 0"/>',13),text:'Jaynaya N.'}]},
+      {type:'textin', when:'3 May · 09:12', title:'Inbound text', body:'"Yes keen to hear more about the solar program when you\u2019re round"'},
+      {type:'textout', when:'2 May · 18:40', title:'Outbound text — Common Threads May blast', body:'"Hi Aisha, we\u2019re chatting to neighbours about the council solar plan \u2014 mind if we drop by this week?"'},
+      {type:'journey', when:'2 May · 18:40', title:'Journey — enrolled', body:'Added to "Solar interest \u2192 door follow-up" after replying interested.'},
+      {type:'knock', when:'12 Apr · 11:05', title:'Door knock — Not home', body:'No answer, flyer left. GPS captured.', meta:[{icon:this.ic('<circle cx="12" cy="7" r="4"/><path d="M5.5 21a7 7 0 0 1 13 0"/>',13),text:'R. Singh'}]},
+    ];
+    const tlFilter = this.state.tl;
+    const tl = tlAll.filter(e=> tlFilter==='unified' ? true : tlFilter==='door' ? e.type==='knock' : (e.type==='textin'||e.type==='textout'));
+    const timeline = tl.map(e=>{ const m = e.type==='knock'?evMeta.knock : e.type==='textin'?evMeta.textin : e.type==='textout'?evMeta.textout : evMeta.journey; return {
+      title:e.title, when:e.when, body:e.body, icon:m.icon, iconBg:m.bg, iconColor:m.color,
+      cardBg: e.type==='knock'?'#faf8ff': e.type==='journey'?'#fffaf2':'#fff',
+      cardBorder: e.type==='knock'?'#ece2fb': e.type==='journey'?'#f6e8d2':'#e6e8ec',
+      titleColor:'#16181d', hasMeta: !!(e.meta&&e.meta.length), meta: e.meta||[],
+    };});
+    const tlBtn = (on)=>`padding:5px 11px;border:none;border-radius:7px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;${on?'background:#fff;color:#16181d;box-shadow:0 1px 2px rgba(16,24,40,.12);':'background:none;color:#6b7280;'}`;
+    const csup = this.SUP('strong');
+    const contact = {
+      name:'Aisha Rahman', firstName:'Aisha', initials:'AR', address:'14 Glenlyon Rd, Brunswick East', phone:'+61 458 208 148', audiences:3,
+      supportLabel:csup.label, supportStyle:`display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:${csup.c};background:${csup.bg};padding:4px 11px;border-radius:999px;`,
+      tags:['Solar interest','Volunteer'], nextAction:'Queued follow-up text in 2 days (solar program details)',
+      surveyAnswers:[
+        {q:'Concern about climate', value:'Very concerned', color:'#16a34a', dot:dot('#16a34a')},
+        {q:'Stronger climate targets', value:'Yes', color:'#16a34a', dot:dot('#16a34a')},
+        {q:'Help out locally', value:'Yes, sign me up', color:'#16a34a', dot:dot('#16a34a')},
+      ],
+      dispHistory:[
+        {label:'Spoke — surveyed', color:'#16a34a', when:'Today'},
+        {label:'Interested (text)', color:'#2f5bd6', when:'3 May'},
+        {label:'Not home', color:'#b45309', when:'12 Apr'},
+      ],
+      audienceList:['Common Threads', 'Brunswick locals', 'Solar supporters'],
+    };
+
+    // sync queue
+    const syncQueue = [
+      {title:'Spoke — Aisha Rahman', sub:'14 Glenlyon Rd · survey ×3', bg:'#f3eafe', color:'#7c3aed', icon:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',15)},
+      {title:'Not home — Patel household', sub:'20 Glenlyon Rd', bg:'#eef0f3', color:'#6b7280', icon:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/>',15)},
+      {title:'Refused — Daniel Okafor', sub:'22 Glenlyon Rd', bg:'#fdeaea', color:'#dc2626', icon:this.ic('<path d="M18 6 6 18M6 6l12 12"/>',15)},
+    ];
+
+    return {
+      ...this.orgData(s),
+      logoMark:this.knot(20), logoMarkLg:this.knot(30),
+      navGroups, sideNav, crumbs,
+      isDesktop:!isMobile, isMobile,
+      isAssignments:s==='assignments', isWalk:s==='walk', isDoor:s==='door', isSync:s==='sync',
+      isCanvass:s==='canvass', isContact:s==='contact', isDeskStub,
+      stubTitle: (crumbMap[s]||['Screen']).slice(-1)[0], stubDesc:'This organiser surface is specced next \u2014 wiring it up in the following pass.',
+      campaignName:this.props.campaignName || 'Climate Action 2026',
+      deskKey:s,
+
+      // icons (shell)
+      iconHelp:this.ic('<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'),
+      iconLogout:this.ic('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'),
+      iconBlast:this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+      iconSwitch:this.ic('<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',15),
+      iconScissors:this.ic('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/>',15),
+      iconChevR:this.ic('<path d="m9 18 6-6-6-6"/>',15), iconChevL:this.ic('<path d="m15 18-6-6 6-6"/>',18),
+      iconPin:this.ic('<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/>',15),
+      iconPinFill:this.ic('<path d="M12 21s7-6.6 7-12a7 7 0 1 0-14 0c0 5.4 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5" fill="#fff" stroke="none"/>',26),
+      iconPhone:this.ic('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z"/>',15),
+      iconUsers:this.ic('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',15),
+      iconZap:this.ic('<path d="M13 2 3 14h7l-1 8 10-12h-7Z"/>',18),
+      iconMsg:this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',15),
+      iconDoor:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/><rect x="10" y="13" width="4" height="7"/>',18),
+
+      // canvass
+      canvassKpis, turfs: (s==='canvass')?turfsDesktop:turfsMobile,
+      goTurf:()=>this.go('turf'), goWalklists:()=>this.go('walklists'), goCanvass:()=>this.go('canvass'), goInbox:()=>this.go('inbox'), goContact:()=>this.go('contact'),
+
+      // contact
+      contact, timeline,
+      tlUnifiedStyle:tlBtn(tlFilter==='unified'), tlDoorStyle:tlBtn(tlFilter==='door'), tlTextStyle:tlBtn(tlFilter==='text'),
+      setTlUnified:()=>this.setState({tl:'unified'}), setTlDoor:()=>this.setState({tl:'door'}), setTlText:()=>this.setState({tl:'text'}),
+
+      // mobile shell
+      iconSignal:this.ic('<path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 20V4"/>',15),
+      iconWifi:this.ic('<path d="M5 13a10 10 0 0 1 14 0M8.5 16.5a5 5 0 0 1 7 0M12 20h.01"/>',15),
+      iconBattery:this.ic('<rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/><rect x="4" y="9" width="12" height="6" rx="1" fill="currentColor" stroke="none"/>',16),
+      iconOffline:this.ic('<path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 4-2.5M12 20h.01"/>',14),
+      iconSync:this.ic('<path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/>',13),
+      syncCount:this.state.syncCount,
+      canvasserFirst:this.props.canvasserName || 'Jaynaya',
+      todayDoors:this.state.tally.doors, todayConvos:this.state.tally.convos, todaySurveys:this.state.tally.surveys,
+      iconUserCircle:this.ic('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19a6 6 0 0 1 11 0"/>'),
+      iconWalk:this.ic('<circle cx="13" cy="4" r="2"/><path d="m9 20 3-6 2 2 1 4M12 14l-2-5 4 1 2 3"/>',18),
+      iconDownload:this.ic('<path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/>',18),
+
+      // walk
+      activeTurf,
+      walkProgressLabel:`${visited} of ${stops.length} stops done`,
+      walkPct, walkIsList:this.state.walkView==='list', walkIsMap:this.state.walkView==='map',
+      walkListBtnStyle:`display:flex;align-items:center;gap:5px;padding:7px 11px;border:none;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;${this.state.walkView==='list'?'background:#fff;color:#16181d;box-shadow:0 1px 2px rgba(16,24,40,.12);':'background:none;color:#6b7280;'}`,
+      walkMapBtnStyle:`display:flex;align-items:center;gap:5px;padding:7px 11px;border:none;border-radius:9px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;${this.state.walkView==='map'?'background:#fff;color:#16181d;box-shadow:0 1px 2px rgba(16,24,40,.12);':'background:none;color:#6b7280;'}`,
+      setWalkList:()=>this.setState({walkView:'list'}), setWalkMap:()=>this.setState({walkView:'map'}),
+      goAssignments:()=>this.go('assignments'), goWalk:()=>this.setState({screen:'walk'}),
+      stops:stopsView, mapPins, nextStop:nextStopObj,
+      iconList:this.ic('<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',14),
+      iconMap:this.ic('<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15M15 6v15"/>',14),
+      iconRoute:this.ic('<circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M9 19h6a3 3 0 0 0 3-3V8"/>',14),
+      iconHistory:this.ic('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',14),
+
+      // door
+      doorStop:{name:doorStop.name, address:doorStop.address, supportShort:dsup.short, supportChipStyle:`flex:0 0 auto;font-size:11px;font-weight:700;color:${dsup.c};background:${dsup.bg};padding:4px 10px;border-radius:999px;`},
+      doorHasPrior:(doorStop.prior||[]).length>0, doorPrior,
+      doorIsPad:this.state.doorStage==='pad', doorIsSurvey:this.state.doorStage==='survey',
+      pickSpoke:()=>this.setState({doorStage:'survey', surveyStep:0}),
+      pickNotHome:()=>this.logOutcome('nothome','Not home','#6b7280'),
+      pickComeBack:()=>this.logOutcome('comeback','Come back later','#2f5bd6'),
+      pickRefused:()=>this.logOutcome('refused','Refused','#dc2626'),
+      pickMoved:()=>this.logOutcome('moved','Moved','#b45309'),
+      pickWrong:()=>this.logOutcome('wrong','Wrong address','#b45309'),
+      iconChat:this.ic('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',19),
+      iconHomeOff:this.ic('<path d="M3 9 12 3l9 6"/><path d="M5 10v10h14V10"/><path d="m4 4 16 16" stroke-width="1.4"/>',22),
+      iconClock:this.ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',22),
+      iconNo:this.ic('<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/>',20),
+      iconWarn:this.ic('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',13),
+      surveyQ, surveyPct:Math.round((this.state.surveyStep)/surv.length*100)+'%',
+      surveyStepLabel:`Question ${this.state.surveyStep+1} of ${surv.length}`,
+      surveyBack:()=>this.surveyBack(), surveySkip:()=>this.surveySkip(),
+
+      // sync centre
+      goSync:()=>this.go('sync'), syncQueue,
+      iconCloudOff:this.ic('<path d="M2 2l20 20M5.8 9.8A5 5 0 0 0 6 19h10M16.5 7A5 5 0 0 1 19 16"/>',16),
+
+      // toast
+      toastShow:!!this.state.toast, toastMsg:this.state.toast||'',
+      iconCheck:this.ic('<circle cx="12" cy="12" r="9"/><path d="m9 12 2 2 4-4"/>',18),
+    };
+  }
+}
+</script>
+</body>
+</html>

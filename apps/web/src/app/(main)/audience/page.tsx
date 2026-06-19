@@ -411,7 +411,7 @@ export default function AudiencePage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:order-1">
+        <Card id="tour-audience-sync" className="lg:order-1">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Action Network List Sync</CardTitle>
             <div className="flex items-center gap-2">
@@ -526,7 +526,7 @@ export default function AudiencePage() {
         </Card>
       </div>
 
-      <Card>
+      <Card id="tour-audience-table">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Segmented Audiences</CardTitle>
           <div className="flex gap-2">

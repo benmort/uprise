@@ -1,7 +1,11 @@
 import { ActionNetworkConnector } from "./action-network.connector";
 
 describe("ActionNetworkConnector", () => {
-  const connector = new ActionNetworkConnector();
+  // Pin the sync page size to 25 (the size these fixtures were written against);
+  // the production default is 95. Other config keys fall through to their defaults.
+  const connector = new ActionNetworkConnector({
+    get: (key: string) => (key === "ACTION_NETWORK_SYNC_PER_PAGE" ? "25" : undefined),
+  } as any);
 
   afterEach(() => {
     jest.restoreAllMocks();

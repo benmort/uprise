@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { MessageChannel } from "../../src/generated/prisma";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -9,15 +10,16 @@ export class InboxRepository {
     return this.prisma.conversationState.findMany({
       where: { organizationId },
       orderBy: { updatedAt: "desc" },
-      take: 200,
+      take: 400,
     });
   }
 
-  getThread(organizationId: string, contactPhone: string) {
+  getThread(organizationId: string, contactPhone: string, channel: MessageChannel) {
     return Promise.all([
       this.prisma.inboundMessage.findMany({
         where: {
           organizationId,
+          channel,
           OR: [{ fromPhone: contactPhone }, { toPhone: contactPhone }],
         },
         orderBy: { receivedAt: "asc" },
@@ -26,6 +28,7 @@ export class InboxRepository {
       this.prisma.outboundMessage.findMany({
         where: {
           organizationId,
+          channel,
           OR: [{ toPhone: contactPhone }, { fromPhone: contactPhone }],
         },
         orderBy: { sentAt: "asc" },
@@ -37,14 +40,14 @@ export class InboxRepository {
   async listRecentMessageContacts(organizationId: string, limit = 500) {
     const [inbound, outbound] = await Promise.all([
       this.prisma.inboundMessage.groupBy({
-        by: ["fromPhone"],
+        by: ["fromPhone", "channel"],
         where: { organizationId },
         _max: { receivedAt: true },
         orderBy: { _max: { receivedAt: "desc" } },
         take: Math.min(Math.max(1, limit), 2000),
       }),
       this.prisma.outboundMessage.groupBy({
-        by: ["toPhone"],
+        by: ["toPhone", "channel"],
         where: { organizationId },
         _max: { sentAt: true },
         orderBy: { _max: { sentAt: "desc" } },
@@ -52,23 +55,20 @@ export class InboxRepository {
       }),
     ]);
 
-    const byPhone = new Map<string, Date>();
-    for (const row of inbound) {
-      const at = row._max.receivedAt;
-      if (!at) continue;
-      const current = byPhone.get(row.fromPhone);
-      if (!current || at > current) byPhone.set(row.fromPhone, at);
-    }
-    for (const row of outbound) {
-      const at = row._max.sentAt;
-      if (!at) continue;
-      const current = byPhone.get(row.toPhone);
-      if (!current || at > current) byPhone.set(row.toPhone, at);
-    }
+    const byKey = new Map<string, { contactPhone: string; channel: MessageChannel; at: Date }>();
+    const consider = (contactPhone: string, channel: MessageChannel, at: Date | null) => {
+      if (!at) return;
+      const key = `${contactPhone}|${channel}`;
+      const current = byKey.get(key);
+      if (!current || at > current.at) byKey.set(key, { contactPhone, channel, at });
+    };
+    for (const row of inbound) consider(row.fromPhone, row.channel, row._max.receivedAt);
+    for (const row of outbound) consider(row.toPhone, row.channel, row._max.sentAt);
 
-    return Array.from(byPhone.entries()).map(([contactPhone, lastMessageAt]) => ({
+    return Array.from(byKey.values()).map(({ contactPhone, channel, at }) => ({
       contactPhone,
-      lastMessageAt,
+      channel,
+      lastMessageAt: at,
     }));
   }
 

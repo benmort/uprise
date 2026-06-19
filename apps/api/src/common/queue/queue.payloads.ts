@@ -23,6 +23,11 @@ export type IntegrationSyncJobPayload = {
   run?: number;
 };
 
+export type JourneyRunRungJobPayload = {
+  enrolmentId: string;
+  rungIndex: number;
+};
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -49,6 +54,13 @@ export function isBlastRetryFailedJobPayload(value: unknown): value is BlastRetr
   if (!value || typeof value !== "object") return false;
   const payload = value as Record<string, unknown>;
   return isNonEmptyString(payload.blastId);
+}
+
+export function isJourneyRunRungJobPayload(value: unknown): value is JourneyRunRungJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  if (!isNonEmptyString(payload.enrolmentId)) return false;
+  return Number.isFinite(payload.rungIndex);
 }
 
 export function isIntegrationSyncJobPayload(value: unknown): value is IntegrationSyncJobPayload {

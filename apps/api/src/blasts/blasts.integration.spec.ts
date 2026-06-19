@@ -5,6 +5,7 @@ import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";
 import { TwilioService } from "../twilio/twilio.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
+import { ConsentService } from "../messaging/consent.service";
 
 describe("BlastsService integration-like flow", () => {
   const configMock = {
@@ -14,6 +15,11 @@ describe("BlastsService integration-like flow", () => {
   const eventsMock = {
     emit: jest.fn(),
   } as unknown as RealtimeEventsService;
+
+  const consentMock = {
+    getStatesForPhones: jest.fn().mockResolvedValue(new Map()),
+    canSend: jest.fn().mockReturnValue(true),
+  } as unknown as ConsentService;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -39,6 +45,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
       eventsMock,
+      consentMock,
     );
 
     const result = await service.markProofed("blast_proofed");
@@ -144,6 +151,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       twilioMock,
       eventsMock,
+      consentMock,
     );
 
     const created = await service.createDraft({
@@ -227,6 +235,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       twilioMock,
       eventsMock,
+      consentMock,
     );
 
     const sent = await service.sendNow("blast_1");
@@ -300,6 +309,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
       eventsMock,
+      consentMock,
     );
 
     const result = await service.handleTwilioStatusCallback({
@@ -378,6 +388,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
       eventsMock,
+      consentMock,
     );
 
     const result = await service.handleTwilioStatusCallback({
@@ -452,6 +463,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       twilioMock,
       eventsMock,
+      consentMock,
     );
 
     await service.sendNow("blast_external");
@@ -527,6 +539,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       twilioMock,
       eventsMock,
+      consentMock,
     );
 
     await service.sendNow("blast_internal");
@@ -596,6 +609,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       twilioMock,
       eventsMock,
+      consentMock,
     );
 
     await service.sendNow("blast_unknown");
@@ -662,6 +676,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
       eventsMock,
+      consentMock,
     );
 
     const result = await service.handleTwilioStatusCallback({
@@ -753,6 +768,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(dryRunConfigMock),
       twilioMock,
       eventsMock,
+      consentMock,
     );
 
     const result = await service.sendNow("blast_dry");
@@ -816,6 +832,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(dryRunConfigMock),
       twilioMock,
       eventsMock,
+      consentMock,
     );
 
     const result = await service.retryFailed("blast_retry_dry");
@@ -858,6 +875,7 @@ describe("BlastsService integration-like flow", () => {
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
       eventsMock,
+      consentMock,
       flags,
       queue as any,
     );

@@ -39,6 +39,10 @@ describe("workflow e2e-style", () => {
   const events = {
     emit: jest.fn(),
   } as any;
+  const consent = {
+    getStatesForPhones: jest.fn(),
+    canSend: jest.fn(),
+  } as any;
 
   let service: BlastsService;
 
@@ -47,10 +51,13 @@ describe("workflow e2e-style", () => {
     (config.get as jest.Mock).mockImplementation((key: string, fallback?: string) => {
       if (key === "DEFAULT_ORGANIZATION_SLUG") return "default";
       if (key === "BLAST_SEND_BATCH_SIZE") return "1";
+      if (key === "BLAST_DISPATCH_BATCH_SIZE") return "50";
       return fallback;
     });
     renderer.render.mockImplementation((template: string) => template);
     compliance.validateMessageForSend.mockImplementation(() => ({ warnings: [] }));
+    consent.getStatesForPhones.mockResolvedValue(new Map());
+    consent.canSend.mockReturnValue(true);
     service = new BlastsService(
       prisma,
       config,
@@ -58,6 +65,7 @@ describe("workflow e2e-style", () => {
       compliance,
       twilio,
       events,
+      consent,
     );
   });
 
@@ -164,9 +172,11 @@ describe("workflow e2e-style", () => {
       } as any)
       .mockRejectedValueOnce(new Error("twilio timeout"));
 
+    // The arg to dispatchDueScheduled is the blast *limit*; each send uses the
+    // configured dispatch batch size (BLAST_DISPATCH_BATCH_SIZE), resolved independently.
     const dispatched = await service.dispatchDueScheduled(5);
-    expect(sendSpy).toHaveBeenCalledWith("blast_ok", 5);
-    expect(sendSpy).toHaveBeenCalledWith("blast_fail", 5);
+    expect(sendSpy).toHaveBeenCalledWith("blast_ok", 50);
+    expect(sendSpy).toHaveBeenCalledWith("blast_fail", 50);
     expect(dispatched.processed).toBe(2);
     expect(dispatched.results).toEqual([
       expect.objectContaining({ blastId: "blast_ok", ok: true, batchSize: 50 }),

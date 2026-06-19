@@ -10,7 +10,8 @@ describe("InboxService", () => {
     inboundMessage: { create: jest.fn() },
     blastRecipient: { updateMany: jest.fn() },
     analyticsSnapshot: { create: jest.fn() },
-    conversationState: { upsert: jest.fn() },
+    conversationState: { upsert: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
+    appUser: { findMany: jest.fn() },
   } as any;
   const config = {
     get: jest.fn((key: string, fallback?: string) => {
@@ -24,6 +25,11 @@ describe("InboxService", () => {
     sendMessage: jest.fn(),
   } as any;
   const events = { emit: jest.fn() } as any;
+  const contacts = {
+    getOrCreateByPhone: jest.fn(async (_orgId: string, phone: string) => ({
+      id: `contact_${phone}`,
+    })),
+  } as any;
   const repo = {
     listConversations: jest.fn(),
     listRecentMessageContacts: jest.fn(),
@@ -33,6 +39,15 @@ describe("InboxService", () => {
     getThread: jest.fn(),
   } as any;
   const ai = { suggestReplies: jest.fn(() => []) } as any;
+  const consent = {
+    setState: jest.fn(),
+    getState: jest.fn(),
+    canSend: jest.fn().mockReturnValue(true),
+    classifyConsentKeyword: jest.fn().mockReturnValue(null),
+  } as any;
+  const sessionWindow = {
+    isOpen: jest.fn().mockResolvedValue(true),
+  } as any;
 
   let service: InboxService;
 
@@ -47,8 +62,23 @@ describe("InboxService", () => {
     prisma.blastRecipient.updateMany.mockResolvedValue({ count: 0 });
     prisma.analyticsSnapshot.create.mockResolvedValue({});
     prisma.conversationState.upsert.mockResolvedValue({});
+    prisma.conversationState.updateMany.mockResolvedValue({ count: 1 });
+    prisma.conversationState.findUnique.mockResolvedValue(null);
+    prisma.appUser.findMany.mockResolvedValue([]);
     repo.listContactNamesByPhones.mockResolvedValue([]);
-    service = new InboxService(prisma, config, twilio, events, repo, ai);
+    consent.canSend.mockReturnValue(true);
+    sessionWindow.isOpen.mockResolvedValue(true);
+    service = new InboxService(
+      prisma,
+      config,
+      twilio,
+      events,
+      contacts,
+      repo,
+      ai,
+      consent,
+      sessionWindow,
+    );
   });
 
   it("attributes inbound reply to latest blast-linked outbound and records responded snapshot", async () => {
@@ -77,6 +107,7 @@ describe("InboxService", () => {
       where: {
         organizationId: "org_1",
         toPhone: "+15550000001",
+        channel: "SMS",
         OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
       },
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
@@ -115,6 +146,7 @@ describe("InboxService", () => {
       contactPhone: "+15550000001",
       blastId: "blast_1",
       body: "Yes, I am interested",
+      channel: "SMS",
     });
   });
 
@@ -163,6 +195,7 @@ describe("InboxService", () => {
       contactPhone: "+15550000009",
       blastId: null,
       body: "Hello",
+      channel: "SMS",
     });
   });
 
@@ -287,5 +320,24 @@ describe("InboxService", () => {
         }),
       }),
     );
+  });
+
+  describe("ownership (E2)", () => {
+    it("claims a conversation for a user and resolves the owner name", async () => {
+      prisma.appUser.findMany.mockResolvedValue([{ id: "u1", displayName: "Ada", email: "a@b.c" }]);
+      const res = await service.claimConversation("+15550000001", "u1", "SMS");
+      expect(prisma.conversationState.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ update: expect.objectContaining({ ownerId: "u1" }) }),
+      );
+      expect(res.owner).toEqual({ id: "u1", name: "Ada" });
+    });
+
+    it("releases a conversation (clears the owner)", async () => {
+      const res = await service.releaseConversation("+15550000001", "SMS");
+      expect(prisma.conversationState.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { ownerId: null, claimedAt: null } }),
+      );
+      expect(res.owner).toBeNull();
+    });
   });
 });

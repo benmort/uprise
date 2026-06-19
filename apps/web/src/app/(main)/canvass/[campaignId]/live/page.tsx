@@ -1,0 +1,157 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { AlertTriangle, ArrowLeft, Bell, DoorOpen, Radio, Users } from "lucide-react";
+import { getCampaignLive, type CampaignLive } from "@/lib/api/campaigns";
+import { broadcastPush } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { KpiTile } from "@/components/canvass/kpi-tile";
+import { SectionCard } from "@/components/canvass/section-card";
+import { DataTable } from "@/components/canvass/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
+
+function ago(iso: string | null): string {
+  if (!iso) return "—";
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  return mins < 1 ? "just now" : mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`;
+}
+
+export default function LiveWarRoomPage() {
+  const { campaignId } = useParams<{ campaignId: string }>();
+  const { showToast } = useToast();
+  const [live, setLive] = useState<CampaignLive | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function notifyField() {
+    const body = window.prompt("Message to send to canvassers out in the field:");
+    if (!body?.trim()) return;
+    const res = await broadcastPush({ title: "Message from your organiser", body: body.trim(), url: "/field" });
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't send", description: res.error });
+      return;
+    }
+    showToast(
+      res.data.enabled
+        ? { tone: "success", title: `Sent to ${res.data.sent} device${res.data.sent === 1 ? "" : "s"}` }
+        : { tone: "warning", title: "Push not configured", description: "Set VAPID keys + FEATURE_PUSH_ENABLED." },
+    );
+  }
+
+  // Poll the live snapshot (the codebase refreshes lists by polling).
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      const res = await getCampaignLive(campaignId);
+      if (!alive) return;
+      if (!res.ok) setError(res.error);
+      else {
+        setLive(res.data);
+        setError("");
+      }
+      setLoading(false);
+    };
+    void tick();
+    const timer = window.setInterval(tick, 10_000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [campaignId]);
+
+  if (loading) return <div className="page-stack"><Skeleton className="h-64 w-full" /></div>;
+  if (error && !live) {
+    return <div className="page-stack"><EmptyState title="Can't load live view" description={error} /></div>;
+  }
+  if (!live) return null;
+
+  const out = live.canvassers.length;
+  const idle = live.canvassers.filter((c) => c.idle);
+
+  return (
+    <div className="page-stack">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/canvass">
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Canvass
+          </Link>
+        </Button>
+        <h1 className="text-2xl font-extrabold">Live</h1>
+        <span className="ml-1 inline-flex items-center gap-1.5 rounded-full bg-success-container px-2.5 py-1 text-xs font-semibold text-success">
+          <Radio className="h-3.5 w-3.5 animate-pulse" />
+          Live · {out} out
+        </span>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={notifyField}>
+          <Bell className="mr-1.5 h-3.5 w-3.5" />
+          Notify field
+        </Button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <KpiTile label="Canvassers out" value={out} icon={<Users className="h-4 w-4" />} />
+        <KpiTile label="Doors today" value={live.doorsToday} icon={<DoorOpen className="h-4 w-4" />} />
+        <KpiTile label="Idle" value={idle.length} icon={<AlertTriangle className="h-4 w-4" />} />
+      </div>
+
+      {idle.length > 0 ? (
+        <SectionCard title="Alerts">
+          <ul className="space-y-1.5">
+            {idle.map((c) => (
+              <li key={c.canvasserId} className="flex items-center gap-2 text-sm">
+                <AlertTriangle className="h-4 w-4 text-warning-foreground" />
+                <span className="text-foreground">
+                  {c.name} idle on {c.turf} — no knock in 30+ min
+                </span>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <SectionCard title="Canvassers">
+          <DataTable
+            rows={live.canvassers}
+            rowKey={(c) => c.canvasserId}
+            empty="No canvassers out right now."
+            columns={[
+              { key: "name", header: "Name", cell: (c) => c.name },
+              { key: "turf", header: "Turf", cell: (c) => c.turf },
+              { key: "doors", header: "Doors", numeric: true, cell: (c) => c.doorsToday },
+              { key: "last", header: "Last action", cell: (c) => ago(c.lastActionAt) },
+              {
+                key: "status",
+                header: "Status",
+                cell: (c) => <StatusBadge status={c.idle ? "PENDING_SYNC" : "ACTIVE"} />,
+              },
+            ]}
+          />
+        </SectionCard>
+
+        <SectionCard title="Recent knocks">
+          {live.recentKnocks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No knocks yet.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {live.recentKnocks.map((k) => (
+                <li key={k.id} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="truncate text-foreground">
+                    {(k.dispositionCode ?? "knock").replaceAll("_", " ")}
+                    {k.canvasser ? ` · ${k.canvasser}` : ""}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(k.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+    </div>
+  );
+}

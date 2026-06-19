@@ -68,6 +68,15 @@ export type ValidatedEnv = {
   TWILIO_SEND_RATE_PER_SECOND: number;
   TWILIO_SEND_MAX_CONCURRENT: number;
   TWILIO_RATE_LIMIT_COOLDOWN_MS: number;
+  TWILIO_WHATSAPP_FROM: string;
+  TWILIO_WHATSAPP_MESSAGING_SERVICE_SID: string;
+  FEATURE_WHATSAPP_ENABLED: boolean;
+  TWILIO_CONTENT_API_ENABLED: boolean;
+  WHATSAPP_SESSION_WINDOW_HOURS: number;
+  FEATURE_PUSH_ENABLED: boolean;
+  VAPID_PUBLIC_KEY: string;
+  VAPID_PRIVATE_KEY: string;
+  VAPID_SUBJECT: string;
   ACTION_NETWORK_API_BASE_URL: string;
   ACTION_NETWORK_API_KEY: string;
   ACTION_NETWORK_SYNC_PER_PAGE: number;
@@ -201,6 +210,23 @@ export function validateEnv(config: Env): ValidatedEnv {
       114000,
       errors,
     ),
+    TWILIO_WHATSAPP_FROM: config.TWILIO_WHATSAPP_FROM?.trim() || "",
+    TWILIO_WHATSAPP_MESSAGING_SERVICE_SID:
+      config.TWILIO_WHATSAPP_MESSAGING_SERVICE_SID?.trim() || "",
+    FEATURE_WHATSAPP_ENABLED: boolish(config, "FEATURE_WHATSAPP_ENABLED", false),
+    TWILIO_CONTENT_API_ENABLED: boolish(config, "TWILIO_CONTENT_API_ENABLED", false),
+    WHATSAPP_SESSION_WINDOW_HOURS: numberInRange(
+      config,
+      "WHATSAPP_SESSION_WINDOW_HOURS",
+      1,
+      24,
+      24,
+      errors,
+    ),
+    FEATURE_PUSH_ENABLED: boolish(config, "FEATURE_PUSH_ENABLED", false),
+    VAPID_PUBLIC_KEY: config.VAPID_PUBLIC_KEY?.trim() || "",
+    VAPID_PRIVATE_KEY: config.VAPID_PRIVATE_KEY?.trim() || "",
+    VAPID_SUBJECT: config.VAPID_SUBJECT?.trim() || "mailto:hello@yarns.app",
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
     ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),
@@ -282,6 +308,16 @@ export function validateEnv(config: Env): ValidatedEnv {
   ) {
     errors.push(
       "BULLMQ_REDIS_URL (or REDIS_URL) is required when FEATURE_BULLMQ_UPLOAD_ENABLED or FEATURE_BULLMQ_BLAST_ENABLED is true",
+    );
+  }
+
+  if (
+    output.FEATURE_WHATSAPP_ENABLED &&
+    !output.TWILIO_WHATSAPP_FROM &&
+    !output.TWILIO_WHATSAPP_MESSAGING_SERVICE_SID
+  ) {
+    errors.push(
+      "TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_MESSAGING_SERVICE_SID is required when FEATURE_WHATSAPP_ENABLED is true",
     );
   }
 

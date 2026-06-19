@@ -3,10 +3,15 @@ import {
   ExecutionContext,
   Injectable,
   Logger,
+  Optional,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
+import { AppUserRole } from "../../src/generated/prisma";
+import { PrismaService } from "../prisma/prisma.service";
+import { AuthUser } from "./auth-user";
+import { verifyPassword } from "./password.util";
 import { resolveStreamTokenSecret } from "./stream-token-secret";
 import { verifyStreamTokenDetailed } from "./stream-token";
 
@@ -16,7 +21,10 @@ export class BasicAuthGuard implements CanActivate {
   private readonly loggedStreamFailures = new Set<string>();
   private warnedFallbackSecret = false;
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    @Optional() private readonly prisma?: PrismaService,
+  ) {}
 
   private requestPathCandidates(request: Request): string[] {
     return [request.originalUrl, request.url]
@@ -72,6 +80,8 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/blasts/dispatch-due",
       "/audiences/dispatch-imports",
       "/api/v1/audiences/dispatch-imports",
+      "/journeys/sweep-due",
+      "/api/v1/journeys/sweep-due",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
@@ -88,8 +98,8 @@ export class BasicAuthGuard implements CanActivate {
     return candidates.some((candidate) => allowedPaths.has(candidate));
   }
 
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request>();
+  canActivate(context: ExecutionContext): boolean | Promise<boolean> {
+    const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     if (request.method?.toUpperCase() === "OPTIONS") return true;
     if (this.isPublicWebhookPath(request)) return true;
     if (this.isAnalyticsStreamPath(request) && this.hasValidStreamToken(request)) return true;
@@ -109,9 +119,6 @@ export class BasicAuthGuard implements CanActivate {
 
     const expectedUser = this.config.get<string>("BASIC_AUTH_USERNAME");
     const expectedPassword = this.config.get<string>("BASIC_AUTH_PASSWORD");
-    if (!expectedUser || !expectedPassword) {
-      throw new UnauthorizedException("Basic auth is not configured");
-    }
 
     const base64Credentials = authHeader.slice(6);
     let credentials: string;
@@ -122,9 +129,40 @@ export class BasicAuthGuard implements CanActivate {
     }
 
     const [username, password] = credentials.split(":", 2);
-    if (username !== expectedUser || password !== expectedPassword) {
+
+    // Env super-admin: the original single-credential organiser login, unchanged.
+    if (expectedUser && expectedPassword && username === expectedUser && password === expectedPassword) {
+      request.user = { id: "env-admin", role: AppUserRole.ORGANISER, organizationId: null, email: username };
+      return true;
+    }
+
+    // Per-user login (canvassers/organisers) — only when a DB is wired. Without
+    // prisma we preserve the original synchronous behaviour exactly.
+    if (this.prisma) {
+      return this.authenticateAppUser(request, username, password);
+    }
+
+    if (!expectedUser || !expectedPassword) {
+      throw new UnauthorizedException("Basic auth is not configured");
+    }
+    throw new UnauthorizedException("Invalid username or password");
+  }
+
+  private async authenticateAppUser(
+    request: Request & { user?: AuthUser },
+    username: string,
+    password: string,
+  ): Promise<boolean> {
+    const user = await this.prisma!.appUser.findUnique({ where: { email: username } });
+    if (!user || !(await verifyPassword(password, user.passwordHash))) {
       throw new UnauthorizedException("Invalid username or password");
     }
+    request.user = {
+      id: user.id,
+      role: user.role,
+      organizationId: user.organizationId,
+      email: user.email,
+    };
     return true;
   }
 }

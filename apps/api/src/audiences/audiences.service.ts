@@ -20,6 +20,7 @@ import {
 } from "../common/queue/queue.constants";
 import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
 import { AudienceImportBatchJobPayload } from "../common/queue/queue.payloads";
+import { ContactsService } from "../contacts/contacts.service";
 
 type CsvRow = Record<string, string | undefined>;
 type ImportErrorRow = { row: number; message: string };
@@ -61,6 +62,7 @@ export class AudiencesService {
     private readonly config: ConfigService,
     flags?: FeatureFlagsService,
     @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+    private readonly contacts?: ContactsService,
   ) {
     this.flags = flags ?? {
       isBullmqUploadEnabled: () => false,
@@ -424,6 +426,9 @@ export class AudiencesService {
         const phone = normalizePhoneE164(phoneRaw);
         const fullName = row.name || row.full_name || row.first_name || null;
         const metadata = withDefaultContactable(sanitizeMetadata(row));
+        const contact = this.contacts
+          ? await this.contacts.getOrCreateByPhone(org.id, phone, { fullName })
+          : null;
         await this.prisma.audienceContact.upsert({
           where: {
             audienceId_phoneE164: {
@@ -432,6 +437,7 @@ export class AudiencesService {
             },
           },
           update: {
+            contactId: contact?.id,
             fullName,
             metadata,
             source: AudienceSource.CSV,
@@ -439,6 +445,7 @@ export class AudiencesService {
           create: {
             organizationId: org.id,
             audienceId: job.audienceId,
+            contactId: contact?.id,
             phoneE164: phone,
             fullName,
             metadata,

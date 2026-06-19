@@ -3,9 +3,10 @@ import { AudiencesController } from "./audiences.controller";
 import { AudiencesService } from "./audiences.service";
 import { QueueModule } from "../common/queue/queue.module";
 import { FlagsModule } from "../common/flags/flags.module";
+import { ContactsModule } from "../contacts/contacts.module";
 
 @Module({
-  imports: [QueueModule, FlagsModule],
+  imports: [QueueModule, FlagsModule, ContactsModule],
   controllers: [AudiencesController],
   providers: [AudiencesService],
   exports: [AudiencesService],

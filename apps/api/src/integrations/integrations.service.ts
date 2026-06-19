@@ -739,4 +739,22 @@ export class IntegrationsService {
       take: Math.min(Math.max(1, limit), 100),
     });
   }
+
+  /** Configured connections for the settings/integrations surface. Never returns the credential. */
+  async listConnections() {
+    const org = await this.ensureOrganization();
+    return this.prisma.integrationConnection.findMany({
+      where: { organizationId: org.id },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true,
+        type: true,
+        name: true,
+        status: true,
+        settings: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
 }

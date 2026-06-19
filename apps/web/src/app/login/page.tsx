@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { login } from "@/lib/api";
 import { setCredentials, getCredentials } from "@/lib/auth";
+import { setCanvasserId } from "@/lib/canvass/canvasser";
 
 function LoginForm() {
   const router = useRouter();
@@ -50,7 +51,14 @@ function LoginForm() {
     setLoading(false);
     if (result.ok) {
       setCredentials({ username, password });
-      router.replace(from);
+      // Canvassers get their AppUser id stored for the offline field app, and
+      // land on the field view; organisers go to the requested page.
+      if (result.user?.role === "CANVASSER") {
+        setCanvasserId(result.user.id);
+        router.replace("/field");
+      } else {
+        router.replace(from);
+      }
     } else {
       setError(result.error);
     }

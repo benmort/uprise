@@ -25,6 +25,25 @@ export type MessagesPage = {
   previousPageToken: string | null;
 };
 
+export type SendChannel = "SMS" | "WHATSAPP";
+
+export interface SendOptions {
+  /** Defaults to SMS — the existing behaviour. */
+  channel?: SendChannel;
+  /** WhatsApp: an approved Content template SID (HX...). Required outside the 24h window. */
+  contentSid?: string;
+  /** WhatsApp: ordered variable values for the template, keyed "1","2",... */
+  contentVariables?: Record<string, string>;
+  /** Optional media URLs (WhatsApp media / MMS). */
+  mediaUrl?: string[];
+}
+
+/** Normalise an address to a WhatsApp channel address (`whatsapp:+E164`). */
+export function toWhatsappAddress(address: string): string {
+  const trimmed = String(address || "").trim();
+  return trimmed.startsWith("whatsapp:") ? trimmed : `whatsapp:${trimmed}`;
+}
+
 function parsePageToken(url: string | null | undefined): string | null {
   if (!url) return null;
   const match = String(url).match(/[?&]PageToken=([^&]+)/);
@@ -257,24 +276,108 @@ export class TwilioService {
     return map;
   }
 
-  async sendMessage(to: string, body: string): Promise<TwilioMessage> {
-    const client = this.getClient();
+  /**
+   * Build the Twilio create params for the requested channel. SMS uses the
+   * configured phone number; WhatsApp prefixes addresses with `whatsapp:` and
+   * uses the WhatsApp sender (or a messaging service), optionally via a Content
+   * template (required for business-initiated sends outside the 24h window).
+   */
+  private buildCreateParams(to: string, body: string, opts: SendOptions): Record<string, unknown> {
+    const statusCallback = this.getStatusCallbackUrl();
+    const channel = opts.channel ?? "SMS";
+    const base: Record<string, unknown> = {
+      ...(statusCallback ? { statusCallback } : {}),
+      ...(opts.mediaUrl && opts.mediaUrl.length ? { mediaUrl: opts.mediaUrl } : {}),
+    };
+
+    if (channel === "WHATSAPP") {
+      const messagingServiceSid = this.config
+        .get<string>("TWILIO_WHATSAPP_MESSAGING_SERVICE_SID", "")
+        .trim();
+      const from = this.config.get<string>("TWILIO_WHATSAPP_FROM", "").trim();
+      if (!messagingServiceSid && !from) {
+        throw new ServiceUnavailableException(
+          "WhatsApp sender is not configured. Set TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_MESSAGING_SERVICE_SID.",
+        );
+      }
+      return {
+        ...base,
+        to: toWhatsappAddress(to),
+        ...(messagingServiceSid
+          ? { messagingServiceSid }
+          : { from: toWhatsappAddress(from) }),
+        ...(opts.contentSid
+          ? {
+              contentSid: opts.contentSid,
+              ...(opts.contentVariables
+                ? { contentVariables: JSON.stringify(opts.contentVariables) }
+                : {}),
+            }
+          : { body: body.trim() }),
+      };
+    }
+
     const from = this.config.get<string>("TWILIO_PHONE_NUMBER");
     if (!from?.trim()) {
       throw new ServiceUnavailableException("TWILIO_PHONE_NUMBER is not set.");
     }
-    const statusCallback = this.getStatusCallbackUrl();
+    return { ...base, from: from.trim(), to: to.trim(), body: body.trim() };
+  }
+
+  /**
+   * Fetch WhatsApp Content templates with their approval status from Twilio's
+   * Content API. Defensive against SDK shape differences across versions.
+   */
+  async listWhatsappContentTemplates(): Promise<
+    Array<{
+      contentSid: string;
+      friendlyName: string;
+      language: string;
+      category: string;
+      status: string;
+      variables: Record<string, string> | null;
+      bodyPreview: string | null;
+    }>
+  > {
+    const client = this.getClient() as any;
+    const content = client?.content?.v1;
+    if (!content?.contentAndApprovals?.list) return [];
+    const rows = await withRetry(() => content.contentAndApprovals.list({ limit: 200 }), {
+      retries: 2,
+    });
+    return (rows as any[]).map((row) => {
+      const approval = row.approvalRequests ?? row.approval_requests ?? {};
+      const types = row.types ?? {};
+      const textType =
+        types["twilio/text"] ?? types["whatsapp/card"] ?? Object.values(types)[0] ?? null;
+      const bodyPreview =
+        (textType && typeof textType === "object" && "body" in textType
+          ? String((textType as { body?: unknown }).body ?? "")
+          : null) || null;
+      return {
+        contentSid: String(row.sid ?? ""),
+        friendlyName: String(row.friendlyName ?? row.friendly_name ?? row.sid ?? ""),
+        language: String(row.language ?? "en"),
+        category: String(approval.category ?? "UTILITY").toUpperCase(),
+        status: String(approval.status ?? "pending").toLowerCase(),
+        variables:
+          row.variables && typeof row.variables === "object"
+            ? (row.variables as Record<string, string>)
+            : null,
+        bodyPreview,
+      };
+    });
+  }
+
+  async sendMessage(to: string, body: string, opts: SendOptions = {}): Promise<TwilioMessage> {
+    const client = this.getClient();
+    const params = this.buildCreateParams(to, body, opts);
     await this.acquireSendPermit();
     try {
       const created = await withRetry(
         async () => {
           try {
-            return await client.messages.create({
-              from: from.trim(),
-              to: to.trim(),
-              body: body.trim(),
-              ...(statusCallback ? { statusCallback } : {}),
-            });
+            return await client.messages.create(params as any);
           } catch (error) {
             if (isTwilioRateLimitError(error)) {
               this.triggerRateLimitCooldown(error);

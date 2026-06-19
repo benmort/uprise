@@ -11,6 +11,7 @@ import { Request } from "express";
 import twilio from "twilio";
 import { InboxService } from "../inbox/inbox.service";
 import { BlastsService } from "../blasts/blasts.service";
+import { parseChannelAddress } from "../messaging/message-channel.util";
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
@@ -47,21 +48,35 @@ export class WebhooksController {
   @Post("inbound-text-message-hook")
   @Header("Content-Type", "application/xml")
   async inboundTextMessage(
-    @Body() body: { From?: string; To?: string; Body?: string; MessageSid?: string },
+    @Body()
+    body: {
+      From?: string;
+      To?: string;
+      Body?: string;
+      MessageSid?: string;
+      NumMedia?: string;
+      MediaUrl0?: string;
+      MediaContentType0?: string;
+    },
     @Req() req: Request,
   ): Promise<string> {
     this.validateTwilioSignature(req, body as Record<string, unknown>);
 
-    const from = String(body?.From || "");
-    const to = String(body?.To || "");
+    // WhatsApp and SMS share this hook; the channel is encoded in the address prefix.
+    const fromParsed = parseChannelAddress(String(body?.From || ""));
+    const toParsed = parseChannelAddress(String(body?.To || ""));
     const text = String(body?.Body || "");
     const messageSid = String(body?.MessageSid || "");
+    const hasMedia = Number(body?.NumMedia || "0") > 0;
 
     await this.inbox.recordInbound({
-      from,
-      to,
+      from: fromParsed.phoneE164,
+      to: toParsed.phoneE164,
       body: text,
       messageSid,
+      channel: fromParsed.channel,
+      mediaUrl: hasMedia ? body?.MediaUrl0 || null : null,
+      mediaContentType: hasMedia ? body?.MediaContentType0 || null : null,
     });
     return TWIML_EMPTY;
   }

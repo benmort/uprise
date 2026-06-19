@@ -42,9 +42,9 @@ const config: Config = {
           container: "hsl(var(--success-container))",
         },
         warning: {
-          DEFAULT: "hsl(var(--tertiary))",
-          foreground: "hsl(var(--on-tertiary))",
-          container: "hsl(var(--tertiary-container))",
+          DEFAULT: "hsl(var(--warning-foreground))",
+          foreground: "hsl(var(--warning-foreground))",
+          container: "hsl(var(--warning-container))",
         },
       },
       borderRadius: {
