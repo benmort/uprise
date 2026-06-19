@@ -40,3 +40,8 @@ pnpm-debug.log*
 
 # one-off prod migration secret (never committed)
 apps/api/.env.migrate
+
+# Playwright e2e artefacts
+apps/web/e2e/.auth/
+apps/web/test-results/
+apps/web/playwright-report/
