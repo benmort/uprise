@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "tsc --noEmit --pretty false",
     "typecheck": "tsc --noEmit --pretty false",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",
@@ -28,13 +30,14 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.6",
+    "@playwright/test": "1.61.0",
     "@types/mapbox-gl": "^3.4.1",
-    "babel-loader": "^8.4.1",
     "@types/node": "^20.17.9",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "babel-loader": "^8.4.1",
     "playwright": "^1.61.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",

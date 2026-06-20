@@ -20,8 +20,10 @@ export class GeoService {
   /** Dataset provenance + row counts for /settings/data. */
   async status() {
     return this.prisma.$queryRawUnsafe(
+      // row_count is bigint → cast to int so it serialises as a JS number, not a
+      // BigInt (which JSON.stringify throws on → 500). National counts (~17M) fit int.
       `SELECT key, label, source_url AS "sourceUrl", release_date AS "releaseDate", licence,
-              row_count AS "rowCount", status, last_ingested AS "lastIngested"
+              row_count::int AS "rowCount", status, last_ingested AS "lastIngested"
        FROM geo.dataset_meta ORDER BY key`,
     );
   }
