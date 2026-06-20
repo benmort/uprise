@@ -45,3 +45,6 @@ apps/api/.env.migrate
 apps/web/e2e/.auth/
 apps/web/test-results/
 apps/web/playwright-report/
+
+# Claude Code local worktree state
+.claude/worktrees/
