@@ -26,7 +26,7 @@ import {
   type MessageChannel,
 } from "@/lib/api";
 import { createBlastAndOpen } from "@/lib/blasts";
-import { clearCredentials, getCredentials } from "@/lib/auth";
+import { clearCredentials, getCredentials, getRole } from "@/lib/auth";
 import { listCampaigns } from "@/lib/api/campaigns";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
@@ -110,6 +110,12 @@ export default function MainLayout({
   useEffect(() => {
     if (!getCredentials()) {
       router.replace(`/login?from=${encodeURIComponent(pathname || "/dashboard")}`);
+      return;
+    }
+    // Canvassers don't belong in the organiser shell — bounce them to the field app
+    // (defence-in-depth; organiser mutations are also @Roles-gated server-side).
+    if (getRole() === "CANVASSER") {
+      router.replace("/field");
       return;
     }
     setReady(true);

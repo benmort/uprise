@@ -91,6 +91,22 @@ export default function ScriptsPage() {
 
   const handleSave = useCallback(async () => {
     if (!draft) return;
+    // Every step needs body text; branch steps (after the opener) need an outcome key.
+    if (!draft.steps.length) {
+      showToast({ tone: "error", title: "Can't save script", description: "Add at least one step." });
+      return;
+    }
+    for (let i = 0; i < draft.steps.length; i += 1) {
+      const s = draft.steps[i];
+      if (!String(s.bodyText ?? "").trim()) {
+        showToast({ tone: "error", title: "Can't save script", description: `Step ${i + 1}: enter the body text.` });
+        return;
+      }
+      if (i > 0 && !String(s.outcomeKey ?? "").trim()) {
+        showToast({ tone: "error", title: "Can't save script", description: `Step ${i + 1}: enter an outcome key (e.g. interested).` });
+        return;
+      }
+    }
     setBusy(true);
     const res = await updateScript(draft.id, { name: draft.name, steps: draft.steps });
     setBusy(false);

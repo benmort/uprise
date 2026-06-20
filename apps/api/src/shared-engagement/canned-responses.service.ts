@@ -42,14 +42,19 @@ export class CannedResponsesService {
   }
 
   async create(organizationId: string, input: CreateCannedResponseInput): Promise<CannedResponse> {
+    const visibility = input.visibility ?? CannedVisibility.ORG;
+    const ownerId = visibility === CannedVisibility.PERSONAL ? input.ownerId ?? null : null;
+    if (visibility === CannedVisibility.PERSONAL && !ownerId) {
+      throw new ApiHttpException("OWNER_REQUIRED", "A personal canned response needs an owner");
+    }
     return this.prisma.cannedResponse.create({
       data: {
         organizationId,
         title: input.title,
         body: input.body,
         channel: input.channel ?? EngagementChannel.SMS,
-        visibility: input.visibility ?? CannedVisibility.ORG,
-        ownerId: input.visibility === CannedVisibility.PERSONAL ? input.ownerId ?? null : null,
+        visibility,
+        ownerId,
         dispositionCode: input.dispositionCode ?? null,
         surveyOptionId: input.surveyOptionId ?? null,
       },
@@ -68,6 +73,13 @@ export class CannedResponsesService {
     const existing = await this.getById(organizationId, id);
     if (!existing) throw new ApiHttpException("CANNED_NOT_FOUND", "Canned response not found");
     const visibility = input.visibility ?? existing.visibility;
+    // Keep ownerId consistent with visibility: only PERSONAL carries an owner, and a
+    // PERSONAL response must have one (don't silently orphan it).
+    const ownerId =
+      visibility === CannedVisibility.PERSONAL ? input.ownerId ?? existing.ownerId ?? null : null;
+    if (visibility === CannedVisibility.PERSONAL && !ownerId) {
+      throw new ApiHttpException("OWNER_REQUIRED", "A personal canned response needs an owner");
+    }
     return this.prisma.cannedResponse.update({
       where: { id },
       data: {
@@ -76,8 +88,7 @@ export class CannedResponsesService {
         ...(input.channel !== undefined ? { channel: input.channel } : {}),
         ...(input.visibility !== undefined ? { visibility: input.visibility } : {}),
         ...(input.dispositionCode !== undefined ? { dispositionCode: input.dispositionCode } : {}),
-        // Keep ownerId consistent with visibility: only PERSONAL carries an owner.
-        ownerId: visibility === CannedVisibility.PERSONAL ? input.ownerId ?? existing.ownerId ?? null : null,
+        ownerId,
       },
     });
   }

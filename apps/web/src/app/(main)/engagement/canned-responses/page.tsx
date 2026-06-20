@@ -51,13 +51,16 @@ export default function CannedResponsesPage() {
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CannedResponseItem | null>(null);
+  // Backend filters channel IN (selected, BOTH), so SMS-only hid every DOOR reply.
+  // Filtering by SMS or DOOR each also surfaces BOTH-channel responses.
+  const [channelFilter, setChannelFilter] = useState<"SMS" | "DOOR">("SMS");
 
   const load = useCallback(async () => {
-    const [res, disp] = await Promise.all([listCannedResponses("SMS"), listDispositions()]);
+    const [res, disp] = await Promise.all([listCannedResponses(channelFilter), listDispositions()]);
     if (res.ok) setItems(res.data as unknown as CannedResponseItem[]);
     if (disp.ok) setDispositions(disp.data.filter((d) => d.layer === "CONTACT_RESULT"));
     setLoading(false);
-  }, []);
+  }, [channelFilter]);
 
   useEffect(() => {
     void load();
@@ -128,7 +131,16 @@ export default function CannedResponsesPage() {
           </Link>
         </Button>
         <h1 className="text-2xl font-extrabold">Canned responses</h1>
-        <Button className="ml-auto" size="sm" onClick={openCreate}>
+        <select
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value as "SMS" | "DOOR")}
+          className="ml-auto h-9 rounded-md border border-input bg-background px-2 text-sm"
+          aria-label="Filter by channel"
+        >
+          <option value="SMS">SMS &amp; both</option>
+          <option value="DOOR">Door &amp; both</option>
+        </select>
+        <Button size="sm" onClick={openCreate}>
           <Plus className="mr-1.5 h-4 w-4" />
           New canned response
         </Button>

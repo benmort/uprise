@@ -5,6 +5,9 @@ export type Credentials = {
 
 const KEY = "yarn_auth_credentials";
 const LEGACY_LOCAL_STORAGE_KEY = "yarn_auth_credentials";
+const ROLE_KEY = "yarn_auth_role";
+
+export type AppRole = "ORGANISER" | "CANVASSER";
 
 function getSessionStorage(): Storage | null {
   if (typeof window === "undefined") return null;
@@ -48,10 +51,20 @@ export function getCredentials(): Credentials | null {
   }
 }
 
+export function setRole(role: AppRole): void {
+  getSessionStorage()?.setItem(ROLE_KEY, role);
+}
+
+export function getRole(): AppRole | null {
+  const value = getSessionStorage()?.getItem(ROLE_KEY);
+  return value === "ORGANISER" || value === "CANVASSER" ? value : null;
+}
+
 export function clearCredentials(): void {
   const storage = getSessionStorage();
   if (!storage) return;
   storage.removeItem(KEY);
+  storage.removeItem(ROLE_KEY);
   window.localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
   window.localStorage.removeItem("yarns.canvasserId");
 }

@@ -42,6 +42,26 @@ function blankQuestion(): SurveyQuestion {
   };
 }
 
+/** Validate a survey before save — returns a human message if invalid, else null. */
+function validateSurvey(questions: SurveyQuestion[]): string | null {
+  if (!questions.length) return "Add at least one question.";
+  for (let i = 0; i < questions.length; i += 1) {
+    const q = questions[i];
+    if (!String(q.prompt ?? "").trim()) return `Question ${i + 1}: enter a prompt.`;
+    const needsOptions = q.type === "single_choice" || q.type === "multi_choice";
+    if (needsOptions) {
+      if (!q.options?.length) return `Question ${i + 1}: add at least one option.`;
+      for (let j = 0; j < q.options.length; j += 1) {
+        const o = q.options[j];
+        if (!String(o.label ?? "").trim() && !String(o.cannedReplyText ?? "").trim()) {
+          return `Question ${i + 1}, option ${j + 1}: enter a door label or an SMS reply.`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export default function SurveysPage() {
   const { showToast } = useToast();
   const [list, setList] = useState<SurveyListItem[]>([]);
@@ -110,6 +130,11 @@ export default function SurveysPage() {
 
   const handleSave = useCallback(async () => {
     if (!draft) return;
+    const problem = validateSurvey(draft.questions);
+    if (problem) {
+      showToast({ tone: "error", title: "Can't save survey", description: problem });
+      return;
+    }
     setBusy(true);
     const res = await updateSurvey(draft.id, { name: draft.name, questions: draft.questions });
     setBusy(false);

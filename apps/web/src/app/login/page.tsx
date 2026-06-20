@@ -7,7 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { login } from "@/lib/api";
-import { setCredentials, getCredentials } from "@/lib/auth";
+import { setCredentials, getCredentials, setRole } from "@/lib/auth";
 import { setCanvasserId } from "@/lib/canvass/canvasser";
 
 function LoginForm() {
@@ -51,6 +51,8 @@ function LoginForm() {
     setLoading(false);
     if (result.ok) {
       setCredentials({ username, password });
+      // Persist the role so the (main)/(field) layouts can enforce routing at runtime.
+      setRole(result.user?.role === "CANVASSER" ? "CANVASSER" : "ORGANISER");
       // Canvassers get their AppUser id stored for the offline field app, and
       // land on the field view; organisers go to the requested page.
       if (result.user?.role === "CANVASSER") {
