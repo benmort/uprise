@@ -20,6 +20,21 @@ enum AudienceSource {
   INTERNAL
 }
 
+// Which messaging channel an audience is built for. ALL = usable on any channel
+// (the existing/default behaviour); WHATSAPP marks a WhatsApp broadcast list.
+enum AudienceChannel {
+  SMS
+  WHATSAPP
+  ALL
+}
+
+// STATIC = a fixed contact list (AudienceContact rows). WHATSAPP_OPTED_IN = a
+// dynamic "smart" audience that always resolves to the org's WhatsApp opt-ins.
+enum AudienceKind {
+  STATIC
+  WHATSAPP_OPTED_IN
+}
+
 enum AudienceImportStatus {
   QUEUED
   RUNNING
@@ -266,6 +281,8 @@ model Audience {
   createdById    String?
   name           String
   source         AudienceSource
+  channel        AudienceChannel @default(ALL)
+  kind           AudienceKind    @default(STATIC)
   status         AudienceStatus @default(ACTIVE)
   externalListId String?
   syncedAt       DateTime?

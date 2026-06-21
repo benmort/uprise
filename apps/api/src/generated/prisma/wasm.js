@@ -165,6 +165,8 @@ exports.Prisma.AudienceScalarFieldEnum = {
   createdById: 'createdById',
   name: 'name',
   source: 'source',
+  channel: 'channel',
+  kind: 'kind',
   status: 'status',
   externalListId: 'externalListId',
   syncedAt: 'syncedAt',
@@ -669,6 +671,17 @@ exports.AudienceSource = exports.$Enums.AudienceSource = {
   CSV: 'CSV',
   ACTION_NETWORK: 'ACTION_NETWORK',
   INTERNAL: 'INTERNAL'
+};
+
+exports.AudienceChannel = exports.$Enums.AudienceChannel = {
+  SMS: 'SMS',
+  WHATSAPP: 'WHATSAPP',
+  ALL: 'ALL'
+};
+
+exports.AudienceKind = exports.$Enums.AudienceKind = {
+  STATIC: 'STATIC',
+  WHATSAPP_OPTED_IN: 'WHATSAPP_OPTED_IN'
 };
 
 exports.AudienceStatus = exports.$Enums.AudienceStatus = {

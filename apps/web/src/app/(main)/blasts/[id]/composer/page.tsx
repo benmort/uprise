@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CheckCircle2, MessageSquareText, Send, Trash2 } from "lucide-react";
 import {
+  createAudience,
   createBlast,
   deleteBlast,
   getAudienceContacts,
+  getAudienceWhatsappReach,
   getFeatureFlags,
   listBlasts,
   listAudiences,
@@ -27,6 +29,8 @@ import { TagChip } from "@/components/ui/tag-chip";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FormDialog } from "@/components/ui/form-dialog";
+import { Field } from "@/components/ui/field";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { useToast } from "@/components/ui/toast";
 
@@ -109,6 +113,11 @@ export default function BlastComposerPage() {
   const [template, setTemplate] = useState("");
   const [channel, setChannel] = useState<MessageChannel>("SMS");
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const [waReach, setWaReach] = useState<{ total: number; reachable: number } | null>(null);
+  const [newWaAudienceOpen, setNewWaAudienceOpen] = useState(false);
+  const [newWaAudienceName, setNewWaAudienceName] = useState("");
+  const [creatingWaAudience, setCreatingWaAudience] = useState(false);
+  const [groupInviteLink, setGroupInviteLink] = useState("");
   const [waTemplates, setWaTemplates] = useState<WhatsappTemplate[]>([]);
   const [contentSid, setContentSid] = useState("");
   const [contentVariableMap, setContentVariableMap] = useState<Record<string, string>>({});
@@ -248,6 +257,38 @@ export default function BlastComposerPage() {
   const characterCount = template.length;
   const maxCharacters = 160;
   const isWhatsapp = channel === "WHATSAPP";
+
+  // For WhatsApp campaigns, only offer WhatsApp + Both audiences (incl. the smart list).
+  const visibleAudiences = useMemo(() => {
+    if (!isWhatsapp) return audiences;
+    return audiences.filter((a) => {
+      const ch = String((a as { channel?: string }).channel ?? "ALL");
+      return ch === "WHATSAPP" || ch === "ALL";
+    });
+  }, [audiences, isWhatsapp]);
+
+  // Show how many of the selected audience are actually WhatsApp-reachable (opted in).
+  useEffect(() => {
+    if (!isWhatsapp || !audienceId) {
+      setWaReach(null);
+      return;
+    }
+    let alive = true;
+    void getAudienceWhatsappReach(audienceId).then((r) => {
+      if (alive) setWaReach(r.ok ? r.data : null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isWhatsapp, audienceId]);
+
+  // If the current selection isn't a WhatsApp audience, fall back to the first valid one.
+  useEffect(() => {
+    if (!isWhatsapp || !audienceId) return;
+    if (!visibleAudiences.some((a) => String(a.id) === audienceId)) {
+      setAudienceId(visibleAudiences[0] ? String(visibleAudiences[0].id) : "");
+    }
+  }, [isWhatsapp, visibleAudiences, audienceId]);
 
   const selectedTemplate = useMemo(
     () => waTemplates.find((t) => t.contentSid === contentSid) || null,
@@ -602,20 +643,43 @@ export default function BlastComposerPage() {
               />
             </div>
             <div id="tour-composer-audience" className="space-y-1">
-              <label className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                Audience
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
+                  {isWhatsapp ? "WhatsApp audience" : "Audience"}
+                </label>
+                {isWhatsapp ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewWaAudienceName("");
+                      setNewWaAudienceOpen(true);
+                    }}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    + New WhatsApp audience
+                  </button>
+                ) : null}
+              </div>
               <select
                 className="h-11 w-full rounded border border-input bg-background px-3 py-2 text-sm"
                 value={audienceId}
                 onChange={(e) => setAudienceId(e.target.value)}
               >
-                {audiences.map((audience) => (
+                {visibleAudiences.length === 0 ? (
+                  <option value="">No WhatsApp audiences yet — create one</option>
+                ) : null}
+                {visibleAudiences.map((audience) => (
                   <option key={String(audience.id)} value={String(audience.id)}>
                     {String(audience.name)} ({String((audience as any)._count?.contacts || 0)})
                   </option>
                 ))}
               </select>
+              {isWhatsapp && waReach ? (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-[hsl(var(--success))]">{waReach.reachable.toLocaleString()}</span>{" "}
+                  of {waReach.total.toLocaleString()} WhatsApp-reachable (opted in)
+                </p>
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -722,6 +786,36 @@ export default function BlastComposerPage() {
             </div>
           </CardContent>
           )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="inline-flex items-center gap-1">
+              WhatsApp group invite link
+              <TooltipHint label="The compliant way to reach native groups: invite people to a group you run in the WhatsApp app. (Twilio can't post to groups directly.)" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Input
+                value={groupInviteLink}
+                onChange={(e) => setGroupInviteLink(e.target.value)}
+                placeholder="https://chat.whatsapp.com/…"
+              />
+              <Button
+                variant="outline"
+                disabled={!groupInviteLink.trim()}
+                onClick={() =>
+                  setTemplate((t) => `${t ? `${t}\n\n` : ""}Join our WhatsApp group: ${groupInviteLink.trim()}`)
+                }
+              >
+                Add to message
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Appends a join CTA to the message body (or map it into a template variable for approved templates).
+            </p>
+          </CardContent>
         </Card>
 
         <Card id="tour-composer-proof">
@@ -872,6 +966,45 @@ export default function BlastComposerPage() {
           await sendBlastNow();
         }}
       />
+
+      <FormDialog
+        open={newWaAudienceOpen}
+        title="New WhatsApp audience"
+        description="A WhatsApp broadcast list. Add contacts from the Audience page after creating."
+        onClose={() => setNewWaAudienceOpen(false)}
+        submitLabel="Create"
+        busy={creatingWaAudience}
+        submitDisabled={!newWaAudienceName.trim()}
+        onSubmit={async () => {
+          setCreatingWaAudience(true);
+          const res = await createAudience({
+            name: newWaAudienceName.trim(),
+            source: "MANUAL",
+            channel: "WHATSAPP",
+          });
+          setCreatingWaAudience(false);
+          if (!res.ok) {
+            showToast({ tone: "error", title: "Couldn't create", description: res.error });
+            return;
+          }
+          const created = res.data as { id: string; name: string };
+          const refreshed = await listAudiences({ limit: 200, offset: 0 });
+          if (refreshed.ok) setAudiences(refreshed.data.rows);
+          setAudienceId(String(created.id));
+          setNewWaAudienceOpen(false);
+          showToast({ tone: "success", title: "WhatsApp audience created", description: created.name });
+        }}
+      >
+        <Field label="Audience name" htmlFor="wa-aud-name" required>
+          <Input
+            id="wa-aud-name"
+            value={newWaAudienceName}
+            onChange={(e) => setNewWaAudienceName(e.target.value)}
+            placeholder="e.g. Northcote WhatsApp list"
+            autoFocus
+          />
+        </Field>
+      </FormDialog>
     </div>
   );
 }

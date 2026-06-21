@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
+  AudienceKind,
   BlastRecipientStatus,
   BlastStatus,
   ConsentState,
@@ -295,20 +296,41 @@ export class BlastsService {
     channel: MessageChannel;
   }): Promise<RecipientSeed[]> {
     if (!blast.audienceId) return [];
-    const contacts = await this.prisma.audienceContact.findMany({
-      where: { audienceId: blast.audienceId },
-      orderBy: { createdAt: "asc" },
+    const audience = await this.prisma.audience.findFirst({
+      where: { id: blast.audienceId, organizationId: blast.organizationId },
+      select: { kind: true },
     });
     const dedup = new Map<string, RecipientSeed>();
-    for (const contact of contacts) {
-      if (!this.isContactable(contact)) continue;
-      dedup.set(contact.phoneE164, {
-        // Point at the persistent Contact spine, not the per-audience row.
-        // Null until backfill populates AudienceContact.contactId.
-        contactId: contact.contactId ?? undefined,
-        phoneE164: contact.phoneE164,
-        metadata: (contact.metadata as Record<string, unknown>) || {},
+
+    if (audience?.kind === AudienceKind.WHATSAPP_OPTED_IN) {
+      // Dynamic "all WhatsApp opt-ins" audience: members are computed from consent,
+      // not a stored AudienceContact list.
+      const optIns = await this.prisma.contactConsent.findMany({
+        where: {
+          organizationId: blast.organizationId,
+          channel: MessageChannel.WHATSAPP,
+          state: ConsentState.OPTED_IN,
+        },
+        select: { phoneE164: true, contactId: true },
       });
+      for (const c of optIns) {
+        dedup.set(c.phoneE164, { contactId: c.contactId ?? undefined, phoneE164: c.phoneE164, metadata: {} });
+      }
+    } else {
+      const contacts = await this.prisma.audienceContact.findMany({
+        where: { audienceId: blast.audienceId },
+        orderBy: { createdAt: "asc" },
+      });
+      for (const contact of contacts) {
+        if (!this.isContactable(contact)) continue;
+        dedup.set(contact.phoneE164, {
+          // Point at the persistent Contact spine, not the per-audience row.
+          // Null until backfill populates AudienceContact.contactId.
+          contactId: contact.contactId ?? undefined,
+          phoneE164: contact.phoneE164,
+          metadata: (contact.metadata as Record<string, unknown>) || {},
+        });
+      }
     }
 
     // Consent gating: SMS skips explicit opt-outs; WhatsApp also requires opt-in.

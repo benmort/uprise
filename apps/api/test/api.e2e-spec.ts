@@ -253,6 +253,38 @@ describe("API e2e — full surface", () => {
     it("blasts list", async () => okStatus((await api.get("/api/v1/blasts")).status));
   });
 
+  // ── WhatsApp audiences ────────────────────────────────────────
+  describe("whatsapp audiences", () => {
+    let waAudienceId: string;
+    it("create a channel=WHATSAPP audience", async () => {
+      const res = await api.post("/api/v1/audiences").send({ name: `E2E WA ${Date.now()}`, source: "MANUAL", channel: "WHATSAPP" });
+      okStatus(res.status);
+      expect(data(res.body).channel).toBe("WHATSAPP");
+      waAudienceId = data(res.body).id;
+    });
+    it("ensure the smart opt-in audience (idempotent)", async () => {
+      const a = await api.post("/api/v1/audiences/whatsapp-opt-ins");
+      okStatus(a.status);
+      const b = await api.post("/api/v1/audiences/whatsapp-opt-ins");
+      okStatus(b.status);
+      expect(data(a.body).id).toBe(data(b.body).id); // idempotent
+      expect(data(a.body).kind).toBe("WHATSAPP_OPTED_IN");
+    });
+    it("list filtered by channel=WHATSAPP excludes SMS-only", async () => {
+      await api.post("/api/v1/audiences").send({ name: `E2E SMS ${Date.now()}`, source: "MANUAL", channel: "SMS" });
+      const res = await api.get("/api/v1/audiences?channel=WHATSAPP");
+      okStatus(res.status);
+      const rows = (data(res.body).rows ?? []) as Array<{ channel: string }>;
+      expect(rows.every((r) => r.channel === "WHATSAPP" || r.channel === "ALL")).toBe(true);
+    });
+    it("whatsapp-reach returns total + reachable", async () => {
+      const res = await api.get(`/api/v1/audiences/${waAudienceId}/whatsapp-reach`);
+      okStatus(res.status);
+      expect(data(res.body)).toHaveProperty("total");
+      expect(data(res.body)).toHaveProperty("reachable");
+    });
+  });
+
   // ── Compliance / integrations / push ──────────────────────────
   describe("compliance + integrations + push", () => {
     it("compliance opt-outs", async () => okStatus((await api.get("/api/v1/compliance/opt-outs")).status));

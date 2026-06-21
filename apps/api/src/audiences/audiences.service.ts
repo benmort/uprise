@@ -1,8 +1,12 @@
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
+  AudienceChannel,
   AudienceImportStatus,
+  AudienceKind,
   AudienceSource,
   AudienceStatus,
+  ConsentState,
+  MessageChannel,
   Prisma,
 } from "../../src/generated/prisma";
 import { parse } from "csv-parse/sync";
@@ -88,17 +92,78 @@ export class AudiencesService {
         organizationId: org.id,
         name: dto.name,
         source: (dto.source || "MANUAL") as AudienceSource,
+        channel: (dto.channel || "ALL") as AudienceChannel,
+        kind: (dto.kind || "STATIC") as AudienceKind,
         status: AudienceStatus.ACTIVE,
       },
     });
   }
 
+  /**
+   * The org's single dynamic "all WhatsApp opt-ins" audience — created on demand,
+   * idempotent. Its members resolve at send time from ContactConsent (see
+   * blasts.service getBlastRecipients).
+   */
+  async ensureWhatsappOptInAudience() {
+    const org = await this.ensureOrganization();
+    const existing = await this.prisma.audience.findFirst({
+      where: { organizationId: org.id, kind: AudienceKind.WHATSAPP_OPTED_IN, status: AudienceStatus.ACTIVE },
+    });
+    if (existing) return existing;
+    return this.prisma.audience.create({
+      data: {
+        organizationId: org.id,
+        name: "WhatsApp opt-ins (all)",
+        source: AudienceSource.INTERNAL,
+        channel: AudienceChannel.WHATSAPP,
+        kind: AudienceKind.WHATSAPP_OPTED_IN,
+        status: AudienceStatus.ACTIVE,
+      },
+    });
+  }
+
+  /** How many of an audience's members are actually WhatsApp-reachable (opted in). */
+  async whatsappReach(audienceId: string): Promise<{ total: number; reachable: number }> {
+    const org = await this.ensureOrganization();
+    const audience = await this.prisma.audience.findFirst({
+      where: { id: audienceId, organizationId: org.id },
+    });
+    if (!audience) throw new NotFoundException("Audience not found");
+
+    const optedIn = await this.prisma.contactConsent.findMany({
+      where: { organizationId: org.id, channel: MessageChannel.WHATSAPP, state: ConsentState.OPTED_IN },
+      select: { phoneE164: true },
+    });
+    const optInSet = new Set(optedIn.map((c) => c.phoneE164));
+
+    if (audience.kind === AudienceKind.WHATSAPP_OPTED_IN) {
+      return { total: optInSet.size, reachable: optInSet.size };
+    }
+    const members = await this.prisma.audienceContact.findMany({
+      where: { audienceId },
+      select: { phoneE164: true },
+    });
+    return {
+      total: members.length,
+      reachable: members.filter((m) => optInSet.has(m.phoneE164)).length,
+    };
+  }
+
   async listAudiences(dto: ListAudiencesDto) {
     const org = await this.ensureOrganization();
+    const channelFilter: Prisma.AudienceWhereInput =
+      dto.channel === "WHATSAPP"
+        ? { channel: { in: [AudienceChannel.WHATSAPP, AudienceChannel.ALL] } }
+        : dto.channel === "SMS"
+          ? { channel: { in: [AudienceChannel.SMS, AudienceChannel.ALL] } }
+          : dto.channel === "ALL"
+            ? { channel: AudienceChannel.ALL }
+            : {};
     const where: Prisma.AudienceWhereInput = {
       organizationId: org.id,
       ...(dto.status ? { status: dto.status as AudienceStatus } : {}),
       ...(dto.source ? { source: dto.source as AudienceSource } : {}),
+      ...channelFilter,
     };
     const [rows, total] = await Promise.all([
       this.prisma.audience.findMany({
