@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import Map, { Layer, Source, useControl, type MapProps } from "react-map-gl/mapbox";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -21,6 +21,22 @@ type MapEvents = { on: (e: string, cb: () => void) => void; off: (e: string, cb:
 function DrawControl({ onChange }: { onChange: (geometry: GeoJSON.Polygon | null) => void }) {
   const drawRef = useRef<MapboxDraw | null>(null);
 
+  // Stable handler so onAdd/onRemove register and remove the SAME reference. The
+  // getAll() call is guarded: if a draw.* event fires while the control is being
+  // torn down (StrictMode remount / unmount), its internal store is gone and
+  // getAll() throws "Cannot read properties of undefined (reading 'getAll')".
+  const handleDrawChange = useCallback(() => {
+    const draw = drawRef.current;
+    if (!draw) return;
+    try {
+      const fc = draw.getAll();
+      const poly = fc?.features.find((f) => f.geometry?.type === "Polygon");
+      onChange((poly?.geometry as GeoJSON.Polygon) ?? null);
+    } catch {
+      /* control mid-teardown — store not connected; ignore this event */
+    }
+  }, [onChange]);
+
   useControl<MapboxDraw>(
     () => {
       const draw = new MapboxDraw({
@@ -31,16 +47,18 @@ function DrawControl({ onChange }: { onChange: (geometry: GeoJSON.Polygon | null
       return draw;
     },
     ({ map }: { map: MapEvents }) => {
-      const emit = () => {
-        const fc = drawRef.current?.getAll();
-        const poly = fc?.features.find((f) => f.geometry?.type === "Polygon");
-        onChange((poly?.geometry as GeoJSON.Polygon) ?? null);
-      };
-      map.on("draw.create", emit);
-      map.on("draw.update", emit);
-      map.on("draw.delete", emit);
+      map.on("draw.create", handleDrawChange);
+      map.on("draw.update", handleDrawChange);
+      map.on("draw.delete", handleDrawChange);
     },
-    () => {},
+    ({ map }: { map: MapEvents }) => {
+      // Critical: remove our listeners (an empty onRemove leaks them, and a leaked
+      // handler firing against the removed control is what triggered the crash).
+      map.off("draw.create", handleDrawChange);
+      map.off("draw.update", handleDrawChange);
+      map.off("draw.delete", handleDrawChange);
+      drawRef.current = null;
+    },
     { position: "top-left" },
   );
 
