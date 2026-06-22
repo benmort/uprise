@@ -98,7 +98,7 @@ export function TourMenuButton() {
         type="button"
         variant="ghost"
         className="w-full justify-start"
-        title="Take a tour of Yarns"
+        title="Take a tour of Foment"
         onClick={toggle}
       >
         <HelpCircle className="mr-2 h-4 w-4" />

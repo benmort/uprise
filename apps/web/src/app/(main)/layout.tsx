@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { Logo } from "@/components/brand/logo";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -332,14 +332,7 @@ export default function MainLayout({
       <div className="flex h-full w-full">
         <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-y-auto border-r border-border bg-white p-4">
           <div id="tour-logo" className="mb-6">
-            <Image
-              src="/images/yarns-logo-full.png"
-              alt="Yarns"
-              width={512}
-              height={159}
-              priority
-              className="h-auto w-32"
-            />
+            <Logo />
           </div>
 
           <nav id="tour-nav" className="space-y-1">

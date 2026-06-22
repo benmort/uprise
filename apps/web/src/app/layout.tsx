@@ -11,16 +11,13 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Yarns – Multichannel organising platform",
+  title: "Foment – Multichannel organising platform",
   description: "SMS & WhatsApp broadcasts, canvassing, audiences, journeys and a unified inbox.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [
-      { url: "/images/yarns-logo.png", sizes: "512x512", type: "image/png" },
-      { url: "/images/yarns-logo.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/images/yarns-logo.png", sizes: "512x512", type: "image/png" }],
-    shortcut: ["/images/yarns-logo.png"],
+    icon: [{ url: "/images/foment-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/images/foment-icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/images/foment-icon.svg"],
   },
 };
 

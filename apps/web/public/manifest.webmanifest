@@ -1,21 +1,15 @@
 {
-  "name": "Yarns",
-  "short_name": "Yarns",
+  "name": "Foment",
+  "short_name": "Foment",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3366CC",
   "icons": [
     {
-      "src": "/images/yarns-logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/images/yarns-logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/images/foment-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
