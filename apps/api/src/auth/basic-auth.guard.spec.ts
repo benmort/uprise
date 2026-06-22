@@ -273,3 +273,52 @@ describe("BasicAuthGuard", () => {
     });
   });
 });
+
+describe("BasicAuthGuard session auth", () => {
+  const config = { get: () => undefined } as unknown as ConfigService;
+  // Non-copying context so guard mutations to request.user are observable.
+  const ctx = (request: any): ExecutionContext =>
+    ({ switchToHttp: () => ({ getRequest: () => request }) }) as unknown as ExecutionContext;
+
+  it("authenticates a Bearer session token and attaches the CASL actor", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u1", email: "a@b.c", tenantId: "t1", role: "ORGANISER" }),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = {
+      path: "/api/v1/canvass/assignments",
+      headers: { authorization: "Bearer sess_token" },
+    };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(request.user).toEqual(
+      expect.objectContaining({
+        id: "u1",
+        role: "ORGANISER",
+        tenantId: "t1",
+        roles: ["organiser"],
+        isSuperAdmin: false,
+      }),
+    );
+    expect(sessions.resolve).toHaveBeenCalledWith("sess_token");
+  });
+
+  it("reads the session token from the auth_token cookie", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u2", email: "c@d.e", tenantId: "t1", role: "CANVASSER" }),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = { path: "/api/v1/inbox", headers: { cookie: "foo=bar; auth_token=cookie_tok" } };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(sessions.resolve).toHaveBeenCalledWith("cookie_tok");
+    expect(request.user.roles).toEqual(["canvasser"]);
+  });
+
+  it("rejects an invalid or expired session token", async () => {
+    const sessions = { resolve: jest.fn().mockResolvedValue(null) } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = { path: "/api/v1/inbox", headers: { authorization: "Bearer bad" } };
+    await expect(guard.canActivate(ctx(request))).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+});
