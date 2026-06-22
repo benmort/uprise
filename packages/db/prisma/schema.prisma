@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops", "payment"]
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops", "payment", "telephony"]
 }
 
 enum AudienceStatus {
@@ -1417,4 +1417,39 @@ model AudienceSegmentMember {
   @@id([segmentId, contactId])
   @@index([contactId])
   @@schema("audience")
+}
+
+// ── Telephony: voice calls (meld doc 09) ─────────────────────────────────────
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  BUSY
+  NO_ANSWER
+  FAILED
+  @@schema("telephony")
+}
+
+// One outbound voice call. Net-new to yarns (SMS/WhatsApp live in messaging).
+// id-only contactId ref to public.Contact (cross-schema decoupling rule).
+model Call {
+  id              String     @id @default(cuid())
+  tenantId        String
+  contactId       String?
+  toNumber        String
+  fromNumber      String
+  status          CallStatus @default(INITIATED)
+  providerCallId  String?    @unique
+  durationSeconds Int?
+  recordingUrl    String?
+  priceCents      Int?
+  currency        String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([tenantId, status])
+  @@schema("telephony")
 }

@@ -29,6 +29,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "iam.all" },
     { action: "manage", resource: "audience.all" },
     { action: "manage", resource: "messaging.all" },
+    { action: "manage", resource: "telephony.all" },
     { action: "manage", resource: "canvass.all" },
     { action: "manage", resource: "journey.all" },
     { action: "manage", resource: "integration.all" },
@@ -42,6 +43,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
   organiser: [
     { action: "manage", resource: "audience.all" },
     { action: "manage", resource: "messaging.all" },
+    { action: "manage", resource: "telephony.all" },
     { action: "manage", resource: "canvass.all" },
     { action: "manage", resource: "journey.all" },
     { action: "manage", resource: "integration.all" },
@@ -72,6 +74,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "read", resource: "tenant.org-profile" },
     { action: "read", resource: "audience.all" },
     { action: "read", resource: "messaging.all" },
+    { action: "read", resource: "telephony.all" },
     { action: "read", resource: "canvass.all" },
     { action: "read", resource: "analytics.all" },
   ],

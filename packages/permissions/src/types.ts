@@ -83,10 +83,13 @@ export const YARNS_RESOURCES = [
   "compliance.suppression",
   "compliance.all",
 
-  // reserved for later-ported domains (meld docs 06–09)
+  // telephony — voice calls (meld doc 09)
+  "telephony.call",
+  "telephony.all",
+
+  // reserved for later-ported domains (meld docs 06–08)
   "payment.all",
   "email.all",
-  "telephony.all",
 
   // cross-cutting
   "audit.log",

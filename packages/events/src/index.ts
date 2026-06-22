@@ -18,6 +18,7 @@ export const EVENT_TYPES = {
   EMAIL_QUEUED: "email.email.queued",
   PAYMENT_SUCCEEDED: "payment.payment.succeeded",
   PAYMENT_REFUNDED: "payment.payment.refunded",
+  CALL_INITIATED: "telephony.call.initiated",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -34,6 +35,7 @@ export interface DomainEventMap {
   "email.email.queued": { emailId: string; tenantId: string; toAddress: string };
   "payment.payment.succeeded": { paymentId: string; tenantId: string; amountCents: number };
   "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
+  "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };
 }
 
 export interface EventMetadata {

@@ -15,6 +15,7 @@ import { BlastsService } from "../blasts/blasts.service";
 import { EmailService, type SendGridEvent } from "../email/email.service";
 import { PaymentService, type StripeEvent } from "../payment/payment.service";
 import { StripeService } from "../payment/stripe.service";
+import { CallsService } from "../calls/calls.service";
 import { parseChannelAddress } from "../messaging/message-channel.util";
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
@@ -28,6 +29,7 @@ export class WebhooksController {
     private readonly email: EmailService,
     private readonly payment: PaymentService,
     private readonly stripe: StripeService,
+    private readonly calls: CallsService,
   ) {}
 
   /**
@@ -146,6 +148,44 @@ export class WebhooksController {
       messageStatus: String(body?.MessageStatus || ""),
       errorCode: body?.ErrorCode ? String(body.ErrorCode) : null,
       errorMessage: body?.ErrorMessage ? String(body.ErrorMessage) : null,
+    });
+    return TWIML_EMPTY;
+  }
+
+  /**
+   * Twilio voice status callback (meld doc 09). Drives the Call FSM; per-status
+   * idempotency + transitions live in CallsService. Twilio sends Price as a
+   * negative decimal in major units (e.g. "-0.015"); we store positive cents.
+   */
+  @Post("voice-status-callback")
+  @Header("Content-Type", "application/xml")
+  async voiceStatusCallback(
+    @Body()
+    body: {
+      CallSid?: string;
+      CallStatus?: string;
+      CallDuration?: string;
+      RecordingUrl?: string;
+      Price?: string;
+      PriceUnit?: string;
+    },
+    @Req() req: Request,
+  ): Promise<string> {
+    this.validateTwilioSignature(req, body as Record<string, unknown>);
+    const status = String(body?.CallStatus || "");
+    const durationRaw = body?.CallDuration ? Number(body.CallDuration) : undefined;
+    const priceRaw = body?.Price ? Number(body.Price) : undefined;
+    await this.calls.processStatusCallback({
+      callSid: String(body?.CallSid || ""),
+      status,
+      durationSeconds: Number.isFinite(durationRaw) ? durationRaw : undefined,
+      recordingUrl: body?.RecordingUrl || undefined,
+      priceCents:
+        priceRaw !== undefined && Number.isFinite(priceRaw)
+          ? Math.round(Math.abs(priceRaw) * 100)
+          : undefined,
+      currency: body?.PriceUnit || undefined,
+      startedAt: status === "in-progress" ? new Date() : undefined,
     });
     return TWIML_EMPTY;
   }

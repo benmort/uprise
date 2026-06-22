@@ -118,10 +118,12 @@ export class BasicAuthGuard implements CanActivate {
     const allowedPaths = new Set([
       "/inbound-text-message-hook",
       "/twilio-status-callback",
+      "/voice-status-callback",
       "/email-webhook",
       "/payment-webhook",
       "/api/v1/inbound-text-message-hook",
       "/api/v1/twilio-status-callback",
+      "/api/v1/voice-status-callback",
       "/api/v1/email-webhook",
       "/api/v1/payment-webhook",
     ]);
