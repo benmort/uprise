@@ -7,7 +7,8 @@ export const EMAIL_TRANSITIONS: TransitionMap<EmailStatus> = {
   [EmailStatus.QUEUED]: [EmailStatus.SENDING, EmailStatus.FAILED],
   [EmailStatus.SENDING]: [EmailStatus.SENT, EmailStatus.FAILED],
   [EmailStatus.SENT]: [EmailStatus.DELIVERED, EmailStatus.BOUNCED, EmailStatus.FAILED],
-  [EmailStatus.DELIVERED]: [],
+  // A late hard-bounce can arrive after delivered (prog parity); allow delivered→bounced.
+  [EmailStatus.DELIVERED]: [EmailStatus.BOUNCED],
   [EmailStatus.BOUNCED]: [],
   [EmailStatus.FAILED]: [],
 };

@@ -65,6 +65,11 @@ export class AuthFlowsController {
     return this.flows.resetPassword(dto.token, dto.password);
   }
 
+  @Post("reset-password/verify")
+  verifyResetToken(@Body() dto: TokenDto) {
+    return this.flows.verifyResetToken(dto.token);
+  }
+
   @Post("verify-email/send")
   sendEmailVerification(@Body() dto: EmailDto) {
     return this.flows.sendEmailVerification(dto.email);

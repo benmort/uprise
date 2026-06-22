@@ -156,6 +156,12 @@ export class IamFlowsService {
     return { ok: true };
   }
 
+  /** Non-consuming reset-link validity check so the UI can show "link expired" pre-submit. */
+  async verifyResetToken(token: string): Promise<{ valid: boolean }> {
+    const reset = await this.prisma.passwordReset.findUnique({ where: { token } });
+    return { valid: !!reset && !reset.consumedAt && reset.expiresAt.getTime() > Date.now() };
+  }
+
   async resetPassword(token: string, newPassword: string): Promise<{ ok: true }> {
     if (!newPassword || newPassword.length < 8) {
       throw new BadRequestException("Password must be at least 8 characters");

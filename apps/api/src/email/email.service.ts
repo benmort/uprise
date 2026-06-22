@@ -111,6 +111,12 @@ export class EmailService {
   }
 
   // ── SendGrid webhook processing ─────────────────────────────────────
+  /** SendGrid event timestamp (epoch seconds) → Date, else now (avoids retry-time skew). */
+  private eventTime(event: SendGridEvent): Date {
+    const ts = Number((event as { timestamp?: unknown }).timestamp);
+    return Number.isFinite(ts) && ts > 0 ? new Date(ts * 1000) : new Date();
+  }
+
   private stripFilter(sgMessageId: string): string {
     // SendGrid appends ".filterN.NNNN" to sg_message_id on some events.
     const dot = sgMessageId.indexOf(".");
@@ -192,12 +198,12 @@ export class EmailService {
           break;
         case "open":
           if (!email.openedAt) {
-            await this.prisma.email.update({ where: { id: email.id }, data: { openedAt: new Date() } });
+            await this.prisma.email.update({ where: { id: email.id }, data: { openedAt: this.eventTime(event) } });
           }
           break;
         case "click":
           if (!email.clickedAt) {
-            await this.prisma.email.update({ where: { id: email.id }, data: { clickedAt: new Date() } });
+            await this.prisma.email.update({ where: { id: email.id }, data: { clickedAt: this.eventTime(event) } });
           }
           break;
         default:

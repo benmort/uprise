@@ -130,6 +130,18 @@ describe("IamFlowsService", () => {
       prisma.passwordReset.findUnique.mockResolvedValueOnce(null);
       await expect(svc.resetPassword("tok", "longenoughpw")).rejects.toThrow();
     });
+
+    it("verifyResetToken reports validity without consuming", async () => {
+      const { svc, prisma } = setup();
+      prisma.passwordReset.findUnique.mockResolvedValueOnce({
+        id: "pr1", userId: "u1", consumedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verifyResetToken("tok")).resolves.toEqual({ valid: true });
+      prisma.passwordReset.findUnique.mockResolvedValueOnce({
+        id: "pr1", userId: "u1", consumedAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verifyResetToken("tok")).resolves.toEqual({ valid: false });
+    });
   });
 
   describe("email verification", () => {

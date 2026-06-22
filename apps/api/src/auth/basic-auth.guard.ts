@@ -45,6 +45,7 @@ export class BasicAuthGuard implements CanActivate {
       "/iam/magic-link/consume",
       "/iam/forgot-password",
       "/iam/reset-password",
+      "/iam/reset-password/verify",
       "/iam/verify-email/send",
       "/iam/verify-email/confirm",
       "/iam/2fa/send",

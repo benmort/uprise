@@ -90,3 +90,21 @@
 - **DeleteTenant** soft-delete write + `membershipsFor` deletedAt filter.
 
 **Deferred-by-design (no action):** event-sourced aggregates/replay, multi-org modelling, OTT handoff.
+
+---
+
+## WS3 final status (2026-06-23)
+
+**Closed across the WS3 commits (feat/prog-parity):**
+- Payment: checkout/portal/health endpoints + read queries (payments/refunds/invoices/subscriptions/payment-methods) + payment.status.changed event; owner role gains payment.all.
+- Identity/tenant: 2FA enrolment + mobile capture; sign-in lastSignInAt; acceptInvite events (iam.user.created/member.added/invitation.accepted); displayName mirror; /auth/check flags; tenant soft-delete + membershipsFor deletedAt filter + last-organiser guard; network reads + billing-write (GetNetwork/GetTenantsByNetwork/UpdateNetworkBilling); subdomain-availability; member lifecycle events.
+- Email: per-tenant template CRUD + getEmail; delivered/bounced events; late hard-bounce (delivered→bounced); webhook open/click use the SendGrid event timestamp; VerifyAccountRecoveryToken.
+- Telephony: telephony.call.completed event.
+
+**Remaining (tracked; deferred this pass):**
+- **Audience sync wiring** — call ContactsService.recordSourceRecord + resolveIdentity from the Action Network import path (needs Contact-spine resolution inside the batched sync; higher regression surface) + audience domain events + source-record list/remove/reconcile. (Segment CRUD intentionally skipped per the brief.)
+- **Telephony** — SMS Twilio-callback (provider,eventId) idempotency claim; transactional-SMS txStatus advance to DELIVERED/UNDELIVERED; per-SMS read (GET /messages/:id); MessageTemplate CRUD + type/category/variables/fromNumber + undeclared-variable guard; segmentCount capture; 'undelivered' BlastRecipientStatus member (enum migration).
+- **Email** — ad-hoc HTML/dynamic-template send path (SendGridService currently text/plain only).
+- **Identity** — OTT issue/exchange (effectively superseded by the doc-14 parent-domain cookie); ClearSelectedAvatar standalone op.
+
+**Deferred-by-design (no action):** event-sourced aggregates/replay; multi-org Organisation aggregate; owner-as-distinct-OWNER enum role.

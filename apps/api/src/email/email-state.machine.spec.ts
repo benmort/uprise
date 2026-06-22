@@ -9,6 +9,7 @@ describe("email state machine", () => {
     [EmailStatus.SENT, EmailStatus.DELIVERED],
     [EmailStatus.SENT, EmailStatus.BOUNCED],
     [EmailStatus.SENT, EmailStatus.FAILED],
+    [EmailStatus.DELIVERED, EmailStatus.BOUNCED], // late hard-bounce after delivered
   ])("allows %s → %s", (from, to) => {
     expect(() => assertValidEmailTransition(from, to)).not.toThrow();
   });
