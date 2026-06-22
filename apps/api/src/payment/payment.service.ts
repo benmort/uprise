@@ -237,6 +237,21 @@ export class PaymentService {
             planName: object.items?.data?.[0]?.price?.nickname ?? null,
             currentPeriodEnd: object.current_period_end ? new Date(Number(object.current_period_end) * 1000) : null,
           });
+          // Emit for the subscription→tenant reaction (WS2): the projection is the read
+          // model; the event is the cross-domain choreography (doc 05).
+          await this.prisma.$transaction((tx) =>
+            this.outbox.append(tx, {
+              tenantId,
+              eventType: "payment.subscription.changed",
+              aggregateId: String(object.id),
+              payload: {
+                tenantId,
+                networkId: null,
+                subscriptionId: String(object.id),
+                status: String(object.status ?? "unknown"),
+              },
+            }),
+          );
         } else {
           this.logger.error("payment", "subscription event with no resolvable tenant — skipped", undefined, { eventId: event.id });
         }

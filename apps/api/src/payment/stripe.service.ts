@@ -104,4 +104,18 @@ export class StripeService {
     });
     return { id: res.id, url: res.url };
   }
+
+  /** Create a Stripe customer (prog adapter parity). Used by the network→customer reaction. */
+  async createCustomer(input: {
+    name?: string;
+    email?: string;
+    metadata?: Record<string, string>;
+  }): Promise<{ id: string }> {
+    const res = await this.post<{ id: string }>("customers", {
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.email ? { email: input.email } : {}),
+      ...(input.metadata ? { metadata: input.metadata } : {}),
+    });
+    return { id: res.id };
+  }
 }
