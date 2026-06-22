@@ -41,7 +41,8 @@
     "uuid": "^11.0.3",
     "web-push": "^3.6.7",
     "@yarns/db": "workspace:*",
-    "@yarns/permissions": "workspace:*"
+    "@yarns/permissions": "workspace:*",
+    "@yarns/events": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",

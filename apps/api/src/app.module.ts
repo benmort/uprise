@@ -31,6 +31,8 @@ import { HealthModule } from "./health/health.module";
 import { LoggingModule } from "./common/logging/logging.module";
 import { FlagsModule } from "./common/flags/flags.module";
 import { EventsModule } from "./common/events/events.module";
+import { OutboxModule } from "./common/outbox/outbox.module";
+import { ReactionsModule } from "./common/reactions/reactions.module";
 import { RequestIdMiddleware } from "./common/http/request-id.middleware";
 import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middleware";
 import { QueueModule } from "./common/queue/queue.module";
@@ -47,6 +49,8 @@ import { QueueModule } from "./common/queue/queue.module";
     LoggingModule,
     FlagsModule,
     EventsModule,
+    OutboxModule,
+    ReactionsModule,
     QueueModule,
     TwilioModule,
     MessagingModule,

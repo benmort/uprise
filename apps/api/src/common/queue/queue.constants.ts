@@ -4,6 +4,7 @@ export const QUEUE_NAMES = {
   BLAST_RETRY: "blast-retry",
   INTEGRATION_SYNC: "integration-sync",
   JOURNEY_RUN: "journey-run",
+  DOMAIN_EVENTS: "domain-events",
 } as const;
 
 export const QUEUE_JOB_TYPES = {
@@ -12,6 +13,7 @@ export const QUEUE_JOB_TYPES = {
   BLAST_RETRY_FAILED: "blast.retry.failed",
   INTEGRATION_SYNC_LIST: "integration.sync.list",
   JOURNEY_RUN_RUNG: "journey.run.rung",
+  DOMAIN_EVENT: "domain.event",
 } as const;
 
 export function getAudienceImportJobId(importId: string, chunkKey?: string): string {

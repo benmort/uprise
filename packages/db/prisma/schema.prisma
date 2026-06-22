@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics"]
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events"]
 }
 
 enum AudienceStatus {
@@ -1127,4 +1127,38 @@ model MobileVerification {
 
   @@index([userId])
   @@schema("iam")
+}
+
+// ── Outbox + reactions (meld doc 05) ─────────────────────────────────────────
+// Domain events written in the same transaction as the state change; a relay
+// publishes unpublished rows (FOR UPDATE SKIP LOCKED) onto the domain-events
+// queue. Prisma rows stay the source of truth — this is choreography, not
+// event-sourcing.
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  seq         BigInt    @default(autoincrement())
+  tenantId    String
+  eventType   String
+  aggregateId String
+  payload     Json
+  metadata    Json
+  occurredAt  DateTime  @default(now())
+  publishedAt DateTime?
+  attempts    Int       @default(0)
+
+  @@index([publishedAt, seq])
+  @@index([tenantId, eventType])
+  @@schema("events")
+}
+
+// Second-layer idempotency for the reaction consumer (BullMQ jobId is the
+// first). One claim per (consumer source, outbox event id).
+model ReactionDedup {
+  id         String   @id @default(cuid())
+  source     String
+  eventId    String
+  receivedAt DateTime @default(now())
+
+  @@unique([source, eventId])
+  @@schema("events")
 }
