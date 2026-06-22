@@ -12,7 +12,7 @@ Last reconciled: 2026-06-23 (after commits d558371 · edd3807 · 28c8420 · b491
 - [ ] **`ManageSourceRecords` remove + batch-reconcile** (P1) — only single-record upsert; a shrinking source leaves orphan rows.
 - [ ] **Audience domain events** (P1) — person/segment/source-record mutations emit nothing (`audience.imported` / `audience.segment.recomputed` catalogued but never emitted).
 - [ ] **Source-record list/read path** (P2) — no read over `ContactSourceRecord`; `getProfile` omits provenance.
-- [ ] **Segment read endpoints (get/list/members)** — _intentionally skipped per the brief (segment CRUD)._
+- [ ] **Segment lifecycle entirely unwired** (P1, _CRUD intentionally skipped per the brief_) — beyond the skipped CRUD: there is **no `SEGMENT_EVAL` producer** (the queue has a worker consumer but nothing enqueues), so the verified-complete `SegmentEvaluatorService` is **unreachable in production**. Even with CRUD skipped, an enqueue trigger is needed for dynamic segments to ever evaluate. _(Reassessment wf_57710a11 flagged this as broader than the tracker framed.)_
 
 ## Telephony
 - [ ] **SMS Twilio-callback idempotency claim** (P1) — voice path claims `(provider,eventId)` + releases on error; the SMS path (`blasts.handleTwilioStatusCallback`) has no claim (idempotency layer-3 missing for SMS).
@@ -23,6 +23,7 @@ Last reconciled: 2026-06-23 (after commits d558371 · edd3807 · 28c8420 · b491
 - [ ] **`MessageTemplate` CRUD + type/category/variables/fromNumber + undeclared-variable guard** (P2).
 - [ ] **`segmentCount` capture** + queued/sent set inline not callback-driven (P2).
 - [ ] **`undelivered` distinction** (P2) — collapsed into `FAILED`; needs an `UNDELIVERED` enum member (migration).
+- [ ] **No consumer/reaction for `telephony.call.completed`/`call.initiated`** (P2) — events are produced but dead (grep finds only the emit); no canvassing/analytics reaction subscribes. _(Reassessment tracker-miss.)_
 
 ## Email
 - [ ] **Email lifecycle events** (P1, PARTIAL) — `delivered`/`bounced` emitted; sent/sending/failed/open/click still not.
@@ -31,6 +32,7 @@ Last reconciled: 2026-06-23 (after commits d558371 · edd3807 · 28c8420 · b491
 ## Payment
 - [ ] **No reaction consumes `payment.succeeded` / `payment.refunded`** (P1) — events emitted, but no receipt/entitlement reaction (WS2 wired subscription→tenant + network→customer only).
 - [ ] **Proactive `EnsureCustomer` at checkout** (P1, PARTIAL) — `StripeService.createCustomer` + network→customer reaction done; an explicit ensure-before-checkout flow still thin.
+- [ ] **PaymentMethod attach/detach/set-default write path** (P2) — prog ships 3 handlers + 3 adapter methods (incl. one-default-per-customer); yarns has projection + read + `GET` only (cards normally flow via the proxied Stripe portal). _(Reassessment tracker-miss.)_
 
 ## Identity
 - [ ] **Most identity lifecycle events** (P1, PARTIAL) — `iam.user.created` emitted (register + acceptInvite); EmailVerified / PasswordReset / MobileVerified / 2FA-enabled/disabled / `iam.user.signed-in` still not (`lastSignInAt` recorded, no event).
