@@ -147,6 +147,13 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/voice-status-callback",
       "/api/v1/email-webhook",
       "/api/v1/payment-webhook",
+      // Public marketing-site form intake (meld doc 12).
+      "/marketing/contact",
+      "/marketing/demo-request",
+      "/marketing/newsletter",
+      "/api/v1/marketing/contact",
+      "/api/v1/marketing/demo-request",
+      "/api/v1/marketing/newsletter",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
