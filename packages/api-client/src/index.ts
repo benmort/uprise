@@ -108,3 +108,25 @@ export const auth = {
 
   selectTenant: (tenantId: string) => post<OkResponse>("/iam/select-tenant", { tenantId }),
 };
+
+// ── Public marketing-site form intake (meld doc 12) ──────────────────
+export interface ContactFormInput {
+  name: string;
+  email: string;
+  company?: string;
+  subject?: string;
+  message: string;
+}
+export interface DemoRequestInput {
+  name: string;
+  email: string;
+  company?: string;
+  role?: string;
+  useCase?: string;
+}
+
+export const marketing = {
+  contact: (body: ContactFormInput) => post<OkResponse>("/marketing/contact", body),
+  demoRequest: (body: DemoRequestInput) => post<OkResponse>("/marketing/demo-request", body),
+  newsletter: (email: string) => post<OkResponse>("/marketing/newsletter", { email }),
+};

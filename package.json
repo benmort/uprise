@@ -6,6 +6,7 @@
     "dev:api": "pnpm --filter api run dev",
     "dev:web": "pnpm --filter web run dev",
     "dev:auth": "pnpm --filter auth run dev",
+    "dev:marketing": "pnpm --filter marketing run dev",
     "dev:worker": "pnpm --filter worker run dev",
     "load:queue-dispatch": "node scripts/load/queue-dispatch-load.mjs",
     "shadow:compare-queues": "node scripts/shadow/compare-queue-outcomes.mjs",
