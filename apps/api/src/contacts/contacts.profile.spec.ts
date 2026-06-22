@@ -12,6 +12,7 @@ describe("ContactsService.getProfile", () => {
       disposition: { findMany: jest.fn().mockResolvedValue([]) },
       doorKnock: { findMany: jest.fn().mockResolvedValue([]) },
       questionResponse: { findMany: jest.fn().mockResolvedValue([]) },
+      contactSourceRecord: { findMany: jest.fn().mockResolvedValue([]) },
     };
     service = new ContactsService(prisma);
   });
@@ -40,11 +41,17 @@ describe("ContactsService.getProfile", () => {
     prisma.doorKnock.findMany.mockResolvedValue([
       { id: "dk1", createdAt: new Date("2026-06-12"), dispositionCode: "SPOKE", lat: null, lng: null, notes: null, safetyFlag: null, canvasser: { id: "u1", displayName: "Sam" } },
     ]);
+    prisma.contactSourceRecord.findMany.mockResolvedValue([
+      { id: "sr1", sourceSystem: "action_network", externalId: "an:1", createdAt: new Date("2026-06-09") },
+    ]);
     const profile = await service.getProfile("org1", "c1");
     expect(profile).not.toBeNull();
     expect(profile!.timeline[0].kind).toBe("knock"); // newest first
     expect(profile!.timeline[1].kind).toBe("text_in");
     expect(profile!.audiences).toEqual([{ id: "a1", name: "Volunteers" }]);
+    expect(profile!.sources).toEqual([
+      { id: "sr1", sourceSystem: "action_network", externalId: "an:1", at: new Date("2026-06-09") },
+    ]);
     expect(profile!.nextAction?.type).toBe("followup");
   });
 

@@ -9,6 +9,8 @@ import {
   Prisma,
 } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
+import { ContactsService } from "../contacts/contacts.service";
+import { OutboxService } from "../common/outbox/outbox.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
 import { CredentialCryptoService } from "./credential-crypto.service";
@@ -34,6 +36,7 @@ type MappedExternalContact = {
   source: AudienceSource;
   phoneE164: string;
   fullName: string | null;
+  email: string | null;
   externalId: string | null;
   metadata: Prisma.InputJsonValue;
   contactable: boolean;
@@ -68,6 +71,8 @@ export class IntegrationsService {
     private readonly actionNetwork: ActionNetworkConnector,
     private readonly internalSource: InternalSourceConnector,
     private readonly logger: DomainLogger,
+    private readonly contacts: ContactsService,
+    private readonly outbox: OutboxService,
     @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
   ) {
     this.queue = queue ?? {
@@ -289,6 +294,7 @@ export class IntegrationsService {
         source,
         phoneE164,
         fullName: contact.name || null,
+        email: this.emailFromActionNetwork(rawMetadata),
         externalId,
         contactable,
         nonContactableReason,
@@ -304,12 +310,45 @@ export class IntegrationsService {
       source,
       phoneE164,
       fullName: contact.name || null,
+      email: typeof contact.email === "string" ? contact.email.trim() || null : null,
       externalId: contact.externalId || null,
       contactable: true,
       nonContactableReason: null,
       metadata:
         withDefaultContactable(sanitizeMetadata(rawMetadata)) as Prisma.InputJsonValue,
     };
+  }
+
+  /** Provenance source-system key for a connection type (drives ContactSourceRecord). */
+  private sourceSystemFor(type: IntegrationConnectionType): string {
+    return type === "ACTION_NETWORK" ? "action_network" : "internal_source";
+  }
+
+  /**
+   * Best-effort email from an Action Network person blob carried in the connector
+   * metadata (`actionNetwork.person.email_addresses[]`). Prefers the primary
+   * address. Returns null when none is present — identity resolution then falls
+   * back to phone alone.
+   */
+  private emailFromActionNetwork(rawMetadata: Record<string, unknown>): string | null {
+    const an = rawMetadata?.actionNetwork;
+    const person =
+      an && typeof an === "object" && !Array.isArray(an)
+        ? (an as Record<string, unknown>).person
+        : undefined;
+    const addresses =
+      person && typeof person === "object" && !Array.isArray(person)
+        ? (person as Record<string, unknown>).email_addresses
+        : undefined;
+    if (!Array.isArray(addresses)) return null;
+    const records = addresses.filter(
+      (a): a is Record<string, unknown> => Boolean(a) && typeof a === "object",
+    );
+    const primary = records.find((a) => a.primary === true && typeof a.address === "string");
+    const fallback = records.find((a) => typeof a.address === "string");
+    const chosen = primary ?? fallback;
+    const email = chosen ? String(chosen.address).trim().toLowerCase() : "";
+    return email || null;
   }
 
   private toJsonBlob(value: unknown): Prisma.InputJsonValue {
@@ -583,6 +622,19 @@ export class IntegrationsService {
               skippedInvalidPhone += 1;
             }
           }
+
+          // Resolve the Contact spine for contactable rows (meld doc 10) so an
+          // imported contact shares the one person record as door/text history.
+          let resolvedContactId: string | null = null;
+          if (mapped.contactable) {
+            const spine = await this.contacts.getOrCreateByPhone(
+              syncJob.tenantId,
+              mapped.phoneE164,
+              { fullName: mapped.fullName, email: mapped.email },
+            );
+            resolvedContactId = spine.id;
+          }
+
           await this.prisma.audienceContact.upsert({
             where: {
               audienceId_phoneE164: {
@@ -595,6 +647,7 @@ export class IntegrationsService {
               metadata: mapped.metadata,
               externalId: mapped.externalId,
               source: mapped.source,
+              ...(resolvedContactId ? { contactId: resolvedContactId } : {}),
             },
             create: {
               tenantId: syncJob.tenantId,
@@ -604,8 +657,29 @@ export class IntegrationsService {
               metadata: mapped.metadata,
               externalId: mapped.externalId,
               source: mapped.source,
+              ...(resolvedContactId ? { contactId: resolvedContactId } : {}),
             },
           });
+
+          // Provenance + cross-source identity (meld doc 10). recordSourceRecord
+          // makes the `hasSource` clause real; resolveIdentity (email present)
+          // collapses the same person across sources onto one canonicalContactId.
+          if (resolvedContactId) {
+            if (mapped.externalId) {
+              await this.contacts.recordSourceRecord({
+                tenantId: syncJob.tenantId,
+                contactId: resolvedContactId,
+                sourceSystem: this.sourceSystemFor(connectionType),
+                externalId: mapped.externalId,
+              });
+            }
+            if (mapped.email) {
+              await this.contacts.resolveIdentity(syncJob.tenantId, {
+                email: mapped.email,
+                phoneE164: mapped.phoneE164,
+              });
+            }
+          }
           syncedDelta += 1;
         } catch (error) {
           failedDelta += 1;
@@ -683,20 +757,37 @@ export class IntegrationsService {
         completedRuns: nextState.runCount,
       };
 
-      await this.prisma.integrationSyncJob.update({
-        where: { id: syncJob.id },
-        data: {
-          status: IntegrationJobStatus.SUCCEEDED,
-          syncedCount,
-          failedCount,
-          errorSummary: JSON.stringify(finalStats),
-          completedAt: new Date(),
-          audienceId: ensuredAudienceId,
-        },
-      });
-      await this.prisma.audience.update({
-        where: { id: ensuredAudienceId },
-        data: { syncedAt: new Date() },
+      // Capture into a const so the closure keeps the non-null narrowing the loop
+      // guarantees (a `let` reassignable outside the closure would widen back).
+      const finalAudienceId = ensuredAudienceId;
+      if (!finalAudienceId) throw new Error("Sync completed without an ensured audience");
+      await this.prisma.$transaction(async (tx) => {
+        await tx.integrationSyncJob.update({
+          where: { id: syncJob.id },
+          data: {
+            status: IntegrationJobStatus.SUCCEEDED,
+            syncedCount,
+            failedCount,
+            errorSummary: JSON.stringify(finalStats),
+            completedAt: new Date(),
+            audienceId: finalAudienceId,
+          },
+        });
+        await tx.audience.update({
+          where: { id: finalAudienceId },
+          data: { syncedAt: new Date() },
+        });
+        // Durable domain event committed atomically with the sync close (doc 05).
+        await this.outbox.append(tx, {
+          tenantId: syncJob.tenantId,
+          eventType: "audience.imported",
+          aggregateId: finalAudienceId,
+          payload: {
+            audienceId: finalAudienceId,
+            tenantId: syncJob.tenantId,
+            count: syncedCount,
+          },
+        });
       });
 
       this.logger.log("integrations", "Sync finished", {
