@@ -13,6 +13,7 @@ import {
   updateTurf,
   type TurfSummary,
 } from "@/lib/api";
+import { createTurfFromAreas } from "@/lib/api/geo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
@@ -20,8 +21,8 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/canvass/section-card";
 import { useToast } from "@/components/ui/toast";
-import { Pencil } from "lucide-react";
-import type { ExistingTurf } from "@/components/canvass/turf-draw-map";
+import { Pencil, Trash2 } from "lucide-react";
+import type { ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
 
 // mapbox-gl + draw touch window: keep them out of SSR.
 const TurfDrawMap = dynamic(
@@ -49,7 +50,9 @@ export default function TurfCuttingPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [universe, setUniverse] = useState<Universe>("hybrid");
-  const [polygon, setPolygon] = useState<GeoJSON.Polygon | null>(null);
+  const [polygons, setPolygons] = useState<GeoJSON.Polygon[]>([]);
+  const [selectedAreas, setSelectedAreas] = useState<SelectedArea[]>([]);
+  const [clearToken, setClearToken] = useState(0); // bump to wipe drawn polygons in place
   const [saving, setSaving] = useState(false);
   const [editingTurf, setEditingTurf] = useState<TurfSummary | null>(null);
   const [turfName, setTurfName] = useState("");
@@ -91,14 +94,38 @@ export default function TurfCuttingPage() {
     color: SWATCHES[i % SWATCHES.length],
   }));
 
+  const toggleArea = useCallback((area: SelectedArea) => {
+    setSelectedAreas((cur) => {
+      const key = `${area.level}:${area.code}`;
+      const exists = cur.some((a) => `${a.level}:${a.code}` === key);
+      return exists ? cur.filter((a) => `${a.level}:${a.code}` !== key) : [...cur, area];
+    });
+  }, []);
+
+  const hasSelection = selectedAreas.length > 0 || polygons.length > 0;
+
   const handleSave = useCallback(async () => {
-    if (!polygon) {
-      showToast({ tone: "warning", title: "Draw a turf first", description: "Use the polygon tool on the map." });
+    if (!hasSelection) {
+      showToast({
+        tone: "warning",
+        title: "Nothing selected",
+        description: "Draw a polygon or click areas to claim them.",
+      });
       return;
     }
     const turfName = name.trim() || `Turf ${turfs.length + 1}`;
     setSaving(true);
-    const created = await createTurf(turfName, polygon, campaignId);
+    // Single free-drawn polygon, no areas → the simple createTurf path (works
+    // with no geo data loaded). Otherwise union the whole selection server-side.
+    const created =
+      selectedAreas.length === 0 && polygons.length === 1
+        ? await createTurf(turfName, polygons[0], campaignId)
+        : await createTurfFromAreas({
+            name: turfName,
+            campaignId,
+            areas: selectedAreas.map((a) => ({ layer: a.level, code: a.code })),
+            polygons,
+          });
     if (!created.ok) {
       setSaving(false);
       showToast({ tone: "error", title: "Couldn't save turf", description: created.error });
@@ -106,13 +133,15 @@ export default function TurfCuttingPage() {
     }
     const turfId = (created.data as { id: string }).id;
     const bucketed = await rebucketTurf(turfId);
-    // Cold doors: pull "addresses without contacts" inside the polygon when the
+    // Cold doors: pull "addresses without contacts" inside the boundary when the
     // chosen universe wants them. Degrades to 0 when no geo data is loaded.
     const cold =
       universe === "existing" ? null : await loadTurfUniverse(turfId, universe);
     setSaving(false);
     setName("");
-    setPolygon(null);
+    setPolygons([]);
+    setSelectedAreas([]);
+    setClearToken((k) => k + 1);
     await reload();
     const existingCount = bucketed.ok ? bucketed.data.total : 0;
     const coldCount = cold?.ok ? cold.data.materialised : 0;
@@ -125,7 +154,7 @@ export default function TurfCuttingPage() {
           : `${existingCount} door${existingCount === 1 ? "" : "s"} in this turf.`
         : "Turf saved; re-bucket the doors from the list.",
     });
-  }, [polygon, name, universe, turfs.length, campaignId, reload, showToast]);
+  }, [hasSelection, selectedAreas, polygons, name, universe, turfs.length, campaignId, reload, showToast]);
 
   return (
     <div className="page-stack">
@@ -141,7 +170,13 @@ export default function TurfCuttingPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="h-[60vh] overflow-hidden rounded-2xl border border-border">
-          <TurfDrawMap existing={existing} onPolygonChange={setPolygon} />
+          <TurfDrawMap
+            existing={existing}
+            selectedAreas={selectedAreas}
+            onToggleArea={toggleArea}
+            onPolygonsChange={setPolygons}
+            clearToken={clearToken}
+          />
         </div>
 
         <div className="space-y-4">
@@ -155,13 +190,40 @@ export default function TurfCuttingPage() {
               placeholder={`Turf ${turfs.length + 1}`}
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              {polygon ? "Polygon drawn ✓" : "Draw a polygon on the map to define the boundary."}
+              {hasSelection
+                ? `${selectedAreas.length} area${selectedAreas.length === 1 ? "" : "s"}${
+                    polygons.length ? ` + ${polygons.length} polygon${polygons.length === 1 ? "" : "s"}` : ""
+                  } selected`
+                : "Click areas or draw a polygon to define the boundary."}
             </p>
-            <Button className="mt-3 w-full" onClick={handleSave} disabled={saving || !polygon}>
+            <Button className="mt-3 w-full" onClick={handleSave} disabled={saving || !hasSelection}>
               <Save className="mr-1.5 h-4 w-4" />
               {saving ? "Saving…" : "Save & re-bucket"}
             </Button>
           </SectionCard>
+
+          {selectedAreas.length > 0 ? (
+            <SectionCard title={`Selected areas (${selectedAreas.length})`}>
+              <ul className="space-y-1.5">
+                {selectedAreas.map((a) => (
+                  <li key={`${a.level}:${a.code}`} className="flex items-center gap-2 text-sm">
+                    <span className="rounded bg-surface-variant px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+                      {a.level}
+                    </span>
+                    <span className="truncate font-medium text-foreground">{a.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${a.name}`}
+                      onClick={() => toggleArea(a)}
+                      className="ml-auto text-muted-foreground hover:text-error"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          ) : null}
 
           <SectionCard title="Universe">
             <div className="space-y-2">

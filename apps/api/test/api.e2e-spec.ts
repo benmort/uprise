@@ -95,6 +95,16 @@ describe("API e2e — full surface", () => {
       const res = await api.get(`/api/v1/geo/addresses?divisionType=ced&divisionCode=${encodeURIComponent(ids.cedCode)}&withoutContacts=true`);
       okStatus(res.status);
     });
+    it("statistical areas in viewport", async () => {
+      const res = await api.get("/api/v1/geo/areas?layer=sa2&bbox=151.1,-33.95,151.3,-33.8");
+      okStatus(res.status);
+      expect(data(res.body)).toHaveProperty("features");
+    });
+    it("area search", async () => {
+      const res = await api.get("/api/v1/geo/areas/search?layer=sa2&q=a");
+      okStatus(res.status);
+      expect(Array.isArray(data(res.body))).toBe(true);
+    });
   });
 
   // ── Canvass: campaigns ────────────────────────────────────────
@@ -139,6 +149,18 @@ describe("API e2e — full surface", () => {
       if (!ids.cedCode) return;
       const res = await api.post("/api/v1/canvass/turfs/from-division").send({ type: "ced", code: ids.cedCode, universe: "existing" });
       okStatus(res.status);
+    });
+    it("cut turf from areas (polygon union)", async () => {
+      // Polygon-only selection exercises the PostGIS union path without needing
+      // ASGS data loaded; a turf comes back with a unioned geometry.
+      const res = await api.post("/api/v1/canvass/turfs/from-areas").send({
+        name: "E2E Areas Turf",
+        areas: [],
+        polygons: [square],
+        campaignId: ids.campaignId,
+      });
+      okStatus(res.status);
+      expect(data(res.body)).toHaveProperty("id");
     });
     it("walk list create → update", async () => {
       const contacts = asArray(data((await api.get(`/api/v1/canvass/turfs/${turfId}/contacts`)).body));

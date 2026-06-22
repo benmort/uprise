@@ -61,6 +61,7 @@ function buildNav(campaignId: string): NavNode[] {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin, match: (p) => p.startsWith("/canvass"),
       children: [
         { label: "Overview", href: "/canvass", match: (p) => p === "/canvass" },
+        { label: "Campaigns", href: "/canvass/campaigns", match: (p) => p.startsWith("/canvass/campaigns") },
         { label: "Turf map", href: scoped("turf"), match: (p) => p.includes("/turf") },
         { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists") },
         { label: "Live", href: scoped("live"), match: (p) => p.includes("/live") },

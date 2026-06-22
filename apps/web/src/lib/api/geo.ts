@@ -21,6 +21,13 @@ export type DivisionDetail = Division & {
 };
 export type UniverseAddress = { gnafPid: string; address: string | null; lat: number | null; lng: number | null };
 
+/** ASGS statistical-area levels selectable on the turf-cut map. */
+export type AreaLevel = "mb" | "sa1" | "sa2" | "sa3";
+export type AreaProps = { code: string; name: string; level: AreaLevel };
+export type AreaFeature = GeoJSON.Feature<GeoJSON.MultiPolygon | GeoJSON.Polygon, AreaProps>;
+export type AreaCollection = GeoJSON.FeatureCollection<GeoJSON.MultiPolygon | GeoJSON.Polygon, AreaProps>;
+export type AreaHit = { level: AreaLevel; code: string; name: string };
+
 /** Which addresses a turf is populated with when it's cut. */
 export type TurfUniverse = "existing" | "none" | "hybrid";
 
@@ -50,6 +57,39 @@ export async function listUniverseAddresses(params: {
   if (params.withoutContacts) q.set("withoutContacts", "true");
   if (params.limit) q.set("limit", String(params.limit));
   return request<UniverseAddress[]>(`/geo/addresses?${q}`);
+}
+
+/** Statistical-area boundaries intersecting a viewport, for the clickable map layer. */
+export async function listAreas(params: { layer: AreaLevel; bbox: [number, number, number, number]; limit?: number }) {
+  const q = new URLSearchParams({ layer: params.layer, bbox: params.bbox.join(",") });
+  if (params.limit) q.set("limit", String(params.limit));
+  return request<AreaCollection>(`/geo/areas?${q}`);
+}
+
+/** Type-ahead over a level's name/code for the area search box. */
+export async function searchAreas(layer: AreaLevel, q: string, limit?: number) {
+  const qs = new URLSearchParams({ layer, q });
+  if (limit) qs.set("limit", String(limit));
+  return request<AreaHit[]>(`/geo/areas/search?${qs}`);
+}
+
+/** One area's boundary — used when a search result is picked. */
+export async function getArea(layer: AreaLevel, code: string) {
+  return request<AreaFeature>(`/geo/areas/${layer}/${encodeURIComponent(code)}`);
+}
+
+/** Cut a turf from selected statistical areas and/or free-drawn polygons. */
+export async function createTurfFromAreas(input: {
+  name: string;
+  campaignId?: string;
+  areas: Array<{ layer: AreaLevel; code: string }>;
+  polygons?: GeoJSON.Polygon[];
+}) {
+  return request<{ id: string }>("/canvass/turfs/from-areas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 
 export async function triggerGeoIngest() {
