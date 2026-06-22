@@ -98,6 +98,29 @@ describe("BasicAuthGuard", () => {
     expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
   });
 
+  it.each([
+    "/api/v1/iam/magic-link",
+    "/api/v1/iam/magic-link/consume",
+    "/api/v1/iam/forgot-password",
+    "/api/v1/iam/reset-password",
+    "/api/v1/iam/verify-email/send",
+    "/api/v1/iam/verify-email/confirm",
+    "/api/v1/iam/2fa/send",
+    "/api/v1/iam/2fa/verify",
+    "/api/v1/iam/invite/abc123", // preview (param route)
+    "/api/v1/iam/invite/accept",
+  ])("allows pre-session IAM flow %s without auth", (path) => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({ path, headers: {} });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it("requires auth for /iam/select-tenant (not a pre-session flow)", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({ path: "/api/v1/iam/select-tenant", headers: {} });
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  });
+
   it("allows requests with valid basic auth credentials", () => {
     const guard = createGuard();
     const token = Buffer.from("admin:secret").toString("base64");

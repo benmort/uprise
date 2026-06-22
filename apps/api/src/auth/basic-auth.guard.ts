@@ -36,8 +36,28 @@ export class BasicAuthGuard implements CanActivate {
 
   /** Auth endpoints that issue/clear sessions — reachable without a session. */
   private isAuthEndpointPath(request: Request): boolean {
-    const allowed = new Set(["/iam/sessions", "/api/v1/iam/sessions"]);
-    return this.requestPathCandidates(request).some((c) => allowed.has(c));
+    // Pre-session IAM flows (meld doc 14): they issue/complete a session, so they
+    // must be reachable without one. NOTE: /iam/select-tenant is deliberately NOT
+    // here — it requires an authenticated session.
+    const exact = new Set([
+      "/iam/sessions",
+      "/iam/magic-link",
+      "/iam/magic-link/consume",
+      "/iam/forgot-password",
+      "/iam/reset-password",
+      "/iam/verify-email/send",
+      "/iam/verify-email/confirm",
+      "/iam/2fa/send",
+      "/iam/2fa/verify",
+    ]);
+    const candidates = this.requestPathCandidates(request);
+    return candidates.some(
+      (c) =>
+        exact.has(c) ||
+        exact.has(c.replace(/^\/api\/v1/, "")) ||
+        // invite preview (GET /iam/invite/:token) + accept (POST /iam/invite/accept)
+        /^(?:\/api\/v1)?\/iam\/invite\//.test(c),
+    );
   }
 
   /** Session token from the auth_token cookie or a (non-cron) Bearer header. */

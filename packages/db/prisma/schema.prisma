@@ -324,6 +324,7 @@ model User {
   twofaSecret     String?
   mobile          String?
   mobileVerified  Boolean          @default(false)
+  emailVerified   Boolean          @default(false)
   registeredAt    DateTime         @default(now())
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -1131,6 +1132,7 @@ model TenantInvitation {
 model Session {
   id        String   @id @default(cuid())
   userId    String
+  tenantId  String?  // active tenant when the user has multiple memberships (select-tenant)
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
