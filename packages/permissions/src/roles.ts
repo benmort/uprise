@@ -37,6 +37,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "analytics.all" },
     { action: "manage", resource: "compliance.all" },
     { action: "manage", resource: "contacts.contact" },
+    { action: "manage", resource: "payment.all" },
     { action: "read", resource: "audit.log" },
   ],
 

@@ -16,7 +16,8 @@ function setup(paymentRow?: any) {
   const webhookEvents = { claim: jest.fn(async () => true), release: jest.fn() } as any;
   const billing = { projectSubscription: jest.fn(), projectInvoice: jest.fn(), projectCustomer: jest.fn() } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const svc = new PaymentService(prisma, outbox, webhookEvents, billing, logger);
+  const config = { get: jest.fn((_k: string, fb?: string) => fb ?? "") } as any;
+  const svc = new PaymentService(prisma, outbox, webhookEvents, billing, logger, config);
   return { svc, prisma, outbox, webhookEvents, billing };
 }
 

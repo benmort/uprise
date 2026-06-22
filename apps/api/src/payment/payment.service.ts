@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { PaymentStatus, PaymentType, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
@@ -33,7 +34,23 @@ export class PaymentService {
     private readonly webhookEvents: WebhookEventService,
     private readonly billing: BillingService,
     private readonly logger: DomainLogger,
+    private readonly config: ConfigService,
   ) {}
+
+  private async ensureOrganization() {
+    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
+    return this.prisma.tenant.upsert({ where: { slug }, create: { slug, name: "Default Organization" }, update: {} });
+  }
+
+  /** Emit payment.status.changed (recorded/processing/failed — succeeded/refunded have their own). */
+  private async emitStatus(tx: Prisma.TransactionClient, paymentId: string, tenantId: string, status: PaymentStatus) {
+    await this.outbox.append(tx, {
+      tenantId,
+      eventType: "payment.status.changed",
+      aggregateId: paymentId,
+      payload: { paymentId, tenantId, status },
+    });
+  }
 
   async recordPayment(input: RecordPaymentInput) {
     if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
@@ -41,19 +58,23 @@ export class PaymentService {
     }
     const currency = input.currency.trim().toUpperCase();
     if (currency.length !== 3) throw new BadRequestException("currency must be a 3-letter code");
-    return this.prisma.payment.create({
-      data: {
-        tenantId: input.tenantId,
-        networkId: input.networkId ?? null,
-        amountCents: input.amountCents,
-        currency,
-        type: input.type,
-        customerRef: input.customerRef ?? null,
-        providerPaymentId: input.providerPaymentId ?? null,
-        subscriptionId: input.subscriptionId ?? null,
-        invoiceId: input.invoiceId ?? null,
-        status: PaymentStatus.RECORDED,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          tenantId: input.tenantId,
+          networkId: input.networkId ?? null,
+          amountCents: input.amountCents,
+          currency,
+          type: input.type,
+          customerRef: input.customerRef ?? null,
+          providerPaymentId: input.providerPaymentId ?? null,
+          subscriptionId: input.subscriptionId ?? null,
+          invoiceId: input.invoiceId ?? null,
+          status: PaymentStatus.RECORDED,
+        },
+      });
+      await this.emitStatus(tx, payment.id, payment.tenantId, PaymentStatus.RECORDED);
+      return payment;
     });
   }
 
@@ -66,7 +87,10 @@ export class PaymentService {
   async markProcessing(paymentId: string): Promise<void> {
     const payment = await this.load(paymentId);
     assertValidPaymentTransition(payment.status, PaymentStatus.PROCESSING);
-    await this.prisma.payment.update({ where: { id: paymentId }, data: { status: PaymentStatus.PROCESSING } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({ where: { id: paymentId }, data: { status: PaymentStatus.PROCESSING } });
+      await this.emitStatus(tx, paymentId, payment.tenantId, PaymentStatus.PROCESSING);
+    });
   }
 
   async markSucceeded(paymentId: string): Promise<void> {
@@ -86,9 +110,53 @@ export class PaymentService {
   async markFailed(paymentId: string, reason?: string): Promise<void> {
     const payment = await this.load(paymentId);
     assertValidPaymentTransition(payment.status, PaymentStatus.FAILED);
-    await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: PaymentStatus.FAILED, failureReason: reason ?? null },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: paymentId },
+        data: { status: PaymentStatus.FAILED, failureReason: reason ?? null },
+      });
+      await this.emitStatus(tx, paymentId, payment.tenantId, PaymentStatus.FAILED);
+    });
+  }
+
+  // ── Read queries (prog GetPayment/GetPayments/ListRefunds/GetInvoices/...) ──
+  async listPayments(limit = 50) {
+    const org = await this.ensureOrganization();
+    return this.prisma.payment.findMany({
+      where: { tenantId: org.id },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(Math.max(1, limit), 200),
+    });
+  }
+
+  async getPayment(id: string) {
+    const org = await this.ensureOrganization();
+    const payment = await this.prisma.payment.findFirst({ where: { id, tenantId: org.id } });
+    if (!payment) throw new NotFoundException("Payment not found");
+    return payment;
+  }
+
+  async listRefunds(paymentId: string) {
+    await this.getPayment(paymentId); // tenant-scopes + 404s
+    return this.prisma.refund.findMany({ where: { paymentId }, orderBy: { createdAt: "desc" } });
+  }
+
+  async listInvoices() {
+    const org = await this.ensureOrganization();
+    return this.prisma.invoice.findMany({ where: { tenantId: org.id }, orderBy: { createdAt: "desc" } });
+  }
+
+  async listSubscriptions() {
+    const org = await this.ensureOrganization();
+    return this.prisma.subscription.findMany({ where: { tenantId: org.id }, orderBy: { createdAt: "desc" } });
+  }
+
+  async listPaymentMethods() {
+    const org = await this.ensureOrganization();
+    const customers = await this.prisma.customer.findMany({ where: { tenantId: org.id }, select: { id: true } });
+    return this.prisma.paymentMethod.findMany({
+      where: { customerId: { in: customers.map((c) => c.id) } },
+      orderBy: { createdAt: "desc" },
     });
   }
 

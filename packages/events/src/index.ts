@@ -26,6 +26,12 @@ export const EVENT_TYPES = {
   TENANT_MEMBER_ROLE_UPDATED: "tenant.member.role-updated",
   NETWORK_CREATED: "tenant.network.created",
   SUBSCRIPTION_CHANGED: "payment.subscription.changed",
+  PAYMENT_STATUS_CHANGED: "payment.status.changed",
+  EMAIL_DELIVERED: "email.email.delivered",
+  EMAIL_BOUNCED: "email.email.bounced",
+  CALL_COMPLETED: "telephony.call.completed",
+  USER_SIGNED_IN: "iam.user.signed-in",
+  INVITATION_ACCEPTED: "tenant.invitation.accepted",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -55,6 +61,12 @@ export interface DomainEventMap {
     subscriptionId: string;
     status: string;
   };
+  "payment.status.changed": { paymentId: string; tenantId: string; status: string };
+  "email.email.delivered": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.bounced": { emailId: string; tenantId: string; toAddress: string; reason: string };
+  "telephony.call.completed": { callId: string; tenantId: string; durationSeconds: number | null };
+  "iam.user.signed-in": { userId: string; tenantId: string };
+  "tenant.invitation.accepted": { invitationId: string; tenantId: string; userId: string };
 }
 
 export interface EventMetadata {
