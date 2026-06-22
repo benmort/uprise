@@ -87,6 +87,8 @@ The `{ok,data,error}` envelope is untouched – guards throw Nest `HttpException
 
 Build the session/magic-link/password-reset/2FA handlers on the doc 03 models. 2FA and verification SMS/email go through the **transactional dispatcher** (doc 06), never the blast path. Magic-link/verification emails go through the email domain (doc 07).
 
+Expose these as IAM API endpoints (e.g. `/iam/sessions`, `/iam/magic-link`, `/iam/2fa`, `/iam/invitations/:token`). The session endpoint sets an **httpOnly cookie scoped to the parent domain** so it can back the standalone auth frontend (doc 14) and SSO across all apps. The auth UI itself is a separate thin frontend (`apps/auth`) — see doc 14 — built after this doc, consuming these endpoints + `@yarns/contracts`/`@yarns/ui`/`@yarns/api-client`.
+
 ## Verification
 
 - e2e: session login issues a token; `AbilityGuard` denies a canvasser hitting an audience endpoint, allows an organiser.
