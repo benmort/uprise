@@ -87,6 +87,26 @@ enum ConsentState {
   @@schema("messaging")
 }
 
+// Marketing vs transactional messages. TRANSACTIONAL (2FA, verification codes,
+// receipts) is legally exempt from marketing consent and bypasses
+// consent/compliance/suppression (meld doc 06).
+enum MessageKind {
+  MARKETING
+  TRANSACTIONAL
+  @@schema("messaging")
+}
+
+// Lifecycle of a transactional SMS (mirrors prog's sms-message aggregate).
+enum TxSmsStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  UNDELIVERED
+  FAILED
+  @@schema("messaging")
+}
+
 enum IntegrationType {
   ACTION_NETWORK
   INTERNAL
@@ -497,6 +517,9 @@ model OutboundMessage {
   recipientId     String?
   contactId       String?
   channel         MessageChannel @default(SMS)
+  kind            MessageKind   @default(MARKETING)
+  txStatus        TxSmsStatus?  // transactional rows; marketing rows use `status`
+  purpose         String?       // transactional only: "verification_code" | "2fa" | ...
   toPhone         String
   fromPhone       String
   body            String
@@ -513,7 +536,25 @@ model OutboundMessage {
   contact         Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, toPhone, sentAt])
+  @@index([tenantId, kind, sentAt])
   @@index([contactId])
+  @@schema("messaging")
+}
+
+// Transactional message bodies (2FA, verification, receipts), tenant-scoped and
+// keyed. Marketing bodies live on Blast; these are for the transactional path.
+model MessageTemplate {
+  id        String         @id @default(cuid())
+  tenantId  String
+  key       String
+  channel   MessageChannel @default(SMS)
+  kind      MessageKind    @default(TRANSACTIONAL)
+  body      String         @db.Text
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([tenantId, key])
   @@schema("messaging")
 }
 

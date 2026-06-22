@@ -397,4 +397,61 @@ export class TwilioService {
       this.releaseSendPermit();
     }
   }
+
+  /** Params for a transactional SMS — a distinct sender from marketing so
+   *  carriers classify it correctly and reputation is isolated. */
+  private buildTransactionalParams(to: string, body: string): Record<string, unknown> {
+    const statusCallback = this.getStatusCallbackUrl();
+    const messagingServiceSid = this.config
+      .get<string>("TWILIO_TRANSACTIONAL_MESSAGING_SERVICE_SID", "")
+      .trim();
+    const from =
+      this.config.get<string>("TWILIO_TRANSACTIONAL_FROM", "").trim() ||
+      this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
+    if (!messagingServiceSid && !from) {
+      throw new ServiceUnavailableException(
+        "Transactional sender is not configured. Set TWILIO_TRANSACTIONAL_FROM, TWILIO_TRANSACTIONAL_MESSAGING_SERVICE_SID, or TWILIO_PHONE_NUMBER.",
+      );
+    }
+    return {
+      ...(statusCallback ? { statusCallback } : {}),
+      to: to.trim(),
+      body: body.trim(),
+      ...(messagingServiceSid ? { messagingServiceSid } : { from }),
+    };
+  }
+
+  /**
+   * Send a transactional SMS (2FA, verification, receipts). Reuses the rate
+   * limiter + retry, but a SEPARATE sender from marketing. Never gated by
+   * consent/compliance — that's the caller's contract (TransactionalMessagingService).
+   */
+  async sendTransactional(to: string, body: string): Promise<TwilioMessage> {
+    const client = this.getClient();
+    const params = this.buildTransactionalParams(to, body);
+    await this.acquireSendPermit();
+    try {
+      const created = await withRetry(
+        async () => {
+          try {
+            return await client.messages.create(params as any);
+          } catch (error) {
+            if (isTwilioRateLimitError(error)) {
+              this.triggerRateLimitCooldown(error);
+            }
+            throw error;
+          }
+        },
+        {
+          retries: 4,
+          baseDelayMs: 400,
+          maxDelayMs: 10000,
+          shouldRetry: (error) => isRetryableTwilioError(error),
+        },
+      );
+      return toMessage(created);
+    } finally {
+      this.releaseSendPermit();
+    }
+  }
 }
