@@ -3,6 +3,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { validateEnv } from "./config/env.validation";
 import { BasicAuthGuard } from "./auth/basic-auth.guard";
+import { AbilityGuard } from "./auth/ability.guard";
 import { RolesGuard } from "./auth/roles.guard";
 import { AuthController } from "./auth/auth.controller";
 import { AuthScopeService } from "./auth/auth-scope.service";
@@ -74,6 +75,12 @@ import { QueueModule } from "./common/queue/queue.module";
     {
       provide: APP_GUARD,
       useClass: BasicAuthGuard,
+    },
+    // Runs after BasicAuthGuard (which attaches request.user). Enforces CASL on
+    // routes decorated with @RequirePermission; a no-op for routes without it.
+    {
+      provide: APP_GUARD,
+      useClass: AbilityGuard,
     },
   ],
 })

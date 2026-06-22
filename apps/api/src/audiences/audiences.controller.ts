@@ -15,6 +15,13 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { AudiencesService } from "./audiences.service";
 import { AudienceContactsDto, CreateAudienceDto, ListAudiencesDto } from "./dto/audience.dto";
+import { RequirePermission } from "../auth/require-permission.decorator";
+
+// Audiences are an organiser/owner domain (canvassers have no access). The cron
+// dispatch route is deliberately left ungated — it runs with a Bearer token and
+// has no request.user.
+const READ = { action: "read", resource: "audience.audience" } as const;
+const MANAGE = { action: "manage", resource: "audience.audience" } as const;
 
 @Controller("audiences")
 export class AudiencesController {
@@ -37,11 +44,13 @@ export class AudiencesController {
   }
 
   @Post()
+  @RequirePermission(MANAGE)
   create(@Body() dto: CreateAudienceDto) {
     return this.audiences.createAudience(dto);
   }
 
   @Get()
+  @RequirePermission(READ)
   list(@Query() dto: ListAudiencesDto) {
     return this.audiences.listAudiences(dto);
   }
@@ -55,31 +64,37 @@ export class AudiencesController {
 
   /** Create (or return) the dynamic "all WhatsApp opt-ins" smart audience. */
   @Post("whatsapp-opt-ins")
+  @RequirePermission(MANAGE)
   whatsappOptIns() {
     return this.audiences.ensureWhatsappOptInAudience();
   }
 
   @Get(":id")
+  @RequirePermission(READ)
   getOne(@Param("id") id: string) {
     return this.audiences.getAudience(id);
   }
 
   @Patch(":id/archive")
+  @RequirePermission(MANAGE)
   archive(@Param("id") id: string) {
     return this.audiences.archiveAudience(id);
   }
 
   @Patch(":id/restore")
+  @RequirePermission(MANAGE)
   restore(@Param("id") id: string) {
     return this.audiences.restoreAudience(id);
   }
 
   @Delete(":id")
+  @RequirePermission(MANAGE)
   remove(@Param("id") id: string) {
     return this.audiences.deleteAudience(id);
   }
 
   @Post(":id/import-csv")
+  @RequirePermission(MANAGE)
   @UseInterceptors(FileInterceptor("file"))
   importCsv(
     @Param("id") id: string,
@@ -90,6 +105,7 @@ export class AudiencesController {
   }
 
   @Get(":id/imports/:importId")
+  @RequirePermission(READ)
   importStatus(
     @Param("id") id: string,
     @Param("importId") importId: string,
@@ -98,6 +114,7 @@ export class AudiencesController {
   }
 
   @Get(":id/contacts")
+  @RequirePermission(READ)
   contacts(@Param("id") id: string, @Query() dto: AudienceContactsDto) {
     if (dto.query && dto.query.trim()) {
       return this.audiences.searchContacts(id, dto.query, dto.limit, dto.offset);
@@ -106,22 +123,26 @@ export class AudiencesController {
   }
 
   @Get(":id/export-csv")
+  @RequirePermission(READ)
   @Header("Content-Type", "text/csv")
   async exportCsv(@Param("id") id: string): Promise<string> {
     return this.audiences.exportContactsCsv(id);
   }
 
   @Get(":id/whatsapp-reach")
+  @RequirePermission(READ)
   whatsappReach(@Param("id") id: string) {
     return this.audiences.whatsappReach(id);
   }
 
   @Get(":id/growth")
+  @RequirePermission(READ)
   growth(@Param("id") id: string) {
     return this.audiences.growthMetrics(id);
   }
 
   @Get(":id/segment-summary")
+  @RequirePermission(READ)
   summary(@Param("id") id: string) {
     return this.audiences.segmentationSummary(id);
   }
