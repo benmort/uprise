@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { MessageChannel } from "../../src/generated/prisma";
+import { MessageChannel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()

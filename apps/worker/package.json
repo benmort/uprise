@@ -3,11 +3,11 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "node scripts/copy-prisma-generated.mjs && node dist/worker/src/main.js",
+    "start": "node dist/worker/src/main.js",
     "dev": "TS_NODE_PROJECT=tsconfig.dev.json node --watch -r ts-node/register src/main.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "pnpm run typecheck",
-    "build": "tsc -p tsconfig.json && node scripts/copy-prisma-generated.mjs",
+    "build": "tsc -p tsconfig.json",
     "queue:inspect-failed": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts inspect-failed",
     "queue:replay-failed": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts replay-failed",
     "queue:drain": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts drain"
@@ -29,7 +29,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "twilio": "^5.3.7",
-    "uuid": "^11.0.3"
+    "uuid": "^11.0.3",
+    "@yarns/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",

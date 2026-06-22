@@ -5,7 +5,7 @@ import {
   EngagementChannel,
   JourneyTriggerType,
   QuestionResponse,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { ApiHttpException } from "../common/http/api-response";

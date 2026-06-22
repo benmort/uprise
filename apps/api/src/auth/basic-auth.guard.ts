@@ -8,7 +8,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
-import { AppUserRole } from "../../src/generated/prisma";
+import { AppUserRole } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthUser } from "./auth-user";
 import { verifyPassword } from "./password.util";

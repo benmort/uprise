@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Contact, Prisma } from "../../src/generated/prisma";
+import { Contact, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizeAddress } from "../common/utils/address.utils";
 

@@ -8,7 +8,7 @@ import {
   TurfAssignmentStatus,
   WalkListItemListType,
   WalkListItemStatus,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { put } from "@vercel/blob";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";

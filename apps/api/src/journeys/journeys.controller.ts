@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Query } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { JourneyEnrolmentState, JourneyStatus, Prisma } from "../../src/generated/prisma";
+import { JourneyEnrolmentState, JourneyStatus, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { JourneysService } from "./journeys.service";

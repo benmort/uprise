@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { BlastRecipientStatus } from "../../src/generated/prisma";
+import { BlastRecipientStatus } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { TwilioService } from "../twilio/twilio.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";

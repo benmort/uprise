@@ -1,4 +1,4 @@
-import { AppUserRole } from "../../src/generated/prisma";
+import { AppUserRole } from "@yarns/db";
 
 /** The principal attached to `request.user` by BasicAuthGuard. */
 export type AuthUser = {

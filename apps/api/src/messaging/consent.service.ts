@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { ConsentState, MessageChannel } from "../../src/generated/prisma";
+import { ConsentState, MessageChannel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 const STOP_KEYWORDS = new Set(["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "stop all"]);

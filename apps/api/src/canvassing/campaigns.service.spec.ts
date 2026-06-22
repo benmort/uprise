@@ -1,4 +1,4 @@
-import { CanvassCampaignStatus } from "../../src/generated/prisma";
+import { CanvassCampaignStatus } from "@yarns/db";
 import { CampaignsService } from "./campaigns.service";
 
 describe("CampaignsService", () => {

@@ -4,7 +4,7 @@ import {
   JourneyStatus,
   JourneyTriggerType,
   Prisma,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { ApiHttpException } from "../common/http/api-response";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";

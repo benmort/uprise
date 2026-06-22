@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { CannedResponse, CannedVisibility, EngagementChannel } from "../../src/generated/prisma";
+import { CannedResponse, CannedVisibility, EngagementChannel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 

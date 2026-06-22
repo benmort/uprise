@@ -7,7 +7,7 @@ import {
   IntegrationJobStatus,
   IntegrationType,
   Prisma,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";

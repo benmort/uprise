@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole, EngagementChannel } from "../../src/generated/prisma";
+import { AppUserRole, EngagementChannel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";

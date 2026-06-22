@@ -1,6 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 import { AudiencesService } from "./audiences.service";
-import { AudienceImportStatus } from "../../src/generated/prisma";
+import { AudienceImportStatus } from "@yarns/db";
 
 describe("AudiencesService integration-like flow", () => {
   it("starts csv import and resumes in bounded batches", async () => {

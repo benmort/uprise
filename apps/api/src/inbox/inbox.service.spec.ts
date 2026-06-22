@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus } from "../../src/generated/prisma";
+import { BlastRecipientStatus } from "@yarns/db";
 import { InboxService } from "./inbox.service";
 
 describe("InboxService", () => {

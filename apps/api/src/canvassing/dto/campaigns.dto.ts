@@ -1,5 +1,5 @@
 import { IsEnum, IsObject, IsOptional, IsString } from "class-validator";
-import { CanvassCampaignStatus } from "../../../src/generated/prisma";
+import { CanvassCampaignStatus } from "@yarns/db";
 
 export class CreateCampaignDto {
   @IsString()

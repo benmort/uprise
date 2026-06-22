@@ -6,7 +6,7 @@ import {
   ConsentState,
   MessageChannel,
   Prisma,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 import { assertValidBlastTransition } from "./blast-state.machine";

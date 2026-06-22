@@ -1,4 +1,4 @@
-import { DispositionLayer, EngagementChannel } from "../../src/generated/prisma";
+import { DispositionLayer, EngagementChannel } from "@yarns/db";
 import { EngagementService } from "./engagement.service";
 
 describe("EngagementService", () => {

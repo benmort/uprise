@@ -1,4 +1,4 @@
-import { JourneyEnrolmentState, JourneyStatus, JourneyTriggerType } from "../../src/generated/prisma";
+import { JourneyEnrolmentState, JourneyStatus, JourneyTriggerType } from "@yarns/db";
 import { JourneysService } from "./journeys.service";
 
 describe("JourneysService", () => {

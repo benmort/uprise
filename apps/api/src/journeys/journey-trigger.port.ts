@@ -1,4 +1,4 @@
-import { JourneyTriggerType } from "../../src/generated/prisma";
+import { JourneyTriggerType } from "@yarns/db";
 
 export const JOURNEY_TRIGGER_PORT = "JourneyTriggerPort";
 

@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus, BlastStatus } from "../../src/generated/prisma";
+import { BlastRecipientStatus, BlastStatus } from "@yarns/db";
 import { BlastsService } from "./blasts.service";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";

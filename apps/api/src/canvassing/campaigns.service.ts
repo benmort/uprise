@@ -5,7 +5,7 @@ import {
   Prisma,
   TurfAssignmentStatus,
   WalkListItemStatus,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 
