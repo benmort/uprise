@@ -91,6 +91,7 @@ describe("BlastsService integration-like flow", () => {
         create: jest.fn().mockResolvedValue({}),
         count: jest.fn().mockResolvedValue(1),
       },
+      audience: { findFirst: jest.fn().mockResolvedValue(null) },
       audienceContact: {
         findMany: jest.fn().mockResolvedValue([
           {

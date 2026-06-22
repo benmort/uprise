@@ -41,6 +41,29 @@ export class GeoController {
     return this.geo.divisionDetail(org.id, type, code);
   }
 
+  @Get("areas/search")
+  searchAreas(
+    @Query("layer") layer = "sa2",
+    @Query("q") q = "",
+    @Query("limit") limit?: string,
+  ) {
+    return this.geo.searchAreas(layer, q, limit ? Number(limit) : undefined);
+  }
+
+  @Get("areas/:layer/:code")
+  area(@Param("layer") layer: string, @Param("code") code: string) {
+    return this.geo.area(layer, code);
+  }
+
+  @Get("areas")
+  listAreas(
+    @Query("layer") layer = "sa2",
+    @Query("bbox") bbox = "",
+    @Query("limit") limit?: string,
+  ) {
+    return this.geo.areas({ layer, bbox, limit: limit ? Number(limit) : undefined });
+  }
+
   @Get("addresses")
   async addresses(
     @Query("turfId") turfId?: string,

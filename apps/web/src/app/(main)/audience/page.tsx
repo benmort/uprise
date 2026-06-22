@@ -4,15 +4,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   createAudience,
+  createWhatsappOptInAudience,
   getAudienceImportStatus,
   importAudienceCsv,
   listAudiences,
   searchIntegrationLists,
   syncIntegrationList,
+  type AudienceChannel,
   type AudienceImportProgress,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -26,9 +29,13 @@ type AudienceRow = {
   name: string;
   source: string;
   status: string;
+  channel?: AudienceChannel;
+  kind?: "STATIC" | "WHATSAPP_OPTED_IN";
   syncedAt?: string;
   _count?: { contacts: number };
 };
+
+const CHANNEL_LABEL: Record<string, string> = { SMS: "SMS", WHATSAPP: "WhatsApp", ALL: "Both" };
 
 type UploadState = {
   audienceId: string;
@@ -108,6 +115,8 @@ export default function AudiencePage() {
   const [filter, setFilter] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [audienceName, setAudienceName] = useState("");
+  const [newChannel, setNewChannel] = useState<AudienceChannel>("ALL");
+  const [creatingSmart, setCreatingSmart] = useState(false);
   const integrationType: "ACTION_NETWORK" = "ACTION_NETWORK";
   const [lists, setLists] = useState<Array<Record<string, unknown>>>([]);
   const [selectedListId, setSelectedListId] = useState("");
@@ -229,7 +238,7 @@ export default function AudiencePage() {
             <CardTitle>Import Subscribers</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
               <Input
                 placeholder="Audience name"
                 value={audienceName}
@@ -240,6 +249,16 @@ export default function AudiencePage() {
                 accept=".csv,text/csv"
                 onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
               />
+              <Select
+                value={newChannel}
+                onChange={(e) => setNewChannel(e.target.value as AudienceChannel)}
+                title="Which channel this audience is for"
+                className="md:w-36"
+              >
+                <option value="ALL">Both channels</option>
+                <option value="SMS">SMS</option>
+                <option value="WHATSAPP">WhatsApp</option>
+              </Select>
               <Button
                 onClick={async () => {
                   if (!audienceName.trim()) {
@@ -253,7 +272,7 @@ export default function AudiencePage() {
                   setValidationMessage("");
                   const trimmedName = audienceName.trim();
                   setImportMessage("");
-                  const created = await createAudience({ name: trimmedName, source: "CSV" });
+                  const created = await createAudience({ name: trimmedName, source: "CSV", channel: newChannel });
                   if (!created.ok) {
                     setImportMessage(created.error);
                     showToast({
@@ -269,6 +288,7 @@ export default function AudiencePage() {
                       id: audienceId,
                       name: trimmedName,
                       source: "CSV",
+                      channel: newChannel,
                       status: "UPLOADING",
                       _count: { contacts: 0 },
                     },
@@ -408,6 +428,29 @@ export default function AudiencePage() {
             </a>
             {validationMessage && <p className="text-xs text-error">{validationMessage}</p>}
             {importMessage && <p className="text-xs text-muted-foreground">{importMessage}</p>}
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={creatingSmart}
+                onClick={async () => {
+                  setCreatingSmart(true);
+                  const res = await createWhatsappOptInAudience();
+                  setCreatingSmart(false);
+                  if (!res.ok) {
+                    showToast({ tone: "error", title: "Couldn't create smart list", description: res.error });
+                    return;
+                  }
+                  await refresh();
+                  showToast({ tone: "success", title: "WhatsApp opt-ins smart list ready" });
+                }}
+              >
+                + WhatsApp opt-ins (smart list)
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Auto-updates to everyone opted in on WhatsApp.
+              </span>
+            </div>
           </CardContent>
         </Card>
 
@@ -563,6 +606,7 @@ export default function AudiencePage() {
                     <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                       <th className="py-2 pr-4">Audience Name</th>
                       <th className="py-2 pr-4">Source</th>
+                      <th className="py-2 pr-4">Channel</th>
                       <th className="py-2 pr-4">Subscribers</th>
                       <th className="py-2 pr-4">Last Sync</th>
                       <th className="py-2 pr-4">Upload Progress</th>
@@ -586,6 +630,19 @@ export default function AudiencePage() {
                             <p className="text-xs text-muted-foreground">ID: {row.id}</p>
                           </td>
                           <td className="py-3 pr-4">{row.source}</td>
+                          <td className="py-3 pr-4">
+                            <span
+                              className={
+                                "rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+                                (row.channel === "WHATSAPP"
+                                  ? "bg-[hsl(var(--success))]/15 text-[hsl(var(--success))]"
+                                  : "bg-surface-variant text-muted-foreground")
+                              }
+                            >
+                              {CHANNEL_LABEL[row.channel ?? "ALL"] ?? "Both"}
+                              {row.kind === "WHATSAPP_OPTED_IN" ? " · smart" : ""}
+                            </span>
+                          </td>
                           <td className="py-3 pr-4">{Number(row._count?.contacts || 0).toLocaleString()}</td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {row.syncedAt ? new Date(row.syncedAt).toLocaleString() : "Never"}
@@ -649,7 +706,7 @@ export default function AudiencePage() {
                     })}
                     {paged.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                        <td colSpan={8} className="py-6 text-center text-muted-foreground">
                           No audiences match your current filters.
                         </td>
                       </tr>

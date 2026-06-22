@@ -25,17 +25,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { KpiTile } from "@/components/canvass/kpi-tile";
 import { MapThumbnail } from "@/components/canvass/map-thumbnail";
 import { ProgressBar } from "@/components/canvass/progress-bar";
+import { CampaignNavCards } from "@/components/canvass/campaign-nav-cards";
 import { useToast } from "@/components/ui/toast";
-
-/** Pull the outer ring ([lng,lat][]) out of a GeoJSON Polygon/MultiPolygon for the thumbnail. */
-function outerRing(geometry: unknown): Array<[number, number]> | undefined {
-  const g = geometry as { type?: string; coordinates?: unknown } | null;
-  if (!g || typeof g.type !== "string") return undefined;
-  if (g.type === "Polygon") return (g.coordinates as Array<Array<[number, number]>>)?.[0];
-  if (g.type === "MultiPolygon")
-    return (g.coordinates as Array<Array<Array<[number, number]>>>)?.[0]?.[0];
-  return undefined;
-}
+import { outerRing } from "@/lib/geometry";
 
 export default function CanvassPage() {
   const router = useRouter();
@@ -219,28 +211,7 @@ export default function CanvassPage() {
         </div>
       </div>
 
-      {activeId ? (
-        <div id="tour-canvass-ops" className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/canvass/${activeId}/live`}>Live war-room</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/canvass/${activeId}/results`}>Results</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/canvass/${activeId}/goals`}>Goals</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/canvass/${activeId}/shifts`}>Shifts</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/canvass/${activeId}/qa`}>QA</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/canvass/canvassers">Canvassers</Link>
-          </Button>
-        </div>
-      ) : null}
+      {activeId ? <CampaignNavCards campaignId={activeId} id="tour-canvass-ops" /> : null}
 
       <div id="tour-canvass-kpis" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile

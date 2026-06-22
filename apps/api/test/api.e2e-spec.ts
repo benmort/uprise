@@ -95,6 +95,16 @@ describe("API e2e — full surface", () => {
       const res = await api.get(`/api/v1/geo/addresses?divisionType=ced&divisionCode=${encodeURIComponent(ids.cedCode)}&withoutContacts=true`);
       okStatus(res.status);
     });
+    it("statistical areas in viewport", async () => {
+      const res = await api.get("/api/v1/geo/areas?layer=sa2&bbox=151.1,-33.95,151.3,-33.8");
+      okStatus(res.status);
+      expect(data(res.body)).toHaveProperty("features");
+    });
+    it("area search", async () => {
+      const res = await api.get("/api/v1/geo/areas/search?layer=sa2&q=a");
+      okStatus(res.status);
+      expect(Array.isArray(data(res.body))).toBe(true);
+    });
   });
 
   // ── Canvass: campaigns ────────────────────────────────────────
@@ -139,6 +149,18 @@ describe("API e2e — full surface", () => {
       if (!ids.cedCode) return;
       const res = await api.post("/api/v1/canvass/turfs/from-division").send({ type: "ced", code: ids.cedCode, universe: "existing" });
       okStatus(res.status);
+    });
+    it("cut turf from areas (polygon union)", async () => {
+      // Polygon-only selection exercises the PostGIS union path without needing
+      // ASGS data loaded; a turf comes back with a unioned geometry.
+      const res = await api.post("/api/v1/canvass/turfs/from-areas").send({
+        name: "E2E Areas Turf",
+        areas: [],
+        polygons: [square],
+        campaignId: ids.campaignId,
+      });
+      okStatus(res.status);
+      expect(data(res.body)).toHaveProperty("id");
     });
     it("walk list create → update", async () => {
       const contacts = asArray(data((await api.get(`/api/v1/canvass/turfs/${turfId}/contacts`)).body));
@@ -251,6 +273,38 @@ describe("API e2e — full surface", () => {
       okStatus((await api.post("/api/v1/audiences").send({ name: `E2E Audience ${Date.now()}`, source: "CSV" })).status);
     });
     it("blasts list", async () => okStatus((await api.get("/api/v1/blasts")).status));
+  });
+
+  // ── WhatsApp audiences ────────────────────────────────────────
+  describe("whatsapp audiences", () => {
+    let waAudienceId: string;
+    it("create a channel=WHATSAPP audience", async () => {
+      const res = await api.post("/api/v1/audiences").send({ name: `E2E WA ${Date.now()}`, source: "MANUAL", channel: "WHATSAPP" });
+      okStatus(res.status);
+      expect(data(res.body).channel).toBe("WHATSAPP");
+      waAudienceId = data(res.body).id;
+    });
+    it("ensure the smart opt-in audience (idempotent)", async () => {
+      const a = await api.post("/api/v1/audiences/whatsapp-opt-ins");
+      okStatus(a.status);
+      const b = await api.post("/api/v1/audiences/whatsapp-opt-ins");
+      okStatus(b.status);
+      expect(data(a.body).id).toBe(data(b.body).id); // idempotent
+      expect(data(a.body).kind).toBe("WHATSAPP_OPTED_IN");
+    });
+    it("list filtered by channel=WHATSAPP excludes SMS-only", async () => {
+      await api.post("/api/v1/audiences").send({ name: `E2E SMS ${Date.now()}`, source: "MANUAL", channel: "SMS" });
+      const res = await api.get("/api/v1/audiences?channel=WHATSAPP");
+      okStatus(res.status);
+      const rows = (data(res.body).rows ?? []) as Array<{ channel: string }>;
+      expect(rows.every((r) => r.channel === "WHATSAPP" || r.channel === "ALL")).toBe(true);
+    });
+    it("whatsapp-reach returns total + reachable", async () => {
+      const res = await api.get(`/api/v1/audiences/${waAudienceId}/whatsapp-reach`);
+      okStatus(res.status);
+      expect(data(res.body)).toHaveProperty("total");
+      expect(data(res.body)).toHaveProperty("reachable");
+    });
   });
 
   // ── Compliance / integrations / push ──────────────────────────

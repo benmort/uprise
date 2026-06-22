@@ -53,6 +53,12 @@ export class AudiencesController {
     return this.audiences.dispatchPendingImports(parsedLimit);
   }
 
+  /** Create (or return) the dynamic "all WhatsApp opt-ins" smart audience. */
+  @Post("whatsapp-opt-ins")
+  whatsappOptIns() {
+    return this.audiences.ensureWhatsappOptInAudience();
+  }
+
   @Get(":id")
   getOne(@Param("id") id: string) {
     return this.audiences.getAudience(id);
@@ -103,6 +109,11 @@ export class AudiencesController {
   @Header("Content-Type", "text/csv")
   async exportCsv(@Param("id") id: string): Promise<string> {
     return this.audiences.exportContactsCsv(id);
+  }
+
+  @Get(":id/whatsapp-reach")
+  whatsappReach(@Param("id") id: string) {
+    return this.audiences.whatsappReach(id);
   }
 
   @Get(":id/growth")

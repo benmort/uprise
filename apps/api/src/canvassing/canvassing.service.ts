@@ -425,6 +425,33 @@ export class CanvassingService {
   }
 
   /**
+   * Cut a turf from a mixed selection of statistical areas (meshblock / SA1-3)
+   * and/or free-drawn polygons. The boundary is the PostGIS union of every
+   * selected piece, so the saved geometry is full-precision regardless of what
+   * the map rendered. Existing-contact bucketing + cold-door loading are left to
+   * the caller (rebucket + load-universe), matching the polygon path.
+   */
+  async createTurfFromAreas(
+    organizationId: string,
+    input: {
+      name: string;
+      campaignId?: string | null;
+      areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3"; code: string }>;
+      polygons?: Record<string, unknown>[];
+    },
+  ) {
+    const geometry = await this.geo.unionAreas(input.areas ?? [], input.polygons ?? []);
+    if (!geometry) {
+      throw new ApiHttpException("EMPTY_SELECTION", "Select at least one area or draw a polygon");
+    }
+    return this.createTurf(organizationId, {
+      name: input.name,
+      geometry,
+      campaignId: input.campaignId ?? null,
+    });
+  }
+
+  /**
    * Materialise the "addresses without contacts" universe for a turf: pull cold
    * G-NAF addresses inside the turf polygon (via GeoService) and create Contact
    * rows so they become canvassable stops in walk lists. Cold doors carry a

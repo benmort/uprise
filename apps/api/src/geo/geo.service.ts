@@ -6,6 +6,16 @@ export type DivisionType = "ced" | "sed" | "lga";
 const DIVISION_TABLE: Record<DivisionType, string> = { ced: "geo.ced", sed: "geo.sed", lga: "geo.lga" };
 const REGION_COL: Record<DivisionType, string> = { ced: "ced_code", sed: "sed_code", lga: "lga_code" };
 
+/** ASGS statistical-area levels selectable on the turf-cut map. */
+export type AreaLevel = "mb" | "sa1" | "sa2" | "sa3";
+const AREA_TABLE: Record<AreaLevel, { table: string; codeCol: string; nameExpr: string }> = {
+  // Meshblocks have no name — fall back to the code as the label.
+  mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "mb_code" },
+  sa1: { table: "geo.sa1", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  sa3: { table: "geo.sa3", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+};
+
 @Injectable()
 export class GeoService {
   constructor(private readonly prisma: PrismaService) {}
@@ -15,6 +25,118 @@ export class GeoService {
       throw new ApiHttpException("BAD_DIVISION_TYPE", "type must be ced, sed or lga");
     }
     return { table: DIVISION_TABLE[type], col: REGION_COL[type], type };
+  }
+
+  private areaTable(layer: string) {
+    if (layer !== "mb" && layer !== "sa1" && layer !== "sa2" && layer !== "sa3") {
+      throw new ApiHttpException("BAD_AREA_LEVEL", "layer must be mb, sa1, sa2 or sa3");
+    }
+    return AREA_TABLE[layer];
+  }
+
+  /**
+   * Statistical-area boundaries intersecting a viewport, as a GeoJSON
+   * FeatureCollection — the clickable/selectable layer on the turf-cut map.
+   * bbox is "minLng,minLat,maxLng,maxLat"; the `geom &&` bbox-overlap test hits
+   * the GIST index so meshblock-density viewports stay fast. Capped so a
+   * zoomed-out request can't ship the whole country.
+   */
+  async areas(opts: { layer: string; bbox: string; limit?: number }) {
+    const { table, codeCol, nameExpr } = this.areaTable(opts.layer);
+    const b = (opts.bbox ?? "").split(",").map(Number);
+    if (b.length !== 4 || b.some((n) => !Number.isFinite(n))) {
+      throw new ApiHttpException("BAD_BBOX", "bbox must be minLng,minLat,maxLng,maxLat");
+    }
+    const limit = Math.min(Math.max(1, opts.limit ?? 800), 3000);
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT ${codeCol} AS code, ${nameExpr} AS name, ST_AsGeoJSON(geom) AS geojson
+       FROM ${table}
+       WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+       LIMIT ${limit}`,
+      b[0],
+      b[1],
+      b[2],
+      b[3],
+    )) as Array<{ code: string; name: string | null; geojson: string }>;
+    return {
+      type: "FeatureCollection" as const,
+      features: rows.map((r) => ({
+        type: "Feature" as const,
+        id: r.code,
+        geometry: JSON.parse(r.geojson),
+        properties: { code: r.code, name: r.name ?? r.code, level: opts.layer },
+      })),
+    };
+  }
+
+  /** Type-ahead over a level's name/code for the area search box. */
+  async searchAreas(layer: string, q: string, limit?: number) {
+    const { table, codeCol, nameExpr } = this.areaTable(layer);
+    const term = `%${(q ?? "").trim()}%`;
+    const lim = Math.min(Math.max(1, limit ?? 12), 50);
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT ${codeCol} AS code, ${nameExpr} AS name
+       FROM ${table}
+       WHERE ${codeCol} ILIKE $1 OR ${nameExpr} ILIKE $1
+       ORDER BY name
+       LIMIT ${lim}`,
+      term,
+    )) as Array<{ code: string; name: string | null }>;
+    return rows.map((r) => ({ level: layer, code: r.code, name: r.name ?? r.code }));
+  }
+
+  /** One statistical area's boundary — used when a search result is picked. */
+  async area(layer: string, code: string) {
+    const { table, codeCol, nameExpr } = this.areaTable(layer);
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT ${codeCol} AS code, ${nameExpr} AS name, ST_AsGeoJSON(geom) AS geojson
+       FROM ${table} WHERE ${codeCol} = $1`,
+      code,
+    )) as Array<{ code: string; name: string | null; geojson: string | null }>;
+    if (rows.length === 0 || !rows[0].geojson) {
+      throw new ApiHttpException("AREA_NOT_FOUND", "Area not found");
+    }
+    const r = rows[0];
+    return {
+      type: "Feature" as const,
+      id: r.code,
+      geometry: JSON.parse(String(r.geojson)),
+      properties: { code: r.code, name: r.name ?? r.code, level: layer },
+    };
+  }
+
+  /**
+   * Union the boundaries of the given statistical areas (+ any free-drawn
+   * polygons) into a single MultiPolygon — the geometry for a turf cut from a
+   * mixed selection. Returns null GeoJSON only if nothing resolved.
+   */
+  async unionAreas(
+    areas: Array<{ layer: string; code: string }>,
+    polygons: unknown[] = [],
+  ): Promise<unknown | null> {
+    // Codes + polygons are passed as JSON-array scalars (not text[]/array binds,
+    // which $queryRawUnsafe doesn't serialise reliably) and expanded in SQL.
+    const codes = (level: AreaLevel) =>
+      JSON.stringify(areas.filter((a) => a.layer === level).map((a) => a.code));
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `WITH parts AS (
+         SELECT geom FROM geo.meshblock WHERE mb_code IN (SELECT jsonb_array_elements_text($1::jsonb))
+         UNION ALL SELECT geom FROM geo.sa1 WHERE code IN (SELECT jsonb_array_elements_text($2::jsonb))
+         UNION ALL SELECT geom FROM geo.sa2 WHERE code IN (SELECT jsonb_array_elements_text($3::jsonb))
+         UNION ALL SELECT geom FROM geo.sa3 WHERE code IN (SELECT jsonb_array_elements_text($4::jsonb))
+         UNION ALL
+           SELECT ST_SetSRID(ST_GeomFromGeoJSON(je.value::text), 4326)
+           FROM jsonb_array_elements($5::jsonb) AS je(value)
+       )
+       SELECT ST_AsGeoJSON(ST_Multi(ST_Union(geom))) AS geojson FROM parts`,
+      codes("mb"),
+      codes("sa1"),
+      codes("sa2"),
+      codes("sa3"),
+      JSON.stringify(polygons ?? []),
+    )) as Array<{ geojson: string | null }>;
+    const geojson = rows[0]?.geojson;
+    return geojson ? JSON.parse(geojson) : null;
   }
 
   /** Dataset provenance + row counts for /settings/data. */

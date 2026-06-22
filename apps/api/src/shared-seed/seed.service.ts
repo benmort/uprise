@@ -301,6 +301,74 @@ export class SeedService {
           poly,
         );
       }
+
+      // Synthetic ASGS statistical areas over the demo turf so the turf-cut map's
+      // clickable MB/SA1/SA2/SA3 layer renders locally (prod has the national load).
+      // A nested grid: 1 SA3 ⊃ 2 SA2 ⊃ 4 SA1 ⊃ 16 meshblocks, parent codes wired up.
+      const W = 151.183;
+      const E = 151.197;
+      const S = -33.89;
+      const N = -33.878;
+      const midX = (W + E) / 2;
+      const midY = (S + N) / 2;
+      const cell = (x0: number, y0: number, x1: number, y1: number) =>
+        `MULTIPOLYGON(((${x0} ${y0},${x1} ${y0},${x1} ${y1},${x0} ${y1},${x0} ${y0})))`;
+
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO geo.sa3 (code,name,sa4_code,geom) VALUES ($1,$2,NULL,ST_GeomFromText($3,4326))
+         ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, geom=EXCLUDED.geom`,
+        "DEMO-SA3",
+        "Demo Inner West (SA3)",
+        cell(W, S, E, N),
+      );
+      for (const [code, name, x0, x1] of [
+        ["DEMO-SA2-1", "Demo Glebe West (SA2)", W, midX],
+        ["DEMO-SA2-2", "Demo Glebe East (SA2)", midX, E],
+      ] as const) {
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO geo.sa2 (code,name,sa3_code,geom) VALUES ($1,$2,'DEMO-SA3',ST_GeomFromText($3,4326))
+           ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, geom=EXCLUDED.geom`,
+          code,
+          name,
+          cell(x0, S, x1, N),
+        );
+      }
+      for (const [code, sa2, x0, y0, x1, y1] of [
+        ["DEMO-SA1-1", "DEMO-SA2-1", W, S, midX, midY],
+        ["DEMO-SA1-2", "DEMO-SA2-1", W, midY, midX, N],
+        ["DEMO-SA1-3", "DEMO-SA2-2", midX, S, E, midY],
+        ["DEMO-SA1-4", "DEMO-SA2-2", midX, midY, E, N],
+      ] as const) {
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO geo.sa1 (code,name,sa2_code,geom) VALUES ($1,$2,$3,ST_GeomFromText($4,4326))
+           ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, sa2_code=EXCLUDED.sa2_code, geom=EXCLUDED.geom`,
+          code,
+          `Demo ${code} (SA1)`,
+          sa2,
+          cell(x0, y0, x1, y1),
+        );
+      }
+      // 4×4 meshblock grid; each cell inherits the SA1/SA2/SA3 quadrant it sits in.
+      for (let r = 0; r < 4; r += 1) {
+        for (let c = 0; c < 4; c += 1) {
+          const x0 = W + (c * (E - W)) / 4;
+          const x1 = W + ((c + 1) * (E - W)) / 4;
+          const y0 = S + (r * (N - S)) / 4;
+          const y1 = S + ((r + 1) * (N - S)) / 4;
+          const sa2 = c < 2 ? "DEMO-SA2-1" : "DEMO-SA2-2";
+          const sa1 =
+            c < 2 ? (r < 2 ? "DEMO-SA1-1" : "DEMO-SA1-2") : r < 2 ? "DEMO-SA1-3" : "DEMO-SA1-4";
+          await this.prisma.$executeRawUnsafe(
+            `INSERT INTO geo.meshblock (mb_code,sa1_code,sa2_code,sa3_code,state,geom)
+             VALUES ($1,$2,$3,'DEMO-SA3','NSW',ST_GeomFromText($4,4326))
+             ON CONFLICT (mb_code) DO UPDATE SET sa1_code=EXCLUDED.sa1_code, sa2_code=EXCLUDED.sa2_code, geom=EXCLUDED.geom`,
+            `DEMO-MB-${r}-${c}`,
+            sa1,
+            sa2,
+            cell(x0, y0, x1, y1),
+          );
+        }
+      }
       // Demo contacts → G-NAF addresses (inside the division), linked back to the Contact.
       for (let i = 0; i < contacts.length; i += 1) {
         const c = contacts[i];
@@ -343,13 +411,17 @@ export class SeedService {
           pid,
         );
       }
-      for (const [key, label] of [
-        ["gnaf", "G-NAF addresses (demo)"],
-        ["ced", "Federal divisions (demo)"],
-        ["sed", "State electorates (demo)"],
-        ["lga", "Local government areas (demo)"],
+      for (const [key, label, rows] of [
+        ["gnaf", "G-NAF addresses (demo)", contacts.length + 6],
+        ["ced", "Federal divisions (demo)", 1],
+        ["sed", "State electorates (demo)", 1],
+        ["lga", "Local government areas (demo)", 1],
+        ["asgs_mb", "Meshblocks (demo)", 16],
+        ["sa1", "Statistical Area 1 (demo)", 4],
+        ["sa2", "Statistical Area 2 (demo)", 2],
+        ["sa3", "Statistical Area 3 (demo)", 1],
       ] as const) {
-        const count = key === "gnaf" ? contacts.length + 6 : 1;
+        const count = rows;
         await this.prisma.$executeRawUnsafe(
           `INSERT INTO geo.dataset_meta (key,label,source_url,release_date,licence,row_count,status,last_ingested)
            VALUES ($1,$2,'(demo seed)','demo','demo',$3,'loaded',now())

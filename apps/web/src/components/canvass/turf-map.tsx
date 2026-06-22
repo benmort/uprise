@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import Map, { Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import { bbox } from "@turf/turf";
+import { Crosshair } from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 export type MapStop = { id: string; lat: number; lng: number; status?: string };
@@ -156,6 +157,19 @@ export function TurfMap({
       )}
       {userPosition && (
         <Marker latitude={userPosition.lat} longitude={userPosition.lng} color="#0ea5e9" />
+      )}
+
+      {/* Snap the viewport back to the boundary after panning/zooming away. */}
+      {bounds && (
+        <button
+          type="button"
+          onClick={fitToBounds}
+          title="Snap back to the division bounds"
+          className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-lg border border-border bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
+        >
+          <Crosshair className="h-3.5 w-3.5" />
+          Recenter
+        </button>
       )}
     </Map>
   );

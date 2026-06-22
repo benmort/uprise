@@ -10,6 +10,7 @@ describe("workflow e2e-style", () => {
   const prisma = {
     organization: { upsert: jest.fn() },
     blast: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+    audience: { findFirst: jest.fn().mockResolvedValue(null) },
     audienceContact: { findMany: jest.fn() },
     blastRecipient: {
       count: jest.fn(),

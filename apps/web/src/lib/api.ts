@@ -178,10 +178,19 @@ export async function getFeatureFlags() {
   return request<FeatureFlagsResponse>("/system/feature-flags");
 }
 
-export async function listAudiences(params?: { status?: string; source?: string; limit?: number; offset?: number }) {
+export type AudienceChannel = "SMS" | "WHATSAPP" | "ALL";
+
+export async function listAudiences(params?: {
+  status?: string;
+  source?: string;
+  channel?: AudienceChannel;
+  limit?: number;
+  offset?: number;
+}) {
   const q = new URLSearchParams();
   if (params?.status) q.set("status", params.status);
   if (params?.source) q.set("source", params.source);
+  if (params?.channel) q.set("channel", params.channel);
   if (params?.limit != null) q.set("limit", String(params.limit));
   if (params?.offset != null) q.set("offset", String(params.offset));
   return request<{ rows: Array<Record<string, unknown>>; total: number }>(`/audiences?${q}`);
@@ -211,12 +220,29 @@ export async function getAudienceContacts(
   );
 }
 
-export async function createAudience(body: { name: string; source?: string }) {
+export async function createAudience(body: {
+  name: string;
+  source?: string;
+  channel?: AudienceChannel;
+  kind?: "STATIC" | "WHATSAPP_OPTED_IN";
+}) {
   return request<Record<string, unknown>>("/audiences", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+/** Create (or fetch) the dynamic "all WhatsApp opt-ins" smart audience. */
+export async function createWhatsappOptInAudience() {
+  return request<{ id: string; name: string }>("/audiences/whatsapp-opt-ins", { method: "POST" });
+}
+
+/** How many of an audience's members are WhatsApp-reachable (opted in). */
+export async function getAudienceWhatsappReach(audienceId: string) {
+  return request<{ total: number; reachable: number }>(
+    `/audiences/${encodeURIComponent(audienceId)}/whatsapp-reach`,
+  );
 }
 
 export async function importAudienceCsv(

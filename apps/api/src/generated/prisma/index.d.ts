@@ -231,6 +231,23 @@ export const AudienceSource: {
 export type AudienceSource = (typeof AudienceSource)[keyof typeof AudienceSource]
 
 
+export const AudienceChannel: {
+  SMS: 'SMS',
+  WHATSAPP: 'WHATSAPP',
+  ALL: 'ALL'
+};
+
+export type AudienceChannel = (typeof AudienceChannel)[keyof typeof AudienceChannel]
+
+
+export const AudienceKind: {
+  STATIC: 'STATIC',
+  WHATSAPP_OPTED_IN: 'WHATSAPP_OPTED_IN'
+};
+
+export type AudienceKind = (typeof AudienceKind)[keyof typeof AudienceKind]
+
+
 export const AudienceStatus: {
   ACTIVE: 'ACTIVE',
   ARCHIVED: 'ARCHIVED'
@@ -450,6 +467,14 @@ export const AppUserRole: typeof $Enums.AppUserRole
 export type AudienceSource = $Enums.AudienceSource
 
 export const AudienceSource: typeof $Enums.AudienceSource
+
+export type AudienceChannel = $Enums.AudienceChannel
+
+export const AudienceChannel: typeof $Enums.AudienceChannel
+
+export type AudienceKind = $Enums.AudienceKind
+
+export const AudienceKind: typeof $Enums.AudienceKind
 
 export type AudienceStatus = $Enums.AudienceStatus
 
@@ -9336,6 +9361,8 @@ export namespace Prisma {
     createdById: string | null
     name: string | null
     source: $Enums.AudienceSource | null
+    channel: $Enums.AudienceChannel | null
+    kind: $Enums.AudienceKind | null
     status: $Enums.AudienceStatus | null
     externalListId: string | null
     syncedAt: Date | null
@@ -9350,6 +9377,8 @@ export namespace Prisma {
     createdById: string | null
     name: string | null
     source: $Enums.AudienceSource | null
+    channel: $Enums.AudienceChannel | null
+    kind: $Enums.AudienceKind | null
     status: $Enums.AudienceStatus | null
     externalListId: string | null
     syncedAt: Date | null
@@ -9364,6 +9393,8 @@ export namespace Prisma {
     createdById: number
     name: number
     source: number
+    channel: number
+    kind: number
     status: number
     externalListId: number
     syncedAt: number
@@ -9380,6 +9411,8 @@ export namespace Prisma {
     createdById?: true
     name?: true
     source?: true
+    channel?: true
+    kind?: true
     status?: true
     externalListId?: true
     syncedAt?: true
@@ -9394,6 +9427,8 @@ export namespace Prisma {
     createdById?: true
     name?: true
     source?: true
+    channel?: true
+    kind?: true
     status?: true
     externalListId?: true
     syncedAt?: true
@@ -9408,6 +9443,8 @@ export namespace Prisma {
     createdById?: true
     name?: true
     source?: true
+    channel?: true
+    kind?: true
     status?: true
     externalListId?: true
     syncedAt?: true
@@ -9495,6 +9532,8 @@ export namespace Prisma {
     createdById: string | null
     name: string
     source: $Enums.AudienceSource
+    channel: $Enums.AudienceChannel
+    kind: $Enums.AudienceKind
     status: $Enums.AudienceStatus
     externalListId: string | null
     syncedAt: Date | null
@@ -9526,6 +9565,8 @@ export namespace Prisma {
     createdById?: boolean
     name?: boolean
     source?: boolean
+    channel?: boolean
+    kind?: boolean
     status?: boolean
     externalListId?: boolean
     syncedAt?: boolean
@@ -9547,6 +9588,8 @@ export namespace Prisma {
     createdById?: boolean
     name?: boolean
     source?: boolean
+    channel?: boolean
+    kind?: boolean
     status?: boolean
     externalListId?: boolean
     syncedAt?: boolean
@@ -9563,6 +9606,8 @@ export namespace Prisma {
     createdById?: boolean
     name?: boolean
     source?: boolean
+    channel?: boolean
+    kind?: boolean
     status?: boolean
     externalListId?: boolean
     syncedAt?: boolean
@@ -9601,6 +9646,8 @@ export namespace Prisma {
       createdById: string | null
       name: string
       source: $Enums.AudienceSource
+      channel: $Enums.AudienceChannel
+      kind: $Enums.AudienceKind
       status: $Enums.AudienceStatus
       externalListId: string | null
       syncedAt: Date | null
@@ -10011,6 +10058,8 @@ export namespace Prisma {
     readonly createdById: FieldRef<"Audience", 'String'>
     readonly name: FieldRef<"Audience", 'String'>
     readonly source: FieldRef<"Audience", 'AudienceSource'>
+    readonly channel: FieldRef<"Audience", 'AudienceChannel'>
+    readonly kind: FieldRef<"Audience", 'AudienceKind'>
     readonly status: FieldRef<"Audience", 'AudienceStatus'>
     readonly externalListId: FieldRef<"Audience", 'String'>
     readonly syncedAt: FieldRef<"Audience", 'DateTime'>
@@ -46706,6 +46755,8 @@ export namespace Prisma {
     createdById: 'createdById',
     name: 'name',
     source: 'source',
+    channel: 'channel',
+    kind: 'kind',
     status: 'status',
     externalListId: 'externalListId',
     syncedAt: 'syncedAt',
@@ -47410,6 +47461,34 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'AudienceChannel'
+   */
+  export type EnumAudienceChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AudienceChannel'>
+    
+
+
+  /**
+   * Reference to a field of type 'AudienceChannel[]'
+   */
+  export type ListEnumAudienceChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AudienceChannel[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'AudienceKind'
+   */
+  export type EnumAudienceKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AudienceKind'>
+    
+
+
+  /**
+   * Reference to a field of type 'AudienceKind[]'
+   */
+  export type ListEnumAudienceKindFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AudienceKind[]'>
+    
+
+
+  /**
    * Reference to a field of type 'AudienceStatus'
    */
   export type EnumAudienceStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AudienceStatus'>
@@ -48102,6 +48181,8 @@ export namespace Prisma {
     createdById?: StringNullableFilter<"Audience"> | string | null
     name?: StringFilter<"Audience"> | string
     source?: EnumAudienceSourceFilter<"Audience"> | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFilter<"Audience"> | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFilter<"Audience"> | $Enums.AudienceKind
     status?: EnumAudienceStatusFilter<"Audience"> | $Enums.AudienceStatus
     externalListId?: StringNullableFilter<"Audience"> | string | null
     syncedAt?: DateTimeNullableFilter<"Audience"> | Date | string | null
@@ -48122,6 +48203,8 @@ export namespace Prisma {
     createdById?: SortOrderInput | SortOrder
     name?: SortOrder
     source?: SortOrder
+    channel?: SortOrder
+    kind?: SortOrder
     status?: SortOrder
     externalListId?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
@@ -48145,6 +48228,8 @@ export namespace Prisma {
     createdById?: StringNullableFilter<"Audience"> | string | null
     name?: StringFilter<"Audience"> | string
     source?: EnumAudienceSourceFilter<"Audience"> | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFilter<"Audience"> | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFilter<"Audience"> | $Enums.AudienceKind
     status?: EnumAudienceStatusFilter<"Audience"> | $Enums.AudienceStatus
     externalListId?: StringNullableFilter<"Audience"> | string | null
     syncedAt?: DateTimeNullableFilter<"Audience"> | Date | string | null
@@ -48165,6 +48250,8 @@ export namespace Prisma {
     createdById?: SortOrderInput | SortOrder
     name?: SortOrder
     source?: SortOrder
+    channel?: SortOrder
+    kind?: SortOrder
     status?: SortOrder
     externalListId?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
@@ -48185,6 +48272,8 @@ export namespace Prisma {
     createdById?: StringNullableWithAggregatesFilter<"Audience"> | string | null
     name?: StringWithAggregatesFilter<"Audience"> | string
     source?: EnumAudienceSourceWithAggregatesFilter<"Audience"> | $Enums.AudienceSource
+    channel?: EnumAudienceChannelWithAggregatesFilter<"Audience"> | $Enums.AudienceChannel
+    kind?: EnumAudienceKindWithAggregatesFilter<"Audience"> | $Enums.AudienceKind
     status?: EnumAudienceStatusWithAggregatesFilter<"Audience"> | $Enums.AudienceStatus
     externalListId?: StringNullableWithAggregatesFilter<"Audience"> | string | null
     syncedAt?: DateTimeNullableWithAggregatesFilter<"Audience"> | Date | string | null
@@ -51601,6 +51690,8 @@ export namespace Prisma {
     id?: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -51621,6 +51712,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -51637,6 +51730,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -51657,6 +51752,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -51675,6 +51772,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -51687,6 +51786,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -51701,6 +51802,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -55555,6 +55658,20 @@ export namespace Prisma {
     not?: NestedEnumAudienceSourceFilter<$PrismaModel> | $Enums.AudienceSource
   }
 
+  export type EnumAudienceChannelFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceChannel | EnumAudienceChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceChannelFilter<$PrismaModel> | $Enums.AudienceChannel
+  }
+
+  export type EnumAudienceKindFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceKind | EnumAudienceKindFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceKindFilter<$PrismaModel> | $Enums.AudienceKind
+  }
+
   export type EnumAudienceStatusFilter<$PrismaModel = never> = {
     equals?: $Enums.AudienceStatus | EnumAudienceStatusFieldRefInput<$PrismaModel>
     in?: $Enums.AudienceStatus[] | ListEnumAudienceStatusFieldRefInput<$PrismaModel>
@@ -55604,6 +55721,8 @@ export namespace Prisma {
     createdById?: SortOrder
     name?: SortOrder
     source?: SortOrder
+    channel?: SortOrder
+    kind?: SortOrder
     status?: SortOrder
     externalListId?: SortOrder
     syncedAt?: SortOrder
@@ -55618,6 +55737,8 @@ export namespace Prisma {
     createdById?: SortOrder
     name?: SortOrder
     source?: SortOrder
+    channel?: SortOrder
+    kind?: SortOrder
     status?: SortOrder
     externalListId?: SortOrder
     syncedAt?: SortOrder
@@ -55632,6 +55753,8 @@ export namespace Prisma {
     createdById?: SortOrder
     name?: SortOrder
     source?: SortOrder
+    channel?: SortOrder
+    kind?: SortOrder
     status?: SortOrder
     externalListId?: SortOrder
     syncedAt?: SortOrder
@@ -55648,6 +55771,26 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumAudienceSourceFilter<$PrismaModel>
     _max?: NestedEnumAudienceSourceFilter<$PrismaModel>
+  }
+
+  export type EnumAudienceChannelWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceChannel | EnumAudienceChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceChannelWithAggregatesFilter<$PrismaModel> | $Enums.AudienceChannel
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAudienceChannelFilter<$PrismaModel>
+    _max?: NestedEnumAudienceChannelFilter<$PrismaModel>
+  }
+
+  export type EnumAudienceKindWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceKind | EnumAudienceKindFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceKindWithAggregatesFilter<$PrismaModel> | $Enums.AudienceKind
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAudienceKindFilter<$PrismaModel>
+    _max?: NestedEnumAudienceKindFilter<$PrismaModel>
   }
 
   export type EnumAudienceStatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -59691,6 +59834,14 @@ export namespace Prisma {
     set?: $Enums.AudienceSource
   }
 
+  export type EnumAudienceChannelFieldUpdateOperationsInput = {
+    set?: $Enums.AudienceChannel
+  }
+
+  export type EnumAudienceKindFieldUpdateOperationsInput = {
+    set?: $Enums.AudienceKind
+  }
+
   export type EnumAudienceStatusFieldUpdateOperationsInput = {
     set?: $Enums.AudienceStatus
   }
@@ -61887,6 +62038,20 @@ export namespace Prisma {
     not?: NestedEnumAudienceSourceFilter<$PrismaModel> | $Enums.AudienceSource
   }
 
+  export type NestedEnumAudienceChannelFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceChannel | EnumAudienceChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceChannelFilter<$PrismaModel> | $Enums.AudienceChannel
+  }
+
+  export type NestedEnumAudienceKindFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceKind | EnumAudienceKindFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceKindFilter<$PrismaModel> | $Enums.AudienceKind
+  }
+
   export type NestedEnumAudienceStatusFilter<$PrismaModel = never> = {
     equals?: $Enums.AudienceStatus | EnumAudienceStatusFieldRefInput<$PrismaModel>
     in?: $Enums.AudienceStatus[] | ListEnumAudienceStatusFieldRefInput<$PrismaModel>
@@ -61913,6 +62078,26 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumAudienceSourceFilter<$PrismaModel>
     _max?: NestedEnumAudienceSourceFilter<$PrismaModel>
+  }
+
+  export type NestedEnumAudienceChannelWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceChannel | EnumAudienceChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceChannel[] | ListEnumAudienceChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceChannelWithAggregatesFilter<$PrismaModel> | $Enums.AudienceChannel
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAudienceChannelFilter<$PrismaModel>
+    _max?: NestedEnumAudienceChannelFilter<$PrismaModel>
+  }
+
+  export type NestedEnumAudienceKindWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.AudienceKind | EnumAudienceKindFieldRefInput<$PrismaModel>
+    in?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    notIn?: $Enums.AudienceKind[] | ListEnumAudienceKindFieldRefInput<$PrismaModel>
+    not?: NestedEnumAudienceKindWithAggregatesFilter<$PrismaModel> | $Enums.AudienceKind
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumAudienceKindFilter<$PrismaModel>
+    _max?: NestedEnumAudienceKindFilter<$PrismaModel>
   }
 
   export type NestedEnumAudienceStatusWithAggregatesFilter<$PrismaModel = never> = {
@@ -62445,6 +62630,8 @@ export namespace Prisma {
     id?: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -62463,6 +62650,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -63412,6 +63601,8 @@ export namespace Prisma {
     createdById?: StringNullableFilter<"Audience"> | string | null
     name?: StringFilter<"Audience"> | string
     source?: EnumAudienceSourceFilter<"Audience"> | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFilter<"Audience"> | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFilter<"Audience"> | $Enums.AudienceKind
     status?: EnumAudienceStatusFilter<"Audience"> | $Enums.AudienceStatus
     externalListId?: StringNullableFilter<"Audience"> | string | null
     syncedAt?: DateTimeNullableFilter<"Audience"> | Date | string | null
@@ -65123,6 +65314,8 @@ export namespace Prisma {
     id?: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -65141,6 +65334,8 @@ export namespace Prisma {
     organizationId: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -65930,6 +66125,8 @@ export namespace Prisma {
     id?: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -65949,6 +66146,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -66041,6 +66240,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -66060,6 +66261,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -66142,6 +66345,8 @@ export namespace Prisma {
     id?: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -66161,6 +66366,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -66192,6 +66399,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -66211,6 +66420,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -66226,6 +66437,8 @@ export namespace Prisma {
     id?: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -66245,6 +66458,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -66276,6 +66491,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -66295,6 +66512,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -66379,6 +66598,8 @@ export namespace Prisma {
     id?: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -66398,6 +66619,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -66729,6 +66952,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -66748,6 +66973,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -73756,6 +73983,8 @@ export namespace Prisma {
     createdById?: string | null
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -74099,6 +74328,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -74117,6 +74348,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -74134,6 +74367,8 @@ export namespace Prisma {
     createdById?: NullableStringFieldUpdateOperationsInput | string | null
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -75710,6 +75945,8 @@ export namespace Prisma {
     organizationId: string
     name: string
     source: $Enums.AudienceSource
+    channel?: $Enums.AudienceChannel
+    kind?: $Enums.AudienceKind
     status?: $Enums.AudienceStatus
     externalListId?: string | null
     syncedAt?: Date | string | null
@@ -75766,6 +76003,8 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -75784,6 +76023,8 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -75801,6 +76042,8 @@ export namespace Prisma {
     organizationId?: StringFieldUpdateOperationsInput | string
     name?: StringFieldUpdateOperationsInput | string
     source?: EnumAudienceSourceFieldUpdateOperationsInput | $Enums.AudienceSource
+    channel?: EnumAudienceChannelFieldUpdateOperationsInput | $Enums.AudienceChannel
+    kind?: EnumAudienceKindFieldUpdateOperationsInput | $Enums.AudienceKind
     status?: EnumAudienceStatusFieldUpdateOperationsInput | $Enums.AudienceStatus
     externalListId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null

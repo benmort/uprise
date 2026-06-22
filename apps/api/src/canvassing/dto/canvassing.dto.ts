@@ -199,6 +199,34 @@ export class CreateTurfFromDivisionDto {
   universe?: "existing" | "none" | "hybrid";
 }
 
+export class TurfAreaDto {
+  @IsIn(["mb", "sa1", "sa2", "sa3"])
+  layer!: "mb" | "sa1" | "sa2" | "sa3";
+
+  @IsString()
+  code!: string;
+}
+
+export class CreateTurfFromAreasDto {
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TurfAreaDto)
+  areas!: TurfAreaDto[];
+
+  // Free-drawn polygons unioned in alongside the selected areas.
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  polygons?: Record<string, unknown>[];
+}
+
 export class LoadUniverseDto {
   @IsIn(["existing", "none", "hybrid"])
   universe!: "existing" | "none" | "hybrid";

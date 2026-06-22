@@ -10,6 +10,14 @@ export class CreateAudienceDto {
   @IsOptional()
   @IsIn(["MANUAL", "CSV", "ACTION_NETWORK", "INTERNAL"])
   source?: "MANUAL" | "CSV" | "ACTION_NETWORK" | "INTERNAL";
+
+  @IsOptional()
+  @IsIn(["SMS", "WHATSAPP", "ALL"])
+  channel?: "SMS" | "WHATSAPP" | "ALL";
+
+  @IsOptional()
+  @IsIn(["STATIC", "WHATSAPP_OPTED_IN"])
+  kind?: "STATIC" | "WHATSAPP_OPTED_IN";
 }
 
 export class ListAudiencesDto extends PaginationDto {
@@ -20,6 +28,10 @@ export class ListAudiencesDto extends PaginationDto {
   @IsOptional()
   @IsIn(["MANUAL", "CSV", "ACTION_NETWORK", "INTERNAL"])
   source?: "MANUAL" | "CSV" | "ACTION_NETWORK" | "INTERNAL";
+
+  @IsOptional()
+  @IsIn(["SMS", "WHATSAPP", "ALL"])
+  channel?: "SMS" | "WHATSAPP" | "ALL";
 }
 
 export class AudienceContactsDto extends PaginationDto {

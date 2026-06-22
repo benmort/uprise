@@ -11,8 +11,8 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Yarns - SMS Blast Platform",
-  description: "Audience management, blast composition, analytics, and inbox workflows.",
+  title: "Yarns – Multichannel organising platform",
+  description: "SMS & WhatsApp broadcasts, canvassing, audiences, journeys and a unified inbox.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
