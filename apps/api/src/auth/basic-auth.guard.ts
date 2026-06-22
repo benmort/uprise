@@ -154,6 +154,9 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/marketing/contact",
       "/api/v1/marketing/demo-request",
       "/api/v1/marketing/newsletter",
+      // Public slug pre-check for the sign-up UI (meld doc 12).
+      "/tenants/availability",
+      "/api/v1/tenants/availability",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));

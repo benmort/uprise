@@ -22,6 +22,8 @@ export const EVENT_TYPES = {
   ORG_CREDENTIAL_UPDATED: "tenant.org-credential.updated",
   TENANT_CREATED: "tenant.tenant.created",
   TENANT_MEMBER_ADDED: "tenant.member.added",
+  TENANT_MEMBER_REMOVED: "tenant.member.removed",
+  TENANT_MEMBER_ROLE_UPDATED: "tenant.member.role-updated",
   NETWORK_CREATED: "tenant.network.created",
   SUBSCRIPTION_CHANGED: "payment.subscription.changed",
 } as const;
@@ -44,6 +46,8 @@ export interface DomainEventMap {
   "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
   "tenant.tenant.created": { tenantId: string; slug: string; name: string; networkId: string | null };
   "tenant.member.added": { tenantId: string; userId: string; role: string };
+  "tenant.member.removed": { tenantId: string; userId: string };
+  "tenant.member.role-updated": { tenantId: string; userId: string; role: string };
   "tenant.network.created": { networkId: string; name: string };
   "payment.subscription.changed": {
     tenantId: string | null;

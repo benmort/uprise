@@ -64,3 +64,29 @@
 - [ ] **MessageTemplate has no CRUD, no variable validation, no type (sms|call_script)** (telephony) — Prog's MessageTemplate aggregate validates declared {{vars}}, supports type/category/variables[]/fromNumber and updateBody; yarns's model is id/tenantId/key/channel/kind/body/isActive only, read internally by resolveBody, with no create/update/get and no undeclared-variable guard. _Fix:_ Add a MessageTemplatesController + service for create/update/get (tenant-scoped, permission-gated), port the {{variable}}-must-be-declared validation, add type/variables if call-script templating is wanted; defer call_script if voice scripting is out of scope.
 - [ ] **queued/sent set inline, not callback-driven; segmentCount not captured** (telephony) — Yarns sets QUEUED/SENT inline at dispatch and the SMS callback never reads NumSegments. _Fix:_ Optionally capture NumSegments on the status callback into BlastRecipient/OutboundMessage metadata; inline queued/sent is acceptable (matches Twilio acceptance semantics) and need not be reworked.
 - [ ] **Event-sourcing aggregates / replay deliberately not ported** (audience / payment / telephony — deferred by design) — Person, Segment, Refund, Customer and the telephony/email aggregates are event-sourced in prog (raise/apply/fromEvents/replay); yarns models them as mutable Prisma rows with FSM guards + a transactional outbox per the meld plan. NA_HYBRID by design. _Fix:_ No port required. Confirm in the meld docs that dropped invariants (audience unique-email, refuse-update-when-deleted, async refund states) are intentional and document the divergences so they are not later mistaken for bugs; any future replay/audit need is met by the outbox stream once lifecycle events land.
+
+---
+
+## WS3 status (2026-06-23)
+
+**Closed (committed on feat/prog-parity):**
+- Tenant + user creation, member ops, invitations, networks, self-registration — WS1 (d558371).
+- All cross-domain reactions (welcome/invitation/network→Stripe-customer/subscription→tenant) — WS2 (edd3807).
+- Subdomain-availability pre-check (`GET /tenants/availability`) + member lifecycle events
+  (`tenant.member.removed` / `tenant.member.role-updated`) — WS3.
+- Latent fix: `createTenant` no longer FK-fails when the actor is the env super-admin (non-User).
+
+**Genuinely remaining P1 (tracked, not yet built):**
+- **Segment CRUD + eval enqueue** — `SegmentEvaluatorService` + the `segment-eval` worker exist but
+  nothing creates an `AudienceSegment` or enqueues an evaluation; dynamic segments are unreachable
+  end-to-end. _Fix:_ audience segment endpoints (create/update/list) + enqueue `SEGMENT_EVAL_RUN`.
+- **2FA enable + mobile capture** — the SMS-2FA login flow (doc 14) is dead code: no endpoint sets
+  `User.mobile` or flips `twofaEnabled`. _Fix:_ profile endpoints to capture+verify mobile then enable 2FA.
+- **Stripe checkout/portal endpoints** — `StripeService.createCheckoutSession/createPortalSession`
+  exist but have no controller (paid conversion unreachable). _Fix:_ `PaymentController` POST
+  /payment/checkout-session + /payment/portal-session, gated `payment.all`.
+- **Network reads/billing** — `GetNetwork`, `GetTenantsByNetwork`, and writing
+  `Network.planName/subscriptionStatus` (currently inert).
+- **DeleteTenant** soft-delete write + `membershipsFor` deletedAt filter.
+
+**Deferred-by-design (no action):** event-sourced aggregates/replay, multi-org modelling, OTT handoff.

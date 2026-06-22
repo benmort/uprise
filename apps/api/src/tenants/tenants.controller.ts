@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import type { Request } from "express";
 import { TenantsService } from "./tenants.service";
 import type { AuthUser } from "../auth/auth-user";
@@ -32,6 +32,13 @@ export class TenantsController {
       networkId: dto.networkId,
       ownerUserId: req.user?.id,
     });
+  }
+
+  // Declared before :id so "availability" isn't captured as a tenant id. Public
+  // (guard-allowlisted) so the sign-up UI can pre-check a desired slug.
+  @Get("availability")
+  available(@Query("slug") slug: string) {
+    return this.tenants.isSlugAvailable(slug ?? "");
   }
 
   @Get(":id")

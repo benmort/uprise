@@ -146,9 +146,18 @@ export class TenantsService {
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
-    return this.prisma.tenantMember.update({
-      where: { tenantId_userId: { tenantId, userId } },
-      data: { role },
+    return this.prisma.$transaction(async (tx) => {
+      const member = await tx.tenantMember.update({
+        where: { tenantId_userId: { tenantId, userId } },
+        data: { role },
+      });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "tenant.member.role-updated",
+        aggregateId: tenantId,
+        payload: { tenantId, userId, role },
+      });
+      return member;
     });
   }
 
@@ -157,8 +166,24 @@ export class TenantsService {
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
-    await this.prisma.tenantMember.delete({ where: { tenantId_userId: { tenantId, userId } } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tenantMember.delete({ where: { tenantId_userId: { tenantId, userId } } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "tenant.member.removed",
+        aggregateId: tenantId,
+        payload: { tenantId, userId },
+      });
+    });
     return { ok: true };
+  }
+
+  /** Pre-flight slug check for the sign-up UI (prog IsSubdomainAvailable parity). */
+  async isSlugAvailable(slug: string): Promise<{ slug: string; available: boolean }> {
+    const norm = this.normaliseSlug(slug);
+    if (!norm) return { slug: norm, available: false };
+    const existing = await this.prisma.tenant.findUnique({ where: { slug: norm } });
+    return { slug: norm, available: !existing };
   }
 
   // ── Invitations (issuing; accept/preview live in IamFlowsService) ─────

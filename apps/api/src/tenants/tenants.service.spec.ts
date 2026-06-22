@@ -103,4 +103,29 @@ describe("TenantsService", () => {
     prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
     await expect(svc.removeMember("t1", "u9")).rejects.toThrow();
   });
+
+  it("removeMember emits tenant.member.removed", async () => {
+    const { svc, outbox } = setup();
+    await svc.removeMember("t1", "u1");
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.member.removed" }),
+    );
+  });
+
+  it("updateMemberRole emits tenant.member.role-updated", async () => {
+    const { svc, outbox } = setup();
+    await svc.updateMemberRole("t1", "u1", AppUserRole.CANVASSER);
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.member.role-updated" }),
+    );
+  });
+
+  it("isSlugAvailable reports availability (normalised)", async () => {
+    const { svc, prisma } = setup();
+    await expect(svc.isSlugAvailable("NewCo")).resolves.toEqual({ slug: "newco", available: true });
+    prisma.tenant.findUnique.mockResolvedValueOnce({ id: "t9", slug: "taken" });
+    await expect(svc.isSlugAvailable("taken")).resolves.toEqual({ slug: "taken", available: false });
+  });
 });
