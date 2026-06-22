@@ -1,4 +1,4 @@
-import { DispositionLayer, EngagementChannel } from "../../src/generated/prisma";
+import { DispositionLayer, EngagementChannel } from "@yarns/db";
 
 export type DispositionDefSeed = {
   code: string;
@@ -16,7 +16,7 @@ export type DispositionDefSeed = {
  * data-quality layer that flags the shared record as bad. Support level is a
  * separate campaign-defined dimension stored on the Disposition, not here.
  *
- * Terminal codes are locked: they ship as system defaults (organizationId null)
+ * Terminal codes are locked: they ship as system defaults (tenantId null)
  * and cannot be edited or deleted, so cross-org benchmarking stays consistent.
  */
 export const DEFAULT_DISPOSITIONS: DispositionDefSeed[] = [

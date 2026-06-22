@@ -66,10 +66,10 @@ export class ContactsBackfillService {
       where: { contactId: null },
       orderBy: { id: "asc" },
       take: limit,
-      select: { id: true, organizationId: true, phoneE164: true, fullName: true },
+      select: { id: true, tenantId: true, phoneE164: true, fullName: true },
     });
     for (const row of rows) {
-      const contact = await this.contacts.getOrCreateByPhone(row.organizationId, row.phoneE164, {
+      const contact = await this.contacts.getOrCreateByPhone(row.tenantId, row.phoneE164, {
         fullName: row.fullName,
       });
       await this.prisma.audienceContact.update({
@@ -90,10 +90,10 @@ export class ContactsBackfillService {
         where: { contactId: null },
         orderBy: { id: "asc" },
         take: limit,
-        select: { id: true, organizationId: true, fromPhone: true },
+        select: { id: true, tenantId: true, fromPhone: true },
       });
       for (const row of rows) {
-        const contact = await this.contacts.getOrCreateByPhone(row.organizationId, row.fromPhone);
+        const contact = await this.contacts.getOrCreateByPhone(row.tenantId, row.fromPhone);
         await this.prisma.inboundMessage.update({
           where: { id: row.id },
           data: { contactId: contact.id },
@@ -107,10 +107,10 @@ export class ContactsBackfillService {
       where: { contactId: null },
       orderBy: { id: "asc" },
       take: limit,
-      select: { id: true, organizationId: true, toPhone: true },
+      select: { id: true, tenantId: true, toPhone: true },
     });
     for (const row of rows) {
-      const contact = await this.contacts.getOrCreateByPhone(row.organizationId, row.toPhone);
+      const contact = await this.contacts.getOrCreateByPhone(row.tenantId, row.toPhone);
       await this.prisma.outboundMessage.update({
         where: { id: row.id },
         data: { contactId: contact.id },
@@ -125,10 +125,10 @@ export class ContactsBackfillService {
       where: { contactId: null },
       orderBy: { id: "asc" },
       take: limit,
-      select: { id: true, organizationId: true, contactPhone: true },
+      select: { id: true, tenantId: true, contactPhone: true },
     });
     for (const row of rows) {
-      const contact = await this.contacts.getOrCreateByPhone(row.organizationId, row.contactPhone);
+      const contact = await this.contacts.getOrCreateByPhone(row.tenantId, row.contactPhone);
       await this.prisma.conversationState.update({
         where: { id: row.id },
         data: { contactId: contact.id },

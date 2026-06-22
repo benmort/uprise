@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Query } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { JourneyEnrolmentState, JourneyStatus, Prisma } from "../../src/generated/prisma";
+import { JourneyEnrolmentState, JourneyStatus, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { JourneysService } from "./journeys.service";
@@ -28,7 +28,7 @@ export class JourneysController {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -39,7 +39,7 @@ export class JourneysController {
   async list() {
     const org = await this.ensureOrganization();
     return this.prisma.journey.findMany({
-      where: { organizationId: org.id },
+      where: { tenantId: org.id },
       include: { rungs: { orderBy: { rungIndex: "asc" } } },
       orderBy: { createdAt: "desc" },
     });
@@ -50,7 +50,7 @@ export class JourneysController {
     const org = await this.ensureOrganization();
     return this.prisma.journey.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         name: dto.name,
         triggerType: dto.triggerType,
         triggerConfig: (dto.triggerConfig ?? {}) as Prisma.InputJsonValue,
@@ -74,7 +74,7 @@ export class JourneysController {
   async setStatus(@Param("id") id: string, @Body() dto: UpdateJourneyStatusDto) {
     const org = await this.ensureOrganization();
     return this.prisma.journey.updateMany({
-      where: { id, organizationId: org.id },
+      where: { id, tenantId: org.id },
       data: { status: dto.status as JourneyStatus },
     });
   }
@@ -83,7 +83,7 @@ export class JourneysController {
   @Patch(":id")
   async update(@Param("id") id: string, @Body() dto: UpdateJourneyDto) {
     const org = await this.ensureOrganization();
-    const existing = await this.prisma.journey.findFirst({ where: { id, organizationId: org.id } });
+    const existing = await this.prisma.journey.findFirst({ where: { id, tenantId: org.id } });
     if (!existing) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);
 
     return this.prisma.$transaction(async (tx) => {
@@ -124,7 +124,7 @@ export class JourneysController {
   @Delete(":id")
   async remove(@Param("id") id: string) {
     const org = await this.ensureOrganization();
-    const res = await this.prisma.journey.deleteMany({ where: { id, organizationId: org.id } });
+    const res = await this.prisma.journey.deleteMany({ where: { id, tenantId: org.id } });
     if (res.count === 0) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);
     return { deleted: true };
   }
@@ -133,7 +133,7 @@ export class JourneysController {
   @Get(":id/stats")
   async stats(@Param("id") id: string) {
     const org = await this.ensureOrganization();
-    const journey = await this.prisma.journey.findFirst({ where: { id, organizationId: org.id } });
+    const journey = await this.prisma.journey.findFirst({ where: { id, tenantId: org.id } });
     if (!journey) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);
     const grouped = await this.prisma.journeyEnrolment.groupBy({
       by: ["state"],
@@ -163,7 +163,7 @@ export class JourneysController {
   async dryRun(@Param("id") id: string, @Body() _dto: DryRunJourneyDto) {
     const org = await this.ensureOrganization();
     const journey = await this.prisma.journey.findFirst({
-      where: { id, organizationId: org.id },
+      where: { id, tenantId: org.id },
       include: { rungs: { orderBy: { rungIndex: "asc" } } },
     });
     if (!journey) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);

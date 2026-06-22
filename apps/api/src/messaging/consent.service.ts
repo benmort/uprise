@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { ConsentState, MessageChannel } from "../../src/generated/prisma";
+import { ConsentState, MessageChannel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 const STOP_KEYWORDS = new Set(["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "stop all"]);
@@ -19,13 +19,13 @@ export class ConsentService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getState(
-    organizationId: string,
+    tenantId: string,
     phoneE164: string,
     channel: MessageChannel,
   ): Promise<ConsentState> {
     const row = await this.prisma.contactConsent.findUnique({
       where: {
-        organizationId_phoneE164_channel: { organizationId, phoneE164, channel },
+        tenantId_phoneE164_channel: { tenantId, phoneE164, channel },
       },
       select: { state: true },
     });
@@ -34,7 +34,7 @@ export class ConsentService {
 
   /** Upsert consent state for a contact on a channel. */
   async setState(input: {
-    organizationId: string;
+    tenantId: string;
     phoneE164: string;
     channel: MessageChannel;
     state: ConsentState;
@@ -43,8 +43,8 @@ export class ConsentService {
   }): Promise<void> {
     await this.prisma.contactConsent.upsert({
       where: {
-        organizationId_phoneE164_channel: {
-          organizationId: input.organizationId,
+        tenantId_phoneE164_channel: {
+          tenantId: input.tenantId,
           phoneE164: input.phoneE164,
           channel: input.channel,
         },
@@ -55,7 +55,7 @@ export class ConsentService {
         ...(input.source ? { source: input.source } : {}),
       },
       create: {
-        organizationId: input.organizationId,
+        tenantId: input.tenantId,
         phoneE164: input.phoneE164,
         channel: input.channel,
         state: input.state,
@@ -78,13 +78,13 @@ export class ConsentService {
 
   /** Bulk consent lookup for a set of phones on one channel. */
   async getStatesForPhones(
-    organizationId: string,
+    tenantId: string,
     channel: MessageChannel,
     phones: string[],
   ): Promise<Map<string, ConsentState>> {
     if (phones.length === 0) return new Map();
     const rows = await this.prisma.contactConsent.findMany({
-      where: { organizationId, channel, phoneE164: { in: phones } },
+      where: { tenantId, channel, phoneE164: { in: phones } },
       select: { phoneE164: true, state: true },
     });
     return new Map(rows.map((r) => [r.phoneE164, r.state]));

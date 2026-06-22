@@ -1,17 +1,17 @@
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus } from "../../src/generated/prisma";
+import { BlastRecipientStatus } from "@yarns/db";
 import { InboxService } from "./inbox.service";
 
 describe("InboxService", () => {
   const prisma = {
-    organization: { upsert: jest.fn() },
+    tenant: { upsert: jest.fn() },
     blast: { findMany: jest.fn() },
     outboundMessage: { create: jest.fn(), findFirst: jest.fn() },
     inboundMessage: { create: jest.fn() },
     blastRecipient: { updateMany: jest.fn() },
     analyticsSnapshot: { create: jest.fn() },
     conversationState: { upsert: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
-    appUser: { findMany: jest.fn() },
+    user: { findMany: jest.fn() },
   } as any;
   const config = {
     get: jest.fn((key: string, fallback?: string) => {
@@ -53,7 +53,7 @@ describe("InboxService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    prisma.organization.upsert.mockResolvedValue({ id: "org_1", slug: "default" });
+    prisma.tenant.upsert.mockResolvedValue({ id: "org_1", slug: "default" });
     prisma.outboundMessage.findFirst.mockResolvedValue(null);
     prisma.inboundMessage.create.mockResolvedValue({
       id: "inbound_1",
@@ -64,7 +64,7 @@ describe("InboxService", () => {
     prisma.conversationState.upsert.mockResolvedValue({});
     prisma.conversationState.updateMany.mockResolvedValue({ count: 1 });
     prisma.conversationState.findUnique.mockResolvedValue(null);
-    prisma.appUser.findMany.mockResolvedValue([]);
+    prisma.user.findMany.mockResolvedValue([]);
     repo.listContactNamesByPhones.mockResolvedValue([]);
     consent.canSend.mockReturnValue(true);
     sessionWindow.isOpen.mockResolvedValue(true);
@@ -105,7 +105,7 @@ describe("InboxService", () => {
 
     expect(prisma.outboundMessage.findFirst).toHaveBeenCalledWith({
       where: {
-        organizationId: "org_1",
+        tenantId: "org_1",
         toPhone: "+15550000001",
         channel: "SMS",
         OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
@@ -135,7 +135,7 @@ describe("InboxService", () => {
     expect(prisma.analyticsSnapshot.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          organizationId: "org_1",
+          tenantId: "org_1",
           blastId: "blast_1",
           metricName: "responded",
           metricValue: 1,
@@ -324,7 +324,7 @@ describe("InboxService", () => {
 
   describe("ownership (E2)", () => {
     it("claims a conversation for a user and resolves the owner name", async () => {
-      prisma.appUser.findMany.mockResolvedValue([{ id: "u1", displayName: "Ada", email: "a@b.c" }]);
+      prisma.user.findMany.mockResolvedValue([{ id: "u1", displayName: "Ada", email: "a@b.c" }]);
       const res = await service.claimConversation("+15550000001", "u1", "SMS");
       expect(prisma.conversationState.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ update: expect.objectContaining({ ownerId: "u1" }) }),

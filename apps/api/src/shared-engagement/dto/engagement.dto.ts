@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsInt, IsOptional, IsString } from "class-validator";
-import { CannedVisibility, EngagementChannel, SupportLevel } from "../../../src/generated/prisma";
+import { CannedVisibility, EngagementChannel, SupportLevel } from "@yarns/db";
 
 export class RecordDispositionDto {
   @IsString()

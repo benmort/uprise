@@ -13,7 +13,7 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole, WalkListItemListType } from "../../src/generated/prisma";
+import { AppUserRole, WalkListItemListType } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
@@ -47,7 +47,7 @@ export class CanvassingController {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},

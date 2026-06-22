@@ -1,0 +1,146 @@
+import { SessionService } from "./session.service";
+
+function makePrisma() {
+  return {
+    session: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      deleteMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    user: { findUnique: jest.fn() },
+    tenantMember: { findMany: jest.fn() },
+  } as any;
+}
+
+describe("SessionService", () => {
+  it("create() issues a random token + future expiry and persists it (no tenant pinned)", async () => {
+    const prisma = makePrisma();
+    const svc = new SessionService(prisma);
+    const { token, expiresAt } = await svc.create("u1");
+    expect(token).toEqual(expect.any(String));
+    expect(token.length).toBeGreaterThan(20);
+    expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(prisma.session.create).toHaveBeenCalledWith({
+      data: { userId: "u1", token, expiresAt, tenantId: null },
+    });
+  });
+
+  it("create() pins the active tenant when given", async () => {
+    const prisma = makePrisma();
+    const svc = new SessionService(prisma);
+    await svc.create("u1", { tenantId: "t2" });
+    expect(prisma.session.create.mock.calls[0][0].data.tenantId).toBe("t2");
+  });
+
+  it("resolve() returns the earliest membership when no tenant is pinned", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      tenantId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    prisma.tenantMember.findMany.mockResolvedValue([
+      { tenantId: "t1", role: "ORGANISER" },
+      { tenantId: "t2", role: "CANVASSER" },
+    ]);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t")).resolves.toEqual({
+      userId: "u1",
+      email: "a@b.c",
+      tenantId: "t1",
+      role: "ORGANISER",
+    });
+  });
+
+  it("resolve() honours a pinned tenant that is still a valid membership", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      tenantId: "t2",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    prisma.tenantMember.findMany.mockResolvedValue([
+      { tenantId: "t1", role: "ORGANISER" },
+      { tenantId: "t2", role: "CANVASSER" },
+    ]);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t")).resolves.toEqual({
+      userId: "u1",
+      email: "a@b.c",
+      tenantId: "t2",
+      role: "CANVASSER",
+    });
+  });
+
+  it("resolve() falls back to first membership if the pinned tenant is no longer valid", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      tenantId: "gone",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    prisma.tenantMember.findMany.mockResolvedValue([{ tenantId: "t1", role: "ORGANISER" }]);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t")).resolves.toMatchObject({ tenantId: "t1" });
+  });
+
+  it("resolve() returns null for an expired session", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      expiresAt: new Date(Date.now() - 1),
+    });
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t")).resolves.toBeNull();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("resolve() returns null when the user has no membership", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    prisma.tenantMember.findMany.mockResolvedValue([]);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t")).resolves.toBeNull();
+  });
+
+  it("resolve() returns null for an unknown token", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue(null);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("nope")).resolves.toBeNull();
+  });
+
+  it("setTenant() pins the tenant on the session", async () => {
+    const prisma = makePrisma();
+    const svc = new SessionService(prisma);
+    await svc.setTenant("t", "t2");
+    expect(prisma.session.updateMany).toHaveBeenCalledWith({ where: { token: "t" }, data: { tenantId: "t2" } });
+  });
+
+  it("revoke() deletes the session by token", async () => {
+    const prisma = makePrisma();
+    const svc = new SessionService(prisma);
+    await svc.revoke("t");
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { token: "t" } });
+  });
+
+  it("revokeAllForUser() deletes every session for the user", async () => {
+    const prisma = makePrisma();
+    const svc = new SessionService(prisma);
+    await svc.revokeAllForUser("u1");
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: "u1" } });
+  });
+});

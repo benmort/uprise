@@ -18,6 +18,8 @@ async function getApp(): Promise<INestApplication> {
       const nestApp = await NestFactory.create(
         AppModule,
         new ExpressAdapter(expressServer),
+        // rawBody enables Stripe webhook signature verification on Vercel (meld doc 08).
+        { rawBody: true },
       );
       await configureNestApp(nestApp);
       await nestApp.init();

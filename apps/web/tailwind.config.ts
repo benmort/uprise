@@ -6,6 +6,8 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    // the shared design system (meld doc 14) — scan its class strings
+    "../../packages/ui/src/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {

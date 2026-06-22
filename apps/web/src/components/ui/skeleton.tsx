@@ -1,5 +1,2 @@
-import { cn } from "@/lib/utils";
-
-export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-surface-variant/70", className)} />;
-}
+// Re-export shim: the design system now lives in @yarns/ui (meld doc 14).
+export * from "@yarns/ui";

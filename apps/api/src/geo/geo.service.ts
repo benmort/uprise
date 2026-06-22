@@ -163,7 +163,7 @@ export class GeoService {
   }
 
   /** One division: boundary GeoJSON + total/contact/without-contact counts for an org. */
-  async divisionDetail(organizationId: string, type: string, code: string) {
+  async divisionDetail(tenantId: string, type: string, code: string) {
     const { table, col } = this.table(type);
     const rows = (await this.prisma.$queryRawUnsafe(
       // COUNT(DISTINCT …): the Contact join fans out address rows whenever an
@@ -174,10 +174,10 @@ export class GeoService {
               (COUNT(DISTINCT ar.gnaf_pid) - COUNT(DISTINCT c."gnafPid"))::int AS "withoutContacts"
        FROM ${table} d
        LEFT JOIN geo.address_region ar ON ar.${col} = d.code
-       LEFT JOIN "Contact" c ON c."gnafPid" = ar.gnaf_pid AND c."organizationId" = $1
+       LEFT JOIN "Contact" c ON c."gnafPid" = ar.gnaf_pid AND c."tenantId" = $1
        WHERE d.code = $2
        GROUP BY d.code, d.name, d.state, d.geom`,
-      organizationId,
+      tenantId,
       code,
     )) as Array<Record<string, unknown>>;
     if (rows.length === 0) throw new ApiHttpException("DIVISION_NOT_FOUND", "Division not found");
@@ -198,7 +198,7 @@ export class GeoService {
    * for the org — the "addresses without contacts" canvassing universe.
    */
   async addresses(
-    organizationId: string,
+    tenantId: string,
     opts: {
       divisionType?: string;
       divisionCode?: string;
@@ -211,14 +211,14 @@ export class GeoService {
     const noContact = opts.withoutContacts
       ? `AND c."gnafPid" IS NULL`
       : "";
-    const join = `LEFT JOIN "Contact" c ON c."gnafPid" = a.gnaf_pid AND c."organizationId" = $1`;
+    const join = `LEFT JOIN "Contact" c ON c."gnafPid" = a.gnaf_pid AND c."tenantId" = $1`;
 
     if (opts.turfId) {
       // ST_Contains against the drawn turf polygon (GeoJSON stored on Turf.geometry).
       const turf = (await this.prisma.$queryRawUnsafe(
-        `SELECT geometry FROM "Turf" WHERE id = $1 AND "organizationId" = $2`,
+        `SELECT geometry FROM "Turf" WHERE id = $1 AND "tenantId" = $2`,
         opts.turfId,
-        organizationId,
+        tenantId,
       )) as Array<{ geometry: unknown }>;
       if (turf.length === 0) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
       const geojson = JSON.stringify(turf[0].geometry);
@@ -228,7 +228,7 @@ export class GeoService {
          ${join}
          WHERE ST_Contains(ST_GeomFromGeoJSON($2), a.geom) ${noContact}
          LIMIT ${limit}`,
-        organizationId,
+        tenantId,
         geojson,
       );
     }
@@ -242,7 +242,7 @@ export class GeoService {
        ${join.replace("a.gnaf_pid", "ar.gnaf_pid")}
        WHERE ar.${col} = $2 ${noContact}
        LIMIT ${limit}`,
-      organizationId,
+      tenantId,
       opts.divisionCode,
     );
   }

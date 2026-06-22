@@ -3,12 +3,16 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { config as dotenvConfig } from "dotenv";
 import { NestFactory } from "@nestjs/core";
-import { Job, QueueEvents, Worker } from "bullmq";
+import { Job, Queue, QueueEvents, Worker } from "bullmq";
+import type { EventEnvelope } from "@yarns/events";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
+import { SegmentEvaluatorService } from "../../api/src/audiences/segment-evaluator.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { IntegrationsService } from "../../api/src/integrations/integrations.service";
 import { JourneysService } from "../../api/src/journeys/journeys.service";
 import { DomainLogger } from "../../api/src/common/logging/domain-logger.service";
+import { PrismaService } from "../../api/src/prisma/prisma.service";
+import { ReactionRegistry } from "../../api/src/common/reactions/reaction-registry";
 import { QueueConfigService } from "../../api/src/common/queue/queue-config.service";
 import {
   isAudienceImportBatchJobPayload,
@@ -16,6 +20,7 @@ import {
   isBlastSendBatchJobPayload,
   isIntegrationSyncJobPayload,
   isJourneyRunRungJobPayload,
+  isSegmentEvalRunJobPayload,
 } from "../../api/src/common/queue/queue.payloads";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES } from "../../api/src/common/queue/queue.constants";
 
@@ -41,18 +46,84 @@ for (const envPath of envFileCandidates) {
   dotenvConfig({ path: envPath, override: false });
 }
 
+type OutboxRow = {
+  id: string;
+  tenantId: string;
+  eventType: string;
+  aggregateId: string;
+  payload: unknown;
+  metadata: unknown;
+  occurredAt: Date;
+};
+
+/**
+ * Outbox relay (meld doc 05): claim unpublished events (FOR UPDATE SKIP LOCKED,
+ * so it's safe even if run by multiple worker instances), enqueue each onto the
+ * domain-events queue (jobId = event id → BullMQ dedup), then mark published —
+ * all in one transaction so a crash mid-loop leaves rows unpublished for retry.
+ */
+async function drainOutbox(
+  prisma: PrismaService,
+  queue: Queue,
+  logger: DomainLogger,
+  batchSize = 100,
+): Promise<number> {
+  let published = 0;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<OutboxRow[]>`
+        SELECT "id", "tenantId", "eventType", "aggregateId", "payload", "metadata", "occurredAt"
+        FROM "events"."OutboxEvent"
+        WHERE "publishedAt" IS NULL
+        ORDER BY "seq" ASC
+        LIMIT ${batchSize}
+        FOR UPDATE SKIP LOCKED`;
+      for (const row of rows) {
+        const envelope: EventEnvelope = {
+          id: row.id,
+          eventType: row.eventType,
+          tenantId: row.tenantId,
+          aggregateId: row.aggregateId,
+          payload: row.payload,
+          metadata: (row.metadata ?? {}) as EventEnvelope["metadata"],
+          occurredAt:
+            row.occurredAt instanceof Date ? row.occurredAt.toISOString() : String(row.occurredAt),
+        };
+        await queue.add(QUEUE_JOB_TYPES.DOMAIN_EVENT, envelope, {
+          jobId: row.id,
+          removeOnComplete: true,
+          removeOnFail: 1000,
+        });
+        await tx.outboxEvent.update({
+          where: { id: row.id },
+          data: { publishedAt: new Date(), attempts: { increment: 1 } },
+        });
+        published += 1;
+      }
+    });
+  } catch (err) {
+    logger.error("worker", "Outbox relay drain failed", undefined, { error: String(err) });
+  }
+  return published;
+}
+
 async function bootstrap(): Promise<void> {
   const { AppModule } = await import("../../api/src/app.module");
   const app = await NestFactory.createApplicationContext(AppModule);
   const queueConfig = app.get(QueueConfigService);
   const audiences = app.get(AudiencesService);
+  const segmentEvaluator = app.get(SegmentEvaluatorService);
   const blasts = app.get(BlastsService);
   const integrations = app.get(IntegrationsService);
   const journeys = app.get(JourneysService);
+  const prisma = app.get(PrismaService);
+  const reactions = app.get(ReactionRegistry);
   const logger = app.get(DomainLogger);
 
   const connection = queueConfig.queueConnection;
   const prefix = queueConfig.queuePrefix;
+  // Producer for the relay; consumed by the domain-events worker below.
+  const domainEventsQueue = new Queue(QUEUE_NAMES.DOMAIN_EVENTS, { connection, prefix });
   const metricsMap = new Map<string, WorkerQueueMetrics>();
 
   const ensureMetrics = (queue: string): WorkerQueueMetrics => {
@@ -127,6 +198,26 @@ async function bootstrap(): Promise<void> {
       },
       { connection, prefix, concurrency: queueConfig.journeyQueueConcurrency },
     ),
+    new Worker(
+      QUEUE_NAMES.DOMAIN_EVENTS,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.DOMAIN_EVENT) return null;
+        await reactions.dispatch(QUEUE_NAMES.DOMAIN_EVENTS, job.data as EventEnvelope);
+        return null;
+      },
+      { connection, prefix, concurrency: 5 },
+    ),
+    new Worker(
+      QUEUE_NAMES.SEGMENT_EVAL,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.SEGMENT_EVAL_RUN) return null;
+        if (!isSegmentEvalRunJobPayload(job.data)) {
+          throw new Error(`Invalid segment eval job payload for job ${job.id}`);
+        }
+        return segmentEvaluator.processEvalJob(job.data);
+      },
+      { connection, prefix, concurrency: 2 },
+    ),
   ];
 
   for (const worker of workers) {
@@ -166,16 +257,27 @@ async function bootstrap(): Promise<void> {
     });
   }
 
+  // Outbox relay: poll for unpublished domain events and fan them onto the
+  // domain-events queue. SKIP LOCKED makes the poll safe across worker instances.
+  const relayIntervalMs = Number(process.env.OUTBOX_RELAY_INTERVAL_MS ?? "750");
+  const relayInterval = setInterval(() => {
+    void drainOutbox(prisma, domainEventsQueue, logger);
+  }, relayIntervalMs);
+
   logger.log("worker", "BullMQ worker booted", {
     prefix,
     queues: workers.map((worker) => worker.name),
     queueMetricsTracked: Array.from(metricsMap.keys()),
+    outboxRelayMs: relayIntervalMs,
+    reactionTriggers: reactions.triggers(),
   });
 
   const shutdown = async () => {
     logger.warn("worker", "Shutting down BullMQ worker");
+    clearInterval(relayInterval);
     await Promise.all(workers.map((worker) => worker.close()));
     await Promise.all(queueEvents.map((events) => events.close()));
+    await domainEventsQueue.close();
     await app.close();
     process.exit(0);
   };

@@ -1,6 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 import { AudiencesService } from "./audiences.service";
-import { AudienceImportStatus } from "../../src/generated/prisma";
+import { AudienceImportStatus } from "@yarns/db";
 
 describe("AudiencesService integration-like flow", () => {
   it("starts csv import and resumes in bounded batches", async () => {
@@ -22,11 +22,11 @@ describe("AudiencesService integration-like flow", () => {
       completedAt: null as Date | null,
     };
     const prismaMock: any = {
-      organization: {
+      tenant: {
         upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
       },
       audience: {
-        findFirst: jest.fn().mockResolvedValue({ id: "aud_1", organizationId: "org_1" }),
+        findFirst: jest.fn().mockResolvedValue({ id: "aud_1", tenantId: "org_1" }),
         update: jest.fn().mockResolvedValue({}),
       },
       audienceContact: {
@@ -104,11 +104,11 @@ describe("AudiencesService integration-like flow", () => {
       completedAt: null as Date | null,
     };
     const prismaMock: any = {
-      organization: {
+      tenant: {
         upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
       },
       audience: {
-        findFirst: jest.fn().mockResolvedValue({ id: "aud_1", organizationId: "org_1" }),
+        findFirst: jest.fn().mockResolvedValue({ id: "aud_1", tenantId: "org_1" }),
         update: jest.fn().mockResolvedValue({}),
       },
       audienceContact: {
@@ -161,11 +161,11 @@ describe("AudiencesService integration-like flow", () => {
       completedAt: null as Date | null,
     };
     const prismaMock: any = {
-      organization: {
+      tenant: {
         upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
       },
       audience: {
-        findFirst: jest.fn().mockResolvedValue({ id: "aud_1", organizationId: "org_1" }),
+        findFirst: jest.fn().mockResolvedValue({ id: "aud_1", tenantId: "org_1" }),
       },
       audienceImport: {
         create: jest.fn().mockResolvedValue({ id: "import_queued" }),

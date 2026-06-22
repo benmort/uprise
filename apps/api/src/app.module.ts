@@ -3,9 +3,11 @@ import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { validateEnv } from "./config/env.validation";
 import { BasicAuthGuard } from "./auth/basic-auth.guard";
+import { AbilityGuard } from "./auth/ability.guard";
 import { RolesGuard } from "./auth/roles.guard";
 import { AuthController } from "./auth/auth.controller";
 import { AuthScopeService } from "./auth/auth-scope.service";
+import { IamModule } from "./auth/iam.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { TwilioModule } from "./twilio/twilio.module";
 import { MessagingModule } from "./messaging/messaging.module";
@@ -29,6 +31,13 @@ import { HealthModule } from "./health/health.module";
 import { LoggingModule } from "./common/logging/logging.module";
 import { FlagsModule } from "./common/flags/flags.module";
 import { EventsModule } from "./common/events/events.module";
+import { OutboxModule } from "./common/outbox/outbox.module";
+import { ReactionsModule } from "./common/reactions/reactions.module";
+import { WebhookEventModule } from "./common/webhooks/webhook-event.module";
+import { EmailModule } from "./email/email.module";
+import { PaymentModule } from "./payment/payment.module";
+import { CallsModule } from "./calls/calls.module";
+import { OrgProfileModule } from "./org-profile/org-profile.module";
 import { RequestIdMiddleware } from "./common/http/request-id.middleware";
 import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middleware";
 import { QueueModule } from "./common/queue/queue.module";
@@ -41,9 +50,17 @@ import { QueueModule } from "./common/queue/queue.module";
       validate: validateEnv,
     }),
     PrismaModule,
+    IamModule,
     LoggingModule,
     FlagsModule,
     EventsModule,
+    OutboxModule,
+    ReactionsModule,
+    WebhookEventModule,
+    EmailModule,
+    PaymentModule,
+    CallsModule,
+    OrgProfileModule,
     QueueModule,
     TwilioModule,
     MessagingModule,
@@ -72,6 +89,12 @@ import { QueueModule } from "./common/queue/queue.module";
     {
       provide: APP_GUARD,
       useClass: BasicAuthGuard,
+    },
+    // Runs after BasicAuthGuard (which attaches request.user). Enforces CASL on
+    // routes decorated with @RequirePermission; a no-op for routes without it.
+    {
+      provide: APP_GUARD,
+      useClass: AbilityGuard,
     },
   ],
 })

@@ -1,24 +1,24 @@
 import { Injectable } from "@nestjs/common";
-import { MessageChannel } from "../../src/generated/prisma";
+import { MessageChannel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class InboxRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  listConversations(organizationId: string) {
+  listConversations(tenantId: string) {
     return this.prisma.conversationState.findMany({
-      where: { organizationId },
+      where: { tenantId },
       orderBy: { updatedAt: "desc" },
       take: 400,
     });
   }
 
-  getThread(organizationId: string, contactPhone: string, channel: MessageChannel) {
+  getThread(tenantId: string, contactPhone: string, channel: MessageChannel) {
     return Promise.all([
       this.prisma.inboundMessage.findMany({
         where: {
-          organizationId,
+          tenantId,
           channel,
           OR: [{ fromPhone: contactPhone }, { toPhone: contactPhone }],
         },
@@ -27,7 +27,7 @@ export class InboxRepository {
       }),
       this.prisma.outboundMessage.findMany({
         where: {
-          organizationId,
+          tenantId,
           channel,
           OR: [{ toPhone: contactPhone }, { fromPhone: contactPhone }],
         },
@@ -37,18 +37,18 @@ export class InboxRepository {
     ]);
   }
 
-  async listRecentMessageContacts(organizationId: string, limit = 500) {
+  async listRecentMessageContacts(tenantId: string, limit = 500) {
     const [inbound, outbound] = await Promise.all([
       this.prisma.inboundMessage.groupBy({
         by: ["fromPhone", "channel"],
-        where: { organizationId },
+        where: { tenantId },
         _max: { receivedAt: true },
         orderBy: { _max: { receivedAt: "desc" } },
         take: Math.min(Math.max(1, limit), 2000),
       }),
       this.prisma.outboundMessage.groupBy({
         by: ["toPhone", "channel"],
-        where: { organizationId },
+        where: { tenantId },
         _max: { sentAt: true },
         orderBy: { _max: { sentAt: "desc" } },
         take: Math.min(Math.max(1, limit), 2000),
@@ -72,15 +72,15 @@ export class InboxRepository {
     }));
   }
 
-  async listContactPhonesForBlast(organizationId: string, blastId: string) {
+  async listContactPhonesForBlast(tenantId: string, blastId: string) {
     const [inbound, outbound] = await Promise.all([
       this.prisma.inboundMessage.findMany({
-        where: { organizationId, blastId },
+        where: { tenantId, blastId },
         select: { fromPhone: true },
         distinct: ["fromPhone"],
       }),
       this.prisma.outboundMessage.findMany({
-        where: { organizationId, blastId },
+        where: { tenantId, blastId },
         select: { toPhone: true },
         distinct: ["toPhone"],
       }),
@@ -91,21 +91,21 @@ export class InboxRepository {
     ];
   }
 
-  async listContactPhonesForAudience(organizationId: string, audienceId: string) {
+  async listContactPhonesForAudience(tenantId: string, audienceId: string) {
     const blasts = await this.prisma.blast.findMany({
-      where: { organizationId, audienceId },
+      where: { tenantId, audienceId },
       select: { id: true },
     });
     const blastIds = blasts.map((blast) => blast.id);
     if (blastIds.length === 0) return [];
     const [inbound, outbound] = await Promise.all([
       this.prisma.inboundMessage.findMany({
-        where: { organizationId, blastId: { in: blastIds } },
+        where: { tenantId, blastId: { in: blastIds } },
         select: { fromPhone: true },
         distinct: ["fromPhone"],
       }),
       this.prisma.outboundMessage.findMany({
-        where: { organizationId, blastId: { in: blastIds } },
+        where: { tenantId, blastId: { in: blastIds } },
         select: { toPhone: true },
         distinct: ["toPhone"],
       }),
@@ -116,11 +116,11 @@ export class InboxRepository {
     ];
   }
 
-  listContactNamesByPhones(organizationId: string, phones: string[]) {
+  listContactNamesByPhones(tenantId: string, phones: string[]) {
     if (phones.length === 0) return Promise.resolve([]);
     return this.prisma.audienceContact.findMany({
       where: {
-        organizationId,
+        tenantId,
         phoneE164: { in: phones },
         NOT: [{ fullName: null }, { fullName: "" }],
       },

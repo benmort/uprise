@@ -1,12 +1,13 @@
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   AudienceKind,
+  AudienceSegmentType,
   BlastRecipientStatus,
   BlastStatus,
   ConsentState,
   MessageChannel,
   Prisma,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 import { assertValidBlastTransition } from "./blast-state.machine";
@@ -110,7 +111,7 @@ export class BlastsService {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -136,7 +137,7 @@ export class BlastsService {
     const org = await this.ensureOrganization();
     const blast = await this.prisma.blast.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         title: dto.title,
         audienceId: dto.audienceId || null,
         bodyTemplate: dto.bodyTemplate,
@@ -292,12 +293,12 @@ export class BlastsService {
   private async getBlastRecipients(blast: {
     audienceId: string | null;
     id: string;
-    organizationId: string;
+    tenantId: string;
     channel: MessageChannel;
   }): Promise<RecipientSeed[]> {
     if (!blast.audienceId) return [];
     const audience = await this.prisma.audience.findFirst({
-      where: { id: blast.audienceId, organizationId: blast.organizationId },
+      where: { id: blast.audienceId, tenantId: blast.tenantId },
       select: { kind: true },
     });
     const dedup = new Map<string, RecipientSeed>();
@@ -307,7 +308,7 @@ export class BlastsService {
       // not a stored AudienceContact list.
       const optIns = await this.prisma.contactConsent.findMany({
         where: {
-          organizationId: blast.organizationId,
+          tenantId: blast.tenantId,
           channel: MessageChannel.WHATSAPP,
           state: ConsentState.OPTED_IN,
         },
@@ -317,26 +318,59 @@ export class BlastsService {
         dedup.set(c.phoneE164, { contactId: c.contactId ?? undefined, phoneE164: c.phoneE164, metadata: {} });
       }
     } else {
-      const contacts = await this.prisma.audienceContact.findMany({
-        where: { audienceId: blast.audienceId },
-        orderBy: { createdAt: "asc" },
+      const dynamicSegments = await this.prisma.audienceSegment.findMany({
+        where: {
+          audienceId: blast.audienceId,
+          tenantId: blast.tenantId,
+          type: AudienceSegmentType.DYNAMIC,
+        },
+        select: { id: true },
       });
-      for (const contact of contacts) {
-        if (!this.isContactable(contact)) continue;
-        dedup.set(contact.phoneE164, {
-          // Point at the persistent Contact spine, not the per-audience row.
-          // Null until backfill populates AudienceContact.contactId.
-          contactId: contact.contactId ?? undefined,
-          phoneE164: contact.phoneE164,
-          metadata: (contact.metadata as Record<string, unknown>) || {},
+
+      if (dynamicSegments.length > 0) {
+        // Dynamic-segment audience: members are the materialised AudienceSegmentMember
+        // set (rewritten by SegmentEvaluatorService), resolved to the Contact spine.
+        const members = await this.prisma.audienceSegmentMember.findMany({
+          where: { segmentId: { in: dynamicSegments.map((s) => s.id) } },
+          select: { contactId: true },
         });
+        const contactIds = Array.from(new Set(members.map((m) => m.contactId)));
+        if (contactIds.length > 0) {
+          const contacts = await this.prisma.contact.findMany({
+            where: { id: { in: contactIds }, tenantId: blast.tenantId, phoneE164: { not: null } },
+            select: { id: true, phoneE164: true, metadata: true },
+          });
+          for (const c of contacts) {
+            if (!c.phoneE164) continue;
+            dedup.set(c.phoneE164, {
+              contactId: c.id,
+              phoneE164: c.phoneE164,
+              metadata: (c.metadata as Record<string, unknown>) || {},
+            });
+          }
+        }
+      } else {
+        const contacts = await this.prisma.audienceContact.findMany({
+          where: { audienceId: blast.audienceId },
+          orderBy: { createdAt: "asc" },
+        });
+        for (const contact of contacts) {
+          if (!this.isContactable(contact)) continue;
+          dedup.set(contact.phoneE164, {
+            // Point at the persistent Contact spine, not the per-audience row.
+            // Null until backfill populates AudienceContact.contactId.
+            contactId: contact.contactId ?? undefined,
+            phoneE164: contact.phoneE164,
+            metadata: (contact.metadata as Record<string, unknown>) || {},
+          });
+        }
       }
     }
 
     // Consent gating: SMS skips explicit opt-outs; WhatsApp also requires opt-in.
     const phones = Array.from(dedup.keys());
     const consentStates = await this.consent.getStatesForPhones(
-      blast.organizationId,
+      blast.tenantId,
       blast.channel,
       phones,
     );
@@ -500,7 +534,7 @@ export class BlastsService {
     id: string;
     audienceId: string | null;
     bodyTemplate: string;
-    organizationId: string;
+    tenantId: string;
     channel: MessageChannel;
   }): Promise<number> {
     const existingCount = await this.prisma.blastRecipient.count({
@@ -610,7 +644,7 @@ export class BlastsService {
   private async writeSnapshot(orgId: string, blastId: string, metricName: string, value: number) {
     await this.prisma.analyticsSnapshot.create({
       data: {
-        organizationId: orgId,
+        tenantId: orgId,
         blastId,
         metricName,
         metricValue: value,
@@ -888,7 +922,7 @@ export class BlastsService {
       id: blast.id,
       audienceId: blast.audienceId,
       bodyTemplate: blast.bodyTemplate,
-      organizationId: blast.organizationId,
+      tenantId: blast.tenantId,
       channel: blast.channel,
     });
 
@@ -998,7 +1032,7 @@ export class BlastsService {
         });
         await this.prisma.outboundMessage.create({
           data: {
-            organizationId: blast.organizationId,
+            tenantId: blast.tenantId,
             blastId: blast.id,
             recipientId: recipient.id,
             toPhone: normalizePhoneE164(message.to),
@@ -1060,8 +1094,8 @@ export class BlastsService {
       }, undefined, `cursor-${statusUpdate.remaining}-${Date.now()}`);
     }
 
-    await this.writeSnapshot(blast.organizationId, blast.id, "sent", sent);
-    await this.writeSnapshot(blast.organizationId, blast.id, "failed", failed);
+    await this.writeSnapshot(blast.tenantId, blast.id, "sent", sent);
+    await this.writeSnapshot(blast.tenantId, blast.id, "failed", failed);
     this.events.emit("blast.updated", {
       blastId: blast.id,
       status: statusUpdate.status,
@@ -1241,7 +1275,7 @@ export class BlastsService {
     const org = await this.ensureOrganization();
     return this.prisma.blast.findMany({
       where: {
-        organizationId: org.id,
+        tenantId: org.id,
         ...(where || {}),
       },
       include: {

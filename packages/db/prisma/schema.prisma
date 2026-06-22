@@ -1,0 +1,1556 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops", "payment", "telephony"]
+}
+
+enum AudienceStatus {
+  ACTIVE
+  ARCHIVED
+  @@schema("audience")
+}
+
+enum AudienceSource {
+  MANUAL
+  CSV
+  ACTION_NETWORK
+  INTERNAL
+  @@schema("audience")
+}
+
+// Which messaging channel an audience is built for. ALL = usable on any channel
+// (the existing/default behaviour); WHATSAPP marks a WhatsApp broadcast list.
+enum AudienceChannel {
+  SMS
+  WHATSAPP
+  ALL
+  @@schema("audience")
+}
+
+// STATIC = a fixed contact list (AudienceContact rows). WHATSAPP_OPTED_IN = a
+// dynamic "smart" audience that always resolves to the org's WhatsApp opt-ins.
+enum AudienceKind {
+  STATIC
+  WHATSAPP_OPTED_IN
+  @@schema("audience")
+}
+
+enum AudienceImportStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  @@schema("audience")
+}
+
+enum BlastStatus {
+  DRAFTED
+  PROOFED
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+  @@schema("messaging")
+}
+
+enum BlastRecipientStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  RESPONDED
+  FAILED
+  SKIPPED
+  @@schema("messaging")
+}
+
+// Messaging transport for a blast / message / conversation. Distinct from
+// EngagementChannel (DOOR/SMS/BOTH), which describes canvassing engagement.
+enum MessageChannel {
+  SMS
+  WHATSAPP
+  @@schema("messaging")
+}
+
+// Per-contact, per-channel consent. WhatsApp legally requires recorded opt-in;
+// SMS stays UNKNOWN (implicit) to preserve today's behaviour.
+enum ConsentState {
+  UNKNOWN
+  OPTED_IN
+  OPTED_OUT
+  @@schema("messaging")
+}
+
+// Marketing vs transactional messages. TRANSACTIONAL (2FA, verification codes,
+// receipts) is legally exempt from marketing consent and bypasses
+// consent/compliance/suppression (meld doc 06).
+enum MessageKind {
+  MARKETING
+  TRANSACTIONAL
+  @@schema("messaging")
+}
+
+// Lifecycle of a transactional SMS (mirrors prog's sms-message aggregate).
+enum TxSmsStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  UNDELIVERED
+  FAILED
+  @@schema("messaging")
+}
+
+enum IntegrationType {
+  ACTION_NETWORK
+  INTERNAL
+  @@schema("integration")
+}
+
+enum IntegrationConnectionStatus {
+  ACTIVE
+  INACTIVE
+  @@schema("integration")
+}
+
+enum IntegrationJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  @@schema("integration")
+}
+
+enum EngagementChannel {
+  DOOR
+  SMS
+  BOTH
+  @@schema("canvass")
+}
+
+enum QuestionType {
+  yes_no
+  single_choice
+  multi_choice
+  text
+  scale
+  @@schema("canvass")
+}
+
+enum DispositionLayer {
+  CONTACT_RESULT
+  TERMINAL
+  DATA_QUALITY
+  @@schema("canvass")
+}
+
+enum SupportLevel {
+  STRONG_SUPPORT
+  LEAN_SUPPORT
+  UNDECIDED
+  LEAN_OPPOSE
+  STRONG_OPPOSE
+  @@schema("canvass")
+}
+
+enum CannedVisibility {
+  ORG
+  PERSONAL
+  AUTO_SEND
+  @@schema("canvass")
+}
+
+enum JourneyStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+  @@schema("journey")
+}
+
+enum JourneyRungType {
+  wait
+  condition
+  action
+  @@schema("journey")
+}
+
+enum JourneyTriggerType {
+  disposition_set
+  message_received
+  tag_added
+  survey_answer
+  no_answer_after
+  @@schema("journey")
+}
+
+enum JourneyEnrolmentState {
+  ACTIVE
+  WAITING
+  COMPLETED
+  EXITED
+  FAILED
+  @@schema("journey")
+}
+
+enum AppUserRole {
+  ORGANISER
+  CANVASSER
+  @@schema("iam")
+}
+
+enum CanvassCampaignStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  @@schema("canvass")
+}
+
+enum TurfAssignmentStatus {
+  ASSIGNED
+  RELEASED
+  @@schema("canvass")
+}
+
+enum WalkListItemStatus {
+  PENDING
+  VISITED
+  SKIPPED
+  @@schema("canvass")
+}
+
+enum WalkListItemListType {
+  STATIC
+  DYNAMIC
+  @@schema("canvass")
+}
+
+model Tenant {
+  id                String                  @id @default(cuid())
+  slug              String                  @unique
+  name              String
+  networkId         String?
+  settings          Json?
+  deletedAt         DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  network           Network?                @relation(fields: [networkId], references: [id])
+  members           TenantMember[]
+  invitations       TenantInvitation[]
+  audiences         Audience[]
+  blasts            Blast[]
+  integrations      IntegrationConnection[]
+  inbound           InboundMessage[]
+  outbound          OutboundMessage[]
+  snapshots         AnalyticsSnapshot[]
+  conversations     ConversationState[]
+  consents          ContactConsent[]
+  whatsappTemplates WhatsappTemplate[]
+  contacts          Contact[]
+  scripts           Script[]
+  surveys           Survey[]
+  cannedResponses   CannedResponse[]
+  dispositionDefs   DispositionDef[]
+  dispositions      Disposition[]
+  questionResponses QuestionResponse[]
+  journeys          Journey[]
+  canvassCampaigns  CanvassCampaign[]
+  turfs             Turf[]
+  walkLists         WalkList[]
+  doorKnocks        DoorKnock[]
+  shifts            Shift[]
+  suppressions      Suppression[]
+  pushSubscriptions PushSubscription[]
+
+  @@schema("tenant")
+}
+
+model Contact {
+  id               String            @id @default(cuid())
+  tenantId   String
+  phoneE164        String?
+  addressNorm      String?
+  gnafPid          String?           // links to geo.gnaf_address (the G-NAF address universe)
+  firstName        String?
+  lastName         String?
+  email            String?
+  address          String?
+  lat              Float?
+  lng              Float?
+  turfId           String?
+  canonicalContactId String?         // identity resolution: groups duplicates under one canonical contact
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audienceContacts AudienceContact[]
+  recipients       BlastRecipient[]
+  inbound          InboundMessage[]
+  outbound         OutboundMessage[]
+  conversations    ConversationState[]
+  consents         ContactConsent[]
+  dispositions     Disposition[]
+  questionResponses QuestionResponse[]
+  journeyEnrolments JourneyEnrolment[]
+  turf             Turf?             @relation(fields: [turfId], references: [id], onDelete: SetNull)
+  walkListItems    WalkListItem[]
+  doorKnocks       DoorKnock[]
+
+  // Dedup is enforced by partial unique indexes (created in the migration):
+  //   UNIQUE (tenantId, phoneE164)   WHERE phoneE164   IS NOT NULL
+  //   UNIQUE (tenantId, addressNorm) WHERE addressNorm IS NOT NULL
+  // Prisma's DSL can't express partial uniques, so they live in migration SQL.
+  @@index([tenantId, phoneE164])
+  @@index([tenantId, addressNorm])
+  @@index([tenantId, turfId])
+  @@index([tenantId, gnafPid])
+  @@index([tenantId, email])
+  @@index([canonicalContactId])
+  @@schema("public")
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  displayName     String
+  passwordHash    String?
+  twofaEnabled    Boolean          @default(false)
+  twofaSecret     String?
+  mobile          String?
+  mobileVerified  Boolean          @default(false)
+  emailVerified   Boolean          @default(false)
+  registeredAt    DateTime         @default(now())
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  audiences       Audience[]
+  blasts          Blast[]
+  turfAssignments TurfAssignment[]
+  doorKnocks      DoorKnock[]
+  sessions        Session[]
+  tenantMembers   TenantMember[]
+
+  @@schema("iam")
+}
+
+model Audience {
+  id             String         @id @default(cuid())
+  tenantId String
+  createdById    String?
+  name           String
+  source         AudienceSource
+  channel        AudienceChannel @default(ALL)
+  kind           AudienceKind    @default(STATIC)
+  status         AudienceStatus @default(ACTIVE)
+  externalListId String?
+  syncedAt       DateTime?
+  archivedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy      User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  contacts       AudienceContact[]
+  imports        AudienceImport[]
+  segments       AudienceSegment[]
+  blasts         Blast[]
+
+  @@index([tenantId, status])
+  @@schema("audience")
+}
+
+model AudienceContact {
+  id             String      @id @default(cuid())
+  tenantId String
+  audienceId     String
+  contactId      String?
+  externalId     String?
+  phoneE164      String
+  fullName       String?
+  metadata       Json?
+  source         AudienceSource
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  audience       Audience    @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  contact        Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([audienceId, phoneE164])
+  @@index([tenantId, phoneE164])
+  @@index([contactId])
+  @@schema("audience")
+}
+
+model AudienceImport {
+  id             String               @id @default(cuid())
+  tenantId String
+  audienceId     String
+  fileName       String
+  status         AudienceImportStatus @default(QUEUED)
+  cursor         Int                  @default(0)
+  totalRows      Int                  @default(0)
+  importedRows   Int                  @default(0)
+  failedRows     Int                  @default(0)
+  csvRaw         String               @db.Text
+  errors         Json?
+  errorSummary   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  audience       Audience             @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status, createdAt])
+  @@schema("audience")
+}
+
+model AudienceSegment {
+  id             String              @id @default(cuid())
+  tenantId       String
+  audienceId     String
+  name           String
+  type           AudienceSegmentType @default(DYNAMIC)
+  definition     Json
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  audience       Audience            @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  members        AudienceSegmentMember[]
+  @@index([audienceId, type])
+  @@schema("audience")
+}
+
+model Blast {
+  id             String      @id @default(cuid())
+  tenantId String
+  audienceId     String?
+  createdById    String?
+  title          String
+  bodyTemplate   String
+  channel        MessageChannel @default(SMS)
+  contentSid     String?        // WhatsApp: approved Content template SID (HX...)
+  contentVariableMap Json?      // WhatsApp: template slot -> personalization key
+  status         BlastStatus  @default(DRAFTED)
+  scheduledFor   DateTime?
+  proofedAt      DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  audience       Audience?    @relation(fields: [audienceId], references: [id], onDelete: SetNull)
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  templates      BlastTemplate[]
+  recipients     BlastRecipient[]
+  inbound        InboundMessage[]
+  outbound       OutboundMessage[]
+  snapshots      AnalyticsSnapshot[]
+
+  @@index([tenantId, status])
+  @@schema("messaging")
+}
+
+model BlastTemplate {
+  id        String   @id @default(cuid())
+  blastId   String
+  version   Int
+  body      String
+  createdAt DateTime @default(now())
+  blast     Blast    @relation(fields: [blastId], references: [id], onDelete: Cascade)
+
+  @@unique([blastId, version])
+  @@schema("messaging")
+}
+
+model BlastRecipient {
+  id              String               @id @default(cuid())
+  blastId         String
+  contactId       String?
+  phoneE164       String
+  channel         MessageChannel       @default(SMS)
+  renderedBody    String
+  status          BlastRecipientStatus @default(PENDING)
+  failureCategory String?
+  twilioMessageSid String?
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  respondedAt     DateTime?
+  errorCode       String?
+  errorMessage    String?
+  metadata        Json?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  blast           Blast                @relation(fields: [blastId], references: [id], onDelete: Cascade)
+  contact         Contact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([blastId, phoneE164])
+  @@index([blastId, status])
+  @@index([phoneE164])
+  @@index([contactId])
+  @@schema("messaging")
+}
+
+model InboundMessage {
+  id             String        @id @default(cuid())
+  tenantId String
+  blastId        String?
+  contactId      String?
+  channel        MessageChannel @default(SMS)
+  fromPhone      String
+  toPhone        String
+  body           String
+  mediaUrl       String?
+  mediaContentType String?
+  twilioMessageSid String?     @unique
+  receivedAt     DateTime      @default(now())
+  threadKey      String
+  createdAt      DateTime      @default(now())
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  blast          Blast?        @relation(fields: [blastId], references: [id], onDelete: SetNull)
+  contact        Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, threadKey, receivedAt])
+  @@index([contactId])
+  @@schema("messaging")
+}
+
+model OutboundMessage {
+  id              String        @id @default(cuid())
+  tenantId  String
+  blastId         String?
+  recipientId     String?
+  contactId       String?
+  channel         MessageChannel @default(SMS)
+  kind            MessageKind   @default(MARKETING)
+  txStatus        TxSmsStatus?  // transactional rows; marketing rows use `status`
+  purpose         String?       // transactional only: "verification_code" | "2fa" | ...
+  toPhone         String
+  fromPhone       String
+  body            String
+  mediaUrl        String?
+  mediaContentType String?
+  status          BlastRecipientStatus @default(SENT)
+  twilioMessageSid String?      @unique
+  sentAt          DateTime      @default(now())
+  errorCode       String?
+  errorMessage    String?
+  createdAt       DateTime      @default(now())
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  blast           Blast?        @relation(fields: [blastId], references: [id], onDelete: SetNull)
+  contact         Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, toPhone, sentAt])
+  @@index([tenantId, kind, sentAt])
+  @@index([contactId])
+  @@schema("messaging")
+}
+
+// Transactional message bodies (2FA, verification, receipts), tenant-scoped and
+// keyed. Marketing bodies live on Blast; these are for the transactional path.
+model MessageTemplate {
+  id        String         @id @default(cuid())
+  tenantId  String
+  key       String
+  channel   MessageChannel @default(SMS)
+  kind      MessageKind    @default(TRANSACTIONAL)
+  body      String         @db.Text
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([tenantId, key])
+  @@schema("messaging")
+}
+
+// Per-contact, per-channel messaging consent. WhatsApp requires OPTED_IN before
+// business-initiated sends; STOP keywords on either channel set OPTED_OUT.
+model ContactConsent {
+  id             String         @id @default(cuid())
+  tenantId String
+  contactId      String?
+  phoneE164      String
+  channel        MessageChannel
+  state          ConsentState   @default(UNKNOWN)
+  source         String?        // e.g. "inbound", "stop_keyword", "manual", "import"
+  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime       @default(now())
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact        Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, phoneE164, channel])
+  @@index([tenantId, channel, state])
+  @@index([contactId])
+  @@schema("messaging")
+}
+
+// Approved WhatsApp message templates synced from the Twilio Content API.
+model WhatsappTemplate {
+  id             String       @id @default(cuid())
+  tenantId String
+  contentSid     String       @unique // Twilio Content SID (HX...)
+  friendlyName   String
+  category       String       // MARKETING | UTILITY | AUTHENTICATION
+  language       String       @default("en")
+  status         String       @default("pending") // approved | pending | rejected
+  variables      Json?        // ordered variable slot names for the composer
+  bodyPreview    String?      @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@schema("messaging")
+}
+
+model IntegrationConnection {
+  id             String                      @id @default(cuid())
+  tenantId String
+  type           IntegrationType
+  name           String
+  status         IntegrationConnectionStatus @default(ACTIVE)
+  encryptedCredential String
+  settings       Json?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  syncJobs       IntegrationSyncJob[]
+
+  @@index([tenantId, type, status])
+  @@schema("integration")
+}
+
+model IntegrationSyncJob {
+  id                    String               @id @default(cuid())
+  tenantId        String
+  integrationConnectionId String
+  audienceId            String?
+  status                IntegrationJobStatus @default(QUEUED)
+  query                 String?
+  remoteListId          String?
+  syncedCount           Int                  @default(0)
+  failedCount           Int                  @default(0)
+  errorSummary          String?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime             @default(now())
+  connection            IntegrationConnection @relation(fields: [integrationConnectionId], references: [id], onDelete: Cascade)
+  @@schema("integration")
+}
+
+model AnalyticsSnapshot {
+  id             String      @id @default(cuid())
+  tenantId String
+  blastId        String?
+  metricName     String
+  metricValue    Float
+  labels         Json?
+  bucketAt       DateTime
+  createdAt      DateTime    @default(now())
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  blast          Blast?       @relation(fields: [blastId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, metricName, bucketAt])
+  @@schema("analytics")
+}
+
+model ConversationState {
+  id             String      @id @default(cuid())
+  tenantId String
+  contactId      String?
+  contactPhone   String
+  channel        MessageChannel @default(SMS)
+  unreadCount    Int         @default(0)
+  resolved       Boolean     @default(false)
+  ownerId        String?     // User id that has claimed this conversation (server-owned)
+  claimedAt      DateTime?
+  lastMessageAt  DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact        Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, contactPhone, channel])
+  @@index([contactId])
+  @@index([tenantId, ownerId])
+  @@schema("messaging")
+}
+
+// ── Shared engagement layer ──────────────────────────────────────────────
+// Script / Survey / Disposition / CannedResponse authored once, consumed by
+// BOTH the door-knock UI and the SMS inbox.
+
+model Script {
+  id             String            @id @default(cuid())
+  tenantId String
+  name           String
+  channel        EngagementChannel @default(BOTH)
+  campaignId     String?
+  isArchived     Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  steps          ScriptStep[]
+
+  @@index([tenantId, channel, isArchived])
+  @@schema("canvass")
+}
+
+model ScriptStep {
+  id           String       @id @default(cuid())
+  scriptId     String
+  parentStepId String?
+  outcomeKey   String?       // disposition code / question-option value leading here from parent
+  bodyText     String       @db.Text
+  orderIndex   Int          @default(0)
+  script       Script       @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  parent       ScriptStep?  @relation("ScriptStepTree", fields: [parentStepId], references: [id], onDelete: Cascade)
+  children     ScriptStep[] @relation("ScriptStepTree")
+
+  @@index([scriptId, parentStepId, orderIndex])
+  @@schema("canvass")
+}
+
+model Survey {
+  id             String       @id @default(cuid())
+  tenantId String
+  name           String
+  campaignId     String?
+  isArchived     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  questions      Question[]
+
+  @@index([tenantId, isArchived])
+  @@schema("canvass")
+}
+
+model Question {
+  id         String           @id @default(cuid())
+  surveyId   String
+  prompt     String           @db.Text
+  type       QuestionType
+  orderIndex Int              @default(0)
+  required   Boolean          @default(false)
+  scaleMin   Int?
+  scaleMax   Int?
+  survey     Survey           @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  options    QuestionOption[]
+  responses  QuestionResponse[]
+
+  @@index([surveyId, orderIndex])
+  @@schema("canvass")
+}
+
+// One object, three projections: a survey option renders as a door disposition
+// button (label + dispositionCode) AND as an SMS canned reply (cannedReplyText).
+model QuestionOption {
+  id              String        @id @default(cuid())
+  questionId      String
+  value           String        // stable machine value, e.g. "yes" / "lean_support"
+  label           String        // door button text
+  orderIndex      Int           @default(0)
+  dispositionCode String?       // picking this option ALSO logs this disposition
+  supportLevel    SupportLevel?
+  cannedReplyText String?       @db.Text // SMS reply text for this option
+  question        Question      @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  responses       QuestionResponse[]
+
+  @@unique([questionId, value])
+  @@index([questionId, orderIndex])
+  @@schema("canvass")
+}
+
+model QuestionResponse {
+  id             String            @id @default(cuid())
+  tenantId String
+  contactId      String
+  questionId     String
+  optionId       String?
+  valueText      String?           @db.Text
+  channel        EngagementChannel
+  campaignId     String?
+  blastId        String?
+  recordedById   String?
+  createdAt      DateTime          @default(now())
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact        Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  question       Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  option         QuestionOption?   @relation(fields: [optionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, contactId, createdAt])
+  @@index([questionId, optionId])
+  @@schema("canvass")
+}
+
+// Disposition catalog: tenantId null = system default. Terminal/locked
+// codes ship as defaults and cannot be edited.
+model DispositionDef {
+  id             String            @id @default(cuid())
+  tenantId String?
+  code           String
+  label          String
+  layer          DispositionLayer
+  channel        EngagementChannel @default(BOTH)
+  isTerminal     Boolean           @default(false)
+  isLocked       Boolean           @default(false)
+  orderIndex     Int               @default(0)
+  tenant   Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, layer, channel])
+  @@schema("canvass")
+}
+
+// A recorded outcome against a contact. code is denormalised from DispositionDef
+// so it survives later edits to the catalog.
+model Disposition {
+  id               String            @id @default(cuid())
+  tenantId   String
+  contactId        String
+  code             String
+  layer            DispositionLayer
+  channel          EngagementChannel
+  campaignId       String?
+  blastId          String?
+  scriptStepId     String?
+  cannedResponseId String?
+  supportLevel     SupportLevel?
+  recordedById     String?
+  createdAt        DateTime          @default(now())
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact          Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, contactId, createdAt])
+  @@index([tenantId, code, createdAt])
+  @@schema("canvass")
+}
+
+// Three-tier visibility. Using a canned reply ALWAYS logs a disposition
+// (dispositionCode), which fixes the silent-data-drop antipattern.
+model CannedResponse {
+  id              String            @id @default(cuid())
+  tenantId  String
+  ownerId         String?           // set when visibility = PERSONAL
+  title           String
+  body            String            @db.Text
+  channel         EngagementChannel @default(SMS)
+  visibility      CannedVisibility  @default(ORG)
+  dispositionCode String?
+  surveyOptionId  String?
+  isArchived      Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, channel, visibility, isArchived])
+  @@index([tenantId, ownerId])
+  @@schema("canvass")
+}
+
+// ── Journeys engine ──────────────────────────────────────────────────────
+// Cross-channel trigger → wait/condition → action. Door dispositions and text
+// replies are first-class triggers; P2P text sends and door tasks are actions.
+
+model Journey {
+  id                     String             @id @default(cuid())
+  tenantId         String
+  name                   String
+  status                 JourneyStatus      @default(DRAFT)
+  triggerType            JourneyTriggerType
+  triggerConfig          Json
+  reentryCooldownMinutes Int                @default(0)
+  maxActivePerContact    Int                @default(1)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rungs                  JourneyRung[]
+  enrolments             JourneyEnrolment[]
+
+  @@index([tenantId, status, triggerType])
+  @@schema("journey")
+}
+
+model JourneyRung {
+  id        String          @id @default(cuid())
+  journeyId String
+  rungIndex Int
+  type      JourneyRungType
+  config    Json
+  journey   Journey         @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+
+  @@unique([journeyId, rungIndex])
+  @@schema("journey")
+}
+
+model JourneyEnrolment {
+  id               String                @id @default(cuid())
+  tenantId   String
+  journeyId        String
+  contactId        String
+  currentRungIndex Int                   @default(0)
+  state            JourneyEnrolmentState @default(ACTIVE)
+  context          Json?
+  resumeAt         DateTime?
+  lastRungAt       DateTime?
+  rungExecCount    Int                   @default(0)
+  enrolledAt       DateTime              @default(now())
+  completedAt      DateTime?
+  journey          Journey               @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  contact          Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([journeyId, contactId, enrolledAt])
+  @@index([tenantId, state, resumeAt])
+  @@index([journeyId, contactId, state])
+  @@schema("journey")
+}
+
+// ── Canvassing domain ────────────────────────────────────────────────────
+// Turf-cutting, walk lists, server-owned assignment locks, and door knocks
+// hung off the Contact spine.
+
+model CanvassCampaign {
+  id             String                @id @default(cuid())
+  tenantId String
+  name           String
+  status         CanvassCampaignStatus @default(DRAFT)
+  surveyId       String?               // shared-engagement Survey attached to the door script
+  scriptId       String?
+  goals          Json?                 // { doors, conversations, surveys, ... } pace-to-target targets
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  turfs          Turf[]
+  walkLists      WalkList[]
+  shifts         Shift[]
+
+  @@index([tenantId, status])
+  @@schema("canvass")
+}
+
+model Turf {
+  id             String       @id @default(cuid())
+  tenantId String
+  campaignId     String?
+  name           String
+  geometry       Json         // GeoJSON Polygon / MultiPolygon
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign       CanvassCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  contacts       Contact[]
+  walkLists      WalkList[]
+  assignments    TurfAssignment[]
+
+  @@index([tenantId, campaignId])
+  @@schema("canvass")
+}
+
+model TurfAssignment {
+  id          String               @id @default(cuid())
+  turfId      String
+  canvasserId String
+  status      TurfAssignmentStatus @default(ASSIGNED)
+  lockedUntil DateTime?
+  assignedAt  DateTime             @default(now())
+  releasedAt  DateTime?
+  turf        Turf                 @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  canvasser   User              @relation(fields: [canvasserId], references: [id], onDelete: Cascade)
+
+  // One active lock per turf: enforced by a partial unique index in the
+  // migration (status = 'ASSIGNED'), so two canvassers can't both own a turf.
+  @@index([turfId, status])
+  @@index([canvasserId, status])
+  @@schema("canvass")
+}
+
+model WalkList {
+  id             String         @id @default(cuid())
+  tenantId String
+  campaignId     String?
+  turfId         String?
+  name           String
+  listType       WalkListItemListType @default(STATIC)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign       CanvassCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  turf           Turf?          @relation(fields: [turfId], references: [id], onDelete: SetNull)
+  items          WalkListItem[]
+
+  @@index([tenantId, campaignId])
+  @@schema("canvass")
+}
+
+model WalkListItem {
+  id         String             @id @default(cuid())
+  walkListId String
+  contactId  String
+  orderIndex Int                @default(0)
+  status     WalkListItemStatus @default(PENDING)
+  walkList   WalkList           @relation(fields: [walkListId], references: [id], onDelete: Cascade)
+  contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([walkListId, contactId])
+  @@index([walkListId, orderIndex])
+  @@schema("canvass")
+}
+
+// A logged door visit. localId is the client-generated idempotency key so a
+// re-synced offline knock is deduped.
+model DoorKnock {
+  id              String       @id @default(cuid())
+  tenantId  String
+  contactId       String
+  canvasserId     String?
+  walkListItemId  String?
+  localId         String       // client-generated idempotency key
+  dispositionCode String?
+  lat             Float?
+  lng             Float?
+  notes           String?      @db.Text
+  photoUrl        String?
+  safetyFlag      Boolean?
+  clientCapturedAt DateTime?
+  createdAt       DateTime     @default(now())
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact         Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  canvasser       User?     @relation(fields: [canvasserId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, localId])
+  @@index([tenantId, contactId, createdAt])
+  @@index([canvasserId, createdAt])
+  @@schema("canvass")
+}
+
+// ── Canvassing UI additions ──────────────────────────────────────────────
+
+// A scheduled canvassing shift: staging location + time window, optionally
+// tied to a campaign/turf and a canvasser.
+model Shift {
+  id             String          @id @default(cuid())
+  tenantId String
+  campaignId     String?
+  turfId         String?
+  canvasserId    String?
+  name           String
+  location       String?
+  startsAt       DateTime
+  endsAt         DateTime
+  notes          String?         @db.Text
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign       CanvassCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, campaignId, startsAt])
+  @@index([tenantId, canvasserId])
+  @@schema("canvass")
+}
+
+// Opt-out / suppression ledger. A phone or email that must never be contacted.
+model Suppression {
+  id             String          @id @default(cuid())
+  tenantId String
+  phoneE164      String?
+  email          String?
+  reason         String?
+  source         String?
+  createdAt      DateTime        @default(now())
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, phoneE164])
+  @@index([tenantId, email])
+  @@schema("messaging")
+}
+
+// Web-push subscription so organisers can broadcast to canvassers in the field.
+model PushSubscription {
+  id             String          @id @default(cuid())
+  tenantId String
+  userId         String?
+  endpoint       String
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime        @default(now())
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, endpoint])
+  @@index([tenantId, userId])
+  @@schema("public")
+}
+
+model Network {
+  id                 String   @id @default(cuid())
+  name               String
+  ownerId            String?
+  planName           String?
+  subscriptionStatus String?
+  createdAt          DateTime @default(now())
+  tenants            Tenant[]
+
+  @@index([ownerId])
+  @@schema("tenant")
+}
+
+model TenantMember {
+  id        String      @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      AppUserRole
+  addedBy   String?
+  createdAt DateTime    @default(now())
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId, role])
+  @@schema("tenant")
+}
+
+model TenantInvitation {
+  id        String      @id @default(cuid())
+  tenantId  String
+  email     String
+  role      AppUserRole
+  status    String
+  token     String?     @unique
+  expiresAt DateTime?
+  invitedBy String?
+  createdAt DateTime    @default(now())
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+  @@schema("tenant")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tenantId  String?  // active tenant when the user has multiple memberships (select-tenant)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@schema("iam")
+}
+
+model MagicLink {
+  id         String    @id @default(cuid())
+  userId     String
+  token      String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@schema("iam")
+}
+
+model PasswordReset {
+  id         String    @id @default(cuid())
+  userId     String
+  token      String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@schema("iam")
+}
+
+model MobileVerification {
+  id         String    @id @default(cuid())
+  userId     String
+  code       String
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@schema("iam")
+}
+
+// ── Outbox + reactions (meld doc 05) ─────────────────────────────────────────
+// Domain events written in the same transaction as the state change; a relay
+// publishes unpublished rows (FOR UPDATE SKIP LOCKED) onto the domain-events
+// queue. Prisma rows stay the source of truth — this is choreography, not
+// event-sourcing.
+model OutboxEvent {
+  id          String    @id @default(cuid())
+  seq         BigInt    @default(autoincrement())
+  tenantId    String
+  eventType   String
+  aggregateId String
+  payload     Json
+  metadata    Json
+  occurredAt  DateTime  @default(now())
+  publishedAt DateTime?
+  attempts    Int       @default(0)
+
+  @@index([publishedAt, seq])
+  @@index([tenantId, eventType])
+  @@schema("events")
+}
+
+// Second-layer idempotency for the reaction consumer (BullMQ jobId is the
+// first). One claim per (consumer source, outbox event id).
+model ReactionDedup {
+  id         String   @id @default(cuid())
+  source     String
+  eventId    String
+  receivedAt DateTime @default(now())
+
+  @@unique([source, eventId])
+  @@schema("events")
+}
+
+// ── Email domain (meld doc 07) ───────────────────────────────────────────────
+enum EmailStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  BOUNCED
+  FAILED
+  @@schema("email")
+}
+
+model Email {
+  id                String      @id @default(cuid())
+  tenantId          String
+  contactId         String?
+  toAddress         String
+  subject           String
+  status            EmailStatus @default(QUEUED)
+  providerMessageId String?
+  templateKey       String?
+  purpose           String?
+  openedAt          DateTime?   // first-write-wins, NOT a status
+  clickedAt         DateTime?   // first-write-wins, NOT a status
+  bounceReason      String?
+  errorMessage      String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([tenantId, status])
+  @@index([providerMessageId])
+  @@schema("email")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  subject   String
+  body      String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@schema("email")
+}
+
+// ── Provider webhook idempotency (meld doc 12) ───────────────────────────────
+// One claim per (provider, eventId): claim-before-act dedup for SendGrid/Stripe/
+// Twilio webhooks. A lost claim means the event was already processed.
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  provider   String
+  eventId    String
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@schema("ops")
+}
+
+// ── Payment domain (meld doc 08) ─────────────────────────────────────────────
+enum PaymentStatus {
+  RECORDED
+  PROCESSING
+  SUCCEEDED
+  PARTIALLY_REFUNDED
+  FAILED
+  REFUNDED
+  @@schema("payment")
+}
+
+enum PaymentType {
+  SUBSCRIPTION
+  ONE_TIME
+  INVOICE
+  REFUND
+  @@schema("payment")
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  tenantId          String
+  networkId         String?
+  amountCents       Int
+  currency          String
+  customerRef       String?
+  providerPaymentId String?       @unique
+  status            PaymentStatus @default(RECORDED)
+  type              PaymentType
+  refundedCents     Int           @default(0)
+  subscriptionId    String?
+  invoiceId         String?
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  refunds           Refund[]
+
+  @@index([tenantId, status])
+  @@schema("payment")
+}
+
+model Refund {
+  id                String   @id @default(cuid())
+  paymentId         String
+  amountCents       Int
+  status            String // created | processing | succeeded | failed
+  processorRefundId String?
+  reason            String?
+  createdAt         DateTime @default(now())
+  payment           Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  // One refund row per (payment, provider refund id) — blocks duplicate refunds
+  // from replayed/concurrent webhook events. NULL processorRefundId (manual
+  // refunds) stays distinct, so multiple manual refunds per payment are allowed.
+  @@unique([paymentId, processorRefundId])
+  @@index([paymentId])
+  @@schema("payment")
+}
+
+model Customer {
+  id                 String   @id @default(cuid())
+  networkId          String?
+  tenantId           String?
+  providerCustomerId String   @unique
+  email              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@schema("payment")
+}
+
+model Subscription {
+  id                     String    @id @default(cuid())
+  tenantId               String
+  providerSubscriptionId String    @unique
+  status                 String
+  planName               String?
+  currentPeriodEnd       DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@schema("payment")
+}
+
+model Invoice {
+  id                String   @id @default(cuid())
+  tenantId          String
+  providerInvoiceId String   @unique
+  status            String
+  amountCents       Int
+  currency          String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@schema("payment")
+}
+
+model PaymentMethod {
+  id               String   @id @default(cuid())
+  customerId       String
+  providerMethodId String   @unique
+  brand            String?
+  last4            String?
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([customerId])
+  @@schema("payment")
+}
+
+// ── Audience fold-in (meld doc 10) ───────────────────────────────────────────
+enum AudienceSegmentType {
+  STATIC
+  DYNAMIC
+  @@schema("audience")
+}
+
+// Multi-source provenance for a Contact — lets a contact be reconciled across
+// source systems (Action Network, CSV, ...) and re-resolved. 1:1 with prog's
+// source_record_view.
+model ContactSourceRecord {
+  id           String   @id @default(cuid())
+  tenantId     String
+  contactId    String   // id-only ref to public.Contact
+  sourceSystem String
+  externalId   String
+  data         Json?
+  createdAt    DateTime @default(now())
+
+  @@unique([sourceSystem, externalId])
+  @@index([contactId])
+  @@index([tenantId, sourceSystem])
+  @@schema("audience")
+}
+
+// Materialised membership of a DYNAMIC AudienceSegment (rewritten by the
+// SegmentEvaluatorService). id-only contactId ref to public.Contact.
+model AudienceSegmentMember {
+  segmentId  String
+  contactId  String
+  computedAt DateTime @default(now())
+  segment    AudienceSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@id([segmentId, contactId])
+  @@index([contactId])
+  @@schema("audience")
+}
+
+// ── Telephony: voice calls (meld doc 09) ─────────────────────────────────────
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  BUSY
+  NO_ANSWER
+  FAILED
+  @@schema("telephony")
+}
+
+// One outbound voice call. Net-new to yarns (SMS/WhatsApp live in messaging).
+// id-only contactId ref to public.Contact (cross-schema decoupling rule).
+model Call {
+  id              String     @id @default(cuid())
+  tenantId        String
+  contactId       String?
+  toNumber        String
+  fromNumber      String
+  status          CallStatus @default(INITIATED)
+  providerCallId  String?    @unique
+  durationSeconds Int?
+  recordingUrl    String?
+  priceCents      Int?
+  currency        String?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([tenantId, status])
+  @@schema("telephony")
+}
+
+// ── Org records & user profiles (meld doc 11) ────────────────────────────────
+// OrgProfile is the legal/operational record of the organisation a tenant
+// represents — distinct from Tenant (the data-isolation boundary, doc 03).
+// 1:1 translation of prog's organisation_*_view tables. id-only tenantId ref.
+model OrgProfile {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  contacts   OrgContact[]
+  addresses  OrgAddress[]
+  credential OrgCredential?
+
+  @@index([tenantId])
+  @@schema("tenant")
+}
+
+model OrgContact {
+  id                    String  @id @default(cuid())
+  orgProfileId          String
+  firstName             String?
+  lastName              String?
+  email                 String?
+  phone                 String?
+  mobilePhone           String?
+  title                 String?
+  role                  String?
+  contactType           String?
+  isPrimaryContact      Boolean @default(false)
+  isAuthorisedSignatory Boolean @default(false)
+  orgProfile            OrgProfile @relation(fields: [orgProfileId], references: [id], onDelete: Cascade)
+
+  @@index([orgProfileId])
+  @@schema("tenant")
+}
+
+model OrgAddress {
+  id           String  @id @default(cuid())
+  orgProfileId String
+  addressType  String?
+  line1        String?
+  line2        String?
+  suburb       String?
+  city         String?
+  state        String?
+  country      String?
+  postcode     String?
+  orgProfile   OrgProfile @relation(fields: [orgProfileId], references: [id], onDelete: Cascade)
+
+  @@index([orgProfileId])
+  @@schema("tenant")
+}
+
+model OrgCredential {
+  id                       String  @id @default(cuid())
+  orgProfileId             String  @unique
+  legalTradingName         String?
+  australianBusinessNumber String?
+  australianCompanyNumber  String?
+  taxFileNumber            String?  // ENCRYPTED at rest (CredentialCryptoService)
+  industry                 String?
+  entityType               String?
+  registrationNumber       String?
+  isRegisteredEntity       Boolean @default(false)
+  acncRegistrationNumber   String?
+  acncStatus               String?
+  charitySubtype           String?
+  deductibleGiftRecipient  Boolean @default(false)
+  dgrStatus                String?
+  financialYearEnd         String?
+  orgProfile               OrgProfile @relation(fields: [orgProfileId], references: [id], onDelete: Cascade)
+
+  @@schema("tenant")
+}
+
+// User profile + avatars (iam schema). id-only userId refs to iam.User.
+model UserProfile {
+  userId      String  @id
+  displayName String?
+  givenName   String?
+  familyName  String?
+  phone       String?
+  avatarUrl   String?
+  bio         String?
+
+  @@schema("iam")
+}
+
+model UserAvatar {
+  id         String  @id @default(cuid())
+  userId     String
+  url        String
+  isSelected Boolean @default(false)
+
+  @@index([userId])
+  @@schema("iam")
+}

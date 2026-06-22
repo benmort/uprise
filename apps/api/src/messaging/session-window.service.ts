@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MessageChannel } from "../../src/generated/prisma";
+import { MessageChannel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 /**
@@ -22,9 +22,9 @@ export class SessionWindowService {
   }
 
   /** When the window opened (last inbound WhatsApp), or null if never. */
-  async lastInboundAt(organizationId: string, phoneE164: string): Promise<Date | null> {
+  async lastInboundAt(tenantId: string, phoneE164: string): Promise<Date | null> {
     const last = await this.prisma.inboundMessage.findFirst({
-      where: { organizationId, fromPhone: phoneE164, channel: MessageChannel.WHATSAPP },
+      where: { tenantId, fromPhone: phoneE164, channel: MessageChannel.WHATSAPP },
       orderBy: { receivedAt: "desc" },
       select: { receivedAt: true },
     });
@@ -32,12 +32,12 @@ export class SessionWindowService {
   }
 
   async isOpen(
-    organizationId: string,
+    tenantId: string,
     phoneE164: string,
     channel: MessageChannel,
   ): Promise<boolean> {
     if (channel !== MessageChannel.WHATSAPP) return true;
-    const last = await this.lastInboundAt(organizationId, phoneE164);
+    const last = await this.lastInboundAt(tenantId, phoneE164);
     if (!last) return false;
     return Date.now() - last.getTime() < this.windowMs();
   }

@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Prisma } from "../../src/generated/prisma";
+import { Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { TwilioService } from "../twilio/twilio.service";
 
@@ -14,7 +14,7 @@ export class WhatsappService {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -26,7 +26,7 @@ export class WhatsappService {
     const org = await this.ensureOrganization();
     return this.prisma.whatsappTemplate.findMany({
       where: {
-        organizationId: org.id,
+        tenantId: org.id,
         ...(opts?.status ? { status: opts.status.toLowerCase() } : {}),
       },
       orderBy: [{ status: "asc" }, { friendlyName: "asc" }],
@@ -46,7 +46,7 @@ export class WhatsappService {
       await this.prisma.whatsappTemplate.upsert({
         where: { contentSid: tpl.contentSid },
         update: {
-          organizationId: org.id,
+          tenantId: org.id,
           friendlyName: tpl.friendlyName,
           category: tpl.category,
           language: tpl.language,
@@ -55,7 +55,7 @@ export class WhatsappService {
           bodyPreview: tpl.bodyPreview,
         },
         create: {
-          organizationId: org.id,
+          tenantId: org.id,
           contentSid: tpl.contentSid,
           friendlyName: tpl.friendlyName,
           category: tpl.category,

@@ -28,6 +28,10 @@ export type JourneyRunRungJobPayload = {
   rungIndex: number;
 };
 
+export type SegmentEvalRunJobPayload = {
+  segmentId: string;
+};
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -61,6 +65,12 @@ export function isJourneyRunRungJobPayload(value: unknown): value is JourneyRunR
   const payload = value as Record<string, unknown>;
   if (!isNonEmptyString(payload.enrolmentId)) return false;
   return Number.isFinite(payload.rungIndex);
+}
+
+export function isSegmentEvalRunJobPayload(value: unknown): value is SegmentEvalRunJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  return isNonEmptyString(payload.segmentId);
 }
 
 export function isIntegrationSyncJobPayload(value: unknown): value is IntegrationSyncJobPayload {

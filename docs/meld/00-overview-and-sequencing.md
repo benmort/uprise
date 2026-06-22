@@ -70,13 +70,14 @@ Transport = **BullMQ** (yarns already depends on it; one in-process consumer mea
 | 04 | `04-auth-and-permissions.md` | `@yarns/permissions` CASL, role taxonomy, SessionAuthGuard + AbilityGuard. |
 | 05 | `05-outbox-and-reactions.md` | OutboxEvent/ReactionDedup, relay loop, domain-events queue, ReactionsModule, `@yarns/events`. |
 | 06 | `06-transactional-messaging.md` | **Priority.** MessageKind, transactional SMS path, TRANSACTIONAL_DISPATCHER seam. |
-| 07 | `07-email-domain.md` | Net-new email domain, SendGrid, webhook. |
+| 07 | `07-email-domain.md` | **Transactional email** (consent-exempt, via `TRANSACTIONAL_DISPATCHER.sendEmail`) — email counterpart of doc 06. SendGrid, `EmailStatus` FSM, webhook. Marketing email is future/separate. |
 | 08 | `08-payment-domain.md` | Net-new payment domain, Stripe, webhook. |
 | 09 | `09-telephony-voice-calls.md` | Net-new voice Call domain. |
 | 10 | `10-audience-foldin.md` | Person/source-record/dynamic-segment fold-in. |
 | 11 | `11-org-records-and-profiles.md` | AU-nonprofit org records + user profiles/avatars. |
 | 12 | `12-drizzle-to-prisma-and-testing.md` | Translation reference + test strategy. |
 | 13 | `13-slingshot-merge-alignment.md` | Forward-compatibility with slingshot. |
+| 14 | `14-auth-frontend-and-sso.md` | Auth UI as its own thin frontend (`apps/auth`) = SSO hub for all apps; shares `@yarns/{contracts,ui,api-client}` + IAM API. Builds after doc 04. |
 
 ## Sequencing
 
@@ -98,6 +99,8 @@ Transport = **BullMQ** (yarns already depends on it; one in-process consumer mea
 - **M5 – Org records + profiles** (doc 11), opportunistic.
 
 Order: **Foundation → M1 → (M2 ∥ M3) → M4 → M5.** Docs 12 and 13 are reference, written alongside the foundation.
+
+**Auth frontend (doc 14):** after doc 04's IAM API lands, extract `@yarns/ui` + `@yarns/api-client` and build `apps/auth` as the SSO hub; then replace `apps/web`'s `/login` with a redirect to it.
 
 ## Risk register
 

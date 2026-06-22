@@ -1,4 +1,4 @@
-import { MessageChannel } from "../../src/generated/prisma";
+import { MessageChannel } from "@yarns/db";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 
 /**

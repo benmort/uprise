@@ -1,5 +1,5 @@
 import { Injectable, HttpStatus } from "@nestjs/common";
-import { Prisma, QuestionType, SupportLevel } from "../../src/generated/prisma";
+import { Prisma, QuestionType, SupportLevel } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 
@@ -26,9 +26,9 @@ export type SurveyQuestionInput = {
 export class SurveysService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(organizationId: string) {
+  async list(tenantId: string) {
     const surveys = await this.prisma.survey.findMany({
-      where: { organizationId, isArchived: false },
+      where: { tenantId, isArchived: false },
       orderBy: { updatedAt: "desc" },
       include: { _count: { select: { questions: true } } },
     });
@@ -41,9 +41,9 @@ export class SurveysService {
     }));
   }
 
-  async get(organizationId: string, id: string) {
+  async get(tenantId: string, id: string) {
     const survey = await this.prisma.survey.findFirst({
-      where: { id, organizationId },
+      where: { id, tenantId },
       include: {
         questions: {
           orderBy: { orderIndex: "asc" },
@@ -55,10 +55,10 @@ export class SurveysService {
     return survey;
   }
 
-  async create(organizationId: string, input: { name: string; questions?: SurveyQuestionInput[] }) {
+  async create(tenantId: string, input: { name: string; questions?: SurveyQuestionInput[] }) {
     return this.prisma.survey.create({
       data: {
-        organizationId,
+        tenantId,
         name: input.name,
         questions: input.questions ? { create: input.questions.map(questionCreate) } : undefined,
       },
@@ -67,11 +67,11 @@ export class SurveysService {
   }
 
   async update(
-    organizationId: string,
+    tenantId: string,
     id: string,
     input: { name?: string; questions?: SurveyQuestionInput[] },
   ) {
-    const existing = await this.prisma.survey.findFirst({ where: { id, organizationId }, select: { id: true } });
+    const existing = await this.prisma.survey.findFirst({ where: { id, tenantId }, select: { id: true } });
     if (!existing) throw new ApiHttpException("SURVEY_NOT_FOUND", "Survey not found", HttpStatus.NOT_FOUND);
     return this.prisma.$transaction(async (tx) => {
       await tx.survey.update({
@@ -92,8 +92,8 @@ export class SurveysService {
     });
   }
 
-  async archive(organizationId: string, id: string) {
-    const existing = await this.prisma.survey.findFirst({ where: { id, organizationId }, select: { id: true } });
+  async archive(tenantId: string, id: string) {
+    const existing = await this.prisma.survey.findFirst({ where: { id, tenantId }, select: { id: true } });
     if (!existing) throw new ApiHttpException("SURVEY_NOT_FOUND", "Survey not found", HttpStatus.NOT_FOUND);
     await this.prisma.survey.update({ where: { id }, data: { isArchived: true } });
     return { archived: true };

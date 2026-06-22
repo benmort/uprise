@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { Logo } from "@/components/brand/logo";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,7 +26,7 @@ import {
   type MessageChannel,
 } from "@/lib/api";
 import { createBlastAndOpen } from "@/lib/blasts";
-import { clearCredentials, getCredentials, getRole } from "@/lib/auth";
+import { getSession, goToLogin, logout } from "@/lib/session";
 import { listCampaigns } from "@/lib/api/campaigns";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
@@ -109,18 +109,28 @@ export default function MainLayout({
   const { showToast } = useToast();
 
   useEffect(() => {
-    if (!getCredentials()) {
-      router.replace(`/login?from=${encodeURIComponent(pathname || "/dashboard")}`);
-      return;
-    }
-    // Canvassers don't belong in the organiser shell — bounce them to the field app
-    // (defence-in-depth; organiser mutations are also @Roles-gated server-side).
-    if (getRole() === "CANVASSER") {
-      router.replace("/field");
-      return;
-    }
-    setReady(true);
-  }, [pathname, router]);
+    let alive = true;
+    void (async () => {
+      const session = await getSession();
+      if (!alive) return;
+      // Middleware gates on the cookie; this resolves the principal. A present
+      // cookie that no longer resolves (expired/revoked) → back to the auth app.
+      if (!session) {
+        goToLogin();
+        return;
+      }
+      // Canvassers don't belong in the organiser shell — bounce them to the field
+      // app (defence-in-depth; organiser mutations are also @Roles-gated server-side).
+      if (session.role === "CANVASSER") {
+        router.replace("/field");
+        return;
+      }
+      setReady(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!ready) return;
@@ -332,14 +342,7 @@ export default function MainLayout({
       <div className="flex h-full w-full">
         <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-y-auto border-r border-border bg-white p-4">
           <div id="tour-logo" className="mb-6">
-            <Image
-              src="/images/yarns-logo-full.png"
-              alt="Yarns"
-              width={512}
-              height={159}
-              priority
-              className="h-auto w-32"
-            />
+            <Logo />
           </div>
 
           <nav id="tour-nav" className="space-y-1">
@@ -430,8 +433,7 @@ export default function MainLayout({
               variant="outline"
               className="w-full justify-start"
               onClick={() => {
-                clearCredentials();
-                router.replace("/login");
+                void logout();
               }}
             >
               <LogOut className="mr-2 h-4 w-4" />

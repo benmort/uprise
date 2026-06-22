@@ -98,6 +98,29 @@ describe("BasicAuthGuard", () => {
     expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
   });
 
+  it.each([
+    "/api/v1/iam/magic-link",
+    "/api/v1/iam/magic-link/consume",
+    "/api/v1/iam/forgot-password",
+    "/api/v1/iam/reset-password",
+    "/api/v1/iam/verify-email/send",
+    "/api/v1/iam/verify-email/confirm",
+    "/api/v1/iam/2fa/send",
+    "/api/v1/iam/2fa/verify",
+    "/api/v1/iam/invite/abc123", // preview (param route)
+    "/api/v1/iam/invite/accept",
+  ])("allows pre-session IAM flow %s without auth", (path) => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({ path, headers: {} });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it("requires auth for /iam/select-tenant (not a pre-session flow)", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({ path: "/api/v1/iam/select-tenant", headers: {} });
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  });
+
   it("allows requests with valid basic auth credentials", () => {
     const guard = createGuard();
     const token = Buffer.from("admin:secret").toString("base64");
@@ -219,8 +242,16 @@ describe("BasicAuthGuard", () => {
           return undefined;
         },
       } as ConfigService;
+      // Identity (User) and membership (TenantMember) are separate tables now.
       const prisma = {
-        appUser: { findUnique: async ({ where }: any) => users[where.email] ?? null },
+        user: { findUnique: async ({ where }: any) => users[where.email] ?? null },
+        tenantMember: {
+          findFirst: async ({ where }: any) => {
+            const u = Object.values(users).find((x: any) => x.id === where.userId) as any;
+            // A fixture without `tenantId` models a user with no membership.
+            return u && u.tenantId ? { tenantId: u.tenantId, role: u.role } : null;
+          },
+        },
       } as any;
       return new BasicAuthGuard(config, prisma);
     }
@@ -228,21 +259,21 @@ describe("BasicAuthGuard", () => {
     it("authenticates a canvasser and attaches their role + org", async () => {
       const passwordHash = await hashPassword("walkfast");
       const guard = createGuardWithUsers({
-        "canv@org.au": { id: "u1", role: "CANVASSER", organizationId: "org1", email: "canv@org.au", passwordHash },
+        "canv@org.au": { id: "u1", role: "CANVASSER", tenantId: "org1", email: "canv@org.au", passwordHash },
       });
       const token = Buffer.from("canv@org.au:walkfast").toString("base64");
       const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
       const result = await guard.canActivate(contextSharing(request));
       expect(result).toBe(true);
       expect(request.user).toEqual(
-        expect.objectContaining({ id: "u1", role: "CANVASSER", organizationId: "org1" }),
+        expect.objectContaining({ id: "u1", role: "CANVASSER", tenantId: "org1" }),
       );
     });
 
     it("rejects a wrong AppUser password", async () => {
       const passwordHash = await hashPassword("walkfast");
       const guard = createGuardWithUsers({
-        "canv@org.au": { id: "u1", role: "CANVASSER", organizationId: "org1", email: "canv@org.au", passwordHash },
+        "canv@org.au": { id: "u1", role: "CANVASSER", tenantId: "org1", email: "canv@org.au", passwordHash },
       });
       const token = Buffer.from("canv@org.au:wrong").toString("base64");
       const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
@@ -250,5 +281,67 @@ describe("BasicAuthGuard", () => {
         UnauthorizedException,
       );
     });
+
+    it("rejects a valid password when the user has no tenant membership", async () => {
+      const passwordHash = await hashPassword("walkfast");
+      // No `tenantId` on the fixture → tenantMember.findFirst returns null.
+      const guard = createGuardWithUsers({
+        "orphan@org.au": { id: "u2", email: "orphan@org.au", passwordHash },
+      });
+      const token = Buffer.from("orphan@org.au:walkfast").toString("base64");
+      const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
+      await expect(guard.canActivate(contextSharing(request))).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+  });
+});
+
+describe("BasicAuthGuard session auth", () => {
+  const config = { get: () => undefined } as unknown as ConfigService;
+  // Non-copying context so guard mutations to request.user are observable.
+  const ctx = (request: any): ExecutionContext =>
+    ({ switchToHttp: () => ({ getRequest: () => request }) }) as unknown as ExecutionContext;
+
+  it("authenticates a Bearer session token and attaches the CASL actor", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u1", email: "a@b.c", tenantId: "t1", role: "ORGANISER" }),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = {
+      path: "/api/v1/canvass/assignments",
+      headers: { authorization: "Bearer sess_token" },
+    };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(request.user).toEqual(
+      expect.objectContaining({
+        id: "u1",
+        role: "ORGANISER",
+        tenantId: "t1",
+        roles: ["organiser"],
+        isSuperAdmin: false,
+      }),
+    );
+    expect(sessions.resolve).toHaveBeenCalledWith("sess_token");
+  });
+
+  it("reads the session token from the auth_token cookie", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u2", email: "c@d.e", tenantId: "t1", role: "CANVASSER" }),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = { path: "/api/v1/inbox", headers: { cookie: "foo=bar; auth_token=cookie_tok" } };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(sessions.resolve).toHaveBeenCalledWith("cookie_tok");
+    expect(request.user.roles).toEqual(["canvasser"]);
+  });
+
+  it("rejects an invalid or expired session token", async () => {
+    const sessions = { resolve: jest.fn().mockResolvedValue(null) } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = { path: "/api/v1/inbox", headers: { authorization: "Bearer bad" } };
+    await expect(guard.canActivate(ctx(request))).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 });

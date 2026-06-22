@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole } from "../../src/generated/prisma";
+import { AppUserRole } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
@@ -18,7 +18,7 @@ export class PushController {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -47,7 +47,7 @@ export class PushController {
   async broadcast(@Body() body: { title: string; body: string; url?: string }) {
     const org = await this.ensureOrganization();
     return this.push.broadcast(org.id, {
-      title: body.title || "Yarns",
+      title: body.title || "Foment",
       body: body.body || "",
       url: body.url,
     });

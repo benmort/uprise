@@ -1,0 +1,99 @@
+/**
+ * Typed domain-event catalogue + the Reaction contract for the hybrid
+ * outbox/reactions backbone (meld doc 05).
+ *
+ * Event names follow `<domain>.<thing>.<pastTenseVerb>`, dot-separated, aligned
+ * with the per-domain schema namespaces (doc 02). The catalogue grows as domains
+ * are ported (docs 06–11) — entries here are the typed contract the OutboxService
+ * `append` and every Reaction `handle` are generic over.
+ */
+export const EVENT_TYPES = {
+  AUDIENCE_IMPORTED: "audience.imported",
+  SEGMENT_RECOMPUTED: "audience.segment.recomputed",
+  BLAST_SENT: "messaging.blast.sent",
+  TX_SMS_REQUESTED: "messaging.tx-sms.requested",
+  INBOUND_RECEIVED: "messaging.inbound.received",
+  USER_CREATED: "iam.user.created",
+  TENANT_INVITATION_SENT: "tenant.invitation.sent",
+  EMAIL_QUEUED: "email.email.queued",
+  PAYMENT_SUCCEEDED: "payment.payment.succeeded",
+  PAYMENT_REFUNDED: "payment.payment.refunded",
+  CALL_INITIATED: "telephony.call.initiated",
+  ORG_CREDENTIAL_UPDATED: "tenant.org-credential.updated",
+} as const;
+
+export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
+
+/** Payload shape per event type. Extended as domains are ported. */
+export interface DomainEventMap {
+  "audience.imported": { audienceId: string; tenantId: string; count: number };
+  "audience.segment.recomputed": { segmentId: string; tenantId: string; memberCount: number };
+  "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };
+  "messaging.tx-sms.requested": { tenantId: string; toPhone: string; purpose: string };
+  "messaging.inbound.received": { tenantId: string; contactPhone: string; channel: string };
+  "iam.user.created": { userId: string; email: string; tenantId: string };
+  "tenant.invitation.sent": { invitationId: string; tenantId: string; email: string };
+  "email.email.queued": { emailId: string; tenantId: string; toAddress: string };
+  "payment.payment.succeeded": { paymentId: string; tenantId: string; amountCents: number };
+  "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
+  "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };
+  "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
+}
+
+export interface EventMetadata {
+  correlationId?: string;
+  causationId?: string;
+  actorId?: string;
+}
+
+/** The published shape a reaction receives. Payload is loosely typed at the
+ * boundary (it crosses a queue as JSON); domain reactions narrow it. */
+export interface EventEnvelope<P = unknown> {
+  id: string;
+  eventType: EventType;
+  tenantId: string;
+  aggregateId: string;
+  payload: P;
+  metadata: EventMetadata;
+  occurredAt: string;
+}
+
+/** A typed envelope for a known event type (used by emitters). */
+export type TypedEventEnvelope<K extends keyof DomainEventMap> = EventEnvelope<DomainEventMap[K]>;
+
+/**
+ * A reaction runs a side-effect when its `trigger` event is published. `emits`
+ * declares the events it may raise (for loop-safety). Handlers must be
+ * idempotent — delivery is at-least-once at the queue and deduped per
+ * (source, eventId) at the registry.
+ */
+export interface Reaction {
+  /** The event type this reaction fires on. */
+  readonly trigger: EventType;
+  /** Event types this reaction may emit (must not include its own trigger). */
+  readonly emits?: readonly EventType[];
+  handle(event: EventEnvelope): Promise<void>;
+}
+
+/**
+ * Fail-fast loop-safety: a reaction must not emit its own trigger (an immediate
+ * self-loop). Run at registry boot. Returns the offending pairs; throws via
+ * assertReactionsLoopSafe.
+ */
+export function loopUnsafeReactions(reactions: ReadonlyArray<Reaction>): Array<{ trigger: EventType; emit: EventType }> {
+  const unsafe: Array<{ trigger: EventType; emit: EventType }> = [];
+  for (const r of reactions) {
+    for (const emit of r.emits ?? []) {
+      if (emit === r.trigger) unsafe.push({ trigger: r.trigger, emit });
+    }
+  }
+  return unsafe;
+}
+
+export function assertReactionsLoopSafe(reactions: ReadonlyArray<Reaction>): void {
+  const unsafe = loopUnsafeReactions(reactions);
+  if (unsafe.length > 0) {
+    const detail = unsafe.map((u) => `${u.trigger} → ${u.emit}`).join(", ");
+    throw new Error(`Loop-unsafe reactions (a reaction emits its own trigger): ${detail}`);
+  }
+}

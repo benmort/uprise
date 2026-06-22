@@ -2,22 +2,32 @@ import { Controller, Get, InternalServerErrorException, Req } from "@nestjs/comm
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
 import { AuthUser } from "./auth-user";
+import { IamFlowsService } from "./iam-flows.service";
 import { createStreamToken } from "./stream-token";
 import { resolveStreamTokenSecret } from "./stream-token-secret";
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly flows: IamFlowsService,
+  ) {}
 
   @Get("check")
-  check(@Req() req: Request & { user?: AuthUser }) {
-    // BasicAuthGuard attaches the principal. The web login reads this to learn
-    // the user's id + role (e.g. to store the canvasser id for the field app).
+  async check(@Req() req: Request & { user?: AuthUser }) {
+    // BasicAuthGuard attaches the principal. Frontends read this to learn the
+    // user's id + active role/tenant and whether to offer tenant selection.
+    if (!req.user) return { ok: true, user: null };
+    const memberships = await this.flows.membershipsFor(req.user.id);
     return {
       ok: true,
-      user: req.user
-        ? { id: req.user.id, role: req.user.role, organizationId: req.user.organizationId }
-        : null,
+      user: {
+        id: req.user.id,
+        role: req.user.role,
+        tenantId: req.user.tenantId,
+        email: req.user.email ?? null,
+        memberships,
+      },
     };
   }
 

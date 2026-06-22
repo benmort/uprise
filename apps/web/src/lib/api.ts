@@ -1,21 +1,7 @@
-import { clearCredentials, getBasicAuthHeader, getCredentials, type Credentials } from "./auth";
+import { request as cookieRequest, getApiUrl, type ApiResult } from "@yarns/api-client";
 
-/** On a true auth failure (401), drop stale credentials and bounce to /login once. */
-function handleUnauthorized(): void {
-  if (typeof window === "undefined") return;
-  clearCredentials();
-  if (!window.location.pathname.startsWith("/login")) {
-    window.location.assign(`/login?from=${encodeURIComponent(window.location.pathname)}`);
-  }
-}
-
-export function getApiUrl(): string {
-  if (typeof window !== "undefined") {
-    const runtime = (window as unknown as { __API_URL__?: string }).__API_URL__;
-    if (runtime) return runtime;
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
-}
+export { getApiUrl };
+export type { ApiResult };
 
 export function getRuntimeConfigWarnings(): string[] {
   const warnings: string[] = [];
@@ -26,14 +12,6 @@ export function getRuntimeConfigWarnings(): string[] {
   }
   return warnings;
 }
-
-function getAuthHeaders(credentials: Credentials): HeadersInit {
-  return {
-    Authorization: getBasicAuthHeader(credentials),
-  };
-}
-
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export type AudienceImportProgress = {
   importId: string;
@@ -48,72 +26,25 @@ export type AudienceImportProgress = {
   remainingRows: number;
 };
 
+/**
+ * Cookie-based request (meld doc 14). Delegates to @yarns/api-client, which sends
+ * the httpOnly session cookie (credentials:include) and bounces to the auth app on
+ * 401. The legacy third arg is accepted for call-site compatibility but ignored —
+ * auth is the cookie, not a per-call header.
+ */
 export async function request<T>(
   path: string,
   init?: RequestInit,
-  withAuth = true,
+  _withAuth = true,
 ): Promise<ApiResult<T>> {
-  const credentials = withAuth ? getCredentials() : null;
-  if (withAuth && !credentials) return { ok: false, error: "Not authenticated" };
-
-  try {
-    const res = await fetch(`${getApiUrl()}${path}`, {
-      ...init,
-      headers: {
-        ...(withAuth ? getAuthHeaders(credentials as Credentials) : {}),
-        ...(init?.headers || {}),
-      },
-    });
-    const json = (await res.json().catch(() => null)) as
-      | { ok?: boolean; data?: T; error?: { message?: string }; message?: string }
-      | null;
-    if (!res.ok) {
-      // 401 = the session is invalid (expired/revoked creds): clear + redirect to
-      // login so the user isn't stuck on a page making failing calls. 403 is a
-      // permission error for a valid session — surface it, don't log the user out.
-      if (res.status === 401 && withAuth) handleUnauthorized();
-      const message =
-        json?.error?.message || json?.message || `Request failed (${res.status})`;
-      return { ok: false, error: message };
-    }
-    const data = (json && "data" in json ? json.data : json) as T;
-    return { ok: true, data };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  return cookieRequest<T>(path, init);
 }
 
 export type AuthPrincipal = {
   id: string;
   role: "ORGANISER" | "CANVASSER";
-  organizationId: string | null;
+  tenantId: string | null;
 };
-
-export async function login(
-  username: string,
-  password: string,
-): Promise<{ ok: true; user: AuthPrincipal | null } | { ok: false; error: string }> {
-  try {
-    const headers = getAuthHeaders({ username, password });
-    const res = await fetch(`${getApiUrl()}/auth/check`, { headers });
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: res.status === 401 ? "Invalid username or password." : `Request failed (${res.status})`,
-      };
-    }
-    const body = (await res.json().catch(() => ({}))) as { user?: AuthPrincipal | null };
-    return { ok: true, user: body.user ?? null };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
 
 export async function getRealtimeStreamToken() {
   return request<{ token: string; expiresAt: string }>("/auth/stream-token");
@@ -251,8 +182,6 @@ export async function importAudienceCsv(
   onProgress?: (percent: number) => void,
 ) {
   const apiUrl = getApiUrl();
-  const credentials = getCredentials();
-  if (!credentials) return { ok: false as const, error: "Not authenticated" };
   const form = new FormData();
   form.append("file", file);
   const url = `${apiUrl}/audiences/${audienceId}/import-csv`;
@@ -264,7 +193,8 @@ export async function importAudienceCsv(
     >((resolve) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", url);
-      xhr.setRequestHeader("Authorization", getBasicAuthHeader(credentials));
+      // Cookie auth (meld doc 14): send the httpOnly session cookie with the upload.
+      xhr.withCredentials = true;
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
         const percent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
@@ -297,9 +227,7 @@ export async function importAudienceCsv(
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: getBasicAuthHeader(credentials),
-      },
+      credentials: "include",
       body: form,
     });
     const json = (await res.json().catch(() => null)) as any;
@@ -570,7 +498,7 @@ export type CannedSuggestion = {
 
 export type DispositionDef = {
   id: string;
-  organizationId: string | null;
+  tenantId: string | null;
   code: string;
   label: string;
   layer: "CONTACT_RESULT" | "TERMINAL" | "DATA_QUALITY";
@@ -972,14 +900,12 @@ export async function broadcastPush(input: { title: string; body: string; url?: 
 
 export async function uploadDoorPhoto(file: File) {
   const apiUrl = getApiUrl();
-  const credentials = getCredentials();
-  if (!credentials) return { ok: false as const, error: "Not authenticated" };
   const form = new FormData();
   form.append("file", file);
   try {
     const res = await fetch(`${apiUrl}/canvass/door-photos`, {
       method: "POST",
-      headers: { Authorization: getBasicAuthHeader(credentials) },
+      credentials: "include",
       body: form,
     });
     const json = await res.json().catch(() => null);

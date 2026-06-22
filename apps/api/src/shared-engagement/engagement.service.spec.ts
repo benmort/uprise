@@ -1,4 +1,4 @@
-import { DispositionLayer, EngagementChannel } from "../../src/generated/prisma";
+import { DispositionLayer, EngagementChannel } from "@yarns/db";
 import { EngagementService } from "./engagement.service";
 
 describe("EngagementService", () => {
@@ -135,25 +135,25 @@ describe("EngagementService", () => {
     it("creates an org contact-result def with next order index", async () => {
       prisma.dispositionDef.findFirst.mockResolvedValue({ orderIndex: 60 });
       const def = await service.createDispositionDef("org_1", { code: "moved_recent", label: "Moved recently" });
-      expect(def.organizationId).toBe("org_1");
+      expect(def.tenantId).toBe("org_1");
       expect(def.layer).toBe(DispositionLayer.CONTACT_RESULT);
       expect(def.isLocked).toBe(false);
       expect(def.orderIndex).toBe(70);
     });
 
     it("refuses to edit a locked system default", async () => {
-      prisma.dispositionDef.findUnique.mockResolvedValue({ id: "def1", organizationId: "org_1", isLocked: true });
+      prisma.dispositionDef.findUnique.mockResolvedValue({ id: "def1", tenantId: "org_1", isLocked: true });
       await expect(service.updateDispositionDef("org_1", "def1", { label: "x" })).rejects.toThrow();
       expect(prisma.dispositionDef.update).not.toHaveBeenCalled();
     });
 
     it("refuses to edit another org's / shared def", async () => {
-      prisma.dispositionDef.findUnique.mockResolvedValue({ id: "def1", organizationId: null, isLocked: false });
+      prisma.dispositionDef.findUnique.mockResolvedValue({ id: "def1", tenantId: null, isLocked: false });
       await expect(service.updateDispositionDef("org_1", "def1", { label: "x" })).rejects.toThrow();
     });
 
     it("deletes an editable org def", async () => {
-      prisma.dispositionDef.findUnique.mockResolvedValue({ id: "def1", organizationId: "org_1", isLocked: false });
+      prisma.dispositionDef.findUnique.mockResolvedValue({ id: "def1", tenantId: "org_1", isLocked: false });
       const res = await service.deleteDispositionDef("org_1", "def1");
       expect(prisma.dispositionDef.delete).toHaveBeenCalledWith({ where: { id: "def1" } });
       expect(res.deleted).toBe(true);

@@ -7,7 +7,7 @@ import {
   IntegrationJobStatus,
   IntegrationType,
   Prisma,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
@@ -122,7 +122,7 @@ export class IntegrationsService {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -133,7 +133,7 @@ export class IntegrationsService {
     const org = await this.ensureOrganization();
     const existing = await this.prisma.integrationConnection.findFirst({
       where: {
-        organizationId: org.id,
+        tenantId: org.id,
         type: type as IntegrationType,
         status: IntegrationConnectionStatus.ACTIVE,
       },
@@ -197,7 +197,7 @@ export class IntegrationsService {
         id: (
           await this.prisma.integrationConnection.findFirst({
             where: {
-              organizationId: org.id,
+              tenantId: org.id,
               type: dto.type as IntegrationType,
             },
             select: { id: true },
@@ -205,7 +205,7 @@ export class IntegrationsService {
         )?.id || "missing",
       },
       create: {
-        organizationId: org.id,
+        tenantId: org.id,
         type: dto.type as IntegrationType,
         name: dto.name,
         encryptedCredential: encrypted,
@@ -451,7 +451,7 @@ export class IntegrationsService {
 
     const syncJob = await this.prisma.integrationSyncJob.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         integrationConnectionId: connection.id,
         status: IntegrationJobStatus.QUEUED,
         query: dto.query,
@@ -552,7 +552,7 @@ export class IntegrationsService {
       if (!ensuredAudienceId) {
         const audience = await this.prisma.audience.create({
           data: {
-            organizationId: syncJob.organizationId,
+            tenantId: syncJob.tenantId,
             name: checkpoint.audienceName,
             source:
               connectionType === "ACTION_NETWORK"
@@ -597,7 +597,7 @@ export class IntegrationsService {
               source: mapped.source,
             },
             create: {
-              organizationId: syncJob.organizationId,
+              tenantId: syncJob.tenantId,
               audienceId: ensuredAudienceId,
               phoneE164: mapped.phoneE164,
               fullName: mapped.fullName,
@@ -734,7 +734,7 @@ export class IntegrationsService {
   async getSyncJobs(limit = 20) {
     const org = await this.ensureOrganization();
     return this.prisma.integrationSyncJob.findMany({
-      where: { organizationId: org.id },
+      where: { tenantId: org.id },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
     });
@@ -744,7 +744,7 @@ export class IntegrationsService {
   async listConnections() {
     const org = await this.ensureOrganization();
     return this.prisma.integrationConnection.findMany({
-      where: { organizationId: org.id },
+      where: { tenantId: org.id },
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,

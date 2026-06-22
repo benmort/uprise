@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole } from "../../src/generated/prisma";
+import { AppUserRole } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
@@ -18,7 +18,7 @@ export class GeoController {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},

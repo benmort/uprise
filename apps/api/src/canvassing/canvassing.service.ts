@@ -8,7 +8,7 @@ import {
   TurfAssignmentStatus,
   WalkListItemListType,
   WalkListItemStatus,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { put } from "@vercel/blob";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
@@ -72,12 +72,12 @@ export class CanvassingService {
    * turf, so a second claimant gets a 409 rather than a silent double-assignment.
    */
   async assignTurf(
-    organizationId: string,
+    tenantId: string,
     turfId: string,
     canvasserId: string,
     lockedUntil?: Date,
   ) {
-    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, organizationId } });
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
     if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
 
     try {
@@ -96,8 +96,8 @@ export class CanvassingService {
     }
   }
 
-  async releaseTurf(organizationId: string, turfId: string, canvasserId: string) {
-    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, organizationId } });
+  async releaseTurf(tenantId: string, turfId: string, canvasserId: string) {
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
     if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
     return this.prisma.turfAssignment.updateMany({
       where: { turfId, canvasserId, status: TurfAssignmentStatus.ASSIGNED },
@@ -106,9 +106,9 @@ export class CanvassingService {
   }
 
   /** The turfs (and their walk lists) currently locked to a canvasser. */
-  async listAssignments(organizationId: string, canvasserId: string) {
+  async listAssignments(tenantId: string, canvasserId: string) {
     const assignments = await this.prisma.turfAssignment.findMany({
-      where: { canvasserId, status: TurfAssignmentStatus.ASSIGNED, turf: { organizationId } },
+      where: { canvasserId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
       include: {
         turf: {
           include: { walkLists: { include: { items: { orderBy: { orderIndex: "asc" }, include: { contact: true } } } } },
@@ -154,7 +154,7 @@ export class CanvassingService {
 
   /** Create a household/resident at the door (cold "addresses without contacts" universe). */
   async createDoorContact(
-    organizationId: string,
+    tenantId: string,
     input: {
       canvasserId: string;
       turfId: string;
@@ -168,14 +168,14 @@ export class CanvassingService {
   ) {
     // The canvasser must hold this turf's lock to add to it.
     const lock = await this.prisma.turfAssignment.findFirst({
-      where: { turfId: input.turfId, status: TurfAssignmentStatus.ASSIGNED, turf: { organizationId } },
+      where: { turfId: input.turfId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
     });
     if (!lock || lock.canvasserId !== input.canvasserId) {
       throw new ApiHttpException("TURF_NOT_ASSIGNED", "This turf is not assigned to you");
     }
     return this.prisma.contact.create({
       data: {
-        organizationId,
+        tenantId,
         turfId: input.turfId,
         firstName: input.firstName ?? null,
         lastName: input.lastName ?? null,
@@ -188,17 +188,17 @@ export class CanvassingService {
     });
   }
 
-  async recordDoorKnock(organizationId: string, input: RecordDoorKnockInput) {
+  async recordDoorKnock(tenantId: string, input: RecordDoorKnockInput) {
     const existing = await this.prisma.doorKnock.findUnique({
-      where: { organizationId_localId: { organizationId, localId: input.localId } },
+      where: { tenantId_localId: { tenantId, localId: input.localId } },
     });
     if (existing) return existing; // idempotent replay
 
-    await this.assertCanvasserOwnsContactTurf(organizationId, input.contactId, input.canvasserId);
+    await this.assertCanvasserOwnsContactTurf(tenantId, input.contactId, input.canvasserId);
 
     const knock = await this.prisma.doorKnock.create({
       data: {
-        organizationId,
+        tenantId,
         contactId: input.contactId,
         canvasserId: input.canvasserId,
         walkListItemId: input.walkListItemId ?? null,
@@ -221,7 +221,7 @@ export class CanvassingService {
     }
 
     if (input.dispositionCode) {
-      await this.engagement.recordDisposition(organizationId, {
+      await this.engagement.recordDisposition(tenantId, {
         contactId: input.contactId,
         code: input.dispositionCode,
         channel: EngagementChannel.DOOR,
@@ -239,13 +239,13 @@ export class CanvassingService {
     // ids from the live campaign survey, so this is an edge-case guard.
     if (input.surveyAnswers?.length) {
       const contact = await this.prisma.contact.findFirst({
-        where: { id: input.contactId, organizationId },
+        where: { id: input.contactId, tenantId },
         select: { turf: { select: { campaignId: true } } },
       });
       const campaignId = contact?.turf?.campaignId ?? null;
       for (const answer of input.surveyAnswers) {
         try {
-          await this.engagement.recordSurveyAnswer(organizationId, {
+          await this.engagement.recordSurveyAnswer(tenantId, {
             contactId: input.contactId,
             questionId: answer.questionId,
             optionId: answer.optionId ?? null,
@@ -268,12 +268,12 @@ export class CanvassingService {
   }
 
   private async assertCanvasserOwnsContactTurf(
-    organizationId: string,
+    tenantId: string,
     contactId: string,
     canvasserId: string,
   ): Promise<void> {
     const contact = await this.prisma.contact.findFirst({
-      where: { id: contactId, organizationId },
+      where: { id: contactId, tenantId },
       select: { turfId: true },
     });
     if (!contact) throw new ApiHttpException("CONTACT_NOT_FOUND", "Contact not found");
@@ -291,36 +291,48 @@ export class CanvassingService {
   }
 
   /** Canvassers (and organisers) available for turf assignment. */
-  async listCanvassers(organizationId: string) {
-    const users = await this.prisma.appUser.findMany({
-      where: { organizationId },
-      orderBy: { displayName: "asc" },
-      select: { id: true, displayName: true, email: true, role: true },
+  async listCanvassers(tenantId: string) {
+    // Identity (User) and membership (TenantMember) are separate tables: the
+    // role lives on the membership, name/email on the user.
+    const members = await this.prisma.tenantMember.findMany({
+      where: { tenantId },
+      select: { userId: true, role: true },
     });
-    return users;
+    if (members.length === 0) return [];
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: members.map((m) => m.userId) } },
+      orderBy: { displayName: "asc" },
+      select: { id: true, displayName: true, email: true },
+    });
+    const roleByUser = new Map(members.map((m) => [m.userId, m.role]));
+    return users.map((u) => ({ ...u, role: roleByUser.get(u.id) ?? AppUserRole.CANVASSER }));
   }
 
   /**
-   * Provision a field login: create an AppUser with a hashed password. Used by
-   * the canvasser-management invite flow. Email is unique; a clash returns 409.
+   * Provision a field login: create a User (identity) + a TenantMember (the
+   * tenant-scoped role) with a hashed password. Used by the canvasser-management
+   * invite flow. Email is unique; a clash returns 409.
    */
   async createCanvasser(
-    organizationId: string,
+    tenantId: string,
     input: { displayName: string; email: string; password: string; role?: AppUserRole },
   ) {
     const passwordHash = await hashPassword(input.password);
+    const role = input.role ?? AppUserRole.CANVASSER;
     try {
-      const user = await this.prisma.appUser.create({
-        data: {
-          organizationId,
-          displayName: input.displayName,
-          email: input.email.toLowerCase(),
-          passwordHash,
-          role: input.role ?? AppUserRole.CANVASSER,
-        },
-        select: { id: true, displayName: true, email: true, role: true },
+      const user = await this.prisma.$transaction(async (tx) => {
+        const u = await tx.user.create({
+          data: {
+            displayName: input.displayName,
+            email: input.email.toLowerCase(),
+            passwordHash,
+          },
+          select: { id: true, displayName: true, email: true },
+        });
+        await tx.tenantMember.create({ data: { tenantId, userId: u.id, role } });
+        return u;
       });
-      return user;
+      return { ...user, role };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         throw new ApiHttpException("EMAIL_TAKEN", "A user with that email already exists");
@@ -331,28 +343,52 @@ export class CanvassingService {
 
   /** Edit a canvasser/organiser: rename, change role, or reset the password. */
   async updateCanvasser(
-    organizationId: string,
+    tenantId: string,
     id: string,
     input: { displayName?: string; role?: AppUserRole; password?: string },
   ) {
-    const existing = await this.prisma.appUser.findFirst({ where: { id, organizationId } });
-    if (!existing) throw new ApiHttpException("USER_NOT_FOUND", "User not found");
-    const data: Prisma.AppUserUpdateInput = {};
-    if (input.displayName !== undefined) data.displayName = input.displayName;
-    if (input.role !== undefined) data.role = input.role;
-    if (input.password) data.passwordHash = await hashPassword(input.password);
-    const user = await this.prisma.appUser.update({
-      where: { id },
-      data,
-      select: { id: true, displayName: true, email: true, role: true },
-    });
-    return user;
+    const membership = await this.prisma.tenantMember.findFirst({ where: { userId: id, tenantId } });
+    if (!membership) throw new ApiHttpException("USER_NOT_FOUND", "User not found");
+    const userData: Prisma.UserUpdateInput = {};
+    if (input.displayName !== undefined) userData.displayName = input.displayName;
+    if (input.password) userData.passwordHash = await hashPassword(input.password);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const u =
+          Object.keys(userData).length > 0
+            ? await tx.user.update({
+                where: { id },
+                data: userData,
+                select: { id: true, displayName: true, email: true },
+              })
+            : await tx.user.findUniqueOrThrow({
+                where: { id },
+                select: { id: true, displayName: true, email: true },
+              });
+        let role = membership.role;
+        if (input.role !== undefined) {
+          const updated = await tx.tenantMember.update({
+            where: { tenantId_userId: { tenantId, userId: id } },
+            data: { role: input.role },
+          });
+          role = updated.role;
+        }
+        return { ...u, role };
+      });
+    } catch (error) {
+      // The FK + cascade make an orphaned membership impossible, but map the
+      // record-not-found error to the API contract defensively.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        throw new ApiHttpException("USER_NOT_FOUND", "User not found");
+      }
+      throw error;
+    }
   }
 
   /** Contacts that fall in a turf, route-orderable for a walk list. */
-  async listTurfContacts(organizationId: string, turfId: string) {
+  async listTurfContacts(tenantId: string, turfId: string) {
     return this.prisma.contact.findMany({
-      where: { organizationId, turfId },
+      where: { tenantId, turfId },
       orderBy: { createdAt: "asc" },
       select: { id: true, firstName: true, lastName: true, address: true, lat: true, lng: true },
     });
@@ -360,9 +396,9 @@ export class CanvassingService {
 
   // ── Authoring (organiser) ───────────────────────────────────────
   /** Turfs for an org with their active assignment + door counts. */
-  async listTurfs(organizationId: string, campaignId?: string) {
+  async listTurfs(tenantId: string, campaignId?: string) {
     const turfs = await this.prisma.turf.findMany({
-      where: { organizationId, ...(campaignId ? { campaignId } : {}) },
+      where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       orderBy: { createdAt: "desc" },
       include: {
         assignments: { where: { status: TurfAssignmentStatus.ASSIGNED }, include: { canvasser: true } },
@@ -396,7 +432,7 @@ export class CanvassingService {
    * materialised into the turf (see loadUniverseIntoTurf).
    */
   async createTurfFromDivision(
-    organizationId: string,
+    tenantId: string,
     input: {
       type: "ced" | "sed" | "lga";
       code: string;
@@ -413,13 +449,13 @@ export class CanvassingService {
     if (rows.length === 0 || !rows[0].geojson) {
       throw new ApiHttpException("DIVISION_NOT_FOUND", "Division boundary not found");
     }
-    const turf = await this.createTurf(organizationId, {
+    const turf = await this.createTurf(tenantId, {
       name: input.name || rows[0].name,
       geometry: JSON.parse(rows[0].geojson),
       campaignId: input.campaignId ?? null,
     });
     if (input.universe && input.universe !== "existing") {
-      await this.loadUniverseIntoTurf(organizationId, turf.id, { universe: input.universe });
+      await this.loadUniverseIntoTurf(tenantId, turf.id, { universe: input.universe });
     }
     return turf;
   }
@@ -432,7 +468,7 @@ export class CanvassingService {
    * the caller (rebucket + load-universe), matching the polygon path.
    */
   async createTurfFromAreas(
-    organizationId: string,
+    tenantId: string,
     input: {
       name: string;
       campaignId?: string | null;
@@ -444,7 +480,7 @@ export class CanvassingService {
     if (!geometry) {
       throw new ApiHttpException("EMPTY_SELECTION", "Select at least one area or draw a polygon");
     }
-    return this.createTurf(organizationId, {
+    return this.createTurf(tenantId, {
       name: input.name,
       geometry,
       campaignId: input.campaignId ?? null,
@@ -461,16 +497,16 @@ export class CanvassingService {
    * data is loaded. "existing" never adds cold doors (rebucketTurf covers those).
    */
   async loadUniverseIntoTurf(
-    organizationId: string,
+    tenantId: string,
     turfId: string,
     opts: { universe: TurfUniverse; limit?: number },
   ): Promise<{ materialised: number; total: number }> {
-    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, organizationId } });
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
     if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
 
     let materialised = 0;
     if (opts.universe !== "existing") {
-      const addresses = (await this.geo.addresses(organizationId, {
+      const addresses = (await this.geo.addresses(tenantId, {
         turfId,
         withoutContacts: true,
         limit: opts.limit ?? 2000,
@@ -481,7 +517,7 @@ export class CanvassingService {
         pids.length
           ? (
               await this.prisma.contact.findMany({
-                where: { organizationId, gnafPid: { in: pids } },
+                where: { tenantId, gnafPid: { in: pids } },
                 select: { gnafPid: true },
               })
             ).map((c) => c.gnafPid)
@@ -491,7 +527,7 @@ export class CanvassingService {
       if (fresh.length) {
         await this.prisma.contact.createMany({
           data: fresh.map((a) => ({
-            organizationId,
+            tenantId,
             turfId,
             gnafPid: a.gnafPid,
             address: a.address ?? null,
@@ -504,14 +540,14 @@ export class CanvassingService {
       }
     }
 
-    const total = await this.prisma.contact.count({ where: { organizationId, turfId } });
+    const total = await this.prisma.contact.count({ where: { tenantId, turfId } });
     return { materialised, total };
   }
 
-  async createTurf(organizationId: string, input: { name: string; geometry: unknown; campaignId?: string | null }) {
+  async createTurf(tenantId: string, input: { name: string; geometry: unknown; campaignId?: string | null }) {
     return this.prisma.turf.create({
       data: {
-        organizationId,
+        tenantId,
         name: input.name,
         geometry: input.geometry as Prisma.InputJsonValue,
         campaignId: input.campaignId ?? null,
@@ -520,7 +556,7 @@ export class CanvassingService {
   }
 
   async createWalkList(
-    organizationId: string,
+    tenantId: string,
     input: {
       name: string;
       turfId?: string | null;
@@ -531,7 +567,7 @@ export class CanvassingService {
   ) {
     return this.prisma.walkList.create({
       data: {
-        organizationId,
+        tenantId,
         name: input.name,
         turfId: input.turfId ?? null,
         campaignId: input.campaignId ?? null,
@@ -546,11 +582,11 @@ export class CanvassingService {
 
   /** Rename a walk list / switch its STATIC↔DYNAMIC mode. */
   async updateWalkList(
-    organizationId: string,
+    tenantId: string,
     id: string,
     input: { name?: string; listType?: WalkListItemListType },
   ) {
-    const existing = await this.prisma.walkList.findFirst({ where: { id, organizationId } });
+    const existing = await this.prisma.walkList.findFirst({ where: { id, tenantId } });
     if (!existing) throw new ApiHttpException("WALK_LIST_NOT_FOUND", "Walk list not found");
     const data: Prisma.WalkListUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
@@ -560,11 +596,11 @@ export class CanvassingService {
 
   /** Rename / reshape a turf boundary. Geometry changes don't auto-rebucket. */
   async updateTurf(
-    organizationId: string,
+    tenantId: string,
     turfId: string,
     input: { name?: string; geometry?: unknown },
   ) {
-    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, organizationId } });
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
     if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
     const data: Prisma.TurfUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
@@ -578,14 +614,14 @@ export class CanvassingService {
    * previously in this turf that fall outside. Point-in-polygon runs in-process
    * via the shared geo util (GeoJSON [lng, lat] order). Returns the deltas.
    */
-  async rebucketTurf(organizationId: string, turfId: string) {
-    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, organizationId } });
+  async rebucketTurf(tenantId: string, turfId: string) {
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
     if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
     const geometry = turf.geometry as { type?: string; coordinates?: unknown } | null;
 
     const contacts = await this.prisma.contact.findMany({
       where: {
-        organizationId,
+        tenantId,
         lat: { not: null },
         lng: { not: null },
         OR: [{ turfId: null }, { turfId }],
@@ -609,25 +645,25 @@ export class CanvassingService {
       await this.prisma.contact.updateMany({ where: { id: { in: toRemove } }, data: { turfId: null } });
     }
 
-    const total = await this.prisma.contact.count({ where: { organizationId, turfId } });
+    const total = await this.prisma.contact.count({ where: { tenantId, turfId } });
     return { added: toAdd.length, removed: toRemove.length, total };
   }
 
   // ── Shifts (G8) ─────────────────────────────────────────────────
-  async listShifts(organizationId: string, campaignId?: string) {
+  async listShifts(tenantId: string, campaignId?: string) {
     return this.prisma.shift.findMany({
-      where: { organizationId, ...(campaignId ? { campaignId } : {}) },
+      where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       orderBy: { startsAt: "asc" },
     });
   }
 
   async createShift(
-    organizationId: string,
+    tenantId: string,
     input: { campaignId: string; name: string; startsAt: string; endsAt: string; location?: string },
   ) {
     return this.prisma.shift.create({
       data: {
-        organizationId,
+        tenantId,
         campaignId: input.campaignId,
         name: input.name,
         startsAt: new Date(input.startsAt),
@@ -637,18 +673,18 @@ export class CanvassingService {
     });
   }
 
-  async deleteShift(organizationId: string, id: string) {
-    const res = await this.prisma.shift.deleteMany({ where: { id, organizationId } });
+  async deleteShift(tenantId: string, id: string) {
+    const res = await this.prisma.shift.deleteMany({ where: { id, tenantId } });
     if (res.count === 0) throw new ApiHttpException("SHIFT_NOT_FOUND", "Shift not found");
     return { deleted: true };
   }
 
   async updateShift(
-    organizationId: string,
+    tenantId: string,
     id: string,
     input: { name?: string; location?: string | null; startsAt?: string; endsAt?: string },
   ) {
-    const existing = await this.prisma.shift.findFirst({ where: { id, organizationId } });
+    const existing = await this.prisma.shift.findFirst({ where: { id, tenantId } });
     if (!existing) throw new ApiHttpException("SHIFT_NOT_FOUND", "Shift not found");
     const data: Prisma.ShiftUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
@@ -660,16 +696,16 @@ export class CanvassingService {
 
   // ── QA review (G10): flag suspicious knocks ─────────────────────
   /** Knocks that look suspect: too-fast cadence or missing GPS. Read-only heuristic. */
-  async qaReview(organizationId: string, campaignId: string) {
+  async qaReview(tenantId: string, campaignId: string) {
     const turfs = await this.prisma.turf.findMany({
-      where: { organizationId, campaignId },
+      where: { tenantId, campaignId },
       select: { id: true },
     });
     const turfIds = turfs.map((t) => t.id);
     if (turfIds.length === 0) return { flags: [] };
 
     const knocks = await this.prisma.doorKnock.findMany({
-      where: { organizationId, contact: { turfId: { in: turfIds } } },
+      where: { tenantId, contact: { turfId: { in: turfIds } } },
       orderBy: [{ canvasserId: "asc" }, { createdAt: "asc" }],
       include: { canvasser: { select: { displayName: true } } },
     });
@@ -697,9 +733,9 @@ export class CanvassingService {
   }
 
   /** Walk lists for an org, optionally filtered to one turf, with item stats + lock. */
-  async listWalkLists(organizationId: string, turfId?: string) {
+  async listWalkLists(tenantId: string, turfId?: string) {
     const walkLists = await this.prisma.walkList.findMany({
-      where: { organizationId, ...(turfId ? { turfId } : {}) },
+      where: { tenantId, ...(turfId ? { turfId } : {}) },
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { items: true } },

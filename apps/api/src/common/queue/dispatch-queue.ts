@@ -3,7 +3,8 @@ export type DispatchQueueName =
   | "blast-send"
   | "blast-retry"
   | "integration-sync"
-  | "journey-run";
+  | "journey-run"
+  | "domain-events";
 
 export type DispatchQueueJob<TPayload> = {
   id: string;

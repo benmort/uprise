@@ -5,7 +5,7 @@ import {
   Prisma,
   TurfAssignmentStatus,
   WalkListItemStatus,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 
@@ -32,9 +32,9 @@ export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 export class CampaignsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(organizationId: string) {
+  async list(tenantId: string) {
     const campaigns = await this.prisma.canvassCampaign.findMany({
-      where: { organizationId },
+      where: { tenantId },
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { turfs: true, walkLists: true } } },
     });
@@ -52,9 +52,9 @@ export class CampaignsService {
     }));
   }
 
-  async get(organizationId: string, id: string) {
+  async get(tenantId: string, id: string) {
     const campaign = await this.prisma.canvassCampaign.findFirst({
-      where: { id, organizationId },
+      where: { id, tenantId },
       include: { _count: { select: { turfs: true, walkLists: true } } },
     });
     if (!campaign) {
@@ -75,9 +75,9 @@ export class CampaignsService {
   }
 
   /** Headline KPIs for the overview: doors today, turf %, contact rate, canvassers out. */
-  async getSummary(organizationId: string, id: string) {
+  async getSummary(tenantId: string, id: string) {
     const campaign = await this.prisma.canvassCampaign.findFirst({
-      where: { id, organizationId },
+      where: { id, tenantId },
       select: { id: true },
     });
     if (!campaign) {
@@ -85,14 +85,14 @@ export class CampaignsService {
     }
 
     const turfs = await this.prisma.turf.findMany({
-      where: { organizationId, campaignId: id },
+      where: { tenantId, campaignId: id },
       select: { id: true },
     });
     const turfIds = turfs.map((t) => t.id);
     const contactInCampaign: Prisma.DoorKnockWhereInput =
       turfIds.length > 0
-        ? { organizationId, contact: { turfId: { in: turfIds } } }
-        : { organizationId, id: "__none__" }; // no turfs → no knocks
+        ? { tenantId, contact: { turfId: { in: turfIds } } }
+        : { tenantId, id: "__none__" }; // no turfs → no knocks
 
     const [doorsToday, totalKnocks, contactKnocks, totalStops, visitedStops, locks] =
       await Promise.all([
@@ -127,24 +127,24 @@ export class CampaignsService {
   }
 
   /** Helper: the turf ids in a campaign, throwing if the campaign is unknown. */
-  private async campaignTurfIds(organizationId: string, id: string): Promise<string[]> {
+  private async campaignTurfIds(tenantId: string, id: string): Promise<string[]> {
     const campaign = await this.prisma.canvassCampaign.findFirst({
-      where: { id, organizationId },
+      where: { id, tenantId },
       select: { id: true },
     });
     if (!campaign) {
       throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
     }
     const turfs = await this.prisma.turf.findMany({
-      where: { organizationId, campaignId: id },
+      where: { tenantId, campaignId: id },
       select: { id: true },
     });
     return turfs.map((t) => t.id);
   }
 
   /** Disposition breakdown, support-level distribution and the door+text funnel. */
-  async getResults(organizationId: string, id: string) {
-    const turfIds = await this.campaignTurfIds(organizationId, id);
+  async getResults(tenantId: string, id: string) {
+    const turfIds = await this.campaignTurfIds(tenantId, id);
     const contactFilter =
       turfIds.length > 0 ? { contact: { turfId: { in: turfIds } } } : { id: "__none__" };
 
@@ -152,22 +152,22 @@ export class CampaignsService {
       await Promise.all([
         this.prisma.disposition.groupBy({
           by: ["code"],
-          where: { organizationId, ...contactFilter },
+          where: { tenantId, ...contactFilter },
           _count: { _all: true },
         }),
         this.prisma.disposition.groupBy({
           by: ["supportLevel"],
-          where: { organizationId, supportLevel: { not: null }, ...contactFilter },
+          where: { tenantId, supportLevel: { not: null }, ...contactFilter },
           _count: { _all: true },
         }),
-        this.prisma.doorKnock.count({ where: { organizationId, ...contactFilter } }),
+        this.prisma.doorKnock.count({ where: { tenantId, ...contactFilter } }),
         this.prisma.doorKnock.count({
-          where: { organizationId, dispositionCode: { in: CONTACT_CODES }, ...contactFilter },
+          where: { tenantId, dispositionCode: { in: CONTACT_CODES }, ...contactFilter },
         }),
-        this.prisma.questionResponse.count({ where: { organizationId, ...contactFilter } }),
+        this.prisma.questionResponse.count({ where: { tenantId, ...contactFilter } }),
         this.prisma.disposition.count({
           where: {
-            organizationId,
+            tenantId,
             supportLevel: { in: ["STRONG_SUPPORT", "LEAN_SUPPORT"] },
             ...contactFilter,
           },
@@ -185,8 +185,8 @@ export class CampaignsService {
   }
 
   /** Live war-room snapshot: who's out, recent knocks, simple alerts. */
-  async getLive(organizationId: string, id: string) {
-    const turfIds = await this.campaignTurfIds(organizationId, id);
+  async getLive(tenantId: string, id: string) {
+    const turfIds = await this.campaignTurfIds(tenantId, id);
     if (turfIds.length === 0) {
       return { canvassers: [], recentKnocks: [], doorsToday: 0 };
     }
@@ -201,11 +201,11 @@ export class CampaignsService {
         },
       }),
       this.prisma.doorKnock.findMany({
-        where: { organizationId, createdAt: { gte: startOfToday() }, ...contactFilter },
+        where: { tenantId, createdAt: { gte: startOfToday() }, ...contactFilter },
         select: { canvasserId: true, createdAt: true },
       }),
       this.prisma.doorKnock.findMany({
-        where: { organizationId, ...contactFilter },
+        where: { tenantId, ...contactFilter },
         orderBy: { createdAt: "desc" },
         take: 20,
         include: { canvasser: { select: { id: true, displayName: true } } },
@@ -248,10 +248,10 @@ export class CampaignsService {
     };
   }
 
-  async create(organizationId: string, input: CreateCampaignInput) {
+  async create(tenantId: string, input: CreateCampaignInput) {
     return this.prisma.canvassCampaign.create({
       data: {
-        organizationId,
+        tenantId,
         name: input.name,
         status: input.status ?? CanvassCampaignStatus.DRAFT,
         surveyId: input.surveyId ?? null,
@@ -261,9 +261,9 @@ export class CampaignsService {
     });
   }
 
-  async update(organizationId: string, id: string, input: UpdateCampaignInput) {
+  async update(tenantId: string, id: string, input: UpdateCampaignInput) {
     const existing = await this.prisma.canvassCampaign.findFirst({
-      where: { id, organizationId },
+      where: { id, tenantId },
       select: { id: true },
     });
     if (!existing) {

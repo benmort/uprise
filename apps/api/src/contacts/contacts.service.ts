@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Contact, Prisma } from "../../src/generated/prisma";
+import { Contact, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizeAddress } from "../common/utils/address.utils";
 
@@ -24,23 +24,23 @@ export class ContactsService {
    * upsert(), so we find-then-create and treat a P2002 as a concurrent insert.
    */
   async getOrCreateByPhone(
-    organizationId: string,
+    tenantId: string,
     phoneE164: string,
     seed?: ContactSeed,
   ): Promise<Contact> {
     const existing = await this.prisma.contact.findFirst({
-      where: { organizationId, phoneE164 },
+      where: { tenantId, phoneE164 },
     });
     if (existing) return this.enrich(existing, seed);
 
     try {
       return await this.prisma.contact.create({
-        data: { organizationId, phoneE164, ...this.seedData(seed) },
+        data: { tenantId, phoneE164, ...this.seedData(seed) },
       });
     } catch (error) {
       if (!this.isUniqueConflict(error)) throw error;
       const raced = await this.prisma.contact.findFirst({
-        where: { organizationId, phoneE164 },
+        where: { tenantId, phoneE164 },
       });
       if (raced) return this.enrich(raced, seed);
       throw error;
@@ -52,7 +52,7 @@ export class ContactsService {
    * Returns null when the address normalises to empty (nothing to dedup on).
    */
   async getOrCreateByAddress(
-    organizationId: string,
+    tenantId: string,
     rawAddress: string,
     seed?: ContactSeed,
   ): Promise<Contact | null> {
@@ -60,14 +60,14 @@ export class ContactsService {
     if (!addressNorm) return null;
 
     const existing = await this.prisma.contact.findFirst({
-      where: { organizationId, addressNorm },
+      where: { tenantId, addressNorm },
     });
     if (existing) return this.enrich(existing, { ...seed, address: rawAddress });
 
     try {
       return await this.prisma.contact.create({
         data: {
-          organizationId,
+          tenantId,
           addressNorm,
           address: rawAddress,
           ...this.seedData(seed),
@@ -76,7 +76,7 @@ export class ContactsService {
     } catch (error) {
       if (!this.isUniqueConflict(error)) throw error;
       const raced = await this.prisma.contact.findFirst({
-        where: { organizationId, addressNorm },
+        where: { tenantId, addressNorm },
       });
       if (raced) return this.enrich(raced, { ...seed, address: rawAddress });
       throw error;
@@ -89,18 +89,18 @@ export class ContactsService {
    * single timeline survives.
    */
   async dedupUpsert(
-    organizationId: string,
+    tenantId: string,
     identity: { phoneE164?: string | null; address?: string | null; seed?: ContactSeed },
   ): Promise<Contact | null> {
     const byPhone = identity.phoneE164
-      ? await this.getOrCreateByPhone(organizationId, identity.phoneE164, identity.seed)
+      ? await this.getOrCreateByPhone(tenantId, identity.phoneE164, identity.seed)
       : null;
     const byAddress = identity.address
-      ? await this.getOrCreateByAddress(organizationId, identity.address, identity.seed)
+      ? await this.getOrCreateByAddress(tenantId, identity.address, identity.seed)
       : null;
 
     if (byPhone && byAddress && byPhone.id !== byAddress.id) {
-      return this.mergeContacts(organizationId, byPhone.id, byAddress.id);
+      return this.mergeContacts(tenantId, byPhone.id, byAddress.id);
     }
     return byPhone ?? byAddress;
   }
@@ -111,13 +111,13 @@ export class ContactsService {
    * timeline merge: door + text history collapses onto one person.
    */
   async mergeContacts(
-    organizationId: string,
+    tenantId: string,
     primaryId: string,
     duplicateId: string,
   ): Promise<Contact> {
     if (primaryId === duplicateId) {
       const same = await this.prisma.contact.findFirst({
-        where: { id: primaryId, organizationId },
+        where: { id: primaryId, tenantId },
       });
       if (!same) throw new Error(`Contact ${primaryId} not found`);
       return same;
@@ -125,8 +125,8 @@ export class ContactsService {
 
     return this.prisma.$transaction(async (tx) => {
       const [primary, duplicate] = await Promise.all([
-        tx.contact.findFirst({ where: { id: primaryId, organizationId } }),
-        tx.contact.findFirst({ where: { id: duplicateId, organizationId } }),
+        tx.contact.findFirst({ where: { id: primaryId, tenantId } }),
+        tx.contact.findFirst({ where: { id: duplicateId, tenantId } }),
       ]);
       if (!primary) throw new Error(`Contact ${primaryId} not found`);
       if (!duplicate) throw new Error(`Contact ${duplicateId} not found`);
@@ -175,16 +175,95 @@ export class ContactsService {
   }
 
   /**
+   * Identity resolution (meld doc 10) — the soft, non-destructive counterpart of
+   * mergeContacts. Groups every Contact sharing an email OR phoneE164 under one
+   * `canonicalContactId` (the earliest by createdAt) WITHOUT deleting any row, so
+   * a contact can be traced across source systems and re-resolved. The canonical
+   * row's own `canonicalContactId` is null. Returns the canonical contact, or null
+   * when nothing matches.
+   */
+  async resolveIdentity(
+    tenantId: string,
+    identity: { email?: string | null; phoneE164?: string | null },
+  ): Promise<Contact | null> {
+    const ors: Prisma.ContactWhereInput[] = [];
+    if (identity.email) ors.push({ email: identity.email });
+    if (identity.phoneE164) ors.push({ phoneE164: identity.phoneE164 });
+    if (ors.length === 0) return null;
+
+    const matches = await this.prisma.contact.findMany({
+      where: { tenantId, OR: ors },
+      orderBy: { createdAt: "asc" },
+    });
+    if (matches.length === 0) return null;
+
+    const canonical = matches[0];
+    const dupeIds = matches.slice(1).map((c) => c.id);
+    if (dupeIds.length > 0) {
+      await this.prisma.$transaction([
+        // Re-point the duplicates AND anyone who previously pointed at a duplicate
+        // (so transitive chains collapse onto the one canonical row).
+        this.prisma.contact.updateMany({
+          where: {
+            tenantId,
+            OR: [{ id: { in: dupeIds } }, { canonicalContactId: { in: dupeIds } }],
+          },
+          data: { canonicalContactId: canonical.id },
+        }),
+        this.prisma.contact.update({
+          where: { id: canonical.id },
+          data: { canonicalContactId: null },
+        }),
+      ]);
+    }
+    return canonical;
+  }
+
+  /**
+   * Record multi-source provenance for a contact (meld doc 10). Idempotent on
+   * (sourceSystem, externalId) so re-importing from Action Network/CSV updates the
+   * payload rather than duplicating. Drives the segment `hasSource` clause.
+   */
+  async recordSourceRecord(input: {
+    tenantId: string;
+    contactId: string;
+    sourceSystem: string;
+    externalId: string;
+    data?: Prisma.InputJsonValue;
+  }): Promise<void> {
+    await this.prisma.contactSourceRecord.upsert({
+      where: {
+        sourceSystem_externalId: {
+          sourceSystem: input.sourceSystem,
+          externalId: input.externalId,
+        },
+      },
+      create: {
+        tenantId: input.tenantId,
+        contactId: input.contactId,
+        sourceSystem: input.sourceSystem,
+        externalId: input.externalId,
+        ...(input.data !== undefined ? { data: input.data } : {}),
+      },
+      update: {
+        tenantId: input.tenantId,
+        contactId: input.contactId,
+        ...(input.data !== undefined ? { data: input.data } : {}),
+      },
+    });
+  }
+
+  /**
    * The merged message timeline for a contact, oldest first.
    */
-  async getTimeline(organizationId: string, contactId: string) {
+  async getTimeline(tenantId: string, contactId: string) {
     const [inbound, outbound] = await Promise.all([
       this.prisma.inboundMessage.findMany({
-        where: { organizationId, contactId },
+        where: { tenantId, contactId },
         orderBy: { receivedAt: "asc" },
       }),
       this.prisma.outboundMessage.findMany({
-        where: { organizationId, contactId },
+        where: { tenantId, contactId },
         orderBy: { sentAt: "asc" },
       }),
     ]);
@@ -216,9 +295,9 @@ export class ContactsService {
    * disposition history, latest survey answers, audience memberships and a
    * derived next-action hint.
    */
-  async getProfile(organizationId: string, contactId: string) {
+  async getProfile(tenantId: string, contactId: string) {
     const contact = await this.prisma.contact.findFirst({
-      where: { id: contactId, organizationId },
+      where: { id: contactId, tenantId },
       include: {
         turf: { select: { id: true, name: true } },
         audienceContacts: { include: { audience: { select: { id: true, name: true } } } },
@@ -227,18 +306,18 @@ export class ContactsService {
     if (!contact) return null;
 
     const [timeline, dispositions, knocks, responses] = await Promise.all([
-      this.getTimeline(organizationId, contactId),
+      this.getTimeline(tenantId, contactId),
       this.prisma.disposition.findMany({
-        where: { organizationId, contactId },
+        where: { tenantId, contactId },
         orderBy: { createdAt: "desc" },
       }),
       this.prisma.doorKnock.findMany({
-        where: { organizationId, contactId },
+        where: { tenantId, contactId },
         orderBy: { createdAt: "asc" },
         include: { canvasser: { select: { id: true, displayName: true } } },
       }),
       this.prisma.questionResponse.findMany({
-        where: { organizationId, contactId },
+        where: { tenantId, contactId },
         orderBy: { createdAt: "desc" },
         include: {
           question: { select: { id: true, prompt: true } },
@@ -313,12 +392,12 @@ export class ContactsService {
   }
 
   /** Search contacts by name or phone within an org. */
-  async search(organizationId: string, query: string, limit = 20) {
+  async search(tenantId: string, query: string, limit = 20) {
     const q = query.trim();
     if (!q) return [];
     const contacts = await this.prisma.contact.findMany({
       where: {
-        organizationId,
+        tenantId,
         OR: [
           { firstName: { contains: q, mode: "insensitive" } },
           { lastName: { contains: q, mode: "insensitive" } },

@@ -1,5 +1,5 @@
 import { SetMetadata } from "@nestjs/common";
-import { AppUserRole } from "../../src/generated/prisma";
+import { AppUserRole } from "@yarns/db";
 
 export const ROLES_KEY = "roles";
 

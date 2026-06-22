@@ -35,6 +35,10 @@ export async function configureNestApp(app: INestApplication): Promise<void> {
       }
       callback(null, configuredOrigins.has(normalizeOrigin(origin)));
     },
+    // credentialed so the standalone auth app + web app send the parent-domain
+    // session cookie cross-subdomain (meld doc 14). The dynamic origin callback
+    // echoes the request origin (never "*"), which is valid with credentials.
+    credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
     optionsSuccessStatus: 204,

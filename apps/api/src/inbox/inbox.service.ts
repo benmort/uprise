@@ -5,7 +5,7 @@ import {
   ConsentState,
   JourneyTriggerType,
   MessageChannel,
-} from "../../src/generated/prisma";
+} from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { TwilioService } from "../twilio/twilio.service";
@@ -38,7 +38,7 @@ export class InboxService {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -61,7 +61,7 @@ export class InboxService {
     const contact = await this.contacts.getOrCreateByPhone(org.id, fromPhone);
     const attributedOutbound = await this.prisma.outboundMessage.findFirst({
       where: {
-        organizationId: org.id,
+        tenantId: org.id,
         toPhone: fromPhone,
         channel,
         OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
@@ -71,7 +71,7 @@ export class InboxService {
 
     const inbound = await this.prisma.inboundMessage.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         blastId: attributedOutbound?.blastId || null,
         contactId: contact.id,
         channel,
@@ -91,7 +91,7 @@ export class InboxService {
     if (keyword === ConsentState.OPTED_OUT) {
       for (const ch of [MessageChannel.SMS, MessageChannel.WHATSAPP]) {
         await this.consent.setState({
-          organizationId: org.id,
+          tenantId: org.id,
           phoneE164: fromPhone,
           channel: ch,
           state: ConsentState.OPTED_OUT,
@@ -101,7 +101,7 @@ export class InboxService {
       }
     } else {
       await this.consent.setState({
-        organizationId: org.id,
+        tenantId: org.id,
         phoneE164: fromPhone,
         channel,
         state: ConsentState.OPTED_IN,
@@ -112,8 +112,8 @@ export class InboxService {
 
     await this.prisma.conversationState.upsert({
       where: {
-        organizationId_contactPhone_channel: {
-          organizationId: org.id,
+        tenantId_contactPhone_channel: {
+          tenantId: org.id,
           contactPhone: fromPhone,
           channel,
         },
@@ -125,7 +125,7 @@ export class InboxService {
         lastMessageAt: inbound.receivedAt,
       },
       create: {
-        organizationId: org.id,
+        tenantId: org.id,
         contactId: contact.id,
         contactPhone: fromPhone,
         channel,
@@ -162,7 +162,7 @@ export class InboxService {
       if (updated.count > 0) {
         await this.prisma.analyticsSnapshot.create({
           data: {
-            organizationId: org.id,
+            tenantId: org.id,
             blastId: attributedOutbound?.blastId || null,
             metricName: "responded",
             metricValue: 1,
@@ -192,7 +192,7 @@ export class InboxService {
     if (this.journeys) {
       try {
         await this.journeys.handleTrigger(JourneyTriggerType.message_received, {
-          organizationId: org.id,
+          tenantId: org.id,
           contactId: contact.id,
           blastId: attributedOutbound?.blastId || null,
         });
@@ -348,16 +348,16 @@ export class InboxService {
   }
 
   /** Resolve claimed-conversation owner ids to { id, name } (batched). */
-  private async resolveOwners(organizationId: string, ownerIds: Array<string | null | undefined>) {
+  private async resolveOwners(tenantId: string, ownerIds: Array<string | null | undefined>) {
     const ids = [...new Set(ownerIds.filter((id): id is string => Boolean(id)))];
     const map = new Map<string, { id: string; name: string }>();
     if (ids.length === 0) return map;
-    const users = await this.prisma.appUser.findMany({
-      where: { id: { in: ids }, organizationId },
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
       select: { id: true, displayName: true, email: true },
     });
     for (const u of users) map.set(u.id, { id: u.id, name: u.displayName || u.email });
-    // The env super-admin isn't an AppUser row; label it sensibly.
+    // The env super-admin isn't a User row; label it sensibly.
     for (const id of ids) if (!map.has(id)) map.set(id, { id, name: id === "env-admin" ? "Admin" : "Unknown" });
     return map;
   }
@@ -476,7 +476,7 @@ export class InboxService {
 
     const convo = await this.prisma.conversationState.findUnique({
       where: {
-        organizationId_contactPhone_channel: { organizationId: org.id, contactPhone: phone, channel },
+        tenantId_contactPhone_channel: { tenantId: org.id, contactPhone: phone, channel },
       },
       select: { ownerId: true },
     });
@@ -521,7 +521,7 @@ export class InboxService {
       : sent.from;
     const row = await this.prisma.outboundMessage.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         contactId: contact.id,
         channel,
         toPhone: normalizedTo,
@@ -534,8 +534,8 @@ export class InboxService {
     });
     await this.prisma.conversationState.upsert({
       where: {
-        organizationId_contactPhone_channel: {
-          organizationId: org.id,
+        tenantId_contactPhone_channel: {
+          tenantId: org.id,
           contactPhone: to,
           channel,
         },
@@ -546,7 +546,7 @@ export class InboxService {
         lastMessageAt: row.sentAt,
       },
       create: {
-        organizationId: org.id,
+        tenantId: org.id,
         contactId: contact.id,
         contactPhone: to,
         channel,
@@ -569,8 +569,8 @@ export class InboxService {
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     return this.prisma.conversationState.upsert({
       where: {
-        organizationId_contactPhone_channel: {
-          organizationId: org.id,
+        tenantId_contactPhone_channel: {
+          tenantId: org.id,
           contactPhone: phone,
           channel,
         },
@@ -580,7 +580,7 @@ export class InboxService {
         resolved,
       },
       create: {
-        organizationId: org.id,
+        tenantId: org.id,
         contactPhone: phone,
         channel,
         unreadCount: 0,
@@ -600,10 +600,10 @@ export class InboxService {
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     await this.prisma.conversationState.upsert({
       where: {
-        organizationId_contactPhone_channel: { organizationId: org.id, contactPhone: phone, channel },
+        tenantId_contactPhone_channel: { tenantId: org.id, contactPhone: phone, channel },
       },
       update: { ownerId, claimedAt: new Date() },
-      create: { organizationId: org.id, contactPhone: phone, channel, ownerId, claimedAt: new Date() },
+      create: { tenantId: org.id, contactPhone: phone, channel, ownerId, claimedAt: new Date() },
     });
     const owner = (await this.resolveOwners(org.id, [ownerId])).get(ownerId) ?? null;
     return { contactPhone: phone, channel, owner };
@@ -615,7 +615,7 @@ export class InboxService {
     const phone = normalizePhoneE164(contactPhone);
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     await this.prisma.conversationState.updateMany({
-      where: { organizationId: org.id, contactPhone: phone, channel },
+      where: { tenantId: org.id, contactPhone: phone, channel },
       data: { ownerId: null, claimedAt: null },
     });
     return { contactPhone: phone, channel, owner: null };
@@ -623,7 +623,7 @@ export class InboxService {
 
   async suggest(message: string) {
     const org = await this.ensureOrganization();
-    const suggestions = await this.ai.suggestReplies({ organizationId: org.id, message });
+    const suggestions = await this.ai.suggestReplies({ tenantId: org.id, message });
     return { suggestions };
   }
 }

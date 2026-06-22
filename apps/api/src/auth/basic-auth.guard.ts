@@ -8,12 +8,19 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
-import { AppUserRole } from "../../src/generated/prisma";
+import { AppUserRole } from "@yarns/db";
+import { APP_USER_ROLE_TO_ROLE } from "@yarns/permissions";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthUser } from "./auth-user";
+import { SessionService } from "./session.service";
 import { verifyPassword } from "./password.util";
 import { resolveStreamTokenSecret } from "./stream-token-secret";
 import { verifyStreamTokenDetailed } from "./stream-token";
+
+/** Unified role ids for an AppUserRole-bearing membership (CASL roles[]). */
+function rolesFor(role: AppUserRole): string[] {
+  return [APP_USER_ROLE_TO_ROLE[role] ?? "member"];
+}
 
 @Injectable()
 export class BasicAuthGuard implements CanActivate {
@@ -24,7 +31,47 @@ export class BasicAuthGuard implements CanActivate {
   constructor(
     private readonly config: ConfigService,
     @Optional() private readonly prisma?: PrismaService,
+    @Optional() private readonly sessions?: SessionService,
   ) {}
+
+  /** Auth endpoints that issue/clear sessions — reachable without a session. */
+  private isAuthEndpointPath(request: Request): boolean {
+    // Pre-session IAM flows (meld doc 14): they issue/complete a session, so they
+    // must be reachable without one. NOTE: /iam/select-tenant is deliberately NOT
+    // here — it requires an authenticated session.
+    const exact = new Set([
+      "/iam/sessions",
+      "/iam/magic-link",
+      "/iam/magic-link/consume",
+      "/iam/forgot-password",
+      "/iam/reset-password",
+      "/iam/verify-email/send",
+      "/iam/verify-email/confirm",
+      "/iam/2fa/send",
+      "/iam/2fa/verify",
+    ]);
+    const candidates = this.requestPathCandidates(request);
+    return candidates.some(
+      (c) =>
+        exact.has(c) ||
+        exact.has(c.replace(/^\/api\/v1/, "")) ||
+        // invite preview (GET /iam/invite/:token) + accept (POST /iam/invite/accept)
+        /^(?:\/api\/v1)?\/iam\/invite\//.test(c),
+    );
+  }
+
+  /** Session token from the auth_token cookie or a (non-cron) Bearer header. */
+  private getSessionToken(request: Request, authHeader?: string): string {
+    if (authHeader?.startsWith("Bearer ")) return authHeader.slice("Bearer ".length);
+    const cookie = request.headers.cookie;
+    if (cookie) {
+      for (const part of cookie.split(";")) {
+        const [k, ...v] = part.trim().split("=");
+        if (k === "auth_token") return decodeURIComponent(v.join("="));
+      }
+    }
+    return "";
+  }
 
   private requestPathCandidates(request: Request): string[] {
     return [request.originalUrl, request.url]
@@ -91,8 +138,14 @@ export class BasicAuthGuard implements CanActivate {
     const allowedPaths = new Set([
       "/inbound-text-message-hook",
       "/twilio-status-callback",
+      "/voice-status-callback",
+      "/email-webhook",
+      "/payment-webhook",
       "/api/v1/inbound-text-message-hook",
       "/api/v1/twilio-status-callback",
+      "/api/v1/voice-status-callback",
+      "/api/v1/email-webhook",
+      "/api/v1/payment-webhook",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
@@ -102,6 +155,7 @@ export class BasicAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     if (request.method?.toUpperCase() === "OPTIONS") return true;
     if (this.isPublicWebhookPath(request)) return true;
+    if (this.isAuthEndpointPath(request)) return true; // login/logout issue the session
     if (this.isAnalyticsStreamPath(request) && this.hasValidStreamToken(request)) return true;
 
     const authHeader = request.headers.authorization;
@@ -113,6 +167,14 @@ export class BasicAuthGuard implements CanActivate {
       }
       return true;
     }
+
+    // Session token (cookie or non-cron Bearer) — the standard login path once
+    // the auth frontend (meld doc 14) is wired. Basic auth remains as a fallback.
+    const sessionToken = this.getSessionToken(request, authHeader);
+    if (sessionToken && this.sessions) {
+      return this.authenticateSession(request, sessionToken);
+    }
+
     if (!authHeader?.startsWith("Basic ")) {
       throw new UnauthorizedException("Missing or invalid Authorization header");
     }
@@ -132,7 +194,14 @@ export class BasicAuthGuard implements CanActivate {
 
     // Env super-admin: the original single-credential organiser login, unchanged.
     if (expectedUser && expectedPassword && username === expectedUser && password === expectedPassword) {
-      request.user = { id: "env-admin", role: AppUserRole.ORGANISER, organizationId: null, email: username };
+      request.user = {
+        id: "env-admin",
+        role: AppUserRole.ORGANISER,
+        tenantId: null,
+        email: username,
+        roles: ["super-admin"],
+        isSuperAdmin: true,
+      };
       return true;
     }
 
@@ -153,15 +222,45 @@ export class BasicAuthGuard implements CanActivate {
     username: string,
     password: string,
   ): Promise<boolean> {
-    const user = await this.prisma!.appUser.findUnique({ where: { email: username } });
+    const user = await this.prisma!.user.findUnique({ where: { email: username } });
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       throw new UnauthorizedException("Invalid username or password");
     }
+    // Identity (User) and membership (TenantMember) are separate: resolve the
+    // user's tenant + role from their membership. A user with no membership
+    // cannot act in any tenant.
+    const membership = await this.prisma!.tenantMember.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!membership) {
+      throw new UnauthorizedException("User has no tenant membership");
+    }
     request.user = {
       id: user.id,
-      role: user.role,
-      organizationId: user.organizationId,
+      role: membership.role,
+      tenantId: membership.tenantId,
       email: user.email,
+      roles: rolesFor(membership.role),
+      isSuperAdmin: false,
+    };
+    return true;
+  }
+
+  /** Authenticate via an opaque session token (cookie or Bearer). */
+  private async authenticateSession(
+    request: Request & { user?: AuthUser },
+    token: string,
+  ): Promise<boolean> {
+    const resolved = await this.sessions!.resolve(token);
+    if (!resolved) throw new UnauthorizedException("Invalid or expired session");
+    request.user = {
+      id: resolved.userId,
+      role: resolved.role as AppUserRole,
+      tenantId: resolved.tenantId,
+      email: resolved.email,
+      roles: rolesFor(resolved.role as AppUserRole),
+      isSuperAdmin: false,
     };
     return true;
   }

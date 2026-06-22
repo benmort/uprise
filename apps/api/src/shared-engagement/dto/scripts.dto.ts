@@ -8,7 +8,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { EngagementChannel } from "../../../src/generated/prisma";
+import { EngagementChannel } from "@yarns/db";
 
 export class ScriptStepInputDto {
   @IsOptional()

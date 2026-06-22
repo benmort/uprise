@@ -159,6 +159,14 @@ export class TwilioService {
     return `${apiBaseUrl.replace(/\/+$/, "")}/api/v1/twilio-status-callback`;
   }
 
+  private getVoiceStatusCallbackUrl(): string | null {
+    const explicit = this.config.get<string>("TWILIO_VOICE_STATUS_CALLBACK_URL", "").trim();
+    if (explicit) return explicit;
+    const apiBaseUrl = this.config.get<string>("API_BASE_URL", "").trim();
+    if (!apiBaseUrl) return null;
+    return `${apiBaseUrl.replace(/\/+$/, "")}/api/v1/voice-status-callback`;
+  }
+
   private async sleep(ms: number): Promise<void> {
     if (ms <= 0) return;
     await new Promise((resolve) => setTimeout(resolve, ms));
@@ -393,6 +401,134 @@ export class TwilioService {
         },
       );
       return toMessage(created);
+    } finally {
+      this.releaseSendPermit();
+    }
+  }
+
+  /** Params for a transactional SMS — a distinct sender from marketing so
+   *  carriers classify it correctly and reputation is isolated. */
+  private buildTransactionalParams(to: string, body: string): Record<string, unknown> {
+    const statusCallback = this.getStatusCallbackUrl();
+    const messagingServiceSid = this.config
+      .get<string>("TWILIO_TRANSACTIONAL_MESSAGING_SERVICE_SID", "")
+      .trim();
+    const from =
+      this.config.get<string>("TWILIO_TRANSACTIONAL_FROM", "").trim() ||
+      this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
+    if (!messagingServiceSid && !from) {
+      throw new ServiceUnavailableException(
+        "Transactional sender is not configured. Set TWILIO_TRANSACTIONAL_FROM, TWILIO_TRANSACTIONAL_MESSAGING_SERVICE_SID, or TWILIO_PHONE_NUMBER.",
+      );
+    }
+    return {
+      ...(statusCallback ? { statusCallback } : {}),
+      to: to.trim(),
+      body: body.trim(),
+      ...(messagingServiceSid ? { messagingServiceSid } : { from }),
+    };
+  }
+
+  /**
+   * Send a transactional SMS (2FA, verification, receipts). Reuses the rate
+   * limiter + retry, but a SEPARATE sender from marketing. Never gated by
+   * consent/compliance — that's the caller's contract (TransactionalMessagingService).
+   */
+  async sendTransactional(to: string, body: string): Promise<TwilioMessage> {
+    const client = this.getClient();
+    const params = this.buildTransactionalParams(to, body);
+    await this.acquireSendPermit();
+    try {
+      const created = await withRetry(
+        async () => {
+          try {
+            return await client.messages.create(params as any);
+          } catch (error) {
+            if (isTwilioRateLimitError(error)) {
+              this.triggerRateLimitCooldown(error);
+            }
+            throw error;
+          }
+        },
+        {
+          retries: 4,
+          baseDelayMs: 400,
+          maxDelayMs: 10000,
+          shouldRetry: (error) => isRetryableTwilioError(error),
+        },
+      );
+      return toMessage(created);
+    } finally {
+      this.releaseSendPermit();
+    }
+  }
+
+  /**
+   * Place an outbound voice call (meld doc 09). Twilio requires exactly one of
+   * `url` (a TwiML endpoint) or `twiml` (inline TwiML). Subscribes to the call
+   * lifecycle so /voice-status-callback drives the Call FSM. Returns the
+   * provider CallSid + initial status; reuses the rate limiter + retry.
+   */
+  async placeCall(input: {
+    to: string;
+    from?: string;
+    url?: string;
+    twiml?: string;
+  }): Promise<{ sid: string; status: string }> {
+    const client = this.getClient();
+    const to = input.to.trim();
+    const from =
+      (input.from?.trim() || "") ||
+      this.config.get<string>("TWILIO_VOICE_FROM", "").trim() ||
+      this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
+    if (!from) {
+      throw new ServiceUnavailableException(
+        "Voice sender is not configured. Set TWILIO_VOICE_FROM or TWILIO_PHONE_NUMBER.",
+      );
+    }
+    const url = input.url ?? this.config.get<string>("TWILIO_VOICE_TWIML_URL", "").trim();
+    const twiml = input.twiml;
+    if (!url && !twiml) {
+      throw new ServiceUnavailableException(
+        "A voice call requires `url`, `twiml`, or TWILIO_VOICE_TWIML_URL.",
+      );
+    }
+
+    const statusCallback = this.getVoiceStatusCallbackUrl();
+    const params: Record<string, unknown> = {
+      to,
+      from,
+      ...(url ? { url } : { twiml }),
+      ...(statusCallback
+        ? {
+            statusCallback,
+            statusCallbackMethod: "POST",
+            statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
+          }
+        : {}),
+    };
+
+    await this.acquireSendPermit();
+    try {
+      const created = await withRetry(
+        async () => {
+          try {
+            return await client.calls.create(params as any);
+          } catch (error) {
+            if (isTwilioRateLimitError(error)) {
+              this.triggerRateLimitCooldown(error);
+            }
+            throw error;
+          }
+        },
+        {
+          retries: 4,
+          baseDelayMs: 400,
+          maxDelayMs: 10000,
+          shouldRetry: (error) => isRetryableTwilioError(error),
+        },
+      );
+      return { sid: String((created as any).sid), status: String((created as any).status ?? "queued") };
     } finally {
       this.releaseSendPermit();
     }
