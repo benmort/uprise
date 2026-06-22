@@ -19,6 +19,7 @@ export const EVENT_TYPES = {
   PAYMENT_SUCCEEDED: "payment.payment.succeeded",
   PAYMENT_REFUNDED: "payment.payment.refunded",
   CALL_INITIATED: "telephony.call.initiated",
+  ORG_CREDENTIAL_UPDATED: "tenant.org-credential.updated",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -36,6 +37,7 @@ export interface DomainEventMap {
   "payment.payment.succeeded": { paymentId: string; tenantId: string; amountCents: number };
   "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
   "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };
+  "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
 }
 
 export interface EventMetadata {
