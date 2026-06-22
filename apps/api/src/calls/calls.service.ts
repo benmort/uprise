@@ -133,6 +133,21 @@ export class CallsService {
         data.endedAt = cb.endedAt ?? new Date();
       }
       await this.prisma.call.update({ where: { id: call.id }, data });
+      // Emit a durable completion event so canvassing/analytics reactions can subscribe (WS3).
+      if (target === CallStatus.COMPLETED) {
+        await this.prisma.$transaction((tx) =>
+          this.outbox.append(tx, {
+            tenantId: call.tenantId,
+            eventType: "telephony.call.completed",
+            aggregateId: call.id,
+            payload: {
+              callId: call.id,
+              tenantId: call.tenantId,
+              durationSeconds: cb.durationSeconds ?? null,
+            },
+          }),
+        );
+      }
     } catch (err) {
       // Release the claim so Twilio's retry reprocesses a transient failure.
       await this.webhookEvents.release(VOICE_PROVIDER, eventId);

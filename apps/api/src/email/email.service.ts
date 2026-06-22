@@ -158,11 +158,32 @@ export class EmailService {
       switch (event.event) {
         case "delivered":
           await this.transition(email.id, email.status, EmailStatus.DELIVERED);
+          await this.prisma.$transaction((tx) =>
+            this.outbox.append(tx, {
+              tenantId: email.tenantId,
+              eventType: "email.email.delivered",
+              aggregateId: email.id,
+              payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
+            }),
+          );
           break;
         case "bounce":
           await this.transition(email.id, email.status, EmailStatus.BOUNCED, {
             bounceReason: String(event.reason ?? ""),
           });
+          await this.prisma.$transaction((tx) =>
+            this.outbox.append(tx, {
+              tenantId: email.tenantId,
+              eventType: "email.email.bounced",
+              aggregateId: email.id,
+              payload: {
+                emailId: email.id,
+                tenantId: email.tenantId,
+                toAddress: email.toAddress,
+                reason: String(event.reason ?? ""),
+              },
+            }),
+          );
           break;
         case "dropped":
           await this.transition(email.id, email.status, EmailStatus.FAILED, {
@@ -183,5 +204,38 @@ export class EmailService {
           break;
       }
     }
+  }
+
+  // ── Reads + per-tenant template management (WS3) ──────────────────────
+  async getEmail(tenantId: string, id: string) {
+    const email = await this.prisma.email.findFirst({ where: { id, tenantId } });
+    if (!email) throw new BadRequestException("Email not found");
+    return email;
+  }
+
+  listTemplates(tenantId: string) {
+    return this.prisma.emailTemplate.findMany({ where: { tenantId }, orderBy: { key: "asc" } });
+  }
+
+  getTemplate(tenantId: string, key: string) {
+    return this.prisma.emailTemplate.findUnique({ where: { tenantId_key: { tenantId, key } } });
+  }
+
+  /** Create or update a per-tenant template override (replaces the built-in default for that key). */
+  upsertTemplate(
+    tenantId: string,
+    input: { key: string; subject: string; body: string; isActive?: boolean },
+  ) {
+    return this.prisma.emailTemplate.upsert({
+      where: { tenantId_key: { tenantId, key: input.key } },
+      create: {
+        tenantId,
+        key: input.key,
+        subject: input.subject,
+        body: input.body,
+        isActive: input.isActive ?? true,
+      },
+      update: { subject: input.subject, body: input.body, isActive: input.isActive ?? true },
+    });
   }
 }
