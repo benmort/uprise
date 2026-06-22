@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "es2021",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["es2021", "dom", "dom.iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["react", "react-dom"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tailwind-preset.ts"],
+  "exclude": ["node_modules"]
+}

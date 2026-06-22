@@ -3,6 +3,7 @@
 /apps/api/node_modules/
 /apps/web/node_modules/
 /apps/worker/node_modules/
+node_modules/
 .pnpm-store/
 
 # Build outputs

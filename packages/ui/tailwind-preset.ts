@@ -1,14 +1,11 @@
-import type { Config } from "tailwindcss";
-
-const config: Config = {
+/**
+ * Shared Tailwind theme preset (meld doc 14) — the colour/radius/font tokens the
+ * @yarns/ui design system uses. Consuming apps add it via `presets: [yarnsUiPreset]`
+ * and pair it with `@yarns/ui/globals.css` (the CSS variable definitions). Typed
+ * loosely so the package needn't depend on tailwindcss.
+ */
+const yarnsUiPreset = {
   darkMode: ["class"],
-  content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-    // the shared design system (meld doc 14) — scan its class strings
-    "../../packages/ui/src/**/*.{ts,tsx}",
-  ],
   theme: {
     extend: {
       colors: {
@@ -72,4 +69,4 @@ const config: Config = {
   plugins: [],
 };
 
-export default config;
+export default yarnsUiPreset;

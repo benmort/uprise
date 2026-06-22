@@ -41,6 +41,9 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // @yarns/ui ships TS/TSX source (the shared design system); api-client/contracts
+  // ship built dist but are listed so Next resolves the workspace packages (meld doc 14).
+  transpilePackages: ["@yarns/ui", "@yarns/api-client", "@yarns/contracts"],
 };
 
 export default withPWA(nextConfig);
