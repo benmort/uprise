@@ -55,6 +55,13 @@ export class TenantsService {
       throw new NotFoundException("network_not_found");
     }
 
+    // The owner is added only if it's a real User row — the env super-admin
+    // (id "env-admin", not in iam.User) creates tenants with no bootstrapped owner.
+    const ownerUserId =
+      input.ownerUserId && (await this.prisma.user.findUnique({ where: { id: input.ownerUserId } }))
+        ? input.ownerUserId
+        : undefined;
+
     return this.prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: { slug, name, networkId: input.networkId ?? null },
@@ -65,20 +72,20 @@ export class TenantsService {
         aggregateId: tenant.id,
         payload: { tenantId: tenant.id, slug: tenant.slug, name: tenant.name, networkId: tenant.networkId },
       });
-      if (input.ownerUserId) {
+      if (ownerUserId) {
         await tx.tenantMember.create({
           data: {
             tenantId: tenant.id,
-            userId: input.ownerUserId,
+            userId: ownerUserId,
             role: AppUserRole.ORGANISER,
-            addedBy: input.ownerUserId,
+            addedBy: ownerUserId,
           },
         });
         await this.outbox.append(tx, {
           tenantId: tenant.id,
           eventType: "tenant.member.added",
           aggregateId: tenant.id,
-          payload: { tenantId: tenant.id, userId: input.ownerUserId, role: AppUserRole.ORGANISER },
+          payload: { tenantId: tenant.id, userId: ownerUserId, role: AppUserRole.ORGANISER },
         });
       }
       return tenant;
