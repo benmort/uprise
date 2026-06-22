@@ -39,11 +39,16 @@ export class ProfileService {
       avatarUrl: input.avatarUrl ?? null,
       bio: input.bio ?? null,
     };
-    return this.prisma.userProfile.upsert({
+    const profile = await this.prisma.userProfile.upsert({
       where: { userId },
       create: { userId, ...data },
       update: data,
     });
+    // Mirror displayName onto the base User row so reads of User.displayName don't drift (WS3).
+    if (input.displayName && input.displayName.trim()) {
+      await this.prisma.user.update({ where: { id: userId }, data: { displayName: input.displayName.trim() } });
+    }
+    return profile;
   }
 
   // ── Avatars ─────────────────────────────────────────────────────────

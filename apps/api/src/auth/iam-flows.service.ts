@@ -3,6 +3,7 @@ import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AppUserRole } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
+import { OutboxService } from "../common/outbox/outbox.service";
 import { SessionService } from "./session.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import {
@@ -44,6 +45,7 @@ export class IamFlowsService {
     private readonly config: ConfigService,
     @Inject(TRANSACTIONAL_DISPATCHER) private readonly dispatcher: TransactionalDispatcher,
     private readonly logger: DomainLogger,
+    private readonly outbox: OutboxService,
   ) {}
 
   // ── shared helpers ──────────────────────────────────────────────────
@@ -65,11 +67,24 @@ export class IamFlowsService {
 
   async membershipsFor(userId: string): Promise<Membership[]> {
     const rows = await this.prisma.tenantMember.findMany({
-      where: { userId },
+      where: { userId, tenant: { deletedAt: null } }, // exclude soft-deleted tenants (WS3)
       orderBy: { createdAt: "asc" },
       include: { tenant: { select: { name: true } } },
     });
     return rows.map((m) => ({ tenantId: m.tenantId, tenantName: m.tenant.name, role: m.role }));
+  }
+
+  /** Account flags for /auth/check so a settings UI needn't make a second call (WS3). */
+  async userFlags(userId: string): Promise<{ emailVerified: boolean; mobileVerified: boolean; twofaEnabled: boolean }> {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { emailVerified: true, mobileVerified: true, twofaEnabled: true },
+    });
+    return {
+      emailVerified: !!u?.emailVerified,
+      mobileVerified: !!u?.mobileVerified,
+      twofaEnabled: !!u?.twofaEnabled,
+    };
   }
 
   /** Tenant to attribute a transactional send to: the user's first membership, else the default org. */
@@ -227,6 +242,47 @@ export class IamFlowsService {
     return this.grantSession(record.userId);
   }
 
+  // ── 2FA enrolment + mobile capture (WS3 — without this the 2FA login is dead) ──
+  /** Set/replace the caller's mobile (resets verification). */
+  async setMobile(userId: string, mobile: string): Promise<{ ok: true }> {
+    const trimmed = mobile.trim();
+    if (!/^\+[1-9]\d{6,14}$/.test(trimmed)) throw new BadRequestException("mobile must be E.164");
+    await this.prisma.user.update({ where: { id: userId }, data: { mobile: trimmed, mobileVerified: false } });
+    return { ok: true };
+  }
+
+  /** Send an SMS code to the caller's mobile (reuses the start2fa challenge). */
+  async sendMobileVerification(userId: string): Promise<{ challengeId: string }> {
+    return this.start2fa(userId);
+  }
+
+  /** Confirm the SMS code → mark the mobile verified. */
+  async confirmMobileVerification(userId: string, code: string): Promise<{ ok: true }> {
+    const record = await this.prisma.mobileVerification.findFirst({
+      where: { userId, code, verifiedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!record) throw new BadRequestException("Invalid or expired code");
+    await this.prisma.$transaction([
+      this.prisma.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } }),
+      this.prisma.user.update({ where: { id: userId }, data: { mobileVerified: true } }),
+    ]);
+    return { ok: true };
+  }
+
+  /** Enable SMS 2FA — requires a verified mobile, else the login challenge can't send. */
+  async enable2fa(userId: string): Promise<{ ok: true }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.mobileVerified) throw new BadRequestException("Verify your mobile number first");
+    await this.prisma.user.update({ where: { id: userId }, data: { twofaEnabled: true } });
+    return { ok: true };
+  }
+
+  async disable2fa(userId: string): Promise<{ ok: true }> {
+    await this.prisma.user.update({ where: { id: userId }, data: { twofaEnabled: false } });
+    return { ok: true };
+  }
+
   // ── Invitation ──────────────────────────────────────────────────────
   async previewInvite(token: string): Promise<{ email: string; tenantName: string; role: AppUserRole }> {
     const invite = await this.loadValidInvite(token);
@@ -243,6 +299,7 @@ export class IamFlowsService {
 
     const grant = await this.prisma.$transaction(async (tx) => {
       let user = await tx.user.findUnique({ where: { email } });
+      const isNewUser = !user;
       if (!user) {
         if (!input.password || input.password.length < 8) {
           throw new BadRequestException("Password must be at least 8 characters");
@@ -262,6 +319,27 @@ export class IamFlowsService {
         update: {},
       });
       await tx.tenantInvitation.update({ where: { id: invite.id }, data: { status: "accepted" } });
+      // Emit the events the invite path was previously silent on (WS3).
+      if (isNewUser) {
+        await this.outbox.append(tx, {
+          tenantId: invite.tenantId,
+          eventType: "iam.user.created",
+          aggregateId: user.id,
+          payload: { userId: user.id, email: user.email, tenantId: invite.tenantId },
+        });
+      }
+      await this.outbox.append(tx, {
+        tenantId: invite.tenantId,
+        eventType: "tenant.member.added",
+        aggregateId: invite.tenantId,
+        payload: { tenantId: invite.tenantId, userId: user.id, role: invite.role },
+      });
+      await this.outbox.append(tx, {
+        tenantId: invite.tenantId,
+        eventType: "tenant.invitation.accepted",
+        aggregateId: invite.id,
+        payload: { invitationId: invite.id, tenantId: invite.tenantId, userId: user.id },
+      });
       return user.id;
     });
 

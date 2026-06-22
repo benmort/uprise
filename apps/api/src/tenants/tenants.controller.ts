@@ -53,6 +53,12 @@ export class TenantsController {
     return this.tenants.updateTenant(id, dto);
   }
 
+  @Delete(":id")
+  @RequirePermission(TENANT_MANAGE)
+  remove(@Param("id") id: string) {
+    return this.tenants.deleteTenant(id);
+  }
+
   @Get(":id/members")
   @RequirePermission(MEMBER_MANAGE)
   listMembers(@Param("id") id: string) {

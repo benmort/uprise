@@ -18,6 +18,7 @@ function setup() {
       upsert: jest.fn(async ({ create }: any) => ({ id: "m1", ...create })),
       findUnique: jest.fn(async () => ({ tenantId: "t1", userId: "u1", role: "ORGANISER" })),
       findMany: jest.fn(async () => []),
+      count: jest.fn(async () => 2),
       update: jest.fn(async ({ data }: any) => ({ id: "m1", ...data })),
       delete: jest.fn(async () => ({})),
     },
@@ -120,6 +121,19 @@ describe("TenantsService", () => {
       expect.anything(),
       expect.objectContaining({ eventType: "tenant.member.role-updated" }),
     );
+  });
+
+  it("refuses to remove the last organiser of a tenant", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenantMember.count.mockResolvedValueOnce(1); // only one organiser left
+    await expect(svc.removeMember("t1", "u1")).rejects.toThrow();
+  });
+
+  it("deleteTenant soft-deletes (sets deletedAt)", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenant.update = jest.fn(async () => ({ id: "t1" }));
+    await svc.deleteTenant("t1");
+    expect(prisma.tenant.update).toHaveBeenCalledWith({ where: { id: "t1" }, data: { deletedAt: expect.any(Date) } });
   });
 
   it("isSlugAvailable reports availability (normalised)", async () => {

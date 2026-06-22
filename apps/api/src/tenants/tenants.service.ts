@@ -141,11 +141,26 @@ export class TenantsService {
     });
   }
 
+  /** Guard: a tenant must keep at least one ORGANISER (owner-equivalent). */
+  private async assertNotLastOrganiser(tenantId: string, userId: string): Promise<void> {
+    const member = await this.prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+    });
+    if (member?.role !== AppUserRole.ORGANISER) return;
+    const organisers = await this.prisma.tenantMember.count({
+      where: { tenantId, role: AppUserRole.ORGANISER },
+    });
+    if (organisers <= 1) throw new BadRequestException("Cannot remove or demote the last organiser of a tenant");
+  }
+
   async updateMemberRole(tenantId: string, userId: string, role: AppUserRole): Promise<TenantMember> {
     const existing = await this.prisma.tenantMember.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
+    if (existing.role === AppUserRole.ORGANISER && role !== AppUserRole.ORGANISER) {
+      await this.assertNotLastOrganiser(tenantId, userId);
+    }
     return this.prisma.$transaction(async (tx) => {
       const member = await tx.tenantMember.update({
         where: { tenantId_userId: { tenantId, userId } },
@@ -166,6 +181,7 @@ export class TenantsService {
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
+    await this.assertNotLastOrganiser(tenantId, userId);
     await this.prisma.$transaction(async (tx) => {
       await tx.tenantMember.delete({ where: { tenantId_userId: { tenantId, userId } } });
       await this.outbox.append(tx, {
@@ -249,5 +265,38 @@ export class TenantsService {
       });
       return network;
     });
+  }
+
+  async getNetwork(id: string): Promise<Network> {
+    const network = await this.prisma.network.findUnique({ where: { id } });
+    if (!network) throw new NotFoundException("Network not found");
+    return network;
+  }
+
+  async listTenantsByNetwork(networkId: string): Promise<Tenant[]> {
+    await this.getNetwork(networkId);
+    return this.prisma.tenant.findMany({ where: { networkId, deletedAt: null }, orderBy: { createdAt: "asc" } });
+  }
+
+  /** Write plan/status onto the Network (the billing boundary) — prog UpdateNetworkBilling. */
+  async updateNetworkBilling(
+    id: string,
+    input: { planName?: string | null; subscriptionStatus?: string | null },
+  ): Promise<Network> {
+    await this.getNetwork(id);
+    return this.prisma.network.update({
+      where: { id },
+      data: {
+        ...(input.planName !== undefined ? { planName: input.planName } : {}),
+        ...(input.subscriptionStatus !== undefined ? { subscriptionStatus: input.subscriptionStatus } : {}),
+      },
+    });
+  }
+
+  // ── Soft delete (prog DeleteTenant) ──────────────────────────────────
+  async deleteTenant(id: string): Promise<{ ok: true }> {
+    await this.getTenant(id); // 404s if already deleted
+    await this.prisma.tenant.update({ where: { id }, data: { deletedAt: new Date() } });
+    return { ok: true };
   }
 }

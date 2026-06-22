@@ -18,7 +18,10 @@ export class AuthController {
     // BasicAuthGuard attaches the principal. Frontends read this to learn the
     // user's id + active role/tenant and whether to offer tenant selection.
     if (!req.user) return { ok: true, user: null };
-    const memberships = await this.flows.membershipsFor(req.user.id);
+    const [memberships, flags] = await Promise.all([
+      this.flows.membershipsFor(req.user.id),
+      this.flows.userFlags(req.user.id),
+    ]);
     return {
       ok: true,
       user: {
@@ -27,6 +30,7 @@ export class AuthController {
         tenantId: req.user.tenantId,
         email: req.user.email ?? null,
         memberships,
+        ...flags,
       },
     };
   }

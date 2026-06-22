@@ -49,8 +49,9 @@ function setup() {
   const config = { get: jest.fn((k: string, fb?: string) => (k === "AUTH_APP_URL" ? "https://auth.test" : fb ?? "")) } as any;
   const dispatcher = { sendEmail: jest.fn(), sendSms: jest.fn() } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const svc = new IamFlowsService(prisma, sessions, config, dispatcher, logger);
-  return { svc, prisma, sessions, dispatcher };
+  const outbox = { append: jest.fn() } as any;
+  const svc = new IamFlowsService(prisma, sessions, config, dispatcher, logger, outbox);
+  return { svc, prisma, sessions, dispatcher, outbox };
 }
 
 describe("IamFlowsService", () => {
@@ -179,6 +180,27 @@ describe("IamFlowsService", () => {
         id: "mv1", userId: "u1", code: "123456", verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
       });
       await expect(svc.verify2fa("mv1", "999999")).rejects.toThrow();
+    });
+  });
+
+  describe("2FA enrolment + mobile capture", () => {
+    it("setMobile rejects a non-E.164 number", async () => {
+      const { svc } = setup();
+      await expect(svc.setMobile("u1", "0400 000 000")).rejects.toThrow();
+    });
+
+    it("enable2fa requires a verified mobile", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobileVerified: false });
+      await expect(svc.enable2fa("u1")).rejects.toThrow();
+    });
+
+    it("enable2fa flips twofaEnabled when the mobile is verified", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobileVerified: true });
+      prisma.user.update = jest.fn(async () => ({}));
+      await svc.enable2fa("u1");
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: "u1" }, data: { twofaEnabled: true } });
     });
   });
 
