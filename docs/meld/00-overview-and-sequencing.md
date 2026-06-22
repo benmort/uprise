@@ -70,7 +70,7 @@ Transport = **BullMQ** (yarns already depends on it; one in-process consumer mea
 | 04 | `04-auth-and-permissions.md` | `@yarns/permissions` CASL, role taxonomy, SessionAuthGuard + AbilityGuard. |
 | 05 | `05-outbox-and-reactions.md` | OutboxEvent/ReactionDedup, relay loop, domain-events queue, ReactionsModule, `@yarns/events`. |
 | 06 | `06-transactional-messaging.md` | **Priority.** MessageKind, transactional SMS path, TRANSACTIONAL_DISPATCHER seam. |
-| 07 | `07-email-domain.md` | Net-new email domain, SendGrid, webhook. |
+| 07 | `07-email-domain.md` | **Transactional email** (consent-exempt, via `TRANSACTIONAL_DISPATCHER.sendEmail`) — email counterpart of doc 06. SendGrid, `EmailStatus` FSM, webhook. Marketing email is future/separate. |
 | 08 | `08-payment-domain.md` | Net-new payment domain, Stripe, webhook. |
 | 09 | `09-telephony-voice-calls.md` | Net-new voice Call domain. |
 | 10 | `10-audience-foldin.md` | Person/source-record/dynamic-segment fold-in. |

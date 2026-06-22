@@ -26,6 +26,13 @@ export interface SendGridEvent {
   [key: string]: unknown;
 }
 
+/**
+ * Transactional email (meld doc 07) — the email counterpart of TransactionalMessagingService
+ * (transactional SMS, doc 06). Like that service, it DELIBERATELY takes no
+ * consent/compliance/suppression dependency: a verification code, magic-link, or
+ * receipt is legally service mail and must always send. Marketing/bulk email is a
+ * separate future domain (the email analogue of blasts).
+ */
 @Injectable()
 export class EmailService {
   constructor(

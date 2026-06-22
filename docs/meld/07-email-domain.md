@@ -1,6 +1,20 @@
-# 07 – Email Domain (net-new)
+# 07 – Transactional Email (net-new)
 
-M1. Net-new email domain – nothing comparable exists in yarns. Provides transactional email (magic-link, verification, receipts) and bulk/newsletter sends.
+M1. The email counterpart of transactional SMS (doc 06). Net-new email domain providing **transactional email** — verification codes, magic-links, password-reset, receipts, invitations. Nothing comparable exists in yarns.
+
+## Parity with transactional SMS (doc 06)
+
+Transactional email is the same class of message as transactional SMS, on the email channel:
+
+| | Transactional SMS (doc 06) | Transactional email (this doc) |
+|---|---|---|
+| Consent/compliance/suppression | **bypassed** (consent-exempt) | **bypassed** (consent-exempt) |
+| Dispatcher seam | `TRANSACTIONAL_DISPATCHER.sendSms` | `TRANSACTIONAL_DISPATCHER.sendEmail` |
+| Sender | `TWILIO_TRANSACTIONAL_FROM` | `SENDGRID_FROM_EMAIL` |
+| Lifecycle FSM | `TxSmsStatus` | `EmailStatus` |
+| Ledger | `OutboundMessage` (kind=TRANSACTIONAL) | `Email` |
+
+**Invariant** (same as transactional SMS): transactional email is legally service mail — it MUST reach the recipient regardless of any marketing-consent state, with no opt-out footer. `EmailService` takes no consent/compliance/suppression dependency. Marketing/newsletter email is a **separate, future** concern (the email analogue of blasts) and is out of scope here — this domain is transactional-only.
 
 Source: `/Users/benjaminmort/code/prog/core-orchestration/apps/platform/src/services/email/*` (`email-message.aggregate.ts`, `templates.ts`, `process-webhook.handler.ts`, `SendGridAdapter`).
 
@@ -52,7 +66,7 @@ model EmailTemplate {
 - `email-templates.ts` – seed the prog template keys: `welcome`, `magic_link`, `verification`, `invitation`, `recovery`, `contact_form`, `demo_request`, `newsletter`.
 - `email-state.machine.ts` – FSM guard.
 
-Transactional emails (magic-link, verification, receipts) are called via `TransactionalDispatcher.sendEmail` (doc 06) and sent inline. Bulk/newsletter sends go through the `email-send` worker queue.
+Transactional emails (magic-link, verification, receipts) are called via `TransactionalDispatcher.sendEmail` (doc 06) and sent **inline** (no queue — like a 2FA code, they're time-sensitive and single-recipient). Bulk/marketing email is out of scope (a future, separate domain).
 
 ## Webhook – `/email-webhook`
 
@@ -64,7 +78,7 @@ Port `process-webhook.handler.ts` verbatim onto yarns' webhook controller (doc 1
 
 ## Worker queue
 
-`email-send` (bulk/newsletter). Add `EmailService.processEmailSendJob` mirroring `BlastsService.processBlastSendQueueJob`. Transactional sends do not queue.
+None — transactional email is sent inline (like transactional SMS). An `email-send` bulk queue belongs to the future marketing-email domain, not here.
 
 ## Verification
 
