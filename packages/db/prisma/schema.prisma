@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events"]
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops"]
 }
 
 enum AudienceStatus {
@@ -1202,4 +1202,64 @@ model ReactionDedup {
 
   @@unique([source, eventId])
   @@schema("events")
+}
+
+// ── Email domain (meld doc 07) ───────────────────────────────────────────────
+enum EmailStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  BOUNCED
+  FAILED
+  @@schema("email")
+}
+
+model Email {
+  id                String      @id @default(cuid())
+  tenantId          String
+  contactId         String?
+  toAddress         String
+  subject           String
+  status            EmailStatus @default(QUEUED)
+  providerMessageId String?
+  templateKey       String?
+  purpose           String?
+  openedAt          DateTime?   // first-write-wins, NOT a status
+  clickedAt         DateTime?   // first-write-wins, NOT a status
+  bounceReason      String?
+  errorMessage      String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([tenantId, status])
+  @@index([providerMessageId])
+  @@schema("email")
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  subject   String
+  body      String   @db.Text
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, key])
+  @@schema("email")
+}
+
+// ── Provider webhook idempotency (meld doc 12) ───────────────────────────────
+// One claim per (provider, eventId): claim-before-act dedup for SendGrid/Stripe/
+// Twilio webhooks. A lost claim means the event was already processed.
+model WebhookEvent {
+  id         String   @id @default(cuid())
+  provider   String
+  eventId    String
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@schema("ops")
 }

@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { MessageKind, TxSmsStatus } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { TwilioService } from "../twilio/twilio.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
+import { EmailService } from "../email/email.service";
 import { assertValidTxSmsTransition } from "./tx-sms-state.machine";
 import type {
   TransactionalDispatcher,
@@ -27,6 +28,7 @@ export class TransactionalMessagingService implements TransactionalDispatcher {
     private readonly outbox: OutboxService,
     private readonly config: ConfigService,
     private readonly logger: DomainLogger,
+    @Optional() private readonly email?: EmailService,
   ) {}
 
   private transactionalFrom(): string {
@@ -106,9 +108,16 @@ export class TransactionalMessagingService implements TransactionalDispatcher {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async sendEmail(_input: TransactionalEmailInput): Promise<void> {
-    // Transactional email dispatch is wired when the email domain lands (doc 07).
-    throw new BadRequestException("Transactional email dispatch is not yet available (meld doc 07)");
+  async sendEmail(input: TransactionalEmailInput): Promise<void> {
+    if (!this.email) {
+      throw new BadRequestException("Transactional email dispatch is unavailable (email domain not loaded)");
+    }
+    await this.email.sendTransactional({
+      tenantId: input.tenantId,
+      toAddress: input.toAddress,
+      templateKey: input.templateKey,
+      vars: input.vars,
+      purpose: input.purpose,
+    });
   }
 }

@@ -16,8 +16,9 @@ function setup() {
       key === "TWILIO_TRANSACTIONAL_FROM" ? "+15550000000" : dflt ?? undefined,
   } as any;
   const logger = { error: jest.fn() } as any;
-  const svc = new TransactionalMessagingService(prisma, twilio, outbox, config, logger);
-  return { svc, prisma, twilio, outbox };
+  const email = { sendTransactional: jest.fn(async () => ({ id: "em1" })) } as any;
+  const svc = new TransactionalMessagingService(prisma, twilio, outbox, config, logger, email);
+  return { svc, prisma, twilio, outbox, email };
 }
 
 describe("TransactionalMessagingService", () => {
@@ -53,8 +54,9 @@ describe("TransactionalMessagingService", () => {
   });
 
   it("the service takes no consent/compliance dependency (constructor arity)", () => {
-    // 5 deps: prisma, twilio, outbox, config, logger — and nothing else.
-    expect(TransactionalMessagingService.length).toBe(5);
+    // 6 deps: prisma, twilio, outbox, config, logger, email — and notably NOT
+    // ConsentService/ComplianceService/suppression. Guards against re-introducing them.
+    expect(TransactionalMessagingService.length).toBe(6);
   });
 
   it("resolves + renders a template body with vars", async () => {
@@ -88,10 +90,11 @@ describe("TransactionalMessagingService", () => {
     );
   });
 
-  it("rejects transactional email until the email domain lands (doc 07)", async () => {
-    const { svc } = setup();
-    await expect(
-      svc.sendEmail({ tenantId: "t1", toAddress: "a@b.c", templateKey: "verification", purpose: "x" }),
-    ).rejects.toThrow();
+  it("delegates transactional email to the email service", async () => {
+    const { svc, email } = setup();
+    await svc.sendEmail({ tenantId: "t1", toAddress: "a@b.c", templateKey: "verification", vars: { code: "123" }, purpose: "2fa" });
+    expect(email.sendTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: "t1", toAddress: "a@b.c", templateKey: "verification", purpose: "2fa" }),
+    );
   });
 });

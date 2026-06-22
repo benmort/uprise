@@ -11,6 +11,7 @@ import { Request } from "express";
 import twilio from "twilio";
 import { InboxService } from "../inbox/inbox.service";
 import { BlastsService } from "../blasts/blasts.service";
+import { EmailService, type SendGridEvent } from "../email/email.service";
 import { parseChannelAddress } from "../messaging/message-channel.util";
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
@@ -21,7 +22,28 @@ export class WebhooksController {
     private readonly config: ConfigService,
     private readonly inbox: InboxService,
     private readonly blasts: BlastsService,
+    private readonly email: EmailService,
   ) {}
+
+  /**
+   * SendGrid event webhook (delivered/bounce/dropped/open/click). Public (the
+   * guard allowlists it); optionally gated by a shared secret. Per-event
+   * idempotency + status transitions live in EmailService.
+   */
+  @Post("email-webhook")
+  async emailWebhook(
+    @Body() body: SendGridEvent[] | SendGridEvent,
+    @Req() req: Request,
+  ): Promise<{ ok: true }> {
+    const secret = this.config.get<string>("SENDGRID_WEBHOOK_SECRET", "").trim();
+    if (secret) {
+      const provided = (req.headers["x-webhook-secret"] as string) ?? "";
+      if (provided !== secret) throw new UnauthorizedException("Invalid SendGrid webhook secret");
+    }
+    const events = Array.isArray(body) ? body : [body];
+    await this.email.processSendGridEvents(events);
+    return { ok: true };
+  }
 
   private validateTwilioSignature(req: Request, body: Record<string, unknown>) {
     const authToken = this.config.get<string>("TWILIO_AUTH_TOKEN");
