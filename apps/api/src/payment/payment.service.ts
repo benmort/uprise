@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { PaymentStatus, PaymentType } from "@yarns/db";
+import { PaymentStatus, PaymentType, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
@@ -114,27 +114,34 @@ export class PaymentService {
         ? PaymentStatus.REFUNDED
         : PaymentStatus.PARTIALLY_REFUNDED;
     assertValidPaymentTransition(payment.status, nextStatus);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.payment.update({
-        where: { id: paymentId },
-        data: { status: nextStatus, refundedCents: { increment: amountCents } },
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: { status: nextStatus, refundedCents: { increment: amountCents } },
+        });
+        await tx.refund.create({
+          data: {
+            paymentId,
+            amountCents,
+            status: "succeeded",
+            processorRefundId: opts.processorRefundId ?? null,
+            reason: opts.reason ?? null,
+          },
+        });
+        await this.outbox.append(tx, {
+          tenantId: payment.tenantId,
+          eventType: "payment.payment.refunded",
+          aggregateId: paymentId,
+          payload: { paymentId, tenantId: payment.tenantId, amountCents },
+        });
       });
-      await tx.refund.create({
-        data: {
-          paymentId,
-          amountCents,
-          status: "succeeded",
-          processorRefundId: opts.processorRefundId ?? null,
-          reason: opts.reason ?? null,
-        },
-      });
-      await this.outbox.append(tx, {
-        tenantId: payment.tenantId,
-        eventType: "payment.payment.refunded",
-        aggregateId: paymentId,
-        payload: { paymentId, tenantId: payment.tenantId, amountCents },
-      });
-    });
+    } catch (err) {
+      // Duplicate (paymentId, processorRefundId) → this refund is already
+      // recorded; the transaction rolled back, so it's an idempotent no-op.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
+      throw err;
+    }
   }
 
   // ── Stripe webhook processing ───────────────────────────────────────
@@ -144,6 +151,30 @@ export class PaymentService {
 
   async processStripeEvent(event: StripeEvent): Promise<void> {
     if (!(await this.webhookEvents.claim("stripe", event.id))) return; // duplicate
+    try {
+      await this.dispatchStripeEvent(event);
+    } catch (err) {
+      // Release the claim so the provider's retry reprocesses — otherwise a
+      // transient/ordering error (e.g. charge.refunded before the succeeded
+      // event) would silently lose the event. Critical for money.
+      await this.webhookEvents.release("stripe", event.id);
+      throw err;
+    }
+  }
+
+  /** Resolve the owning tenant: explicit metadata, else via the Customer projection. */
+  private async resolveTenantId(object: Record<string, any>): Promise<string | null> {
+    if (object.metadata?.tenantId) return String(object.metadata.tenantId);
+    if (object.customer) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { providerCustomerId: String(object.customer) },
+      });
+      if (customer?.tenantId) return customer.tenantId;
+    }
+    return null;
+  }
+
+  private async dispatchStripeEvent(event: StripeEvent): Promise<void> {
     const object = event.data?.object ?? {};
     switch (event.type) {
       case "payment_intent.processing": {
@@ -153,17 +184,26 @@ export class PaymentService {
       }
       case "payment_intent.succeeded": {
         let payment = object.id ? await this.resolveByProvider(object.id) : null;
-        if (!payment && object.metadata?.tenantId) {
+        if (!payment) {
+          const tenantId = await this.resolveTenantId(object);
+          if (!tenantId) {
+            // Don't silently drop a real payment — make it auditable.
+            this.logger.error("payment", "payment_intent.succeeded with no resolvable tenant — NOT recorded", undefined, {
+              eventId: event.id,
+              providerPaymentId: object.id,
+            });
+            return;
+          }
           payment = await this.recordPayment({
-            tenantId: String(object.metadata.tenantId),
-            amountCents: Number(object.amount ?? object.amount_received ?? 0),
+            tenantId,
+            amountCents: Number(object.amount_received ?? object.amount ?? 0),
             currency: String(object.currency ?? "AUD"),
             type: PaymentType.ONE_TIME,
             providerPaymentId: String(object.id),
             customerRef: object.customer ? String(object.customer) : undefined,
           });
         }
-        if (payment) await this.markSucceeded(payment.id);
+        await this.markSucceeded(payment.id);
         break;
       }
       case "payment_intent.payment_failed": {
@@ -177,34 +217,46 @@ export class PaymentService {
         if (payment) {
           const refundedTotal = Number(object.amount_refunded ?? 0);
           const delta = refundedTotal - payment.refundedCents;
-          if (delta > 0) await this.refund(payment.id, delta, { processorRefundId: object.id ? String(object.id) : undefined });
+          if (delta > 0) {
+            await this.refund(payment.id, delta, {
+              processorRefundId: object.id ? String(object.id) : undefined,
+            });
+          }
         }
         break;
       }
       case "customer.subscription.created":
       case "customer.subscription.updated":
-      case "customer.subscription.deleted":
-        if (object.metadata?.tenantId && object.id) {
+      case "customer.subscription.deleted": {
+        const tenantId = await this.resolveTenantId(object);
+        if (tenantId && object.id) {
           await this.billing.projectSubscription({
-            tenantId: String(object.metadata.tenantId),
+            tenantId,
             providerSubscriptionId: String(object.id),
             status: String(object.status ?? "unknown"),
             planName: object.items?.data?.[0]?.price?.nickname ?? null,
             currentPeriodEnd: object.current_period_end ? new Date(Number(object.current_period_end) * 1000) : null,
           });
+        } else {
+          this.logger.error("payment", "subscription event with no resolvable tenant — skipped", undefined, { eventId: event.id });
         }
         break;
-      case "invoice.paid":
-        if (object.metadata?.tenantId && object.id) {
+      }
+      case "invoice.paid": {
+        const tenantId = await this.resolveTenantId(object);
+        if (tenantId && object.id) {
           await this.billing.projectInvoice({
-            tenantId: String(object.metadata.tenantId),
+            tenantId,
             providerInvoiceId: String(object.id),
             status: String(object.status ?? "paid"),
             amountCents: Number(object.amount_paid ?? object.total ?? 0),
             currency: String(object.currency ?? "AUD"),
           });
+        } else {
+          this.logger.error("payment", "invoice.paid with no resolvable tenant — skipped", undefined, { eventId: event.id });
         }
         break;
+      }
       case "customer.created":
       case "customer.updated":
         if (object.id) {

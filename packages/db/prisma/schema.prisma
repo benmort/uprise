@@ -1315,6 +1315,10 @@ model Refund {
   createdAt         DateTime @default(now())
   payment           Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
+  // One refund row per (payment, provider refund id) — blocks duplicate refunds
+  // from replayed/concurrent webhook events. NULL processorRefundId (manual
+  // refunds) stays distinct, so multiple manual refunds per payment are allowed.
+  @@unique([paymentId, processorRefundId])
   @@index([paymentId])
   @@schema("payment")
 }

@@ -11,6 +11,9 @@ describe("payment state machine", () => {
     [PaymentStatus.SUCCEEDED, PaymentStatus.REFUNDED],
     [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED],
     [PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.REFUNDED],
+    // Stripe supports unlimited partial refunds, so a second non-completing
+    // partial is allowed (deliberate deviation from prog's stricter FSM).
+    [PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.PARTIALLY_REFUNDED],
   ])("allows %s → %s", (from, to) => {
     expect(() => assertValidPaymentTransition(from, to)).not.toThrow();
   });
@@ -18,7 +21,6 @@ describe("payment state machine", () => {
   it.each([
     [PaymentStatus.RECORDED, PaymentStatus.REFUNDED],
     [PaymentStatus.SUCCEEDED, PaymentStatus.PROCESSING],
-    [PaymentStatus.PARTIALLY_REFUNDED, PaymentStatus.PARTIALLY_REFUNDED], // prog: no second non-completing partial
     [PaymentStatus.FAILED, PaymentStatus.SUCCEEDED],
     [PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED],
   ])("rejects %s → %s", (from, to) => {

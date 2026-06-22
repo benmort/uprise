@@ -9,12 +9,13 @@ function setup(paymentRow?: any) {
       update: jest.fn(async () => ({})),
     },
     refund: { create: jest.fn() },
+    customer: { findUnique: jest.fn(async () => null) },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const outbox = { append: jest.fn() } as any;
-  const webhookEvents = { claim: jest.fn(async () => true) } as any;
+  const webhookEvents = { claim: jest.fn(async () => true), release: jest.fn() } as any;
   const billing = { projectSubscription: jest.fn(), projectInvoice: jest.fn(), projectCustomer: jest.fn() } as any;
-  const logger = { debug: jest.fn() } as any;
+  const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
   const svc = new PaymentService(prisma, outbox, webhookEvents, billing, logger);
   return { svc, prisma, outbox, webhookEvents, billing };
 }
@@ -87,9 +88,37 @@ describe("PaymentService", () => {
     );
   });
 
-  it("a second NON-completing partial refund is rejected (prog FSM)", async () => {
-    const { svc } = setup({ id: "p1", status: "PARTIALLY_REFUNDED", amountCents: 1000, refundedCents: 400, tenantId: "t1" });
-    await expect(svc.refund("p1", 300)).rejects.toThrow();
+  it("a second NON-completing partial refund is allowed (Stripe supports unlimited partials)", async () => {
+    const { svc, prisma } = setup({ id: "p1", status: "PARTIALLY_REFUNDED", amountCents: 1000, refundedCents: 400, tenantId: "t1" });
+    await svc.refund("p1", 300);
+    expect(prisma.payment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "PARTIALLY_REFUNDED" }) }),
+    );
+  });
+
+  it("refund is idempotent on a duplicate (P2002) — no double-count, no throw", async () => {
+    const { svc, prisma } = setup({ id: "p1", status: "SUCCEEDED", amountCents: 1000, refundedCents: 0, tenantId: "t1" });
+    const { Prisma } = require("@yarns/db");
+    prisma.$transaction.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "6.19.3" }),
+    );
+    await expect(svc.refund("p1", 500, { processorRefundId: "re_dup" })).resolves.toBeUndefined();
+  });
+
+  it("processStripeEvent releases the claim when a handler throws (so the retry reprocesses)", async () => {
+    const { svc, prisma, webhookEvents } = setup({ id: "p1", status: "PROCESSING", amountCents: 1000, refundedCents: 0, tenantId: "t1", providerPaymentId: "pi_1" });
+    webhookEvents.release = jest.fn();
+    // charge.refunded on a PROCESSING payment → refund() FSM-throws → claim released + rethrown.
+    await expect(
+      svc.processStripeEvent({ id: "evt_x", type: "charge.refunded", data: { object: { id: "ch", payment_intent: "pi_1", amount_refunded: 500 } } }),
+    ).rejects.toThrow();
+    expect(webhookEvents.release).toHaveBeenCalledWith("stripe", "evt_x");
+  });
+
+  it("processStripeEvent does NOT record a payment with no resolvable tenant (logs instead)", async () => {
+    const { svc, prisma } = setup(null); // resolveByProvider → null; no metadata.tenantId, no customer
+    await svc.processStripeEvent({ id: "evt_y", type: "payment_intent.succeeded", data: { object: { id: "pi_x", amount: 1000, currency: "aud" } } });
+    expect(prisma.payment.create).not.toHaveBeenCalled();
   });
 
   it("processStripeEvent skips a duplicate (claim=false)", async () => {

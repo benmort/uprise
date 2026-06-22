@@ -21,4 +21,14 @@ export class WebhookEventService {
       throw err;
     }
   }
+
+  /**
+   * Release a claim so a failed event is reprocessed on the provider's retry.
+   * Call this if processing throws AFTER a successful claim — otherwise the event
+   * is marked processed but never applied (a silent loss, critical for payments).
+   */
+  async release(provider: string, eventId: string): Promise<void> {
+    if (!eventId) return;
+    await this.prisma.webhookEvent.deleteMany({ where: { provider, eventId } });
+  }
 }

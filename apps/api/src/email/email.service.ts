@@ -141,8 +141,20 @@ export class EmailService {
     for (const event of events) {
       const eventId = event.sg_event_id ?? "";
       if (eventId && !(await this.webhookEvents.claim("sendgrid", eventId))) continue; // duplicate
+      try {
+        await this.applySendGridEvent(event);
+      } catch (err) {
+        // Release the claim so SendGrid's retry reprocesses this event.
+        await this.webhookEvents.release("sendgrid", eventId);
+        throw err;
+      }
+    }
+  }
+
+  private async applySendGridEvent(event: SendGridEvent): Promise<void> {
+    {
       const email = await this.resolveEmail(event);
-      if (!email) continue;
+      if (!email) return;
       switch (event.event) {
         case "delivered":
           await this.transition(email.id, email.status, EmailStatus.DELIVERED);

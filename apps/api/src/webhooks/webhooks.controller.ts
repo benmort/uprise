@@ -37,16 +37,16 @@ export class WebhooksController {
    */
   @Post("payment-webhook")
   async paymentWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ ok: true }> {
+    // Signature verification is MANDATORY — an unsigned/forged event could trigger
+    // refunds or mark payments succeeded. Require the secret + the raw body.
     const secret = this.config.get<string>("STRIPE_WEBHOOK_SECRET", "").trim();
+    if (!secret) throw new UnauthorizedException("STRIPE_WEBHOOK_SECRET is not configured");
     const raw = req.rawBody?.toString("utf8") ?? "";
-    if (secret) {
-      const sig = (req.headers["stripe-signature"] as string) ?? "";
-      if (!raw || !this.stripe.verifyWebhookSignature(raw, sig)) {
-        throw new UnauthorizedException("Invalid Stripe signature");
-      }
+    const sig = (req.headers["stripe-signature"] as string) ?? "";
+    if (!raw || !this.stripe.verifyWebhookSignature(raw, sig)) {
+      throw new UnauthorizedException("Invalid Stripe signature");
     }
-    const event = (raw ? JSON.parse(raw) : (req.body as unknown)) as StripeEvent;
-    await this.payment.processStripeEvent(event);
+    await this.payment.processStripeEvent(JSON.parse(raw) as StripeEvent);
     return { ok: true };
   }
 

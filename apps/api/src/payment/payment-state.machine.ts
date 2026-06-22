@@ -1,14 +1,15 @@
 import { PaymentStatus } from "@yarns/db";
 import { assertTransition, type TransitionMap } from "../common/fsm/assert-transition";
 
-// Faithful port of prog's payment aggregate STATUS_TRANSITIONS.
-// Note: partially_refunded only → refunded (a second non-completing partial is
-// rejected) — matching prog exactly.
+// Based on prog's payment aggregate, with one deliberate deviation: prog forbade
+// partially_refunded → partially_refunded, but Stripe supports unlimited partial
+// refunds, so a real second partial would deadlock. We allow the self-transition
+// (a non-completing partial) and reserve → refunded for the completing one.
 export const PAYMENT_TRANSITIONS: TransitionMap<PaymentStatus> = {
   [PaymentStatus.RECORDED]: [PaymentStatus.PROCESSING, PaymentStatus.SUCCEEDED, PaymentStatus.FAILED],
   [PaymentStatus.PROCESSING]: [PaymentStatus.SUCCEEDED, PaymentStatus.FAILED],
   [PaymentStatus.SUCCEEDED]: [PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED],
-  [PaymentStatus.PARTIALLY_REFUNDED]: [PaymentStatus.REFUNDED],
+  [PaymentStatus.PARTIALLY_REFUNDED]: [PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED],
   [PaymentStatus.FAILED]: [],
   [PaymentStatus.REFUNDED]: [],
 };
