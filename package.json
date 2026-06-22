@@ -3,13 +3,16 @@
   "private": true,
   "scripts": {
     "dev:all": "pnpm -r --parallel run dev",
+    "dev:api": "pnpm --filter api run dev",
+    "dev:web": "pnpm --filter web run dev",
+    "dev:auth": "pnpm --filter auth run dev",
     "dev:worker": "pnpm --filter worker run dev",
     "load:queue-dispatch": "node scripts/load/queue-dispatch-load.mjs",
     "shadow:compare-queues": "node scripts/shadow/compare-queue-outcomes.mjs",
-    "lint": "pnpm --filter api run lint && pnpm --filter web run lint && pnpm --filter worker run lint",
-    "typecheck": "pnpm --filter api run typecheck && pnpm --filter web run typecheck && pnpm --filter worker run typecheck",
-    "test": "pnpm --filter api run test && pnpm --filter web run test",
-    "build": "pnpm --filter api run build && pnpm --filter web run build && pnpm --filter worker run build"
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "build": "pnpm -r run build"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
