@@ -13,7 +13,7 @@ export class AnalyticsService {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -109,7 +109,7 @@ export class AnalyticsService {
     const [totalContacted, totalSent, totalResponded, activeDrafts] = await Promise.all([
       this.prisma.blastRecipient.count({
         where: {
-          blast: { organizationId: org.id },
+          blast: { tenantId: org.id },
           ...ch,
           status: {
             in: [
@@ -122,14 +122,14 @@ export class AnalyticsService {
         },
       }),
       this.prisma.blastRecipient.count({
-        where: { blast: { organizationId: org.id }, ...ch, status: BlastRecipientStatus.SENT },
+        where: { blast: { tenantId: org.id }, ...ch, status: BlastRecipientStatus.SENT },
       }),
       this.prisma.blastRecipient.count({
-        where: { blast: { organizationId: org.id }, ...ch, status: BlastRecipientStatus.RESPONDED },
+        where: { blast: { tenantId: org.id }, ...ch, status: BlastRecipientStatus.RESPONDED },
       }),
       this.prisma.blast.count({
         where: {
-          organizationId: org.id,
+          tenantId: org.id,
           ...ch,
           status: { in: ["DRAFTED", "PROOFED", "SCHEDULED"] },
         },
@@ -149,7 +149,7 @@ export class AnalyticsService {
   async recentBlasts(limit = 20, channel?: string | null) {
     const org = await this.ensureOrganization();
     const blasts = await this.prisma.blast.findMany({
-      where: { organizationId: org.id, ...this.channelFilter(channel) },
+      where: { tenantId: org.id, ...this.channelFilter(channel) },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
       include: {

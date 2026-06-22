@@ -219,8 +219,16 @@ describe("BasicAuthGuard", () => {
           return undefined;
         },
       } as ConfigService;
+      // Identity (User) and membership (TenantMember) are separate tables now.
       const prisma = {
-        appUser: { findUnique: async ({ where }: any) => users[where.email] ?? null },
+        user: { findUnique: async ({ where }: any) => users[where.email] ?? null },
+        tenantMember: {
+          findFirst: async ({ where }: any) => {
+            const u = Object.values(users).find((x: any) => x.id === where.userId) as any;
+            // A fixture without `tenantId` models a user with no membership.
+            return u && u.tenantId ? { tenantId: u.tenantId, role: u.role } : null;
+          },
+        },
       } as any;
       return new BasicAuthGuard(config, prisma);
     }
@@ -228,23 +236,36 @@ describe("BasicAuthGuard", () => {
     it("authenticates a canvasser and attaches their role + org", async () => {
       const passwordHash = await hashPassword("walkfast");
       const guard = createGuardWithUsers({
-        "canv@org.au": { id: "u1", role: "CANVASSER", organizationId: "org1", email: "canv@org.au", passwordHash },
+        "canv@org.au": { id: "u1", role: "CANVASSER", tenantId: "org1", email: "canv@org.au", passwordHash },
       });
       const token = Buffer.from("canv@org.au:walkfast").toString("base64");
       const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
       const result = await guard.canActivate(contextSharing(request));
       expect(result).toBe(true);
       expect(request.user).toEqual(
-        expect.objectContaining({ id: "u1", role: "CANVASSER", organizationId: "org1" }),
+        expect.objectContaining({ id: "u1", role: "CANVASSER", tenantId: "org1" }),
       );
     });
 
     it("rejects a wrong AppUser password", async () => {
       const passwordHash = await hashPassword("walkfast");
       const guard = createGuardWithUsers({
-        "canv@org.au": { id: "u1", role: "CANVASSER", organizationId: "org1", email: "canv@org.au", passwordHash },
+        "canv@org.au": { id: "u1", role: "CANVASSER", tenantId: "org1", email: "canv@org.au", passwordHash },
       });
       const token = Buffer.from("canv@org.au:wrong").toString("base64");
+      const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
+      await expect(guard.canActivate(contextSharing(request))).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it("rejects a valid password when the user has no tenant membership", async () => {
+      const passwordHash = await hashPassword("walkfast");
+      // No `tenantId` on the fixture → tenantMember.findFirst returns null.
+      const guard = createGuardWithUsers({
+        "orphan@org.au": { id: "u2", email: "orphan@org.au", passwordHash },
+      });
+      const token = Buffer.from("orphan@org.au:walkfast").toString("base64");
       const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
       await expect(guard.canActivate(contextSharing(request))).rejects.toThrow(
         UnauthorizedException,

@@ -16,7 +16,7 @@ export class AuthController {
     return {
       ok: true,
       user: req.user
-        ? { id: req.user.id, role: req.user.role, organizationId: req.user.organizationId }
+        ? { id: req.user.id, role: req.user.role, tenantId: req.user.tenantId }
         : null,
     };
   }

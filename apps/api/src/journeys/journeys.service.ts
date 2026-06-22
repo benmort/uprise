@@ -69,7 +69,7 @@ export class JourneysService implements JourneyTriggerPort {
   async handleTrigger(type: JourneyTriggerType, payload: JourneyTriggerPayload): Promise<void> {
     if (!this.isEnabled()) return;
     const journeys = await this.prisma.journey.findMany({
-      where: { organizationId: payload.organizationId, status: JourneyStatus.ACTIVE, triggerType: type },
+      where: { tenantId: payload.tenantId, status: JourneyStatus.ACTIVE, triggerType: type },
       include: { rungs: { orderBy: { rungIndex: "asc" }, take: 1 } },
     });
     for (const journey of journeys) {
@@ -101,7 +101,7 @@ export class JourneysService implements JourneyTriggerPort {
   }
 
   private async tryEnrol(
-    journey: { id: string; organizationId: string; reentryCooldownMinutes: number; maxActivePerContact: number },
+    journey: { id: string; tenantId: string; reentryCooldownMinutes: number; maxActivePerContact: number },
     payload: JourneyTriggerPayload,
   ): Promise<void> {
     const activeCount = await this.prisma.journeyEnrolment.count({
@@ -123,7 +123,7 @@ export class JourneysService implements JourneyTriggerPort {
 
     const enrolment = await this.prisma.journeyEnrolment.create({
       data: {
-        organizationId: journey.organizationId,
+        tenantId: journey.tenantId,
         journeyId: journey.id,
         contactId: payload.contactId,
         currentRungIndex: 0,
@@ -205,7 +205,7 @@ export class JourneysService implements JourneyTriggerPort {
     }
 
     if (rung.type === "condition") {
-      const pass = await this.evaluateCondition(enrolment.organizationId, enrolment.contactId, cfg);
+      const pass = await this.evaluateCondition(enrolment.tenantId, enrolment.contactId, cfg);
       if (!pass) {
         return this.finish(enrolment.id, JourneyEnrolmentState.EXITED);
       }
@@ -213,26 +213,26 @@ export class JourneysService implements JourneyTriggerPort {
     }
 
     // action
-    await this.executeAction(enrolment.organizationId, enrolment.contactId, cfg);
+    await this.executeAction(enrolment.tenantId, enrolment.contactId, cfg);
     return this.advanceOrComplete(enrolment.id, payload.rungIndex, enrolment.journey.rungs);
   }
 
   private async evaluateCondition(
-    organizationId: string,
+    tenantId: string,
     contactId: string,
     cfg: Record<string, unknown>,
   ): Promise<boolean> {
     switch (cfg.kind) {
       case "disposition": {
         const found = await this.prisma.disposition.findFirst({
-          where: { organizationId, contactId, ...(cfg.code ? { code: String(cfg.code) } : {}) },
+          where: { tenantId, contactId, ...(cfg.code ? { code: String(cfg.code) } : {}) },
         });
         return Boolean(found);
       }
       case "answered": {
         const found = await this.prisma.questionResponse.findFirst({
           where: {
-            organizationId,
+            tenantId,
             contactId,
             ...(cfg.questionId ? { questionId: String(cfg.questionId) } : {}),
           },
@@ -245,17 +245,17 @@ export class JourneysService implements JourneyTriggerPort {
   }
 
   private async executeAction(
-    organizationId: string,
+    tenantId: string,
     contactId: string,
     cfg: Record<string, unknown>,
   ): Promise<void> {
     switch (cfg.kind) {
       case "p2p_text":
-        await this.singleSend.sendToContact(organizationId, contactId, String(cfg.body ?? ""));
+        await this.singleSend.sendToContact(tenantId, contactId, String(cfg.body ?? ""));
         return;
       case "to_inbox":
         await this.prisma.conversationState.updateMany({
-          where: { organizationId, contactId },
+          where: { tenantId, contactId },
           data: { resolved: false },
         });
         this.events.emit("inbox.inbound", { contactId, source: "journey" });

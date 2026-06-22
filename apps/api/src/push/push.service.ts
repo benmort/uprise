@@ -33,12 +33,12 @@ export class PushService {
     return this.enabled;
   }
 
-  async subscribe(organizationId: string, userId: string | null, sub: PushSubscriptionInput) {
+  async subscribe(tenantId: string, userId: string | null, sub: PushSubscriptionInput) {
     return this.prisma.pushSubscription.upsert({
-      where: { organizationId_endpoint: { organizationId, endpoint: sub.endpoint } },
+      where: { tenantId_endpoint: { tenantId, endpoint: sub.endpoint } },
       update: { p256dh: sub.keys.p256dh, auth: sub.keys.auth, userId, userAgent: sub.userAgent ?? null },
       create: {
-        organizationId,
+        tenantId,
         userId,
         endpoint: sub.endpoint,
         p256dh: sub.keys.p256dh,
@@ -49,9 +49,9 @@ export class PushService {
   }
 
   /** Send a notification to every subscription in the org. Prunes dead (404/410) subs. */
-  async broadcast(organizationId: string, payload: { title: string; body: string; url?: string }) {
+  async broadcast(tenantId: string, payload: { title: string; body: string; url?: string }) {
     if (!this.enabled) return { sent: 0, pruned: 0, enabled: false };
-    const subs = await this.prisma.pushSubscription.findMany({ where: { organizationId } });
+    const subs = await this.prisma.pushSubscription.findMany({ where: { tenantId } });
     const body = JSON.stringify(payload);
     let sent = 0;
     const dead: string[] = [];

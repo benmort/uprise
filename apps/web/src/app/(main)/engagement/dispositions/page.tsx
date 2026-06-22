@@ -109,7 +109,7 @@ export default function DispositionsPage() {
     showToast({ tone: "success", title: "Deleted" });
   }, [deleteTarget, load, showToast]);
 
-  const editable = (d: DispositionDef) => !d.isLocked && d.organizationId !== null;
+  const editable = (d: DispositionDef) => !d.isLocked && d.tenantId !== null;
 
   return (
     <div className="page-stack">

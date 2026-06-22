@@ -3,7 +3,7 @@ import { AnalyticsService } from "./analytics.service";
 
 describe("AnalyticsService", () => {
   const prisma = {
-    organization: { upsert: jest.fn() },
+    tenant: { upsert: jest.fn() },
     blastRecipient: { count: jest.fn() },
   } as any;
   const config = {

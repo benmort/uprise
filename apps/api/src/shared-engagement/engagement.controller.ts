@@ -27,7 +27,7 @@ export class EngagementController {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},

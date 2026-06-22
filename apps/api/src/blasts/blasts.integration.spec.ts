@@ -56,27 +56,27 @@ describe("BlastsService integration-like flow", () => {
 
   it("creates and sends one recipient when audience includes duplicate phones", async () => {
     const prismaMock: any = {
-      organization: {
+      tenant: {
         upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
       },
       blast: {
         create: jest.fn().mockResolvedValue({
           id: "blast_1",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           bodyTemplate: "Hi {{first_name}}",
           status: "DRAFTED",
         }),
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_1",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           bodyTemplate: "Hi {{first_name}}",
           status: "PROOFED",
         }),
         update: jest.fn().mockImplementation(async ({ data }: { data: { status: string } }) => ({
           id: "blast_1",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           status: data.status,
           startedAt: new Date(),
@@ -171,13 +171,13 @@ describe("BlastsService integration-like flow", () => {
 
   it("skips duplicate pending recipients once a phone was already sent", async () => {
     const prismaMock: any = {
-      organization: {
+      tenant: {
         upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
       },
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_1",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           bodyTemplate: "Hi {{first_name}}",
           title: "Campaign",
@@ -188,7 +188,7 @@ describe("BlastsService integration-like flow", () => {
         }),
         update: jest.fn().mockImplementation(async ({ data }: { data: { status: string } }) => ({
           id: "blast_1",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           status: data.status,
           startedAt: new Date(),
@@ -412,7 +412,7 @@ describe("BlastsService integration-like flow", () => {
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_external",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           bodyTemplate: "Hi {{first_name}}",
           title: "Campaign",
@@ -488,7 +488,7 @@ describe("BlastsService integration-like flow", () => {
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_internal",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           bodyTemplate: "Hi {{first_name}}",
           title: "Campaign",
@@ -558,7 +558,7 @@ describe("BlastsService integration-like flow", () => {
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_unknown",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           bodyTemplate: "Hi {{first_name}}",
           title: "Campaign",
@@ -724,7 +724,7 @@ describe("BlastsService integration-like flow", () => {
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_dry",
-          organizationId: "org_1",
+          tenantId: "org_1",
           audienceId: "aud_1",
           bodyTemplate: "Hi {{first_name}}",
           title: "Dry Run Campaign",
@@ -859,7 +859,7 @@ describe("BlastsService integration-like flow", () => {
           status: BlastStatus.PROOFED,
           audienceId: "aud_1",
           bodyTemplate: "Hi there",
-          organizationId: "org_1",
+          tenantId: "org_1",
           startedAt: null,
         }),
         findMany: jest.fn().mockResolvedValue([{ id: "blast_1", scheduledFor: new Date() }]),

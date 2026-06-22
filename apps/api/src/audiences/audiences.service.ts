@@ -78,7 +78,7 @@ export class AudiencesService {
 
   private async ensureOrganization() {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.organization.upsert({
+    return this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -89,7 +89,7 @@ export class AudiencesService {
     const org = await this.ensureOrganization();
     return this.prisma.audience.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         name: dto.name,
         source: (dto.source || "MANUAL") as AudienceSource,
         channel: (dto.channel || "ALL") as AudienceChannel,
@@ -107,12 +107,12 @@ export class AudiencesService {
   async ensureWhatsappOptInAudience() {
     const org = await this.ensureOrganization();
     const existing = await this.prisma.audience.findFirst({
-      where: { organizationId: org.id, kind: AudienceKind.WHATSAPP_OPTED_IN, status: AudienceStatus.ACTIVE },
+      where: { tenantId: org.id, kind: AudienceKind.WHATSAPP_OPTED_IN, status: AudienceStatus.ACTIVE },
     });
     if (existing) return existing;
     return this.prisma.audience.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         name: "WhatsApp opt-ins (all)",
         source: AudienceSource.INTERNAL,
         channel: AudienceChannel.WHATSAPP,
@@ -126,12 +126,12 @@ export class AudiencesService {
   async whatsappReach(audienceId: string): Promise<{ total: number; reachable: number }> {
     const org = await this.ensureOrganization();
     const audience = await this.prisma.audience.findFirst({
-      where: { id: audienceId, organizationId: org.id },
+      where: { id: audienceId, tenantId: org.id },
     });
     if (!audience) throw new NotFoundException("Audience not found");
 
     const optedIn = await this.prisma.contactConsent.findMany({
-      where: { organizationId: org.id, channel: MessageChannel.WHATSAPP, state: ConsentState.OPTED_IN },
+      where: { tenantId: org.id, channel: MessageChannel.WHATSAPP, state: ConsentState.OPTED_IN },
       select: { phoneE164: true },
     });
     const optInSet = new Set(optedIn.map((c) => c.phoneE164));
@@ -160,7 +160,7 @@ export class AudiencesService {
             ? { channel: AudienceChannel.ALL }
             : {};
     const where: Prisma.AudienceWhereInput = {
-      organizationId: org.id,
+      tenantId: org.id,
       ...(dto.status ? { status: dto.status as AudienceStatus } : {}),
       ...(dto.source ? { source: dto.source as AudienceSource } : {}),
       ...channelFilter,
@@ -186,7 +186,7 @@ export class AudiencesService {
       this.prisma.audience.findFirst({
         where: {
           id,
-          organizationId: org.id,
+          tenantId: org.id,
         },
         include: {
           _count: { select: { contacts: true } },
@@ -194,7 +194,7 @@ export class AudiencesService {
       }),
       this.prisma.integrationSyncJob.findFirst({
         where: {
-          organizationId: org.id,
+          tenantId: org.id,
           audienceId: id,
         },
         orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
@@ -239,7 +239,7 @@ export class AudiencesService {
     const audience = await this.prisma.audience.findFirst({
       where: {
         id,
-        organizationId: org.id,
+        tenantId: org.id,
       },
       select: { id: true },
     });
@@ -350,7 +350,7 @@ export class AudiencesService {
   async startCsvImport(audienceId: string, fileName: string, csvRaw: string) {
     const org = await this.ensureOrganization();
     const audience = await this.prisma.audience.findFirst({
-      where: { id: audienceId, organizationId: org.id },
+      where: { id: audienceId, tenantId: org.id },
     });
     if (!audience) throw new NotFoundException("Audience not found");
 
@@ -358,7 +358,7 @@ export class AudiencesService {
 
     const created = await this.prisma.audienceImport.create({
       data: {
-        organizationId: org.id,
+        tenantId: org.id,
         audienceId,
         fileName,
         totalRows: rows.length,
@@ -391,7 +391,7 @@ export class AudiencesService {
       where: {
         id: importId,
         audienceId,
-        organizationId: org.id,
+        tenantId: org.id,
       },
       select: {
         id: true,
@@ -417,7 +417,7 @@ export class AudiencesService {
     const job = await this.prisma.audienceImport.findFirst({
       where: {
         id: importId,
-        organizationId: org.id,
+        tenantId: org.id,
       },
       select: {
         id: true,
@@ -442,7 +442,7 @@ export class AudiencesService {
     }
 
     const audience = await this.prisma.audience.findFirst({
-      where: { id: job.audienceId, organizationId: org.id },
+      where: { id: job.audienceId, tenantId: org.id },
       select: { id: true },
     });
     if (!audience) {
@@ -508,7 +508,7 @@ export class AudiencesService {
             source: AudienceSource.CSV,
           },
           create: {
-            organizationId: org.id,
+            tenantId: org.id,
             audienceId: job.audienceId,
             contactId: contact?.id,
             phoneE164: phone,
@@ -603,7 +603,7 @@ export class AudiencesService {
     const batchSize = this.getImportDispatchBatchSize();
     const due = await this.prisma.audienceImport.findMany({
       where: {
-        organizationId: org.id,
+        tenantId: org.id,
         status: { in: [AudienceImportStatus.QUEUED, AudienceImportStatus.RUNNING] },
       },
       orderBy: [{ createdAt: "asc" }, { updatedAt: "asc" }],

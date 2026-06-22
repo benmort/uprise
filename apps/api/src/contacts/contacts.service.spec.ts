@@ -49,7 +49,7 @@ describe("ContactsService", () => {
 
       expect(prisma.contact.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          organizationId: "org_1",
+          tenantId: "org_1",
           phoneE164: "+15550000002",
           firstName: "Grace",
           lastName: "Hopper",
@@ -98,7 +98,7 @@ describe("ContactsService", () => {
       await service.getOrCreateByAddress("org_1", "12 Main St.");
 
       expect(prisma.contact.findFirst).toHaveBeenCalledWith({
-        where: { organizationId: "org_1", addressNorm: "12 main st" },
+        where: { tenantId: "org_1", addressNorm: "12 main st" },
       });
       expect(prisma.contact.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ addressNorm: "12 main st", address: "12 Main St." }),

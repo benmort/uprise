@@ -32,11 +32,11 @@ describe("JourneysService", () => {
   describe("handleTrigger", () => {
     it("enrols a contact and enqueues rung 0 when the trigger config matches", async () => {
       prisma.journey.findMany.mockResolvedValue([
-        { id: "jrn1", organizationId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: { code: "refused" }, rungs: [] },
+        { id: "jrn1", tenantId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: { code: "refused" }, rungs: [] },
       ]);
 
       await service.handleTrigger(JourneyTriggerType.disposition_set, {
-        organizationId: "org1",
+        tenantId: "org1",
         contactId: "c1",
         code: "refused",
       });
@@ -49,11 +49,11 @@ describe("JourneysService", () => {
 
     it("does not enrol when the disposition code does not match", async () => {
       prisma.journey.findMany.mockResolvedValue([
-        { id: "jrn1", organizationId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: { code: "moved" }, rungs: [] },
+        { id: "jrn1", tenantId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: { code: "moved" }, rungs: [] },
       ]);
 
       await service.handleTrigger(JourneyTriggerType.disposition_set, {
-        organizationId: "org1",
+        tenantId: "org1",
         contactId: "c1",
         code: "refused",
       });
@@ -63,12 +63,12 @@ describe("JourneysService", () => {
 
     it("respects maxActivePerContact", async () => {
       prisma.journey.findMany.mockResolvedValue([
-        { id: "jrn1", organizationId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: {}, rungs: [] },
+        { id: "jrn1", tenantId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: {}, rungs: [] },
       ]);
       prisma.journeyEnrolment.count.mockResolvedValue(1);
 
       await service.handleTrigger(JourneyTriggerType.message_received, {
-        organizationId: "org1",
+        tenantId: "org1",
         contactId: "c1",
       });
 
@@ -79,7 +79,7 @@ describe("JourneysService", () => {
   describe("processRungJob", () => {
     const enrolmentWith = (rungs: any[], overrides: any = {}) => ({
       id: "enr1",
-      organizationId: "org1",
+      tenantId: "org1",
       contactId: "c1",
       state: JourneyEnrolmentState.ACTIVE,
       currentRungIndex: 0,

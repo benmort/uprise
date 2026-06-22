@@ -4,6 +4,6 @@ import { AppUserRole } from "@yarns/db";
 export type AuthUser = {
   id: string;
   role: AppUserRole;
-  organizationId: string | null;
+  tenantId: string | null;
   email?: string;
 };

@@ -48,7 +48,7 @@ describe("CampaignsService", () => {
   it("create defaults status to DRAFT", async () => {
     const created = await service.create("org1", { name: "New" });
     expect(created.status).toBe(CanvassCampaignStatus.DRAFT);
-    expect(created.organizationId).toBe("org1");
+    expect(created.tenantId).toBe("org1");
   });
 
   it("update only writes provided fields and rejects unknown campaigns", async () => {

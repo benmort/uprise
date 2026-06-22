@@ -89,7 +89,7 @@ export async function request<T>(
 export type AuthPrincipal = {
   id: string;
   role: "ORGANISER" | "CANVASSER";
-  organizationId: string | null;
+  tenantId: string | null;
 };
 
 export async function login(
@@ -570,7 +570,7 @@ export type CannedSuggestion = {
 
 export type DispositionDef = {
   id: string;
-  organizationId: string | null;
+  tenantId: string | null;
   code: string;
   label: string;
   layer: "CONTACT_RESULT" | "TERMINAL" | "DATA_QUALITY";

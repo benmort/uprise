@@ -211,43 +211,49 @@ enum WalkListItemListType {
   @@schema("canvass")
 }
 
-model Organization {
-  id           String                  @id @default(cuid())
-  slug         String                  @unique
-  name         String
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
-  users        AppUser[]
-  audiences    Audience[]
-  blasts       Blast[]
-  integrations IntegrationConnection[]
-  inbound      InboundMessage[]
-  outbound     OutboundMessage[]
-  snapshots    AnalyticsSnapshot[]
-  conversations ConversationState[]
-  consents      ContactConsent[]
+model Tenant {
+  id                String                  @id @default(cuid())
+  slug              String                  @unique
+  name              String
+  networkId         String?
+  settings          Json?
+  deletedAt         DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  network           Network?                @relation(fields: [networkId], references: [id])
+  members           TenantMember[]
+  invitations       TenantInvitation[]
+  audiences         Audience[]
+  blasts            Blast[]
+  integrations      IntegrationConnection[]
+  inbound           InboundMessage[]
+  outbound          OutboundMessage[]
+  snapshots         AnalyticsSnapshot[]
+  conversations     ConversationState[]
+  consents          ContactConsent[]
   whatsappTemplates WhatsappTemplate[]
-  contacts     Contact[]
-  scripts          Script[]
-  surveys          Survey[]
-  cannedResponses  CannedResponse[]
-  dispositionDefs  DispositionDef[]
-  dispositions     Disposition[]
+  contacts          Contact[]
+  scripts           Script[]
+  surveys           Survey[]
+  cannedResponses   CannedResponse[]
+  dispositionDefs   DispositionDef[]
+  dispositions      Disposition[]
   questionResponses QuestionResponse[]
-  journeys         Journey[]
-  canvassCampaigns CanvassCampaign[]
-  turfs            Turf[]
-  walkLists        WalkList[]
-  doorKnocks       DoorKnock[]
-  shifts           Shift[]
-  suppressions     Suppression[]
+  journeys          Journey[]
+  canvassCampaigns  CanvassCampaign[]
+  turfs             Turf[]
+  walkLists         WalkList[]
+  doorKnocks        DoorKnock[]
+  shifts            Shift[]
+  suppressions      Suppression[]
   pushSubscriptions PushSubscription[]
+
   @@schema("tenant")
 }
 
 model Contact {
   id               String            @id @default(cuid())
-  organizationId   String
+  tenantId   String
   phoneE164        String?
   addressNorm      String?
   gnafPid          String?           // links to geo.gnaf_address (the G-NAF address universe)
@@ -261,7 +267,7 @@ model Contact {
   metadata         Json?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   audienceContacts AudienceContact[]
   recipients       BlastRecipient[]
   inbound          InboundMessage[]
@@ -276,38 +282,41 @@ model Contact {
   doorKnocks       DoorKnock[]
 
   // Dedup is enforced by partial unique indexes (created in the migration):
-  //   UNIQUE (organizationId, phoneE164)   WHERE phoneE164   IS NOT NULL
-  //   UNIQUE (organizationId, addressNorm) WHERE addressNorm IS NOT NULL
+  //   UNIQUE (tenantId, phoneE164)   WHERE phoneE164   IS NOT NULL
+  //   UNIQUE (tenantId, addressNorm) WHERE addressNorm IS NOT NULL
   // Prisma's DSL can't express partial uniques, so they live in migration SQL.
-  @@index([organizationId, phoneE164])
-  @@index([organizationId, addressNorm])
-  @@index([organizationId, turfId])
-  @@index([organizationId, gnafPid])
+  @@index([tenantId, phoneE164])
+  @@index([tenantId, addressNorm])
+  @@index([tenantId, turfId])
+  @@index([tenantId, gnafPid])
   @@schema("public")
 }
 
-model AppUser {
-  id             String        @id @default(cuid())
-  organizationId String
-  email          String        @unique
-  displayName    String
-  passwordHash   String?
-  role           AppUserRole   @default(ORGANISER)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  audiences      Audience[]
-  blasts         Blast[]
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  displayName     String
+  passwordHash    String?
+  twofaEnabled    Boolean          @default(false)
+  twofaSecret     String?
+  mobile          String?
+  mobileVerified  Boolean          @default(false)
+  registeredAt    DateTime         @default(now())
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  audiences       Audience[]
+  blasts          Blast[]
   turfAssignments TurfAssignment[]
-  doorKnocks     DoorKnock[]
+  doorKnocks      DoorKnock[]
+  sessions        Session[]
+  tenantMembers   TenantMember[]
 
-  @@index([organizationId, role])
   @@schema("iam")
 }
 
 model Audience {
   id             String         @id @default(cuid())
-  organizationId String
+  tenantId String
   createdById    String?
   name           String
   source         AudienceSource
@@ -319,20 +328,20 @@ model Audience {
   archivedAt     DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy      AppUser?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy      User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
   contacts       AudienceContact[]
   imports        AudienceImport[]
   segments       AudienceSegment[]
   blasts         Blast[]
 
-  @@index([organizationId, status])
+  @@index([tenantId, status])
   @@schema("audience")
 }
 
 model AudienceContact {
   id             String      @id @default(cuid())
-  organizationId String
+  tenantId String
   audienceId     String
   contactId      String?
   externalId     String?
@@ -346,14 +355,14 @@ model AudienceContact {
   contact        Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
   @@unique([audienceId, phoneE164])
-  @@index([organizationId, phoneE164])
+  @@index([tenantId, phoneE164])
   @@index([contactId])
   @@schema("audience")
 }
 
 model AudienceImport {
   id             String               @id @default(cuid())
-  organizationId String
+  tenantId String
   audienceId     String
   fileName       String
   status         AudienceImportStatus @default(QUEUED)
@@ -370,13 +379,13 @@ model AudienceImport {
   updatedAt      DateTime             @updatedAt
   audience       Audience             @relation(fields: [audienceId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, status, createdAt])
+  @@index([tenantId, status, createdAt])
   @@schema("audience")
 }
 
 model AudienceSegment {
   id             String    @id @default(cuid())
-  organizationId String
+  tenantId String
   audienceId     String
   name           String
   definition     Json
@@ -388,7 +397,7 @@ model AudienceSegment {
 
 model Blast {
   id             String      @id @default(cuid())
-  organizationId String
+  tenantId String
   audienceId     String?
   createdById    String?
   title          String
@@ -404,16 +413,16 @@ model Blast {
   metadata       Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   audience       Audience?    @relation(fields: [audienceId], references: [id], onDelete: SetNull)
-  createdBy      AppUser?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy      User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   templates      BlastTemplate[]
   recipients     BlastRecipient[]
   inbound        InboundMessage[]
   outbound       OutboundMessage[]
   snapshots      AnalyticsSnapshot[]
 
-  @@index([organizationId, status])
+  @@index([tenantId, status])
   @@schema("messaging")
 }
 
@@ -459,7 +468,7 @@ model BlastRecipient {
 
 model InboundMessage {
   id             String        @id @default(cuid())
-  organizationId String
+  tenantId String
   blastId        String?
   contactId      String?
   channel        MessageChannel @default(SMS)
@@ -472,18 +481,18 @@ model InboundMessage {
   receivedAt     DateTime      @default(now())
   threadKey      String
   createdAt      DateTime      @default(now())
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   blast          Blast?        @relation(fields: [blastId], references: [id], onDelete: SetNull)
   contact        Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, threadKey, receivedAt])
+  @@index([tenantId, threadKey, receivedAt])
   @@index([contactId])
   @@schema("messaging")
 }
 
 model OutboundMessage {
   id              String        @id @default(cuid())
-  organizationId  String
+  tenantId  String
   blastId         String?
   recipientId     String?
   contactId       String?
@@ -499,11 +508,11 @@ model OutboundMessage {
   errorCode       String?
   errorMessage    String?
   createdAt       DateTime      @default(now())
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   blast           Blast?        @relation(fields: [blastId], references: [id], onDelete: SetNull)
   contact         Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, toPhone, sentAt])
+  @@index([tenantId, toPhone, sentAt])
   @@index([contactId])
   @@schema("messaging")
 }
@@ -512,7 +521,7 @@ model OutboundMessage {
 // business-initiated sends; STOP keywords on either channel set OPTED_OUT.
 model ContactConsent {
   id             String         @id @default(cuid())
-  organizationId String
+  tenantId String
   contactId      String?
   phoneE164      String
   channel        MessageChannel
@@ -520,11 +529,11 @@ model ContactConsent {
   source         String?        // e.g. "inbound", "stop_keyword", "manual", "import"
   updatedAt      DateTime       @updatedAt
   createdAt      DateTime       @default(now())
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact        Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  @@unique([organizationId, phoneE164, channel])
-  @@index([organizationId, channel, state])
+  @@unique([tenantId, phoneE164, channel])
+  @@index([tenantId, channel, state])
   @@index([contactId])
   @@schema("messaging")
 }
@@ -532,7 +541,7 @@ model ContactConsent {
 // Approved WhatsApp message templates synced from the Twilio Content API.
 model WhatsappTemplate {
   id             String       @id @default(cuid())
-  organizationId String
+  tenantId String
   contentSid     String       @unique // Twilio Content SID (HX...)
   friendlyName   String
   category       String       // MARKETING | UTILITY | AUTHENTICATION
@@ -542,15 +551,15 @@ model WhatsappTemplate {
   bodyPreview    String?      @db.Text
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, status])
+  @@index([tenantId, status])
   @@schema("messaging")
 }
 
 model IntegrationConnection {
   id             String                      @id @default(cuid())
-  organizationId String
+  tenantId String
   type           IntegrationType
   name           String
   status         IntegrationConnectionStatus @default(ACTIVE)
@@ -558,16 +567,16 @@ model IntegrationConnection {
   settings       Json?
   createdAt      DateTime                    @default(now())
   updatedAt      DateTime                    @updatedAt
-  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   syncJobs       IntegrationSyncJob[]
 
-  @@index([organizationId, type, status])
+  @@index([tenantId, type, status])
   @@schema("integration")
 }
 
 model IntegrationSyncJob {
   id                    String               @id @default(cuid())
-  organizationId        String
+  tenantId        String
   integrationConnectionId String
   audienceId            String?
   status                IntegrationJobStatus @default(QUEUED)
@@ -585,39 +594,39 @@ model IntegrationSyncJob {
 
 model AnalyticsSnapshot {
   id             String      @id @default(cuid())
-  organizationId String
+  tenantId String
   blastId        String?
   metricName     String
   metricValue    Float
   labels         Json?
   bucketAt       DateTime
   createdAt      DateTime    @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   blast          Blast?       @relation(fields: [blastId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, metricName, bucketAt])
+  @@index([tenantId, metricName, bucketAt])
   @@schema("analytics")
 }
 
 model ConversationState {
   id             String      @id @default(cuid())
-  organizationId String
+  tenantId String
   contactId      String?
   contactPhone   String
   channel        MessageChannel @default(SMS)
   unreadCount    Int         @default(0)
   resolved       Boolean     @default(false)
-  ownerId        String?     // AppUser id that has claimed this conversation (server-owned)
+  ownerId        String?     // User id that has claimed this conversation (server-owned)
   claimedAt      DateTime?
   lastMessageAt  DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact        Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  @@unique([organizationId, contactPhone, channel])
+  @@unique([tenantId, contactPhone, channel])
   @@index([contactId])
-  @@index([organizationId, ownerId])
+  @@index([tenantId, ownerId])
   @@schema("messaging")
 }
 
@@ -627,17 +636,17 @@ model ConversationState {
 
 model Script {
   id             String            @id @default(cuid())
-  organizationId String
+  tenantId String
   name           String
   channel        EngagementChannel @default(BOTH)
   campaignId     String?
   isArchived     Boolean           @default(false)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   steps          ScriptStep[]
 
-  @@index([organizationId, channel, isArchived])
+  @@index([tenantId, channel, isArchived])
   @@schema("canvass")
 }
 
@@ -658,16 +667,16 @@ model ScriptStep {
 
 model Survey {
   id             String       @id @default(cuid())
-  organizationId String
+  tenantId String
   name           String
   campaignId     String?
   isArchived     Boolean      @default(false)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   questions      Question[]
 
-  @@index([organizationId, isArchived])
+  @@index([tenantId, isArchived])
   @@schema("canvass")
 }
 
@@ -709,7 +718,7 @@ model QuestionOption {
 
 model QuestionResponse {
   id             String            @id @default(cuid())
-  organizationId String
+  tenantId String
   contactId      String
   questionId     String
   optionId       String?
@@ -719,21 +728,21 @@ model QuestionResponse {
   blastId        String?
   recordedById   String?
   createdAt      DateTime          @default(now())
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact        Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
   question       Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
   option         QuestionOption?   @relation(fields: [optionId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, contactId, createdAt])
+  @@index([tenantId, contactId, createdAt])
   @@index([questionId, optionId])
   @@schema("canvass")
 }
 
-// Disposition catalog: organizationId null = system default. Terminal/locked
+// Disposition catalog: tenantId null = system default. Terminal/locked
 // codes ship as defaults and cannot be edited.
 model DispositionDef {
   id             String            @id @default(cuid())
-  organizationId String?
+  tenantId String?
   code           String
   label          String
   layer          DispositionLayer
@@ -741,10 +750,10 @@ model DispositionDef {
   isTerminal     Boolean           @default(false)
   isLocked       Boolean           @default(false)
   orderIndex     Int               @default(0)
-  organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, code])
-  @@index([organizationId, layer, channel])
+  @@unique([tenantId, code])
+  @@index([tenantId, layer, channel])
   @@schema("canvass")
 }
 
@@ -752,7 +761,7 @@ model DispositionDef {
 // so it survives later edits to the catalog.
 model Disposition {
   id               String            @id @default(cuid())
-  organizationId   String
+  tenantId   String
   contactId        String
   code             String
   layer            DispositionLayer
@@ -764,11 +773,11 @@ model Disposition {
   supportLevel     SupportLevel?
   recordedById     String?
   createdAt        DateTime          @default(now())
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact          Contact           @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, contactId, createdAt])
-  @@index([organizationId, code, createdAt])
+  @@index([tenantId, contactId, createdAt])
+  @@index([tenantId, code, createdAt])
   @@schema("canvass")
 }
 
@@ -776,7 +785,7 @@ model Disposition {
 // (dispositionCode), which fixes the silent-data-drop antipattern.
 model CannedResponse {
   id              String            @id @default(cuid())
-  organizationId  String
+  tenantId  String
   ownerId         String?           // set when visibility = PERSONAL
   title           String
   body            String            @db.Text
@@ -787,10 +796,10 @@ model CannedResponse {
   isArchived      Boolean           @default(false)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
-  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, channel, visibility, isArchived])
-  @@index([organizationId, ownerId])
+  @@index([tenantId, channel, visibility, isArchived])
+  @@index([tenantId, ownerId])
   @@schema("canvass")
 }
 
@@ -800,7 +809,7 @@ model CannedResponse {
 
 model Journey {
   id                     String             @id @default(cuid())
-  organizationId         String
+  tenantId         String
   name                   String
   status                 JourneyStatus      @default(DRAFT)
   triggerType            JourneyTriggerType
@@ -809,11 +818,11 @@ model Journey {
   maxActivePerContact    Int                @default(1)
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
-  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   rungs                  JourneyRung[]
   enrolments             JourneyEnrolment[]
 
-  @@index([organizationId, status, triggerType])
+  @@index([tenantId, status, triggerType])
   @@schema("journey")
 }
 
@@ -831,7 +840,7 @@ model JourneyRung {
 
 model JourneyEnrolment {
   id               String                @id @default(cuid())
-  organizationId   String
+  tenantId   String
   journeyId        String
   contactId        String
   currentRungIndex Int                   @default(0)
@@ -846,7 +855,7 @@ model JourneyEnrolment {
   contact          Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@unique([journeyId, contactId, enrolledAt])
-  @@index([organizationId, state, resumeAt])
+  @@index([tenantId, state, resumeAt])
   @@index([journeyId, contactId, state])
   @@schema("journey")
 }
@@ -857,7 +866,7 @@ model JourneyEnrolment {
 
 model CanvassCampaign {
   id             String                @id @default(cuid())
-  organizationId String
+  tenantId String
   name           String
   status         CanvassCampaignStatus @default(DRAFT)
   surveyId       String?               // shared-engagement Survey attached to the door script
@@ -865,30 +874,30 @@ model CanvassCampaign {
   goals          Json?                 // { doors, conversations, surveys, ... } pace-to-target targets
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
-  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   turfs          Turf[]
   walkLists      WalkList[]
   shifts         Shift[]
 
-  @@index([organizationId, status])
+  @@index([tenantId, status])
   @@schema("canvass")
 }
 
 model Turf {
   id             String       @id @default(cuid())
-  organizationId String
+  tenantId String
   campaignId     String?
   name           String
   geometry       Json         // GeoJSON Polygon / MultiPolygon
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campaign       CanvassCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   contacts       Contact[]
   walkLists      WalkList[]
   assignments    TurfAssignment[]
 
-  @@index([organizationId, campaignId])
+  @@index([tenantId, campaignId])
   @@schema("canvass")
 }
 
@@ -901,7 +910,7 @@ model TurfAssignment {
   assignedAt  DateTime             @default(now())
   releasedAt  DateTime?
   turf        Turf                 @relation(fields: [turfId], references: [id], onDelete: Cascade)
-  canvasser   AppUser              @relation(fields: [canvasserId], references: [id], onDelete: Cascade)
+  canvasser   User              @relation(fields: [canvasserId], references: [id], onDelete: Cascade)
 
   // One active lock per turf: enforced by a partial unique index in the
   // migration (status = 'ASSIGNED'), so two canvassers can't both own a turf.
@@ -912,19 +921,19 @@ model TurfAssignment {
 
 model WalkList {
   id             String         @id @default(cuid())
-  organizationId String
+  tenantId String
   campaignId     String?
   turfId         String?
   name           String
   listType       WalkListItemListType @default(STATIC)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campaign       CanvassCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   turf           Turf?          @relation(fields: [turfId], references: [id], onDelete: SetNull)
   items          WalkListItem[]
 
-  @@index([organizationId, campaignId])
+  @@index([tenantId, campaignId])
   @@schema("canvass")
 }
 
@@ -946,7 +955,7 @@ model WalkListItem {
 // re-synced offline knock is deduped.
 model DoorKnock {
   id              String       @id @default(cuid())
-  organizationId  String
+  tenantId  String
   contactId       String
   canvasserId     String?
   walkListItemId  String?
@@ -959,12 +968,12 @@ model DoorKnock {
   safetyFlag      Boolean?
   clientCapturedAt DateTime?
   createdAt       DateTime     @default(now())
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact         Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  canvasser       AppUser?     @relation(fields: [canvasserId], references: [id], onDelete: SetNull)
+  canvasser       User?     @relation(fields: [canvasserId], references: [id], onDelete: SetNull)
 
-  @@unique([organizationId, localId])
-  @@index([organizationId, contactId, createdAt])
+  @@unique([tenantId, localId])
+  @@index([tenantId, contactId, createdAt])
   @@index([canvasserId, createdAt])
   @@schema("canvass")
 }
@@ -975,7 +984,7 @@ model DoorKnock {
 // tied to a campaign/turf and a canvasser.
 model Shift {
   id             String          @id @default(cuid())
-  organizationId String
+  tenantId String
   campaignId     String?
   turfId         String?
   canvasserId    String?
@@ -986,43 +995,136 @@ model Shift {
   notes          String?         @db.Text
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   campaign       CanvassCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, campaignId, startsAt])
-  @@index([organizationId, canvasserId])
+  @@index([tenantId, campaignId, startsAt])
+  @@index([tenantId, canvasserId])
   @@schema("canvass")
 }
 
 // Opt-out / suppression ledger. A phone or email that must never be contacted.
 model Suppression {
   id             String          @id @default(cuid())
-  organizationId String
+  tenantId String
   phoneE164      String?
   email          String?
   reason         String?
   source         String?
   createdAt      DateTime        @default(now())
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, phoneE164])
-  @@index([organizationId, email])
+  @@index([tenantId, phoneE164])
+  @@index([tenantId, email])
   @@schema("messaging")
 }
 
 // Web-push subscription so organisers can broadcast to canvassers in the field.
 model PushSubscription {
   id             String          @id @default(cuid())
-  organizationId String
+  tenantId String
   userId         String?
   endpoint       String
   p256dh         String
   auth           String
   userAgent      String?
   createdAt      DateTime        @default(now())
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, endpoint])
-  @@index([organizationId, userId])
+  @@unique([tenantId, endpoint])
+  @@index([tenantId, userId])
   @@schema("public")
+}
+
+model Network {
+  id                 String   @id @default(cuid())
+  name               String
+  ownerId            String?
+  planName           String?
+  subscriptionStatus String?
+  createdAt          DateTime @default(now())
+  tenants            Tenant[]
+
+  @@index([ownerId])
+  @@schema("tenant")
+}
+
+model TenantMember {
+  id        String      @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      AppUserRole
+  addedBy   String?
+  createdAt DateTime    @default(now())
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([tenantId, role])
+  @@schema("tenant")
+}
+
+model TenantInvitation {
+  id        String      @id @default(cuid())
+  tenantId  String
+  email     String
+  role      AppUserRole
+  status    String
+  token     String?     @unique
+  expiresAt DateTime?
+  invitedBy String?
+  createdAt DateTime    @default(now())
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+  @@schema("tenant")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@schema("iam")
+}
+
+model MagicLink {
+  id         String    @id @default(cuid())
+  userId     String
+  token      String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@schema("iam")
+}
+
+model PasswordReset {
+  id         String    @id @default(cuid())
+  userId     String
+  token      String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@schema("iam")
+}
+
+model MobileVerification {
+  id         String    @id @default(cuid())
+  userId     String
+  code       String
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@schema("iam")
 }

@@ -132,7 +132,7 @@ export class BasicAuthGuard implements CanActivate {
 
     // Env super-admin: the original single-credential organiser login, unchanged.
     if (expectedUser && expectedPassword && username === expectedUser && password === expectedPassword) {
-      request.user = { id: "env-admin", role: AppUserRole.ORGANISER, organizationId: null, email: username };
+      request.user = { id: "env-admin", role: AppUserRole.ORGANISER, tenantId: null, email: username };
       return true;
     }
 
@@ -153,14 +153,24 @@ export class BasicAuthGuard implements CanActivate {
     username: string,
     password: string,
   ): Promise<boolean> {
-    const user = await this.prisma!.appUser.findUnique({ where: { email: username } });
+    const user = await this.prisma!.user.findUnique({ where: { email: username } });
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       throw new UnauthorizedException("Invalid username or password");
     }
+    // Identity (User) and membership (TenantMember) are separate: resolve the
+    // user's tenant + role from their membership. A user with no membership
+    // cannot act in any tenant.
+    const membership = await this.prisma!.tenantMember.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!membership) {
+      throw new UnauthorizedException("User has no tenant membership");
+    }
     request.user = {
       id: user.id,
-      role: user.role,
-      organizationId: user.organizationId,
+      role: membership.role,
+      tenantId: membership.tenantId,
       email: user.email,
     };
     return true;

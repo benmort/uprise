@@ -55,15 +55,15 @@ export class EngagementService {
   ) {}
 
   /**
-   * Idempotently seed the system-default disposition taxonomy (organizationId
+   * Idempotently seed the system-default disposition taxonomy (tenantId
    * null). Uses find-then-create rather than upsert: a compound unique with a
-   * null organizationId is unreliable to target (Postgres treats nulls as
-   * distinct), so we match on (organizationId IS NULL, code) explicitly.
+   * null tenantId is unreliable to target (Postgres treats nulls as
+   * distinct), so we match on (tenantId IS NULL, code) explicitly.
    */
   async ensureDefaultDispositions(): Promise<void> {
     for (const def of DEFAULT_DISPOSITIONS) {
       const existing = await this.prisma.dispositionDef.findFirst({
-        where: { organizationId: null, code: def.code },
+        where: { tenantId: null, code: def.code },
       });
       if (existing) {
         await this.prisma.dispositionDef.update({
@@ -79,15 +79,15 @@ export class EngagementService {
         });
         continue;
       }
-      await this.prisma.dispositionDef.create({ data: { ...def, organizationId: null } });
+      await this.prisma.dispositionDef.create({ data: { ...def, tenantId: null } });
     }
   }
 
   /** Disposition catalog for an org: system defaults + the org's own, channel-filtered. */
-  async listDispositionDefs(organizationId: string, channel?: EngagementChannel) {
+  async listDispositionDefs(tenantId: string, channel?: EngagementChannel) {
     return this.prisma.dispositionDef.findMany({
       where: {
-        OR: [{ organizationId: null }, { organizationId }],
+        OR: [{ tenantId: null }, { tenantId }],
         ...(channel ? { channel: { in: [channel, EngagementChannel.BOTH] } } : {}),
       },
       orderBy: { orderIndex: "asc" },
@@ -95,9 +95,9 @@ export class EngagementService {
   }
 
   /** Reject edits/deletes to locked (system terminal) disposition defs. */
-  async assertDefEditable(organizationId: string, defId: string): Promise<void> {
+  async assertDefEditable(tenantId: string, defId: string): Promise<void> {
     const def = await this.prisma.dispositionDef.findUnique({ where: { id: defId } });
-    if (!def || (def.organizationId !== organizationId)) {
+    if (!def || (def.tenantId !== tenantId)) {
       throw new ApiHttpException("DISPOSITION_NOT_FOUND", "Disposition not found or is a shared system default");
     }
     if (def.isLocked) {
@@ -107,17 +107,17 @@ export class EngagementService {
 
   /** Create an org-defined contact-result disposition. Terminal/data-quality codes are system-locked. */
   async createDispositionDef(
-    organizationId: string,
+    tenantId: string,
     input: { code: string; label: string; channel?: EngagementChannel; orderIndex?: number },
   ) {
     const last = await this.prisma.dispositionDef.findFirst({
-      where: { organizationId },
+      where: { tenantId },
       orderBy: { orderIndex: "desc" },
       select: { orderIndex: true },
     });
     return this.prisma.dispositionDef.create({
       data: {
-        organizationId,
+        tenantId,
         code: input.code,
         label: input.label,
         layer: DispositionLayer.CONTACT_RESULT,
@@ -130,11 +130,11 @@ export class EngagementService {
   }
 
   async updateDispositionDef(
-    organizationId: string,
+    tenantId: string,
     defId: string,
     input: { label?: string; channel?: EngagementChannel; orderIndex?: number },
   ) {
-    await this.assertDefEditable(organizationId, defId);
+    await this.assertDefEditable(tenantId, defId);
     return this.prisma.dispositionDef.update({
       where: { id: defId },
       data: {
@@ -145,17 +145,17 @@ export class EngagementService {
     });
   }
 
-  async deleteDispositionDef(organizationId: string, defId: string) {
-    await this.assertDefEditable(organizationId, defId);
+  async deleteDispositionDef(tenantId: string, defId: string) {
+    await this.assertDefEditable(tenantId, defId);
     await this.prisma.dispositionDef.delete({ where: { id: defId } });
     return { deleted: true };
   }
 
-  async recordDisposition(organizationId: string, input: RecordDispositionInput): Promise<Disposition> {
-    const layer = await this.resolveLayer(organizationId, input.code);
+  async recordDisposition(tenantId: string, input: RecordDispositionInput): Promise<Disposition> {
+    const layer = await this.resolveLayer(tenantId, input.code);
     const disposition = await this.prisma.disposition.create({
       data: {
-        organizationId,
+        tenantId,
         contactId: input.contactId,
         code: input.code,
         layer,
@@ -174,7 +174,7 @@ export class EngagementService {
       channel: input.channel,
     });
     await this.fireTrigger(JourneyTriggerType.disposition_set, {
-      organizationId,
+      tenantId,
       contactId: input.contactId,
       code: input.code,
     });
@@ -186,7 +186,7 @@ export class EngagementService {
    * record that disposition in the same transaction.
    */
   async recordSurveyAnswer(
-    organizationId: string,
+    tenantId: string,
     input: RecordSurveyAnswerInput,
   ): Promise<QuestionResponse> {
     const option = input.optionId
@@ -196,7 +196,7 @@ export class EngagementService {
     const response = await this.prisma.$transaction(async (tx) => {
       const created = await tx.questionResponse.create({
         data: {
-          organizationId,
+          tenantId,
           contactId: input.contactId,
           questionId: input.questionId,
           optionId: input.optionId ?? null,
@@ -209,10 +209,10 @@ export class EngagementService {
       });
 
       if (option?.dispositionCode) {
-        const layer = await this.resolveLayer(organizationId, option.dispositionCode);
+        const layer = await this.resolveLayer(tenantId, option.dispositionCode);
         await tx.disposition.create({
           data: {
-            organizationId,
+            tenantId,
             contactId: input.contactId,
             code: option.dispositionCode,
             layer,
@@ -233,7 +233,7 @@ export class EngagementService {
       channel: input.channel,
     });
     await this.fireTrigger(JourneyTriggerType.survey_answer, {
-      organizationId,
+      tenantId,
       contactId: input.contactId,
       questionId: input.questionId,
       optionId: input.optionId ?? null,
@@ -246,16 +246,16 @@ export class EngagementService {
    * Returns the body the caller should send; the disposition is recorded here.
    */
   async useCannedResponse(
-    organizationId: string,
+    tenantId: string,
     input: { cannedResponseId: string; contactId: string; channel: EngagementChannel; recordedById?: string | null },
   ): Promise<{ body: string; disposition: Disposition | null }> {
-    const canned = await this.canned.getById(organizationId, input.cannedResponseId);
+    const canned = await this.canned.getById(tenantId, input.cannedResponseId);
     if (!canned) {
       throw new ApiHttpException("CANNED_RESPONSE_NOT_FOUND", "Canned response not found");
     }
     let disposition: Disposition | null = null;
     if (canned.dispositionCode) {
-      disposition = await this.recordDisposition(organizationId, {
+      disposition = await this.recordDisposition(tenantId, {
         contactId: input.contactId,
         code: canned.dispositionCode,
         channel: input.channel,
@@ -266,9 +266,9 @@ export class EngagementService {
     return { body: canned.body, disposition };
   }
 
-  private async resolveLayer(organizationId: string, code: string): Promise<DispositionLayer> {
+  private async resolveLayer(tenantId: string, code: string): Promise<DispositionLayer> {
     const def = await this.prisma.dispositionDef.findFirst({
-      where: { code, OR: [{ organizationId: null }, { organizationId }] },
+      where: { code, OR: [{ tenantId: null }, { tenantId }] },
     });
     return def?.layer ?? DispositionLayer.CONTACT_RESULT;
   }

@@ -3,7 +3,7 @@ import { JourneyTriggerType } from "@yarns/db";
 export const JOURNEY_TRIGGER_PORT = "JourneyTriggerPort";
 
 export type JourneyTriggerPayload = {
-  organizationId: string;
+  tenantId: string;
   contactId: string;
   code?: string; // disposition code
   questionId?: string;

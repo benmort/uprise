@@ -37,7 +37,7 @@ describe("PushService", () => {
     });
     expect(prisma.pushSubscription.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { organizationId_endpoint: { organizationId: "org1", endpoint: "https://push.example/abc" } },
+        where: { tenantId_endpoint: { tenantId: "org1", endpoint: "https://push.example/abc" } },
       }),
     );
   });

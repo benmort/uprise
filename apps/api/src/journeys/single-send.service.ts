@@ -23,12 +23,12 @@ export class SingleSendService {
   ) {}
 
   async sendToContact(
-    organizationId: string,
+    tenantId: string,
     contactId: string,
     body: string,
   ): Promise<{ sent: boolean; reason?: string }> {
     const contact = await this.prisma.contact.findFirst({
-      where: { id: contactId, organizationId },
+      where: { id: contactId, tenantId },
       select: { phoneE164: true },
     });
     if (!contact?.phoneE164) {
@@ -40,7 +40,7 @@ export class SingleSendService {
     const sent = await this.twilio.sendMessage(to, body);
     await this.prisma.outboundMessage.create({
       data: {
-        organizationId,
+        tenantId,
         contactId,
         toPhone: sent.to ? normalizePhoneE164(sent.to) : to,
         fromPhone: sent.from ? normalizePhoneE164(sent.from) : sent.from,

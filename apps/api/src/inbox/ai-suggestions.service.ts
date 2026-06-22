@@ -26,13 +26,13 @@ export class AiSuggestionsService {
   ) {}
 
   async suggestReplies(input: {
-    organizationId: string;
+    tenantId: string;
     message: string;
     ownerId?: string | null;
     limit?: number;
   }): Promise<CannedSuggestion[]> {
     const library = await this.canned.listForChannel(
-      input.organizationId,
+      input.tenantId,
       EngagementChannel.SMS,
       input.ownerId,
     );

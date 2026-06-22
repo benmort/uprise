@@ -27,7 +27,7 @@ import {
 } from "./seed-data";
 
 export type SeedResult = {
-  organizationId: string;
+  tenantId: string;
   organiserEmail: string;
   canvasserEmail: string;
   canvasserId: string;
@@ -62,7 +62,7 @@ export class SeedService {
 
   private async org(): Promise<string> {
     const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    const org = await this.prisma.organization.upsert({
+    const org = await this.prisma.tenant.upsert({
       where: { slug },
       create: { slug, name: "Default Organization" },
       update: {},
@@ -71,44 +71,51 @@ export class SeedService {
   }
 
   private async upsertUser(
-    organizationId: string,
+    tenantId: string,
     login: { email: string; password: string; displayName: string },
     role: AppUserRole,
   ): Promise<string> {
-    const existing = await this.prisma.appUser.findUnique({ where: { email: login.email } });
-    if (existing) return existing.id;
-    const user = await this.prisma.appUser.create({
-      data: {
-        organizationId,
-        email: login.email,
-        displayName: login.displayName,
-        passwordHash: await hashPassword(login.password),
-        role,
-      },
+    // Identity (User) is global; membership (TenantMember) carries the role.
+    const existing = await this.prisma.user.findUnique({ where: { email: login.email } });
+    const userId =
+      existing?.id ??
+      (
+        await this.prisma.user.create({
+          data: {
+            email: login.email,
+            displayName: login.displayName,
+            passwordHash: await hashPassword(login.password),
+          },
+        })
+      ).id;
+    await this.prisma.tenantMember.upsert({
+      where: { tenantId_userId: { tenantId, userId } },
+      create: { tenantId, userId, role },
+      update: { role },
     });
-    return user.id;
+    return userId;
   }
 
   async seedDemo(): Promise<SeedResult> {
-    const organizationId = await this.org();
+    const tenantId = await this.org();
     await this.engagement.ensureDefaultDispositions();
 
-    await this.upsertUser(organizationId, DEMO_LOGINS.organiser, AppUserRole.ORGANISER);
-    const canvasserId = await this.upsertUser(organizationId, DEMO_LOGINS.canvasser, AppUserRole.CANVASSER);
+    await this.upsertUser(tenantId, DEMO_LOGINS.organiser, AppUserRole.ORGANISER);
+    const canvasserId = await this.upsertUser(tenantId, DEMO_LOGINS.canvasser, AppUserRole.CANVASSER);
 
     // Campaign
     const campaign =
-      (await this.prisma.canvassCampaign.findFirst({ where: { organizationId, name: DEMO_CAMPAIGN.name } })) ??
+      (await this.prisma.canvassCampaign.findFirst({ where: { tenantId, name: DEMO_CAMPAIGN.name } })) ??
       (await this.prisma.canvassCampaign.create({
-        data: { organizationId, name: DEMO_CAMPAIGN.name, status: "ACTIVE", goals: { doors: 500, conversations: 120 } },
+        data: { tenantId, name: DEMO_CAMPAIGN.name, status: "ACTIVE", goals: { doors: 500, conversations: 120 } },
       }));
 
     // Turf
     const turf =
-      (await this.prisma.turf.findFirst({ where: { organizationId, name: DEMO_TURF.name } })) ??
+      (await this.prisma.turf.findFirst({ where: { tenantId, name: DEMO_TURF.name } })) ??
       (await this.prisma.turf.create({
         data: {
-          organizationId,
+          tenantId,
           campaignId: campaign.id,
           name: DEMO_TURF.name,
           geometry: DEMO_TURF.geometry as unknown as Prisma.InputJsonValue,
@@ -119,12 +126,12 @@ export class SeedService {
     const contacts = buildDemoContacts();
     const contactIds: string[] = [];
     for (const c of contacts) {
-      const found = await this.prisma.contact.findFirst({ where: { organizationId, address: c.address } });
+      const found = await this.prisma.contact.findFirst({ where: { tenantId, address: c.address } });
       const row =
         found ??
         (await this.prisma.contact.create({
           data: {
-            organizationId,
+            tenantId,
             turfId: turf.id,
             firstName: c.firstName,
             lastName: c.lastName,
@@ -142,11 +149,11 @@ export class SeedService {
 
     // Walk list
     let walkList = await this.prisma.walkList.findFirst({
-      where: { organizationId, name: DEMO_WALK_LIST.name },
+      where: { tenantId, name: DEMO_WALK_LIST.name },
       include: { items: { orderBy: { orderIndex: "asc" } } },
     });
     if (!walkList) {
-      const created = await this.canvassing.createWalkList(organizationId, {
+      const created = await this.canvassing.createWalkList(tenantId, {
         name: DEMO_WALK_LIST.name,
         turfId: turf.id,
         campaignId: campaign.id,
@@ -161,13 +168,13 @@ export class SeedService {
     const stopId = walkList?.items[0]?.id ?? null;
 
     // Assign the turf to the demo canvasser (idempotent re-claim).
-    await this.canvassing.assignTurf(organizationId, turf.id, canvasserId);
+    await this.canvassing.assignTurf(tenantId, turf.id, canvasserId);
 
     // A few door knocks (idempotent on localId; wires dispositions + journeys).
     for (const k of DEMO_KNOCKS) {
       const contactId = contactIds[k.contactIndex];
       if (!contactId) continue;
-      await this.canvassing.recordDoorKnock(organizationId, {
+      await this.canvassing.recordDoorKnock(tenantId, {
         contactId,
         canvasserId,
         localId: `demo:knock:${k.contactIndex}`,
@@ -180,15 +187,15 @@ export class SeedService {
 
     // Audience + blast (canonical example, shared with the tour).
     const audience =
-      (await this.prisma.audience.findFirst({ where: { organizationId, name: EXAMPLE_AUDIENCE_NAME } })) ??
+      (await this.prisma.audience.findFirst({ where: { tenantId, name: EXAMPLE_AUDIENCE_NAME } })) ??
       (await this.prisma.audience.create({
-        data: { organizationId, name: EXAMPLE_AUDIENCE_NAME, source: AudienceSource.CSV },
+        data: { tenantId, name: EXAMPLE_AUDIENCE_NAME, source: AudienceSource.CSV },
       }));
     const blast =
-      (await this.prisma.blast.findFirst({ where: { organizationId, title: EXAMPLE_BLAST_TITLE } })) ??
+      (await this.prisma.blast.findFirst({ where: { tenantId, title: EXAMPLE_BLAST_TITLE } })) ??
       (await this.prisma.blast.create({
         data: {
-          organizationId,
+          tenantId,
           title: EXAMPLE_BLAST_TITLE,
           bodyTemplate: DEFAULT_TOUR_TEMPLATE,
           audienceId: audience.id,
@@ -197,10 +204,10 @@ export class SeedService {
 
     // Survey (dual-channel options)
     const survey =
-      (await this.prisma.survey.findFirst({ where: { organizationId, name: DEMO_SURVEY.name } })) ??
+      (await this.prisma.survey.findFirst({ where: { tenantId, name: DEMO_SURVEY.name } })) ??
       (await this.prisma.survey.create({
         data: {
-          organizationId,
+          tenantId,
           name: DEMO_SURVEY.name,
           questions: {
             create: DEMO_SURVEY.questions.map((q, qi) => ({
@@ -224,10 +231,10 @@ export class SeedService {
 
     // Script
     const script =
-      (await this.prisma.script.findFirst({ where: { organizationId, name: DEMO_SCRIPT.name } })) ??
+      (await this.prisma.script.findFirst({ where: { tenantId, name: DEMO_SCRIPT.name } })) ??
       (await this.prisma.script.create({
         data: {
-          organizationId,
+          tenantId,
           name: DEMO_SCRIPT.name,
           steps: { create: DEMO_SCRIPT.steps.map((s) => ({ bodyText: s.bodyText, outcomeKey: s.outcomeKey ?? null, orderIndex: s.orderIndex })) },
         },
@@ -235,10 +242,10 @@ export class SeedService {
 
     // Journey
     const journey =
-      (await this.prisma.journey.findFirst({ where: { organizationId, name: DEMO_JOURNEY.name } })) ??
+      (await this.prisma.journey.findFirst({ where: { tenantId, name: DEMO_JOURNEY.name } })) ??
       (await this.prisma.journey.create({
         data: {
-          organizationId,
+          tenantId,
           name: DEMO_JOURNEY.name,
           triggerType: DEMO_JOURNEY.triggerType,
           triggerConfig: DEMO_JOURNEY.triggerConfig as Prisma.InputJsonValue,
@@ -248,19 +255,19 @@ export class SeedService {
 
     // Canned responses
     for (const cr of DEMO_CANNED) {
-      const exists = await this.prisma.cannedResponse.findFirst({ where: { organizationId, title: cr.title } });
+      const exists = await this.prisma.cannedResponse.findFirst({ where: { tenantId, title: cr.title } });
       if (!exists) {
         await this.prisma.cannedResponse.create({
-          data: { organizationId, title: cr.title, body: cr.body, dispositionCode: cr.dispositionCode },
+          data: { tenantId, title: cr.title, body: cr.body, dispositionCode: cr.dispositionCode },
         });
       }
     }
 
-    await this.seedGeo(organizationId, contactIds);
+    await this.seedGeo(tenantId, contactIds);
 
-    this.logger.log(`Demo seed complete for org ${organizationId}.`);
+    this.logger.log(`Demo seed complete for org ${tenantId}.`);
     return {
-      organizationId,
+      tenantId,
       organiserEmail: DEMO_LOGINS.organiser.email,
       canvasserEmail: DEMO_LOGINS.canvasser.email,
       canvasserId,
@@ -283,7 +290,7 @@ export class SeedService {
    * contacts as G-NAF addresses (inside) plus a few cold doors, and the mapping. Idempotent.
    * Skips silently if PostGIS/geo isn't present.
    */
-  private async seedGeo(organizationId: string, contactIds: string[]): Promise<void> {
+  private async seedGeo(tenantId: string, contactIds: string[]): Promise<void> {
     const poly =
       "MULTIPOLYGON(((151.183 -33.878,151.197 -33.878,151.197 -33.890,151.183 -33.890,151.183 -33.878)))";
     const contacts = buildDemoContacts();
@@ -438,20 +445,29 @@ export class SeedService {
 
   /** Best-effort removal of demo-labelled rows (FK-safe order). */
   async clearDemo(): Promise<void> {
-    const organizationId = await this.org();
+    const tenantId = await this.org();
     const addresses = buildDemoContacts().map((c) => c.address);
-    await this.prisma.doorKnock.deleteMany({ where: { organizationId, localId: { startsWith: "demo:knock:" } } });
-    await this.prisma.canvassCampaign.deleteMany({ where: { organizationId, name: DEMO_CAMPAIGN.name } });
-    await this.prisma.turf.deleteMany({ where: { organizationId, name: DEMO_TURF.name } });
-    await this.prisma.contact.deleteMany({ where: { organizationId, address: { in: addresses } } });
-    await this.prisma.survey.deleteMany({ where: { organizationId, name: DEMO_SURVEY.name } });
-    await this.prisma.script.deleteMany({ where: { organizationId, name: DEMO_SCRIPT.name } });
-    await this.prisma.journey.deleteMany({ where: { organizationId, name: DEMO_JOURNEY.name } });
-    await this.prisma.cannedResponse.deleteMany({ where: { organizationId, title: { in: DEMO_CANNED.map((c) => c.title) } } });
-    await this.prisma.blast.deleteMany({ where: { organizationId, title: EXAMPLE_BLAST_TITLE } });
-    await this.prisma.audience.deleteMany({ where: { organizationId, name: EXAMPLE_AUDIENCE_NAME } });
-    await this.prisma.appUser.deleteMany({
-      where: { organizationId, email: { in: [DEMO_LOGINS.organiser.email, DEMO_LOGINS.canvasser.email] } },
+    await this.prisma.doorKnock.deleteMany({ where: { tenantId, localId: { startsWith: "demo:knock:" } } });
+    await this.prisma.canvassCampaign.deleteMany({ where: { tenantId, name: DEMO_CAMPAIGN.name } });
+    await this.prisma.turf.deleteMany({ where: { tenantId, name: DEMO_TURF.name } });
+    await this.prisma.contact.deleteMany({ where: { tenantId, address: { in: addresses } } });
+    await this.prisma.survey.deleteMany({ where: { tenantId, name: DEMO_SURVEY.name } });
+    await this.prisma.script.deleteMany({ where: { tenantId, name: DEMO_SCRIPT.name } });
+    await this.prisma.journey.deleteMany({ where: { tenantId, name: DEMO_JOURNEY.name } });
+    await this.prisma.cannedResponse.deleteMany({ where: { tenantId, title: { in: DEMO_CANNED.map((c) => c.title) } } });
+    await this.prisma.blast.deleteMany({ where: { tenantId, title: EXAMPLE_BLAST_TITLE } });
+    await this.prisma.audience.deleteMany({ where: { tenantId, name: EXAMPLE_AUDIENCE_NAME } });
+    const demoEmails = [DEMO_LOGINS.organiser.email, DEMO_LOGINS.canvasser.email];
+    const demoUsers = await this.prisma.user.findMany({
+      where: { email: { in: demoEmails } },
+      select: { id: true },
+    });
+    const demoUserIds = demoUsers.map((u) => u.id);
+    // Remove this tenant's memberships first, then delete the demo users ONLY if
+    // they have no remaining memberships in other tenants (don't orphan shared users).
+    await this.prisma.tenantMember.deleteMany({ where: { tenantId, userId: { in: demoUserIds } } });
+    await this.prisma.user.deleteMany({
+      where: { email: { in: demoEmails }, tenantMembers: { none: {} } },
     });
     try {
       await this.prisma.$executeRawUnsafe(`DELETE FROM geo.address_region WHERE gnaf_pid LIKE 'demo:gnaf:%'`);
@@ -463,6 +479,6 @@ export class SeedService {
     } catch {
       /* geo not present — fine */
     }
-    this.logger.log(`Demo seed cleared for org ${organizationId}.`);
+    this.logger.log(`Demo seed cleared for org ${tenantId}.`);
   }
 }

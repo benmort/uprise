@@ -23,13 +23,13 @@ export class CannedResponsesService {
    * first so the ranking layer (AI) can re-order without losing the default.
    */
   async listForChannel(
-    organizationId: string,
+    tenantId: string,
     channel: EngagementChannel,
     ownerId?: string | null,
   ): Promise<CannedResponse[]> {
     return this.prisma.cannedResponse.findMany({
       where: {
-        organizationId,
+        tenantId,
         isArchived: false,
         channel: { in: [channel, EngagementChannel.BOTH] },
         OR: [
@@ -41,7 +41,7 @@ export class CannedResponsesService {
     });
   }
 
-  async create(organizationId: string, input: CreateCannedResponseInput): Promise<CannedResponse> {
+  async create(tenantId: string, input: CreateCannedResponseInput): Promise<CannedResponse> {
     const visibility = input.visibility ?? CannedVisibility.ORG;
     const ownerId = visibility === CannedVisibility.PERSONAL ? input.ownerId ?? null : null;
     if (visibility === CannedVisibility.PERSONAL && !ownerId) {
@@ -49,7 +49,7 @@ export class CannedResponsesService {
     }
     return this.prisma.cannedResponse.create({
       data: {
-        organizationId,
+        tenantId,
         title: input.title,
         body: input.body,
         channel: input.channel ?? EngagementChannel.SMS,
@@ -61,16 +61,16 @@ export class CannedResponsesService {
     });
   }
 
-  async getById(organizationId: string, id: string): Promise<CannedResponse | null> {
-    return this.prisma.cannedResponse.findFirst({ where: { id, organizationId } });
+  async getById(tenantId: string, id: string): Promise<CannedResponse | null> {
+    return this.prisma.cannedResponse.findFirst({ where: { id, tenantId } });
   }
 
   async update(
-    organizationId: string,
+    tenantId: string,
     id: string,
     input: Partial<CreateCannedResponseInput>,
   ): Promise<CannedResponse> {
-    const existing = await this.getById(organizationId, id);
+    const existing = await this.getById(tenantId, id);
     if (!existing) throw new ApiHttpException("CANNED_NOT_FOUND", "Canned response not found");
     const visibility = input.visibility ?? existing.visibility;
     // Keep ownerId consistent with visibility: only PERSONAL carries an owner, and a
@@ -94,8 +94,8 @@ export class CannedResponsesService {
   }
 
   /** Soft-delete: archive so historical dispositions logged against it stay valid. */
-  async archive(organizationId: string, id: string): Promise<{ archived: boolean }> {
-    const existing = await this.getById(organizationId, id);
+  async archive(tenantId: string, id: string): Promise<{ archived: boolean }> {
+    const existing = await this.getById(tenantId, id);
     if (!existing) throw new ApiHttpException("CANNED_NOT_FOUND", "Canned response not found");
     await this.prisma.cannedResponse.update({ where: { id }, data: { isArchived: true } });
     return { archived: true };

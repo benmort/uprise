@@ -8,7 +8,7 @@ import { BlastsService } from "../blasts/blasts.service";
 
 describe("workflow e2e-style", () => {
   const prisma = {
-    organization: { upsert: jest.fn() },
+    tenant: { upsert: jest.fn() },
     blast: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
     audience: { findFirst: jest.fn().mockResolvedValue(null) },
     audienceContact: { findMany: jest.fn() },
@@ -78,7 +78,7 @@ describe("workflow e2e-style", () => {
         status: BlastStatus.PROOFED,
         audienceId: "aud_1",
         bodyTemplate: "Hi there",
-        organizationId: "org_1",
+        tenantId: "org_1",
         startedAt: null,
       })
       .mockResolvedValueOnce({
@@ -86,7 +86,7 @@ describe("workflow e2e-style", () => {
         status: BlastStatus.SCHEDULED,
         audienceId: "aud_1",
         bodyTemplate: "Hi there",
-        organizationId: "org_1",
+        tenantId: "org_1",
         startedAt: null,
       })
       .mockResolvedValueOnce({
@@ -94,7 +94,7 @@ describe("workflow e2e-style", () => {
         status: BlastStatus.SENDING,
         audienceId: "aud_1",
         bodyTemplate: "Hi there",
-        organizationId: "org_1",
+        tenantId: "org_1",
         startedAt: new Date(),
         completedAt: null,
       })
@@ -103,7 +103,7 @@ describe("workflow e2e-style", () => {
         status: BlastStatus.SENDING,
         audienceId: "aud_1",
         bodyTemplate: "Hi there",
-        organizationId: "org_1",
+        tenantId: "org_1",
         startedAt: new Date(),
       });
     prisma.blast.update
@@ -192,7 +192,7 @@ describe("workflow e2e-style", () => {
         status: BlastStatus.PROOFED,
         audienceId: "aud_seed",
         bodyTemplate: "Hello {{first_name}}",
-        organizationId: "org_1",
+        tenantId: "org_1",
         startedAt: null,
       })
       .mockResolvedValueOnce({
@@ -200,7 +200,7 @@ describe("workflow e2e-style", () => {
         status: BlastStatus.SENDING,
         audienceId: "aud_seed",
         bodyTemplate: "Hello {{first_name}}",
-        organizationId: "org_1",
+        tenantId: "org_1",
         startedAt: new Date(),
         completedAt: null,
       })
@@ -209,7 +209,7 @@ describe("workflow e2e-style", () => {
         status: BlastStatus.SENT,
         audienceId: "aud_seed",
         bodyTemplate: "Hello {{first_name}}",
-        organizationId: "org_1",
+        tenantId: "org_1",
         startedAt: new Date(),
       });
     prisma.blast.update
