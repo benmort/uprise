@@ -10,5 +10,12 @@
     "typecheck": "pnpm --filter api run typecheck && pnpm --filter web run typecheck && pnpm --filter worker run typecheck",
     "test": "pnpm --filter api run test && pnpm --filter web run test",
     "build": "pnpm --filter api run build && pnpm --filter web run build && pnpm --filter worker run build"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
   }
 }
