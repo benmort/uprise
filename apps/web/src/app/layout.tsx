@@ -27,12 +27,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+  const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
   return (
     <html lang="en">
       <body className={roboto.variable}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.__API_URL__=${JSON.stringify(apiUrl)};`,
+            __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};`,
           }}
         />
         <ToastProvider>

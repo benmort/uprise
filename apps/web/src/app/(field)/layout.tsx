@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useSyncQueue } from "@/hooks/use-sync-queue";
-import { getCredentials } from "@/lib/auth";
+import { getSession, goToLogin } from "@/lib/session";
+import { setCanvasserId } from "@/lib/canvass/canvasser";
 import { OfflineBanner } from "@/components/canvass/offline-banner";
 import { SyncStatusBadge } from "@/components/canvass/sync-status-badge";
 
@@ -16,18 +16,26 @@ import { SyncStatusBadge } from "@/components/canvass/sync-status-badge";
  */
 export default function FieldLayout({ children }: { children: React.ReactNode }) {
   const { counts, online } = useSyncQueue();
-  const router = useRouter();
   const [ready, setReady] = useState(false);
 
-  // A canvasserId in localStorage isn't proof of a session — require credentials
-  // (sessionStorage persists offline, so this still works in the field).
+  // The httpOnly session cookie is the proof of auth (meld doc 14). Resolve the
+  // principal to seed the canvasser id the field pages read from localStorage.
   useEffect(() => {
-    if (!getCredentials()) {
-      router.replace("/login?from=/field");
-      return;
-    }
-    setReady(true);
-  }, [router]);
+    let alive = true;
+    void (async () => {
+      const session = await getSession();
+      if (!alive) return;
+      if (!session) {
+        goToLogin();
+        return;
+      }
+      setCanvasserId(session.id);
+      setReady(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   if (!ready) return null;
 
