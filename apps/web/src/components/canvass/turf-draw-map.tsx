@@ -110,6 +110,7 @@ export function TurfDrawMap({
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<Array<{ label: string; code?: string; lat: number; lng: number; bbox?: [number, number, number, number] }>>([]);
   const [searching, setSearching] = useState(false);
+  const [areaOpen, setAreaOpen] = useState(false);
 
   const minZoom = useMemo(() => LEVELS.find((l) => l.id === level)?.minZoom ?? 9, [level]);
 
@@ -199,9 +200,43 @@ export function TurfDrawMap({
       }
       setHits([]);
       setQuery("");
+      setAreaOpen(false);
     },
     [searchMode, level, onToggleArea],
   );
+
+  // Area mode is a combobox: typing (≥2 chars) live-searches the level's full
+  // national set; an empty query falls back to the in-view areas (below).
+  useEffect(() => {
+    if (searchMode !== "area") return;
+    if (query.trim().length < 2) {
+      setHits([]);
+      return;
+    }
+    const t = setTimeout(() => void runSearch(), 250);
+    return () => clearTimeout(t);
+  }, [query, searchMode, level, runSearch]);
+
+  // What the area dropdown shows: search hits when typing, else the active
+  // level's areas currently on the map (scrollable). Capped for DOM sanity.
+  const AREA_LIST_CAP = 300;
+  const viewportAreas = useMemo(() => {
+    const feats = (areas?.features ?? []) as Array<GeoJSON.Feature>;
+    const seen = new Set<string>();
+    const opts: Array<{ label: string; code?: string; lat: number; lng: number }> = [];
+    for (const f of feats) {
+      const p = f.properties as { code?: string; name?: string } | null;
+      if (!p?.code || seen.has(p.code)) continue;
+      seen.add(p.code);
+      opts.push({ label: `${p.name ?? p.code} · ${p.code}`, code: p.code, lat: 0, lng: 0 });
+    }
+    opts.sort((a, b) => a.label.localeCompare(b.label));
+    return opts;
+  }, [areas]);
+
+  const areaOptions = query.trim().length >= 2 ? hits : viewportAreas;
+  const areaListTruncated = query.trim().length < 2 && viewportAreas.length > AREA_LIST_CAP;
+  const displayList = searchMode === "area" ? (areaOpen ? areaOptions.slice(0, AREA_LIST_CAP) : []) : hits;
 
   if (!TOKEN) {
     return (
@@ -266,6 +301,8 @@ export function TurfDrawMap({
               type="button"
               onClick={() => {
                 setLevel(l.id);
+                setQuery("");
+                setHits([]);
                 void refreshAreas(l.id);
               }}
               className={`flex-1 px-2 py-1.5 text-xs font-semibold transition ${
@@ -300,8 +337,10 @@ export function TurfDrawMap({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setAreaOpen(true)}
+              onBlur={() => setTimeout(() => setAreaOpen(false), 150)}
               onKeyDown={(e) => e.key === "Enter" && void runSearch()}
-              placeholder={searchMode === "area" ? `Search ${level.toUpperCase()}…` : "Suburb, address…"}
+              placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
               className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
             {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
@@ -311,12 +350,13 @@ export function TurfDrawMap({
               </button>
             ) : null}
           </div>
-          {hits.length > 0 ? (
-            <ul className="max-h-48 overflow-auto border-t border-border">
-              {hits.map((h, i) => (
+          {displayList.length > 0 ? (
+            <ul className="max-h-64 overflow-auto border-t border-border">
+              {displayList.map((h, i) => (
                 <li key={`${h.code ?? h.label}-${i}`}>
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void pickHit(h)}
                     className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-surface-variant"
                   >
@@ -325,7 +365,18 @@ export function TurfDrawMap({
                   </button>
                 </li>
               ))}
+              {areaListTruncated ? (
+                <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                  Showing first {AREA_LIST_CAP} — type to search the full {level.toUpperCase()} list.
+                </li>
+              ) : null}
             </ul>
+          ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
+            <div className="border-t border-border px-2 py-1.5 text-[11px] text-muted-foreground">
+              {tooZoomedOut
+                ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
+                : `No ${level.toUpperCase()} areas in view — type to search.`}
+            </div>
           ) : null}
         </div>
 
