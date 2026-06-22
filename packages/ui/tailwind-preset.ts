@@ -5,7 +5,7 @@
  * loosely so the package needn't depend on tailwindcss.
  */
 const yarnsUiPreset = {
-  darkMode: ["class"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
