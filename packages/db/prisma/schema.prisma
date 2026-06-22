@@ -6,11 +6,13 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics"]
 }
 
 enum AudienceStatus {
   ACTIVE
   ARCHIVED
+  @@schema("audience")
 }
 
 enum AudienceSource {
@@ -18,6 +20,7 @@ enum AudienceSource {
   CSV
   ACTION_NETWORK
   INTERNAL
+  @@schema("audience")
 }
 
 // Which messaging channel an audience is built for. ALL = usable on any channel
@@ -26,6 +29,7 @@ enum AudienceChannel {
   SMS
   WHATSAPP
   ALL
+  @@schema("audience")
 }
 
 // STATIC = a fixed contact list (AudienceContact rows). WHATSAPP_OPTED_IN = a
@@ -33,6 +37,7 @@ enum AudienceChannel {
 enum AudienceKind {
   STATIC
   WHATSAPP_OPTED_IN
+  @@schema("audience")
 }
 
 enum AudienceImportStatus {
@@ -40,6 +45,7 @@ enum AudienceImportStatus {
   RUNNING
   SUCCEEDED
   FAILED
+  @@schema("audience")
 }
 
 enum BlastStatus {
@@ -49,6 +55,7 @@ enum BlastStatus {
   SENDING
   SENT
   FAILED
+  @@schema("messaging")
 }
 
 enum BlastRecipientStatus {
@@ -60,6 +67,7 @@ enum BlastRecipientStatus {
   RESPONDED
   FAILED
   SKIPPED
+  @@schema("messaging")
 }
 
 // Messaging transport for a blast / message / conversation. Distinct from
@@ -67,6 +75,7 @@ enum BlastRecipientStatus {
 enum MessageChannel {
   SMS
   WHATSAPP
+  @@schema("messaging")
 }
 
 // Per-contact, per-channel consent. WhatsApp legally requires recorded opt-in;
@@ -75,16 +84,19 @@ enum ConsentState {
   UNKNOWN
   OPTED_IN
   OPTED_OUT
+  @@schema("messaging")
 }
 
 enum IntegrationType {
   ACTION_NETWORK
   INTERNAL
+  @@schema("integration")
 }
 
 enum IntegrationConnectionStatus {
   ACTIVE
   INACTIVE
+  @@schema("integration")
 }
 
 enum IntegrationJobStatus {
@@ -92,12 +104,14 @@ enum IntegrationJobStatus {
   RUNNING
   SUCCEEDED
   FAILED
+  @@schema("integration")
 }
 
 enum EngagementChannel {
   DOOR
   SMS
   BOTH
+  @@schema("canvass")
 }
 
 enum QuestionType {
@@ -106,12 +120,14 @@ enum QuestionType {
   multi_choice
   text
   scale
+  @@schema("canvass")
 }
 
 enum DispositionLayer {
   CONTACT_RESULT
   TERMINAL
   DATA_QUALITY
+  @@schema("canvass")
 }
 
 enum SupportLevel {
@@ -120,12 +136,14 @@ enum SupportLevel {
   UNDECIDED
   LEAN_OPPOSE
   STRONG_OPPOSE
+  @@schema("canvass")
 }
 
 enum CannedVisibility {
   ORG
   PERSONAL
   AUTO_SEND
+  @@schema("canvass")
 }
 
 enum JourneyStatus {
@@ -133,12 +151,14 @@ enum JourneyStatus {
   ACTIVE
   PAUSED
   ARCHIVED
+  @@schema("journey")
 }
 
 enum JourneyRungType {
   wait
   condition
   action
+  @@schema("journey")
 }
 
 enum JourneyTriggerType {
@@ -147,6 +167,7 @@ enum JourneyTriggerType {
   tag_added
   survey_answer
   no_answer_after
+  @@schema("journey")
 }
 
 enum JourneyEnrolmentState {
@@ -155,33 +176,39 @@ enum JourneyEnrolmentState {
   COMPLETED
   EXITED
   FAILED
+  @@schema("journey")
 }
 
 enum AppUserRole {
   ORGANISER
   CANVASSER
+  @@schema("iam")
 }
 
 enum CanvassCampaignStatus {
   DRAFT
   ACTIVE
   ARCHIVED
+  @@schema("canvass")
 }
 
 enum TurfAssignmentStatus {
   ASSIGNED
   RELEASED
+  @@schema("canvass")
 }
 
 enum WalkListItemStatus {
   PENDING
   VISITED
   SKIPPED
+  @@schema("canvass")
 }
 
 enum WalkListItemListType {
   STATIC
   DYNAMIC
+  @@schema("canvass")
 }
 
 model Organization {
@@ -215,6 +242,7 @@ model Organization {
   shifts           Shift[]
   suppressions     Suppression[]
   pushSubscriptions PushSubscription[]
+  @@schema("tenant")
 }
 
 model Contact {
@@ -255,6 +283,7 @@ model Contact {
   @@index([organizationId, addressNorm])
   @@index([organizationId, turfId])
   @@index([organizationId, gnafPid])
+  @@schema("public")
 }
 
 model AppUser {
@@ -273,6 +302,7 @@ model AppUser {
   doorKnocks     DoorKnock[]
 
   @@index([organizationId, role])
+  @@schema("iam")
 }
 
 model Audience {
@@ -297,6 +327,7 @@ model Audience {
   blasts         Blast[]
 
   @@index([organizationId, status])
+  @@schema("audience")
 }
 
 model AudienceContact {
@@ -317,6 +348,7 @@ model AudienceContact {
   @@unique([audienceId, phoneE164])
   @@index([organizationId, phoneE164])
   @@index([contactId])
+  @@schema("audience")
 }
 
 model AudienceImport {
@@ -339,6 +371,7 @@ model AudienceImport {
   audience       Audience             @relation(fields: [audienceId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, status, createdAt])
+  @@schema("audience")
 }
 
 model AudienceSegment {
@@ -350,6 +383,7 @@ model AudienceSegment {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   audience       Audience  @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  @@schema("audience")
 }
 
 model Blast {
@@ -380,6 +414,7 @@ model Blast {
   snapshots      AnalyticsSnapshot[]
 
   @@index([organizationId, status])
+  @@schema("messaging")
 }
 
 model BlastTemplate {
@@ -391,6 +426,7 @@ model BlastTemplate {
   blast     Blast    @relation(fields: [blastId], references: [id], onDelete: Cascade)
 
   @@unique([blastId, version])
+  @@schema("messaging")
 }
 
 model BlastRecipient {
@@ -418,6 +454,7 @@ model BlastRecipient {
   @@index([blastId, status])
   @@index([phoneE164])
   @@index([contactId])
+  @@schema("messaging")
 }
 
 model InboundMessage {
@@ -441,6 +478,7 @@ model InboundMessage {
 
   @@index([organizationId, threadKey, receivedAt])
   @@index([contactId])
+  @@schema("messaging")
 }
 
 model OutboundMessage {
@@ -467,6 +505,7 @@ model OutboundMessage {
 
   @@index([organizationId, toPhone, sentAt])
   @@index([contactId])
+  @@schema("messaging")
 }
 
 // Per-contact, per-channel messaging consent. WhatsApp requires OPTED_IN before
@@ -487,6 +526,7 @@ model ContactConsent {
   @@unique([organizationId, phoneE164, channel])
   @@index([organizationId, channel, state])
   @@index([contactId])
+  @@schema("messaging")
 }
 
 // Approved WhatsApp message templates synced from the Twilio Content API.
@@ -505,6 +545,7 @@ model WhatsappTemplate {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, status])
+  @@schema("messaging")
 }
 
 model IntegrationConnection {
@@ -521,6 +562,7 @@ model IntegrationConnection {
   syncJobs       IntegrationSyncJob[]
 
   @@index([organizationId, type, status])
+  @@schema("integration")
 }
 
 model IntegrationSyncJob {
@@ -538,6 +580,7 @@ model IntegrationSyncJob {
   completedAt           DateTime?
   createdAt             DateTime             @default(now())
   connection            IntegrationConnection @relation(fields: [integrationConnectionId], references: [id], onDelete: Cascade)
+  @@schema("integration")
 }
 
 model AnalyticsSnapshot {
@@ -553,6 +596,7 @@ model AnalyticsSnapshot {
   blast          Blast?       @relation(fields: [blastId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, metricName, bucketAt])
+  @@schema("analytics")
 }
 
 model ConversationState {
@@ -574,6 +618,7 @@ model ConversationState {
   @@unique([organizationId, contactPhone, channel])
   @@index([contactId])
   @@index([organizationId, ownerId])
+  @@schema("messaging")
 }
 
 // ── Shared engagement layer ──────────────────────────────────────────────
@@ -593,6 +638,7 @@ model Script {
   steps          ScriptStep[]
 
   @@index([organizationId, channel, isArchived])
+  @@schema("canvass")
 }
 
 model ScriptStep {
@@ -607,6 +653,7 @@ model ScriptStep {
   children     ScriptStep[] @relation("ScriptStepTree")
 
   @@index([scriptId, parentStepId, orderIndex])
+  @@schema("canvass")
 }
 
 model Survey {
@@ -621,6 +668,7 @@ model Survey {
   questions      Question[]
 
   @@index([organizationId, isArchived])
+  @@schema("canvass")
 }
 
 model Question {
@@ -637,6 +685,7 @@ model Question {
   responses  QuestionResponse[]
 
   @@index([surveyId, orderIndex])
+  @@schema("canvass")
 }
 
 // One object, three projections: a survey option renders as a door disposition
@@ -655,6 +704,7 @@ model QuestionOption {
 
   @@unique([questionId, value])
   @@index([questionId, orderIndex])
+  @@schema("canvass")
 }
 
 model QuestionResponse {
@@ -676,6 +726,7 @@ model QuestionResponse {
 
   @@index([organizationId, contactId, createdAt])
   @@index([questionId, optionId])
+  @@schema("canvass")
 }
 
 // Disposition catalog: organizationId null = system default. Terminal/locked
@@ -694,6 +745,7 @@ model DispositionDef {
 
   @@unique([organizationId, code])
   @@index([organizationId, layer, channel])
+  @@schema("canvass")
 }
 
 // A recorded outcome against a contact. code is denormalised from DispositionDef
@@ -717,6 +769,7 @@ model Disposition {
 
   @@index([organizationId, contactId, createdAt])
   @@index([organizationId, code, createdAt])
+  @@schema("canvass")
 }
 
 // Three-tier visibility. Using a canned reply ALWAYS logs a disposition
@@ -738,6 +791,7 @@ model CannedResponse {
 
   @@index([organizationId, channel, visibility, isArchived])
   @@index([organizationId, ownerId])
+  @@schema("canvass")
 }
 
 // ── Journeys engine ──────────────────────────────────────────────────────
@@ -760,6 +814,7 @@ model Journey {
   enrolments             JourneyEnrolment[]
 
   @@index([organizationId, status, triggerType])
+  @@schema("journey")
 }
 
 model JourneyRung {
@@ -771,6 +826,7 @@ model JourneyRung {
   journey   Journey         @relation(fields: [journeyId], references: [id], onDelete: Cascade)
 
   @@unique([journeyId, rungIndex])
+  @@schema("journey")
 }
 
 model JourneyEnrolment {
@@ -792,6 +848,7 @@ model JourneyEnrolment {
   @@unique([journeyId, contactId, enrolledAt])
   @@index([organizationId, state, resumeAt])
   @@index([journeyId, contactId, state])
+  @@schema("journey")
 }
 
 // ── Canvassing domain ────────────────────────────────────────────────────
@@ -814,6 +871,7 @@ model CanvassCampaign {
   shifts         Shift[]
 
   @@index([organizationId, status])
+  @@schema("canvass")
 }
 
 model Turf {
@@ -831,6 +889,7 @@ model Turf {
   assignments    TurfAssignment[]
 
   @@index([organizationId, campaignId])
+  @@schema("canvass")
 }
 
 model TurfAssignment {
@@ -848,6 +907,7 @@ model TurfAssignment {
   // migration (status = 'ASSIGNED'), so two canvassers can't both own a turf.
   @@index([turfId, status])
   @@index([canvasserId, status])
+  @@schema("canvass")
 }
 
 model WalkList {
@@ -865,6 +925,7 @@ model WalkList {
   items          WalkListItem[]
 
   @@index([organizationId, campaignId])
+  @@schema("canvass")
 }
 
 model WalkListItem {
@@ -878,6 +939,7 @@ model WalkListItem {
 
   @@unique([walkListId, contactId])
   @@index([walkListId, orderIndex])
+  @@schema("canvass")
 }
 
 // A logged door visit. localId is the client-generated idempotency key so a
@@ -904,6 +966,7 @@ model DoorKnock {
   @@unique([organizationId, localId])
   @@index([organizationId, contactId, createdAt])
   @@index([canvasserId, createdAt])
+  @@schema("canvass")
 }
 
 // ── Canvassing UI additions ──────────────────────────────────────────────
@@ -928,6 +991,7 @@ model Shift {
 
   @@index([organizationId, campaignId, startsAt])
   @@index([organizationId, canvasserId])
+  @@schema("canvass")
 }
 
 // Opt-out / suppression ledger. A phone or email that must never be contacted.
@@ -943,6 +1007,7 @@ model Suppression {
 
   @@index([organizationId, phoneE164])
   @@index([organizationId, email])
+  @@schema("messaging")
 }
 
 // Web-push subscription so organisers can broadcast to canvassers in the field.
@@ -959,4 +1024,5 @@ model PushSubscription {
 
   @@unique([organizationId, endpoint])
   @@index([organizationId, userId])
+  @@schema("public")
 }
