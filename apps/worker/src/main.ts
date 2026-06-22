@@ -6,6 +6,7 @@ import { NestFactory } from "@nestjs/core";
 import { Job, Queue, QueueEvents, Worker } from "bullmq";
 import type { EventEnvelope } from "@yarns/events";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
+import { SegmentEvaluatorService } from "../../api/src/audiences/segment-evaluator.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { IntegrationsService } from "../../api/src/integrations/integrations.service";
 import { JourneysService } from "../../api/src/journeys/journeys.service";
@@ -19,6 +20,7 @@ import {
   isBlastSendBatchJobPayload,
   isIntegrationSyncJobPayload,
   isJourneyRunRungJobPayload,
+  isSegmentEvalRunJobPayload,
 } from "../../api/src/common/queue/queue.payloads";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES } from "../../api/src/common/queue/queue.constants";
 
@@ -110,6 +112,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.createApplicationContext(AppModule);
   const queueConfig = app.get(QueueConfigService);
   const audiences = app.get(AudiencesService);
+  const segmentEvaluator = app.get(SegmentEvaluatorService);
   const blasts = app.get(BlastsService);
   const integrations = app.get(IntegrationsService);
   const journeys = app.get(JourneysService);
@@ -203,6 +206,17 @@ async function bootstrap(): Promise<void> {
         return null;
       },
       { connection, prefix, concurrency: 5 },
+    ),
+    new Worker(
+      QUEUE_NAMES.SEGMENT_EVAL,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.SEGMENT_EVAL_RUN) return null;
+        if (!isSegmentEvalRunJobPayload(job.data)) {
+          throw new Error(`Invalid segment eval job payload for job ${job.id}`);
+        }
+        return segmentEvaluator.processEvalJob(job.data);
+      },
+      { connection, prefix, concurrency: 2 },
     ),
   ];
 

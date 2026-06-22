@@ -11,6 +11,7 @@ describe("workflow e2e-style", () => {
     tenant: { upsert: jest.fn() },
     blast: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
     audience: { findFirst: jest.fn().mockResolvedValue(null) },
+    audienceSegment: { findMany: jest.fn().mockResolvedValue([]) },
     audienceContact: { findMany: jest.fn() },
     blastRecipient: {
       count: jest.fn(),
@@ -59,6 +60,7 @@ describe("workflow e2e-style", () => {
     compliance.validateMessageForSend.mockImplementation(() => ({ warnings: [] }));
     consent.getStatesForPhones.mockResolvedValue(new Map());
     consent.canSend.mockReturnValue(true);
+    prisma.audienceSegment.findMany.mockResolvedValue([]);
     service = new BlastsService(
       prisma,
       config,

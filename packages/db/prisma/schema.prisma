@@ -284,6 +284,7 @@ model Contact {
   lat              Float?
   lng              Float?
   turfId           String?
+  canonicalContactId String?         // identity resolution: groups duplicates under one canonical contact
   metadata         Json?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -309,6 +310,8 @@ model Contact {
   @@index([tenantId, addressNorm])
   @@index([tenantId, turfId])
   @@index([tenantId, gnafPid])
+  @@index([tenantId, email])
+  @@index([canonicalContactId])
   @@schema("public")
 }
 
@@ -404,14 +407,17 @@ model AudienceImport {
 }
 
 model AudienceSegment {
-  id             String    @id @default(cuid())
-  tenantId String
+  id             String              @id @default(cuid())
+  tenantId       String
   audienceId     String
   name           String
+  type           AudienceSegmentType @default(DYNAMIC)
   definition     Json
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  audience       Audience  @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  audience       Audience            @relation(fields: [audienceId], references: [id], onDelete: Cascade)
+  members        AudienceSegmentMember[]
+  @@index([audienceId, type])
   @@schema("audience")
 }
 
@@ -1373,4 +1379,42 @@ model PaymentMethod {
 
   @@index([customerId])
   @@schema("payment")
+}
+
+// ── Audience fold-in (meld doc 10) ───────────────────────────────────────────
+enum AudienceSegmentType {
+  STATIC
+  DYNAMIC
+  @@schema("audience")
+}
+
+// Multi-source provenance for a Contact — lets a contact be reconciled across
+// source systems (Action Network, CSV, ...) and re-resolved. 1:1 with prog's
+// source_record_view.
+model ContactSourceRecord {
+  id           String   @id @default(cuid())
+  tenantId     String
+  contactId    String   // id-only ref to public.Contact
+  sourceSystem String
+  externalId   String
+  data         Json?
+  createdAt    DateTime @default(now())
+
+  @@unique([sourceSystem, externalId])
+  @@index([contactId])
+  @@index([tenantId, sourceSystem])
+  @@schema("audience")
+}
+
+// Materialised membership of a DYNAMIC AudienceSegment (rewritten by the
+// SegmentEvaluatorService). id-only contactId ref to public.Contact.
+model AudienceSegmentMember {
+  segmentId  String
+  contactId  String
+  computedAt DateTime @default(now())
+  segment    AudienceSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@id([segmentId, contactId])
+  @@index([contactId])
+  @@schema("audience")
 }

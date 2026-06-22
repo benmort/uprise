@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   AudienceKind,
+  AudienceSegmentType,
   BlastRecipientStatus,
   BlastStatus,
   ConsentState,
@@ -317,19 +318,52 @@ export class BlastsService {
         dedup.set(c.phoneE164, { contactId: c.contactId ?? undefined, phoneE164: c.phoneE164, metadata: {} });
       }
     } else {
-      const contacts = await this.prisma.audienceContact.findMany({
-        where: { audienceId: blast.audienceId },
-        orderBy: { createdAt: "asc" },
+      const dynamicSegments = await this.prisma.audienceSegment.findMany({
+        where: {
+          audienceId: blast.audienceId,
+          tenantId: blast.tenantId,
+          type: AudienceSegmentType.DYNAMIC,
+        },
+        select: { id: true },
       });
-      for (const contact of contacts) {
-        if (!this.isContactable(contact)) continue;
-        dedup.set(contact.phoneE164, {
-          // Point at the persistent Contact spine, not the per-audience row.
-          // Null until backfill populates AudienceContact.contactId.
-          contactId: contact.contactId ?? undefined,
-          phoneE164: contact.phoneE164,
-          metadata: (contact.metadata as Record<string, unknown>) || {},
+
+      if (dynamicSegments.length > 0) {
+        // Dynamic-segment audience: members are the materialised AudienceSegmentMember
+        // set (rewritten by SegmentEvaluatorService), resolved to the Contact spine.
+        const members = await this.prisma.audienceSegmentMember.findMany({
+          where: { segmentId: { in: dynamicSegments.map((s) => s.id) } },
+          select: { contactId: true },
         });
+        const contactIds = Array.from(new Set(members.map((m) => m.contactId)));
+        if (contactIds.length > 0) {
+          const contacts = await this.prisma.contact.findMany({
+            where: { id: { in: contactIds }, tenantId: blast.tenantId, phoneE164: { not: null } },
+            select: { id: true, phoneE164: true, metadata: true },
+          });
+          for (const c of contacts) {
+            if (!c.phoneE164) continue;
+            dedup.set(c.phoneE164, {
+              contactId: c.id,
+              phoneE164: c.phoneE164,
+              metadata: (c.metadata as Record<string, unknown>) || {},
+            });
+          }
+        }
+      } else {
+        const contacts = await this.prisma.audienceContact.findMany({
+          where: { audienceId: blast.audienceId },
+          orderBy: { createdAt: "asc" },
+        });
+        for (const contact of contacts) {
+          if (!this.isContactable(contact)) continue;
+          dedup.set(contact.phoneE164, {
+            // Point at the persistent Contact spine, not the per-audience row.
+            // Null until backfill populates AudienceContact.contactId.
+            contactId: contact.contactId ?? undefined,
+            phoneE164: contact.phoneE164,
+            metadata: (contact.metadata as Record<string, unknown>) || {},
+          });
+        }
       }
     }
 

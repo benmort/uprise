@@ -175,6 +175,85 @@ export class ContactsService {
   }
 
   /**
+   * Identity resolution (meld doc 10) — the soft, non-destructive counterpart of
+   * mergeContacts. Groups every Contact sharing an email OR phoneE164 under one
+   * `canonicalContactId` (the earliest by createdAt) WITHOUT deleting any row, so
+   * a contact can be traced across source systems and re-resolved. The canonical
+   * row's own `canonicalContactId` is null. Returns the canonical contact, or null
+   * when nothing matches.
+   */
+  async resolveIdentity(
+    tenantId: string,
+    identity: { email?: string | null; phoneE164?: string | null },
+  ): Promise<Contact | null> {
+    const ors: Prisma.ContactWhereInput[] = [];
+    if (identity.email) ors.push({ email: identity.email });
+    if (identity.phoneE164) ors.push({ phoneE164: identity.phoneE164 });
+    if (ors.length === 0) return null;
+
+    const matches = await this.prisma.contact.findMany({
+      where: { tenantId, OR: ors },
+      orderBy: { createdAt: "asc" },
+    });
+    if (matches.length === 0) return null;
+
+    const canonical = matches[0];
+    const dupeIds = matches.slice(1).map((c) => c.id);
+    if (dupeIds.length > 0) {
+      await this.prisma.$transaction([
+        // Re-point the duplicates AND anyone who previously pointed at a duplicate
+        // (so transitive chains collapse onto the one canonical row).
+        this.prisma.contact.updateMany({
+          where: {
+            tenantId,
+            OR: [{ id: { in: dupeIds } }, { canonicalContactId: { in: dupeIds } }],
+          },
+          data: { canonicalContactId: canonical.id },
+        }),
+        this.prisma.contact.update({
+          where: { id: canonical.id },
+          data: { canonicalContactId: null },
+        }),
+      ]);
+    }
+    return canonical;
+  }
+
+  /**
+   * Record multi-source provenance for a contact (meld doc 10). Idempotent on
+   * (sourceSystem, externalId) so re-importing from Action Network/CSV updates the
+   * payload rather than duplicating. Drives the segment `hasSource` clause.
+   */
+  async recordSourceRecord(input: {
+    tenantId: string;
+    contactId: string;
+    sourceSystem: string;
+    externalId: string;
+    data?: Prisma.InputJsonValue;
+  }): Promise<void> {
+    await this.prisma.contactSourceRecord.upsert({
+      where: {
+        sourceSystem_externalId: {
+          sourceSystem: input.sourceSystem,
+          externalId: input.externalId,
+        },
+      },
+      create: {
+        tenantId: input.tenantId,
+        contactId: input.contactId,
+        sourceSystem: input.sourceSystem,
+        externalId: input.externalId,
+        ...(input.data !== undefined ? { data: input.data } : {}),
+      },
+      update: {
+        tenantId: input.tenantId,
+        contactId: input.contactId,
+        ...(input.data !== undefined ? { data: input.data } : {}),
+      },
+    });
+  }
+
+  /**
    * The merged message timeline for a contact, oldest first.
    */
   async getTimeline(tenantId: string, contactId: string) {
