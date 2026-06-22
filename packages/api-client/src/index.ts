@@ -4,6 +4,7 @@ import type {
   InvitePreview,
   LoginResponse,
   OkResponse,
+  RegisterRequest,
   SessionGrantResponse,
 } from "@yarns/contracts";
 
@@ -82,6 +83,7 @@ function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
 export const auth = {
   login: (email: string, password: string) =>
     post<LoginResponse>("/iam/sessions", { email, password }),
+  register: (body: RegisterRequest) => post<SessionGrantResponse>("/auth/register", body),
   logout: () => request<OkResponse>("/iam/sessions", { method: "DELETE" }, { redirectOn401: false }),
   checkSession: () => request<CheckSessionResponse>("/auth/check", undefined, { redirectOn401: false }),
 

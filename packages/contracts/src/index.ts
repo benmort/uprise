@@ -71,6 +71,19 @@ export type AcceptInviteRequest = z.infer<typeof acceptInviteSchema>;
 export const selectTenantSchema = z.object({ tenantId: z.string().min(1) });
 export type SelectTenantRequest = z.infer<typeof selectTenantSchema>;
 
+export const registerSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  displayName: z.string().max(200).optional(),
+  orgName: z.string().min(1).max(200),
+  slug: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/, "lowercase letters, numbers and hyphens only"),
+});
+export type RegisterRequest = z.infer<typeof registerSchema>;
+
 // ── Response types ────────────────────────────────────────────────────
 export interface SessionGrantResponse {
   token: string;

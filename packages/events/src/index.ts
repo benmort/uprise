@@ -20,6 +20,10 @@ export const EVENT_TYPES = {
   PAYMENT_REFUNDED: "payment.payment.refunded",
   CALL_INITIATED: "telephony.call.initiated",
   ORG_CREDENTIAL_UPDATED: "tenant.org-credential.updated",
+  TENANT_CREATED: "tenant.tenant.created",
+  TENANT_MEMBER_ADDED: "tenant.member.added",
+  NETWORK_CREATED: "tenant.network.created",
+  SUBSCRIPTION_CHANGED: "payment.subscription.changed",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -38,6 +42,15 @@ export interface DomainEventMap {
   "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
   "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };
   "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
+  "tenant.tenant.created": { tenantId: string; slug: string; name: string; networkId: string | null };
+  "tenant.member.added": { tenantId: string; userId: string; role: string };
+  "tenant.network.created": { networkId: string; name: string };
+  "payment.subscription.changed": {
+    tenantId: string | null;
+    networkId: string | null;
+    subscriptionId: string;
+    status: string;
+  };
 }
 
 export interface EventMetadata {

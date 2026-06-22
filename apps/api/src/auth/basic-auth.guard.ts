@@ -49,6 +49,7 @@ export class BasicAuthGuard implements CanActivate {
       "/iam/verify-email/confirm",
       "/iam/2fa/send",
       "/iam/2fa/verify",
+      "/auth/register", // self-service sign-up (meld doc 12) — issues the session
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some(
