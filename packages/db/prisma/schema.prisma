@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops"]
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops", "payment"]
 }
 
 enum AudienceStatus {
@@ -1262,4 +1262,111 @@ model WebhookEvent {
 
   @@unique([provider, eventId])
   @@schema("ops")
+}
+
+// ── Payment domain (meld doc 08) ─────────────────────────────────────────────
+enum PaymentStatus {
+  RECORDED
+  PROCESSING
+  SUCCEEDED
+  PARTIALLY_REFUNDED
+  FAILED
+  REFUNDED
+  @@schema("payment")
+}
+
+enum PaymentType {
+  SUBSCRIPTION
+  ONE_TIME
+  INVOICE
+  REFUND
+  @@schema("payment")
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  tenantId          String
+  networkId         String?
+  amountCents       Int
+  currency          String
+  customerRef       String?
+  providerPaymentId String?       @unique
+  status            PaymentStatus @default(RECORDED)
+  type              PaymentType
+  refundedCents     Int           @default(0)
+  subscriptionId    String?
+  invoiceId         String?
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  refunds           Refund[]
+
+  @@index([tenantId, status])
+  @@schema("payment")
+}
+
+model Refund {
+  id                String   @id @default(cuid())
+  paymentId         String
+  amountCents       Int
+  status            String // created | processing | succeeded | failed
+  processorRefundId String?
+  reason            String?
+  createdAt         DateTime @default(now())
+  payment           Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@schema("payment")
+}
+
+model Customer {
+  id                 String   @id @default(cuid())
+  networkId          String?
+  tenantId           String?
+  providerCustomerId String   @unique
+  email              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@schema("payment")
+}
+
+model Subscription {
+  id                     String    @id @default(cuid())
+  tenantId               String
+  providerSubscriptionId String    @unique
+  status                 String
+  planName               String?
+  currentPeriodEnd       DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@schema("payment")
+}
+
+model Invoice {
+  id                String   @id @default(cuid())
+  tenantId          String
+  providerInvoiceId String   @unique
+  status            String
+  amountCents       Int
+  currency          String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@schema("payment")
+}
+
+model PaymentMethod {
+  id               String   @id @default(cuid())
+  customerId       String
+  providerMethodId String   @unique
+  brand            String?
+  last4            String?
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([customerId])
+  @@schema("payment")
 }

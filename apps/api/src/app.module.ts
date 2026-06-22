@@ -35,6 +35,7 @@ import { OutboxModule } from "./common/outbox/outbox.module";
 import { ReactionsModule } from "./common/reactions/reactions.module";
 import { WebhookEventModule } from "./common/webhooks/webhook-event.module";
 import { EmailModule } from "./email/email.module";
+import { PaymentModule } from "./payment/payment.module";
 import { RequestIdMiddleware } from "./common/http/request-id.middleware";
 import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middleware";
 import { QueueModule } from "./common/queue/queue.module";
@@ -55,6 +56,7 @@ import { QueueModule } from "./common/queue/queue.module";
     ReactionsModule,
     WebhookEventModule,
     EmailModule,
+    PaymentModule,
     QueueModule,
     TwilioModule,
     MessagingModule,

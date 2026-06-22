@@ -9,9 +9,12 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
 import twilio from "twilio";
+import { RawBodyRequest } from "@nestjs/common";
 import { InboxService } from "../inbox/inbox.service";
 import { BlastsService } from "../blasts/blasts.service";
 import { EmailService, type SendGridEvent } from "../email/email.service";
+import { PaymentService, type StripeEvent } from "../payment/payment.service";
+import { StripeService } from "../payment/stripe.service";
 import { parseChannelAddress } from "../messaging/message-channel.util";
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
@@ -23,7 +26,29 @@ export class WebhooksController {
     private readonly inbox: InboxService,
     private readonly blasts: BlastsService,
     private readonly email: EmailService,
+    private readonly payment: PaymentService,
+    private readonly stripe: StripeService,
   ) {}
+
+  /**
+   * Stripe event webhook. Verifies the signature over the RAW body when
+   * STRIPE_WEBHOOK_SECRET is set (rawBody enabled in main.ts). Per-event
+   * idempotency + transitions live in PaymentService.
+   */
+  @Post("payment-webhook")
+  async paymentWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ ok: true }> {
+    const secret = this.config.get<string>("STRIPE_WEBHOOK_SECRET", "").trim();
+    const raw = req.rawBody?.toString("utf8") ?? "";
+    if (secret) {
+      const sig = (req.headers["stripe-signature"] as string) ?? "";
+      if (!raw || !this.stripe.verifyWebhookSignature(raw, sig)) {
+        throw new UnauthorizedException("Invalid Stripe signature");
+      }
+    }
+    const event = (raw ? JSON.parse(raw) : (req.body as unknown)) as StripeEvent;
+    await this.payment.processStripeEvent(event);
+    return { ok: true };
+  }
 
   /**
    * SendGrid event webhook (delivered/bounce/dropped/open/click). Public (the
