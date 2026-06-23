@@ -17,6 +17,7 @@ function setup(paymentRow?: any) {
       deleteMany: jest.fn(async () => ({})),
     },
     tenant: { upsert: jest.fn(async () => ({ id: "t1", name: "Acme" })) },
+    $queryRaw: jest.fn(async () => [{ id: "p1" }]),
     $transaction: jest.fn(async (arg: any) =>
       Array.isArray(arg) ? Promise.all(arg) : arg(prisma),
     ),

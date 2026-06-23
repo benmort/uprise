@@ -202,6 +202,16 @@ export class EmailService {
   }
 
   // ── SendGrid webhook processing ─────────────────────────────────────
+  /** Whether SendGrid signed-webhook verification is configured. */
+  isWebhookVerificationConfigured(): boolean {
+    return this.sendgrid.isWebhookVerificationConfigured();
+  }
+
+  /** Verify a SendGrid signed-event-webhook request (ECDSA over timestamp+payload). */
+  verifyEventWebhookSignature(rawPayload: string, signature: string, timestamp: string): boolean {
+    return this.sendgrid.verifyEventWebhookSignature(rawPayload, signature, timestamp);
+  }
+
   /** SendGrid event timestamp (epoch seconds) → Date, else now (avoids retry-time skew). */
   private eventTime(event: SendGridEvent): Date {
     const ts = Number((event as { timestamp?: unknown }).timestamp);

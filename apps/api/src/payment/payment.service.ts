@@ -80,25 +80,34 @@ export class PaymentService {
     });
   }
 
-  private async load(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+  /**
+   * Lock + load a payment row inside a transaction (`SELECT … FOR UPDATE`), so a
+   * concurrent webhook + manual transition can't both pass the stale-status guard
+   * and double-apply (TOCTOU, doc 08). Callers run the guard on the locked row.
+   */
+  private async lockAndLoad(tx: Prisma.TransactionClient, paymentId: string) {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`SELECT id FROM payment."Payment" WHERE id = ${paymentId} FOR UPDATE`,
+    );
+    if (locked.length === 0) throw new NotFoundException("Payment not found");
+    const payment = await tx.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException("Payment not found");
     return payment;
   }
 
   async markProcessing(paymentId: string): Promise<void> {
-    const payment = await this.load(paymentId);
-    assertValidPaymentTransition(payment.status, PaymentStatus.PROCESSING);
     await this.prisma.$transaction(async (tx) => {
+      const payment = await this.lockAndLoad(tx, paymentId);
+      assertValidPaymentTransition(payment.status, PaymentStatus.PROCESSING);
       await tx.payment.update({ where: { id: paymentId }, data: { status: PaymentStatus.PROCESSING } });
       await this.emitStatus(tx, paymentId, payment.tenantId, PaymentStatus.PROCESSING);
     });
   }
 
   async markSucceeded(paymentId: string): Promise<void> {
-    const payment = await this.load(paymentId);
-    assertValidPaymentTransition(payment.status, PaymentStatus.SUCCEEDED);
     await this.prisma.$transaction(async (tx) => {
+      const payment = await this.lockAndLoad(tx, paymentId);
+      assertValidPaymentTransition(payment.status, PaymentStatus.SUCCEEDED);
       await tx.payment.update({ where: { id: paymentId }, data: { status: PaymentStatus.SUCCEEDED } });
       await this.outbox.append(tx, {
         tenantId: payment.tenantId,
@@ -110,9 +119,9 @@ export class PaymentService {
   }
 
   async markFailed(paymentId: string, reason?: string): Promise<void> {
-    const payment = await this.load(paymentId);
-    assertValidPaymentTransition(payment.status, PaymentStatus.FAILED);
     await this.prisma.$transaction(async (tx) => {
+      const payment = await this.lockAndLoad(tx, paymentId);
+      assertValidPaymentTransition(payment.status, PaymentStatus.FAILED);
       await tx.payment.update({
         where: { id: paymentId },
         data: { status: PaymentStatus.FAILED, failureReason: reason ?? null },
@@ -259,18 +268,18 @@ export class PaymentService {
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
       throw new BadRequestException("refund amountCents must be a positive integer");
     }
-    const payment = await this.load(paymentId);
-    const outstanding = payment.amountCents - payment.refundedCents;
-    if (amountCents > outstanding) {
-      throw new BadRequestException("Refund exceeds the outstanding amount");
-    }
-    const nextStatus =
-      payment.refundedCents + amountCents === payment.amountCents
-        ? PaymentStatus.REFUNDED
-        : PaymentStatus.PARTIALLY_REFUNDED;
-    assertValidPaymentTransition(payment.status, nextStatus);
     try {
       await this.prisma.$transaction(async (tx) => {
+        const payment = await this.lockAndLoad(tx, paymentId);
+        const outstanding = payment.amountCents - payment.refundedCents;
+        if (amountCents > outstanding) {
+          throw new BadRequestException("Refund exceeds the outstanding amount");
+        }
+        const nextStatus =
+          payment.refundedCents + amountCents === payment.amountCents
+            ? PaymentStatus.REFUNDED
+            : PaymentStatus.PARTIALLY_REFUNDED;
+        assertValidPaymentTransition(payment.status, nextStatus);
         await tx.payment.update({
           where: { id: paymentId },
           data: { status: nextStatus, refundedCents: { increment: amountCents } },

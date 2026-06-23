@@ -58,16 +58,25 @@ export class WebhooksController {
    * idempotency + status transitions live in EmailService.
    */
   @Post("email-webhook")
-  async emailWebhook(
-    @Body() body: SendGridEvent[] | SendGridEvent,
-    @Req() req: Request,
-  ): Promise<{ ok: true }> {
-    const secret = this.config.get<string>("SENDGRID_WEBHOOK_SECRET", "").trim();
-    if (secret) {
-      const provided = (req.headers["x-webhook-secret"] as string) ?? "";
-      if (provided !== secret) throw new UnauthorizedException("Invalid SendGrid webhook secret");
+  async emailWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ ok: true }> {
+    const raw = req.rawBody?.toString("utf8") ?? "";
+    if (this.email.isWebhookVerificationConfigured()) {
+      // Preferred: ECDSA signed event webhook over the RAW body (doc 07).
+      const sig = (req.headers["x-twilio-email-event-webhook-signature"] as string) ?? "";
+      const ts = (req.headers["x-twilio-email-event-webhook-timestamp"] as string) ?? "";
+      if (!this.email.verifyEventWebhookSignature(raw, sig, ts)) {
+        throw new UnauthorizedException("Invalid SendGrid signature");
+      }
+    } else {
+      // Fallback: optional shared secret (legacy).
+      const secret = this.config.get<string>("SENDGRID_WEBHOOK_SECRET", "").trim();
+      if (secret) {
+        const provided = (req.headers["x-webhook-secret"] as string) ?? "";
+        if (provided !== secret) throw new UnauthorizedException("Invalid SendGrid webhook secret");
+      }
     }
-    const events = Array.isArray(body) ? body : [body];
+    const parsed = raw ? (JSON.parse(raw) as SendGridEvent[] | SendGridEvent) : [];
+    const events = Array.isArray(parsed) ? parsed : [parsed];
     await this.email.processSendGridEvents(events);
     return { ok: true };
   }

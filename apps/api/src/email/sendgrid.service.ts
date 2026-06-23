@@ -1,3 +1,4 @@
+import { createPublicKey, createVerify } from "crypto";
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { withRetry } from "../common/utils/retry.utils";
@@ -31,6 +32,35 @@ export class SendGridService {
 
   isConfigured(): boolean {
     return Boolean(this.config.get<string>("SENDGRID_API_KEY", "").trim());
+  }
+
+  /** Whether the signed-event-webhook verification key is configured. */
+  isWebhookVerificationConfigured(): boolean {
+    return Boolean(this.config.get<string>("SENDGRID_WEBHOOK_VERIFICATION_KEY", "").trim());
+  }
+
+  /**
+   * Verify SendGrid's Signed Event Webhook (doc 07): ECDSA-P256/SHA-256 over
+   * `timestamp + rawPayload`, with the base64 signature + timestamp headers and
+   * the base64 DER (SPKI) public key from the console. Returns false on any
+   * mismatch / missing input.
+   */
+  verifyEventWebhookSignature(rawPayload: string, signature: string, timestamp: string): boolean {
+    const publicKeyB64 = this.config.get<string>("SENDGRID_WEBHOOK_VERIFICATION_KEY", "").trim();
+    if (!publicKeyB64 || !signature || !timestamp) return false;
+    try {
+      const publicKey = createPublicKey({
+        key: Buffer.from(publicKeyB64, "base64"),
+        format: "der",
+        type: "spki",
+      });
+      const verifier = createVerify("sha256");
+      verifier.update(timestamp + rawPayload);
+      verifier.end();
+      return verifier.verify(publicKey, Buffer.from(signature, "base64"));
+    } catch {
+      return false;
+    }
   }
 
   async send(input: SendGridSendInput): Promise<SendGridSendResult> {
