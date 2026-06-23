@@ -18,6 +18,11 @@ export const EVENT_TYPES = {
   USER_CREATED: "iam.user.created",
   TENANT_INVITATION_SENT: "tenant.invitation.sent",
   EMAIL_QUEUED: "email.email.queued",
+  EMAIL_SENDING: "email.email.sending",
+  EMAIL_SENT: "email.email.sent",
+  EMAIL_FAILED: "email.email.failed",
+  EMAIL_OPENED: "email.email.opened",
+  EMAIL_CLICKED: "email.email.clicked",
   PAYMENT_SUCCEEDED: "payment.payment.succeeded",
   PAYMENT_REFUNDED: "payment.payment.refunded",
   CALL_INITIATED: "telephony.call.initiated",
@@ -51,6 +56,11 @@ export interface DomainEventMap {
   "iam.user.created": { userId: string; email: string; tenantId: string };
   "tenant.invitation.sent": { invitationId: string; tenantId: string; email: string };
   "email.email.queued": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.sending": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.sent": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.failed": { emailId: string; tenantId: string; toAddress: string; reason: string };
+  "email.email.opened": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.clicked": { emailId: string; tenantId: string; toAddress: string };
   "payment.payment.succeeded": { paymentId: string; tenantId: string; amountCents: number };
   "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
   "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };

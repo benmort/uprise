@@ -60,46 +60,137 @@ export class EmailService {
     const template = await this.resolveTemplate(input.tenantId, input.templateKey);
     const subject = this.render(template.subject, input.vars);
     const body = this.render(template.body, input.vars);
+    return this.runEmailSend(
+      {
+        tenantId: input.tenantId,
+        toAddress: input.toAddress,
+        subject,
+        contactId: input.contactId,
+        purpose: input.purpose,
+        templateKey: input.templateKey,
+      },
+      (emailId) => this.sendgrid.send({ to: input.toAddress, subject, body, customArgs: { emailId } }),
+    );
+  }
 
+  /** Ad-hoc email with a caller-supplied subject + text and/or HTML body (no stored template). */
+  async sendRaw(input: {
+    tenantId: string;
+    toAddress: string;
+    subject: string;
+    body?: string;
+    html?: string;
+    purpose: string;
+    contactId?: string;
+  }): Promise<{ id: string }> {
+    if (!input.body && !input.html) {
+      throw new BadRequestException("sendRaw requires a body or html");
+    }
+    return this.runEmailSend(
+      {
+        tenantId: input.tenantId,
+        toAddress: input.toAddress,
+        subject: input.subject,
+        contactId: input.contactId,
+        purpose: input.purpose,
+      },
+      (emailId) =>
+        this.sendgrid.send({
+          to: input.toAddress,
+          subject: input.subject,
+          body: input.body,
+          html: input.html,
+          customArgs: { emailId },
+        }),
+    );
+  }
+
+  /** Convenience: an HTML email (delegates to sendRaw). */
+  async sendHtml(input: {
+    tenantId: string;
+    toAddress: string;
+    subject: string;
+    html: string;
+    purpose: string;
+    contactId?: string;
+  }): Promise<{ id: string }> {
+    return this.sendRaw(input);
+  }
+
+  /**
+   * Shared lifecycle: QUEUED → SENDING → SENT|FAILED, each transition emitting its
+   * durable event (doc 05/07). The `send` thunk performs the provider call.
+   */
+  private async runEmailSend(
+    meta: {
+      tenantId: string;
+      toAddress: string;
+      subject: string;
+      contactId?: string | null;
+      purpose: string;
+      templateKey?: string | null;
+    },
+    send: (emailId: string) => Promise<{ providerMessageId: string }>,
+  ): Promise<{ id: string }> {
+    const { tenantId, toAddress } = meta;
     const email = await this.prisma.$transaction(async (tx) => {
       const created = await tx.email.create({
         data: {
-          tenantId: input.tenantId,
-          contactId: input.contactId ?? null,
-          toAddress: input.toAddress,
-          subject,
+          tenantId,
+          contactId: meta.contactId ?? null,
+          toAddress,
+          subject: meta.subject,
           status: EmailStatus.QUEUED,
-          templateKey: input.templateKey,
-          purpose: input.purpose,
+          templateKey: meta.templateKey ?? null,
+          purpose: meta.purpose,
         },
       });
       await this.outbox.append(tx, {
-        tenantId: input.tenantId,
+        tenantId,
         eventType: "email.email.queued",
         aggregateId: created.id,
-        payload: { emailId: created.id, tenantId: input.tenantId, toAddress: input.toAddress },
+        payload: { emailId: created.id, tenantId, toAddress },
       });
       return created;
     });
 
     assertValidEmailTransition(EmailStatus.QUEUED, EmailStatus.SENDING);
-    await this.prisma.email.update({ where: { id: email.id }, data: { status: EmailStatus.SENDING } });
-    try {
-      const { providerMessageId } = await this.sendgrid.send({
-        to: input.toAddress,
-        subject,
-        body,
-        customArgs: { emailId: email.id },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.email.update({ where: { id: email.id }, data: { status: EmailStatus.SENDING } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "email.email.sending",
+        aggregateId: email.id,
+        payload: { emailId: email.id, tenantId, toAddress },
       });
+    });
+    try {
+      const { providerMessageId } = await send(email.id);
       assertValidEmailTransition(EmailStatus.SENDING, EmailStatus.SENT);
-      await this.prisma.email.update({
-        where: { id: email.id },
-        data: { status: EmailStatus.SENT, providerMessageId: providerMessageId || null },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.email.update({
+          where: { id: email.id },
+          data: { status: EmailStatus.SENT, providerMessageId: providerMessageId || null },
+        });
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "email.email.sent",
+          aggregateId: email.id,
+          payload: { emailId: email.id, tenantId, toAddress },
+        });
       });
     } catch (err) {
-      await this.prisma.email.update({
-        where: { id: email.id },
-        data: { status: EmailStatus.FAILED, errorMessage: String(err) },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.email.update({
+          where: { id: email.id },
+          data: { status: EmailStatus.FAILED, errorMessage: String(err) },
+        });
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "email.email.failed",
+          aggregateId: email.id,
+          payload: { emailId: email.id, tenantId, toAddress, reason: String(err) },
+        });
       });
       this.logger.error("email", "Transactional email send failed", undefined, {
         emailId: email.id,
@@ -195,15 +286,44 @@ export class EmailService {
           await this.transition(email.id, email.status, EmailStatus.FAILED, {
             errorMessage: String(event.reason ?? "dropped"),
           });
+          await this.prisma.$transaction((tx) =>
+            this.outbox.append(tx, {
+              tenantId: email.tenantId,
+              eventType: "email.email.failed",
+              aggregateId: email.id,
+              payload: {
+                emailId: email.id,
+                tenantId: email.tenantId,
+                toAddress: email.toAddress,
+                reason: String(event.reason ?? "dropped"),
+              },
+            }),
+          );
           break;
         case "open":
           if (!email.openedAt) {
-            await this.prisma.email.update({ where: { id: email.id }, data: { openedAt: this.eventTime(event) } });
+            await this.prisma.$transaction(async (tx) => {
+              await tx.email.update({ where: { id: email.id }, data: { openedAt: this.eventTime(event) } });
+              await this.outbox.append(tx, {
+                tenantId: email.tenantId,
+                eventType: "email.email.opened",
+                aggregateId: email.id,
+                payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
+              });
+            });
           }
           break;
         case "click":
           if (!email.clickedAt) {
-            await this.prisma.email.update({ where: { id: email.id }, data: { clickedAt: this.eventTime(event) } });
+            await this.prisma.$transaction(async (tx) => {
+              await tx.email.update({ where: { id: email.id }, data: { clickedAt: this.eventTime(event) } });
+              await this.outbox.append(tx, {
+                tenantId: email.tenantId,
+                eventType: "email.email.clicked",
+                aggregateId: email.id,
+                payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
+              });
+            });
           }
           break;
         default:

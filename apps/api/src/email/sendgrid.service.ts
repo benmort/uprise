@@ -4,8 +4,15 @@ import { withRetry } from "../common/utils/retry.utils";
 
 export interface SendGridSendInput {
   to: string;
-  subject: string;
-  body: string;
+  /** Required for ad-hoc sends; optional when a dynamic template supplies it. */
+  subject?: string;
+  /** text/plain body. Provide body and/or html, or a templateId. */
+  body?: string;
+  /** text/html body (ordered after text/plain per SendGrid's content rules). */
+  html?: string;
+  /** SendGrid dynamic template id; subject/content then come from the template. */
+  templateId?: string;
+  dynamicTemplateData?: Record<string, unknown>;
   customArgs?: Record<string, string>;
 }
 
@@ -34,16 +41,30 @@ export class SendGridService {
         "SendGrid is not configured. Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL.",
       );
     }
+    // SendGrid requires either content[] or a template_id. text/plain must precede
+    // text/html in content[].
+    const content: Array<{ type: string; value: string }> = [];
+    if (input.body) content.push({ type: "text/plain", value: input.body });
+    if (input.html) content.push({ type: "text/html", value: input.html });
+    if (!input.templateId && content.length === 0) {
+      throw new ServiceUnavailableException(
+        "SendGrid send requires a body, html, or templateId.",
+      );
+    }
     const payload = {
       personalizations: [
         {
           to: [{ email: input.to }],
+          ...(input.dynamicTemplateData
+            ? { dynamic_template_data: input.dynamicTemplateData }
+            : {}),
           ...(input.customArgs ? { custom_args: input.customArgs } : {}),
         },
       ],
       from: { email: from },
-      subject: input.subject,
-      content: [{ type: "text/plain", value: input.body }],
+      ...(input.subject ? { subject: input.subject } : {}),
+      ...(content.length > 0 ? { content } : {}),
+      ...(input.templateId ? { template_id: input.templateId } : {}),
     };
     const res = await withRetry(
       async () => {
