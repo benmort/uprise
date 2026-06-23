@@ -18,6 +18,8 @@ export * from "./components/form-textarea";
 export * from "./components/input";
 export * from "./components/label";
 export * from "./components/logo";
+export * from "./components/otp-input";
+export * from "./components/password-input";
 export * from "./components/radio-group";
 export * from "./components/pagination-controls";
 export * from "./components/select";
