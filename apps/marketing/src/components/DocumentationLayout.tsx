@@ -135,7 +135,7 @@ export default function DocumentationLayout({
           <div className="p-6 border-b h-20">
             <Link href="/" className="flex items-center gap-2">
               <CircleIcon className="h-8 w-8 text-primary" />
-              <span className="font-bold text-xl text-gray-900">Foment</span>
+              <span className="font-bold text-xl text-gray-900">Yarns</span>
             </Link>
           </div>
 

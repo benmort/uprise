@@ -2,7 +2,7 @@
 
 ## Visual Architecture Overview
 
-This document provides a comprehensive visual representation of the Foment system architecture, showing how all components interact and communicate.
+This document provides a comprehensive visual representation of the Yarns system architecture, showing how all components interact and communicate.
 
 ## System Architecture Diagram
 

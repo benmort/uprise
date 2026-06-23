@@ -94,7 +94,7 @@ export default function MagicLinkPage() {
               type="button"
               onClick={request}
               disabled={busy || resendCountdown > 0}
-              className="font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
             >
               {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : "Resend"}
             </button>

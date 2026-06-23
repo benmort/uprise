@@ -35,7 +35,7 @@ export default function Features() {
                   Custom Subdomains
                 </h3>
                 <p className="text-base !leading-normal text-text-color-secondary">
-                  Each client gets their own branded portal at yourname.foment.org.au with custom branding, colors, and domain management.
+                  Each client gets their own branded portal at yourname.yarns.org.au with custom branding, colors, and domain management.
                 </p>
               </div>
             </div>

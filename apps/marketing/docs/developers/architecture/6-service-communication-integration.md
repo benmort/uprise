@@ -544,4 +544,4 @@ describe('Service Integration', () => {
 - External service integration verification
 - Performance and reliability testing
 
-This comprehensive communication and integration framework ensures reliable, secure, and scalable interactions between all components in the Foment ecosystem.
+This comprehensive communication and integration framework ensures reliable, secure, and scalable interactions between all components in the Yarns ecosystem.

@@ -19,7 +19,7 @@ export default function SecurityPage() {
 
               <PolicyH2>Overview</PolicyH2>
               <PolicyP>
-                At Foment, security is fundamental to everything we do. We implement industry-leading security measures to protect our platform, our customers&apos; data, and ensure the highest levels of trust and reliability.
+                At Yarns, security is fundamental to everything we do. We implement industry-leading security measures to protect our platform, our customers&apos; data, and ensure the highest levels of trust and reliability.
               </PolicyP>
 
               <PolicyH2>Security Framework</PolicyH2>
@@ -206,7 +206,7 @@ export default function SecurityPage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For security-related questions or to report security issues:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@foment.org.au</PolicyLi>
+                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Security Updates</PolicyH2>

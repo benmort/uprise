@@ -1,6 +1,6 @@
 # 4. Data Flow / Request Lifecycle
 
-This document describes the end-to-end journey of key interactions through the Foment system, showing how requests flow between components and how data is processed across the architecture.
+This document describes the end-to-end journey of key interactions through the Yarns system, showing how requests flow between components and how data is processed across the architecture.
 
 ## Request Lifecycle Overview
 
@@ -453,4 +453,4 @@ sequenceDiagram
 - Service dependency mapping
 - Error correlation across services
 
-This comprehensive data flow documentation provides the foundation for understanding how data moves through the Foment system, enabling effective debugging, optimization, and maintenance of the platform.
+This comprehensive data flow documentation provides the foundation for understanding how data moves through the Yarns system, enabling effective debugging, optimization, and maintenance of the platform.

@@ -19,7 +19,7 @@ export default function CompliancePage() {
 
               <PolicyH2>Overview</PolicyH2>
               <PolicyP>
-                Foment is committed to maintaining the highest standards of compliance with applicable laws, regulations, and industry best practices. This page outlines our compliance framework and commitments.
+                Yarns is committed to maintaining the highest standards of compliance with applicable laws, regulations, and industry best practices. This page outlines our compliance framework and commitments.
               </PolicyP>
 
               <PolicyH2>Data Protection Compliance</PolicyH2>
@@ -204,7 +204,7 @@ export default function CompliancePage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For compliance-related questions, contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@foment.org.au</PolicyLi>
+                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Updates</PolicyH2>

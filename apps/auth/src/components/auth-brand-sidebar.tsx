@@ -5,19 +5,19 @@ import Image from "next/image";
 import { CircleIcon } from "lucide-react";
 import { GridShape } from "./grid-shape";
 
-/** Foment brand mark (light, for the dark panel). */
+/** Yarns brand mark (light, for the dark panel). */
 function BrandMark() {
   return (
     <div className="flex items-center justify-center gap-2">
       <CircleIcon className="h-8 w-8 text-brand-400" />
-      <span className="text-2xl font-bold text-white">Foment</span>
+      <span className="text-2xl font-bold text-white">Yarns</span>
     </div>
   );
 }
 
 /**
  * Right-hand brand panel (lg+ only). Dark brand-950 with the grid pattern and the
- * Foment mark + tagline; on sign-up it shows the onboarding illustration.
+ * Yarns mark + tagline; on sign-up it shows the onboarding illustration.
  */
 export function AuthBrandSidebar() {
   const pathname = usePathname();

@@ -11,7 +11,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Foment — multichannel organising platform",
+  title: "Yarns — multichannel organising platform",
   description: "SMS & WhatsApp broadcasts, voice, canvassing, audiences and a unified inbox for organisers.",
 };
 

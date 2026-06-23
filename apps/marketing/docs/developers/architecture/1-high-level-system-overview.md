@@ -2,7 +2,7 @@
 
 ## System Purpose
 
-Foment is a comprehensive microservices-based platform designed to power progressive organizations and community-driven initiatives. The system provides a complete ecosystem for user management, multi-tenancy, payment processing, email communication, and real-time event streaming, all orchestrated through a centralized API gateway and event-driven architecture.
+Yarns is a comprehensive microservices-based platform designed to power progressive organizations and community-driven initiatives. The system provides a complete ecosystem for user management, multi-tenancy, payment processing, email communication, and real-time event streaming, all orchestrated through a centralized API gateway and event-driven architecture.
 
 ## Primary Business Goals
 
@@ -35,7 +35,7 @@ Foment is a comprehensive microservices-based platform designed to power progres
 - Manage their profiles and preferences
 
 **Developers**
-- Integrate with Foment APIs for custom applications
+- Integrate with Yarns APIs for custom applications
 - Build client applications using provided SDKs
 - Extend functionality through webhook integrations
 - Monitor and debug using comprehensive logging

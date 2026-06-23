@@ -15,12 +15,12 @@ export default function TermsOfServicePage() {
 
               <PolicyH2>Agreement to Terms</PolicyH2>
               <PolicyP>
-                By accessing and using Foment&apos;s platform and services, you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you disagree with any part of these terms, you may not access our services.
+                By accessing and using Yarns&apos;s platform and services, you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you disagree with any part of these terms, you may not access our services.
               </PolicyP>
 
               <PolicyH2>Description of Service</PolicyH2>
               <PolicyP>
-                Foment provides an enterprise-grade multi-tenant SaaS platform for progressive organisations, including:
+                Yarns provides an enterprise-grade multi-tenant SaaS platform for progressive organisations, including:
               </PolicyP>
               <PolicyUl>
                 <PolicyLi>Campaign management tools</PolicyLi>
@@ -76,7 +76,7 @@ export default function TermsOfServicePage() {
               <PolicyH2>Intellectual Property</PolicyH2>
               <PolicyH3>Our Rights</PolicyH3>
               <PolicyUl>
-                <PolicyLi>The service and its content are owned by Foment</PolicyLi>
+                <PolicyLi>The service and its content are owned by Yarns</PolicyLi>
                 <PolicyLi>All trademarks, logos, and brand names are our property</PolicyLi>
                 <PolicyLi>You may not use our intellectual property without permission</PolicyLi>
               </PolicyUl>
@@ -116,7 +116,7 @@ export default function TermsOfServicePage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For questions about these Terms, contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@foment.org.au</PolicyLi>
+                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
               </PolicyUl>
             </PolicyProse>
           </div>

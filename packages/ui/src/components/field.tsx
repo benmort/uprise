@@ -19,7 +19,10 @@ type FieldProps = {
  */
 export function Field({ label, htmlFor, hint, error, required, className, children }: FieldProps) {
   return (
-    <div className={cn("space-y-1.5", className)}>
+    // suppressHydrationWarning: password managers / autofill extensions inject
+    // markup into form fields before hydration, which would otherwise throw a
+    // benign "server HTML" mismatch. The container's own render is deterministic.
+    <div className={cn("space-y-1.5", className)} suppressHydrationWarning>
       {label ? (
         <Label htmlFor={htmlFor} required={required}>
           {label}

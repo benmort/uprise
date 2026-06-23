@@ -191,7 +191,7 @@ export default function SignUpPage() {
             <button
               type="button"
               onClick={() => setSlug(suggestion)}
-              className="text-sm text-primary hover:underline"
+              className="cursor-pointer text-sm text-primary hover:underline"
             >
               Use suggestion: {suggestion}
             </button>

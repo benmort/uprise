@@ -177,7 +177,7 @@ export const yarnsTourSteps: TourStep[] = [
   // ── Orientation: sidebar + header (anchored on the dashboard) ──────────────
   {
     icon: Sparkles,
-    title: "Welcome to Foment",
+    title: "Welcome to Yarns",
     content: "This is your SMS organising hub — let's walk the whole thing end to end.",
     detail:
       "We'll create a throwaway example audience and draft blast as we go so every screen has something real to look at. Nothing is ever sent. Use ← → or the buttons; Esc closes.",
@@ -298,7 +298,7 @@ export const yarnsTourSteps: TourStep[] = [
   {
     icon: CheckCircle2,
     title: "Compliance check",
-    content: "Foment flags compliance issues before you can send.",
+    content: "Yarns flags compliance issues before you can send.",
     detail: "Missing opt-out language or an over-long message shows up here — fix it and the warning clears.",
     selector: "#tour-composer-compliance",
     route: composerRoute,
@@ -426,7 +426,7 @@ export const whatsappTourSteps: TourStep[] = [
   {
     icon: Sparkles,
     title: "WhatsApp, alongside SMS",
-    content: "Foment can now send and receive on WhatsApp as a second channel.",
+    content: "Yarns can now send and receive on WhatsApp as a second channel.",
     detail:
       "Same Twilio account and audiences — but WhatsApp has its own rules: approved templates, recorded opt-in, and a 24-hour reply window. Let's walk the new pieces. Nothing is sent.",
     selector: "#tour-dashboard-table",
@@ -534,7 +534,7 @@ export const canvassingTourSteps: TourStep[] = [
   {
     icon: MapPin,
     title: "Canvassing",
-    content: "Foment now runs door-knocking alongside texting, on one shared contact spine.",
+    content: "Yarns now runs door-knocking alongside texting, on one shared contact spine.",
     detail:
       "Organisers cut turf and assign it here; canvassers knock from the mobile field app. Door knocks and texts land on the same timeline. Let's walk it.",
     selector: "#tour-canvass-kpis",
@@ -553,7 +553,7 @@ export const canvassingTourSteps: TourStep[] = [
     title: "Cut turf",
     content: "Draw turf boundaries on the map and bucket the contacts inside.",
     detail:
-      "“Cut new turf” opens the map editor: draw a polygon, save, and Foment re-buckets every geocoded contact that falls inside it (point-in-polygon).",
+      "“Cut new turf” opens the map editor: draw a polygon, save, and Yarns re-buckets every geocoded contact that falls inside it (point-in-polygon).",
     selector: "#tour-canvass-kpis",
     route: "/canvass",
   },

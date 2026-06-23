@@ -15,7 +15,7 @@ export default function PrivacyPolicyPage() {
 
               <PolicyH2>Introduction</PolicyH2>
               <PolicyP>
-                Foment (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform and services.
+                Yarns (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform and services.
               </PolicyP>
 
               <PolicyH2>Information We Collect</PolicyH2>
@@ -78,7 +78,7 @@ export default function PrivacyPolicyPage() {
               <PolicyH2>Contact Us</PolicyH2>
               <PolicyP>If you have questions about this Privacy Policy, please contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@foment.org.au</PolicyLi>
+                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Changes to This Policy</PolicyH2>

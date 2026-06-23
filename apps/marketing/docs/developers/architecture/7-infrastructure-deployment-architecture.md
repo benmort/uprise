@@ -1,6 +1,6 @@
 # 7. Infrastructure / Deployment Architecture
 
-This document outlines how the Foment system is deployed and managed across different environments, including containerization, orchestration, cloud provider setup, and deployment strategies.
+This document outlines how the Yarns system is deployed and managed across different environments, including containerization, orchestration, cloud provider setup, and deployment strategies.
 
 ## Environment Overview
 
@@ -46,7 +46,7 @@ This document outlines how the Foment system is deployed and managed across diff
 // Environment-based configuration loading
 const config = {
   development: {
-    database: { url: 'postgresql://localhost:5432/foment_dev' },
+    database: { url: 'postgresql://localhost:5432/yarns_dev' },
     redis: { url: 'redis://localhost:6379' },
     external: {
       stripe: { publishableKey: 'pk_test_...' },
@@ -142,7 +142,7 @@ RUN npm run build
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f https://http-event-bridge.service.dev.foment.network/health || exit 1
+  CMD curl -f https://http-event-bridge.service.dev.yarns.network/health || exit 1
 
 EXPOSE 8001
 CMD ["npm", "run", "start:event-streaming"]
@@ -163,15 +163,15 @@ CMD ["npm", "run", "start:event-streaming"]
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: foment-production
+  name: yarns-production
   labels:
     environment: production
     team: platform
 ```
 
 **Namespaces**:
-- `foment-production`: Production workloads
-- `foment-staging`: Staging environment
+- `yarns-production`: Production workloads
+- `yarns-staging`: Staging environment
 - `monitoring`: Observability stack
 - `ingress-nginx`: Ingress controllers
 
@@ -189,7 +189,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service
-  namespace: foment-production
+  namespace: yarns-production
 spec:
   replicas: 3
   selector:
@@ -202,7 +202,7 @@ spec:
     spec:
       containers:
       - name: user-service
-        image: foment-user-service:latest
+        image: yarns-user-service:latest
         ports:
         - containerPort: 3007
         env:
@@ -239,7 +239,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: user-service
-  namespace: foment-production
+  namespace: yarns-production
 spec:
   selector:
     app: user-service
@@ -262,8 +262,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: foment-ingress
-  namespace: foment-production
+  name: yarns-ingress
+  namespace: yarns-production
   annotations:
     kubernetes.io/ingress.class: "nginx"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
@@ -272,11 +272,11 @@ metadata:
 spec:
   tls:
   - hosts:
-    - api.foment.com
-    - app.foment.com
-    secretName: foment-tls
+    - api.yarns.com
+    - app.yarns.com
+    secretName: yarns-tls
   rules:
-  - host: api.foment.com
+  - host: api.yarns.com
     http:
       paths:
       - path: /api/(.*)
@@ -286,7 +286,7 @@ spec:
             name: api-gateway
             port:
               number: 80
-  - host: app.foment.com
+  - host: app.yarns.com
     http:
       paths:
       - path: /(.*)
@@ -368,8 +368,8 @@ Resources:
   RedisCluster:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
-      ReplicationGroupId: foment-redis-cluster
-      ReplicationGroupDescription: Redis cluster for Foment
+      ReplicationGroupId: yarns-redis-cluster
+      ReplicationGroupDescription: Redis cluster for Yarns
       NumCacheClusters: 3
       Engine: redis
       EngineVersion: "7.0"
@@ -467,7 +467,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service-blue
-  namespace: foment-production
+  namespace: yarns-production
 spec:
   replicas: 3
   selector:
@@ -481,7 +481,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service-green
-  namespace: foment-production
+  namespace: yarns-production
 spec:
   replicas: 1
   selector:
@@ -554,7 +554,7 @@ scrape_configs:
 ```json
 {
   "dashboard": {
-    "title": "Foment Service Health",
+    "title": "Yarns Service Health",
     "panels": [
       {
         "title": "Service Response Times",
@@ -633,7 +633,7 @@ spec:
             - -c
             - |
               pg_dump -h $DB_HOST -U $DB_USER $DB_NAME > /backup/backup.sql
-              aws s3 cp /backup/backup.sql s3://foment-backups/$(date +%Y-%m-%d).sql
+              aws s3 cp /backup/backup.sql s3://yarns-backups/$(date +%Y-%m-%d).sql
 ```
 
 **Backup Strategy**:
@@ -757,7 +757,7 @@ Resources:
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      Name: foment-cloudtrail
+      Name: yarns-cloudtrail
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
@@ -808,4 +808,4 @@ service:
 - Service dependency mapping
 - User experience monitoring
 
-This comprehensive infrastructure and deployment architecture ensures reliable, scalable, and secure operation of the Foment platform across all environments.
+This comprehensive infrastructure and deployment architecture ensures reliable, scalable, and secure operation of the Yarns platform across all environments.

@@ -12,13 +12,13 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Foment – Multichannel organising platform",
+  title: "Yarns – Multichannel organising platform",
   description: "SMS & WhatsApp broadcasts, canvassing, audiences, journeys and a unified inbox.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/images/foment-icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/images/foment-icon.svg", type: "image/svg+xml" }],
-    shortcut: ["/images/foment-icon.svg"],
+    icon: [{ url: "/images/yarns-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/images/yarns-icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/images/yarns-icon.svg"],
   },
 };
 

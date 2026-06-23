@@ -15,7 +15,7 @@ export default function DonationsPolicyPage() {
 
               <PolicyH2>Overview</PolicyH2>
               <PolicyP>
-                This Donations Policy outlines how Foment handles donations, contributions, and financial support for our platform and services.
+                This Donations Policy outlines how Yarns handles donations, contributions, and financial support for our platform and services.
               </PolicyP>
 
               <PolicyH2>Types of Donations</PolicyH2>
@@ -59,7 +59,7 @@ export default function DonationsPolicyPage() {
               <PolicyH2>Tax Information</PolicyH2>
               <PolicyH3>Tax Deductibility</PolicyH3>
               <PolicyUl>
-                <PolicyLi>Donations to Foment may be tax-deductible</PolicyLi>
+                <PolicyLi>Donations to Yarns may be tax-deductible</PolicyLi>
                 <PolicyLi>Consult with your tax advisor for specific guidance</PolicyLi>
                 <PolicyLi>We provide donation receipts for tax purposes</PolicyLi>
               </PolicyUl>
@@ -157,7 +157,7 @@ export default function DonationsPolicyPage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For questions about donations, contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@foment.org.au</PolicyLi>
+                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Updates to Policy</PolicyH2>

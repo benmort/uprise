@@ -49,7 +49,7 @@ export default function LoginPage() {
         <Field label="Password" htmlFor="password">
           <PasswordInput id="password" autoComplete="current-password" placeholder="Enter your password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
-        <div className="flex justify-end">
+        <div className="flex justify-start">
           <Link className="text-sm text-primary hover:underline" href={`/account-recovery${q}`}>Forgot your password?</Link>
         </div>
         {error ? <Alert variant="error" title={error} /> : null}

@@ -14,7 +14,7 @@ export default function Footer() {
           <div className="lg:col-span-3">
             <div className="flex items-center gap-2 mb-6">
               <CircleIcon className="h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold text-gray-900">Foment</span>
+              <span className="text-2xl font-bold text-gray-900">Yarns</span>
             </div>
             <p className="text-gray-600 mb-6 max-w-md">
               Built for progressive organisations, nonprofits, and changemakers who want to make a real impact.
@@ -132,13 +132,13 @@ export default function Footer() {
               </span>
               <span className="text-sm text-gray-500">•</span>
               <span className="text-sm text-gray-500">
-                © 2025 Foment - All Rights Reserved.
+                © 2025 Yarns - All Rights Reserved.
               </span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <span>A product by</span>
               <CircleIcon className="h-4 w-4 text-primary" />
-              <span className="font-medium text-gray-700">Foment</span>
+              <span className="font-medium text-gray-700">Uprise Labs</span>
             </div>
           </div>
         </div>

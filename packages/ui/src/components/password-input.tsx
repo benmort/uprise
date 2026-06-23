@@ -12,7 +12,9 @@ const PasswordInput = React.forwardRef<HTMLInputElement, Omit<React.ComponentPro
   ({ className, ...props }, ref) => {
     const [visible, setVisible] = React.useState(false);
     return (
-      <div className="relative">
+      // suppressHydrationWarning: password managers inject a toggle/icon node
+      // into this wrapper before hydration; the wrapper's own render is stable.
+      <div className="relative" suppressHydrationWarning>
         <input
           type={visible ? "text" : "password"}
           className={cn(

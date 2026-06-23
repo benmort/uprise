@@ -185,7 +185,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-3xl font-semibold">Command centre</h1>
           <p className="text-sm text-muted-foreground">
-            Everything across Foment — messaging, conversations, audiences, automation and the field.
+            Everything across Yarns — messaging, conversations, audiences, automation and the field.
             {lastUpdatedAt ? ` Updated ${lastUpdatedAt.toLocaleTimeString()}.` : ""}
           </p>
         </div>

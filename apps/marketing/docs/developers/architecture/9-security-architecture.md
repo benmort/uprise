@@ -1,6 +1,6 @@
 # 9. Security Architecture
 
-This document provides a comprehensive overview of how the Foment system is secured, including authentication, authorization, encryption, secrets management, and network-level protections.
+This document provides a comprehensive overview of how the Yarns system is secured, including authentication, authorization, encryption, secrets management, and network-level protections.
 
 ## Authentication Architecture
 
@@ -310,7 +310,7 @@ apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
 metadata:
   name: default
-  namespace: foment-production
+  namespace: yarns-production
 spec:
   selector:
     matchLabels:
@@ -388,7 +388,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: database-credentials
-  namespace: foment-production
+  namespace: yarns-production
 type: Opaque
 data:
   username: <base64-encoded-username>
@@ -522,7 +522,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: FomentWebACL
+      Name: YarnsWebACL
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -740,7 +740,7 @@ security-tests:
 
   - name: DAST (Dynamic Application Security Testing)
     tool: OWASP ZAP
-    target: https://api.foment.com
+    target: https://api.yarns.com
 
   - name: Dependency Scanning
     tool: npm audit
@@ -762,4 +762,4 @@ security-tests:
 - Container and infrastructure security
 - Compliance rule validation
 
-This comprehensive security architecture ensures that Foment maintains the highest standards of security across all layers of the application stack, protecting user data, maintaining compliance, and preventing security breaches.
+This comprehensive security architecture ensures that Yarns maintains the highest standards of security across all layers of the application stack, protecting user data, maintaining compliance, and preventing security breaches.

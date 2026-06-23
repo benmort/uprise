@@ -1,13 +1,13 @@
 {
-  "name": "Foment",
-  "short_name": "Foment",
+  "name": "Yarns",
+  "short_name": "Yarns",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3366CC",
   "icons": [
     {
-      "src": "/images/foment-icon.svg",
+      "src": "/images/yarns-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

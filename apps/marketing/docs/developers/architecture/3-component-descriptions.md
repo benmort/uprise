@@ -1,10 +1,10 @@
 # 3. Component Descriptions
 
-This document provides detailed descriptions of each component in the Foment ecosystem, including their responsibilities, technology stacks, and integration patterns.
+This document provides detailed descriptions of each component in the Yarns ecosystem, including their responsibilities, technology stacks, and integration patterns.
 
 ## Client Applications
 
-### Admin Client (`foment-admin-client`)
+### Admin Client (`yarns-admin-client`)
 **Location**: `/services/clients/admin-client/`
 **Technology**: Next.js 14, React, TypeScript
 **Port**: 3000
@@ -39,7 +39,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Auth Client (`foment-auth-client`)
+### Auth Client (`yarns-auth-client`)
 **Location**: `/services/clients/auth-client/`
 **Technology**: Next.js 14, React, TypeScript
 **Port**: 3001
@@ -73,7 +73,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Marketing Client (`foment-marketing-client`)
+### Marketing Client (`yarns-marketing-client`)
 **Location**: `/services/clients/marketing-client/`
 **Technology**: Next.js 14, React, TypeScript
 **Port**: 3002
@@ -167,7 +167,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ## Business Services
 
-### User Service (`foment-user-service`)
+### User Service (`yarns-user-service`)
 **Location**: `/services/user-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3007
@@ -201,7 +201,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Tenant Service (`foment-tenant-service`)
+### Tenant Service (`yarns-tenant-service`)
 **Location**: `/services/tenant-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3006
@@ -235,7 +235,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Payment Service (`foment-payment-service`)
+### Payment Service (`yarns-payment-service`)
 **Location**: `/services/payment-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3005
@@ -269,7 +269,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Email Service (`foment-email-service`)
+### Email Service (`yarns-email-service`)
 **Location**: `/services/email-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL, Rust
 **Port**: 3003
@@ -303,7 +303,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Monitoring Service (`foment-monitoring-service`)
+### Monitoring Service (`yarns-monitoring-service`)
 **Location**: `/services/monitoring-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3004
@@ -337,7 +337,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ## Shared Infrastructure Packages
 
-### Environment Configuration (`@foment/environment-configuration`)
+### Environment Configuration (`@yarns/environment-configuration`)
 **Location**: `/packages/environment-configuration/`
 
 **Purpose**: Centralized configuration management across all services and environments.
@@ -357,7 +357,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Event-Based Service Client (`@foment/event-based-service-client`)
+### Event-Based Service Client (`@yarns/event-based-service-client`)
 **Location**: `/packages/event-based-service-client/`
 
 **Purpose**: Standardized client library for service-to-service communication using events.
@@ -377,7 +377,7 @@ This document provides detailed descriptions of each component in the Foment eco
 
 ---
 
-### Shared Infrastructure (`@foment/shared-infrastructure`)
+### Shared Infrastructure (`@yarns/shared-infrastructure`)
 **Location**: `/packages/shared-infrastructure/`
 
 **Purpose**: Common utilities, types, and infrastructure components shared across all services.
@@ -449,4 +449,4 @@ This document provides detailed descriptions of each component in the Foment eco
 - Automated testing and quality gates
 - Rollback capabilities and blue-green deployments
 
-This comprehensive component inventory provides the foundation for understanding how each piece fits into the overall Foment architecture and enables effective development, deployment, and maintenance of the system.
+This comprehensive component inventory provides the foundation for understanding how each piece fits into the overall Yarns architecture and enables effective development, deployment, and maintenance of the system.

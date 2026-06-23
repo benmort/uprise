@@ -1,6 +1,6 @@
 # 5. Technology Stack
 
-This document provides a comprehensive inventory of all tools, frameworks, and technologies used across the Foment ecosystem, organized by architectural layers.
+This document provides a comprehensive inventory of all tools, frameworks, and technologies used across the Yarns ecosystem, organized by architectural layers.
 
 ## Frontend Layer
 
