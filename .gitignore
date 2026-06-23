@@ -1,7 +1,7 @@
 # Dependencies
 /node_modules/
 /apps/api/node_modules/
-/apps/web/node_modules/
+/apps/admin/node_modules/
 /apps/worker/node_modules/
 node_modules/
 .pnpm-store/
@@ -43,9 +43,9 @@ pnpm-debug.log*
 apps/api/.env.migrate
 
 # Playwright e2e artefacts
-apps/web/e2e/.auth/
-apps/web/test-results/
-apps/web/playwright-report/
+apps/admin/e2e/.auth/
+apps/admin/test-results/
+apps/admin/playwright-report/
 
 # Claude Code local worktree state + per-user local settings
 .claude/worktrees/

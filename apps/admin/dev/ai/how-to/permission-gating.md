@@ -11,7 +11,7 @@ last_reviewed: 2026-06-23
 
 UI gating mirrors the server's authorisation, never replaces it. The API is the enforcer; the frontend hides what the user can't use so they never hit a dead control.
 
-Canonical: `packages/permissions/src/ability.ts` (`defineAbilityFor`, `AppAbility`, `resolveRolePermissions`), `packages/permissions/src/roles.ts` (`YARNS_ROLES`, `ROLE_PERMISSIONS`, `APP_USER_ROLE_TO_ROLE`), `packages/permissions/src/types.ts` (`Action`, `Resource`, `PermissionRule`), `apps/web/src/lib/session.ts` (`getSession`), `@yarns/contracts` `AuthPrincipal` (`role: AppRole` = `"ORGANISER" | "CANVASSER"`), `apps/web/src/app/(main)/layout.tsx` (the `CANVASSER` → `/field` route gate).
+Canonical: `packages/permissions/src/ability.ts` (`defineAbilityFor`, `AppAbility`, `resolveRolePermissions`), `packages/permissions/src/roles.ts` (`YARNS_ROLES`, `ROLE_PERMISSIONS`, `APP_USER_ROLE_TO_ROLE`), `packages/permissions/src/types.ts` (`Action`, `Resource`, `PermissionRule`), `apps/admin/src/lib/session.ts` (`getSession`), `@yarns/contracts` `AuthPrincipal` (`role: AppRole` = `"ORGANISER" | "CANVASSER"`), `apps/admin/src/app/(main)/layout.tsx` (the `CANVASSER` → `/field` route gate).
 
 ## Must have
 - Resolve the principal from the session (`getSession()` → `AuthPrincipal`). Its `role` (`AppRole`) and the CASL ability from `@yarns/permissions` are the gate inputs – derive the ability from the role rather than scattering string comparisons.
@@ -33,7 +33,7 @@ Canonical: `packages/permissions/src/ability.ts` (`defineAbilityFor`, `AppAbilit
 - [ ] Gate: walk `dev/ai/how-to/definition-of-done.md`.
 
 ## Related guides
-- `apps/web/dev/ai/how-to/web-security.md` – the session the principal comes from.
-- `apps/web/dev/ai/how-to/feedback-states.md` – the no-permission state pairs with the other three.
-- `apps/web/dev/ai/how-to/app-router-and-api-client.md` – the calls being gated.
+- `apps/admin/dev/ai/how-to/web-security.md` – the session the principal comes from.
+- `apps/admin/dev/ai/how-to/feedback-states.md` – the no-permission state pairs with the other three.
+- `apps/admin/dev/ai/how-to/app-router-and-api-client.md` – the calls being gated.
 - `packages/dev/ai/how-to/permissions-package.md` – the role/ability taxonomy and how the api gates routes.

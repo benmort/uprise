@@ -36,5 +36,5 @@ Canonical: `packages/permissions/src/types.ts` (`STANDARD_ACTIONS`, `YARNS_RESOU
 
 ## Related guides
 - `packages/dev/ai/how-to/package-build.md` – why the rebuild is mandatory.
-- `apps/web/dev/ai/how-to/permission-gating.md` – the frontend mirror of this matrix.
+- `apps/admin/dev/ai/how-to/permission-gating.md` – the frontend mirror of this matrix.
 - `dev/ai/how-to/definition-of-done.md` – the security line for new routes.

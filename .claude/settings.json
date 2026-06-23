@@ -7,7 +7,7 @@
       "Bash(pnpm -r lint)",
       "Bash(pnpm --filter api test:*)",
       "Bash(pnpm --filter api typecheck)",
-      "Bash(pnpm --filter web build)",
+      "Bash(pnpm --filter admin build)",
       "Bash(pnpm --filter auth build)",
       "Bash(pnpm --filter marketing build)",
       "Bash(pnpm --filter @yarns/db prisma:generate)",

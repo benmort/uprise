@@ -51,13 +51,13 @@ jobs:
         run: pnpm --filter api run test
 
       - name: Web tests
-        run: pnpm --filter web run test
+        run: pnpm --filter admin run test
 
       - name: API build
         run: pnpm --filter api run build
 
       - name: Web build
-        run: pnpm --filter web run build
+        run: pnpm --filter admin run build
 
       - name: Worker build
         run: pnpm --filter worker run build

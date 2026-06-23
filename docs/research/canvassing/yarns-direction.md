@@ -19,7 +19,7 @@ Date: 2026-06-16.
 - **Inbox composer** sends via `reply()` and offers canned text via `suggest()`,
   which returns three hardcoded strings from `ai-suggestions.service.ts`.
 - **Ownership/assignment is client-side only** – browser localStorage in
-  `apps/web/src/lib/responder-alerts.ts`. Lost on device change; two texters can
+  `apps/admin/src/lib/responder-alerts.ts`. Lost on device change; two texters can
   collide.
 - **Campaigns** are `Blast` → `BlastRecipient`; sending runs through BullMQ
   (`apps/worker/src/main.ts`, queues in `apps/api/src/common/queue/`).

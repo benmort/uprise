@@ -1,6 +1,6 @@
 # Prog admin → yarns port — comparison + checklist
 
-Porting prog's admin-client (85 routes) into yarns `apps/web` as pixel-perfect,
+Porting prog's admin-client (85 routes) into yarns `apps/admin` as pixel-perfect,
 non-functional replicas under a collapsable **Prog** sidebar group. Pages are vendored from
 prog verbatim (own UI kit under `src/components/prog/`, prog's `dark:` variants kept,
 providers/API stripped → static mock data).
@@ -107,7 +107,7 @@ providers/API stripped → static mock data).
 - ✗ none: ~61 (grant-mgmt 17, business/commerce, tasks, data-tooling, support, dev-hub).
 
 ## Notes
-- Vendored UI kit: `apps/web/src/components/prog/` (ui + shared/forms). Keep prog `dark:`
+- Vendored UI kit: `apps/admin/src/components/prog/` (ui + shared/forms). Keep prog `dark:`
   variants verbatim — **WS1 dark sweep must exclude `(main)/prog/**` and `components/prog/**`**.
 - yarns-native screens with no prog counterpart (not part of this port): `/canvass/*`,
   `/channels/{text,whatsapp}`, `/journeys`, `/compliance`, `/engagement/{scripts,dispositions,canned-responses}`, `/settings/data`.

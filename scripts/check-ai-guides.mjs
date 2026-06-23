@@ -14,7 +14,7 @@ const REQUIRED_FRONTMATTER = ["name", "description", "layer", "topic", "use_when
 const GUIDE_DIRS = [
   "dev/ai/how-to",
   "apps/api/dev/ai/how-to",
-  "apps/web/dev/ai/how-to",
+  "apps/admin/dev/ai/how-to",
   "packages/dev/ai/how-to",
 ];
 

@@ -6,7 +6,7 @@ Master document for folding **prog** into **yarns** as the base, and shaping the
 
 GetUp runs three NestJS-era platforms that overlap heavily and should become one:
 
-- **yarns** (`/Users/benjaminmort/code/common-threads/yarns`) – **the base**. NestJS + Prisma + Postgres modular monolith. `apps/api` (~22 domain modules), `apps/worker` (BullMQ), `apps/web` (Next.js). Strong SMS/WhatsApp/canvassing/field product. Single `Organization` + `AppUser` (ORGANISER/CANVASSER) + Basic auth.
+- **yarns** (`/Users/benjaminmort/code/common-threads/yarns`) – **the base**. NestJS + Prisma + Postgres modular monolith. `apps/api` (~22 domain modules), `apps/worker` (BullMQ), `apps/admin` (Next.js). Strong SMS/WhatsApp/canvassing/field product. Single `Organization` + `AppUser` (ORGANISER/CANVASSER) + Basic auth.
 - **prog** (`/Users/benjaminmort/code/prog/core-orchestration`) – an **event-sourced modular monolith** (`apps/platform`) on **Drizzle**: 6 domains (tenant, identity, audience, email, payment, telephony) with aggregates/FSM, per-domain event stores, transactional outbox → Redis Streams, reactions choreography, CASL RBAC, full Network→Tenant→Membership multi-tenancy + IAM (sessions, magic-link, 2FA). *(Its `ONBOARDING.md` still describes the old 8-microservice layout – stale; the code is now one monolith under `apps/platform`.)*
 - **slingshot** (`/Users/benjaminmort/code/getup/slingshot`) – GetUp's CRM/engagement/settlement platform. NestJS 11 + **MikroORM** + **schema-per-domain** Postgres (18 domains) + BullMQ + CASL + Zod contracts. A **future** merge target, not in scope to port now.
 
@@ -100,7 +100,7 @@ Transport = **BullMQ** (yarns already depends on it; one in-process consumer mea
 
 Order: **Foundation → M1 → (M2 ∥ M3) → M4 → M5.** Docs 12 and 13 are reference, written alongside the foundation.
 
-**Auth frontend (doc 14):** after doc 04's IAM API lands, extract `@yarns/ui` + `@yarns/api-client` and build `apps/auth` as the SSO hub; then replace `apps/web`'s `/login` with a redirect to it.
+**Auth frontend (doc 14):** after doc 04's IAM API lands, extract `@yarns/ui` + `@yarns/api-client` and build `apps/auth` as the SSO hub; then replace `apps/admin`'s `/login` with a redirect to it.
 
 ## Risk register
 

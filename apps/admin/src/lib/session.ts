@@ -3,7 +3,7 @@
 import { auth, getAuthAppUrl, type AuthPrincipal } from "@yarns/api-client";
 
 /**
- * Client session helpers (meld doc 14). apps/web no longer holds credentials —
+ * Client session helpers (meld doc 14). apps/admin no longer holds credentials —
  * the httpOnly parent-domain cookie is the session, issued by the standalone auth
  * app. These read the current principal from /auth/check and bounce to the auth
  * app when there's no valid session.

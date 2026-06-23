@@ -5,8 +5,8 @@ import { defineConfig, devices } from "@playwright/test";
  * the seeded IDs; the auth fixture injects the super-admin Basic-auth creds into
  * sessionStorage (same pattern as scripts/capture-surfaces.mjs). webServer boots the
  * API (:3001) + web (:3000) if they aren't already running.
- *   npm --prefix apps/web run e2e            (headless)
- *   npm --prefix apps/web run e2e:ui         (interactive)
+ *   npm --prefix apps/admin run e2e            (headless)
+ *   npm --prefix apps/admin run e2e:ui         (interactive)
  * Prereqs: local Postgres + Redis up; apps/api/.env with BASIC_AUTH_*.
  */
 const WEB = process.env.WEB_URL || "http://localhost:3000";

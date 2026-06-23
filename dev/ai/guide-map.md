@@ -31,11 +31,11 @@ Single entry point and router to layer-local guides. Read this, then read every 
 | Wire a Nest module / pass the DI boot gate | `apps/api/dev/ai/how-to/module-wiring.md` |
 | Write backend unit tests (mocked-prisma conventions) | `apps/api/dev/ai/how-to/testing-unit.md` |
 | Build a backend service / controller / DTO | `apps/api/dev/ai/how-to/services-controllers-dtos.md` |
-| Apply the design system (Tailwind v4 + `@yarns/ui`) | `apps/web/dev/ai/how-to/design-system.md` |
-| Build a Next page / call the API from the web apps | `apps/web/dev/ai/how-to/app-router-and-api-client.md` |
-| Apply web security (cookie SSO, CORS, secrets) | `apps/web/dev/ai/how-to/web-security.md` |
-| Show loading / empty / error / no-permission states | `apps/web/dev/ai/how-to/feedback-states.md` |
-| Permission-gate UI | `apps/web/dev/ai/how-to/permission-gating.md` |
+| Apply the design system (Tailwind v4 + `@yarns/ui`) | `apps/admin/dev/ai/how-to/design-system.md` |
+| Build a Next page / call the API from the web apps | `apps/admin/dev/ai/how-to/app-router-and-api-client.md` |
+| Apply web security (cookie SSO, CORS, secrets) | `apps/admin/dev/ai/how-to/web-security.md` |
+| Show loading / empty / error / no-permission states | `apps/admin/dev/ai/how-to/feedback-states.md` |
+| Permission-gate UI | `apps/admin/dev/ai/how-to/permission-gating.md` |
 | Add a domain event type to `@yarns/events` | `packages/dev/ai/how-to/events-catalogue.md` |
 | Work with `@yarns/db` / the Prisma client | `packages/dev/ai/how-to/db-and-prisma.md` |
 | Work with `@yarns/permissions` (abilities/roles) | `packages/dev/ai/how-to/permissions-package.md` |
@@ -56,10 +56,10 @@ Every how-to has: YAML frontmatter (`name`, `description`, `layer`, `topic`, `us
 ## Structure
 
 ```
-CLAUDE.md  apps/api/CLAUDE.md  apps/web/CLAUDE.md   ← navigation + hard rules (auto-loaded)
+CLAUDE.md  apps/api/CLAUDE.md  apps/admin/CLAUDE.md   ← navigation + hard rules (auto-loaded)
 dev/ai/{guide-map,conventions}.md + how-to/        ← root: navigation + process
 apps/api/dev/ai/how-to/                             ← backend pattern guides
-apps/web/dev/ai/how-to/                             ← frontend pattern guides (web/auth/marketing)
+apps/admin/dev/ai/how-to/                             ← frontend pattern guides (web/auth/marketing)
 packages/dev/ai/how-to/                             ← @yarns/* package guides
 .claude/skills/<skill>/SKILL.md                     ← codified workflows, invoked on demand
 ```

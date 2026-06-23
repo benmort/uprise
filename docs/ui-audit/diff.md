@@ -48,7 +48,7 @@ Re-captured all surfaces against a clean prod build. Confirmed:
 - E2 inbox door-chips/"View contact" only render when the thread's phone matches a
   Contact; the seeded demo numbers don't collide with the existing inbox threads, so
   it's not visible in `inbox.png` (component is wired + builds).
-- Capture harness: `node apps/web/scripts/capture-surfaces.mjs` (needs web :3000, API
+- Capture harness: `node apps/admin/scripts/capture-surfaces.mjs` (needs web :3000, API
   :3001, `npm --prefix apps/api run seed:demo`).
 - **Do not run `next build` while `next dev` is live** — they share `.next` and the
   build clobbers the dev server's vendor chunks ("Cannot find module

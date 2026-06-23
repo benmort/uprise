@@ -193,4 +193,4 @@ From the field-app complaints in the dossiers (MiniVAN, Qomon):
 - GPS pin accuracy; battery drain; minimal taps for household entry.
 - Server-owned conversation queue distribution so two texters never collide
   (CallHub does this well; yarns' current ownership is client-side localStorage
-  only – see `apps/web/src/lib/responder-alerts.ts`).
+  only – see `apps/admin/src/lib/responder-alerts.ts`).

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Core guidance for AI agents working in yarns. Layer-specific detail lives in `apps/api/CLAUDE.md` and `apps/web/CLAUDE.md`; deep patterns live in the guides routed from `dev/ai/guide-map.md`.
+Core guidance for AI agents working in yarns. Layer-specific detail lives in `apps/api/CLAUDE.md` and `apps/admin/CLAUDE.md`; deep patterns live in the guides routed from `dev/ai/guide-map.md`.
 
 ## CORE RULES
 
@@ -49,7 +49,7 @@ yarns/  (pnpm workspace – apps/* + packages/*)
 ├── apps/
 │   ├── api/         # NestJS modular monolith – ALL backend domains under src/<domain>/  (see apps/api/CLAUDE.md)
 │   ├── worker/      # BullMQ consumers + the outbox relay
-│   ├── web/         # Next.js app (App Router)               (see apps/web/CLAUDE.md)
+│   ├── admin/       # Next.js admin app (App Router)         (see apps/admin/CLAUDE.md)
 │   ├── auth/        # Next.js standalone auth/SSO app (port 3002)
 │   └── marketing/   # Next.js marketing site (port 3003)
 └── packages/

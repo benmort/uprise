@@ -1,4 +1,4 @@
-// Server-side port of apps/web/src/lib/canvass/geo.ts — dependency-free
+// Server-side port of apps/admin/src/lib/canvass/geo.ts — dependency-free
 // point-in-polygon for re-bucketing contacts into a turf (which household
 // falls inside a drawn turf boundary). GeoJSON [lng, lat] order throughout.
 

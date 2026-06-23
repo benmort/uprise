@@ -3,9 +3,9 @@
 ## Pre-Launch Gates
 
 - [ ] `pnpm --filter api build` passes
-- [ ] `pnpm --filter web build` passes
+- [ ] `pnpm --filter admin build` passes
 - [ ] `pnpm --filter api test` passes
-- [ ] `pnpm --filter web test` passes
+- [ ] `pnpm --filter admin test` passes
 - [ ] `prisma:deploy` tested in staging
 - [ ] Twilio credentials validated
 - [ ] Action Network connection validated

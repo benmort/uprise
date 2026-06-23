@@ -10,10 +10,10 @@ by their real repo-relative paths, and applies each to the four parts of the bri
 
 The run must read `dev/ai/guide-map.md` first, then cite these guides by their actual paths. All four are mandatory; web-security is bonus context (no credential touch here).
 
-- [ ] `apps/web/dev/ai/how-to/design-system.md` – rendering the list/rows/buttons from `@yarns/ui`.
-- [ ] `apps/web/dev/ai/how-to/feedback-states.md` – the four states on a data surface.
-- [ ] `apps/web/dev/ai/how-to/permission-gating.md` – the billing-permission gate.
-- [ ] `apps/web/dev/ai/how-to/app-router-and-api-client.md` – the route + the typed fetch.
+- [ ] `apps/admin/dev/ai/how-to/design-system.md` – rendering the list/rows/buttons from `@yarns/ui`.
+- [ ] `apps/admin/dev/ai/how-to/feedback-states.md` – the four states on a data surface.
+- [ ] `apps/admin/dev/ai/how-to/permission-gating.md` – the billing-permission gate.
+- [ ] `apps/admin/dev/ai/how-to/app-router-and-api-client.md` – the route + the typed fetch.
 - [ ] (bonus) `packages/dev/ai/how-to/permissions-package.md` – where the ability/role the gate derives from is defined.
 
 A run that cites a guide path that does not exist, or names a slingshot/board artefact, fails regardless of other content.
@@ -41,13 +41,13 @@ A run that cites a guide path that does not exist, or names a slingshot/board ar
 - [ ] `"use client"` is scoped to the interactive island (the list with the Remove action), not slapped on the whole page.
 
 **Close (from `dev/ai/how-to/definition-of-done.md`)**
-- [ ] Ends on the DoD gate: `pnpm -r typecheck` green, and the Next build (`pnpm --filter web build`) run as the real check for any Tailwind/config change. Evidence stated, not asserted.
+- [ ] Ends on the DoD gate: `pnpm -r typecheck` green, and the Next build (`pnpm --filter admin build`) run as the real check for any Tailwind/config change. Evidence stated, not asserted.
 
 ## Auto-fail conditions
 
 - References Plane, a story/epic, or a dev/product registry (yarns is board-free – the unit of work is the task brief / plan file / runbook).
 - Names a slingshot artefact (`@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`).
-- Proposes a raw hex colour, a bare `fetch` to the API, a login form / credential / secret in `apps/web`, or reading `auth_token` from JS.
+- Proposes a raw hex colour, a bare `fetch` to the API, a login form / credential / secret in `apps/admin`, or reading `auth_token` from JS.
 - Cites a guide path that does not exist in the repo.
 - Outputs an em-dash character, or uses US spelling where Australian is expected.
 
