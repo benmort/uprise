@@ -1,7 +1,7 @@
 // @yarns/ui — the shared Radix/Tailwind/CVA design system (meld doc 14), extracted
-// from apps/web so apps/auth (and future apps) render identically. Consumed as
+// from apps/admin so apps/auth (and future apps) render identically. Consumed as
 // source via Next `transpilePackages`. Tailwind v4 tokens ship in ./globals.css
-// (CSS-first @theme). (breadcrumbs stays in apps/web — it depends on next/link.)
+// (CSS-first @theme). (breadcrumbs stays in apps/admin — it depends on next/link.)
 export * from "./lib/utils";
 export * from "./components/alert";
 export * from "./components/avatar";

@@ -215,12 +215,12 @@ Accept optional `channel` (+ `contentSid`/`contentVariables`) for ad-hoc sends; 
 
 ## Frontend changes
 
-API client (`apps/web/src/lib/api.ts`) — thread `channel` through:
+API client (`apps/admin/src/lib/api.ts`) — thread `channel` through:
 `createBlast`/`updateBlast` (+`contentSid`, `contentVariableMap`), `proofBlast`,
 `sendInboxReply(contactPhone, body, channel)`, `listConversations`/`getConversation` (return
 + filter by channel). Add `listWhatsappTemplates()`.
 
-### Composer (`apps/web/src/app/(main)/blasts/[id]/composer/page.tsx`)
+### Composer (`apps/admin/src/app/(main)/blasts/[id]/composer/page.tsx`)
 
 - **Channel toggle** (SMS / WhatsApp) near Campaign Details, gated on `FEATURE_WHATSAPP_ENABLED`.
 - **SMS path**: unchanged — 160-char counter, segment warning, "Reply STOP" compliance check.
@@ -233,7 +233,7 @@ API client (`apps/web/src/lib/api.ts`) — thread `channel` through:
     styling on channel.
   - Proof send goes via the WhatsApp sender (sandbox in dev).
 
-### Inbox (`apps/web/src/app/(main)/inbox/page.tsx`)
+### Inbox (`apps/admin/src/app/(main)/inbox/page.tsx`)
 
 - Add `channel` to the `ThreadMessage` and `ConversationRow` types; show a small **channel
   badge** (SMS / WhatsApp) on each conversation row and in the thread header.
@@ -254,7 +254,7 @@ API client (`apps/web/src/lib/api.ts`) — thread `channel` through:
 
 ### Tour
 
-Add a couple of steps to `apps/web/src/lib/tours/yarns-tour.ts` pointing at the composer
+Add a couple of steps to `apps/admin/src/lib/tours/yarns-tour.ts` pointing at the composer
 channel toggle and the template picker once the UI exists. Low priority.
 
 ---
@@ -297,7 +297,7 @@ channel toggle and the template picker once the UI exists. Low priority.
   and that the contact is excluded from the next blast.
 - **Dry-run**: with `BLAST_DRY_RUN=true`, confirm WhatsApp sends are simulated (no Twilio call)
   and recorded with `channel=WHATSAPP`.
-- `tsc --noEmit` clean across `apps/api`, `apps/worker`, `apps/web`; `prisma migrate deploy`
+- `tsc --noEmit` clean across `apps/api`, `apps/worker`, `apps/admin`; `prisma migrate deploy`
   applies cleanly.
 
 ---

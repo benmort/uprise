@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Shared auth contracts (meld doc 14) — Zod schemas + inferred types for the IAM
- * flows, consumed by @yarns/api-client and the frontends (apps/auth, apps/web).
+ * flows, consumed by @yarns/api-client and the frontends (apps/auth, apps/admin).
  * The API keeps its own class-validator request DTOs; these are the wire types
  * the clients validate against.
  */

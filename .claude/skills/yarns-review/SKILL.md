@@ -41,7 +41,7 @@ The built-in harness `code-review` skill is for **throwaway diffs** – quick co
 - BullMQ job → `apps/api/dev/ai/how-to/bullmq-jobs.md` (stable idempotent `getXJobId`).
 - migration → `apps/api/dev/ai/how-to/migrations.md` (additive, hand-written, `prisma migrate deploy` – never `migrate dev`; client regenerated; `@yarns/db` rebuilt).
 - Nest module wiring → `apps/api/dev/ai/how-to/module-wiring.md` (provider resolvable; the boot smoke is the only check that catches a DI break).
-- `apps/web/src/**` → `apps/web/dev/ai/how-to/app-router-and-api-client.md`, `design-system.md`, `feedback-states.md`, `permission-gating.md`, `web-security.md` as the file fits.
+- `apps/admin/src/**` → `apps/admin/dev/ai/how-to/app-router-and-api-client.md`, `design-system.md`, `feedback-states.md`, `permission-gating.md`, `web-security.md` as the file fits.
 - `packages/**` → the matching `packages/dev/ai/how-to/*` guide; an edit to a package `src` without a dist rebuild leaves consumers on the old build.
 
 ### 2. Verify claims against the actual code and tests – never assert

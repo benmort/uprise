@@ -6,7 +6,7 @@
 //   2. Demo data seeded:  npm --prefix apps/api run seed:demo
 //   3. playwright installed (uses system Chrome via channel:'chrome').
 //
-// Run:  node apps/web/scripts/capture-surfaces.mjs
+// Run:  node apps/admin/scripts/capture-surfaces.mjs
 // Output: docs/ui-audit/dev/<surface>.png
 //
 // Auth: env super-admin (BASIC_AUTH_*) injected into sessionStorage; the demo

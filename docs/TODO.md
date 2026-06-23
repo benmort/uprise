@@ -15,7 +15,7 @@ the tenant in-session via `/select-tenant` and serves the organiser app on one h
 (`app.dev.prog.network`).
 
 Switching would mean:
-- Host→tenant parsing in `apps/web/src/middleware.ts` (a `buildTenantUrl` / `extractTenantFromHost`
+- Host→tenant parsing in `apps/admin/src/middleware.ts` (a `buildTenantUrl` / `extractTenantFromHost`
   helper, cf. prog `clients/auth-client/lib/utils/tenancy.ts`).
 - Redirect-to-subdomain after login in `apps/auth/src/lib/session.ts` (`completeAuth`), reworking
   the `/select-tenant` step.

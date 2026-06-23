@@ -11,7 +11,7 @@ last_reviewed: 2026-06-23
 
 Every frontend talks to `apps/api` only through the typed `@yarns/api-client`, inside Next App Router route groups.
 
-Canonical: `packages/api-client/src/index.ts` (`request<T>`, `getApiUrl`, `auth`, `marketing`, `ApiResult<T>`; re-exports `@yarns/contracts`), `apps/web/src/lib/api.ts` and `apps/web/src/lib/api/*` (app fetch helpers), `apps/web/src/app/layout.tsx` (root layout, `window.__API_URL__` injection), `apps/web/src/app/(main)/layout.tsx` + `apps/web/src/app/(field)/` (route groups), `apps/web/next.config.mjs` (`transpilePackages` includes `@yarns/api-client`, `@yarns/contracts`).
+Canonical: `packages/api-client/src/index.ts` (`request<T>`, `getApiUrl`, `auth`, `marketing`, `ApiResult<T>`; re-exports `@yarns/contracts`), `apps/admin/src/lib/api.ts` and `apps/admin/src/lib/api/*` (app fetch helpers), `apps/admin/src/app/layout.tsx` (root layout, `window.__API_URL__` injection), `apps/admin/src/app/(main)/layout.tsx` + `apps/admin/src/app/(field)/` (route groups), `apps/admin/next.config.mjs` (`transpilePackages` includes `@yarns/api-client`, `@yarns/contracts`).
 
 ## Must have
 - Reach the API through `@yarns/api-client`'s `request<T>` wrapper (or an app helper in `lib/api` that wraps it) – never a bare `fetch` to the API. The wrapper sends `credentials: "include"` (the httpOnly cookie), unwraps the `{ data }` envelope, and bounces to the auth app on 401.
@@ -36,6 +36,6 @@ Canonical: `packages/api-client/src/index.ts` (`request<T>`, `getApiUrl`, `auth`
 - [ ] Gate: walk `dev/ai/how-to/definition-of-done.md`.
 
 ## Related guides
-- `apps/web/dev/ai/how-to/web-security.md` – the cookie session the client wrapper rides on.
-- `apps/web/dev/ai/how-to/feedback-states.md` – rendering the loading/error branches of `ApiResult`.
-- `apps/web/dev/ai/how-to/permission-gating.md` – gating what these calls expose.
+- `apps/admin/dev/ai/how-to/web-security.md` – the cookie session the client wrapper rides on.
+- `apps/admin/dev/ai/how-to/feedback-states.md` – rendering the loading/error branches of `ApiResult`.
+- `apps/admin/dev/ai/how-to/permission-gating.md` – gating what these calls expose.

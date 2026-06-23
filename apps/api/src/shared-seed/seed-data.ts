@@ -3,7 +3,7 @@
  * tour, the demo-data seeder (SeedService) and tests. Framework-free (no Prisma,
  * no Nest) so it can be imported anywhere, including unit specs as fixture data.
  *
- * Web mirrors the tour-facing literals in apps/web/src/lib/seed-constants.ts
+ * Web mirrors the tour-facing literals in apps/admin/src/lib/seed-constants.ts
  * (the web bundle can't import apps/api); keep the two in sync.
  */
 

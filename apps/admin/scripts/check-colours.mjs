@@ -2,7 +2,7 @@
 /**
  * Dark-mode guard: fail if a source file uses a raw light-only colour in a className
  * instead of a semantic token (bg-surface, text-muted-foreground, border-border, …).
- * Keeps the app dark-mode-safe after the WS1 sweep. Run via `pnpm --filter web lint`.
+ * Keeps the app dark-mode-safe after the WS1 sweep. Run via `pnpm --filter admin lint`.
  *
  * Allowlisted paths are genuine special-cases:
  *  - components/prog/** + app/(main)/prog/** — ported prog components that pair raw

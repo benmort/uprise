@@ -102,7 +102,7 @@ Data loss is acceptable, so there is no rename/backfill/dual-write dance. The wo
 pnpm --filter @yarns/db prisma:migrate reset   # clean DB, fresh schema
 pnpm --filter @yarns/db run seed               # shared demo seed
 pnpm --filter api test
-pnpm --filter web build
+pnpm --filter admin build
 ```
 
 Gate: api boots on the fresh schema; the full api suite passes; every existing endpoint (audiences, blasts, canvass, inbox, journeys, geo, integrations) works under `tenantId` scoping with **no functional regression** – the `organizationId`→`tenantId` rename is the only behavioural change.

@@ -6,7 +6,7 @@
  * Shared semantic tokens live as HSL channels in :root and are mapped via
  * `@theme inline` so a `.dark` block / per-tenant override can re-skin by changing
  * channels alone. yarns DOMAIN tokens (knock, support, warning, containers,
- * surface) are preserved untouched — apps/web depends on them.
+ * surface) are preserved untouched — apps/admin depends on them.
  */
 
 @custom-variant dark (&:where(.dark, .dark *));

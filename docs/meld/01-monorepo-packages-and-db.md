@@ -42,7 +42,7 @@ This makes the Prisma client the single most-shared artefact – which is exactl
 multiSchema (doc 02) is GA in Prisma 6. Do the bump here, before any schema restructuring, so namespacing never rides a preview flag.
 
 - Bump `prisma` and `@prisma/client` to v6 in `packages/db`.
-- Regenerate the client; run the existing api jest suite + `pnpm --filter web build`.
+- Regenerate the client; run the existing api jest suite + `pnpm --filter admin build`.
 - Review the v6 changelog for client API deltas (validate against `apps/api/src/**` Prisma calls); fix any.
 
 ## Verification
@@ -53,7 +53,7 @@ pnpm --filter @yarns/db prisma:generate
 pnpm --filter api typecheck && pnpm --filter api build
 pnpm --filter api test
 pnpm --filter worker build
-pnpm --filter web build
+pnpm --filter admin build
 ```
 
 Gate: all green, no remaining import of `apps/api/src/generated/prisma`, copy-script deleted.

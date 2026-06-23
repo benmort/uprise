@@ -46,8 +46,8 @@ Grades a cold session that ran `yarns-implement` against `fixture-work-unit.md`
    - an **additive migration applied with `prisma migrate deploy`** (never `migrate dev`),
      citing `apps/api/dev/ai/how-to/migrations.md`.
 9. Frontend slice cites the design-system + permission-gating + feedback-state guides
-   (`apps/web/dev/ai/how-to/design-system.md`, `apps/web/dev/ai/how-to/permission-gating.md`,
-   `apps/web/dev/ai/how-to/feedback-states.md`, `apps/web/dev/ai/how-to/app-router-and-api-client.md`)
+   (`apps/admin/dev/ai/how-to/design-system.md`, `apps/admin/dev/ai/how-to/permission-gating.md`,
+   `apps/admin/dev/ai/how-to/feedback-states.md`, `apps/admin/dev/ai/how-to/app-router-and-api-client.md`)
    for the badge + hidden action.
 
 ### MUST – terminate at the gate, then review

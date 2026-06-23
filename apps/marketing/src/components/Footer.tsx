@@ -75,6 +75,11 @@ export default function Footer() {
                   Request a Demo
                 </Link>
               </li>
+              <li>
+                <Link href="/developers" className="text-gray-600 hover:text-primary transition-colors">
+                  Developers
+                </Link>
+              </li>
             </ul>
           </div>
 

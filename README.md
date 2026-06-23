@@ -10,13 +10,13 @@ Yarns is a Twilio-powered SMS blast platform with five primary surfaces:
 
 This repository is configured for **Vercel + BullMQ worker deployment**:
 
-- `apps/web` (Next.js) -> Vercel project #1
+- `apps/admin` (Next.js) -> Vercel project #1
 - `apps/api` (NestJS serverless function) -> Vercel project #2
 - `apps/worker` (BullMQ worker) -> always-on worker host (for example Render/Fly/Railway)
 
 ## Architecture
 
-- **Web (`apps/web`)**
+- **Web (`apps/admin`)**
   - Next.js App Router UI
   - Yarns design system
   - Routes: `/dashboard`, `/audience`, `/analytics`, `/inbox`, `/blasts/:id`, `/blasts/:id/composer`
@@ -44,7 +44,7 @@ pnpm install
 
 ```bash
 cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
+cp apps/admin/.env.example apps/admin/.env
 ```
 
 3. Ensure `DATABASE_URL` points to a reachable Postgres instance.
@@ -124,9 +124,9 @@ Optional:
 
 Scheduled dispatch runs via Vercel Cron (`/api/v1/blasts/dispatch-due` and `/api/v1/audiences/dispatch-imports`) every minute and expects `Authorization: Bearer <CRON_SECRET>`. When BullMQ flags are enabled, these endpoints enqueue queue jobs instead of executing full send/import loops inline.
 
-### 2) Deploy Web (`apps/web`)
+### 2) Deploy Web (`apps/admin`)
 
-Create a Vercel project with root directory `apps/web`.
+Create a Vercel project with root directory `apps/admin`.
 
 Set web env vars:
 
@@ -173,8 +173,8 @@ pnpm --filter api build
 ### Web
 
 ```bash
-pnpm --filter web test
-pnpm --filter web build
+pnpm --filter admin test
+pnpm --filter admin build
 ```
 
 ## Operational Docs

@@ -1,8 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import MarketingChrome from "@/components/MarketingChrome";
 import ScrollToTop from "@/components/ScrollToTop";
 
 const outfit = Outfit({
@@ -28,9 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           }}
         />
         <div className="flex min-h-screen flex-col bg-background">
-          <Header />
-          <div className="flex-1">{children}</div>
-          <Footer />
+          <MarketingChrome>{children}</MarketingChrome>
           <ScrollToTop />
         </div>
       </body>
