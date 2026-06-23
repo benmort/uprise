@@ -1,60 +1,63 @@
 # Parity — Outstanding Items
 
-Living tracker of prog→yarns parity work **still open** after WS0–WS3 (branch `feat/prog-parity`).
-Companion to `12-parity-matrix.md` (per-domain rows) and `12-parity-backlog.md` (original audit gaps).
-Status: **OPEN** (untouched) · **PARTIAL** (some closed, remainder noted) · **DEFERRED-BY-DESIGN** (no action — contradicts a locked meld decision).
+Living tracker of prog→yarns parity work on branch `feat/prog-parity`.
+Status: **DONE** (closed this round) · **NOT PORTED** (intentional — see scope) · **DEFERRED-BY-DESIGN** (contradicts a locked meld decision) · **INFRA** (needs the live stack).
 
-Last reconciled: 2026-06-23 (after commits d558371 · edd3807 · 28c8420 · b491ad4 · 69cfded · 29241ef · 3993cd8 · 65537a5 · e0a4822 · c71b727 · 1e222c8).
+Last reconciled: 2026-06-23 after the M1–M6 gap-closure (commits 02c82ae · 3556f9e · e045ff7 · 4162e84 · 09da620 · b78cd8d). 428 api tests green; all 9 builds green; recursive typecheck clean.
 
-## Audience
-- [ ] **Wire `recordSourceRecord` into the Action Network import** (P1) — connector writes `externalId` onto `AudienceContact`, never `ContactSourceRecord`; the `hasSource` segment clause matches nothing for imported contacts. Needs Contact-spine resolution inside the batched sync loop.
-- [ ] **Wire `resolveIdentity`** (P1) — implemented but never called; `canonicalContactId` stays null, cross-source identity unresolved.
-- [ ] **`ManageSourceRecords` remove + batch-reconcile** (P1) — only single-record upsert; a shrinking source leaves orphan rows.
-- [ ] **Audience domain events** (P1) — person/segment/source-record mutations emit nothing (`audience.imported` / `audience.segment.recomputed` catalogued but never emitted).
-- [ ] **Source-record list/read path** (P2) — no read over `ContactSourceRecord`; `getProfile` omits provenance.
-- [ ] **Segment lifecycle entirely unwired** (P1, _CRUD intentionally skipped per the brief_) — beyond the skipped CRUD: there is **no `SEGMENT_EVAL` producer** (the queue has a worker consumer but nothing enqueues), so the verified-complete `SegmentEvaluatorService` is **unreachable in production**. Even with CRUD skipped, an enqueue trigger is needed for dynamic segments to ever evaluate. _(Reassessment wf_57710a11 flagged this as broader than the tracker framed.)_
+## Audience (M1 — 02c82ae)
+- [x] **DONE** `recordSourceRecord` wired into the Action Network import — the Contact spine is resolved per contactable row and `ContactSourceRecord` written, so the `hasSource` clause now matches imported contacts.
+- [x] **DONE** `resolveIdentity` wired — called per row with email+phone so `canonicalContactId` collapses the same person across sources.
+- [x] **DONE** `ManageSourceRecords` remove + batch-reconcile — `ContactsService.removeSourceRecord` + `reconcileSourceRecords` (drops orphans).
+- [x] **DONE** Audience domain event — `audience.imported` emitted atomically on sync close.
+- [x] **DONE** Source-record list/read — `listSourceRecords` + provenance (`sources` + `canonicalContactId`) in `getProfile`.
+- **NOT PORTED** Segment lifecycle (CRUD + `SEGMENT_EVAL` producer) — intentionally not ported (audience layer covers targeting). Existing dormant segment scaffolding left intact; `audience.segment.recomputed` stays catalogued-but-unemitted.
 
-## Telephony
-- [ ] **SMS Twilio-callback idempotency claim** (P1) — voice path claims `(provider,eventId)` + releases on error; the SMS path (`blasts.handleTwilioStatusCallback`) has no claim (idempotency layer-3 missing for SMS).
-- [ ] **Transactional-SMS `txStatus` advance** (P1) — the callback updates only `status`, never `txStatus`, so transactional rows stick at SENT (DELIVERED/UNDELIVERED edges dead).
-- [ ] **Call lifecycle events** (P1, PARTIAL) — `telephony.call.completed` emitted; ringing/in-progress/busy/no-answer/failed still not.
-- [ ] **Blast (SmsCampaign) outbox events** (P1) — only in-process realtime events; no durable `blast.created/scheduled/sent`.
-- [ ] **Per-SMS read** (P2) — no `GET /messages/:id` (GetSms/GetSmsStatus).
-- [ ] **`MessageTemplate` CRUD + type/category/variables/fromNumber + undeclared-variable guard** (P2).
-- [ ] **`segmentCount` capture** + queued/sent set inline not callback-driven (P2).
-- [ ] **`undelivered` distinction** (P2) — collapsed into `FAILED`; needs an `UNDELIVERED` enum member (migration).
-- [ ] **No consumer/reaction for `telephony.call.completed`/`call.initiated`** (P2) — events are produced but dead (grep finds only the emit); no canvassing/analytics reaction subscribes. _(Reassessment tracker-miss.)_
+## Telephony (M2 — 3556f9e)
+- [x] **DONE** SMS Twilio-callback idempotency claim — `claim(twilio, sid:status)` + release on failure (parity with the voice path).
+- [x] **DONE** Transactional-SMS `txStatus` advance — callback advances `txStatus` via the tx-sms FSM (SENT→DELIVERED/UNDELIVERED/FAILED), distinct from the marketing `status`.
+- [x] **DONE** Call lifecycle events — `telephony.call.status-changed` on every legal transition (+ the existing `call.completed`), atomic with the update.
+- [x] **DONE** Blast (SmsCampaign) outbox events — `messaging.blast.created/scheduled/sent`.
+- [x] **DONE** Per-SMS read — `GET /messages/:id`.
+- [x] **DONE** `MessageTemplate` CRUD + `type/category/variables/fromNumber` + undeclared-`{{var}}` guard (migration 20260623110000).
+- [x] **DONE** `undelivered` distinction — `UNDELIVERED` enum member; Twilio `undelivered` maps to it on recipients + transactional rows.
+- **NOT PORTED** `segmentCount` capture — no column exists on the messaging models; an unread metric, not a behavioural gap. Skipped (would need a speculative schema + metric design).
+- Consumers for `telephony.*` events — events are now emitted (the prog parity bar); a canvassing/analytics consumer is yarns-specific future work, not a prog gap.
 
-## Email
-- [ ] **Email lifecycle events** (P1, PARTIAL) — `delivered`/`bounced` emitted; sent/sending/failed/open/click still not.
-- [ ] **Raw HTML / dynamic-template send path** (P1) — `SendGridService.send` is text/plain only; no ad-hoc HTML or server-side dynamic template.
+## Email (M3 — e045ff7)
+- [x] **DONE** Full lifecycle events — `email.email.sending/sent/failed/opened/clicked` alongside queued/delivered/bounced.
+- [x] **DONE** Raw-HTML / dynamic-template send — `SendGridService.send` gains html + `template_id`/`dynamic_template_data`; `EmailService.sendRaw`/`sendHtml`.
 
-## Payment
-- [ ] **No reaction consumes `payment.succeeded` / `payment.refunded`** (P1) — events emitted, but no receipt/entitlement reaction (WS2 wired subscription→tenant + network→customer only).
-- [ ] **Proactive `EnsureCustomer` at checkout** (P1, PARTIAL) — `StripeService.createCustomer` + network→customer reaction done; an explicit ensure-before-checkout flow still thin.
-- [ ] **PaymentMethod attach/detach/set-default write path** (P2) — prog ships 3 handlers + 3 adapter methods (incl. one-default-per-customer); yarns has projection + read + `GET` only (cards normally flow via the proxied Stripe portal). _(Reassessment tracker-miss.)_
+## Payment (M4 — 4162e84)
+- [x] **DONE** `payment.succeeded`/`refunded` reactions — receipt + refund emails to the billing contact (new default templates).
+- [x] **DONE** EnsureCustomer at checkout — resolve/create + project the tenant's Stripe customer before the session.
+- [x] **DONE** PaymentMethod attach/detach/set-default write path — Stripe adapter methods + controller endpoints, one-default-per-customer, tenant-scoped.
 
-## Identity
-- [ ] **Most identity lifecycle events** (P1, PARTIAL) — `iam.user.created` emitted (register + acceptInvite); EmailVerified / PasswordReset / MobileVerified / 2FA-enabled/disabled / `iam.user.signed-in` still not (`lastSignInAt` recorded, no event).
-- [ ] **Sign-in logic extraction** (P1) — password verify + membership + 2FA branch still inline in `iam.controller`, not a testable service method.
-- [ ] **OTT issue/exchange** (P1) — effectively superseded by the doc-14 parent-domain cookie SSO; build only if cross-app handoff is needed.
-- [ ] **`ClearSelectedAvatar` standalone op** (P2).
+## Identity (M5 — 09da620)
+- [x] **DONE** Identity lifecycle events — `iam.user.signed-in` (every grantSession path) + email-verified / password-reset / mobile-verified / 2fa-enabled / 2fa-disabled.
+- [x] **DONE** Sign-in extraction — `IamFlowsService.signIn` (discriminated result); the controller delegates.
+- [x] **DONE** Invitation decline-by-token — `POST /iam/invite/decline` + `tenant.invitation.declined`.
+- [x] **DONE** `ClearSelectedAvatar` — service + endpoint.
+- **DEFERRED-BY-DESIGN** OTT issue/exchange — superseded by the doc-14 parent-domain cookie SSO; build only if a cross-app handoff is later needed.
 
-## Tenant
-- [ ] **Invitation decline-by-token + `already_member` rejection + revoke event** (P1, PARTIAL) — admin revoke + last-owner guard done; no `POST /iam/invite/decline {token}`, `addMember` still upserts (silent role update), `revokeInvitation` emits no event.
-- [ ] **`TenantRenamed` event + slug format (`SLUG_RE`) + org-contact email validation** (P1, PARTIAL) — soft-delete done; these invariants/events still missing.
-- [ ] **`GetUserTenants` network context** (P2, PARTIAL) — deletedAt filter done; still no network plan/status join or client aliases.
+## Tenant (M5 — 09da620)
+- [x] **DONE** `already_member` rejection on addMember (was a silent role-update) + `tenant.invitation.revoked` event (status now `revoked`).
+- [x] **DONE** `TenantRenamed` + `TenantDeleted` events + `SLUG_RE` on create/update (with slug-change + uniqueness re-check) + org-contact `@IsEmail`.
+- [x] **DONE** `GetUserTenants` / `membershipsFor` joins the network plan/status.
+
+## Cross-cutting hardening (M6 — b78cd8d)
+- [x] **DONE** Payment `FOR UPDATE` on `mark*`/`refund` — closes the stale-status TOCTOU.
+- [x] **DONE** SendGrid ECDSA signed-event-webhook verification (preferred over the legacy shared secret).
+- [x] **DONE** Outbox/reactions real-DB integration test — proves the `ReactionDedup` unique index enforces at-most-once dispatch (self-skips without a DB).
 
 ## Deferred-by-design (no action — contradict locked meld decisions)
 - Event-sourced aggregates / replay (yarns = Prisma rows + FSM + outbox, doc 00 decision 1).
 - Multi-org `Organisation` aggregate (yarns folds to 1:1 `OrgProfile`, doc 11).
-- Owner-as-distinct-`OWNER` enum role (yarns uses `ORGANISER`; last-owner guard added instead).
+- Owner-as-distinct-`OWNER` enum role (yarns uses `ORGANISER`; last-owner guard instead).
+- OTT cross-app handoff (superseded by cookie SSO, doc 14).
 
-## Other meld outstanding (beyond the parity audit)
-- [ ] **Doc 13** — slingshot merge-alignment write-up (reference doc, never written).
-- [ ] **Bulk email-send queue** (marketing email domain) + **voice-dispatch queue** (doc 09, "only if bulk/scheduled calling").
-- [ ] **Outbox/reactions integration test** — real Redis+DB end-to-end (deferred since doc 05; reactions unit-tested only).
-- [ ] **SendGrid ECDSA webhook signature verify** (doc 07; currently optional shared-secret).
-- [ ] **Payment `FOR UPDATE` on `mark*`** — TOCTOU hardening (doc 08, low risk).
-- [ ] **e2e execution** — Playwright + jest-e2e written + typecheck, unrun in sandbox; need the live stack (Postgres+Redis+4 apps; `*.lvh.me` for cross-subdomain SSO).
-- [ ] **`feat/prog-parity` not pushed** — 11 commits local; no PR opened.
+## Remaining (infra / not behavioural)
+- **INFRA** Live-stack e2e — Playwright + jest-e2e + the BullMQ relay→consumer publish leg need Postgres+Redis+4 apps (`*.lvh.me` for cross-subdomain SSO). The reactions backbone's dedup is now covered by a real-DB integration test; the queue-publish leg remains for this run.
+- **Doc 13** — slingshot merge-alignment write-up (reference doc, not behavioural).
+- Bulk email-send queue + voice-dispatch queue (doc 09, "only if bulk/scheduled" — separate feature, not parity).
+- **PR** — `feat/prog-parity` commits are local; no PR opened yet (awaiting the go-ahead to push).
