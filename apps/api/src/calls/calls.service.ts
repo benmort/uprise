@@ -132,11 +132,20 @@ export class CallsService {
         if (cb.currency !== undefined) data.currency = cb.currency;
         data.endedAt = cb.endedAt ?? new Date();
       }
-      await this.prisma.call.update({ where: { id: call.id }, data });
-      // Emit a durable completion event so canvassing/analytics reactions can subscribe (WS3).
-      if (target === CallStatus.COMPLETED) {
-        await this.prisma.$transaction((tx) =>
-          this.outbox.append(tx, {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.call.update({ where: { id: call.id }, data });
+        // Durable lifecycle event for every legal transition
+        // (ringing/in-progress/busy/no-answer/failed/completed) so canvassing +
+        // analytics reactions can subscribe to the full call timeline (doc 09).
+        await this.outbox.append(tx, {
+          tenantId: call.tenantId,
+          eventType: "telephony.call.status-changed",
+          aggregateId: call.id,
+          payload: { callId: call.id, tenantId: call.tenantId, status: target },
+        });
+        // The completion-specific event carries the billable duration.
+        if (target === CallStatus.COMPLETED) {
+          await this.outbox.append(tx, {
             tenantId: call.tenantId,
             eventType: "telephony.call.completed",
             aggregateId: call.id,
@@ -145,9 +154,9 @@ export class CallsService {
               tenantId: call.tenantId,
               durationSeconds: cb.durationSeconds ?? null,
             },
-          }),
-        );
-      }
+          });
+        }
+      });
     } catch (err) {
       // Release the claim so Twilio's retry reprocesses a transient failure.
       await this.webhookEvents.release(VOICE_PROVIDER, eventId);

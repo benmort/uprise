@@ -6,7 +6,9 @@ import {
   BlastStatus,
   ConsentState,
   MessageChannel,
+  MessageKind,
   Prisma,
+  TxSmsStatus,
 } from "@yarns/db";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
@@ -31,6 +33,30 @@ import {
 } from "../common/queue/queue.constants";
 import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
 import { BlastRetryFailedJobPayload, BlastSendBatchJobPayload } from "../common/queue/queue.payloads";
+import { WebhookEventService } from "../common/webhooks/webhook-event.service";
+import { OutboxService } from "../common/outbox/outbox.service";
+import { canTransitionTxSms } from "../messaging/tx-sms-state.machine";
+
+const TWILIO_SMS_PROVIDER = "twilio";
+
+/** Map a Twilio SMS status to the transactional-SMS FSM target (null = ignore). */
+function mapTwilioToTxStatus(status: string): TxSmsStatus | null {
+  switch (status) {
+    case "queued":
+      return TxSmsStatus.QUEUED;
+    case "sent":
+      return TxSmsStatus.SENT;
+    case "delivered":
+    case "read":
+      return TxSmsStatus.DELIVERED;
+    case "undelivered":
+      return TxSmsStatus.UNDELIVERED;
+    case "failed":
+      return TxSmsStatus.FAILED;
+    default:
+      return null;
+  }
+}
 
 type RecipientSeed = {
   contactId?: string;
@@ -89,6 +115,8 @@ export class BlastsService {
   private readonly logger = new Logger(BlastsService.name);
   private readonly flags: Pick<FeatureFlagsService, "isBullmqBlastEnabled">;
   private readonly queue: DispatchQueue;
+  private readonly webhookEvents: Pick<WebhookEventService, "claim" | "release">;
+  private readonly outbox: Pick<OutboxService, "append">;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -100,12 +128,23 @@ export class BlastsService {
     private readonly consent: ConsentService,
     flags?: FeatureFlagsService,
     @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+    webhookEvents?: WebhookEventService,
+    outbox?: OutboxService,
   ) {
     this.flags = flags ?? {
       isBullmqBlastEnabled: () => false,
     };
     this.queue = queue ?? {
       enqueue: async (job) => ({ jobId: job.id, queued: true }),
+    };
+    // Optional-with-fallback (mirrors flags/queue) so unit specs can construct
+    // positionally; DI supplies the real global services in production.
+    this.webhookEvents = webhookEvents ?? {
+      claim: async () => true,
+      release: async () => {},
+    };
+    this.outbox = outbox ?? {
+      append: async () => {},
     };
   }
 
@@ -135,26 +174,35 @@ export class BlastsService {
 
   async createDraft(dto: CreateBlastDto) {
     const org = await this.ensureOrganization();
-    const blast = await this.prisma.blast.create({
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const blast = await tx.blast.create({
+        data: {
+          tenantId: org.id,
+          title: dto.title,
+          audienceId: dto.audienceId || null,
+          bodyTemplate: dto.bodyTemplate,
+          channel: (dto.channel as MessageChannel) ?? MessageChannel.SMS,
+          contentSid: dto.contentSid ?? null,
+          contentVariableMap: (dto.contentVariableMap ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          status: BlastStatus.DRAFTED,
+        },
+      });
+      await tx.blastTemplate.create({
+        data: {
+          blastId: blast.id,
+          version: 1,
+          body: dto.bodyTemplate,
+        },
+      });
+      // Durable lifecycle event (doc 05) committed with the draft.
+      await this.outbox.append(tx, {
         tenantId: org.id,
-        title: dto.title,
-        audienceId: dto.audienceId || null,
-        bodyTemplate: dto.bodyTemplate,
-        channel: (dto.channel as MessageChannel) ?? MessageChannel.SMS,
-        contentSid: dto.contentSid ?? null,
-        contentVariableMap: (dto.contentVariableMap ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-        status: BlastStatus.DRAFTED,
-      },
+        eventType: "messaging.blast.created",
+        aggregateId: blast.id,
+        payload: { blastId: blast.id, tenantId: org.id, title: blast.title },
+      });
+      return blast;
     });
-    await this.prisma.blastTemplate.create({
-      data: {
-        blastId: blast.id,
-        version: 1,
-        body: dto.bodyTemplate,
-      },
-    });
-    return blast;
   }
 
   async updateDraft(id: string, dto: UpdateBlastDto) {
@@ -252,12 +300,21 @@ export class BlastsService {
       FlowBlastStatus.SCHEDULED,
     );
     const runAt = new Date(dto.scheduledFor);
-    const updated = await this.prisma.blast.update({
-      where: { id },
-      data: {
-        status: BlastStatus.SCHEDULED,
-        scheduledFor: runAt,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.blast.update({
+        where: { id },
+        data: {
+          status: BlastStatus.SCHEDULED,
+          scheduledFor: runAt,
+        },
+      });
+      await this.outbox.append(tx, {
+        tenantId: u.tenantId,
+        eventType: "messaging.blast.scheduled",
+        aggregateId: u.id,
+        payload: { blastId: u.id, tenantId: u.tenantId, scheduledAt: runAt.toISOString() },
+      });
+      return u;
     });
     if (this.isBullmqBlastEnabled()) {
       await this.enqueueBlastSendBatch({ blastId: id }, runAt);
@@ -658,6 +715,7 @@ export class BlastsService {
       where: { id: blastId },
       select: {
         id: true,
+        tenantId: true,
         status: true,
         completedAt: true,
       },
@@ -697,12 +755,25 @@ export class BlastsService {
     const shouldUpdateStatus = blast.status !== status;
     const shouldSetCompletedAt = status !== BlastStatus.SENDING && !blast.completedAt;
     if (shouldUpdateStatus || shouldSetCompletedAt) {
-      await this.prisma.blast.update({
-        where: { id: blastId },
-        data:
-          status === BlastStatus.SENDING
-            ? { status: BlastStatus.SENDING }
-            : { status, completedAt: blast.completedAt ?? new Date() },
+      const emitSent = shouldUpdateStatus && status === BlastStatus.SENT;
+      await this.prisma.$transaction(async (tx) => {
+        await tx.blast.update({
+          where: { id: blastId },
+          data:
+            status === BlastStatus.SENDING
+              ? { status: BlastStatus.SENDING }
+              : { status, completedAt: blast.completedAt ?? new Date() },
+        });
+        // Durable send-completion event on the transition into SENT (doc 05).
+        if (emitSent) {
+          const recipientCount = await tx.blastRecipient.count({ where: { blastId } });
+          await this.outbox.append(tx, {
+            tenantId: blast.tenantId,
+            eventType: "messaging.blast.sent",
+            aggregateId: blastId,
+            payload: { blastId, tenantId: blast.tenantId, recipientCount },
+          });
+        }
       });
     }
 
@@ -714,6 +785,34 @@ export class BlastsService {
   }
 
   async handleTwilioStatusCallback(payload: TwilioStatusCallbackPayload) {
+    // Idempotency claim (doc 12), keyed (provider, sid:status) so distinct
+    // lifecycle statuses still apply while a replayed same-status is dropped —
+    // mirrors the voice path. Release on failure so Twilio's retry reprocesses.
+    const sid = String(payload.messageSid || "").trim();
+    const st = String(payload.messageStatus || "").trim().toLowerCase();
+    if (sid && st) {
+      const eventId = `${sid}:${st}`;
+      if (!(await this.webhookEvents.claim(TWILIO_SMS_PROVIDER, eventId))) {
+        return {
+          messageSid: sid,
+          status: st,
+          recipientUpdates: 0,
+          outboundUpdates: 0,
+          blastStatusUpdates: [],
+          ignored: true,
+        };
+      }
+      try {
+        return await this.applyTwilioStatusCallback(payload);
+      } catch (err) {
+        await this.webhookEvents.release(TWILIO_SMS_PROVIDER, eventId);
+        throw err;
+      }
+    }
+    return this.applyTwilioStatusCallback(payload);
+  }
+
+  private async applyTwilioStatusCallback(payload: TwilioStatusCallbackPayload) {
     const messageSid = String(payload.messageSid || "").trim();
     const status = String(payload.messageStatus || "").trim().toLowerCase();
     const errorCode = payload.errorCode ? String(payload.errorCode).trim() : null;
@@ -747,7 +846,9 @@ export class BlastsService {
         where: { twilioMessageSid: messageSid },
         select: {
           id: true,
+          kind: true,
           status: true,
+          txStatus: true,
           errorCode: true,
           errorMessage: true,
         },
@@ -796,9 +897,14 @@ export class BlastsService {
           errorMessage: nextFailureMessage,
           messageStatus: status,
         });
+        // A carrier 'undelivered' is distinct from a hard 'failed' (doc 12).
+        const failedStatus =
+          status === "undelivered"
+            ? BlastRecipientStatus.UNDELIVERED
+            : BlastRecipientStatus.FAILED;
         const shouldSetFailedStatus = FAILED_TRANSITIONABLE_STATUSES.includes(recipient.status);
         if (shouldSetFailedStatus) {
-          data.status = BlastRecipientStatus.FAILED;
+          data.status = failedStatus;
         }
         const nextFailureCode = classification.code || nextFailureCodeRaw;
         const nextFailureCategory = classification.normalizedCategory;
@@ -816,7 +922,7 @@ export class BlastsService {
           data.metadata = this.appendRecipientTrace(
             recipient.metadata,
             {
-              status: BlastRecipientStatus.FAILED,
+              status: failedStatus,
               source: "twilio_callback",
               reason: `Delivery failed (${status})`,
               scope: classification.scope,
@@ -840,6 +946,27 @@ export class BlastsService {
     }
 
     for (const outbound of outboundRows) {
+      // Transactional rows track lifecycle on txStatus via the SMS FSM, distinct
+      // from the marketing `status` column (doc 09/12). The FSM guard swallows a
+      // replayed terminal callback.
+      if (outbound.kind === MessageKind.TRANSACTIONAL) {
+        const target = mapTwilioToTxStatus(status);
+        if (!target) continue;
+        const from = outbound.txStatus ?? TxSmsStatus.SENT;
+        if (from === target || !canTransitionTxSms(from, target)) continue;
+        const data: Prisma.OutboundMessageUpdateInput = { txStatus: target };
+        if (target === TxSmsStatus.FAILED || target === TxSmsStatus.UNDELIVERED) {
+          if (errorCode && errorCode !== outbound.errorCode) data.errorCode = errorCode;
+          if (errorMessage && errorMessage !== outbound.errorMessage) data.errorMessage = errorMessage;
+        } else if (target === TxSmsStatus.DELIVERED && (outbound.errorCode || outbound.errorMessage)) {
+          data.errorCode = null;
+          data.errorMessage = null;
+        }
+        await this.prisma.outboundMessage.update({ where: { id: outbound.id }, data });
+        outboundUpdates += 1;
+        continue;
+      }
+
       const data: Prisma.OutboundMessageUpdateInput = {};
       if (TWILIO_DELIVERY_CONFIRMED_STATUSES.has(status)) {
         const confirmedStatus =
@@ -855,8 +982,12 @@ export class BlastsService {
           data.errorMessage = null;
         }
       } else if (TWILIO_DELIVERY_FAILED_STATUSES.has(status)) {
-        if (outbound.status !== BlastRecipientStatus.FAILED) {
-          data.status = BlastRecipientStatus.FAILED;
+        const failedStatus =
+          status === "undelivered"
+            ? BlastRecipientStatus.UNDELIVERED
+            : BlastRecipientStatus.FAILED;
+        if (outbound.status !== failedStatus) {
+          data.status = failedStatus;
         }
         if (errorCode && errorCode !== outbound.errorCode) data.errorCode = errorCode;
         if (errorMessage && errorMessage !== outbound.errorMessage) data.errorMessage = errorMessage;

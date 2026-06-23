@@ -10,6 +10,8 @@
 export const EVENT_TYPES = {
   AUDIENCE_IMPORTED: "audience.imported",
   SEGMENT_RECOMPUTED: "audience.segment.recomputed",
+  BLAST_CREATED: "messaging.blast.created",
+  BLAST_SCHEDULED: "messaging.blast.scheduled",
   BLAST_SENT: "messaging.blast.sent",
   TX_SMS_REQUESTED: "messaging.tx-sms.requested",
   INBOUND_RECEIVED: "messaging.inbound.received",
@@ -19,6 +21,7 @@ export const EVENT_TYPES = {
   PAYMENT_SUCCEEDED: "payment.payment.succeeded",
   PAYMENT_REFUNDED: "payment.payment.refunded",
   CALL_INITIATED: "telephony.call.initiated",
+  CALL_STATUS_CHANGED: "telephony.call.status-changed",
   ORG_CREDENTIAL_UPDATED: "tenant.org-credential.updated",
   TENANT_CREATED: "tenant.tenant.created",
   TENANT_MEMBER_ADDED: "tenant.member.added",
@@ -40,6 +43,8 @@ export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
 export interface DomainEventMap {
   "audience.imported": { audienceId: string; tenantId: string; count: number };
   "audience.segment.recomputed": { segmentId: string; tenantId: string; memberCount: number };
+  "messaging.blast.created": { blastId: string; tenantId: string; title: string };
+  "messaging.blast.scheduled": { blastId: string; tenantId: string; scheduledAt: string };
   "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };
   "messaging.tx-sms.requested": { tenantId: string; toPhone: string; purpose: string };
   "messaging.inbound.received": { tenantId: string; contactPhone: string; channel: string };
@@ -49,6 +54,7 @@ export interface DomainEventMap {
   "payment.payment.succeeded": { paymentId: string; tenantId: string; amountCents: number };
   "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
   "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };
+  "telephony.call.status-changed": { callId: string; tenantId: string; status: string };
   "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
   "tenant.tenant.created": { tenantId: string; slug: string; name: string; networkId: string | null };
   "tenant.member.added": { tenantId: string; userId: string; role: string };
