@@ -89,6 +89,15 @@ export class RegistrationService {
     });
 
     const { token, expiresAt } = await this.sessions.create(userId, { tenantId });
+    // Sign-in audit event — register issues a session like every grantSession path (WS3).
+    await this.prisma.$transaction((tx) =>
+      this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.signed-in",
+        aggregateId: userId,
+        payload: { userId, tenantId },
+      }),
+    );
     return {
       userId,
       tenantId,

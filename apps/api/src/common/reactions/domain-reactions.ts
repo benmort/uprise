@@ -41,18 +41,32 @@ function formatAmount(amountCents: number): string {
 }
 
 /**
- * Resolve a billing email for a tenant from its Customer projection (earliest).
- * Returns null when no customer/email is on file (the reaction then skips).
+ * Resolve a billing email for a tenant. A customer may be tenant-scoped (created
+ * by EnsureCustomer at checkout) OR network-scoped (the network→customer
+ * reaction sets networkId only), so fall back to the tenant's network customer.
+ * Returns null when no email is on file (the reaction then skips).
  */
 async function billingEmailFor(
   prisma: ReactionDeps["prisma"],
   tenantId: string,
 ): Promise<string | null> {
-  const customer = await prisma.customer.findFirst({
+  const direct = await prisma.customer.findFirst({
     where: { tenantId },
     orderBy: { createdAt: "asc" },
   });
-  return customer?.email ?? null;
+  if (direct?.email) return direct.email;
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { networkId: true },
+  });
+  if (tenant?.networkId) {
+    const networkCustomer = await prisma.customer.findFirst({
+      where: { networkId: tenant.networkId },
+      orderBy: { createdAt: "asc" },
+    });
+    if (networkCustomer?.email) return networkCustomer.email;
+  }
+  return null;
 }
 
 /** iam.user.created → welcome email. */

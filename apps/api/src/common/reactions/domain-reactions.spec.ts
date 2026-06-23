@@ -53,11 +53,31 @@ describe("domain reactions", () => {
 
   it("receipt reaction no-ops when no billing email is on file", async () => {
     const { byTrigger, ev, email, prisma } = setup();
-    prisma.customer.findFirst.mockResolvedValueOnce(null);
+    prisma.customer.findFirst.mockResolvedValueOnce(null); // no tenant customer
+    prisma.tenant.findUnique.mockResolvedValueOnce({ networkId: null }); // no network either
     await byTrigger("payment.payment.succeeded").handle(
       ev({ paymentId: "p1", tenantId: "t1", amountCents: 5000 }),
     );
     expect(email.sendTransactional).not.toHaveBeenCalled();
+  });
+
+  it("receipt reaction falls back to the network-scoped customer email", async () => {
+    const { byTrigger, ev, email, prisma } = setup();
+    // No tenant-scoped customer, but the tenant's network has one (network→customer reaction).
+    prisma.customer.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "cn", email: "network-billing@x.y" });
+    prisma.tenant.findUnique.mockResolvedValueOnce({ networkId: "n1" });
+    await byTrigger("payment.payment.succeeded").handle(
+      ev({ paymentId: "p1", tenantId: "t1", amountCents: 5000 }),
+    );
+    expect(prisma.customer.findFirst).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ where: { networkId: "n1" } }),
+    );
+    expect(email.sendTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({ toAddress: "network-billing@x.y", templateKey: "receipt" }),
+    );
   });
 
   it("payment.payment.refunded → refund email to the billing contact", async () => {

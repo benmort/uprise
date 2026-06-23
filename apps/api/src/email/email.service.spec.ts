@@ -121,6 +121,61 @@ describe("EmailService", () => {
     );
   });
 
+  it("webhook: click emits email.email.clicked (first write)", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findUnique.mockResolvedValue({
+      id: "em1",
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      status: "DELIVERED",
+      openedAt: new Date(),
+      clickedAt: null,
+    });
+    await svc.processSendGridEvents([{ event: "click", sg_event_id: "ec", emailId: "em1" }]);
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.clicked" }),
+    );
+  });
+
+  it("webhook: delivered emits the event atomically only when the transition applied", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findUnique.mockResolvedValue({
+      id: "em1",
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      status: "SENT",
+      openedAt: null,
+      clickedAt: null,
+    });
+    await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "ed", emailId: "em1" }]);
+    expect(prisma.email.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "DELIVERED" }) }),
+    );
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.delivered" }),
+    );
+  });
+
+  it("webhook: a replayed delivered on a terminal email emits no event (no spurious append)", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findUnique.mockResolvedValue({
+      id: "em1",
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      status: "BOUNCED", // terminal — DELIVERED transition is illegal
+      openedAt: null,
+      clickedAt: null,
+    });
+    await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "ed2", emailId: "em1" }]);
+    expect(prisma.email.update).not.toHaveBeenCalled();
+    expect(outbox.append).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.delivered" }),
+    );
+  });
+
   it("rejects an unknown template", async () => {
     const { svc } = setup();
     await expect(

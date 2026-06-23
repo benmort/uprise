@@ -36,7 +36,12 @@ describe("RegistrationService", () => {
     );
     expect(prisma.tenantMember.create).toHaveBeenCalled();
     const events = outbox.append.mock.calls.map((c: any) => c[1].eventType);
-    expect(events).toEqual(["iam.user.created", "tenant.tenant.created", "tenant.member.added"]);
+    expect(events).toEqual([
+      "iam.user.created",
+      "tenant.tenant.created",
+      "tenant.member.added",
+      "iam.user.signed-in",
+    ]);
     expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
     expect(grant).toMatchObject({ userId: "u1", tenantId: "t1", token: "sess" });
     expect(grant.memberships).toHaveLength(1);

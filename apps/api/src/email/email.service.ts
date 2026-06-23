@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { EmailStatus } from "@yarns/db";
+import { EmailStatus, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
@@ -234,14 +234,23 @@ export class EmailService {
     return null;
   }
 
-  private async transition(
+  /**
+   * Apply a status transition inside the caller's transaction and report whether
+   * it actually moved (an illegal/terminal move is a no-op → false). Returning the
+   * applied flag lets the caller emit the lifecycle event ONLY when the state
+   * truly changed, keeping the write + event atomic and never emitting a spurious
+   * event for a rejected transition.
+   */
+  private async transitionTx(
+    tx: Prisma.TransactionClient,
     emailId: string,
     from: EmailStatus,
     to: EmailStatus,
     extra: Record<string, unknown> = {},
-  ): Promise<void> {
-    if (!canTransitionEmail(from, to)) return; // already terminal / illegal → idempotent no-op
-    await this.prisma.email.update({ where: { id: emailId }, data: { status: to, ...extra } });
+  ): Promise<boolean> {
+    if (!canTransitionEmail(from, to)) return false;
+    await tx.email.update({ where: { id: emailId }, data: { status: to, ...extra } });
+    return true;
   }
 
   async processSendGridEvents(events: SendGridEvent[]): Promise<void> {
@@ -264,22 +273,24 @@ export class EmailService {
       if (!email) return;
       switch (event.event) {
         case "delivered":
-          await this.transition(email.id, email.status, EmailStatus.DELIVERED);
-          await this.prisma.$transaction((tx) =>
-            this.outbox.append(tx, {
+          await this.prisma.$transaction(async (tx) => {
+            const applied = await this.transitionTx(tx, email.id, email.status, EmailStatus.DELIVERED);
+            if (!applied) return; // illegal/terminal move — no state change, no event
+            await this.outbox.append(tx, {
               tenantId: email.tenantId,
               eventType: "email.email.delivered",
               aggregateId: email.id,
               payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
-            }),
-          );
+            });
+          });
           break;
         case "bounce":
-          await this.transition(email.id, email.status, EmailStatus.BOUNCED, {
-            bounceReason: String(event.reason ?? ""),
-          });
-          await this.prisma.$transaction((tx) =>
-            this.outbox.append(tx, {
+          await this.prisma.$transaction(async (tx) => {
+            const applied = await this.transitionTx(tx, email.id, email.status, EmailStatus.BOUNCED, {
+              bounceReason: String(event.reason ?? ""),
+            });
+            if (!applied) return;
+            await this.outbox.append(tx, {
               tenantId: email.tenantId,
               eventType: "email.email.bounced",
               aggregateId: email.id,
@@ -289,15 +300,16 @@ export class EmailService {
                 toAddress: email.toAddress,
                 reason: String(event.reason ?? ""),
               },
-            }),
-          );
+            });
+          });
           break;
         case "dropped":
-          await this.transition(email.id, email.status, EmailStatus.FAILED, {
-            errorMessage: String(event.reason ?? "dropped"),
-          });
-          await this.prisma.$transaction((tx) =>
-            this.outbox.append(tx, {
+          await this.prisma.$transaction(async (tx) => {
+            const applied = await this.transitionTx(tx, email.id, email.status, EmailStatus.FAILED, {
+              errorMessage: String(event.reason ?? "dropped"),
+            });
+            if (!applied) return;
+            await this.outbox.append(tx, {
               tenantId: email.tenantId,
               eventType: "email.email.failed",
               aggregateId: email.id,
@@ -307,8 +319,8 @@ export class EmailService {
                 toAddress: email.toAddress,
                 reason: String(event.reason ?? "dropped"),
               },
-            }),
-          );
+            });
+          });
           break;
         case "open":
           if (!email.openedAt) {
