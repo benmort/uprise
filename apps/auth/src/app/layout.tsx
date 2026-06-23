@@ -1,11 +1,11 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { Outfit } from "next/font/google";
 
-const roboto = Roboto({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-roboto",
-  weight: ["400", "500", "700"],
+  variable: "--font-outfit",
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -17,7 +17,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
   return (
     <html lang="en">
-      <body className={roboto.variable}>
+      <body className={outfit.variable}>
         <script
           dangerouslySetInnerHTML={{ __html: `window.__API_URL__=${JSON.stringify(apiUrl)};` }}
         />

@@ -15,6 +15,8 @@ class DemoRequestDto {
   @IsOptional() @IsString() @MaxLength(200) company?: string;
   @IsOptional() @IsString() @MaxLength(120) role?: string;
   @IsOptional() @IsString() @MaxLength(2000) useCase?: string;
+  @IsOptional() @IsString() @MaxLength(120) timeline?: string;
+  @IsOptional() @IsString() @MaxLength(2000) additionalInfo?: string;
 }
 class NewsletterDto {
   @IsEmail() @MaxLength(200) email!: string;

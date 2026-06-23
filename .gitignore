@@ -47,5 +47,6 @@ apps/web/e2e/.auth/
 apps/web/test-results/
 apps/web/playwright-report/
 
-# Claude Code local worktree state
+# Claude Code local worktree state + per-user local settings
 .claude/worktrees/
+.claude/settings.local.json

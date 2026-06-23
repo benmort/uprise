@@ -123,6 +123,8 @@ export interface DemoRequestInput {
   company?: string;
   role?: string;
   useCase?: string;
+  timeline?: string;
+  additionalInfo?: string;
 }
 
 export const marketing = {

@@ -1,13 +1,13 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Roboto } from "next/font/google";
+import { Outfit } from "next/font/google";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { ToastProvider } from "@/components/ui/toast";
 
-const roboto = Roboto({
+const outfit = Outfit({
   subsets: ["latin"],
-  variable: "--font-roboto",
-  weight: ["400", "500", "700"],
+  variable: "--font-outfit",
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +30,7 @@ export default function RootLayout({
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
   return (
     <html lang="en">
-      <body className={roboto.variable}>
+      <body className={outfit.variable}>
         <script
           dangerouslySetInnerHTML={{
             __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};`,
