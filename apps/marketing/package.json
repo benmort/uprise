@@ -14,9 +14,11 @@
     "@yarns/contracts": "workspace:*",
     "@yarns/ui": "workspace:*",
     "lucide-react": "^0.469.0",
+    "mermaid": "^11.15.0",
     "next": "^14.2.20",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
