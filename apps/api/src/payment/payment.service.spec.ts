@@ -9,16 +9,37 @@ function setup(paymentRow?: any) {
       update: jest.fn(async () => ({})),
     },
     refund: { create: jest.fn() },
-    customer: { findUnique: jest.fn(async () => null) },
-    $transaction: jest.fn(async (cb: any) => cb(prisma)),
+    customer: { findUnique: jest.fn(async () => null), findFirst: jest.fn(async () => null) },
+    paymentMethod: {
+      findUnique: jest.fn(async () => null),
+      update: jest.fn(async () => ({})),
+      updateMany: jest.fn(async () => ({})),
+      deleteMany: jest.fn(async () => ({})),
+    },
+    tenant: { upsert: jest.fn(async () => ({ id: "t1", name: "Acme" })) },
+    $transaction: jest.fn(async (arg: any) =>
+      Array.isArray(arg) ? Promise.all(arg) : arg(prisma),
+    ),
   };
   const outbox = { append: jest.fn() } as any;
   const webhookEvents = { claim: jest.fn(async () => true), release: jest.fn() } as any;
-  const billing = { projectSubscription: jest.fn(), projectInvoice: jest.fn(), projectCustomer: jest.fn() } as any;
+  const billing = {
+    projectSubscription: jest.fn(),
+    projectInvoice: jest.fn(),
+    projectCustomer: jest.fn(),
+    projectPaymentMethod: jest.fn(),
+  } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
   const config = { get: jest.fn((_k: string, fb?: string) => fb ?? "") } as any;
-  const svc = new PaymentService(prisma, outbox, webhookEvents, billing, logger, config);
-  return { svc, prisma, outbox, webhookEvents, billing };
+  const stripe = {
+    isConfigured: jest.fn(() => false),
+    createCustomer: jest.fn(async () => ({ id: "cus_x" })),
+    attachPaymentMethod: jest.fn(async () => ({ id: "pm_x", brand: "visa", last4: "4242" })),
+    detachPaymentMethod: jest.fn(async () => ({ id: "pm_x" })),
+    setDefaultPaymentMethod: jest.fn(async () => undefined),
+  } as any;
+  const svc = new PaymentService(prisma, outbox, webhookEvents, billing, logger, config, stripe);
+  return { svc, prisma, outbox, webhookEvents, billing, stripe };
 }
 
 describe("PaymentService", () => {
@@ -147,6 +168,54 @@ describe("PaymentService", () => {
     expect(prisma.refund.create).toHaveBeenCalled();
     expect(prisma.payment.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "REFUNDED" }) }),
+    );
+  });
+
+  it("ensureCustomer creates + projects a Stripe customer when none exists", async () => {
+    const { svc, stripe, billing } = setup();
+    stripe.isConfigured.mockReturnValue(true);
+    const id = await svc.ensureCustomer();
+    expect(id).toBe("cus_x");
+    expect(stripe.createCustomer).toHaveBeenCalled();
+    expect(billing.projectCustomer).toHaveBeenCalledWith({ providerCustomerId: "cus_x", tenantId: "t1" });
+  });
+
+  it("ensureCustomer returns the existing customer without creating one", async () => {
+    const { svc, prisma, stripe } = setup();
+    stripe.isConfigured.mockReturnValue(true);
+    prisma.customer.findFirst.mockResolvedValue({ providerCustomerId: "cus_existing" });
+    expect(await svc.ensureCustomer()).toBe("cus_existing");
+    expect(stripe.createCustomer).not.toHaveBeenCalled();
+  });
+
+  it("ensureCustomer returns undefined when Stripe is unconfigured", async () => {
+    const { svc, stripe } = setup();
+    stripe.isConfigured.mockReturnValue(false);
+    expect(await svc.ensureCustomer()).toBeUndefined();
+    expect(stripe.createCustomer).not.toHaveBeenCalled();
+  });
+
+  it("setDefaultPaymentMethod enforces one default per customer", async () => {
+    const { svc, prisma, stripe } = setup();
+    prisma.paymentMethod.findUnique.mockResolvedValue({ providerMethodId: "pm_1", customerId: "c1" });
+    prisma.customer.findFirst.mockResolvedValue({ id: "c1", providerCustomerId: "cus_x" });
+    await svc.setDefaultPaymentMethod("pm_1");
+    expect(stripe.setDefaultPaymentMethod).toHaveBeenCalledWith({ customerId: "cus_x", paymentMethodId: "pm_1" });
+    expect(prisma.paymentMethod.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { customerId: "c1", isDefault: true }, data: { isDefault: false } }),
+    );
+    expect(prisma.paymentMethod.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { providerMethodId: "pm_1" }, data: { isDefault: true } }),
+    );
+  });
+
+  it("attachPaymentMethod attaches via Stripe + projects the method", async () => {
+    const { svc, prisma, stripe, billing } = setup();
+    prisma.customer.findFirst.mockResolvedValue({ id: "c1", providerCustomerId: "cus_x" });
+    await svc.attachPaymentMethod("pm_new");
+    expect(stripe.attachPaymentMethod).toHaveBeenCalledWith({ paymentMethodId: "pm_new", customerId: "cus_x" });
+    expect(billing.projectPaymentMethod).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: "c1", providerMethodId: "pm_x", brand: "visa", last4: "4242" }),
     );
   });
 });

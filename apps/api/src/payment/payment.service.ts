@@ -6,6 +6,7 @@ import { OutboxService } from "../common/outbox/outbox.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { BillingService } from "./billing.service";
+import { StripeService } from "./stripe.service";
 import { assertValidPaymentTransition } from "./payment-state.machine";
 
 export interface RecordPaymentInput {
@@ -35,6 +36,7 @@ export class PaymentService {
     private readonly billing: BillingService,
     private readonly logger: DomainLogger,
     private readonly config: ConfigService,
+    private readonly stripe: StripeService,
   ) {}
 
   private async ensureOrganization() {
@@ -158,6 +160,91 @@ export class PaymentService {
       where: { customerId: { in: customers.map((c) => c.id) } },
       orderBy: { createdAt: "desc" },
     });
+  }
+
+  /**
+   * Resolve the tenant's Stripe customer, creating + projecting one when absent
+   * (EnsureCustomer at checkout, doc 08). Returns undefined when Stripe is
+   * unconfigured so checkout can proceed customer-less.
+   */
+  async ensureCustomer(): Promise<string | undefined> {
+    if (!this.stripe.isConfigured()) return undefined;
+    const org = await this.ensureOrganization();
+    const existing = await this.prisma.customer.findFirst({
+      where: { tenantId: org.id },
+      orderBy: { createdAt: "asc" },
+    });
+    if (existing) return existing.providerCustomerId;
+    const created = await this.stripe.createCustomer({
+      name: org.name ?? undefined,
+      metadata: { tenantId: org.id },
+    });
+    await this.billing.projectCustomer({ providerCustomerId: created.id, tenantId: org.id });
+    return created.id;
+  }
+
+  /** The tenant's billing customer, or a 400 when none exists yet. */
+  private async requireCustomer() {
+    const org = await this.ensureOrganization();
+    const customer = await this.prisma.customer.findFirst({
+      where: { tenantId: org.id },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!customer) throw new BadRequestException("No billing customer for this tenant");
+    return customer;
+  }
+
+  /** A payment method scoped to the current tenant, or a 404. */
+  private async requireTenantPaymentMethod(providerMethodId: string) {
+    const org = await this.ensureOrganization();
+    const method = await this.prisma.paymentMethod.findUnique({ where: { providerMethodId } });
+    if (!method) throw new NotFoundException("Payment method not found");
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: method.customerId, tenantId: org.id },
+    });
+    if (!customer) throw new NotFoundException("Payment method not found");
+    return { method, customer };
+  }
+
+  /** Attach a payment method to the tenant's customer + project it. */
+  async attachPaymentMethod(providerMethodId: string): Promise<void> {
+    const customer = await this.requireCustomer();
+    const res = await this.stripe.attachPaymentMethod({
+      paymentMethodId: providerMethodId,
+      customerId: customer.providerCustomerId,
+    });
+    await this.billing.projectPaymentMethod({
+      customerId: customer.id,
+      providerMethodId: res.id,
+      brand: res.brand,
+      last4: res.last4,
+    });
+  }
+
+  /** Detach a payment method from the tenant's customer + drop the projection. */
+  async detachPaymentMethod(providerMethodId: string): Promise<void> {
+    await this.requireTenantPaymentMethod(providerMethodId);
+    await this.stripe.detachPaymentMethod(providerMethodId);
+    await this.prisma.paymentMethod.deleteMany({ where: { providerMethodId } });
+  }
+
+  /** Set the tenant's default payment method, enforcing one-default-per-customer. */
+  async setDefaultPaymentMethod(providerMethodId: string): Promise<void> {
+    const { method, customer } = await this.requireTenantPaymentMethod(providerMethodId);
+    await this.stripe.setDefaultPaymentMethod({
+      customerId: customer.providerCustomerId,
+      paymentMethodId: providerMethodId,
+    });
+    await this.prisma.$transaction([
+      this.prisma.paymentMethod.updateMany({
+        where: { customerId: method.customerId, isDefault: true },
+        data: { isDefault: false },
+      }),
+      this.prisma.paymentMethod.update({
+        where: { providerMethodId },
+        data: { isDefault: true },
+      }),
+    ]);
   }
 
   /**

@@ -30,7 +30,29 @@ export function buildDomainReactions(deps: ReactionDeps): Reaction[] {
     invitationEmailReaction(deps),
     networkCustomerReaction(deps),
     subscriptionTenantReaction(deps),
+    paymentReceiptReaction(deps),
+    paymentRefundReaction(deps),
   ];
+}
+
+/** cents → a "$X.XX"-style display string (currency-agnostic). */
+function formatAmount(amountCents: number): string {
+  return `$${(amountCents / 100).toFixed(2)}`;
+}
+
+/**
+ * Resolve a billing email for a tenant from its Customer projection (earliest).
+ * Returns null when no customer/email is on file (the reaction then skips).
+ */
+async function billingEmailFor(
+  prisma: ReactionDeps["prisma"],
+  tenantId: string,
+): Promise<string | null> {
+  const customer = await prisma.customer.findFirst({
+    where: { tenantId },
+    orderBy: { createdAt: "asc" },
+  });
+  return customer?.email ?? null;
 }
 
 /** iam.user.created → welcome email. */
@@ -89,6 +111,60 @@ function networkCustomerReaction({ stripe, billing, logger }: ReactionDeps): Rea
       }
       const customer = await stripe.createCustomer({ name: p.name, metadata: { networkId: p.networkId } });
       await billing.projectCustomer({ providerCustomerId: customer.id, networkId: p.networkId });
+    },
+  };
+}
+
+/** payment.payment.succeeded → email the billing contact a receipt. */
+function paymentReceiptReaction({ prisma, email, logger }: ReactionDeps): Reaction {
+  return {
+    trigger: "payment.payment.succeeded",
+    emits: ["email.email.queued"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as { paymentId: string; tenantId: string; amountCents: number };
+      if (!p?.tenantId) return;
+      const toAddress = await billingEmailFor(prisma, p.tenantId);
+      if (!toAddress) {
+        logger.debug("payment", "No billing email on file — skipping receipt", {
+          tenantId: p.tenantId,
+          paymentId: p.paymentId,
+        });
+        return;
+      }
+      await email.sendTransactional({
+        tenantId: p.tenantId,
+        toAddress,
+        templateKey: "receipt",
+        vars: { appName: "Foment", amount: formatAmount(p.amountCents) },
+        purpose: "receipt",
+      });
+    },
+  };
+}
+
+/** payment.payment.refunded → email the billing contact a refund notice. */
+function paymentRefundReaction({ prisma, email, logger }: ReactionDeps): Reaction {
+  return {
+    trigger: "payment.payment.refunded",
+    emits: ["email.email.queued"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as { paymentId: string; tenantId: string; amountCents: number };
+      if (!p?.tenantId) return;
+      const toAddress = await billingEmailFor(prisma, p.tenantId);
+      if (!toAddress) {
+        logger.debug("payment", "No billing email on file — skipping refund notice", {
+          tenantId: p.tenantId,
+          paymentId: p.paymentId,
+        });
+        return;
+      }
+      await email.sendTransactional({
+        tenantId: p.tenantId,
+        toAddress,
+        templateKey: "refund",
+        vars: { appName: "Foment", amount: formatAmount(p.amountCents) },
+        purpose: "refund",
+      });
     },
   };
 }

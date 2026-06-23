@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
-import { IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
+import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
+import { IsArray, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 import { PaymentService } from "./payment.service";
 import { StripeService } from "./stripe.service";
@@ -19,6 +19,9 @@ class CheckoutSessionDto {
 class PortalSessionDto {
   @IsString() @MaxLength(120) customer!: string;
   @IsString() @MaxLength(2048) returnUrl!: string;
+}
+class AttachPaymentMethodDto {
+  @IsString() @IsNotEmpty() @MaxLength(120) providerMethodId!: string;
 }
 
 // Billing is an owner/super-admin surface (manage payment.all). Reads use read payment.all.
@@ -40,8 +43,11 @@ export class PaymentController {
 
   @Post("checkout-session")
   @RequirePermission(MANAGE)
-  checkout(@Body() dto: CheckoutSessionDto) {
-    return this.stripe.createCheckoutSession(dto);
+  async checkout(@Body() dto: CheckoutSessionDto) {
+    // EnsureCustomer (doc 08): resolve/create the tenant's Stripe customer when the
+    // caller didn't pin one, so checkout always binds to a customer.
+    const customer = dto.customer ?? (await this.payment.ensureCustomer());
+    return this.stripe.createCheckoutSession({ ...dto, customer });
   }
 
   @Post("portal-session")
@@ -84,5 +90,26 @@ export class PaymentController {
   @RequirePermission(READ)
   paymentMethods() {
     return this.payment.listPaymentMethods();
+  }
+
+  @Post("payment-methods")
+  @RequirePermission(MANAGE)
+  async attachPaymentMethod(@Body() dto: AttachPaymentMethodDto) {
+    await this.payment.attachPaymentMethod(dto.providerMethodId);
+    return { ok: true };
+  }
+
+  @Delete("payment-methods/:providerMethodId")
+  @RequirePermission(MANAGE)
+  async detachPaymentMethod(@Param("providerMethodId") providerMethodId: string) {
+    await this.payment.detachPaymentMethod(providerMethodId);
+    return { ok: true };
+  }
+
+  @Post("payment-methods/:providerMethodId/default")
+  @RequirePermission(MANAGE)
+  async setDefaultPaymentMethod(@Param("providerMethodId") providerMethodId: string) {
+    await this.payment.setDefaultPaymentMethod(providerMethodId);
+    return { ok: true };
   }
 }

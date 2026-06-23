@@ -8,6 +8,7 @@ function setup() {
       findUnique: jest.fn(async () => ({ id: "t1", name: "Acme", settings: { foo: 1 } })),
       update: jest.fn(async () => ({})),
     },
+    customer: { findFirst: jest.fn(async () => ({ id: "c1", email: "billing@x.y" })) },
   };
   const email = { sendTransactional: jest.fn(async () => ({ id: "e1" })) } as any;
   const stripe = { isConfigured: jest.fn(() => true), createCustomer: jest.fn(async () => ({ id: "cus_1" })) } as any;
@@ -32,8 +33,41 @@ function setup() {
 describe("domain reactions", () => {
   it("are loop-safe (no reaction emits its own trigger)", () => {
     const { reactions } = setup();
-    expect(reactions).toHaveLength(4);
+    expect(reactions).toHaveLength(6);
     expect(() => assertReactionsLoopSafe(reactions)).not.toThrow();
+  });
+
+  it("payment.payment.succeeded → receipt email to the billing contact", async () => {
+    const { byTrigger, ev, email } = setup();
+    await byTrigger("payment.payment.succeeded").handle(
+      ev({ paymentId: "p1", tenantId: "t1", amountCents: 5000 }),
+    );
+    expect(email.sendTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toAddress: "billing@x.y",
+        templateKey: "receipt",
+        vars: expect.objectContaining({ amount: "$50.00" }),
+      }),
+    );
+  });
+
+  it("receipt reaction no-ops when no billing email is on file", async () => {
+    const { byTrigger, ev, email, prisma } = setup();
+    prisma.customer.findFirst.mockResolvedValueOnce(null);
+    await byTrigger("payment.payment.succeeded").handle(
+      ev({ paymentId: "p1", tenantId: "t1", amountCents: 5000 }),
+    );
+    expect(email.sendTransactional).not.toHaveBeenCalled();
+  });
+
+  it("payment.payment.refunded → refund email to the billing contact", async () => {
+    const { byTrigger, ev, email } = setup();
+    await byTrigger("payment.payment.refunded").handle(
+      ev({ paymentId: "p1", tenantId: "t1", amountCents: 1500 }),
+    );
+    expect(email.sendTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({ templateKey: "refund", vars: expect.objectContaining({ amount: "$15.00" }) }),
+    );
   });
 
   it("iam.user.created → welcome email", async () => {

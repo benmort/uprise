@@ -118,4 +118,32 @@ export class StripeService {
     });
     return { id: res.id };
   }
+
+  /** Attach a payment method to a customer (prog adapter parity). */
+  async attachPaymentMethod(input: {
+    paymentMethodId: string;
+    customerId: string;
+  }): Promise<{ id: string; brand: string | null; last4: string | null }> {
+    const res = await this.post<{ id: string; card?: { brand?: string; last4?: string } }>(
+      `payment_methods/${input.paymentMethodId}/attach`,
+      { customer: input.customerId },
+    );
+    return { id: res.id, brand: res.card?.brand ?? null, last4: res.card?.last4 ?? null };
+  }
+
+  /** Detach a payment method from its customer. */
+  async detachPaymentMethod(paymentMethodId: string): Promise<{ id: string }> {
+    const res = await this.post<{ id: string }>(`payment_methods/${paymentMethodId}/detach`, {});
+    return { id: res.id };
+  }
+
+  /** Set a customer's default invoice payment method. */
+  async setDefaultPaymentMethod(input: {
+    customerId: string;
+    paymentMethodId: string;
+  }): Promise<void> {
+    await this.post(`customers/${input.customerId}`, {
+      invoice_settings: { default_payment_method: input.paymentMethodId },
+    });
+  }
 }
