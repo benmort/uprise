@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQueryParams } from "@/lib/use-query";
-import { Button, Card, CardContent, CardHeader, CardTitle, Logo } from "@yarns/ui";
+import { Alert, Button } from "@yarns/ui";
 import { auth, type Membership } from "@yarns/api-client";
 import { validateReturnTo } from "@/lib/return-to";
 
@@ -43,31 +43,29 @@ export default function SelectTenantPage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="mb-2 flex justify-center"><Logo large /></div>
-        <CardTitle>Choose a workspace</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {error ? <p className="mb-3 text-sm text-error">{error}</p> : null}
-        {memberships ? (
-          <ul className="space-y-2">
-            {memberships.map((m) => (
-              <li key={m.tenantId}>
-                <Button variant="outline" className="w-full justify-between" disabled={busy} onClick={() => choose(m.tenantId)}>
-                  <span>{m.tenantName}</span>
-                  <span className="text-xs text-muted-foreground">{m.role}</span>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
-        )}
-        <div className="mt-4 text-sm">
-          <Link className="text-primary hover:underline" href="/login">Sign in as someone else</Link>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex w-full flex-col">
+      <div className="mb-6">
+        <h1 className="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90 sm:text-title-md">Choose a workspace</h1>
+        <p className="text-sm text-muted-foreground">Pick the workspace you want to sign in to.</p>
+      </div>
+      {error ? <Alert variant="error" title={error} className="mb-4" /> : null}
+      {memberships ? (
+        <ul className="space-y-2">
+          {memberships.map((m) => (
+            <li key={m.tenantId}>
+              <Button variant="outline" className="w-full justify-between" disabled={busy} onClick={() => choose(m.tenantId)}>
+                <span>{m.tenantName}</span>
+                <span className="text-xs text-muted-foreground">{m.role}</span>
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+      )}
+      <div className="mt-5 text-sm text-muted-foreground">
+        <Link className="text-primary hover:underline" href="/login">Sign in as someone else</Link>
+      </div>
+    </div>
   );
 }

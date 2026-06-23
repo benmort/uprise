@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Logo } from "@yarns/ui";
+import { Alert, Button, OtpInput } from "@yarns/ui";
 import { auth } from "@yarns/api-client";
 import { completeAuth } from "@/lib/session";
 
@@ -16,6 +17,13 @@ export default function TwoFactorPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resendCountdown, setResendCountdown] = useState(30);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown((n) => n - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
 
   async function verify(e: React.FormEvent) {
     e.preventDefault();
@@ -34,38 +42,55 @@ export default function TwoFactorPage() {
   async function resend() {
     if (!challengeId) return;
     setInfo(null);
+    setError(null);
+    setResendCountdown(30);
     const res = await auth.send2fa(challengeId);
-    setInfo(res.ok ? "A new code has been sent." : res.error);
+    if (res.ok) setInfo("A new verification code has been sent.");
+    else setError(res.error);
   }
 
   if (!challengeId) {
     return (
-      <Card>
-        <CardContent className="py-8 text-center text-sm text-error">
-          Missing 2FA challenge. <Link className="text-primary hover:underline" href="/login">Start again</Link>
-        </CardContent>
-      </Card>
+      <div className="py-8 text-center text-sm text-error">
+        Missing 2FA challenge. <Link className="text-primary hover:underline" href="/login">Start again</Link>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="mb-2 flex justify-center"><Logo large /></div>
-        <CardTitle>Two-factor verification</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={verify} className="space-y-4">
-          <Field label="Code" htmlFor="code" hint={info ?? "We sent a code to your mobile."} error={error ?? undefined}>
-            <Input id="code" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} />
-          </Field>
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Verifying…" : "Verify"}</Button>
-        </form>
-        <div className="mt-4 flex justify-between text-sm">
-          <button type="button" className="text-primary hover:underline" onClick={resend}>Resend code</button>
-          <Link className="text-primary hover:underline" href="/login">Cancel</Link>
+    <div className="flex w-full flex-col">
+      <div className="mb-5">
+        <Link href="/login" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+          <ChevronLeft className="h-4 w-4" />
+          Back to sign in
+        </Link>
+      </div>
+      <div className="mb-6 text-center">
+        <h1 className="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90 sm:text-title-md">Two Step Verification</h1>
+        <p className="text-sm text-muted-foreground">A verification code has been sent to your mobile.</p>
+      </div>
+      <form onSubmit={verify} className="space-y-6">
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Type your 6 digit security code</label>
+          <OtpInput value={code} onChange={setCode} length={6} />
         </div>
-      </CardContent>
-    </Card>
+        {error ? <Alert variant="error" title={error} /> : null}
+        {info ? <Alert variant="success" title={info} /> : null}
+        <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
+          {busy ? "Verifying…" : "Verify My Account"}
+        </Button>
+      </form>
+      <div className="mt-6 text-center text-sm text-muted-foreground">
+        Didn&apos;t get the code?{" "}
+        <button
+          type="button"
+          onClick={resend}
+          disabled={resendCountdown > 0}
+          className="font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : "Resend"}
+        </button>
+      </div>
+    </div>
   );
 }
