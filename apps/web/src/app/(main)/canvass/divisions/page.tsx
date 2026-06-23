@@ -135,7 +135,7 @@ export default function DivisionsPage() {
           <select
             value={universe}
             onChange={(e) => setUniverse(e.target.value as TurfUniverse)}
-            className="h-9 rounded-lg border border-border bg-white px-2 text-sm font-semibold text-foreground"
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
             title="Which addresses land in the turf when you cut it"
           >
             <option value="hybrid">Existing + cold doors</option>

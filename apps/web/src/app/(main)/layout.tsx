@@ -5,17 +5,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Boxes,
   ChevronDown,
   LayoutDashboard,
   LogOut,
   Mail,
   MapPin,
-  MessageCircle,
   MessageSquareText,
   Settings,
   ShieldCheck,
   Sparkles,
-  Users,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -25,8 +24,14 @@ import {
   listConversations,
   type MessageChannel,
 } from "@/lib/api";
+import type { AuthPrincipal } from "@yarns/api-client";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, goToLogin, logout } from "@/lib/session";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search";
+import { NotificationsDropdown } from "@/components/topbar/notifications-dropdown";
+import { TenantSwitcher } from "@/components/topbar/tenant-switcher";
+import { UserDropdown } from "@/components/topbar/user-dropdown";
 import { listCampaigns } from "@/lib/api/campaigns";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
@@ -92,6 +97,21 @@ function buildNav(campaignId: string): NavNode[] {
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
       ],
     },
+    {
+      type: "group", key: "prog", label: "Prog", icon: Boxes, match: (p) => p.startsWith("/prog"),
+      children: [
+        { label: "Billing", href: "/prog/billing", match: (p) => p.startsWith("/prog/billing") },
+        { label: "Plans", href: "/prog/plans", match: (p) => p.startsWith("/prog/plans") },
+        { label: "Transactions", href: "/prog/transactions", match: (p) => p.startsWith("/prog/transactions") },
+        { label: "Invoices", href: "/prog/invoices", match: (p) => p.startsWith("/prog/invoices") },
+        { label: "Products", href: "/prog/products", match: (p) => p.startsWith("/prog/products") },
+        { label: "Support tickets", href: "/prog/support-tickets", match: (p) => p.startsWith("/prog/support-tickets") },
+        { label: "Checkout", href: "/prog/checkout", match: (p) => p.startsWith("/prog/checkout") },
+        { label: "Workspace settings", href: "/prog/tenant-settings", match: (p) => p.startsWith("/prog/tenant-settings") },
+        { label: "Team", href: "/prog/team", match: (p) => p.startsWith("/prog/team") },
+        { label: "Tenants", href: "/prog/tenants", match: (p) => p.startsWith("/prog/tenants") },
+      ],
+    },
   ];
 }
 
@@ -103,6 +123,7 @@ export default function MainLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
   const [creatingBlast, setCreatingBlast] = useState(false);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const inboxUnreadRef = useRef(0);
@@ -125,6 +146,7 @@ export default function MainLayout({
         router.replace("/field");
         return;
       }
+      setPrincipal(session);
       setReady(true);
     })();
     return () => {
@@ -289,10 +311,7 @@ export default function MainLayout({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        router.push("/inbox");
-      }
+      // ⌘K is owned by the topbar search; "c" still quick-creates a blast.
       if (event.key.toLowerCase() === "c" && !event.metaKey && !event.ctrlKey) {
         const target = event.target as HTMLElement | null;
         const tag = target?.tagName.toLowerCase();
@@ -320,6 +339,16 @@ export default function MainLayout({
   }, [ready]);
 
   const nav = useMemo(() => buildNav(campaignId), [campaignId]);
+  // Flatten the nav into a search index for the topbar command palette.
+  const searchItems = useMemo<SearchItem[]>(
+    () =>
+      nav.flatMap((node) =>
+        node.type === "leaf"
+          ? [{ label: node.label, href: node.href }]
+          : node.children.map((c) => ({ label: c.label, href: c.href, group: node.label })),
+      ),
+    [nav],
+  );
   const p = pathname || "";
   // Groups toggle independently (prototype: openGroups array). Default-open is the
   // active group, plus Canvass (prototype seeds openGroups:['canvass']); an explicit
@@ -340,7 +369,7 @@ export default function MainLayout({
     <TourRoot>
     <div className="h-screen overflow-hidden bg-background">
       <div className="flex h-full w-full">
-        <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-y-auto border-r border-border bg-white p-4">
+        <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-y-auto border-r border-border bg-surface p-4">
           <div id="tour-logo" className="mb-6">
             <Logo />
           </div>
@@ -357,7 +386,7 @@ export default function MainLayout({
                     className={cn(
                       "flex min-h-11 items-center gap-2.5 rounded-[11px] px-3 py-2 text-[14.5px] font-label",
                       active
-                        ? "bg-[#eef2fd] font-bold text-primary"
+                        ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                         : "font-semibold text-foreground hover:bg-surface-variant",
                     )}
                   >
@@ -382,7 +411,7 @@ export default function MainLayout({
                     className={cn(
                       "flex min-h-11 w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[14.5px] font-label",
                       groupActive
-                        ? "bg-[#eef2fd] font-bold text-primary"
+                        ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                         : "font-semibold text-foreground hover:bg-surface-variant",
                     )}
                   >
@@ -396,7 +425,7 @@ export default function MainLayout({
                     />
                   </button>
                   {open ? (
-                    <div className="ml-[19px] mb-1.5 mt-px space-y-0.5 border-l-[1.5px] border-[#eef0f3] pl-[11px]">
+                    <div className="ml-[19px] mb-1.5 mt-px space-y-0.5 border-l-[1.5px] border-border pl-[11px]">
                       {node.children.map((child) => {
                         const childActive = child.match(p);
                         return (
@@ -406,7 +435,7 @@ export default function MainLayout({
                             className={cn(
                               "flex min-h-9 items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-[14px]",
                               childActive
-                                ? "bg-[#eef2fd] font-bold text-primary"
+                                ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                                 : "font-medium text-muted-foreground hover:text-foreground",
                             )}
                           >
@@ -443,47 +472,18 @@ export default function MainLayout({
         </aside>
 
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-white px-6">
-            <div />
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="gap-2" asChild>
-                <Link href="/audience">
-                  <Users className="h-4 w-4" />
-                  New audience
-                </Link>
-              </Button>
-              <Button variant="ghost" size="sm" className="gap-2" asChild>
-                <Link href="/inbox">
-                  <Mail className="h-4 w-4" />
-                  Open inbox
-                  {inboxUnreadCount > 0 ? (
-                    <span className="ml-0.5 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
-                      {inboxUnreadCount}
-                    </span>
-                  ) : null}
-                </Link>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={creatingBlast}
-                onClick={() => handleCreateBlast("WHATSAPP")}
-              >
-                <MessageCircle className="h-4 w-4" />
-                New WhatsApp blast
-              </Button>
-              <Button
-                id="tour-create-blast"
-                type="button"
-                size="sm"
-                className="gap-2"
-                disabled={creatingBlast}
-                onClick={() => handleCreateBlast("SMS")}
-              >
-                <MessageSquareText className="h-4 w-4" />
-                {creatingBlast ? "Creating…" : "New text blast"}
-              </Button>
+          <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-6">
+            <TopbarSearch items={searchItems} />
+            <div className="flex items-center gap-2.5">
+              <ThemeToggle />
+              <NotificationsDropdown unreadCount={inboxUnreadCount} />
+              {principal ? (
+                <TenantSwitcher
+                  memberships={principal.memberships}
+                  currentTenantId={principal.tenantId}
+                />
+              ) : null}
+              <UserDropdown email={principal?.email ?? null} />
             </div>
           </header>
           <main className="flex-1 overflow-y-auto p-6">{children}</main>

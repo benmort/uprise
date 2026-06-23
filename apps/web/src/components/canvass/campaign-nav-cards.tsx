@@ -31,9 +31,9 @@ export function CampaignNavCards({ campaignId, className, id }: { campaignId: st
         <Link
           key={item.href}
           href={item.href}
-          className="group flex items-center gap-3 rounded-2xl border border-border bg-white p-3 shadow-sm transition hover:border-primary hover:shadow-card"
+          className="group flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-sm transition hover:border-primary hover:shadow-card"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#eef2fd] text-primary">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20 text-primary">
             <item.icon className="h-4 w-4" />
           </span>
           <span className="min-w-0">

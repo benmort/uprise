@@ -197,7 +197,7 @@ export default function SurveysPage() {
                 onClick={() => setSelectedId(s.id)}
                 className={cn(
                   "w-full rounded-xl border p-3 text-left text-sm transition",
-                  s.id === selectedId ? "border-primary bg-[#eef2fd]" : "border-border bg-white hover:bg-surface-variant",
+                  s.id === selectedId ? "border-primary bg-primary/10 dark:bg-primary/20" : "border-border bg-surface hover:bg-surface-variant",
                 )}
               >
                 <span className="font-semibold text-foreground">{s.name}</span>
@@ -331,7 +331,7 @@ export default function SurveysPage() {
                     <p className="mb-2 text-sm font-semibold text-foreground">{draft.questions[0].prompt}</p>
                     <div className="flex flex-wrap gap-2">
                       {(draft.questions[0].options ?? []).map((o, i) => (
-                        <span key={i} className="rounded-xl border border-primary bg-[#eef2fd] px-3 py-1.5 text-sm font-semibold text-primary">
+                        <span key={i} className="rounded-xl border border-primary bg-primary/10 dark:bg-primary/20 px-3 py-1.5 text-sm font-semibold text-primary">
                           {o.label}
                         </span>
                       ))}

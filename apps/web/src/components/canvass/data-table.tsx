@@ -30,7 +30,7 @@ export function DataTable<T>({
   className,
 }: DataTableProps<T>) {
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border bg-white", className)}>
+    <div className={cn("overflow-hidden rounded-xl border border-border bg-surface", className)}>
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border">

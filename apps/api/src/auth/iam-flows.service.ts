@@ -110,7 +110,7 @@ export class IamFlowsService {
     const user = normalised
       ? await this.prisma.user.findUnique({ where: { email: normalised } })
       : null;
-    if (!user || !(await verifyPassword(password ?? "", user.passwordHash))) {
+    if (!user || user.deletedAt || !(await verifyPassword(password ?? "", user.passwordHash))) {
       return { kind: "invalid" };
     }
     const memberships = await this.membershipsFor(user.id);
@@ -386,6 +386,96 @@ export class IamFlowsService {
         payload: { userId, tenantId },
       });
     });
+    return { ok: true };
+  }
+
+  // ── Self-service password + email change (authenticated) ────────────
+  /** Change the caller's password after verifying the current one. Revokes other sessions. */
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<{ ok: true }> {
+    if (!newPassword || newPassword.length < 8) {
+      throw new BadRequestException("Password must be at least 8 characters");
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !(await verifyPassword(currentPassword ?? "", user.passwordHash))) {
+      throw new BadRequestException("Current password is incorrect");
+    }
+    const passwordHash = await hashPassword(newPassword);
+    const tenantId = await this.resolveTenantId(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.password-reset",
+        aggregateId: userId,
+        payload: { userId, tenantId },
+      });
+    });
+    // Changing the password invalidates other sessions; the caller keeps theirs.
+    await this.sessions.revokeAllForUser(userId);
+    return { ok: true };
+  }
+
+  /** Change the caller's email after confirming their password; resets verification. */
+  async changeEmail(userId: string, newEmail: string, password: string): Promise<{ ok: true }> {
+    const email = newEmail.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !(await verifyPassword(password ?? "", user.passwordHash))) {
+      throw new BadRequestException("Password is incorrect");
+    }
+    if (email === user.email) throw new BadRequestException("That is already your email address");
+    const taken = await this.prisma.user.findUnique({ where: { email } });
+    if (taken) throw new BadRequestException("That email is already in use");
+    const tenantId = await this.resolveTenantId(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { email, emailVerified: false } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.email-changed",
+        aggregateId: userId,
+        payload: { userId, tenantId, newEmail: email },
+      });
+    });
+    // Send a fresh verification code to the new address.
+    await this.sendEmailVerification(email);
+    return { ok: true };
+  }
+
+  /**
+   * Self-service account deletion (soft-delete). Verifies the password, blocks if the
+   * caller is the sole organiser of any tenant (they must hand off first), then in one
+   * transaction soft-deletes the user, removes their memberships and emits the event;
+   * finally revokes every session. Mirrors the tenant soft-delete pattern.
+   */
+  async deleteAccount(userId: string, password: string): Promise<{ ok: true }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) throw new BadRequestException("Account not found");
+    if (!(await verifyPassword(password ?? "", user.passwordHash))) {
+      throw new BadRequestException("Password is incorrect");
+    }
+    const memberships = await this.prisma.tenantMember.findMany({ where: { userId } });
+    for (const m of memberships) {
+      if (m.role !== AppUserRole.ORGANISER) continue;
+      const organisers = await this.prisma.tenantMember.count({
+        where: { tenantId: m.tenantId, role: AppUserRole.ORGANISER },
+      });
+      if (organisers <= 1) {
+        throw new BadRequestException(
+          "You are the only organiser of a workspace. Hand over or delete it before deleting your account.",
+        );
+      }
+    }
+    const tenantId = await this.resolveTenantId(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { deletedAt: new Date() } });
+      await tx.tenantMember.deleteMany({ where: { userId } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.deleted",
+        aggregateId: userId,
+        payload: { userId, tenantId },
+      });
+    });
+    await this.sessions.revokeAllForUser(userId);
     return { ok: true };
   }
 

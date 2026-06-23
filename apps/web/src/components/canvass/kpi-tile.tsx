@@ -13,7 +13,7 @@ export type KpiTileProps = {
 export function KpiTile({ label, value, delta, icon, className }: KpiTileProps) {
   const dir = delta?.direction ?? "flat";
   return (
-    <div className={cn("rounded-xl border border-border bg-white p-4 shadow-card", className)}>
+    <div className={cn("rounded-xl border border-border bg-surface p-4 shadow-card", className)}>
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
           {label}

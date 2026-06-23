@@ -54,7 +54,7 @@ function TimelineCard({ e }: { e: TimelineEntry }) {
   }
   const inbound = e.kind === "text_in";
   return (
-    <div className="rounded-xl border border-border bg-white p-3">
+    <div className="rounded-xl border border-border bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
         <span
           className={cn(
@@ -122,8 +122,8 @@ export default function ContactProfilePage() {
   return (
     <div className="page-stack">
       {/* Header */}
-      <div className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-white p-5">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#eef2fd] text-lg font-extrabold text-primary">
+      <div className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-surface p-5">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20 text-lg font-extrabold text-primary">
           {initials(c.fullName)}
         </div>
         <div className="min-w-0 flex-1">
@@ -150,7 +150,7 @@ export default function ContactProfilePage() {
       </div>
 
       {/* Next-action banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#d4def9] bg-[#eef2fd] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/10 dark:bg-primary/20 p-4">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-primary">Next action</p>
           <p className="text-sm font-semibold text-foreground">

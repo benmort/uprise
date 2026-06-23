@@ -4,18 +4,23 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, PasswordInput } from "@yarns/ui";
+import { Alert, Button, Field, PasswordInput, PasswordStrength, isPasswordStrong } from "@yarns/ui";
 import { auth } from "@yarns/api-client";
 
 export default function ResetPasswordPage() {
   const token = useQueryParams().get("token");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const passwordsMatch = confirm.length > 0 && password === confirm;
+  const canSubmit = isPasswordStrong(password) && passwordsMatch;
+
   async function confirmReset(e: React.FormEvent) {
     e.preventDefault();
+    if (!canSubmit) return;
     setBusy(true);
     setError(null);
     const res = await auth.resetPassword(token as string, password);
@@ -52,10 +57,18 @@ export default function ResetPasswordPage() {
         </Alert>
       ) : (
         <form onSubmit={confirmReset} className="space-y-5">
-          <Field label="New Password" htmlFor="password" hint="At least 8 characters" error={error ?? undefined}>
-            <PasswordInput id="password" autoComplete="new-password" placeholder="Enter new password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
+          <Field label="New Password" htmlFor="password">
+            <PasswordInput id="password" autoComplete="new-password" placeholder="Enter new password" required value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
-          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Resetting Password…" : "Reset Password"}</Button>
+          <PasswordStrength value={password} />
+          <Field
+            label="Confirm Password"
+            htmlFor="confirm"
+            error={(confirm.length > 0 && !passwordsMatch ? "Passwords don't match." : undefined) ?? error ?? undefined}
+          >
+            <PasswordInput id="confirm" autoComplete="new-password" placeholder="Re-enter new password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          </Field>
+          <Button type="submit" className="w-full" disabled={busy || !canSubmit}>{busy ? "Resetting Password…" : "Reset Password"}</Button>
         </form>
       )}
     </div>

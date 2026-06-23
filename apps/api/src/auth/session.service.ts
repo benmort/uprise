@@ -12,6 +12,16 @@ export interface ResolvedSession {
   role: string; // AppUserRole value from the membership
 }
 
+export interface SessionSummary {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  lastSeenAt: Date | null;
+  createdAt: Date;
+  expiresAt: Date;
+  current: boolean;
+}
+
 /**
  * Opaque session tokens backed by iam.Session (meld doc 03). The token is a
  * random 256-bit string stored verbatim; sessions expire and are deleted on
@@ -41,12 +51,26 @@ export class SessionService {
    * pinned tenant (set via select-tenant) if it's still a valid membership,
    * else the user's earliest membership.
    */
-  async resolve(token: string): Promise<ResolvedSession | null> {
+  async resolve(
+    token: string,
+    meta?: { userAgent?: string | null; ipAddress?: string | null },
+  ): Promise<ResolvedSession | null> {
     if (!token) return null;
     const session = await this.prisma.session.findUnique({ where: { token } });
     if (!session || session.expiresAt.getTime() <= Date.now()) return null;
     const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
-    if (!user) return null;
+    if (!user || user.deletedAt) return null;
+    // Lazily stamp device info (first authenticated request) + last-seen, best-effort.
+    void this.prisma.session
+      .update({
+        where: { id: session.id },
+        data: {
+          lastSeenAt: new Date(),
+          userAgent: session.userAgent ?? meta?.userAgent ?? null,
+          ipAddress: session.ipAddress ?? meta?.ipAddress ?? null,
+        },
+      })
+      .catch(() => undefined);
     const memberships = await this.prisma.tenantMember.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "asc" },
@@ -72,5 +96,32 @@ export class SessionService {
   /** Revoke every session for a user (e.g. after a password reset). */
   async revokeAllForUser(userId: string): Promise<void> {
     await this.prisma.session.deleteMany({ where: { userId } });
+  }
+
+  /** Active (unexpired) sessions for a user, newest activity first; flags the current one. */
+  async listForUser(userId: string, currentToken: string): Promise<SessionSummary[]> {
+    const rows = await this.prisma.session.findMany({
+      where: { userId, expiresAt: { gt: new Date() } },
+      orderBy: [{ lastSeenAt: "desc" }, { createdAt: "desc" }],
+    });
+    return rows.map((s) => ({
+      id: s.id,
+      userAgent: s.userAgent,
+      ipAddress: s.ipAddress,
+      lastSeenAt: s.lastSeenAt,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      current: s.token === currentToken,
+    }));
+  }
+
+  /** Revoke one session by id, scoped to the owner (can't touch another user's). */
+  async revokeById(userId: string, sessionId: string): Promise<void> {
+    await this.prisma.session.deleteMany({ where: { id: sessionId, userId } });
+  }
+
+  /** Sign out everywhere except the caller's current session. */
+  async revokeOthers(userId: string, currentToken: string): Promise<void> {
+    await this.prisma.session.deleteMany({ where: { userId, token: { not: currentToken } } });
   }
 }

@@ -23,9 +23,9 @@ export function FieldOnboarding() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <div className="w-full max-w-sm animate-pop-in rounded-2xl bg-white p-5 shadow-float">
+      <div className="w-full max-w-sm animate-pop-in rounded-2xl bg-surface p-5 shadow-float">
         <div className="flex items-start justify-between">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#eef2fd] text-primary">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20 text-primary">
             <Icon className="h-6 w-6" />
           </span>
           <button type="button" aria-label="Skip" onClick={() => setSeen(true)} className="text-muted-foreground">

@@ -182,7 +182,7 @@ export default function CanvassPage() {
           <select
             value={activeId}
             onChange={(e) => setActiveId(e.target.value)}
-            className="h-9 rounded-[11px] border border-border bg-white px-3 text-sm font-semibold text-foreground"
+            className="h-9 rounded-[11px] border border-border bg-surface px-3 text-sm font-semibold text-foreground"
             aria-label="Campaign"
           >
             {campaigns.map((c) => (
@@ -255,7 +255,7 @@ export default function CanvassPage() {
                   ? "IN_PROGRESS"
                   : "UNASSIGNED";
             return (
-              <div key={t.id} className="rounded-2xl border border-border bg-white p-3 shadow-sm">
+              <div key={t.id} className="rounded-2xl border border-border bg-surface p-3 shadow-sm">
                 <MapThumbnail polygon={outerRing(t.geometry)} className="h-24 w-full" />
                 <div className="mt-3 flex items-start justify-between gap-2">
                   <div>

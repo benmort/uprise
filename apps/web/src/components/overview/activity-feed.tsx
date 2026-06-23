@@ -1,28 +1,8 @@
-import * as React from "react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
+import { relativeTime, type ActivityItem } from "@/lib/activity/recent-activity";
 
-export type ActivityItem = {
-  id: string;
-  icon?: React.ReactNode;
-  label: string;
-  sublabel?: string;
-  at: string;
-  href?: string;
-};
-
-function relativeTime(iso: string): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "";
-  const diffMs = Date.now() - t;
-  const mins = Math.round(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  return `${days}d ago`;
-}
+export type { ActivityItem };
 
 /** Cross-domain recent-activity list (blasts, inbound replies, door knocks…). */
 export function ActivityFeed({ items, loading }: { items: ActivityItem[]; loading?: boolean }) {

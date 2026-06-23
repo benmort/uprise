@@ -8,8 +8,11 @@ import {
   Put,
   Req,
   UnauthorizedException,
+  UploadedFile,
+  UseInterceptors,
 } from "@nestjs/common";
-import { IsString, MaxLength } from "class-validator";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { IsEmail, IsString, MaxLength, MinLength } from "class-validator";
 import type { Request } from "express";
 import { ProfileService } from "./profile.service";
 import { IamFlowsService } from "./iam-flows.service";
@@ -21,6 +24,17 @@ class SetMobileDto {
 }
 class CodeDto {
   @IsString() @MaxLength(12) code!: string;
+}
+class ChangePasswordDto {
+  @IsString() currentPassword!: string;
+  @IsString() @MinLength(8) @MaxLength(200) newPassword!: string;
+}
+class ChangeEmailDto {
+  @IsEmail() newEmail!: string;
+  @IsString() password!: string;
+}
+class DeleteAccountDto {
+  @IsString() password!: string;
 }
 
 /**
@@ -77,6 +91,22 @@ export class ProfileController {
     return this.flows.disable2fa(this.userId(req));
   }
 
+  // ── Self-service password + email change ──────────────────────────────
+  @Post("password/change")
+  changePassword(@Req() req: Request & { user?: AuthUser }, @Body() dto: ChangePasswordDto) {
+    return this.flows.changePassword(this.userId(req), dto.currentPassword, dto.newPassword);
+  }
+
+  @Post("email/change")
+  changeEmail(@Req() req: Request & { user?: AuthUser }, @Body() dto: ChangeEmailDto) {
+    return this.flows.changeEmail(this.userId(req), dto.newEmail, dto.password);
+  }
+
+  @Post("account/delete")
+  deleteAccount(@Req() req: Request & { user?: AuthUser }, @Body() dto: DeleteAccountDto) {
+    return this.flows.deleteAccount(this.userId(req), dto.password);
+  }
+
   @Get("avatars")
   listAvatars(@Req() req: Request & { user?: AuthUser }) {
     return this.profiles.listAvatars(this.userId(req));
@@ -85,6 +115,15 @@ export class ProfileController {
   @Post("avatars")
   addAvatar(@Req() req: Request & { user?: AuthUser }, @Body() dto: AddAvatarDto) {
     return this.profiles.addAvatar(this.userId(req), dto.url);
+  }
+
+  @Post("avatars/upload")
+  @UseInterceptors(FileInterceptor("file"))
+  uploadAvatar(
+    @Req() req: Request & { user?: AuthUser },
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string },
+  ) {
+    return this.profiles.uploadAvatar(this.userId(req), file);
   }
 
   @Post("avatars/:id/select")

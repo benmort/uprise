@@ -12,7 +12,8 @@ export default function InvitePage() {
   const token = String(useParams().token ?? "");
   const returnTo = useQueryParams().get("return_to");
   const [preview, setPreview] = useState<InvitePreview | null>(null);
-  const [displayName, setDisplayName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -31,7 +32,8 @@ export default function InvitePage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await auth.acceptInvite({ token, displayName: displayName.trim() || undefined, password: password || undefined });
+    const displayName = [firstName, lastName].map((s) => s.trim()).filter(Boolean).join(" ");
+    const res = await auth.acceptInvite({ token, displayName: displayName || undefined, password: password || undefined });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -65,9 +67,14 @@ export default function InvitePage() {
             </p>
           </div>
           <form onSubmit={accept} className="space-y-5">
-            <Field label="Your name" htmlFor="name">
-              <Input id="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="First name" htmlFor="firstName">
+                <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              </Field>
+              <Field label="Last name" htmlFor="lastName">
+                <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </Field>
+            </div>
             <Field label="Set a password" htmlFor="password" hint="At least 8 characters (skip if you already have an account)" error={error ?? undefined}>
               <PasswordInput id="password" autoComplete="new-password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>

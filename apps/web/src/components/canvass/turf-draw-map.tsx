@@ -6,10 +6,13 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Loader2, MapPin, Search, X } from "lucide-react";
 import { getArea, listAreas, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
+import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+const mapStyleFor = (theme: string) =>
+  theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12";
 
 export type ExistingTurf = {
   id: string;
@@ -100,6 +103,7 @@ export function TurfDrawMap({
   onPolygonsChange: (polygons: GeoJSON.Polygon[]) => void;
   clearToken?: number;
 }) {
+  const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -252,7 +256,7 @@ export function TurfDrawMap({
         ref={mapRef}
         mapboxAccessToken={TOKEN}
         initialViewState={initialViewState}
-        mapStyle="mapbox://styles/mapbox/streets-v12"
+        mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
         interactiveLayerIds={["areas-fill"]}
         onLoad={() => void refreshAreas(level)}
@@ -294,7 +298,7 @@ export function TurfDrawMap({
 
       {/* Level toggle + search panel. */}
       <div className="absolute right-2 top-2 z-10 w-64 space-y-2">
-        <div className="flex overflow-hidden rounded-lg border border-border bg-white shadow-card">
+        <div className="flex overflow-hidden rounded-lg border border-border bg-surface shadow-card">
           {LEVELS.map((l) => (
             <button
               key={l.id}
@@ -314,7 +318,7 @@ export function TurfDrawMap({
           ))}
         </div>
 
-        <div className="rounded-lg border border-border bg-white shadow-card">
+        <div className="rounded-lg border border-border bg-surface shadow-card">
           <div className="flex border-b border-border text-[11px] font-bold uppercase tracking-[0.05em]">
             {(["area", "place"] as const).map((m) => (
               <button

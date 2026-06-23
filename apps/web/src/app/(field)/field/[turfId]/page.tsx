@@ -118,7 +118,7 @@ export default function WalkViewPage() {
             onStopTap={(id) => router.push(`/field/${turfId}/door/${id}`)}
           />
           {nextStop ? (
-            <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-white p-3 shadow-float">
+            <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-3 shadow-float">
               <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
                 Next stop
               </p>

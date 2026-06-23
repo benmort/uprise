@@ -1,11 +1,19 @@
 import type {
   AcceptInviteRequest,
+  AvailabilityResponse,
+  ChangeEmailRequest,
+  ChangePasswordRequest,
   CheckSessionResponse,
+  DeleteAccountRequest,
   InvitePreview,
   LoginResponse,
   OkResponse,
   RegisterRequest,
   SessionGrantResponse,
+  SessionSummaryResponse,
+  UpdateProfileRequest,
+  UserAvatarResponse,
+  UserProfileResponse,
 } from "@yarns/contracts";
 
 export * from "@yarns/contracts";
@@ -48,12 +56,14 @@ export async function request<T>(
   opts: { redirectOn401?: boolean } = {},
 ): Promise<ApiResult<T>> {
   const { redirectOn401 = true } = opts;
+  // FormData sets its own multipart Content-Type (with boundary) — don't override it.
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   try {
     const res = await fetch(`${getApiUrl()}${path}`, {
       ...init,
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...(init?.headers || {}),
       },
     });
@@ -107,6 +117,57 @@ export const auth = {
   acceptInvite: (body: AcceptInviteRequest) => post<SessionGrantResponse>("/iam/invite/accept", body),
 
   selectTenant: (tenantId: string) => post<OkResponse>("/iam/select-tenant", { tenantId }),
+};
+
+// ── Self-service profile + account (prog parity) ─────────────────────
+export const profile = {
+  get: () => request<UserProfileResponse>("/iam/profile"),
+  update: (body: UpdateProfileRequest) =>
+    request<UserProfileResponse>("/iam/profile", { method: "PUT", body: JSON.stringify(body) }),
+
+  listAvatars: () => request<UserAvatarResponse[]>("/iam/avatars"),
+  addAvatar: (url: string) =>
+    request<UserAvatarResponse>("/iam/avatars", { method: "POST", body: JSON.stringify({ url }) }),
+  selectAvatar: (id: string) =>
+    request<UserAvatarResponse>(`/iam/avatars/${encodeURIComponent(id)}/select`, { method: "POST" }),
+  clearSelectedAvatar: () => request<OkResponse>("/iam/avatars/clear-selected", { method: "POST" }),
+  deleteAvatar: (id: string) =>
+    request<OkResponse>(`/iam/avatars/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  setMobile: (mobile: string) =>
+    request<OkResponse>("/iam/profile/mobile", { method: "PUT", body: JSON.stringify({ mobile }) }),
+  sendMobileCode: () => request<{ challengeId: string }>("/iam/profile/mobile/send", { method: "POST" }),
+  verifyMobile: (code: string) =>
+    request<OkResponse>("/iam/profile/mobile/verify", { method: "POST", body: JSON.stringify({ code }) }),
+  enable2fa: () => request<OkResponse>("/iam/profile/2fa/enable", { method: "POST" }),
+  disable2fa: () => request<OkResponse>("/iam/profile/2fa/disable", { method: "POST" }),
+
+  changePassword: (body: ChangePasswordRequest) => post<OkResponse>("/iam/password/change", body),
+  changeEmail: (body: ChangeEmailRequest) => post<OkResponse>("/iam/email/change", body),
+  deleteAccount: (body: DeleteAccountRequest) => post<OkResponse>("/iam/account/delete", body),
+
+  uploadAvatar: (file: Blob) => {
+    const form = new FormData();
+    form.append("file", file, "avatar.jpg");
+    // No JSON Content-Type — let the browser set the multipart boundary.
+    return request<UserAvatarResponse>("/iam/avatars/upload", { method: "POST", body: form });
+  },
+};
+
+// ── Active-sessions management ───────────────────────────────────────
+export const sessions = {
+  list: () => request<SessionSummaryResponse[]>("/iam/my-sessions"),
+  revoke: (id: string) =>
+    request<OkResponse>(`/iam/my-sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  revokeOthers: () => post<OkResponse>("/iam/my-sessions/revoke-others", {}),
+};
+
+// ── Tenants (sign-up subdomain check) ────────────────────────────────
+export const tenants = {
+  checkAvailability: (slug: string) =>
+    request<AvailabilityResponse>(`/tenants/availability?slug=${encodeURIComponent(slug)}`, undefined, {
+      redirectOn401: false,
+    }),
 };
 
 // ── Public marketing-site form intake (meld doc 12) ──────────────────

@@ -20,7 +20,7 @@ export function SectionCard({
   bodyClassName,
 }: SectionCardProps) {
   return (
-    <section className={cn("rounded-2xl border border-border bg-white shadow-card", className)}>
+    <section className={cn("rounded-2xl border border-border bg-surface shadow-card", className)}>
       {(title || action) && (
         <header className="flex items-start justify-between gap-4 border-b border-[hsl(var(--muted))] px-5 py-4">
           <div>

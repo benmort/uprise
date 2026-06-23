@@ -35,7 +35,7 @@ export function PriorContactStrip({
   const recent = timeline.slice(0, limit);
   if (recent.length === 0) return null;
   return (
-    <div className="rounded-2xl border border-[#d4def9] bg-[#eef2fd] p-3">
+    <div className="rounded-2xl border border-primary/20 bg-primary/10 dark:bg-primary/20 p-3">
       <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.05em] text-primary">
         Walk up informed · recent contact
       </p>

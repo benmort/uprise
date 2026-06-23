@@ -87,7 +87,7 @@ export default function CampaignsIndexPage() {
             const shown = turfs.slice(0, THUMBS);
             const more = turfs.length - shown.length;
             return (
-              <section key={campaign.id} className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+              <section key={campaign.id} className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <h2 className="text-lg font-bold text-foreground">{campaign.name}</h2>

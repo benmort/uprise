@@ -169,7 +169,7 @@ export default function CannedResponsesPage() {
                 ) : (
                   <ul className="space-y-2">
                     {colItems.map((item) => (
-                      <li key={item.id} className="rounded-xl border border-border bg-white p-3">
+                      <li key={item.id} className="rounded-xl border border-border bg-surface p-3">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-semibold text-foreground">{item.title}</p>
                           <div className="flex items-center gap-1.5">

@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Post, Req, Res, UnauthorizedException } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+} from "@nestjs/common";
+import type { AuthUser } from "./auth-user";
 import { ConfigService } from "@nestjs/config";
 import type { Request, Response } from "express";
 import { SessionService } from "./session.service";
@@ -46,6 +57,31 @@ export class IamController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     await this.sessions.revoke(readSessionToken(req) ?? "");
     clearSessionCookie(res, this.config);
+    return { ok: true };
+  }
+
+  // ── Active-sessions management (self-scoped; needs a session) ──────────
+  // Path is /iam/my-sessions to avoid the allowlisted /iam/sessions auth path.
+  private userId(req: Request & { user?: AuthUser }): string {
+    const id = req.user?.id;
+    if (!id) throw new UnauthorizedException("Authentication required");
+    return id;
+  }
+
+  @Get("my-sessions")
+  listSessions(@Req() req: Request & { user?: AuthUser }) {
+    return this.sessions.listForUser(this.userId(req), readSessionToken(req) ?? "");
+  }
+
+  @Delete("my-sessions/:id")
+  async revokeSession(@Req() req: Request & { user?: AuthUser }, @Param("id") id: string) {
+    await this.sessions.revokeById(this.userId(req), id);
+    return { ok: true };
+  }
+
+  @Post("my-sessions/revoke-others")
+  async revokeOtherSessions(@Req() req: Request & { user?: AuthUser }) {
+    await this.sessions.revokeOthers(this.userId(req), readSessionToken(req) ?? "");
     return { ok: true };
   }
 }
