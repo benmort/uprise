@@ -18,9 +18,9 @@ test("authenticated user reaches the dashboard", async ({ page }) => {
 test.describe("unauthenticated", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("a protected route 307-redirects to the auth app login (no local /login)", async ({ request }) => {
+  test("a protected route 307-redirects to the auth app sign-in (no local /sign-in)", async ({ request }) => {
     const res = await request.get("/dashboard", { maxRedirects: 0 });
     expect([301, 302, 307, 308]).toContain(res.status());
-    expect(res.headers()["location"] ?? "").toContain(`${AUTH_APP}/login`);
+    expect(res.headers()["location"] ?? "").toContain(`${AUTH_APP}/sign-in`);
   });
 });

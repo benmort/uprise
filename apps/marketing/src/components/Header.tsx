@@ -164,7 +164,7 @@ export default function Header() {
               </div>
               <a
                 className="inline-flex items-center justify-center gap-2 rounded-lg border border-stroke-tertiary bg-white px-4 py-3 text-sm font-medium text-text-color shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 max-xl:h-13 max-xl:w-full max-xl:rounded-full"
-                href={`${authAppUrl()}/login`}
+                href={`${authAppUrl()}/sign-in`}
               >
                 Login
               </a>

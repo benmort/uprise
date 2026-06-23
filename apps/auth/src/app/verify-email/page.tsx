@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Logo } from "@yarns/ui";
+import { Alert, Button, Field, Input } from "@yarns/ui";
 import { auth } from "@yarns/api-client";
 
 
@@ -36,35 +37,38 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="mb-2 flex justify-center"><Logo large /></div>
-        <CardTitle>Verify your email</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {done ? (
-          <p className="text-sm text-muted-foreground">
+    <div className="flex w-full flex-col">
+      <div className="mb-5">
+        <Link href="/sign-in" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+          <ChevronLeft className="h-4 w-4" />
+          Back to sign in
+        </Link>
+      </div>
+      <div className="mb-6">
+        <h1 className="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90 sm:text-title-md">Verify your email</h1>
+        <p className="text-sm text-muted-foreground">Enter the code we sent to confirm your email address.</p>
+      </div>
+      {done ? (
+        <Alert variant="success" title="Email verified">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Your email is verified.{" "}
-            <Link className="text-primary hover:underline" href="/login">Sign in</Link>
+            <Link className="text-primary hover:underline" href="/sign-in">Sign in</Link>
           </p>
-        ) : (
-          <form onSubmit={confirm} className="space-y-4">
-            <Field label="Email" htmlFor="email">
-              <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </Field>
-            <Field label="Verification code" htmlFor="code" hint={info ?? undefined} error={error ?? undefined}>
-              <Input id="code" inputMode="numeric" required value={code} onChange={(e) => setCode(e.target.value)} />
-            </Field>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" className="flex-1" disabled={busy || !email} onClick={sendCode}>Send code</Button>
-              <Button type="submit" className="flex-1" disabled={busy}>{busy ? "…" : "Verify"}</Button>
-            </div>
-          </form>
-        )}
-        <div className="mt-4 text-sm">
-          <Link className="text-primary hover:underline" href="/login">Back to sign in</Link>
-        </div>
-      </CardContent>
-    </Card>
+        </Alert>
+      ) : (
+        <form onSubmit={confirm} className="space-y-5">
+          <Field label="Email" htmlFor="email">
+            <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Field>
+          <Field label="Verification code" htmlFor="code" hint={info ?? undefined} error={error ?? undefined}>
+            <Input id="code" inputMode="numeric" required value={code} onChange={(e) => setCode(e.target.value)} />
+          </Field>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="flex-1" disabled={busy || !email} onClick={sendCode}>Send code</Button>
+            <Button type="submit" className="flex-1" disabled={busy}>{busy ? "Verifying…" : "Verify My Account"}</Button>
+          </div>
+        </form>
+      )}
+    </div>
   );
 }

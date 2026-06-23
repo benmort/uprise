@@ -64,7 +64,7 @@ describe("IamFlowsService", () => {
       expect(prisma.magicLink.create).toHaveBeenCalled();
       const email = dispatcher.sendEmail.mock.calls[0][0];
       expect(email.templateKey).toBe("magic_link");
-      expect(email.vars.link).toContain("https://auth.test/magic-link?token=");
+      expect(email.vars.link).toContain("https://auth.test/sign-in/magic-link?token=");
     });
 
     it("does NOT leak account existence for an unknown email", async () => {
