@@ -17,6 +17,8 @@ export interface DemoRequestInput {
   company?: string;
   role?: string;
   useCase?: string;
+  timeline?: string;
+  additionalInfo?: string;
 }
 export interface NewsletterInput {
   email: string;
@@ -84,6 +86,8 @@ export class MarketingService {
       input.company ? `Company: ${input.company}` : null,
       input.role ? `Role: ${input.role}` : null,
       input.useCase ? `Use case: ${input.useCase}` : null,
+      input.timeline ? `Timeline: ${input.timeline}` : null,
+      input.additionalInfo ? `Additional info: ${input.additionalInfo}` : null,
     ]
       .filter((l) => l !== null)
       .join("\n");
