@@ -1,40 +1,43 @@
 /**
  * @yarns/ui design-system stylesheet (Tailwind v4, CSS-first).
  *
- * Consuming apps import this once from their own globals.css, after
- * `@import "tailwindcss"`. The raw HSL channel vars live in :root so a future
- * `.dark` block (or per-tenant override) can re-skin every utility by changing
- * channels alone; `@theme inline` maps them to colour utilities so the var
- * reference stays inline and the cascade still wins.
+ * Default theme = the prog marketing palette (brand blue #465fff, Outfit, 0.6rem
+ * radius, TailAdmin neutrals/shadows/type-scale), adopted globally across all apps.
+ * Shared semantic tokens live as HSL channels in :root and are mapped via
+ * `@theme inline` so a `.dark` block / per-tenant override can re-skin by changing
+ * channels alone. yarns DOMAIN tokens (knock, support, warning, containers,
+ * surface) are preserved untouched — apps/web depends on them.
  */
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --surface: 300 11% 98%;
-  --surface-variant: 300 3% 89%;
-  --background: 300 11% 98%;
-  --foreground: 220 10% 9%;
-  --muted: 300 8% 94%;
-  --muted-foreground: 225 8% 30%;
-  --border: 228 9% 42%;
-  --input: 228 9% 42%;
-  --ring: 220 68% 45%;
+  /* ---- Shared semantic palette (prog effective values, as HSL channels) ---- */
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --surface: 0 0% 100%;
+  --surface-variant: 240 5% 96%;
+  --muted: 240 5% 96%;
+  --muted-foreground: 240 4% 46%;
+  --border: 240 6% 90%;
+  --input: 240 6% 90%;
+  --ring: 232 100% 64%;
 
-  --primary: 220 64% 43%;
-  --on-primary: 0 0% 100%;
-  --primary-container: 220 60% 50%;
+  --primary: 232 100% 64%; /* #465fff (brand-500) */
+  --on-primary: 0 0% 98%;
+  --primary-container: 232 100% 72%;
   --on-primary-container: 227 100% 95%;
 
-  --secondary: 210 7% 31%;
-  --on-secondary: 0 0% 100%;
-  --secondary-container: 210 14% 88%;
-  --secondary-foreground: 210 8% 28%;
+  --secondary: 240 5% 96%;
+  --on-secondary: 240 6% 10%;
+  --secondary-container: 240 6% 90%;
+  --secondary-foreground: 240 6% 10%;
 
   --tertiary: 0 60% 50%;
   --on-tertiary: 0 0% 100%;
   --tertiary-container: 0 60% 50%;
 
+  /* ---- yarns DOMAIN tokens (preserved — do not restyle) ---- */
   --error: 0 72% 38%;
   --on-error: 0 0% 100%;
   --error-container: 9 100% 92%;
@@ -43,36 +46,93 @@
   --on-success: 0 0% 100%;
   --success-container: 138 41% 91%;
 
-  /* Design-system amber (handoff README → Warning: #b45309 on #fef3e2),
-     not the tertiary alias (which rendered salmon/red and read as an error). */
   --warning-container: 37 89% 94%;
   --warning-foreground: 26 90% 37%;
 
-  /* Canvassing: door/knock accent (purple #7c3aed on #f3eafe) */
   --knock: 262 83% 58%;
   --knock-foreground: 0 0% 100%;
   --knock-container: 268 80% 96%;
 
-  /* Support-level scale (campaign-defined), strong → strong-oppose */
-  --support-strong: 142 71% 36%; /* #16a34a */
-  --support-lean: 174 84% 32%; /* #0e9488 */
-  --support-undecided: 215 16% 65%; /* #94a3b8 */
-  --support-lean-oppose: 32 89% 37%; /* #b45309 */
-  --support-strong-oppose: 0 72% 51%; /* #dc2626 */
+  --support-strong: 142 71% 36%;
+  --support-lean: 174 84% 32%;
+  --support-undecided: 215 16% 65%;
+  --support-lean-oppose: 32 89% 37%;
+  --support-strong-oppose: 0 72% 51%;
+
+  /* ---- TailAdmin text/stroke constants (prog marketing) ---- */
+  --title-color: #1e293b;
+  --text-color: #475569;
+  --text-color-secondary: #64748b;
+  --text-color-tertiary: #94a3b8;
+  --stroke-secondary: #e2e8f0;
+  --stroke-tertiary: #f1f5f9;
 }
 
-/* Radii are static design tokens (no runtime override), so they live in @theme
-   directly — `rounded` → --radius, `rounded-md` → --radius-md, etc. */
+/* Static design tokens — auto-generate utilities (rounded-*, bg-brand-*,
+   shadow-theme-*, text-title-*, etc.) via Tailwind v4 theme namespaces. */
 @theme {
-  --radius: 0.25rem;
-  --radius-sm: 0.125rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius: 0.6rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Brand scale → bg-brand-500, text-brand-600, border-brand-500, … */
+  --color-brand-25: #f2f7ff;
+  --color-brand-50: #ecf3ff;
+  --color-brand-100: #dde9ff;
+  --color-brand-200: #c2d6ff;
+  --color-brand-300: #9cb9ff;
+  --color-brand-400: #7592ff;
+  --color-brand-500: #465fff;
+  --color-brand-600: #3641f5;
+  --color-brand-700: #2a31d8;
+  --color-brand-800: #252dae;
+  --color-brand-900: #262e89;
+  --color-brand-950: #161950;
+
+  /* Error / success scales used by the marketing form kit → bg/text/border/ring */
+  --color-error-50: #fef3f2;
+  --color-error-300: #f97066;
+  --color-error-400: #f97066;
+  --color-error-500: #f04438;
+  --color-error-600: #d92d20;
+  --color-error-800: #b42318;
+  --color-success-50: #f6fef9;
+  --color-success-300: #6ee7b7;
+  --color-success-400: #34d399;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+
+  /* Elevation → shadow-theme-xs … shadow-theme-xl */
+  --shadow-theme-xs: 0px 1px 2px 0px rgba(16, 24, 40, 0.05);
+  --shadow-theme-sm: 0px 1px 3px 0px rgba(16, 24, 40, 0.1), 0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+  --shadow-theme-md: 0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --shadow-theme-lg: 0px 12px 16px -4px rgba(16, 24, 40, 0.08), 0px 4px 6px -2px rgba(16, 24, 40, 0.03);
+  --shadow-theme-xl: 0px 20px 24px -4px rgba(16, 24, 40, 0.08), 0px 8px 8px -4px rgba(16, 24, 40, 0.03);
+  --shadow-feature: 0px 18.824px 100px 0px rgba(16, 24, 40, 0.12);
+
+  /* Display type scale → text-title-2xl … text-theme-xs (with line-heights) */
+  --text-title-2xl: 72px;
+  --text-title-2xl--line-height: 90px;
+  --text-title-xl: 60px;
+  --text-title-xl--line-height: 72px;
+  --text-title-lg: 48px;
+  --text-title-lg--line-height: 60px;
+  --text-title-md: 36px;
+  --text-title-md--line-height: 44px;
+  --text-title-sm: 30px;
+  --text-title-sm--line-height: 38px;
+  --text-theme-xl: 20px;
+  --text-theme-xl--line-height: 30px;
+  --text-theme-sm: 14px;
+  --text-theme-sm--line-height: 20px;
+  --text-theme-xs: 12px;
+  --text-theme-xs--line-height: 18px;
 }
 
-/* Map the channel vars to Tailwind colour/radius/font utilities. `inline` keeps
-   the var() reference in the generated utility so :root / .dark overrides win. */
+/* Map channel vars to colour/font utilities. `inline` keeps the var() reference in
+   the utility so :root / .dark / per-tenant overrides win. */
 @theme inline {
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
@@ -115,9 +175,9 @@
   --color-support-lean-oppose: hsl(var(--support-lean-oppose));
   --color-support-strong-oppose: hsl(var(--support-strong-oppose));
 
-  --font-headline: var(--font-roboto), sans-serif;
-  --font-body: var(--font-roboto), sans-serif;
-  --font-label: var(--font-roboto), sans-serif;
+  --font-headline: var(--font-outfit), sans-serif;
+  --font-body: var(--font-outfit), sans-serif;
+  --font-label: var(--font-outfit), sans-serif;
 }
 
 @layer base {
@@ -148,6 +208,11 @@
   .surface-muted {
     @apply rounded-md border border-border bg-surface;
   }
+
+  /* prog marketing content width */
+  .container {
+    @apply mx-auto w-full max-w-[1200px] px-4 xl:px-10 2xl:px-16 min-[1800px]:px-[115px];
+  }
 }
 
 /* Design-system motion (handoff README → Motion). Snappy ease-out, no bounce. */
@@ -173,6 +238,16 @@
   }
 }
 
+/* prog logo carousel */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-stack,
   .animate-fade-up,
@@ -194,6 +269,11 @@
   .animate-pop-in {
     animation: popIn 0.2s ease both;
   }
+  .animate-scroll {
+    animation: scroll 40s linear infinite;
+    display: flex;
+    width: max-content;
+  }
 
   /* Design-system elevation (handoff README → Shadow). */
   .shadow-card {
@@ -204,5 +284,79 @@
   }
   .shadow-float {
     box-shadow: 0 8px 28px rgba(16, 24, 40, 0.18);
+  }
+
+  /* prog/TailAdmin text + stroke utilities */
+  .text-title-color {
+    color: var(--title-color);
+  }
+  .text-text-color {
+    color: var(--text-color);
+  }
+  .text-text-color-secondary {
+    color: var(--text-color-secondary);
+  }
+  .text-text-color-tertiary {
+    color: var(--text-color-tertiary);
+  }
+  .text-dark-4 {
+    color: #6b7280;
+  }
+  .border-stroke {
+    border-color: var(--stroke-secondary);
+  }
+  .border-stroke-tertiary {
+    border-color: var(--stroke-tertiary);
+  }
+
+  /* prog fractional spacing utilities */
+  .mb-12\.5 {
+    margin-bottom: 3.125rem;
+  }
+  .mb-15 {
+    margin-bottom: 3.75rem;
+  }
+  .mb-17\.5 {
+    margin-bottom: 4.375rem;
+  }
+  .pb-13 {
+    padding-bottom: 3.25rem;
+  }
+  .pt-30 {
+    padding-top: 7.5rem;
+  }
+  .py-30 {
+    padding-top: 7.5rem;
+    padding-bottom: 7.5rem;
+  }
+  .gap-7\.5 {
+    gap: 1.875rem;
+  }
+  .gap-12\.5 {
+    gap: 3.125rem;
+  }
+  .gap-15 {
+    gap: 3.75rem;
+  }
+  .gap-20 {
+    gap: 5rem;
+  }
+  .gap-24 {
+    gap: 6rem;
+  }
+  .xl\:gap-7\.5 {
+    gap: 1.875rem;
+  }
+  .xl\:gap-10 {
+    gap: 2.5rem;
+  }
+  .xl\:gap-12\.5 {
+    gap: 3.125rem;
+  }
+  .xl\:gap-20 {
+    gap: 5rem;
+  }
+  .xl\:gap-24 {
+    gap: 6rem;
   }
 }
