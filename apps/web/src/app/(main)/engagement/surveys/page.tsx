@@ -17,7 +17,7 @@ import {
 import { listDispositions, type DispositionDef } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -240,13 +240,13 @@ export default function SurveysPage() {
                         />
                         <Select
                           value={q.type}
-                          onChange={(e) => patchQuestion(qi, { type: e.target.value as QuestionType })}
+                          onValueChange={(v) => patchQuestion(qi, { type: v as QuestionType })}
                           className="h-8 w-36"
                         >
                           {QUESTION_TYPES.map((t) => (
-                            <option key={t.value} value={t.value}>
+                            <SelectItem key={t.value} value={t.value}>
                               {t.label}
-                            </option>
+                            </SelectItem>
                           ))}
                         </Select>
                         <button
@@ -281,15 +281,17 @@ export default function SurveysPage() {
                               className="h-8"
                             />
                             <Select
-                              value={o.dispositionCode ?? ""}
-                              onChange={(e) => patchOption(qi, oi, { dispositionCode: e.target.value || null })}
+                              value={o.dispositionCode || "__none__"}
+                              onValueChange={(v) =>
+                                patchOption(qi, oi, { dispositionCode: v === "__none__" ? null : v })
+                              }
                               className="h-8"
                             >
-                              <option value="">— none —</option>
+                              <SelectItem value="__none__">— none —</SelectItem>
                               {dispositions.map((d) => (
-                                <option key={d.id} value={d.code}>
+                                <SelectItem key={d.id} value={d.code}>
                                   {d.label}
-                                </option>
+                                </SelectItem>
                               ))}
                             </Select>
                           </div>

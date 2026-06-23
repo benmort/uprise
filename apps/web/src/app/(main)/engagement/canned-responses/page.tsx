@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -239,36 +239,38 @@ export default function CannedResponsesPage() {
             <Select
               id="cr-visibility"
               value={form.visibility}
-              onChange={(e) => setForm((f) => ({ ...f, visibility: e.target.value as CannedVisibility }))}
+              onValueChange={(v) => setForm((f) => ({ ...f, visibility: v as CannedVisibility }))}
             >
-              <option value="ORG">Recommended (org)</option>
-              <option value="PERSONAL">Personal (mine)</option>
-              <option value="AUTO_SEND">Auto-send</option>
+              <SelectItem value="ORG">Recommended (org)</SelectItem>
+              <SelectItem value="PERSONAL">Personal (mine)</SelectItem>
+              <SelectItem value="AUTO_SEND">Auto-send</SelectItem>
             </Select>
           </Field>
           <Field label="Channel" htmlFor="cr-channel">
             <Select
               id="cr-channel"
               value={form.channel}
-              onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value as Channel }))}
+              onValueChange={(v) => setForm((f) => ({ ...f, channel: v as Channel }))}
             >
-              <option value="SMS">SMS</option>
-              <option value="DOOR">Door</option>
-              <option value="BOTH">Both</option>
+              <SelectItem value="SMS">SMS</SelectItem>
+              <SelectItem value="DOOR">Door</SelectItem>
+              <SelectItem value="BOTH">Both</SelectItem>
             </Select>
           </Field>
         </div>
         <Field label="Logs disposition" htmlFor="cr-disp" hint="Using this reply records this disposition.">
           <Select
             id="cr-disp"
-            value={form.dispositionCode}
-            onChange={(e) => setForm((f) => ({ ...f, dispositionCode: e.target.value }))}
+            value={form.dispositionCode || "__none__"}
+            onValueChange={(v) =>
+              setForm((f) => ({ ...f, dispositionCode: v === "__none__" ? "" : v }))
+            }
           >
-            <option value="">— none —</option>
+            <SelectItem value="__none__">— none —</SelectItem>
             {dispositions.map((d) => (
-              <option key={d.id} value={d.code}>
+              <SelectItem key={d.id} value={d.code}>
                 {d.label}
-              </option>
+              </SelectItem>
             ))}
           </Select>
         </Field>

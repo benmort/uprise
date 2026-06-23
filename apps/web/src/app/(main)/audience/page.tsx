@@ -15,7 +15,7 @@ import {
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -251,13 +251,13 @@ export default function AudiencePage() {
               />
               <Select
                 value={newChannel}
-                onChange={(e) => setNewChannel(e.target.value as AudienceChannel)}
+                onValueChange={(v) => setNewChannel(v as AudienceChannel)}
                 title="Which channel this audience is for"
                 className="md:w-36"
               >
-                <option value="ALL">Both channels</option>
-                <option value="SMS">SMS</option>
-                <option value="WHATSAPP">WhatsApp</option>
+                <SelectItem value="ALL">Both channels</SelectItem>
+                <SelectItem value="SMS">SMS</SelectItem>
+                <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
               </Select>
               <Button
                 onClick={async () => {

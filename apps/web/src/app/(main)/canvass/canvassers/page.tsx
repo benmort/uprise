@@ -6,7 +6,7 @@ import { ArrowLeft, Pencil, UserPlus } from "lucide-react";
 import { createCanvasser, listCanvassers, updateCanvasser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -116,9 +116,9 @@ export default function CanvassersPage() {
             <Input id="cv-pw" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" type="password" />
           </Field>
           <Field label="Role" htmlFor="cv-role">
-            <Select id="cv-role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="CANVASSER">Canvasser</option>
-              <option value="ORGANISER">Organiser</option>
+            <Select id="cv-role" value={role} onValueChange={(v) => setRole(v as Role)}>
+              <SelectItem value="CANVASSER">Canvasser</SelectItem>
+              <SelectItem value="ORGANISER">Organiser</SelectItem>
             </Select>
           </Field>
         </div>
@@ -177,10 +177,10 @@ export default function CanvassersPage() {
           <Select
             id="cv-edit-role"
             value={editForm.role}
-            onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value as Role }))}
+            onValueChange={(v) => setEditForm((f) => ({ ...f, role: v as Role }))}
           >
-            <option value="CANVASSER">Canvasser</option>
-            <option value="ORGANISER">Organiser</option>
+            <SelectItem value="CANVASSER">Canvasser</SelectItem>
+            <SelectItem value="ORGANISER">Organiser</SelectItem>
           </Select>
         </Field>
         <Field label="Reset password" htmlFor="cv-edit-pw" hint="Leave blank to keep the current password.">

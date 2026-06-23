@@ -19,7 +19,7 @@ import {
 import { optimiseRoute, type Stop } from "@/lib/canvass/route";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -177,14 +177,14 @@ export default function WalkListBuilderPage() {
         <h1 className="text-2xl font-extrabold">Walk lists</h1>
         <Select
           value={turfId}
-          onChange={(e) => setTurfId(e.target.value)}
+          onValueChange={setTurfId}
           className="ml-auto max-w-xs font-semibold"
           aria-label="Turf"
         >
           {turfs.map((t) => (
-            <option key={t.id} value={t.id}>
+            <SelectItem key={t.id} value={t.id}>
               {t.name}
-            </option>
+            </SelectItem>
           ))}
         </Select>
       </div>
@@ -295,13 +295,13 @@ export default function WalkListBuilderPage() {
                 <>
                   <Select
                     value={selectedCanvasser}
-                    onChange={(e) => setSelectedCanvasser(e.target.value)}
+                    onValueChange={setSelectedCanvasser}
+                    placeholder="Select a canvasser…"
                   >
-                    <option value="">Select a canvasser…</option>
                     {canvassers.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <SelectItem key={c.id} value={c.id}>
                         {c.displayName}
-                      </option>
+                      </SelectItem>
                     ))}
                   </Select>
                   <Button
@@ -365,10 +365,10 @@ export default function WalkListBuilderPage() {
           <Select
             id="wl-type"
             value={wlForm.listType}
-            onChange={(e) => setWlForm((f) => ({ ...f, listType: e.target.value as ListType }))}
+            onValueChange={(v) => setWlForm((f) => ({ ...f, listType: v as ListType }))}
           >
-            <option value="STATIC">Static</option>
-            <option value="DYNAMIC">Dynamic</option>
+            <SelectItem value="STATIC">Static</SelectItem>
+            <SelectItem value="DYNAMIC">Dynamic</SelectItem>
           </Select>
         </Field>
       </FormDialog>

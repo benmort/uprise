@@ -12,7 +12,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -234,10 +234,10 @@ export default function DispositionsPage() {
           />
         </Field>
         <Field label="Channel" htmlFor="disp-channel">
-          <Select id="disp-channel" value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
-            <option value="BOTH">Both (door + SMS)</option>
-            <option value="DOOR">Door</option>
-            <option value="SMS">SMS</option>
+          <Select id="disp-channel" value={channel} onValueChange={(v) => setChannel(v as Channel)}>
+            <SelectItem value="BOTH">Both (door + SMS)</SelectItem>
+            <SelectItem value="DOOR">Door</SelectItem>
+            <SelectItem value="SMS">SMS</SelectItem>
           </Select>
         </Field>
       </FormDialog>
