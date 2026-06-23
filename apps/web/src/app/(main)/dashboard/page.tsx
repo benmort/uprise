@@ -42,7 +42,8 @@ import { KpiTile } from "@/components/canvass/kpi-tile";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { OverviewModuleCard } from "@/components/overview/overview-module-card";
-import { ActivityFeed, type ActivityItem } from "@/components/overview/activity-feed";
+import { ActivityFeed } from "@/components/overview/activity-feed";
+import { buildActivityItems } from "@/lib/activity/recent-activity";
 import { MiniBar } from "@/components/overview/mini-bar";
 
 type Slice<T> = { data?: T; error?: string } | null; // null === loading
@@ -158,48 +159,10 @@ export default function DashboardPage() {
     return { sms, wa };
   }, [blasts]);
 
-  const activity = useMemo<ActivityItem[]>(() => {
-    const items: ActivityItem[] = [];
-    for (const b of blasts?.data ?? []) {
-      const at = String((b as any).sentAt || (b as any).createdAt || "");
-      if (!at) continue;
-      items.push({
-        id: `blast-${String(b.id)}`,
-        icon: <SendHorizontal className="h-4 w-4" />,
-        label: `Blast: ${String(b.title || "Untitled")}`,
-        sublabel: `${String(b.status || "DRAFTED")} · ${normaliseChannel(b.channel)}`,
-        at,
-        href: `/blasts/${encodeURIComponent(String(b.id))}`,
-      });
-    }
-    for (const c of convos?.data ?? []) {
-      const at = String((c as any).lastMessageAt || "");
-      if (!at) continue;
-      const phone = String((c as any).contactPhone || "");
-      items.push({
-        id: `convo-${phone}`,
-        icon: <InboxIcon className="h-4 w-4" />,
-        label: String((c as any).contactName || phone || "Conversation"),
-        sublabel: "New reply in inbox",
-        at,
-        href: `/inbox?contact=${encodeURIComponent(phone)}`,
-      });
-    }
-    for (const k of campaign?.data?.live?.recentKnocks ?? []) {
-      items.push({
-        id: `knock-${k.id}`,
-        icon: <MapPin className="h-4 w-4" />,
-        label: `Door knock${k.dispositionCode ? `: ${k.dispositionCode}` : ""}`,
-        sublabel: k.canvasser || "Canvasser",
-        at: k.at,
-        href: "/canvass",
-      });
-    }
-    return items
-      .filter((i) => Number.isFinite(Date.parse(i.at)))
-      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-      .slice(0, 12);
-  }, [blasts, convos, campaign]);
+  const activity = useMemo(
+    () => buildActivityItems(blasts?.data, convos?.data, campaign?.data),
+    [blasts, convos, campaign],
+  );
 
   const activityLoading = blasts === null && convos === null && campaign === null;
 

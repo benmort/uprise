@@ -51,12 +51,26 @@ describe("major route files", () => {
     expect(source).toContain("Type your response");
   });
 
-  it("wires the header create blast CTA to create-and-redirect flow", () => {
+  it("renders the prog-style topbar (search + notifications + user menu)", () => {
     const source = read("layout.tsx");
+    expect(source).toContain("TopbarSearch");
+    expect(source).toContain("NotificationsDropdown");
+    expect(source).toContain("UserDropdown");
+    // The "c" quick-create-blast shortcut still routes through the shared helper.
     expect(source).toContain("createBlastAndOpen");
-    expect(source).toContain("New text blast");
-    // The create-and-redirect itself lives in the shared helper.
     const helper = read("../../lib/blasts.ts");
     expect(helper).toContain("/blasts/");
+  });
+
+  it("contains the profile page scaffold", () => {
+    const source = read("profile/page.tsx");
+    expect(source).toContain("Personal information");
+    expect(source).toContain("profile.update");
+  });
+
+  it("contains the account page scaffold", () => {
+    const source = read("account/page.tsx");
+    expect(source).toContain("Change password");
+    expect(source).toContain("Two-factor authentication");
   });
 });

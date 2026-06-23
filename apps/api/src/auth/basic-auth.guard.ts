@@ -264,7 +264,10 @@ export class BasicAuthGuard implements CanActivate {
     request: Request & { user?: AuthUser },
     token: string,
   ): Promise<boolean> {
-    const resolved = await this.sessions!.resolve(token);
+    const resolved = await this.sessions!.resolve(token, {
+      userAgent: request.headers["user-agent"] ?? null,
+      ipAddress: request.ip ?? request.socket?.remoteAddress ?? null,
+    });
     if (!resolved) throw new UnauthorizedException("Invalid or expired session");
     request.user = {
       id: resolved.userId,

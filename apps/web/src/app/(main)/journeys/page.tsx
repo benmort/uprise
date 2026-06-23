@@ -217,7 +217,7 @@ export default function JourneysPage() {
                 onClick={() => setSelectedId(j.id)}
                 className={cn(
                   "w-full rounded-xl border p-3 text-left transition",
-                  j.id === selectedId ? "border-primary bg-[#eef2fd]" : "border-border bg-white hover:bg-surface-variant",
+                  j.id === selectedId ? "border-primary bg-primary/10 dark:bg-primary/20" : "border-border bg-surface hover:bg-surface-variant",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -269,7 +269,7 @@ export default function JourneysPage() {
                 <select
                   value={draft.triggerType}
                   onChange={(e) => setDraft({ ...draft, triggerType: e.target.value as JourneyTriggerType })}
-                  className="mt-1 h-9 w-full rounded-lg border border-border bg-white px-2 text-sm"
+                  className="mt-1 h-9 w-full rounded-lg border border-border bg-surface px-2 text-sm"
                 >
                   {TRIGGERS.map((t) => (
                     <option key={t.value} value={t.value}>

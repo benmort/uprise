@@ -40,10 +40,12 @@ export const EVENT_TYPES = {
   CALL_COMPLETED: "telephony.call.completed",
   USER_SIGNED_IN: "iam.user.signed-in",
   USER_EMAIL_VERIFIED: "iam.user.email-verified",
+  USER_EMAIL_CHANGED: "iam.user.email-changed",
   USER_PASSWORD_RESET: "iam.user.password-reset",
   USER_MOBILE_VERIFIED: "iam.user.mobile-verified",
   USER_2FA_ENABLED: "iam.user.2fa-enabled",
   USER_2FA_DISABLED: "iam.user.2fa-disabled",
+  USER_DELETED: "iam.user.deleted",
   INVITATION_ACCEPTED: "tenant.invitation.accepted",
   INVITATION_DECLINED: "tenant.invitation.declined",
   INVITATION_REVOKED: "tenant.invitation.revoked",
@@ -92,10 +94,12 @@ export interface DomainEventMap {
   "telephony.call.completed": { callId: string; tenantId: string; durationSeconds: number | null };
   "iam.user.signed-in": { userId: string; tenantId: string };
   "iam.user.email-verified": { userId: string; tenantId: string };
+  "iam.user.email-changed": { userId: string; tenantId: string; newEmail: string };
   "iam.user.password-reset": { userId: string; tenantId: string };
   "iam.user.mobile-verified": { userId: string; tenantId: string };
   "iam.user.2fa-enabled": { userId: string; tenantId: string };
   "iam.user.2fa-disabled": { userId: string; tenantId: string };
+  "iam.user.deleted": { userId: string; tenantId: string };
   "tenant.invitation.accepted": { invitationId: string; tenantId: string; userId: string };
   "tenant.invitation.declined": { invitationId: string; tenantId: string };
   "tenant.invitation.revoked": { invitationId: string; tenantId: string };

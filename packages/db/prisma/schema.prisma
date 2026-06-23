@@ -327,6 +327,7 @@ model User {
   mobileVerified  Boolean          @default(false)
   emailVerified   Boolean          @default(false)
   lastSignInAt    DateTime?
+  deletedAt       DateTime?
   registeredAt    DateTime         @default(now())
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -1136,13 +1137,16 @@ model TenantInvitation {
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  tenantId  String?  // active tenant when the user has multiple memberships (select-tenant)
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  userId     String
+  tenantId   String?  // active tenant when the user has multiple memberships (select-tenant)
+  token      String   @unique
+  userAgent  String?  // captured at login for the active-sessions list
+  ipAddress  String?
+  lastSeenAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
   @@schema("iam")
@@ -1540,13 +1544,19 @@ model OrgCredential {
 
 // User profile + avatars (iam schema). id-only userId refs to iam.User.
 model UserProfile {
-  userId      String  @id
-  displayName String?
-  givenName   String?
-  familyName  String?
-  phone       String?
-  avatarUrl   String?
-  bio         String?
+  userId        String    @id
+  displayName   String?
+  givenName     String?
+  familyName    String?
+  phone         String?
+  avatarUrl     String?
+  bio           String?
+  dateOfBirth   DateTime?
+  facebookUrl   String?
+  twitterUrl    String?
+  linkedinUrl   String?
+  instagramUrl  String?
+  websiteUrl    String?
 
   @@schema("iam")
 }

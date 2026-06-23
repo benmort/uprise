@@ -169,7 +169,7 @@ export default function ScriptsPage() {
                 onClick={() => setSelectedId(s.id)}
                 className={cn(
                   "w-full rounded-xl border p-3 text-left text-sm transition",
-                  s.id === selectedId ? "border-primary bg-[#eef2fd]" : "border-border bg-white hover:bg-surface-variant",
+                  s.id === selectedId ? "border-primary bg-primary/10 dark:bg-primary/20" : "border-border bg-surface hover:bg-surface-variant",
                 )}
               >
                 <span className="font-semibold text-foreground">{s.name}</span>

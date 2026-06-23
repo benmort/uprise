@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { put } from "@vercel/blob";
 import { UserAvatar, UserProfile } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -9,6 +10,12 @@ export interface UserProfileInput {
   phone?: string | null;
   avatarUrl?: string | null;
   bio?: string | null;
+  dateOfBirth?: string | Date | null;
+  facebookUrl?: string | null;
+  twitterUrl?: string | null;
+  linkedinUrl?: string | null;
+  instagramUrl?: string | null;
+  websiteUrl?: string | null;
 }
 
 /**
@@ -38,6 +45,12 @@ export class ProfileService {
       phone: input.phone ?? null,
       avatarUrl: input.avatarUrl ?? null,
       bio: input.bio ?? null,
+      dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : null,
+      facebookUrl: input.facebookUrl ?? null,
+      twitterUrl: input.twitterUrl ?? null,
+      linkedinUrl: input.linkedinUrl ?? null,
+      instagramUrl: input.instagramUrl ?? null,
+      websiteUrl: input.websiteUrl ?? null,
     };
     const profile = await this.prisma.userProfile.upsert({
       where: { userId },
@@ -54,6 +67,30 @@ export class ProfileService {
   // ── Avatars ─────────────────────────────────────────────────────────
   async listAvatars(userId: string): Promise<UserAvatar[]> {
     return this.prisma.userAvatar.findMany({ where: { userId }, orderBy: { isSelected: "desc" } });
+  }
+
+  /**
+   * Upload an avatar image to blob storage, then register + select it. Mirrors the
+   * canvassing door-photo upload (Vercel Blob, BLOB_READ_WRITE_TOKEN). Selecting is
+   * handled by addAvatar (first avatar auto-selects); we select explicitly so an
+   * upload always becomes the active avatar.
+   */
+  async uploadAvatar(
+    userId: string,
+    file?: { buffer?: Buffer; originalname?: string; mimetype?: string },
+  ): Promise<UserAvatar> {
+    if (!file?.buffer) throw new BadRequestException("No image provided");
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    if (!token) throw new BadRequestException("Image storage is not configured");
+    const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const key = `avatars/${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`;
+    const { url } = await put(key, file.buffer, {
+      access: "public",
+      token,
+      contentType: file.mimetype || "image/jpeg",
+    });
+    const avatar = await this.addAvatar(userId, url);
+    return avatar.isSelected ? avatar : this.selectAvatar(userId, avatar.id);
   }
 
   /** Add an avatar; the first avatar a user has becomes the selected one. */

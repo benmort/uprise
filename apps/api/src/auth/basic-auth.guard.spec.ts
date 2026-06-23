@@ -322,7 +322,7 @@ describe("BasicAuthGuard session auth", () => {
         isSuperAdmin: false,
       }),
     );
-    expect(sessions.resolve).toHaveBeenCalledWith("sess_token");
+    expect(sessions.resolve).toHaveBeenCalledWith("sess_token", expect.any(Object));
   });
 
   it("reads the session token from the auth_token cookie", async () => {
@@ -332,7 +332,7 @@ describe("BasicAuthGuard session auth", () => {
     const guard = new BasicAuthGuard(config, undefined, sessions);
     const request: any = { path: "/api/v1/inbox", headers: { cookie: "foo=bar; auth_token=cookie_tok" } };
     await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
-    expect(sessions.resolve).toHaveBeenCalledWith("cookie_tok");
+    expect(sessions.resolve).toHaveBeenCalledWith("cookie_tok", expect.any(Object));
     expect(request.user.roles).toEqual(["canvasser"]);
   });
 

@@ -7,6 +7,12 @@ export class UpdateProfileDto {
   @IsOptional() @IsString() @MaxLength(40) phone?: string;
   @IsOptional() @IsString() @MaxLength(2048) avatarUrl?: string;
   @IsOptional() @IsString() @MaxLength(2000) bio?: string;
+  @IsOptional() @IsString() @MaxLength(40) dateOfBirth?: string;
+  @IsOptional() @IsString() @MaxLength(2048) facebookUrl?: string;
+  @IsOptional() @IsString() @MaxLength(2048) twitterUrl?: string;
+  @IsOptional() @IsString() @MaxLength(2048) linkedinUrl?: string;
+  @IsOptional() @IsString() @MaxLength(2048) instagramUrl?: string;
+  @IsOptional() @IsString() @MaxLength(2048) websiteUrl?: string;
 }
 
 export class AddAvatarDto {

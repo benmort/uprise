@@ -106,7 +106,7 @@ export default function AssignmentsPage() {
             const items = a.walkLists.flatMap((wl) => wl.items);
             const stopCount = items.length;
             return (
-              <div key={a.turfId} className="overflow-hidden rounded-2xl border border-border bg-white">
+              <div key={a.turfId} className="overflow-hidden rounded-2xl border border-border bg-surface">
                 <MapThumbnail polygon={outerRing(a.turf.geometry)} className="h-24 w-full" />
                 <div className="space-y-3 p-4">
                   <div className="flex items-start justify-between gap-2">

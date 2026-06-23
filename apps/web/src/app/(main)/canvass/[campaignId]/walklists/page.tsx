@@ -219,9 +219,9 @@ export default function WalkListBuilderPage() {
                 {orderedContacts.map((c, i) => (
                   <li
                     key={c.id}
-                    className="flex items-center gap-3 rounded-xl border border-border bg-white px-3 py-2"
+                    className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2"
                   >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef2fd] text-xs font-bold tabular-nums text-primary">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20 text-xs font-bold tabular-nums text-primary">
                       {i + 1}
                     </span>
                     <div className="min-w-0">

@@ -5,8 +5,10 @@ function makePrisma() {
     session: {
       create: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       deleteMany: jest.fn(),
       updateMany: jest.fn(),
+      update: jest.fn(async () => ({})),
     },
     user: { findUnique: jest.fn(), update: jest.fn(async () => ({})) },
     tenantMember: { findMany: jest.fn() },
@@ -142,5 +144,42 @@ describe("SessionService", () => {
     const svc = new SessionService(prisma);
     await svc.revokeAllForUser("u1");
     expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: "u1" } });
+  });
+
+  it("listForUser() returns active sessions and flags the current one", async () => {
+    const prisma = makePrisma();
+    prisma.session.findMany.mockResolvedValue([
+      { id: "s1", token: "cur", userAgent: "Chrome", ipAddress: "1.2.3.4", lastSeenAt: null, createdAt: new Date(), expiresAt: new Date() },
+      { id: "s2", token: "other", userAgent: "Safari", ipAddress: null, lastSeenAt: null, createdAt: new Date(), expiresAt: new Date() },
+    ]);
+    const svc = new SessionService(prisma);
+    const rows = await svc.listForUser("u1", "cur");
+    expect(rows.find((r) => r.id === "s1")?.current).toBe(true);
+    expect(rows.find((r) => r.id === "s2")?.current).toBe(false);
+    expect(rows[0]).not.toHaveProperty("token"); // never leak the token
+  });
+
+  it("revokeById() is scoped to the owner", async () => {
+    const prisma = makePrisma();
+    const svc = new SessionService(prisma);
+    await svc.revokeById("u1", "s9");
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { id: "s9", userId: "u1" } });
+  });
+
+  it("revokeOthers() keeps the current session", async () => {
+    const prisma = makePrisma();
+    const svc = new SessionService(prisma);
+    await svc.revokeOthers("u1", "cur");
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: "u1", token: { not: "cur" } } });
+  });
+
+  it("resolve() returns null for a soft-deleted user", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      id: "s1", userId: "u1", token: "t", tenantId: null, expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c", deletedAt: new Date() });
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t")).resolves.toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import Map, { Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import { bbox } from "@turf/turf";
 import { Crosshair } from "lucide-react";
+import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 export type MapStop = { id: string; lat: number; lng: number; status?: string };
@@ -32,6 +33,7 @@ export function TurfMap({
   userPosition?: LngLat | null;
   onStopTap?: (id: string) => void;
 }) {
+  const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
 
   // Bounding box of the turf/division polygon, if one is supplied.
@@ -101,7 +103,7 @@ export function TurfMap({
       ref={mapRef}
       mapboxAccessToken={TOKEN}
       initialViewState={initialViewState}
-      mapStyle="mapbox://styles/mapbox/streets-v12"
+      mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
       onLoad={fitToBounds}
       onClick={(e) => {

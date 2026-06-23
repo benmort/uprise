@@ -51,7 +51,7 @@ export default function EngagementPage() {
           const inner = (
             <SectionCard className={t.ready ? "transition hover:border-primary" : "opacity-60"}>
               <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef2fd] text-primary">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20 text-primary">
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">

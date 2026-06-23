@@ -23,7 +23,7 @@ export function MapThumbnail({ polygon, className, children }: MapThumbnailProps
   const points = polygon && polygon.length >= 3 ? toViewBoxPoints(polygon) : STOCK_POLYGON;
 
   return (
-    <div className={cn("relative overflow-hidden rounded-xl bg-[#eef2fd]", className)}>
+    <div className={cn("relative overflow-hidden rounded-xl bg-primary/10 dark:bg-primary/20", className)}>
       <svg viewBox="0 0 128 96" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
         <defs>
           <pattern id="mt-grid" width="16" height="16" patternUnits="userSpaceOnUse">

@@ -40,7 +40,7 @@ export function PWAInstallPrompt() {
   if (!deferredPrompt || dismissed) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-50 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-border bg-white p-3 shadow-sm">
+    <div className="fixed bottom-4 left-1/2 z-50 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-border bg-surface p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-foreground">
           Install Foment for faster access and notifications.

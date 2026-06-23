@@ -25,6 +25,10 @@ export interface AuthPrincipal {
   role: AppRole;
   tenantId: string | null;
   memberships: Membership[];
+  // Account flags surfaced by GET /auth/check (optional — older callers may omit).
+  emailVerified?: boolean;
+  mobileVerified?: boolean;
+  twofaEnabled?: boolean;
 }
 
 // ── Request schemas ───────────────────────────────────────────────────
@@ -118,4 +122,79 @@ export interface OkResponse {
 export interface CheckSessionResponse {
   ok: true;
   user: AuthPrincipal | null;
+}
+
+// ── Self-service profile + account (prog parity) ──────────────────────
+export interface UserProfileResponse {
+  userId: string;
+  displayName: string | null;
+  givenName: string | null;
+  familyName: string | null;
+  phone: string | null;
+  avatarUrl: string | null;
+  bio: string | null;
+  dateOfBirth: string | null;
+  facebookUrl: string | null;
+  twitterUrl: string | null;
+  linkedinUrl: string | null;
+  instagramUrl: string | null;
+  websiteUrl: string | null;
+}
+
+export interface UserAvatarResponse {
+  id: string;
+  userId: string;
+  url: string;
+  isSelected: boolean;
+}
+
+export const updateProfileSchema = z.object({
+  displayName: z.string().max(200).optional(),
+  givenName: z.string().max(120).optional(),
+  familyName: z.string().max(120).optional(),
+  phone: z.string().max(40).optional(),
+  avatarUrl: z.string().max(2048).optional(),
+  bio: z.string().max(2000).optional(),
+  dateOfBirth: z.string().max(40).optional(),
+  facebookUrl: z.string().max(2048).optional(),
+  twitterUrl: z.string().max(2048).optional(),
+  linkedinUrl: z.string().max(2048).optional(),
+  instagramUrl: z.string().max(2048).optional(),
+  websiteUrl: z.string().max(2048).optional(),
+});
+export type UpdateProfileRequest = z.infer<typeof updateProfileSchema>;
+
+export const setMobileSchema = z.object({ mobile: z.string().min(1).max(20) });
+export type SetMobileRequest = z.infer<typeof setMobileSchema>;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(200),
+});
+export type ChangePasswordRequest = z.infer<typeof changePasswordSchema>;
+
+export const changeEmailSchema = z.object({
+  newEmail: z.string().email(),
+  password: z.string().min(1),
+});
+export type ChangeEmailRequest = z.infer<typeof changeEmailSchema>;
+
+export const deleteAccountSchema = z.object({ password: z.string().min(1) });
+export type DeleteAccountRequest = z.infer<typeof deleteAccountSchema>;
+
+// ── Active-sessions management ────────────────────────────────────────
+export interface SessionSummaryResponse {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  lastSeenAt: string | null;
+  createdAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
+// ── Subdomain availability (sign-up) ──────────────────────────────────
+export interface AvailabilityResponse {
+  slug: string;
+  available: boolean;
 }

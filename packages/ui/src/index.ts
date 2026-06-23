@@ -4,10 +4,12 @@
 // (CSS-first @theme). (breadcrumbs stays in apps/web — it depends on next/link.)
 export * from "./lib/utils";
 export * from "./components/alert";
+export * from "./components/avatar";
 export * from "./components/button";
 export * from "./components/card";
 export * from "./components/checkbox";
 export * from "./components/confirm-dialog";
+export * from "./components/dropdown";
 export * from "./components/empty-state";
 export * from "./components/field";
 export * from "./components/form-dialog";
@@ -20,6 +22,7 @@ export * from "./components/label";
 export * from "./components/logo";
 export * from "./components/otp-input";
 export * from "./components/password-input";
+export * from "./components/password-strength";
 export * from "./components/radio-group";
 export * from "./components/pagination-controls";
 export * from "./components/select";

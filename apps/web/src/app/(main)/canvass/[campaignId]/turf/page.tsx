@@ -234,8 +234,8 @@ export default function TurfCuttingPage() {
                   onClick={() => setUniverse(o.id)}
                   className={`w-full rounded-xl border p-3 text-left text-sm transition ${
                     universe === o.id
-                      ? "border-primary bg-[#eef2fd]"
-                      : "border-border bg-white hover:bg-surface-variant"
+                      ? "border-primary bg-primary/10 dark:bg-primary/20"
+                      : "border-border bg-surface hover:bg-surface-variant"
                   }`}
                 >
                   <span className="block font-semibold text-foreground">{o.label}</span>

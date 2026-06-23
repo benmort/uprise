@@ -1,4 +1,5 @@
 import { IamFlowsService } from "./iam-flows.service";
+import { hashPassword } from "./password.util";
 
 function setup() {
   const prisma: any = {
@@ -15,6 +16,8 @@ function setup() {
       findFirst: jest.fn(async () => ({ tenantId: "t1", role: "ORGANISER" })),
       findMany: jest.fn(async () => [{ tenantId: "t1", role: "ORGANISER", tenant: { name: "Org One" } }]),
       findUnique: jest.fn(async () => ({ tenantId: "t1", userId: "u1", role: "ORGANISER" })),
+      count: jest.fn(async () => 2),
+      deleteMany: jest.fn(async () => ({ count: 1 })),
       upsert: jest.fn(async () => ({})),
     },
     tenantInvitation: {
@@ -213,6 +216,131 @@ describe("IamFlowsService", () => {
       prisma.user.update = jest.fn(async () => ({}));
       await svc.enable2fa("u1");
       expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: "u1" }, data: { twofaEnabled: true } });
+    });
+  });
+
+  describe("change password", () => {
+    it("verifies the current password, sets the new one, and revokes other sessions", async () => {
+      const { svc, prisma, sessions, outbox } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        id: "u1",
+        passwordHash: await hashPassword("currentpw1"),
+      });
+      await svc.changePassword("u1", "currentpw1", "newlongpw1");
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "u1" },
+        data: { passwordHash: expect.any(String) },
+      });
+      expect(sessions.revokeAllForUser).toHaveBeenCalledWith("u1");
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "iam.user.password-reset" }),
+      );
+    });
+
+    it("rejects a wrong current password", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        id: "u1",
+        passwordHash: await hashPassword("currentpw1"),
+      });
+      await expect(svc.changePassword("u1", "wrongpw", "newlongpw1")).rejects.toThrow();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a too-short new password", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        id: "u1",
+        passwordHash: await hashPassword("currentpw1"),
+      });
+      await expect(svc.changePassword("u1", "currentpw1", "short")).rejects.toThrow();
+    });
+  });
+
+  describe("change email", () => {
+    it("verifies the password, sets the email unverified, and sends a verification", async () => {
+      const { svc, prisma, dispatcher, outbox } = setup();
+      const passwordHash = await hashPassword("currentpw1");
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ id: "u1", email: "old@x.y", passwordHash }) // password check
+        .mockResolvedValueOnce(null) // email-taken check
+        .mockResolvedValueOnce({ id: "u1", email: "new@x.y", emailVerified: false }); // sendEmailVerification
+      await svc.changeEmail("u1", "New@X.Y", "currentpw1");
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "u1" },
+        data: { email: "new@x.y", emailVerified: false },
+      });
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "iam.user.email-changed" }),
+      );
+      expect(dispatcher.sendEmail).toHaveBeenCalled();
+    });
+
+    it("rejects a wrong password", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        id: "u1",
+        email: "old@x.y",
+        passwordHash: await hashPassword("currentpw1"),
+      });
+      await expect(svc.changeEmail("u1", "new@x.y", "wrongpw")).rejects.toThrow();
+    });
+
+    it("rejects an email already in use", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ id: "u1", email: "old@x.y", passwordHash: await hashPassword("currentpw1") })
+        .mockResolvedValueOnce({ id: "u2", email: "new@x.y" }); // taken
+      await expect(svc.changeEmail("u1", "new@x.y", "currentpw1")).rejects.toThrow();
+    });
+  });
+
+  describe("delete account", () => {
+    it("soft-deletes, removes memberships, revokes sessions and emits the event", async () => {
+      const { svc, prisma, sessions, outbox } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        id: "u1",
+        deletedAt: null,
+        passwordHash: await hashPassword("currentpw1"),
+      });
+      prisma.tenantMember.findMany.mockResolvedValueOnce([{ tenantId: "t1", role: "CANVASSER" }]);
+      await svc.deleteAccount("u1", "currentpw1");
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "u1" },
+        data: { deletedAt: expect.any(Date) },
+      });
+      expect(prisma.tenantMember.deleteMany).toHaveBeenCalledWith({ where: { userId: "u1" } });
+      expect(sessions.revokeAllForUser).toHaveBeenCalledWith("u1");
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "iam.user.deleted" }),
+      );
+    });
+
+    it("rejects a wrong password", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        id: "u1",
+        deletedAt: null,
+        passwordHash: await hashPassword("currentpw1"),
+      });
+      await expect(svc.deleteAccount("u1", "wrongpw")).rejects.toThrow();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("blocks the sole organiser of a tenant", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        id: "u1",
+        deletedAt: null,
+        passwordHash: await hashPassword("currentpw1"),
+      });
+      prisma.tenantMember.findMany.mockResolvedValueOnce([{ tenantId: "t1", role: "ORGANISER" }]);
+      prisma.tenantMember.count.mockResolvedValueOnce(1); // sole organiser
+      await expect(svc.deleteAccount("u1", "currentpw1")).rejects.toThrow();
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
