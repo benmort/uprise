@@ -33,12 +33,22 @@ subdomain routing is a deferred item in `docs/TODO.md`.)
 
 ## Run it
 
-Two terminals from the repo root:
+`dev:all` runs the four apps **and** the ngrok tunnels together (via `concurrently`,
+labelled `apps`/`tunnel`):
 
 ```
-pnpm dev:all       # terminal A — the four apps on localhost
-pnpm dev:tunnel    # terminal B — ngrok start --config ngrok.yml --all
+pnpm dev:all       # apps + ngrok tunnels
 ```
+
+Apps-only (no tunnel, e.g. if you haven't set up `ngrok.local.yml`):
+
+```
+pnpm dev:apps      # the four apps on localhost
+pnpm dev:tunnel    # the ngrok tunnels on their own (optional, second terminal)
+```
+
+`dev:all` won't kill the apps if the tunnel fails (e.g. missing token) — you'll just
+see ngrok errors under the `tunnel` label while the apps keep running.
 
 Then copy the **"ngrok / prog-subdomain dev"** block from each app's `.env.example` into its
 `.env` (api, web, auth, marketing) and restart `dev:all`. The key overrides:

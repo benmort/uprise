@@ -2,7 +2,8 @@
   "name": "twilio-messenger",
   "private": true,
   "scripts": {
-    "dev:all": "pnpm -r --parallel run dev",
+    "dev:all": "concurrently -n apps,tunnel -c blue,magenta \"pnpm dev:apps\" \"pnpm dev:tunnel\"",
+    "dev:apps": "pnpm -r --parallel run dev",
     "dev:api": "pnpm --filter api run dev",
     "dev:web": "pnpm --filter web run dev",
     "dev:auth": "pnpm --filter auth run dev",
@@ -16,6 +17,9 @@
     "test": "pnpm -r run test",
     "build": "pnpm -r run build",
     "check:ai-guides": "node scripts/check-ai-guides.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
