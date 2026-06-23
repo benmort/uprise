@@ -50,3 +50,6 @@ apps/web/playwright-report/
 # Claude Code local worktree state + per-user local settings
 .claude/worktrees/
 .claude/settings.local.json
+
+# Local ngrok authtoken (merged with the committed ngrok.yml by `pnpm dev:tunnel`)
+ngrok.local.yml

@@ -1,0 +1,36 @@
+# ngrok tunnels for yarns local development — reuses prog's reserved domains.
+#
+#   pnpm dev:all      (terminal A — runs the four apps on localhost)
+#   pnpm dev:tunnel   (terminal B — exposes them on the dev.prog.network subdomains)
+#
+# Prerequisites (see docs/development/ngrok-dev.md):
+#   - The prog ngrok account, which reserves dev.prog.network, auth.dev.prog.network
+#     and the *.dev.prog.network wildcard, with DNS CNAMEs already pointing at ngrok.
+#   - Authtoken set once on this machine: `ngrok config add-authtoken <token>`
+#     (NOT committed here — keep the secret in your local ngrok config).
+version: "2"
+
+tunnels:
+  # Marketing site → dev.prog.network
+  marketing:
+    addr: 3003
+    proto: http
+    domain: dev.prog.network
+
+  # Auth / SSO identity app → auth.dev.prog.network
+  auth:
+    addr: 3002
+    proto: http
+    domain: auth.dev.prog.network
+
+  # Organiser app (web) → app.dev.prog.network (under the *.dev.prog.network reservation)
+  web:
+    addr: 3000
+    proto: http
+    domain: app.dev.prog.network
+
+  # API → api.dev.prog.network (frontend calls + provider webhooks)
+  api:
+    addr: 3001
+    proto: http
+    domain: api.dev.prog.network
