@@ -39,11 +39,16 @@ export class ProfileService {
       avatarUrl: input.avatarUrl ?? null,
       bio: input.bio ?? null,
     };
-    return this.prisma.userProfile.upsert({
+    const profile = await this.prisma.userProfile.upsert({
       where: { userId },
       create: { userId, ...data },
       update: data,
     });
+    // Mirror displayName onto the base User row so reads of User.displayName don't drift (WS3).
+    if (input.displayName && input.displayName.trim()) {
+      await this.prisma.user.update({ where: { id: userId }, data: { displayName: input.displayName.trim() } });
+    }
+    return profile;
   }
 
   // ── Avatars ─────────────────────────────────────────────────────────
@@ -84,6 +89,15 @@ export class ProfileService {
       }),
     ]);
     return selected;
+  }
+
+  /** Clear the selected avatar: no avatar selected + blank the profile avatarUrl. */
+  async clearSelectedAvatar(userId: string): Promise<{ ok: true }> {
+    await this.prisma.$transaction([
+      this.prisma.userAvatar.updateMany({ where: { userId }, data: { isSelected: false } }),
+      this.prisma.userProfile.updateMany({ where: { userId }, data: { avatarUrl: null } }),
+    ]);
+    return { ok: true };
   }
 
   async deleteAvatar(userId: string, avatarId: string): Promise<{ ok: true }> {

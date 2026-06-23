@@ -1,10 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { PaymentStatus, PaymentType, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { BillingService } from "./billing.service";
+import { StripeService } from "./stripe.service";
 import { assertValidPaymentTransition } from "./payment-state.machine";
 
 export interface RecordPaymentInput {
@@ -33,7 +35,24 @@ export class PaymentService {
     private readonly webhookEvents: WebhookEventService,
     private readonly billing: BillingService,
     private readonly logger: DomainLogger,
+    private readonly config: ConfigService,
+    private readonly stripe: StripeService,
   ) {}
+
+  private async ensureOrganization() {
+    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
+    return this.prisma.tenant.upsert({ where: { slug }, create: { slug, name: "Default Organization" }, update: {} });
+  }
+
+  /** Emit payment.status.changed (recorded/processing/failed — succeeded/refunded have their own). */
+  private async emitStatus(tx: Prisma.TransactionClient, paymentId: string, tenantId: string, status: PaymentStatus) {
+    await this.outbox.append(tx, {
+      tenantId,
+      eventType: "payment.status.changed",
+      aggregateId: paymentId,
+      payload: { paymentId, tenantId, status },
+    });
+  }
 
   async recordPayment(input: RecordPaymentInput) {
     if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
@@ -41,38 +60,54 @@ export class PaymentService {
     }
     const currency = input.currency.trim().toUpperCase();
     if (currency.length !== 3) throw new BadRequestException("currency must be a 3-letter code");
-    return this.prisma.payment.create({
-      data: {
-        tenantId: input.tenantId,
-        networkId: input.networkId ?? null,
-        amountCents: input.amountCents,
-        currency,
-        type: input.type,
-        customerRef: input.customerRef ?? null,
-        providerPaymentId: input.providerPaymentId ?? null,
-        subscriptionId: input.subscriptionId ?? null,
-        invoiceId: input.invoiceId ?? null,
-        status: PaymentStatus.RECORDED,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          tenantId: input.tenantId,
+          networkId: input.networkId ?? null,
+          amountCents: input.amountCents,
+          currency,
+          type: input.type,
+          customerRef: input.customerRef ?? null,
+          providerPaymentId: input.providerPaymentId ?? null,
+          subscriptionId: input.subscriptionId ?? null,
+          invoiceId: input.invoiceId ?? null,
+          status: PaymentStatus.RECORDED,
+        },
+      });
+      await this.emitStatus(tx, payment.id, payment.tenantId, PaymentStatus.RECORDED);
+      return payment;
     });
   }
 
-  private async load(paymentId: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+  /**
+   * Lock + load a payment row inside a transaction (`SELECT … FOR UPDATE`), so a
+   * concurrent webhook + manual transition can't both pass the stale-status guard
+   * and double-apply (TOCTOU, doc 08). Callers run the guard on the locked row.
+   */
+  private async lockAndLoad(tx: Prisma.TransactionClient, paymentId: string) {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>(
+      Prisma.sql`SELECT id FROM payment."Payment" WHERE id = ${paymentId} FOR UPDATE`,
+    );
+    if (locked.length === 0) throw new NotFoundException("Payment not found");
+    const payment = await tx.payment.findUnique({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException("Payment not found");
     return payment;
   }
 
   async markProcessing(paymentId: string): Promise<void> {
-    const payment = await this.load(paymentId);
-    assertValidPaymentTransition(payment.status, PaymentStatus.PROCESSING);
-    await this.prisma.payment.update({ where: { id: paymentId }, data: { status: PaymentStatus.PROCESSING } });
+    await this.prisma.$transaction(async (tx) => {
+      const payment = await this.lockAndLoad(tx, paymentId);
+      assertValidPaymentTransition(payment.status, PaymentStatus.PROCESSING);
+      await tx.payment.update({ where: { id: paymentId }, data: { status: PaymentStatus.PROCESSING } });
+      await this.emitStatus(tx, paymentId, payment.tenantId, PaymentStatus.PROCESSING);
+    });
   }
 
   async markSucceeded(paymentId: string): Promise<void> {
-    const payment = await this.load(paymentId);
-    assertValidPaymentTransition(payment.status, PaymentStatus.SUCCEEDED);
     await this.prisma.$transaction(async (tx) => {
+      const payment = await this.lockAndLoad(tx, paymentId);
+      assertValidPaymentTransition(payment.status, PaymentStatus.SUCCEEDED);
       await tx.payment.update({ where: { id: paymentId }, data: { status: PaymentStatus.SUCCEEDED } });
       await this.outbox.append(tx, {
         tenantId: payment.tenantId,
@@ -84,12 +119,141 @@ export class PaymentService {
   }
 
   async markFailed(paymentId: string, reason?: string): Promise<void> {
-    const payment = await this.load(paymentId);
-    assertValidPaymentTransition(payment.status, PaymentStatus.FAILED);
-    await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: PaymentStatus.FAILED, failureReason: reason ?? null },
+    await this.prisma.$transaction(async (tx) => {
+      const payment = await this.lockAndLoad(tx, paymentId);
+      assertValidPaymentTransition(payment.status, PaymentStatus.FAILED);
+      await tx.payment.update({
+        where: { id: paymentId },
+        data: { status: PaymentStatus.FAILED, failureReason: reason ?? null },
+      });
+      await this.emitStatus(tx, paymentId, payment.tenantId, PaymentStatus.FAILED);
     });
+  }
+
+  // ── Read queries (prog GetPayment/GetPayments/ListRefunds/GetInvoices/...) ──
+  async listPayments(limit = 50) {
+    const org = await this.ensureOrganization();
+    return this.prisma.payment.findMany({
+      where: { tenantId: org.id },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(Math.max(1, limit), 200),
+    });
+  }
+
+  async getPayment(id: string) {
+    const org = await this.ensureOrganization();
+    const payment = await this.prisma.payment.findFirst({ where: { id, tenantId: org.id } });
+    if (!payment) throw new NotFoundException("Payment not found");
+    return payment;
+  }
+
+  async listRefunds(paymentId: string) {
+    await this.getPayment(paymentId); // tenant-scopes + 404s
+    return this.prisma.refund.findMany({ where: { paymentId }, orderBy: { createdAt: "desc" } });
+  }
+
+  async listInvoices() {
+    const org = await this.ensureOrganization();
+    return this.prisma.invoice.findMany({ where: { tenantId: org.id }, orderBy: { createdAt: "desc" } });
+  }
+
+  async listSubscriptions() {
+    const org = await this.ensureOrganization();
+    return this.prisma.subscription.findMany({ where: { tenantId: org.id }, orderBy: { createdAt: "desc" } });
+  }
+
+  async listPaymentMethods() {
+    const org = await this.ensureOrganization();
+    const customers = await this.prisma.customer.findMany({ where: { tenantId: org.id }, select: { id: true } });
+    return this.prisma.paymentMethod.findMany({
+      where: { customerId: { in: customers.map((c) => c.id) } },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  /**
+   * Resolve the tenant's Stripe customer, creating + projecting one when absent
+   * (EnsureCustomer at checkout, doc 08). Returns undefined when Stripe is
+   * unconfigured so checkout can proceed customer-less.
+   */
+  async ensureCustomer(): Promise<string | undefined> {
+    if (!this.stripe.isConfigured()) return undefined;
+    const org = await this.ensureOrganization();
+    const existing = await this.prisma.customer.findFirst({
+      where: { tenantId: org.id },
+      orderBy: { createdAt: "asc" },
+    });
+    if (existing) return existing.providerCustomerId;
+    const created = await this.stripe.createCustomer({
+      name: org.name ?? undefined,
+      metadata: { tenantId: org.id },
+    });
+    await this.billing.projectCustomer({ providerCustomerId: created.id, tenantId: org.id });
+    return created.id;
+  }
+
+  /** The tenant's billing customer, or a 400 when none exists yet. */
+  private async requireCustomer() {
+    const org = await this.ensureOrganization();
+    const customer = await this.prisma.customer.findFirst({
+      where: { tenantId: org.id },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!customer) throw new BadRequestException("No billing customer for this tenant");
+    return customer;
+  }
+
+  /** A payment method scoped to the current tenant, or a 404. */
+  private async requireTenantPaymentMethod(providerMethodId: string) {
+    const org = await this.ensureOrganization();
+    const method = await this.prisma.paymentMethod.findUnique({ where: { providerMethodId } });
+    if (!method) throw new NotFoundException("Payment method not found");
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: method.customerId, tenantId: org.id },
+    });
+    if (!customer) throw new NotFoundException("Payment method not found");
+    return { method, customer };
+  }
+
+  /** Attach a payment method to the tenant's customer + project it. */
+  async attachPaymentMethod(providerMethodId: string): Promise<void> {
+    const customer = await this.requireCustomer();
+    const res = await this.stripe.attachPaymentMethod({
+      paymentMethodId: providerMethodId,
+      customerId: customer.providerCustomerId,
+    });
+    await this.billing.projectPaymentMethod({
+      customerId: customer.id,
+      providerMethodId: res.id,
+      brand: res.brand,
+      last4: res.last4,
+    });
+  }
+
+  /** Detach a payment method from the tenant's customer + drop the projection. */
+  async detachPaymentMethod(providerMethodId: string): Promise<void> {
+    await this.requireTenantPaymentMethod(providerMethodId);
+    await this.stripe.detachPaymentMethod(providerMethodId);
+    await this.prisma.paymentMethod.deleteMany({ where: { providerMethodId } });
+  }
+
+  /** Set the tenant's default payment method, enforcing one-default-per-customer. */
+  async setDefaultPaymentMethod(providerMethodId: string): Promise<void> {
+    const { method, customer } = await this.requireTenantPaymentMethod(providerMethodId);
+    await this.stripe.setDefaultPaymentMethod({
+      customerId: customer.providerCustomerId,
+      paymentMethodId: providerMethodId,
+    });
+    await this.prisma.$transaction([
+      this.prisma.paymentMethod.updateMany({
+        where: { customerId: method.customerId, isDefault: true },
+        data: { isDefault: false },
+      }),
+      this.prisma.paymentMethod.update({
+        where: { providerMethodId },
+        data: { isDefault: true },
+      }),
+    ]);
   }
 
   /**
@@ -104,18 +268,18 @@ export class PaymentService {
     if (!Number.isInteger(amountCents) || amountCents <= 0) {
       throw new BadRequestException("refund amountCents must be a positive integer");
     }
-    const payment = await this.load(paymentId);
-    const outstanding = payment.amountCents - payment.refundedCents;
-    if (amountCents > outstanding) {
-      throw new BadRequestException("Refund exceeds the outstanding amount");
-    }
-    const nextStatus =
-      payment.refundedCents + amountCents === payment.amountCents
-        ? PaymentStatus.REFUNDED
-        : PaymentStatus.PARTIALLY_REFUNDED;
-    assertValidPaymentTransition(payment.status, nextStatus);
     try {
       await this.prisma.$transaction(async (tx) => {
+        const payment = await this.lockAndLoad(tx, paymentId);
+        const outstanding = payment.amountCents - payment.refundedCents;
+        if (amountCents > outstanding) {
+          throw new BadRequestException("Refund exceeds the outstanding amount");
+        }
+        const nextStatus =
+          payment.refundedCents + amountCents === payment.amountCents
+            ? PaymentStatus.REFUNDED
+            : PaymentStatus.PARTIALLY_REFUNDED;
+        assertValidPaymentTransition(payment.status, nextStatus);
         await tx.payment.update({
           where: { id: paymentId },
           data: { status: nextStatus, refundedCents: { increment: amountCents } },
@@ -237,6 +401,21 @@ export class PaymentService {
             planName: object.items?.data?.[0]?.price?.nickname ?? null,
             currentPeriodEnd: object.current_period_end ? new Date(Number(object.current_period_end) * 1000) : null,
           });
+          // Emit for the subscription→tenant reaction (WS2): the projection is the read
+          // model; the event is the cross-domain choreography (doc 05).
+          await this.prisma.$transaction((tx) =>
+            this.outbox.append(tx, {
+              tenantId,
+              eventType: "payment.subscription.changed",
+              aggregateId: String(object.id),
+              payload: {
+                tenantId,
+                networkId: null,
+                subscriptionId: String(object.id),
+                status: String(object.status ?? "unknown"),
+              },
+            }),
+          );
         } else {
           this.logger.error("payment", "subscription event with no resolvable tenant — skipped", undefined, { eventId: event.id });
         }

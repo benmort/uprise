@@ -3,11 +3,16 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 /**
- * Seeds demo data, then resolves the seeded IDs so dynamic-route specs have real
- * content. Writes e2e/.auth/context.json (creds + ids) for the auth fixture.
+ * Seeds demo data, logs in the seeded demo organiser to mint a real session, and
+ * writes a Playwright storageState carrying the httpOnly `auth_token` cookie (meld
+ * doc 14 cutover — the app no longer reads sessionStorage creds). Cookies are
+ * host-scoped (port-agnostic), so one `localhost` cookie is sent to both web (:3000)
+ * and api (:3001). Also resolves seeded IDs for dynamic-route specs.
  */
 const REPO = resolve(__dirname, "../../..");
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+const COOKIE_HOST = process.env.E2E_COOKIE_DOMAIN || "localhost";
+const ORGANISER = { email: "demo.organiser@yarns.test", password: "demo-organiser-pw" };
 
 function readEnv(key: string): string {
   if (process.env[key]) return process.env[key] as string;
@@ -31,7 +36,6 @@ export default async function globalSetup() {
   const pass = readEnv("BASIC_AUTH_PASSWORD") || "decolonise2026";
   const auth = "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
 
-  // Seed demo data (idempotent). Skip with E2E_SKIP_SEED=1.
   if (!process.env.E2E_SKIP_SEED) {
     try {
       execSync("npm --prefix ../api run seed:demo", { cwd: __dirname + "/..", stdio: "inherit" });
@@ -65,8 +69,48 @@ export default async function globalSetup() {
   ids.audienceId = asArray(await get("/audiences"))[0]?.id;
   ids.blastId = asArray(await get("/blasts"))[0]?.id;
 
+  // Mint a real session for the seeded demo organiser (cookie auth, doc 14).
+  let token = "";
+  try {
+    const res = await fetch(`${API}/iam/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ORGANISER),
+    });
+    const json = await res.json().catch(() => null);
+    token = (json?.data?.token ?? json?.token ?? "") as string;
+  } catch (e) {
+    console.warn("[e2e] organiser login failed — authed specs will redirect:", (e as Error).message);
+  }
+
   const dir = resolve(__dirname, ".auth");
   mkdirSync(dir, { recursive: true });
+  // Playwright storageState: the host-scoped session cookie + the canvasser id.
+  const storageState = {
+    cookies: token
+      ? [
+          {
+            name: "auth_token",
+            value: token,
+            domain: COOKIE_HOST,
+            path: "/",
+            httpOnly: true,
+            secure: false,
+            sameSite: "Lax" as const,
+            expires: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
+          },
+        ]
+      : [],
+    origins: ids.canvasserId
+      ? [
+          {
+            origin: process.env.WEB_URL || "http://localhost:3000",
+            localStorage: [{ name: "yarns.canvasserId", value: ids.canvasserId }],
+          },
+        ]
+      : [],
+  };
+  writeFileSync(resolve(dir, "state.json"), JSON.stringify(storageState, null, 2));
   writeFileSync(resolve(dir, "context.json"), JSON.stringify({ user, pass, ids }, null, 2));
-  console.log("[e2e] resolved ids:", ids);
+  console.log("[e2e] resolved ids:", ids, "session:", token ? "ok" : "none");
 }

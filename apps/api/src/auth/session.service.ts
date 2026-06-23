@@ -31,6 +31,8 @@ export class SessionService {
     await this.prisma.session.create({
       data: { userId, token, expiresAt, tenantId: opts.tenantId ?? null },
     });
+    // Sign-in audit (WS3) — every login path funnels through here.
+    await this.prisma.user.update({ where: { id: userId }, data: { lastSignInAt: new Date() } }).catch(() => undefined);
     return { token, expiresAt };
   }
 

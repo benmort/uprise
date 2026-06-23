@@ -66,6 +66,7 @@ enum BlastRecipientStatus {
   READ
   RESPONDED
   FAILED
+  UNDELIVERED
   SKIPPED
   @@schema("messaging")
 }
@@ -325,6 +326,7 @@ model User {
   mobile          String?
   mobileVerified  Boolean          @default(false)
   emailVerified   Boolean          @default(false)
+  lastSignInAt    DateTime?
   registeredAt    DateTime         @default(now())
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -551,15 +553,19 @@ model OutboundMessage {
 // Transactional message bodies (2FA, verification, receipts), tenant-scoped and
 // keyed. Marketing bodies live on Blast; these are for the transactional path.
 model MessageTemplate {
-  id        String         @id @default(cuid())
-  tenantId  String
-  key       String
-  channel   MessageChannel @default(SMS)
-  kind      MessageKind    @default(TRANSACTIONAL)
-  body      String         @db.Text
-  isActive  Boolean        @default(true)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id         String         @id @default(cuid())
+  tenantId   String
+  key        String
+  channel    MessageChannel @default(SMS)
+  kind       MessageKind    @default(TRANSACTIONAL)
+  type       String?        // freeform classification (mirrors prog template.type)
+  category   String?        // grouping/folder (mirrors prog template.category)
+  variables  Json?          // declared {{var}} names rendered by this template
+  fromNumber String?        // optional sender override (E.164) for this template
+  body       String         @db.Text
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@unique([tenantId, key])
   @@schema("messaging")

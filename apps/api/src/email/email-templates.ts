@@ -17,4 +17,12 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplateDef> = {
   contact_form: { subject: "New contact form submission", body: "{{message}}" },
   demo_request: { subject: "New demo request", body: "{{message}}" },
   newsletter: { subject: "{{subject}}", body: "{{body}}" },
+  receipt: {
+    subject: "Your receipt from {{appName}}",
+    body: "Hi,\n\nWe received your payment of {{amount}}. Thank you.",
+  },
+  refund: {
+    subject: "Your refund from {{appName}}",
+    body: "Hi,\n\nA refund of {{amount}} has been processed to your payment method.",
+  },
 };

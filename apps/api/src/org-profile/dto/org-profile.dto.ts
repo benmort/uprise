@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, MaxLength } from "class-validator";
+import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class UpdateOrgProfileDto {
   @IsOptional()
@@ -10,7 +10,7 @@ export class UpdateOrgProfileDto {
 export class OrgContactDto {
   @IsOptional() @IsString() @MaxLength(120) firstName?: string;
   @IsOptional() @IsString() @MaxLength(120) lastName?: string;
-  @IsOptional() @IsString() @MaxLength(200) email?: string;
+  @IsOptional() @IsEmail() @MaxLength(200) email?: string;
   @IsOptional() @IsString() @MaxLength(40) phone?: string;
   @IsOptional() @IsString() @MaxLength(40) mobilePhone?: string;
   @IsOptional() @IsString() @MaxLength(120) title?: string;

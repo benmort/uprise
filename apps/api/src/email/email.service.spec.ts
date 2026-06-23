@@ -54,6 +54,128 @@ describe("EmailService", () => {
     );
   });
 
+  it("emits sending + sent lifecycle events on a successful send", async () => {
+    const { svc, outbox } = setup();
+    await svc.sendTransactional({
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      templateKey: "verification",
+      vars: { code: "123" },
+      purpose: "2fa",
+    });
+    const eventTypes = outbox.append.mock.calls.map((c: any[]) => c[1].eventType);
+    expect(eventTypes).toEqual(["email.email.queued", "email.email.sending", "email.email.sent"]);
+  });
+
+  it("emits email.email.failed on a provider error", async () => {
+    const { svc, sendgrid, outbox } = setup();
+    sendgrid.send.mockRejectedValue(new Error("sendgrid down"));
+    await expect(
+      svc.sendTransactional({ tenantId: "t1", toAddress: "a@b.c", templateKey: "verification", purpose: "x" }),
+    ).rejects.toThrow("sendgrid down");
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.failed" }),
+    );
+  });
+
+  it("sendRaw sends an HTML body and emits the sent event", async () => {
+    const { svc, sendgrid, outbox } = setup();
+    await svc.sendRaw({
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      subject: "Hello",
+      html: "<p>Hi</p>",
+      purpose: "receipt",
+    });
+    expect(sendgrid.send).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "a@b.c", subject: "Hello", html: "<p>Hi</p>" }),
+    );
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.sent" }),
+    );
+  });
+
+  it("sendRaw requires a body or html", async () => {
+    const { svc } = setup();
+    await expect(
+      svc.sendRaw({ tenantId: "t1", toAddress: "a@b.c", subject: "x", purpose: "y" }),
+    ).rejects.toThrow();
+  });
+
+  it("webhook: open emits email.email.opened (first write)", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findUnique.mockResolvedValue({
+      id: "em1",
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      status: "SENT",
+      openedAt: null,
+      clickedAt: null,
+    });
+    await svc.processSendGridEvents([{ event: "open", sg_event_id: "eo", emailId: "em1" }]);
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.opened" }),
+    );
+  });
+
+  it("webhook: click emits email.email.clicked (first write)", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findUnique.mockResolvedValue({
+      id: "em1",
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      status: "DELIVERED",
+      openedAt: new Date(),
+      clickedAt: null,
+    });
+    await svc.processSendGridEvents([{ event: "click", sg_event_id: "ec", emailId: "em1" }]);
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.clicked" }),
+    );
+  });
+
+  it("webhook: delivered emits the event atomically only when the transition applied", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findUnique.mockResolvedValue({
+      id: "em1",
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      status: "SENT",
+      openedAt: null,
+      clickedAt: null,
+    });
+    await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "ed", emailId: "em1" }]);
+    expect(prisma.email.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "DELIVERED" }) }),
+    );
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.delivered" }),
+    );
+  });
+
+  it("webhook: a replayed delivered on a terminal email emits no event (no spurious append)", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.email.findUnique.mockResolvedValue({
+      id: "em1",
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      status: "BOUNCED", // terminal — DELIVERED transition is illegal
+      openedAt: null,
+      clickedAt: null,
+    });
+    await svc.processSendGridEvents([{ event: "delivered", sg_event_id: "ed2", emailId: "em1" }]);
+    expect(prisma.email.update).not.toHaveBeenCalled();
+    expect(outbox.append).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "email.email.delivered" }),
+    );
+  });
+
   it("rejects an unknown template", async () => {
     const { svc } = setup();
     await expect(

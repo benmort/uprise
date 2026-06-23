@@ -28,6 +28,7 @@ describe("BlastsService integration-like flow", () => {
   it("treats markProofed as idempotent when blast is already proofed", async () => {
     const alreadyProofedAt = new Date("2026-05-19T10:30:00.000Z");
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_proofed",
@@ -56,6 +57,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("creates and sends one recipient when audience includes duplicate phones", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       tenant: {
         upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
       },
@@ -172,6 +174,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("skips duplicate pending recipients once a phone was already sent", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       tenant: {
         upsert: jest.fn().mockResolvedValue({ id: "org_1", slug: "default" }),
       },
@@ -259,6 +262,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("marks delivered from callback and preserves responded recipient status", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_1",
@@ -359,6 +363,7 @@ describe("BlastsService integration-like flow", () => {
   it("treats duplicate delivered callbacks as idempotent updates", async () => {
     const firstDeliveredAt = new Date("2026-05-11T09:30:00.000Z");
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blastRecipient: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -410,6 +415,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("keeps blast status SENT when only external failures exist", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_external",
@@ -486,6 +492,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("marks blast status FAILED when internal failures are present", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_internal",
@@ -556,6 +563,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("treats unknown no-code failures as internal for blast status", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_unknown",
@@ -626,6 +634,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("recalculates blast status on callbacks using failure scope", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_callback",
@@ -722,6 +731,7 @@ describe("BlastsService integration-like flow", () => {
     } as ConfigService;
 
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_dry",
@@ -797,6 +807,7 @@ describe("BlastsService integration-like flow", () => {
     } as ConfigService;
 
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_retry_dry",
@@ -854,6 +865,7 @@ describe("BlastsService integration-like flow", () => {
 
   it("enqueues blast send and retry jobs when BullMQ blast flag is enabled", async () => {
     const prismaMock: any = {
+      $transaction: (cb: any) => cb(prismaMock),
       blast: {
         findUnique: jest.fn().mockResolvedValue({
           id: "blast_1",

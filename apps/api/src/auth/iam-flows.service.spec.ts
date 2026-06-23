@@ -49,8 +49,9 @@ function setup() {
   const config = { get: jest.fn((k: string, fb?: string) => (k === "AUTH_APP_URL" ? "https://auth.test" : fb ?? "")) } as any;
   const dispatcher = { sendEmail: jest.fn(), sendSms: jest.fn() } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const svc = new IamFlowsService(prisma, sessions, config, dispatcher, logger);
-  return { svc, prisma, sessions, dispatcher };
+  const outbox = { append: jest.fn() } as any;
+  const svc = new IamFlowsService(prisma, sessions, config, dispatcher, logger, outbox);
+  return { svc, prisma, sessions, dispatcher, outbox };
 }
 
 describe("IamFlowsService", () => {
@@ -85,7 +86,7 @@ describe("IamFlowsService", () => {
       });
       const grant = await svc.consumeMagicLink("tok");
       expect(prisma.magicLink.update).toHaveBeenCalledWith({ where: { id: "ml1" }, data: { consumedAt: expect.any(Date) } });
-      expect(sessions.create).toHaveBeenCalledWith("u1");
+      expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
       expect(grant.token).toBe("sess-token");
       expect(grant.memberships).toHaveLength(1);
     });
@@ -129,6 +130,18 @@ describe("IamFlowsService", () => {
       prisma.passwordReset.findUnique.mockResolvedValueOnce(null);
       await expect(svc.resetPassword("tok", "longenoughpw")).rejects.toThrow();
     });
+
+    it("verifyResetToken reports validity without consuming", async () => {
+      const { svc, prisma } = setup();
+      prisma.passwordReset.findUnique.mockResolvedValueOnce({
+        id: "pr1", userId: "u1", consumedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verifyResetToken("tok")).resolves.toEqual({ valid: true });
+      prisma.passwordReset.findUnique.mockResolvedValueOnce({
+        id: "pr1", userId: "u1", consumedAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verifyResetToken("tok")).resolves.toEqual({ valid: false });
+    });
   });
 
   describe("email verification", () => {
@@ -170,7 +183,7 @@ describe("IamFlowsService", () => {
       });
       const grant = await svc.verify2fa("mv1", "123456");
       expect(grant.token).toBe("sess-token");
-      expect(sessions.create).toHaveBeenCalledWith("u1");
+      expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
     });
 
     it("verify rejects a wrong code", async () => {
@@ -179,6 +192,27 @@ describe("IamFlowsService", () => {
         id: "mv1", userId: "u1", code: "123456", verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
       });
       await expect(svc.verify2fa("mv1", "999999")).rejects.toThrow();
+    });
+  });
+
+  describe("2FA enrolment + mobile capture", () => {
+    it("setMobile rejects a non-E.164 number", async () => {
+      const { svc } = setup();
+      await expect(svc.setMobile("u1", "0400 000 000")).rejects.toThrow();
+    });
+
+    it("enable2fa requires a verified mobile", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobileVerified: false });
+      await expect(svc.enable2fa("u1")).rejects.toThrow();
+    });
+
+    it("enable2fa flips twofaEnabled when the mobile is verified", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobileVerified: true });
+      prisma.user.update = jest.fn(async () => ({}));
+      await svc.enable2fa("u1");
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: "u1" }, data: { twofaEnabled: true } });
     });
   });
 
@@ -236,6 +270,64 @@ describe("IamFlowsService", () => {
       prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
       await expect(svc.selectTenant("u1", "sess", "t9")).rejects.toThrow();
       expect(sessions.setTenant).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("lifecycle events", () => {
+    it("emits iam.user.signed-in when a session is granted", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.magicLink.findUnique.mockResolvedValueOnce({
+        id: "ml1",
+        userId: "u1",
+        consumedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await svc.consumeMagicLink("tok");
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "iam.user.signed-in", payload: { userId: "u1", tenantId: "t1" } }),
+      );
+    });
+
+    it("emits iam.user.password-reset on reset", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.passwordReset.findUnique.mockResolvedValueOnce({
+        id: "pr1",
+        userId: "u1",
+        consumedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await svc.resetPassword("tok", "longenoughpw");
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "iam.user.password-reset" }),
+      );
+    });
+
+    it("declineInvite marks the invite declined + emits the event", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValueOnce({
+        id: "inv1",
+        tenantId: "t1",
+        email: "x@y.z",
+        role: "CANVASSER",
+        status: "pending",
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await svc.declineInvite("tok");
+      expect(prisma.tenantInvitation.update).toHaveBeenCalledWith({
+        where: { id: "inv1" },
+        data: { status: "declined" },
+      });
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "tenant.invitation.declined" }),
+      );
+    });
+
+    it("signIn returns invalid for an unknown user", async () => {
+      const { svc } = setup();
+      expect(await svc.signIn("nobody@x.y", "pw")).toEqual({ kind: "invalid" });
     });
   });
 });

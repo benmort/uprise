@@ -23,6 +23,8 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: WEB,
+    // Cookie session minted by global-setup (meld doc 14); the unauth spec overrides this.
+    storageState: "./e2e/.auth/state.json",
     actionTimeout: 15_000,
     navigationTimeout: 45_000,
     trace: "retain-on-failure",
@@ -38,7 +40,21 @@ export default defineConfig({
     },
     {
       command: "npm run dev",
-      url: `${WEB}/login`,
+      // /login was removed in the doc-14 cutover; the root 307-redirects when
+      // unauthenticated, which Playwright accepts as "ready".
+      url: WEB,
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
+    {
+      command: "npm --prefix ../auth run dev",
+      url: `${process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002"}/login`,
+      reuseExistingServer: true,
+      timeout: 120_000,
+    },
+    {
+      command: "npm --prefix ../marketing run dev",
+      url: process.env.MARKETING_URL || "http://localhost:3003",
       reuseExistingServer: true,
       timeout: 120_000,
     },

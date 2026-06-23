@@ -8,6 +8,7 @@ import { BlastsService } from "../blasts/blasts.service";
 
 describe("workflow e2e-style", () => {
   const prisma = {
+    $transaction: (cb: any) => cb(prisma),
     tenant: { upsert: jest.fn() },
     blast: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
     audience: { findFirst: jest.fn().mockResolvedValue(null) },

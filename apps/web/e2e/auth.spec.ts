@@ -1,37 +1,26 @@
-import { test, expect, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { test, expect } from "@playwright/test";
 
-// Self-contained auth helper (relative TS imports trip Playwright's resolver in this
-// repo's bundler tsconfig, so each spec inlines this rather than sharing a module).
-const ctx = JSON.parse(readFileSync(resolve(__dirname, ".auth/context.json"), "utf8"));
-async function authed(page: Page) {
-  await page.addInitScript(
-    ([u, p, cid]) => {
-      try {
-        window.sessionStorage.setItem("yarn_auth_credentials", JSON.stringify({ username: u, password: p }));
-      } catch {}
-      try {
-        if (cid) window.localStorage.setItem("yarns.canvasserId", cid);
-      } catch {}
-    },
-    [ctx.user, ctx.pass, ctx.ids?.canvasserId ?? ""],
-  );
-}
+/**
+ * Auth e2e against the doc-14 cookie/SSO model. The global storageState (set in
+ * global-setup) carries the httpOnly auth_token cookie, so authed specs need no
+ * client-side injection. The web app has no /login of its own anymore — an
+ * unauthenticated request is 307-redirected to the standalone auth app.
+ */
+const AUTH_APP = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
 
 test("authenticated user reaches the dashboard", async ({ page }) => {
-  await authed(page);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.locator("body")).toBeVisible();
 });
 
-test("unauthenticated visit redirects to login", async ({ page }) => {
-  await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/login/, { timeout: 20_000 });
-});
+// Fresh context with no session cookie.
+test.describe("unauthenticated", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
 
-test("login page renders for signing in", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.locator('input[type="password"]')).toBeVisible();
+  test("a protected route 307-redirects to the auth app login (no local /login)", async ({ request }) => {
+    const res = await request.get("/dashboard", { maxRedirects: 0 });
+    expect([301, 302, 307, 308]).toContain(res.status());
+    expect(res.headers()["location"] ?? "").toContain(`${AUTH_APP}/login`);
+  });
 });

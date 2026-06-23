@@ -16,3 +16,8 @@ export const TX_SMS_TRANSITIONS: TransitionMap<TxSmsStatus> = {
 export function assertValidTxSmsTransition(from: TxSmsStatus, to: TxSmsStatus): void {
   assertTransition(TX_SMS_TRANSITIONS, from, to, "INVALID_TX_SMS_TRANSITION", "transactional SMS");
 }
+
+/** Non-throwing guard: is `from → to` a legal transactional-SMS transition? */
+export function canTransitionTxSms(from: TxSmsStatus, to: TxSmsStatus): boolean {
+  return (TX_SMS_TRANSITIONS[from] ?? []).includes(to);
+}

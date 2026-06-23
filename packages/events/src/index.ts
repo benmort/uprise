@@ -10,16 +10,45 @@
 export const EVENT_TYPES = {
   AUDIENCE_IMPORTED: "audience.imported",
   SEGMENT_RECOMPUTED: "audience.segment.recomputed",
+  BLAST_CREATED: "messaging.blast.created",
+  BLAST_SCHEDULED: "messaging.blast.scheduled",
   BLAST_SENT: "messaging.blast.sent",
   TX_SMS_REQUESTED: "messaging.tx-sms.requested",
   INBOUND_RECEIVED: "messaging.inbound.received",
   USER_CREATED: "iam.user.created",
   TENANT_INVITATION_SENT: "tenant.invitation.sent",
   EMAIL_QUEUED: "email.email.queued",
+  EMAIL_SENDING: "email.email.sending",
+  EMAIL_SENT: "email.email.sent",
+  EMAIL_FAILED: "email.email.failed",
+  EMAIL_OPENED: "email.email.opened",
+  EMAIL_CLICKED: "email.email.clicked",
   PAYMENT_SUCCEEDED: "payment.payment.succeeded",
   PAYMENT_REFUNDED: "payment.payment.refunded",
   CALL_INITIATED: "telephony.call.initiated",
+  CALL_STATUS_CHANGED: "telephony.call.status-changed",
   ORG_CREDENTIAL_UPDATED: "tenant.org-credential.updated",
+  TENANT_CREATED: "tenant.tenant.created",
+  TENANT_MEMBER_ADDED: "tenant.member.added",
+  TENANT_MEMBER_REMOVED: "tenant.member.removed",
+  TENANT_MEMBER_ROLE_UPDATED: "tenant.member.role-updated",
+  NETWORK_CREATED: "tenant.network.created",
+  SUBSCRIPTION_CHANGED: "payment.subscription.changed",
+  PAYMENT_STATUS_CHANGED: "payment.status.changed",
+  EMAIL_DELIVERED: "email.email.delivered",
+  EMAIL_BOUNCED: "email.email.bounced",
+  CALL_COMPLETED: "telephony.call.completed",
+  USER_SIGNED_IN: "iam.user.signed-in",
+  USER_EMAIL_VERIFIED: "iam.user.email-verified",
+  USER_PASSWORD_RESET: "iam.user.password-reset",
+  USER_MOBILE_VERIFIED: "iam.user.mobile-verified",
+  USER_2FA_ENABLED: "iam.user.2fa-enabled",
+  USER_2FA_DISABLED: "iam.user.2fa-disabled",
+  INVITATION_ACCEPTED: "tenant.invitation.accepted",
+  INVITATION_DECLINED: "tenant.invitation.declined",
+  INVITATION_REVOKED: "tenant.invitation.revoked",
+  TENANT_RENAMED: "tenant.tenant.renamed",
+  TENANT_DELETED: "tenant.tenant.deleted",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -28,16 +57,50 @@ export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
 export interface DomainEventMap {
   "audience.imported": { audienceId: string; tenantId: string; count: number };
   "audience.segment.recomputed": { segmentId: string; tenantId: string; memberCount: number };
+  "messaging.blast.created": { blastId: string; tenantId: string; title: string };
+  "messaging.blast.scheduled": { blastId: string; tenantId: string; scheduledAt: string };
   "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };
   "messaging.tx-sms.requested": { tenantId: string; toPhone: string; purpose: string };
   "messaging.inbound.received": { tenantId: string; contactPhone: string; channel: string };
   "iam.user.created": { userId: string; email: string; tenantId: string };
   "tenant.invitation.sent": { invitationId: string; tenantId: string; email: string };
   "email.email.queued": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.sending": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.sent": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.failed": { emailId: string; tenantId: string; toAddress: string; reason: string };
+  "email.email.opened": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.clicked": { emailId: string; tenantId: string; toAddress: string };
   "payment.payment.succeeded": { paymentId: string; tenantId: string; amountCents: number };
   "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
   "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };
+  "telephony.call.status-changed": { callId: string; tenantId: string; status: string };
   "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
+  "tenant.tenant.created": { tenantId: string; slug: string; name: string; networkId: string | null };
+  "tenant.member.added": { tenantId: string; userId: string; role: string };
+  "tenant.member.removed": { tenantId: string; userId: string };
+  "tenant.member.role-updated": { tenantId: string; userId: string; role: string };
+  "tenant.network.created": { networkId: string; name: string };
+  "payment.subscription.changed": {
+    tenantId: string | null;
+    networkId: string | null;
+    subscriptionId: string;
+    status: string;
+  };
+  "payment.status.changed": { paymentId: string; tenantId: string; status: string };
+  "email.email.delivered": { emailId: string; tenantId: string; toAddress: string };
+  "email.email.bounced": { emailId: string; tenantId: string; toAddress: string; reason: string };
+  "telephony.call.completed": { callId: string; tenantId: string; durationSeconds: number | null };
+  "iam.user.signed-in": { userId: string; tenantId: string };
+  "iam.user.email-verified": { userId: string; tenantId: string };
+  "iam.user.password-reset": { userId: string; tenantId: string };
+  "iam.user.mobile-verified": { userId: string; tenantId: string };
+  "iam.user.2fa-enabled": { userId: string; tenantId: string };
+  "iam.user.2fa-disabled": { userId: string; tenantId: string };
+  "tenant.invitation.accepted": { invitationId: string; tenantId: string; userId: string };
+  "tenant.invitation.declined": { invitationId: string; tenantId: string };
+  "tenant.invitation.revoked": { invitationId: string; tenantId: string };
+  "tenant.tenant.renamed": { tenantId: string; name: string };
+  "tenant.tenant.deleted": { tenantId: string };
 }
 
 export interface EventMetadata {

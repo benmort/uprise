@@ -253,6 +253,52 @@ export class ContactsService {
     });
   }
 
+  /** Provenance rows for a contact, oldest first. */
+  async listSourceRecords(tenantId: string, contactId: string) {
+    return this.prisma.contactSourceRecord.findMany({
+      where: { tenantId, contactId },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
+  /** Drop a single provenance row (idempotent — a no-op when absent). */
+  async removeSourceRecord(input: {
+    tenantId: string;
+    sourceSystem: string;
+    externalId: string;
+  }): Promise<void> {
+    await this.prisma.contactSourceRecord.deleteMany({
+      where: {
+        tenantId: input.tenantId,
+        sourceSystem: input.sourceSystem,
+        externalId: input.externalId,
+      },
+    });
+  }
+
+  /**
+   * Reconcile a contact's provenance for one source system against the set of
+   * externalIds still present upstream: any row whose externalId is no longer in
+   * `desiredExternalIds` is an orphan and gets dropped. An empty desired set drops
+   * every row for that (contact, sourceSystem). The matching upserts run via
+   * recordSourceRecord; this only prunes.
+   */
+  async reconcileSourceRecords(
+    tenantId: string,
+    contactId: string,
+    sourceSystem: string,
+    desiredExternalIds: string[],
+  ): Promise<void> {
+    await this.prisma.contactSourceRecord.deleteMany({
+      where: {
+        tenantId,
+        contactId,
+        sourceSystem,
+        externalId: { notIn: desiredExternalIds },
+      },
+    });
+  }
+
   /**
    * The merged message timeline for a contact, oldest first.
    */
@@ -305,7 +351,7 @@ export class ContactsService {
     });
     if (!contact) return null;
 
-    const [timeline, dispositions, knocks, responses] = await Promise.all([
+    const [timeline, dispositions, knocks, responses, sourceRecords] = await Promise.all([
       this.getTimeline(tenantId, contactId),
       this.prisma.disposition.findMany({
         where: { tenantId, contactId },
@@ -323,6 +369,10 @@ export class ContactsService {
           question: { select: { id: true, prompt: true } },
           option: { select: { id: true, label: true, supportLevel: true } },
         },
+      }),
+      this.prisma.contactSourceRecord.findMany({
+        where: { tenantId, contactId },
+        orderBy: { createdAt: "asc" },
       }),
     ]);
 
@@ -366,7 +416,14 @@ export class ContactsService {
         lng: contact.lng,
         turf: contact.turf,
         supportLevel: latestSupport,
+        canonicalContactId: contact.canonicalContactId,
       },
+      sources: sourceRecords.map((s) => ({
+        id: s.id,
+        sourceSystem: s.sourceSystem,
+        externalId: s.externalId,
+        at: s.createdAt,
+      })),
       timeline: mergedTimeline,
       dispositions: dispositions.map((d) => ({
         id: d.id,

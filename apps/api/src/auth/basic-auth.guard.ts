@@ -45,10 +45,12 @@ export class BasicAuthGuard implements CanActivate {
       "/iam/magic-link/consume",
       "/iam/forgot-password",
       "/iam/reset-password",
+      "/iam/reset-password/verify",
       "/iam/verify-email/send",
       "/iam/verify-email/confirm",
       "/iam/2fa/send",
       "/iam/2fa/verify",
+      "/auth/register", // self-service sign-up (meld doc 12) — issues the session
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some(
@@ -146,6 +148,16 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/voice-status-callback",
       "/api/v1/email-webhook",
       "/api/v1/payment-webhook",
+      // Public marketing-site form intake (meld doc 12).
+      "/marketing/contact",
+      "/marketing/demo-request",
+      "/marketing/newsletter",
+      "/api/v1/marketing/contact",
+      "/api/v1/marketing/demo-request",
+      "/api/v1/marketing/newsletter",
+      // Public slug pre-check for the sign-up UI (meld doc 12).
+      "/tenants/availability",
+      "/api/v1/tenants/availability",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));

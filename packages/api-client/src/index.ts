@@ -4,6 +4,7 @@ import type {
   InvitePreview,
   LoginResponse,
   OkResponse,
+  RegisterRequest,
   SessionGrantResponse,
 } from "@yarns/contracts";
 
@@ -82,6 +83,7 @@ function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
 export const auth = {
   login: (email: string, password: string) =>
     post<LoginResponse>("/iam/sessions", { email, password }),
+  register: (body: RegisterRequest) => post<SessionGrantResponse>("/auth/register", body),
   logout: () => request<OkResponse>("/iam/sessions", { method: "DELETE" }, { redirectOn401: false }),
   checkSession: () => request<CheckSessionResponse>("/auth/check", undefined, { redirectOn401: false }),
 
@@ -105,4 +107,26 @@ export const auth = {
   acceptInvite: (body: AcceptInviteRequest) => post<SessionGrantResponse>("/iam/invite/accept", body),
 
   selectTenant: (tenantId: string) => post<OkResponse>("/iam/select-tenant", { tenantId }),
+};
+
+// ── Public marketing-site form intake (meld doc 12) ──────────────────
+export interface ContactFormInput {
+  name: string;
+  email: string;
+  company?: string;
+  subject?: string;
+  message: string;
+}
+export interface DemoRequestInput {
+  name: string;
+  email: string;
+  company?: string;
+  role?: string;
+  useCase?: string;
+}
+
+export const marketing = {
+  contact: (body: ContactFormInput) => post<OkResponse>("/marketing/contact", body),
+  demoRequest: (body: DemoRequestInput) => post<OkResponse>("/marketing/demo-request", body),
+  newsletter: (email: string) => post<OkResponse>("/marketing/newsletter", { email }),
 };

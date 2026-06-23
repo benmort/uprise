@@ -8,7 +8,7 @@ function makePrisma() {
       deleteMany: jest.fn(),
       updateMany: jest.fn(),
     },
-    user: { findUnique: jest.fn() },
+    user: { findUnique: jest.fn(), update: jest.fn(async () => ({})) },
     tenantMember: { findMany: jest.fn() },
   } as any;
 }

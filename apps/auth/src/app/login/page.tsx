@@ -59,6 +59,10 @@ export default function LoginPage() {
           <Link className="text-primary hover:underline" href={`/magic-link${q}`}>Email me a link</Link>
           <Link className="text-primary hover:underline" href={`/reset-password${q}`}>Forgot password?</Link>
         </div>
+        <div className="mt-2 text-sm">
+          New here?{" "}
+          <Link className="text-primary hover:underline" href={`/sign-up${q}`}>Create a workspace</Link>
+        </div>
       </CardContent>
     </Card>
   );
