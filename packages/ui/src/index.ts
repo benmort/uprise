@@ -3,6 +3,7 @@
 // source via Next `transpilePackages`. Tailwind v4 tokens ship in ./globals.css
 // (CSS-first @theme). (breadcrumbs stays in apps/web — it depends on next/link.)
 export * from "./lib/utils";
+export * from "./components/alert";
 export * from "./components/button";
 export * from "./components/card";
 export * from "./components/checkbox";
@@ -10,6 +11,10 @@ export * from "./components/confirm-dialog";
 export * from "./components/empty-state";
 export * from "./components/field";
 export * from "./components/form-dialog";
+export * from "./components/form-input";
+export * from "./components/form-label";
+export * from "./components/form-select";
+export * from "./components/form-textarea";
 export * from "./components/input";
 export * from "./components/label";
 export * from "./components/logo";
