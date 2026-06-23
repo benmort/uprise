@@ -8,10 +8,10 @@ const AUTH = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test("login renders the password form", async ({ page }) => {
-  await page.goto(`${AUTH}/login`);
+test("sign-in renders the password form", async ({ page }) => {
+  await page.goto(`${AUTH}/sign-in`);
   await expect(page.locator('input[type="password"]')).toBeVisible();
-  await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /sign in/i }).first()).toBeVisible();
 });
 
 test("sign-up renders the create-workspace step", async ({ page }) => {
@@ -19,7 +19,7 @@ test("sign-up renders the create-workspace step", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /create your workspace/i })).toBeVisible();
 });
 
-test("forgot-password renders", async ({ page }) => {
-  await page.goto(`${AUTH}/reset-password`);
+test("account-recovery renders", async ({ page }) => {
+  await page.goto(`${AUTH}/account-recovery`);
   await expect(page.locator('input[type="email"]')).toBeVisible();
 });

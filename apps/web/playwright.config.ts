@@ -48,7 +48,7 @@ export default defineConfig({
     },
     {
       command: "npm --prefix ../auth run dev",
-      url: `${process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002"}/login`,
+      url: `${process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002"}/sign-in`,
       reuseExistingServer: true,
       timeout: 120_000,
     },
