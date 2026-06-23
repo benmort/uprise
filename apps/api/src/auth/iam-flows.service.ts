@@ -182,7 +182,7 @@ export class IamFlowsService {
         tenantId: await this.resolveTenantId(user.id),
         toAddress: user.email,
         templateKey: "magic_link",
-        vars: { link: this.link("magic-link", token) },
+        vars: { link: this.link("sign-in/magic-link", token) },
         purpose: "magic_link",
       });
     }

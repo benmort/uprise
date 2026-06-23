@@ -18,7 +18,7 @@ export default function SelectTenantPage() {
     void (async () => {
       const res = await auth.checkSession();
       if (!res.ok || !res.data.user) {
-        window.location.assign(`/login${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`);
+        window.location.assign(`/sign-in${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`);
         return;
       }
       const m = res.data.user.memberships;
@@ -64,7 +64,7 @@ export default function SelectTenantPage() {
         <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
       )}
       <div className="mt-5 text-sm text-muted-foreground">
-        <Link className="text-primary hover:underline" href="/login">Sign in as someone else</Link>
+        <Link className="text-primary hover:underline" href="/sign-in">Sign in as someone else</Link>
       </div>
     </div>
   );

@@ -67,7 +67,7 @@ export default function MagicLinkPage() {
   return (
     <div className="flex w-full flex-col">
       <div className="mb-5">
-        <Link href={`/login${q}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <Link href={`/sign-in${q}`} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-4 w-4" />
           Back to sign in
         </Link>

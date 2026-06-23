@@ -33,7 +33,7 @@ export function getAuthAppUrl(): string {
 function redirectToLogin(): void {
   if (typeof window === "undefined") return;
   const returnTo = encodeURIComponent(window.location.href);
-  window.location.assign(`${getAuthAppUrl()}/login?return_to=${returnTo}`);
+  window.location.assign(`${getAuthAppUrl()}/sign-in?return_to=${returnTo}`);
 }
 
 /**

@@ -39,7 +39,7 @@ export default function VerifyEmailPage() {
   return (
     <div className="flex w-full flex-col">
       <div className="mb-5">
-        <Link href="/login" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/sign-in" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-4 w-4" />
           Back to sign in
         </Link>
@@ -52,7 +52,7 @@ export default function VerifyEmailPage() {
         <Alert variant="success" title="Email verified">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Your email is verified.{" "}
-            <Link className="text-primary hover:underline" href="/login">Sign in</Link>
+            <Link className="text-primary hover:underline" href="/sign-in">Sign in</Link>
           </p>
         </Alert>
       ) : (

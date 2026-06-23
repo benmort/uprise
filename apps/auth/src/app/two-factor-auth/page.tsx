@@ -52,7 +52,7 @@ export default function TwoFactorPage() {
   if (!challengeId) {
     return (
       <div className="py-8 text-center text-sm text-error">
-        Missing 2FA challenge. <Link className="text-primary hover:underline" href="/login">Start again</Link>
+        Missing 2FA challenge. <Link className="text-primary hover:underline" href="/sign-in">Start again</Link>
       </div>
     );
   }
@@ -60,7 +60,7 @@ export default function TwoFactorPage() {
   return (
     <div className="flex w-full flex-col">
       <div className="mb-5">
-        <Link href="/login" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/sign-in" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-4 w-4" />
           Back to sign in
         </Link>

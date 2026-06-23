@@ -28,7 +28,7 @@ export default function LoginPage() {
     }
     if (isTwofaChallenge(res.data)) {
       const rt = returnTo ? `&return_to=${encodeURIComponent(returnTo)}` : "";
-      window.location.assign(`/2fa?challengeId=${encodeURIComponent(res.data.challengeId)}${rt}`);
+      window.location.assign(`/two-factor-auth?challengeId=${encodeURIComponent(res.data.challengeId)}${rt}`);
       return;
     }
     completeAuth(res.data.memberships, returnTo);
@@ -50,7 +50,7 @@ export default function LoginPage() {
           <PasswordInput id="password" autoComplete="current-password" placeholder="Enter your password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         <div className="flex justify-end">
-          <Link className="text-sm text-primary hover:underline" href={`/reset-password${q}`}>Forgot your password?</Link>
+          <Link className="text-sm text-primary hover:underline" href={`/account-recovery${q}`}>Forgot your password?</Link>
         </div>
         {error ? <Alert variant="error" title={error} /> : null}
         <Button type="submit" className="w-full" disabled={busy}>
@@ -60,7 +60,7 @@ export default function LoginPage() {
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-input" /></div>
           <div className="relative flex justify-center text-sm"><span className="bg-background px-4 text-muted-foreground">Or continue with</span></div>
         </div>
-        <Link href={`/magic-link${q}`} className="block">
+        <Link href={`/sign-in/magic-link${q}`} className="block">
           <Button type="button" variant="outline" className="w-full">
             <Mail className="mr-2 h-4 w-4" />
             Send Magic Link

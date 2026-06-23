@@ -12,7 +12,7 @@ const COOKIE = "auth_token";
 export function middleware(req: NextRequest): NextResponse {
   if (req.cookies.get(COOKIE)) return NextResponse.next();
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
-  const url = new URL("/login", authAppUrl);
+  const url = new URL("/sign-in", authAppUrl);
   url.searchParams.set("return_to", req.nextUrl.href);
   return NextResponse.redirect(url);
 }

@@ -17,7 +17,7 @@ export async function getSession(): Promise<AuthPrincipal | null> {
 export function goToLogin(): void {
   if (typeof window === "undefined") return;
   const returnTo = encodeURIComponent(window.location.href);
-  window.location.assign(`${getAuthAppUrl()}/login?return_to=${returnTo}`);
+  window.location.assign(`${getAuthAppUrl()}/sign-in?return_to=${returnTo}`);
 }
 
 export async function logout(): Promise<void> {

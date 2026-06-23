@@ -240,7 +240,7 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
               Get Started
             </a>
             <a
-              href={`${authAppUrl()}/login`}
+              href={`${authAppUrl()}/sign-in`}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 h-12 w-full touch-manipulation"
               onClick={onClose}
             >

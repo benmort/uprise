@@ -45,7 +45,7 @@ export default function InvitePage() {
       <div className="flex w-full flex-col">
         <Alert variant="error" title="Invitation Error">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {loadError} <Link className="text-primary hover:underline" href="/login">Sign in</Link>
+            {loadError} <Link className="text-primary hover:underline" href="/sign-in">Sign in</Link>
           </p>
         </Alert>
       </div>
