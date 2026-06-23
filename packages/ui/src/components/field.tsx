@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../lib/utils";
+import { Label } from "./label";
 
 type FieldProps = {
   label?: string;
@@ -20,13 +21,9 @@ export function Field({ label, htmlFor, hint, error, required, className, childr
   return (
     <div className={cn("space-y-1.5", className)}>
       {label ? (
-        <label
-          htmlFor={htmlFor}
-          className="block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground"
-        >
+        <Label htmlFor={htmlFor} required={required}>
           {label}
-          {required ? <span className="text-error"> *</span> : null}
-        </label>
+        </Label>
       ) : null}
       {children}
       {error ? (

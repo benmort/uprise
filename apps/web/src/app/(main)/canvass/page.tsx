@@ -16,7 +16,7 @@ import {
 } from "@/lib/api/campaigns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -321,11 +321,11 @@ export default function CanvassPage() {
             <Select
               id="camp-status"
               value={form.status}
-              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as CampaignStatus }))}
+              onValueChange={(v) => setForm((f) => ({ ...f, status: v as CampaignStatus }))}
             >
-              <option value="ACTIVE">Active</option>
-              <option value="DRAFT">Draft</option>
-              <option value="ARCHIVED">Archived</option>
+              <SelectItem value="ACTIVE">Active</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="ARCHIVED">Archived</SelectItem>
             </Select>
           </Field>
         ) : null}

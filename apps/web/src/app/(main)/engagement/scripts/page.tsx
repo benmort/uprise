@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -275,10 +275,10 @@ export default function ScriptsPage() {
           />
         </Field>
         <Field label="Channel" htmlFor="script-channel" hint="Where this script is used.">
-          <Select id="script-channel" value={newChannel} onChange={(e) => setNewChannel(e.target.value)}>
-            <option value="BOTH">Both (door + SMS)</option>
-            <option value="DOOR">Door</option>
-            <option value="SMS">SMS</option>
+          <Select id="script-channel" value={newChannel} onValueChange={setNewChannel}>
+            <SelectItem value="BOTH">Both (door + SMS)</SelectItem>
+            <SelectItem value="DOOR">Door</SelectItem>
+            <SelectItem value="SMS">SMS</SelectItem>
           </Select>
         </Field>
       </FormDialog>
