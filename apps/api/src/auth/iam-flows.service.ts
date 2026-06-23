@@ -10,7 +10,7 @@ import {
   TRANSACTIONAL_DISPATCHER,
   type TransactionalDispatcher,
 } from "../messaging/transactional-dispatcher";
-import { hashPassword } from "./password.util";
+import { hashPassword, verifyPassword } from "./password.util";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
@@ -21,6 +21,8 @@ export interface Membership {
   tenantId: string;
   tenantName: string;
   role: AppUserRole;
+  /** Billing context from the owning network (null for network-less tenants). */
+  network: { id: string; planName: string | null; subscriptionStatus: string | null } | null;
 }
 
 export interface SessionGrant {
@@ -29,6 +31,13 @@ export interface SessionGrant {
   expiresAt: Date;
   memberships: Membership[];
 }
+
+/** Result of a password sign-in attempt (the controller maps these to HTTP). */
+export type SignInResult =
+  | { kind: "invalid" }
+  | { kind: "no-membership" }
+  | { kind: "twofa"; challengeId: string }
+  | ({ kind: "ok"; email: string } & SessionGrant);
 
 /**
  * IAM auth flows (meld doc 14) — magic-link, password reset, email verification,
@@ -69,9 +78,50 @@ export class IamFlowsService {
     const rows = await this.prisma.tenantMember.findMany({
       where: { userId, tenant: { deletedAt: null } }, // exclude soft-deleted tenants (WS3)
       orderBy: { createdAt: "asc" },
-      include: { tenant: { select: { name: true } } },
+      include: {
+        tenant: {
+          select: {
+            name: true,
+            network: { select: { id: true, planName: true, subscriptionStatus: true } },
+          },
+        },
+      },
     });
-    return rows.map((m) => ({ tenantId: m.tenantId, tenantName: m.tenant.name, role: m.role }));
+    return rows.map((m) => ({
+      tenantId: m.tenantId,
+      tenantName: m.tenant.name,
+      role: m.role,
+      network: m.tenant.network
+        ? {
+            id: m.tenant.network.id,
+            planName: m.tenant.network.planName,
+            subscriptionStatus: m.tenant.network.subscriptionStatus,
+          }
+        : null,
+    }));
+  }
+
+  /**
+   * Password sign-in (extracted from the controller so it's unit-testable).
+   * Returns a discriminated result; the controller maps it to HTTP + the cookie.
+   */
+  async signIn(email: string | undefined, password: string | undefined): Promise<SignInResult> {
+    const normalised = email?.trim().toLowerCase();
+    const user = normalised
+      ? await this.prisma.user.findUnique({ where: { email: normalised } })
+      : null;
+    if (!user || !(await verifyPassword(password ?? "", user.passwordHash))) {
+      return { kind: "invalid" };
+    }
+    const memberships = await this.membershipsFor(user.id);
+    if (memberships.length === 0) return { kind: "no-membership" };
+    // 2FA-enabled users complete login via POST /iam/2fa/verify; no session yet.
+    if (user.twofaEnabled) {
+      const { challengeId } = await this.start2fa(user.id);
+      return { kind: "twofa", challengeId };
+    }
+    const grant = await this.grantSession(user.id);
+    return { kind: "ok", email: user.email, ...grant };
   }
 
   /** Account flags for /auth/check so a settings UI needn't make a second call (WS3). */
@@ -104,8 +154,19 @@ export class IamFlowsService {
   }
 
   private async grantSession(userId: string): Promise<SessionGrant> {
-    const { token, expiresAt } = await this.sessions.create(userId);
-    return { userId, token, expiresAt, memberships: await this.membershipsFor(userId) };
+    const memberships = await this.membershipsFor(userId);
+    const tenantId = memberships[0]?.tenantId ?? (await this.resolveTenantId(userId));
+    const { token, expiresAt } = await this.sessions.create(userId, { tenantId });
+    // Sign-in audit event — every session-issuing path funnels through here (WS3).
+    await this.prisma.$transaction((tx) =>
+      this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.signed-in",
+        aggregateId: userId,
+        payload: { userId, tenantId },
+      }),
+    );
+    return { userId, token, expiresAt, memberships };
   }
 
   // ── Magic link ──────────────────────────────────────────────────────
@@ -171,10 +232,17 @@ export class IamFlowsService {
       throw new BadRequestException("Invalid or expired reset token");
     }
     const passwordHash = await hashPassword(newPassword);
-    await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: reset.userId }, data: { passwordHash } }),
-      this.prisma.passwordReset.update({ where: { id: reset.id }, data: { consumedAt: new Date() } }),
-    ]);
+    const tenantId = await this.resolveTenantId(reset.userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: reset.userId }, data: { passwordHash } });
+      await tx.passwordReset.update({ where: { id: reset.id }, data: { consumedAt: new Date() } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.password-reset",
+        aggregateId: reset.userId,
+        payload: { userId: reset.userId, tenantId },
+      });
+    });
     // A reset invalidates every existing session for that user.
     await this.sessions.revokeAllForUser(reset.userId);
     return { ok: true };
@@ -207,10 +275,17 @@ export class IamFlowsService {
       orderBy: { createdAt: "desc" },
     });
     if (!record) throw new BadRequestException("Invalid or expired code");
-    await this.prisma.$transaction([
-      this.prisma.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } }),
-      this.prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } }),
-    ]);
+    const tenantId = await this.resolveTenantId(user.id);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
+      await tx.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.email-verified",
+        aggregateId: user.id,
+        payload: { userId: user.id, tenantId },
+      });
+    });
     return { ok: true };
   }
 
@@ -269,10 +344,17 @@ export class IamFlowsService {
       orderBy: { createdAt: "desc" },
     });
     if (!record) throw new BadRequestException("Invalid or expired code");
-    await this.prisma.$transaction([
-      this.prisma.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } }),
-      this.prisma.user.update({ where: { id: userId }, data: { mobileVerified: true } }),
-    ]);
+    const tenantId = await this.resolveTenantId(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
+      await tx.user.update({ where: { id: userId }, data: { mobileVerified: true } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.mobile-verified",
+        aggregateId: userId,
+        payload: { userId, tenantId },
+      });
+    });
     return { ok: true };
   }
 
@@ -280,12 +362,30 @@ export class IamFlowsService {
   async enable2fa(userId: string): Promise<{ ok: true }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.mobileVerified) throw new BadRequestException("Verify your mobile number first");
-    await this.prisma.user.update({ where: { id: userId }, data: { twofaEnabled: true } });
+    const tenantId = await this.resolveTenantId(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { twofaEnabled: true } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.2fa-enabled",
+        aggregateId: userId,
+        payload: { userId, tenantId },
+      });
+    });
     return { ok: true };
   }
 
   async disable2fa(userId: string): Promise<{ ok: true }> {
-    await this.prisma.user.update({ where: { id: userId }, data: { twofaEnabled: false } });
+    const tenantId = await this.resolveTenantId(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { twofaEnabled: false } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "iam.user.2fa-disabled",
+        aggregateId: userId,
+        payload: { userId, tenantId },
+      });
+    });
     return { ok: true };
   }
 
@@ -350,6 +450,21 @@ export class IamFlowsService {
     });
 
     return this.grantSession(grant);
+  }
+
+  /** Invitee-side decline (single-use): marks the invite declined + emits the event. */
+  async declineInvite(token: string): Promise<{ ok: true }> {
+    const invite = await this.loadValidInvite(token);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tenantInvitation.update({ where: { id: invite.id }, data: { status: "declined" } });
+      await this.outbox.append(tx, {
+        tenantId: invite.tenantId,
+        eventType: "tenant.invitation.declined",
+        aggregateId: invite.id,
+        payload: { invitationId: invite.id, tenantId: invite.tenantId },
+      });
+    });
+    return { ok: true };
   }
 
   private async loadValidInvite(token: string) {

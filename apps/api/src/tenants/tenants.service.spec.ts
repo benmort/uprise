@@ -73,14 +73,23 @@ describe("TenantsService", () => {
     );
   });
 
-  it("addMember resolves the user by email and upserts the membership", async () => {
+  it("addMember resolves the user by email and creates the membership", async () => {
     const { svc, prisma, outbox } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce(null); // not yet a member
     await svc.addMember("t1", { email: "a@b.c", role: AppUserRole.ORGANISER });
-    expect(prisma.tenantMember.upsert).toHaveBeenCalled();
+    expect(prisma.tenantMember.create).toHaveBeenCalled();
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventType: "tenant.member.added" }),
     );
+  });
+
+  it("addMember rejects a user who is already a member", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "ORGANISER" });
+    await expect(
+      svc.addMember("t1", { email: "a@b.c", role: AppUserRole.CANVASSER }),
+    ).rejects.toThrow("already_member");
   });
 
   it("addMember throws when the user does not exist", async () => {
@@ -141,5 +150,49 @@ describe("TenantsService", () => {
     await expect(svc.isSlugAvailable("NewCo")).resolves.toEqual({ slug: "newco", available: true });
     prisma.tenant.findUnique.mockResolvedValueOnce({ id: "t9", slug: "taken" });
     await expect(svc.isSlugAvailable("taken")).resolves.toEqual({ slug: "taken", available: false });
+  });
+
+  it("createTenant rejects a malformed slug", async () => {
+    const { svc } = setup();
+    await expect(svc.createTenant({ slug: "Bad Slug!", name: "X" })).rejects.toThrow("invalid_slug");
+  });
+
+  it("updateTenant emits tenant.tenant.renamed when the name changes", async () => {
+    const { svc, outbox } = setup();
+    await svc.updateTenant("t1", { name: "Acme Renamed" });
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.tenant.renamed", payload: { tenantId: "t1", name: "Acme Renamed" } }),
+    );
+  });
+
+  it("updateTenant rejects a malformed slug", async () => {
+    const { svc } = setup();
+    await expect(svc.updateTenant("t1", { slug: "Bad Slug!" })).rejects.toThrow("invalid_slug");
+  });
+
+  it("deleteTenant soft-deletes + emits tenant.tenant.deleted", async () => {
+    const { svc, prisma, outbox } = setup();
+    await svc.deleteTenant("t1");
+    expect(prisma.tenant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "t1" }, data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
+    );
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.tenant.deleted" }),
+    );
+  });
+
+  it("revokeInvitation marks revoked + emits the event", async () => {
+    const { svc, prisma, outbox } = setup();
+    await svc.revokeInvitation("t1", "inv1");
+    expect(prisma.tenantInvitation.update).toHaveBeenCalledWith({
+      where: { id: "inv1" },
+      data: { status: "revoked" },
+    });
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.invitation.revoked" }),
+    );
   });
 });

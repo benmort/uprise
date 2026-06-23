@@ -11,6 +11,9 @@ import { OutboxService } from "../common/outbox/outbox.service";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** Slug shape (prog parity): lowercase alphanumeric + hyphens, no leading/trailing hyphen. */
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+
 export interface CreateTenantInput {
   slug: string;
   name: string;
@@ -46,6 +49,7 @@ export class TenantsService {
   async createTenant(input: CreateTenantInput): Promise<Tenant> {
     const slug = this.normaliseSlug(input.slug);
     if (!slug) throw new BadRequestException("slug is required");
+    if (!SLUG_RE.test(slug)) throw new BadRequestException("invalid_slug");
     const name = input.name.trim();
     if (!name) throw new BadRequestException("name is required");
     if (await this.prisma.tenant.findUnique({ where: { slug } })) {
@@ -98,12 +102,41 @@ export class TenantsService {
     return tenant;
   }
 
-  async updateTenant(id: string, input: { name?: string; settings?: Prisma.InputJsonValue }): Promise<Tenant> {
-    await this.getTenant(id);
+  async updateTenant(
+    id: string,
+    input: { name?: string; slug?: string; settings?: Prisma.InputJsonValue },
+  ): Promise<Tenant> {
+    const current = await this.getTenant(id);
     const data: Prisma.TenantUpdateInput = {};
-    if (input.name !== undefined && input.name.trim()) data.name = input.name.trim();
+    let renamedTo: string | null = null;
+    if (input.name !== undefined && input.name.trim()) {
+      const name = input.name.trim();
+      data.name = name;
+      if (name !== current.name) renamedTo = name;
+    }
+    if (input.slug !== undefined) {
+      const slug = this.normaliseSlug(input.slug);
+      if (!SLUG_RE.test(slug)) throw new BadRequestException("invalid_slug");
+      if (slug !== current.slug) {
+        if (await this.prisma.tenant.findUnique({ where: { slug } })) {
+          throw new ConflictException("slug_already_taken");
+        }
+        data.slug = slug;
+      }
+    }
     if (input.settings !== undefined) data.settings = input.settings;
-    return this.prisma.tenant.update({ where: { id }, data });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.tenant.update({ where: { id }, data });
+      if (renamedTo) {
+        await this.outbox.append(tx, {
+          tenantId: id,
+          eventType: "tenant.tenant.renamed",
+          aggregateId: id,
+          payload: { tenantId: id, name: renamedTo },
+        });
+      }
+      return updated;
+    });
   }
 
   // ── Members ──────────────────────────────────────────────────────────
@@ -125,11 +158,14 @@ export class TenantsService {
         : null;
     if (!user) throw new NotFoundException("User not found");
 
+    const already = await this.prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId: user.id } },
+    });
+    if (already) throw new ConflictException("already_member");
+
     return this.prisma.$transaction(async (tx) => {
-      const member = await tx.tenantMember.upsert({
-        where: { tenantId_userId: { tenantId, userId: user.id } },
-        create: { tenantId, userId: user.id, role: input.role, addedBy: input.addedBy ?? null },
-        update: { role: input.role },
+      const member = await tx.tenantMember.create({
+        data: { tenantId, userId: user.id, role: input.role, addedBy: input.addedBy ?? null },
       });
       await this.outbox.append(tx, {
         tenantId,
@@ -247,7 +283,15 @@ export class TenantsService {
   async revokeInvitation(tenantId: string, invitationId: string): Promise<{ ok: true }> {
     const invite = await this.prisma.tenantInvitation.findFirst({ where: { id: invitationId, tenantId } });
     if (!invite) throw new NotFoundException("Invitation not found");
-    await this.prisma.tenantInvitation.update({ where: { id: invitationId }, data: { status: "declined" } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tenantInvitation.update({ where: { id: invitationId }, data: { status: "revoked" } });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "tenant.invitation.revoked",
+        aggregateId: invitationId,
+        payload: { invitationId, tenantId },
+      });
+    });
     return { ok: true };
   }
 
@@ -296,7 +340,15 @@ export class TenantsService {
   // ── Soft delete (prog DeleteTenant) ──────────────────────────────────
   async deleteTenant(id: string): Promise<{ ok: true }> {
     await this.getTenant(id); // 404s if already deleted
-    await this.prisma.tenant.update({ where: { id }, data: { deletedAt: new Date() } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tenant.update({ where: { id }, data: { deletedAt: new Date() } });
+      await this.outbox.append(tx, {
+        tenantId: id,
+        eventType: "tenant.tenant.deleted",
+        aggregateId: id,
+        payload: { tenantId: id },
+      });
+    });
     return { ok: true };
   }
 }

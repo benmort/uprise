@@ -104,6 +104,11 @@ export class AuthFlowsController {
     return this.grantResponse(res, grant);
   }
 
+  @Post("invite/decline")
+  declineInvite(@Body() dto: TokenDto) {
+    return this.flows.declineInvite(dto.token);
+  }
+
   @Post("select-tenant")
   async selectTenant(
     @Body() dto: SelectTenantDto,

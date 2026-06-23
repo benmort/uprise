@@ -92,6 +92,11 @@ export class ProfileController {
     return this.profiles.selectAvatar(this.userId(req), id);
   }
 
+  @Post("avatars/clear-selected")
+  clearSelectedAvatar(@Req() req: Request & { user?: AuthUser }) {
+    return this.profiles.clearSelectedAvatar(this.userId(req));
+  }
+
   @Delete("avatars/:id")
   deleteAvatar(@Req() req: Request & { user?: AuthUser }, @Param("id") id: string) {
     return this.profiles.deleteAvatar(this.userId(req), id);

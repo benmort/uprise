@@ -86,7 +86,7 @@ describe("IamFlowsService", () => {
       });
       const grant = await svc.consumeMagicLink("tok");
       expect(prisma.magicLink.update).toHaveBeenCalledWith({ where: { id: "ml1" }, data: { consumedAt: expect.any(Date) } });
-      expect(sessions.create).toHaveBeenCalledWith("u1");
+      expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
       expect(grant.token).toBe("sess-token");
       expect(grant.memberships).toHaveLength(1);
     });
@@ -183,7 +183,7 @@ describe("IamFlowsService", () => {
       });
       const grant = await svc.verify2fa("mv1", "123456");
       expect(grant.token).toBe("sess-token");
-      expect(sessions.create).toHaveBeenCalledWith("u1");
+      expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
     });
 
     it("verify rejects a wrong code", async () => {
@@ -270,6 +270,64 @@ describe("IamFlowsService", () => {
       prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
       await expect(svc.selectTenant("u1", "sess", "t9")).rejects.toThrow();
       expect(sessions.setTenant).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("lifecycle events", () => {
+    it("emits iam.user.signed-in when a session is granted", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.magicLink.findUnique.mockResolvedValueOnce({
+        id: "ml1",
+        userId: "u1",
+        consumedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await svc.consumeMagicLink("tok");
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "iam.user.signed-in", payload: { userId: "u1", tenantId: "t1" } }),
+      );
+    });
+
+    it("emits iam.user.password-reset on reset", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.passwordReset.findUnique.mockResolvedValueOnce({
+        id: "pr1",
+        userId: "u1",
+        consumedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await svc.resetPassword("tok", "longenoughpw");
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "iam.user.password-reset" }),
+      );
+    });
+
+    it("declineInvite marks the invite declined + emits the event", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValueOnce({
+        id: "inv1",
+        tenantId: "t1",
+        email: "x@y.z",
+        role: "CANVASSER",
+        status: "pending",
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      await svc.declineInvite("tok");
+      expect(prisma.tenantInvitation.update).toHaveBeenCalledWith({
+        where: { id: "inv1" },
+        data: { status: "declined" },
+      });
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "tenant.invitation.declined" }),
+      );
+    });
+
+    it("signIn returns invalid for an unknown user", async () => {
+      const { svc } = setup();
+      expect(await svc.signIn("nobody@x.y", "pw")).toEqual({ kind: "invalid" });
     });
   });
 });

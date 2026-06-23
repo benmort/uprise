@@ -9,6 +9,7 @@ export class CreateTenantDto {
 
 export class UpdateTenantDto {
   @IsOptional() @IsString() @MaxLength(200) name?: string;
+  @IsOptional() @IsString() @MaxLength(64) slug?: string;
 }
 
 export class AddMemberDto {

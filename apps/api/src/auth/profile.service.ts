@@ -91,6 +91,15 @@ export class ProfileService {
     return selected;
   }
 
+  /** Clear the selected avatar: no avatar selected + blank the profile avatarUrl. */
+  async clearSelectedAvatar(userId: string): Promise<{ ok: true }> {
+    await this.prisma.$transaction([
+      this.prisma.userAvatar.updateMany({ where: { userId }, data: { isSelected: false } }),
+      this.prisma.userProfile.updateMany({ where: { userId }, data: { avatarUrl: null } }),
+    ]);
+    return { ok: true };
+  }
+
   async deleteAvatar(userId: string, avatarId: string): Promise<{ ok: true }> {
     const target = await this.prisma.userAvatar.findFirst({ where: { id: avatarId, userId } });
     if (!target) throw new NotFoundException("Avatar not found");
