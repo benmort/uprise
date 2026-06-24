@@ -2,13 +2,16 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { CircleIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { CircleIcon, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
 import MobileMenu from "./MobileMenu";
-import { authAppUrl } from "@/lib/links";
+import { authAppUrl, adminAppUrl } from "@/lib/links";
+import { useSession } from "@/lib/session";
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const { user } = useSession();
+  const sessionHint = user?.email ? { email: user.email } : null;
 
   React.useEffect(() => {
     const handleScroll = () => {
@@ -144,36 +147,56 @@ export default function Header() {
 
           <div className="mt-7 flex items-center gap-3 xl:mt-0">
             <div className="flex flex-col gap-3.5 xl:flex-row xl:items-center">
-              <Link
-                href="/plans"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-[rgb(52,64,84)] px-4 py-3 text-sm font-medium text-white shadow-theme-xs duration-200 hover:bg-[#1e293b] max-xl:h-13 max-xl:w-full max-xl:rounded-full"
-              >
-                View Plans
-                <ChevronRight className="h-5 w-5" />
-              </Link>
-              <div className="py-3">
-                <a
-                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-white duration-200 max-xl:h-13 max-xl:w-full max-xl:rounded-full"
-                  href={`${authAppUrl()}/sign-up`}
-                >
-                  <span>
-                    <CircleIcon className="h-5 w-5" />
-                  </span>
-                  Get Started
-                </a>
-              </div>
-              <a
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-stroke-tertiary bg-white px-4 py-3 text-sm font-medium text-text-color shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 max-xl:h-13 max-xl:w-full max-xl:rounded-full"
-                href={`${authAppUrl()}/sign-in`}
-              >
-                Login
-              </a>
+              {sessionHint ? (
+                <div className="flex items-center gap-3 py-3">
+                  <a
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-stroke-tertiary bg-white px-4 py-3 text-sm font-medium text-text-color shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 max-xl:h-13 max-xl:flex-1 max-xl:rounded-full"
+                    href={`${authAppUrl()}/sign-in`}
+                  >
+                    Switch account
+                  </a>
+                  <a
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-white duration-200 max-xl:h-13 max-xl:flex-1 max-xl:rounded-full"
+                    href={adminAppUrl()}
+                  >
+                    Continue as {sessionHint.email}
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
+                </div>
+              ) : (
+                <>
+                  <Link
+                    href="/plans"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-[rgb(52,64,84)] px-4 py-3 text-sm font-medium text-white shadow-theme-xs duration-200 hover:bg-[#1e293b] max-xl:h-13 max-xl:w-full max-xl:rounded-full"
+                  >
+                    View Plans
+                    <ChevronRight className="h-5 w-5" />
+                  </Link>
+                  <div className="py-3">
+                    <a
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-white duration-200 max-xl:h-13 max-xl:w-full max-xl:rounded-full"
+                      href={`${authAppUrl()}/sign-up`}
+                    >
+                      <span>
+                        <CircleIcon className="h-5 w-5" />
+                      </span>
+                      Get Started
+                    </a>
+                  </div>
+                  <a
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-stroke-tertiary bg-white px-4 py-3 text-sm font-medium text-text-color shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 max-xl:h-13 max-xl:w-full max-xl:rounded-full"
+                    href={`${authAppUrl()}/sign-in`}
+                  >
+                    Login
+                  </a>
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+      <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} sessionHint={sessionHint} />
     </header>
   );
 }

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import MarketingChrome from "@/components/MarketingChrome";
 import ScrollToTop from "@/components/ScrollToTop";
+import { SessionProvider } from "@/lib/session";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -18,18 +19,21 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return (
     <html lang="en">
       <body className={outfit.variable}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};`,
+            __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};window.__APP_URL__=${JSON.stringify(appUrl)};`,
           }}
         />
-        <div className="flex min-h-screen flex-col bg-background">
-          <MarketingChrome>{children}</MarketingChrome>
-          <ScrollToTop />
-        </div>
+        <SessionProvider>
+          <div className="flex min-h-screen flex-col bg-background">
+            <MarketingChrome>{children}</MarketingChrome>
+            <ScrollToTop />
+          </div>
+        </SessionProvider>
       </body>
     </html>
   );
