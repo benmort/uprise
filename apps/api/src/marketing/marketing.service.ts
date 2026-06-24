@@ -55,13 +55,24 @@ export class MarketingService {
 
   private async notify(templateKey: string, purpose: string, message: string): Promise<{ ok: true }> {
     const tenantId = await this.defaultTenantId();
-    await this.email.sendTransactional({
-      tenantId,
-      toAddress: this.notifyAddress(),
-      templateKey,
-      vars: { message, subject: purpose, body: message },
-      purpose,
-    });
+    try {
+      await this.email.sendTransactional({
+        tenantId,
+        toAddress: this.notifyAddress(),
+        templateKey,
+        vars: { message, subject: purpose, body: message },
+        purpose,
+      });
+    } catch (err) {
+      // Public marketing forms must not surface infra errors to the visitor. Email
+      // delivery (e.g. SendGrid) may be unconfigured; the Email row already records
+      // the submission, so log and degrade to success rather than 500 the form.
+      this.logger.warn(
+        "marketing",
+        `Notify email failed for ${purpose}; submission recorded but not delivered`,
+        { templateKey, error: err instanceof Error ? err.message : String(err) },
+      );
+    }
     return { ok: true };
   }
 

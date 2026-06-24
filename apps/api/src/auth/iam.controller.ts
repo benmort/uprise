@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Post,
@@ -37,6 +38,9 @@ export class IamController {
   ) {
     const result = await this.flows.signIn(body.email, body.password);
     if (result.kind === "invalid") throw new UnauthorizedException("Invalid email or password");
+    if (result.kind === "pending") {
+      throw new ForbiddenException("Your request to join is awaiting approval by an organiser.");
+    }
     if (result.kind === "no-membership") throw new UnauthorizedException("User has no tenant membership");
     if (result.kind === "twofa") return { twofaRequired: true, challengeId: result.challengeId };
 

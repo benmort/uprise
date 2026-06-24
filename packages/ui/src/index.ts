@@ -23,6 +23,7 @@ export * from "./components/logo";
 export * from "./components/otp-input";
 export * from "./components/password-input";
 export * from "./components/password-strength";
+export * from "./components/quick-actions";
 export * from "./components/radio-group";
 export * from "./components/pagination-controls";
 export * from "./components/select";

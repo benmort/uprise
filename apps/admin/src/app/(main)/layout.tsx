@@ -26,7 +26,7 @@ import {
   listConversations,
   type MessageChannel,
 } from "@/lib/api";
-import type { AuthPrincipal } from "@yarns/api-client";
+import { tenants, type AuthPrincipal } from "@yarns/api-client";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, goToLogin, logout } from "@/lib/session";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
@@ -101,6 +101,7 @@ function buildNav(campaignId: string): NavNode[] {
       type: "group", key: "settings", label: "Settings", icon: Settings, match: (p) => p.startsWith("/settings"),
       children: [
         { label: "General", href: "/settings", match: (p) => p === "/settings" },
+        { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
         { label: "Roles", href: "/settings/roles", match: (p) => p.startsWith("/settings/roles") },
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
@@ -264,6 +265,7 @@ export default function MainLayout({
   const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
   const [creatingBlast, setCreatingBlast] = useState(false);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
+  const [pendingJoinCount, setPendingJoinCount] = useState(0);
   const inboxUnreadRef = useRef(0);
   const { showToast } = useToast();
 
@@ -317,6 +319,23 @@ export default function MainLayout({
       window.clearInterval(id);
     };
   }, [ready, pathname]);
+
+  // Pending join-request count for the Settings/Team nav badge (organisers only).
+  useEffect(() => {
+    if (!ready || !principal?.tenantId || principal.role !== "ORGANISER") return;
+    let cancelled = false;
+    const tenantId = principal.tenantId;
+    const sync = async () => {
+      const res = await tenants.listJoinRequests(tenantId, "pending");
+      if (!cancelled && res.ok) setPendingJoinCount(res.data.length);
+    };
+    void sync();
+    const id = window.setInterval(() => void sync(), 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [ready, principal, pathname]);
 
   useEffect(() => {
     if (!ready) return;
@@ -537,6 +556,11 @@ export default function MainLayout({
                 )}
               />
               <span>{entry.label}</span>
+              {entry.href === "/settings/team" && pendingJoinCount > 0 ? (
+                <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                  {pendingJoinCount}
+                </span>
+              ) : null}
             </Link>
           );
         }
@@ -669,9 +693,15 @@ export default function MainLayout({
                   >
                     <Icon className="h-[18px] w-[18px] shrink-0" />
                     <span className={labelHidden}>{node.label}</span>
+                    {node.key === "settings" && pendingJoinCount > 0 ? (
+                      <span className={cn("ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground", labelHidden)}>
+                        {pendingJoinCount}
+                      </span>
+                    ) : null}
                     <ChevronDown
                       className={cn(
-                        "ml-auto h-4 w-4 text-muted-foreground transition-transform",
+                        "h-4 w-4 text-muted-foreground transition-transform",
+                        node.key === "settings" && pendingJoinCount > 0 ? "ml-2" : "ml-auto",
                         open ? "rotate-0" : "-rotate-90",
                         labelHidden,
                       )}

@@ -37,4 +37,10 @@ describe("MarketingService", () => {
     expect(call.templateKey).toBe("newsletter");
     expect(call.vars.message).toContain("ada@x.y");
   });
+
+  it("degrades to success (no throw) when notify email delivery fails", async () => {
+    const { svc, email } = setup();
+    email.sendTransactional.mockRejectedValueOnce(new Error("SendGrid is not configured"));
+    await expect(svc.newsletterSignup({ email: "ada@x.y" })).resolves.toEqual({ ok: true });
+  });
 });

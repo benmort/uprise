@@ -49,6 +49,9 @@ export const EVENT_TYPES = {
   INVITATION_ACCEPTED: "tenant.invitation.accepted",
   INVITATION_DECLINED: "tenant.invitation.declined",
   INVITATION_REVOKED: "tenant.invitation.revoked",
+  JOIN_REQUEST_SUBMITTED: "tenant.join-request.submitted",
+  JOIN_REQUEST_APPROVED: "tenant.join-request.approved",
+  JOIN_REQUEST_REJECTED: "tenant.join-request.rejected",
   TENANT_RENAMED: "tenant.tenant.renamed",
   TENANT_DELETED: "tenant.tenant.deleted",
   API_KEY_ISSUED: "tenant.api-key.issued",
@@ -105,6 +108,9 @@ export interface DomainEventMap {
   "tenant.invitation.accepted": { invitationId: string; tenantId: string; userId: string };
   "tenant.invitation.declined": { invitationId: string; tenantId: string };
   "tenant.invitation.revoked": { invitationId: string; tenantId: string };
+  "tenant.join-request.submitted": { requestId: string; tenantId: string; email: string; requestedRole: string };
+  "tenant.join-request.approved": { requestId: string; tenantId: string; userId: string; role: string };
+  "tenant.join-request.rejected": { requestId: string; tenantId: string; userId: string };
   "tenant.tenant.renamed": { tenantId: string; name: string };
   "tenant.tenant.deleted": { tenantId: string };
   "tenant.api-key.issued": { apiKeyId: string; tenantId: string; name: string };
