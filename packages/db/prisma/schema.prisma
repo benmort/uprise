@@ -270,6 +270,7 @@ model Tenant {
   suppressions      Suppression[]
   pushSubscriptions PushSubscription[]
   apiKeys           ApiKey[]
+  storedFiles       StoredFile[]
 
   @@schema("tenant")
 }
@@ -287,6 +288,23 @@ model ApiKey {
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, revokedAt])
+  @@schema("tenant")
+}
+
+model StoredFile {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  pathname    String
+  url         String
+  contentType String?
+  sizeBytes   Int
+  folder      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, folder])
   @@schema("tenant")
 }
 

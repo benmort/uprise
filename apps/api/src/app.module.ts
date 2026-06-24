@@ -40,6 +40,7 @@ import { CallsModule } from "./calls/calls.module";
 import { OrgProfileModule } from "./org-profile/org-profile.module";
 import { TenantsModule } from "./tenants/tenants.module";
 import { ApiKeysModule } from "./api-keys/api-keys.module";
+import { FilesModule } from "./files/files.module";
 import { MarketingModule } from "./marketing/marketing.module";
 import { RequestIdMiddleware } from "./common/http/request-id.middleware";
 import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middleware";
@@ -66,6 +67,7 @@ import { QueueModule } from "./common/queue/queue.module";
     OrgProfileModule,
     TenantsModule,
     ApiKeysModule,
+    FilesModule,
     MarketingModule,
     QueueModule,
     TwilioModule,
