@@ -415,6 +415,9 @@ importers:
       '@nestjs/platform-express':
         specifier: ^10.4.15
         version: 10.4.17(@nestjs/common@10.4.17(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.17)
+      '@vercel/blob':
+        specifier: ^2.4.0
+        version: 2.4.0
       '@yarns/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -460,6 +463,9 @@ importers:
       uuid:
         specifier: ^11.0.3
         version: 11.1.1
+      web-push:
+        specifier: ^3.6.7
+        version: 3.6.7
     devDependencies:
       '@types/node':
         specifier: ^20.17.9
