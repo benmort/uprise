@@ -114,71 +114,18 @@ function buildNav(campaignId: string): NavNode[] {
       children: [
         { label: "Calendar", href: "/prog/calendar", match: px("calendar") },
         {
-          label: "Channels", match: px("email") /* representative */,
+          label: "Channels", match: (p) => px("email")(p) || px("calls")(p) || px("chats")(p) || px("social-media")(p),
           children: [
             { label: "Email", href: "/prog/email", match: px("email") },
             { label: "Calls", href: "/prog/calls", match: px("calls") },
             { label: "Chats", href: "/prog/chats", match: px("chats") },
             { label: "Social Media", href: "/prog/social-media", match: px("social-media") },
-            { label: "Direct Mail", href: "/prog/direct-mail", match: px("direct-mail") },
           ],
         },
         {
-          label: "Audience", match: (p) => px("audience/")(p) || px("queries")(p) || px("tags")(p) || px("reports")(p) || px("activists")(p),
+          label: "Organising", match: px("events"),
           children: [
-            { label: "Persons", href: "/prog/audience/persons", match: px("audience/persons") },
-            { label: "Segments", href: "/prog/audience/segments", match: px("audience/segments") },
-            { label: "Queries", href: "/prog/queries", match: px("queries") },
-            { label: "Tags", href: "/prog/tags", match: px("tags") },
-            { label: "Reports", href: "/prog/reports", match: px("reports") },
-            { label: "Activists", href: "/prog/activists", match: px("activists") },
-          ],
-        },
-        {
-          label: "Actions", match: (p) => px("petitions")(p) || px("forms")(p) || px("fundraisers")(p),
-          children: [
-            { label: "Petitions", href: "/prog/petitions", match: px("petitions") },
-            { label: "Forms", href: "/prog/forms", match: px("forms") },
-            { label: "Fundraisers", href: "/prog/fundraisers", match: px("fundraisers") },
-          ],
-        },
-        {
-          label: "Organising", match: (p) => px("ladders")(p) || px("events")(p),
-          children: [
-            { label: "Ladders", href: "/prog/ladders", match: px("ladders") },
             { label: "Events", href: "/prog/events", match: px("events") },
-          ],
-        },
-        {
-          label: "Grant Management", match: px("grant-management"),
-          children: [
-            { label: "Dashboard", href: "/prog/grant-management/dashboard", match: px("grant-management/dashboard") },
-            { label: "Applications", href: "/prog/grant-management/applications", match: px("grant-management/applications") },
-            { label: "Action Flow", href: "/prog/grant-management/action-flow", match: px("grant-management/action-flow") },
-            {
-              label: "Reviewing", match: px("grant-management/reviewing"),
-              children: [
-                { label: "Manage", href: "/prog/grant-management/reviewing/manage", match: px("grant-management/reviewing/manage") },
-                { label: "Leaderboard", href: "/prog/grant-management/reviewing/Leaderboard", match: px("grant-management/reviewing/Leaderboard") },
-                { label: "Progress", href: "/prog/grant-management/reviewing/Progress", match: px("grant-management/reviewing/Progress") },
-                { label: "Settings", href: "/prog/grant-management/reviewing/Settings", match: px("grant-management/reviewing/Settings") },
-              ],
-            },
-            {
-              label: "Grants", match: px("grant-management/grants"),
-              children: [
-                { label: "Manage", href: "/prog/grant-management/grants/manage", match: px("grant-management/grants/manage") },
-                { label: "Funds", href: "/prog/grant-management/grants/funds", match: px("grant-management/grants/funds") },
-                { label: "Allocations", href: "/prog/grant-management/grants/allocations", match: px("grant-management/grants/allocations") },
-                { label: "Payments", href: "/prog/grant-management/grants/payments", match: px("grant-management/grants/payments") },
-                { label: "Contracts", href: "/prog/grant-management/grants/contracts", match: px("grant-management/grants/contracts") },
-                { label: "Reports", href: "/prog/grant-management/grants/reports", match: px("grant-management/grants/reports") },
-                { label: "Settings", href: "/prog/grant-management/grants/settings", match: px("grant-management/grants/settings") },
-                { label: "Users", href: "/prog/grant-management/grants/users", match: px("grant-management/grants/users") },
-              ],
-            },
-            { label: "Forms", href: "/prog/grant-management/forms", match: px("grant-management/forms") },
-            { label: "Settings", href: "/prog/grant-management/settings", match: px("grant-management/settings") },
           ],
         },
         {
@@ -216,37 +163,17 @@ function buildNav(campaignId: string): NavNode[] {
           ],
         },
         {
-          label: "Data & Files", match: (p) => px("keywords")(p) || px("questions-custom-fields")(p) || px("personalization-datasets")(p) || px("custom-targets")(p) || px("id-targets")(p) || px("file-manager")(p),
+          label: "Data & Files", match: px("file-manager"),
           children: [
-            { label: "Keywords", href: "/prog/keywords", match: px("keywords") },
-            { label: "Questions & Custom Fields", href: "/prog/questions-custom-fields", match: px("questions-custom-fields") },
-            { label: "Personalization Datasets", href: "/prog/personalization-datasets", match: px("personalization-datasets") },
-            { label: "Custom Targets", href: "/prog/custom-targets", match: px("custom-targets") },
-            { label: "ID Targets", href: "/prog/id-targets", match: px("id-targets") },
             { label: "File Manager", href: "/prog/file-manager", match: px("file-manager") },
           ],
         },
         {
-          label: "Developer Hub", match: (p) => px("api-keys")(p) || px("ai-assistant")(p) || px("form-elements")(p) || px("uploads")(p) || px("syncs")(p) || px("email-wrappers")(p) || px("page-wrappers")(p) || px("snippets")(p) || px("shortlinks")(p),
+          label: "Developer Hub", match: (p) => px("api-keys")(p) || px("ai-assistant")(p) || px("form-elements")(p),
           children: [
             { label: "API Keys", href: "/prog/api-keys", match: px("api-keys") },
             { label: "AI Assistant", href: "/prog/ai-assistant", match: px("ai-assistant") },
             { label: "Form Elements", href: "/prog/form-elements", match: px("form-elements") },
-            { label: "Uploads", href: "/prog/uploads", match: px("uploads") },
-            { label: "Sync", href: "/prog/syncs", match: px("syncs") },
-            { label: "Email Wrappers", href: "/prog/email-wrappers", match: px("email-wrappers") },
-            { label: "Page Wrappers", href: "/prog/page-wrappers", match: px("page-wrappers") },
-            { label: "Snippets", href: "/prog/snippets", match: px("snippets") },
-            { label: "Shortlinks", href: "/prog/shortlinks", match: px("shortlinks") },
-          ],
-        },
-        {
-          label: "Support", match: (p) => px("email-support")(p) || px("knowledge-base")(p) || px("trainings")(p) || px("release-notes")(p),
-          children: [
-            { label: "Email Support", href: "/prog/email-support", match: px("email-support") },
-            { label: "Knowledge Base", href: "/prog/knowledge-base", match: px("knowledge-base") },
-            { label: "Trainings", href: "/prog/trainings", match: px("trainings") },
-            { label: "Release Notes", href: "/prog/release-notes", match: px("release-notes") },
           ],
         },
       ],
