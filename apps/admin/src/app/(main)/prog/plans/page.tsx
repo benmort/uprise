@@ -426,7 +426,7 @@ export default function PlanPage() {
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Plans</h2>
         <Breadcrumbs
           items={[
-            { label: 'Home', href: '/admin' },
+            { label: 'Home', href: '/dashboard' },
             { label: 'Plans' },
           ]}
         />

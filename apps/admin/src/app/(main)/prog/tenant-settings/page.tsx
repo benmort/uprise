@@ -173,7 +173,7 @@ export default function TenantSettingsPage() {
                   Onboarding
                 </Link>
               </Button>
-              <Breadcrumbs items={[{ label: 'Home', href: '/admin' }, { label: 'Settings' }]} />
+              <Breadcrumbs items={[{ label: 'Home', href: '/dashboard' }, { label: 'Settings' }]} />
             </div>
           </div>
 
