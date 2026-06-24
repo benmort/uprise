@@ -1,14 +1,20 @@
 import type {
   AcceptInviteRequest,
+  ApproveJoinRequestRequest,
   AvailabilityResponse,
   ChangeEmailRequest,
   ChangePasswordRequest,
   CheckSessionResponse,
+  ConfirmAccessRequest,
   DeleteAccountRequest,
   InvitePreview,
+  JoinRequest,
   LoginResponse,
   OkResponse,
   RegisterRequest,
+  RejectJoinRequestRequest,
+  RequestAccessRequest,
+  RequestAccessResponse,
   SessionGrantResponse,
   SessionSummaryResponse,
   UpdateProfileRequest,
@@ -117,6 +123,10 @@ export const auth = {
   acceptInvite: (body: AcceptInviteRequest) => post<SessionGrantResponse>("/iam/invite/accept", body),
 
   selectTenant: (tenantId: string) => post<OkResponse>("/iam/select-tenant", { tenantId }),
+
+  // Self-signup → admin approval (public; issue no session).
+  requestAccess: (body: RequestAccessRequest) => post<RequestAccessResponse>("/auth/request-access", body),
+  confirmAccess: (body: ConfirmAccessRequest) => post<OkResponse>("/auth/request-access/verify", body),
 };
 
 // ── Self-service profile + account (prog parity) ─────────────────────
@@ -168,6 +178,22 @@ export const tenants = {
     request<AvailabilityResponse>(`/tenants/availability?slug=${encodeURIComponent(slug)}`, undefined, {
       redirectOn401: false,
     }),
+
+  // Join-request approval queue (admin; session + permission gated).
+  listJoinRequests: (tenantId: string, status?: string) =>
+    request<JoinRequest[]>(
+      `/tenants/${encodeURIComponent(tenantId)}/join-requests${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+  approveJoinRequest: (tenantId: string, requestId: string, body: ApproveJoinRequestRequest) =>
+    request<OkResponse>(
+      `/tenants/${encodeURIComponent(tenantId)}/join-requests/${encodeURIComponent(requestId)}/approve`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  rejectJoinRequest: (tenantId: string, requestId: string, body: RejectJoinRequestRequest) =>
+    request<OkResponse>(
+      `/tenants/${encodeURIComponent(tenantId)}/join-requests/${encodeURIComponent(requestId)}/reject`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
 };
 
 // ── Public marketing-site form intake (meld doc 12) ──────────────────

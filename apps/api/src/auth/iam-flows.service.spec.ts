@@ -10,7 +10,16 @@ function setup() {
     },
     tenant: {
       findUnique: jest.fn(async () => ({ id: "t1", name: "Org One" })),
+      findFirst: jest.fn(async () => ({ id: "t1", name: "Org One", slug: "org-one" })),
       upsert: jest.fn(async () => ({ id: "t1", name: "Org One" })),
+    },
+    tenantJoinRequest: {
+      findFirst: jest.fn(async () => null),
+      findUnique: jest.fn(async () => null),
+      create: jest.fn(async () => ({ id: "jr1" })),
+      update: jest.fn(async () => ({ id: "jr1" })),
+      upsert: jest.fn(async () => ({ id: "jr1" })),
+      updateMany: jest.fn(async () => ({ count: 1 })),
     },
     tenantMember: {
       findFirst: jest.fn(async () => ({ tenantId: "t1", role: "ORGANISER" })),
@@ -341,6 +350,147 @@ describe("IamFlowsService", () => {
       prisma.tenantMember.count.mockResolvedValueOnce(1); // sole organiser
       await expect(svc.deleteAccount("u1", "currentpw1")).rejects.toThrow();
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("join requests (self-signup → approval)", () => {
+    it("requestAccess creates a new user (unverified) + an unverified request, sends a code, no session", async () => {
+      const { svc, prisma, sessions, dispatcher } = setup();
+      // 1st lookup (new-user check in the tx) → null; later lookup (sendEmailVerification) → the created user.
+      prisma.user.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: "newuser", email: "new@x.y", emailVerified: false });
+      const res = await svc.requestAccess({
+        email: "New@X.Y", password: "longenoughpw", displayName: "New U",
+        requestedRole: "volunteer", tenantSlug: "org-one",
+      });
+      expect(res).toEqual({ ok: true });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ emailVerified: false, email: "new@x.y" }) }),
+      );
+      expect(prisma.tenantJoinRequest.create).toHaveBeenCalled();
+      expect(prisma.tenantJoinRequest.create.mock.calls[0][0].data.status).toBe("unverified");
+      expect(sessions.create).not.toHaveBeenCalled();
+      // sends a verification code (sendEmailVerification → mobileVerification.create + dispatcher)
+      expect(dispatcher.sendEmail).toHaveBeenCalled();
+    });
+
+    it("requestAccess short-circuits when the user is already a member (no request, no code)", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+      prisma.tenantMember.findUnique.mockResolvedValue({ tenantId: "t1", userId: "u1", role: "CANVASSER" });
+      const res = await svc.requestAccess({
+        email: "a@b.c", password: "longenoughpw", displayName: "A", requestedRole: "staff", tenantSlug: "org-one",
+      });
+      expect(res).toEqual({ ok: true, alreadyMember: true });
+      expect(prisma.tenantJoinRequest.upsert).not.toHaveBeenCalled();
+      expect(dispatcher.sendEmail).not.toHaveBeenCalled();
+    });
+
+    it("requestAccess re-request after rejection resets the row to unverified", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ id: "u1", email: "a@b.c" }) // existing user
+        .mockResolvedValue({ id: "u1", email: "a@b.c", emailVerified: false });
+      prisma.tenantMember.findUnique.mockResolvedValueOnce(null); // not a member
+      prisma.tenantJoinRequest.findUnique.mockResolvedValueOnce({ id: "jr1", status: "rejected" });
+      await svc.requestAccess({ email: "a@b.c", password: "longenoughpw", displayName: "A", requestedRole: "staff", tenantSlug: "org-one" });
+      expect(prisma.tenantJoinRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: "unverified", decidedBy: null, decidedAt: null }) }),
+      );
+    });
+
+    it("requestAccess on an existing PENDING row preserves status/audit (only refreshes the hint)", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ id: "u1", email: "a@b.c" })
+        .mockResolvedValue({ id: "u1", email: "a@b.c", emailVerified: false });
+      prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
+      prisma.tenantJoinRequest.findUnique.mockResolvedValueOnce({ id: "jr1", status: "pending" });
+      await svc.requestAccess({ email: "a@b.c", password: "longenoughpw", displayName: "A", requestedRole: "volunteer", tenantSlug: "org-one" });
+      const arg = prisma.tenantJoinRequest.update.mock.calls[0][0];
+      expect(arg.data).toEqual({ requestedRole: "volunteer" }); // no status/decidedBy reset
+    });
+
+    it("requestAccess rejects an unknown organisation slug", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenant.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        svc.requestAccess({ email: "a@b.c", password: "longenoughpw", displayName: "A", requestedRole: "staff", tenantSlug: "nope" }),
+      ).rejects.toThrow();
+    });
+
+    it("confirmAccess promotes unverified → pending and emits submitted", async () => {
+      const { svc, prisma, outbox } = setup();
+      // confirmEmailVerification path
+      prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c", emailVerified: false });
+      prisma.mobileVerification.findFirst.mockResolvedValueOnce({ id: "mv1", userId: "u1" });
+      prisma.tenantJoinRequest.updateMany.mockResolvedValueOnce({ count: 1 });
+      prisma.tenantJoinRequest.findUnique.mockResolvedValue({ id: "jr1", requestedRole: "volunteer" });
+      await svc.confirmAccess("a@b.c", "123456", "org-one");
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "tenant.join-request.submitted" }),
+      );
+    });
+
+    it("approveJoinRequest creates the membership (shared core) + emits member.added & approved", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
+      prisma.tenantJoinRequest.updateMany.mockResolvedValueOnce({ count: 1 }); // wins the race
+      await svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any, approvedBy: "admin1" });
+      expect(prisma.tenantMember.upsert).toHaveBeenCalled();
+      const types = outbox.append.mock.calls.map((c: any) => c[1].eventType);
+      expect(types).toContain("tenant.member.added");
+      expect(types).toContain("tenant.join-request.approved");
+    });
+
+    it("approveJoinRequest is a no-op on an already-approved request", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "approved" });
+      await svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any });
+      expect(prisma.tenantMember.upsert).not.toHaveBeenCalled();
+      expect(outbox.append).not.toHaveBeenCalled();
+    });
+
+    it("approveJoinRequest emits nothing if it loses the race (conditional update count 0)", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
+      prisma.tenantJoinRequest.updateMany.mockResolvedValueOnce({ count: 0 }); // lost the race
+      await svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any });
+      expect(prisma.tenantMember.upsert).not.toHaveBeenCalled();
+      expect(outbox.append).not.toHaveBeenCalled();
+    });
+
+    it("approveJoinRequest rejects approving a rejected request", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "rejected" });
+      await expect(svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any })).rejects.toThrow();
+    });
+
+    it("rejectJoinRequest moves pending → rejected and emits rejected", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
+      prisma.tenantJoinRequest.updateMany.mockResolvedValueOnce({ count: 1 });
+      await svc.rejectJoinRequest("t1", "jr1", { rejectedBy: "admin1" });
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "tenant.join-request.rejected" }),
+      );
+    });
+
+    it("rejectJoinRequest refuses to reject an approved request", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "approved" });
+      await expect(svc.rejectJoinRequest("t1", "jr1")).rejects.toThrow();
+    });
+
+    it("signIn returns 'pending' for a verified user with no membership but an open request", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "a@b.c", passwordHash: await hashPassword("longenoughpw"), deletedAt: null });
+      prisma.tenantMember.findMany.mockResolvedValueOnce([]); // no membership
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", status: "pending" });
+      expect(await svc.signIn("a@b.c", "longenoughpw")).toEqual({ kind: "pending" });
     });
   });
 

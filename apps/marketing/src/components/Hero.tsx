@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button } from "@yarns/ui";
 import Image from "next/image";
 import { authAppUrl } from "@/lib/links";
+import MarketingLaunchpad from "./MarketingLaunchpad";
 
 export default function Hero() {
   return (
@@ -17,17 +18,21 @@ export default function Hero() {
               Progress is built together. We partner with organisations that drive change - and give them the tools to build the future.
             </p>
 
-            <div className="mt-9 flex flex-wrap justify-center gap-3.5">
-              <a href={`${authAppUrl()}/sign-up`}>
-                <Button size="lg" className="px-6 py-3 cursor-pointer">
-                  Start a Campaign
-                </Button>
-              </a>
-              <Link href="/request-demo">
-                <Button variant="outline" size="lg" className="px-6 py-3 cursor-pointer">
-                  Request a Demo
-                </Button>
-              </Link>
+            <div className="mt-9">
+              <MarketingLaunchpad tone="light">
+                <div className="flex flex-wrap justify-center gap-3.5">
+                  <a href={`${authAppUrl()}/sign-up`}>
+                    <Button size="lg" className="px-6 py-3 cursor-pointer">
+                      Start a Campaign
+                    </Button>
+                  </a>
+                  <Link href="/request-demo">
+                    <Button variant="outline" size="lg" className="px-6 py-3 cursor-pointer">
+                      Request a Demo
+                    </Button>
+                  </Link>
+                </div>
+              </MarketingLaunchpad>
             </div>
 
             <div className="mt-15">

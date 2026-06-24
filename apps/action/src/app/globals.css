@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import "@yarns/ui/globals.css";
+
+/* Scan the shared design system for class strings (this app's own files are
+   auto-detected by Tailwind v4). */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";

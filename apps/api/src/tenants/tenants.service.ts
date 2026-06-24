@@ -5,7 +5,15 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { AppUserRole, Network, Prisma, Tenant, TenantInvitation, TenantMember } from "@yarns/db";
+import {
+  AppUserRole,
+  Network,
+  Prisma,
+  Tenant,
+  TenantInvitation,
+  TenantJoinRequest,
+  TenantMember,
+} from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 
@@ -278,6 +286,15 @@ export class TenantsService {
   async listInvitations(tenantId: string): Promise<TenantInvitation[]> {
     await this.getTenant(tenantId);
     return this.prisma.tenantInvitation.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } });
+  }
+
+  /** Join requests for the admin approval queue (defaults to actionable "pending"). */
+  async listJoinRequests(tenantId: string, status?: string): Promise<TenantJoinRequest[]> {
+    await this.getTenant(tenantId);
+    return this.prisma.tenantJoinRequest.findMany({
+      where: { tenantId, status: status ?? "pending" },
+      orderBy: { createdAt: "desc" },
+    });
   }
 
   async revokeInvitation(tenantId: string, invitationId: string): Promise<{ ok: true }> {

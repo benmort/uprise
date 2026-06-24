@@ -9,6 +9,12 @@ function setup() {
       update: jest.fn(async () => ({})),
     },
     customer: { findFirst: jest.fn(async () => ({ id: "c1", email: "billing@x.y" })) },
+    tenantMember: { findMany: jest.fn(async () => [{ userId: "org1" }, { userId: "org2" }]) },
+    user: {
+      findMany: jest.fn(async () => [{ email: "org1@x.y" }, { email: "org2@x.y" }]),
+      findUnique: jest.fn(async () => ({ id: "u9", email: "applicant@x.y" })),
+    },
+    tenantJoinRequest: { findUnique: jest.fn(async () => ({ id: "jr1", userId: "u9", tenantId: "t1" })) },
   };
   const email = { sendTransactional: jest.fn(async () => ({ id: "e1" })) } as any;
   const stripe = { isConfigured: jest.fn(() => true), createCustomer: jest.fn(async () => ({ id: "cus_1" })) } as any;
@@ -33,8 +39,32 @@ function setup() {
 describe("domain reactions", () => {
   it("are loop-safe (no reaction emits its own trigger)", () => {
     const { reactions } = setup();
-    expect(reactions).toHaveLength(6);
+    expect(reactions).toHaveLength(9);
     expect(() => assertReactionsLoopSafe(reactions)).not.toThrow();
+  });
+
+  it("tenant.join-request.submitted → emails every organiser", async () => {
+    const { byTrigger, ev, email } = setup();
+    await byTrigger("tenant.join-request.submitted").handle(
+      ev({ tenantId: "t1", email: "prospect@x.y", requestedRole: "volunteer" }),
+    );
+    expect(email.sendTransactional).toHaveBeenCalledTimes(2);
+    expect(email.sendTransactional.mock.calls[0][0].templateKey).toBe("join_request_submitted");
+  });
+
+  it("tenant.join-request.approved → emails the applicant with a sign-in link", async () => {
+    const { byTrigger, ev, email } = setup();
+    await byTrigger("tenant.join-request.approved").handle(ev({ tenantId: "t1", userId: "u9", role: "CANVASSER" }));
+    const call = email.sendTransactional.mock.calls[0][0];
+    expect(call.toAddress).toBe("applicant@x.y");
+    expect(call.templateKey).toBe("join_request_approved");
+    expect(call.vars.link).toContain("/sign-in");
+  });
+
+  it("tenant.join-request.rejected → emails the applicant", async () => {
+    const { byTrigger, ev, email } = setup();
+    await byTrigger("tenant.join-request.rejected").handle(ev({ requestId: "jr1", tenantId: "t1", userId: "u9" }));
+    expect(email.sendTransactional.mock.calls[0][0].templateKey).toBe("join_request_rejected");
   });
 
   it("payment.payment.succeeded → receipt email to the billing contact", async () => {

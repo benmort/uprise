@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "crypto";
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole } from "@yarns/db";
+import { AppUserRole, Prisma } from "@yarns/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { SessionService } from "./session.service";
@@ -36,6 +36,7 @@ export interface SessionGrant {
 export type SignInResult =
   | { kind: "invalid" }
   | { kind: "no-membership" }
+  | { kind: "pending" }
   | { kind: "twofa"; challengeId: string }
   | ({ kind: "ok"; email: string } & SessionGrant);
 
@@ -114,7 +115,14 @@ export class IamFlowsService {
       return { kind: "invalid" };
     }
     const memberships = await this.membershipsFor(user.id);
-    if (memberships.length === 0) return { kind: "no-membership" };
+    if (memberships.length === 0) {
+      // A self-signup awaiting approval has a User + a pending join request but no
+      // membership — surface a soft "awaiting approval" rather than invalid creds.
+      const pending = await this.prisma.tenantJoinRequest.findFirst({
+        where: { userId: user.id, status: "pending" },
+      });
+      return { kind: pending ? "pending" : "no-membership" };
+    }
     // 2FA-enabled users complete login via POST /iam/2fa/verify; no session yet.
     if (user.twofaEnabled) {
       const { challengeId } = await this.start2fa(user.id);
@@ -509,10 +517,11 @@ export class IamFlowsService {
           },
         });
       }
-      await tx.tenantMember.upsert({
-        where: { tenantId_userId: { tenantId: invite.tenantId, userId: user.id } },
-        create: { tenantId: invite.tenantId, userId: user.id, role: invite.role, addedBy: invite.invitedBy },
-        update: {},
+      await this.createMembershipTx(tx, {
+        tenantId: invite.tenantId,
+        userId: user.id,
+        role: invite.role,
+        addedBy: invite.invitedBy,
       });
       await tx.tenantInvitation.update({ where: { id: invite.id }, data: { status: "accepted" } });
       // Emit the events the invite path was previously silent on (WS3).
@@ -524,12 +533,6 @@ export class IamFlowsService {
           payload: { userId: user.id, email: user.email, tenantId: invite.tenantId },
         });
       }
-      await this.outbox.append(tx, {
-        tenantId: invite.tenantId,
-        eventType: "tenant.member.added",
-        aggregateId: invite.tenantId,
-        payload: { tenantId: invite.tenantId, userId: user.id, role: invite.role },
-      });
       await this.outbox.append(tx, {
         tenantId: invite.tenantId,
         eventType: "tenant.invitation.accepted",
@@ -567,6 +570,192 @@ export class IamFlowsService {
       throw new BadRequestException("Invalid or expired invitation");
     }
     return invite;
+  }
+
+  /**
+   * Shared membership-creation core (reused by acceptInvite + approveJoinRequest).
+   * Idempotent: the `update: {}` makes a re-run / already-member a no-op. Emits
+   * tenant.member.added in the SAME transaction (outbox-atomic).
+   */
+  private async createMembershipTx(
+    tx: Prisma.TransactionClient,
+    args: { tenantId: string; userId: string; role: AppUserRole; addedBy?: string | null },
+  ): Promise<void> {
+    await tx.tenantMember.upsert({
+      where: { tenantId_userId: { tenantId: args.tenantId, userId: args.userId } },
+      create: { tenantId: args.tenantId, userId: args.userId, role: args.role, addedBy: args.addedBy ?? null },
+      update: {},
+    });
+    await this.outbox.append(tx, {
+      tenantId: args.tenantId,
+      eventType: "tenant.member.added",
+      aggregateId: args.tenantId,
+      payload: { tenantId: args.tenantId, userId: args.userId, role: args.role },
+    });
+  }
+
+  // ── Join requests (self-signup → admin approval; the inverse of invite) ──
+  /**
+   * Public: a prospect requests access to an existing tenant. Creates/loads the User
+   * (emailVerified:false), upserts a join request at status "unverified" (resetting a
+   * stale/rejected row), and sends a verification code. NO session, NO iam.user.created
+   * (that would fire the welcome email pre-approval), NO submitted event yet — the
+   * request only enters the organiser queue once the email is verified (confirmAccess).
+   */
+  async requestAccess(input: {
+    email: string;
+    password: string;
+    displayName: string;
+    requestedRole: string;
+    tenantSlug: string;
+  }): Promise<{ ok: true; alreadyMember?: boolean }> {
+    const email = input.email.trim().toLowerCase();
+    if (!input.password || input.password.length < 8) {
+      throw new BadRequestException("Password must be at least 8 characters");
+    }
+    const slug = input.tenantSlug.trim().toLowerCase();
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug, deletedAt: null } });
+    if (!tenant) throw new BadRequestException("Unknown organisation");
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      let user = await tx.user.findUnique({ where: { email } });
+      if (user) {
+        const member = await tx.tenantMember.findUnique({
+          where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+        });
+        if (member) return { alreadyMember: true };
+      } else {
+        user = await tx.user.create({
+          data: {
+            email,
+            displayName: input.displayName.trim() || email,
+            passwordHash: await hashPassword(input.password),
+            emailVerified: false,
+          },
+        });
+      }
+      const existingReq = await tx.tenantJoinRequest.findUnique({
+        where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+      });
+      if (!existingReq) {
+        await tx.tenantJoinRequest.create({
+          data: { tenantId: tenant.id, userId: user.id, email, requestedRole: input.requestedRole, status: "unverified" },
+        });
+      } else if (existingReq.status === "rejected") {
+        // Soft re-request: a rejected applicant may try again — reset to unverified.
+        await tx.tenantJoinRequest.update({
+          where: { id: existingReq.id },
+          data: { requestedRole: input.requestedRole, status: "unverified", decidedBy: null, decidedAt: null },
+        });
+      } else {
+        // pending / unverified / approved — keep the row + decision audit intact; just
+        // refresh the role hint (the verify step re-sends the code below).
+        await tx.tenantJoinRequest.update({
+          where: { id: existingReq.id },
+          data: { requestedRole: input.requestedRole },
+        });
+      }
+      return { alreadyMember: false };
+    });
+
+    if (result.alreadyMember) return { ok: true, alreadyMember: true };
+    // Send the verification code (no-op if the user is somehow already verified).
+    await this.sendEmailVerification(email);
+    return { ok: true };
+  }
+
+  /**
+   * Public: confirm the verification code, then promote the join request to "pending"
+   * (visible to organisers) and emit submitted. Reuses confirmEmailVerification.
+   */
+  async confirmAccess(email: string, code: string, tenantSlug: string): Promise<{ ok: true }> {
+    const slug = tenantSlug.trim().toLowerCase();
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug, deletedAt: null } });
+    if (!tenant) throw new BadRequestException("Unknown organisation");
+    await this.confirmEmailVerification(email, code); // sets emailVerified, throws on bad code
+    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (!user) throw new BadRequestException("Invalid code");
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.tenantJoinRequest.updateMany({
+        where: { tenantId: tenant.id, userId: user.id, status: "unverified" },
+        data: { status: "pending" },
+      });
+      if (updated.count === 0) return; // already pending/decided — idempotent
+      const req = await tx.tenantJoinRequest.findUnique({
+        where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+      });
+      if (req) {
+        await this.outbox.append(tx, {
+          tenantId: tenant.id,
+          eventType: "tenant.join-request.submitted",
+          aggregateId: req.id,
+          payload: { requestId: req.id, tenantId: tenant.id, email: user.email, requestedRole: req.requestedRole },
+        });
+      }
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Admin: approve a pending request → create the membership (shared core) with the
+   * organiser-assigned role. Race-safe: the conditional updateMany ensures exactly one
+   * concurrent approve wins and emits. Idempotent on a second call.
+   */
+  async approveJoinRequest(
+    tenantId: string,
+    requestId: string,
+    input: { role: AppUserRole; approvedBy?: string | null },
+  ): Promise<{ ok: true }> {
+    const reqRow = await this.prisma.tenantJoinRequest.findFirst({ where: { id: requestId, tenantId } });
+    if (!reqRow) throw new BadRequestException("Join request not found");
+    if (reqRow.status === "rejected") throw new BadRequestException("This request was rejected");
+    if (reqRow.status === "approved") return { ok: true };
+    await this.prisma.$transaction(async (tx) => {
+      const won = await tx.tenantJoinRequest.updateMany({
+        where: { id: requestId, tenantId, status: "pending" },
+        data: { status: "approved", decidedBy: input.approvedBy ?? null, decidedAt: new Date() },
+      });
+      if (won.count === 0) return; // lost the race / not pending — no duplicate emit
+      await this.createMembershipTx(tx, {
+        tenantId,
+        userId: reqRow.userId,
+        role: input.role,
+        addedBy: input.approvedBy,
+      });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "tenant.join-request.approved",
+        aggregateId: requestId,
+        payload: { requestId, tenantId, userId: reqRow.userId, role: input.role },
+      });
+    });
+    return { ok: true };
+  }
+
+  /** Admin: reject a pending request (soft — the prospect may re-request). */
+  async rejectJoinRequest(
+    tenantId: string,
+    requestId: string,
+    input: { rejectedBy?: string | null } = {},
+  ): Promise<{ ok: true }> {
+    const reqRow = await this.prisma.tenantJoinRequest.findFirst({ where: { id: requestId, tenantId } });
+    if (!reqRow) throw new BadRequestException("Join request not found");
+    if (reqRow.status === "approved") throw new BadRequestException("This request was already approved");
+    if (reqRow.status === "rejected") return { ok: true };
+    await this.prisma.$transaction(async (tx) => {
+      const won = await tx.tenantJoinRequest.updateMany({
+        where: { id: requestId, tenantId, status: { in: ["pending", "unverified"] } },
+        data: { status: "rejected", decidedBy: input.rejectedBy ?? null, decidedAt: new Date() },
+      });
+      if (won.count === 0) return;
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "tenant.join-request.rejected",
+        aggregateId: requestId,
+        payload: { requestId, tenantId, userId: reqRow.userId },
+      });
+    });
+    return { ok: true };
   }
 
   // ── Tenant selection ────────────────────────────────────────────────

@@ -75,6 +75,48 @@ export type AcceptInviteRequest = z.infer<typeof acceptInviteSchema>;
 export const selectTenantSchema = z.object({ tenantId: z.string().min(1) });
 export type SelectTenantRequest = z.infer<typeof selectTenantSchema>;
 
+// ── Self-signup → admin approval (the inverse of invite) ──────────────
+export const requestAccessSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(200),
+  displayName: z.string().min(1).max(200),
+  requestedRole: z.enum(["staff", "volunteer"]),
+  tenantSlug: z.string().min(1).max(64),
+});
+export type RequestAccessRequest = z.infer<typeof requestAccessSchema>;
+
+export const confirmAccessSchema = z.object({
+  email: z.string().email(),
+  code: z.string().min(4).max(12),
+  tenantSlug: z.string().min(1).max(64),
+});
+export type ConfirmAccessRequest = z.infer<typeof confirmAccessSchema>;
+
+export const approveJoinRequestSchema = z.object({ role: z.enum(["ORGANISER", "CANVASSER"]) });
+export type ApproveJoinRequestRequest = z.infer<typeof approveJoinRequestSchema>;
+
+export const rejectJoinRequestSchema = z.object({ reason: z.string().max(500).optional() });
+export type RejectJoinRequestRequest = z.infer<typeof rejectJoinRequestSchema>;
+
+export type JoinRequestStatus = "unverified" | "pending" | "approved" | "rejected";
+export interface JoinRequest {
+  id: string;
+  tenantId: string;
+  userId: string;
+  email: string;
+  requestedRole: string;
+  status: JoinRequestStatus;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+/** POST /auth/request-access response — `alreadyMember` short-circuits the verify step. */
+export interface RequestAccessResponse {
+  ok: true;
+  alreadyMember?: boolean;
+}
+
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),

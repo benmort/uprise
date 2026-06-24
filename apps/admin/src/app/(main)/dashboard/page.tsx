@@ -40,6 +40,7 @@ import { createBlastAndOpen } from "@/lib/blasts";
 import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
 import { KpiTile } from "@/components/canvass/kpi-tile";
 import { Button } from "@/components/ui/button";
+import { QuickActions } from "@yarns/ui";
 import { useToast } from "@/components/ui/toast";
 import { OverviewModuleCard } from "@/components/overview/overview-module-card";
 import { ActivityFeed } from "@/components/overview/activity-feed";
@@ -189,24 +190,31 @@ export default function DashboardPage() {
             {lastUpdatedAt ? ` Updated ${lastUpdatedAt.toLocaleTimeString()}.` : ""}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button className="gap-1.5" disabled={creating} onClick={() => void newBlast("SMS")}>
-            <PlusCircle className="h-4 w-4" />
-            New text blast
-          </Button>
-          {whatsappEnabled ? (
-            <Button variant="outline" className="gap-1.5" disabled={creating} onClick={() => void newBlast("WHATSAPP")}>
-              <MessageSquareText className="h-4 w-4" />
-              New WhatsApp blast
-            </Button>
-          ) : null}
-          <Button asChild variant="outline">
-            <Link href="/inbox">Open inbox</Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/audience">New audience</Link>
-          </Button>
-        </div>
+        <QuickActions
+          actions={[
+            {
+              key: "new-sms",
+              label: "New text blast",
+              icon: <PlusCircle className="h-4 w-4" />,
+              disabled: creating,
+              onClick: () => void newBlast("SMS"),
+            },
+            ...(whatsappEnabled
+              ? [
+                  {
+                    key: "new-whatsapp",
+                    label: "New WhatsApp blast",
+                    icon: <MessageSquareText className="h-4 w-4" />,
+                    variant: "outline" as const,
+                    disabled: creating,
+                    onClick: () => void newBlast("WHATSAPP"),
+                  },
+                ]
+              : []),
+            { key: "inbox", label: "Open inbox", variant: "outline", onClick: () => router.push("/inbox") },
+            { key: "audience", label: "New audience", variant: "outline", onClick: () => router.push("/audience") },
+          ]}
+        />
       </div>
 
       {/* Top KPI row */}

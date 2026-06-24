@@ -43,7 +43,7 @@ const mockMessages: Message[] = [
     isSupport: true,
     body: [
       'Hi John,',
-      'Thanks for reaching out — and great to hear you\'re customizing the dashboard to fit your needs! Yes, you can definitely add custom pages like a "Reports" section, and it\'s quite straightforward. Here\'s a quick guide to help you get started:',
+      'Thanks for reaching out – and great to hear you\'re customizing the dashboard to fit your needs! Yes, you can definitely add custom pages like a "Reports" section, and it\'s quite straightforward. Here\'s a quick guide to help you get started:',
       'To include your new page in the sidebar:',
     ],
     listItems: [
@@ -94,7 +94,7 @@ export default function TicketReplyPage() {
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Ticket Reply</h2>
         <Breadcrumbs
           items={[
-            { label: 'Home', href: '/admin' },
+            { label: 'Home', href: '/dashboard' },
             { label: 'Support Tickets', href: '/admin/support-tickets' },
             { label: 'Ticket Reply' },
           ]}

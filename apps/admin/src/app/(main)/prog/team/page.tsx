@@ -211,7 +211,7 @@ function TeamMembers({ refreshTrigger }: { refreshTrigger?: number }) {
   const getGrantedByDisplay = (member: Member) => {
     if (member.grantedByUser) return getMemberDisplayName(member.grantedByUser);
     if (member.grantedBy) return 'Unknown user';
-    return '—';
+    return '–';
   };
 
   if (isLoading || (tenantId && membersLoading)) {
@@ -320,7 +320,7 @@ function TeamMembers({ refreshTrigger }: { refreshTrigger?: number }) {
                         {displayName}
                       </p>
                       <p className="text-sm text-muted-foreground dark:text-gray-400 truncate">
-                        {member.user?.email || '—'} | {member.role}
+                        {member.user?.email || '–'} | {member.role}
                       </p>
                       <p className="text-xs text-muted-foreground dark:text-gray-500 truncate mt-0.5">
                         Granted by: {getGrantedByDisplay(member)}

@@ -2,15 +2,16 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, CircleIcon } from "lucide-react";
-import { authAppUrl } from "@/lib/links";
+import { ChevronDown, ChevronRight, CircleIcon, ArrowRight } from "lucide-react";
+import { authAppUrl, adminAppUrl } from "@/lib/links";
 
 interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
+  sessionHint: { email: string } | null;
 }
 
-export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
+export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuProps) {
   const [expandedSections, setExpandedSections] = useState<{
     products: boolean;
     resources: boolean;
@@ -221,31 +222,53 @@ export default function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         </div>
         <div className="flex-shrink-0 w-full bg-white border-t border-gray-200 p-4 pb-safe">
           <div className="flex flex-col gap-3">
-            <Link
-              href="/plans"
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-[rgb(52,64,84)] px-4 py-3 text-sm font-medium text-white shadow-theme-xs duration-200 hover:bg-[#1e293b] h-12 w-full touch-manipulation"
-              onClick={onClose}
-            >
-              View Plans
-              <ChevronRight className="h-5 w-5" />
-            </Link>
-            <a
-              href={`${authAppUrl()}/sign-up`}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white duration-200 h-12 w-full touch-manipulation"
-              onClick={onClose}
-            >
-              <span>
-                <CircleIcon className="h-5 w-5" />
-              </span>
-              Get Started
-            </a>
-            <a
-              href={`${authAppUrl()}/sign-in`}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 h-12 w-full touch-manipulation"
-              onClick={onClose}
-            >
-              Login
-            </a>
+            {sessionHint ? (
+              <>
+                <a
+                  href={`${authAppUrl()}/sign-in`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 h-12 w-full touch-manipulation"
+                  onClick={onClose}
+                >
+                  Switch account
+                </a>
+                <a
+                  href={adminAppUrl()}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white duration-200 h-12 w-full touch-manipulation"
+                  onClick={onClose}
+                >
+                  Continue as {sessionHint.email}
+                  <ArrowRight className="h-4 w-4" />
+                </a>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/plans"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-transparent bg-[rgb(52,64,84)] px-4 py-3 text-sm font-medium text-white shadow-theme-xs duration-200 hover:bg-[#1e293b] h-12 w-full touch-manipulation"
+                  onClick={onClose}
+                >
+                  View Plans
+                  <ChevronRight className="h-5 w-5" />
+                </Link>
+                <a
+                  href={`${authAppUrl()}/sign-up`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white duration-200 h-12 w-full touch-manipulation"
+                  onClick={onClose}
+                >
+                  <span>
+                    <CircleIcon className="h-5 w-5" />
+                  </span>
+                  Get Started
+                </a>
+                <a
+                  href={`${authAppUrl()}/sign-in`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-xs duration-200 hover:bg-gray-50 hover:text-gray-800 h-12 w-full touch-manipulation"
+                  onClick={onClose}
+                >
+                  Login
+                </a>
+              </>
+            )}
           </div>
         </div>
       </div>

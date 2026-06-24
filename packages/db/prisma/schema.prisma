@@ -244,6 +244,7 @@ model Tenant {
   network           Network?                @relation(fields: [networkId], references: [id])
   members           TenantMember[]
   invitations       TenantInvitation[]
+  joinRequests      TenantJoinRequest[]
   audiences         Audience[]
   blasts            Blast[]
   integrations      IntegrationConnection[]
@@ -268,7 +269,24 @@ model Tenant {
   shifts            Shift[]
   suppressions      Suppression[]
   pushSubscriptions PushSubscription[]
+  apiKeys           ApiKey[]
 
+  @@schema("tenant")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  prefix     String
+  keyHash    String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, revokedAt])
   @@schema("tenant")
 }
 
@@ -1132,6 +1150,28 @@ model TenantInvitation {
   tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
+  @@index([tenantId, status])
+  @@schema("tenant")
+}
+
+/**
+ * Prospect-initiated request to join an existing tenant (the inverse of TenantInvitation).
+ * status: unverified → pending (after email verification) → approved | rejected. Approval
+ * creates the TenantMember. id-only userId ref to iam.User (no cross-schema FK).
+ */
+model TenantJoinRequest {
+  id            String    @id @default(cuid())
+  tenantId      String
+  userId        String
+  email         String
+  requestedRole String
+  status        String
+  decidedBy     String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
   @@index([tenantId, status])
   @@schema("tenant")
 }

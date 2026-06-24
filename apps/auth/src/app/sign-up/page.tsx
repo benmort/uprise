@@ -117,13 +117,15 @@ export default function SignUpPage() {
     return () => clearTimeout(t);
   }, [step, memberships, returnTo]);
 
+  const homepageUrl = process.env.NEXT_PUBLIC_MARKETING_URL || "http://localhost:3003";
+
   return (
     <div className="flex w-full flex-col">
       <div className="mb-5">
-        <Link href="/sign-in" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <a href={homepageUrl} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-4 w-4" />
-          Back to sign in
-        </Link>
+          Back to homepage
+        </a>
       </div>
 
       {step < 3 ? (

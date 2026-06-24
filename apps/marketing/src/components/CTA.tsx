@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@yarns/ui";
 import { authAppUrl } from "@/lib/links";
+import MarketingLaunchpad from "./MarketingLaunchpad";
 
 export default function CTA() {
   return (
@@ -17,17 +18,21 @@ export default function CTA() {
               Join organisations already using the{" "}
               next generation platform for progressive movements!
             </h2>
-            <div className="mb-17.5 flex flex-wrap gap-3">
-              <a href={`${authAppUrl()}/sign-up`}>
-                <Button className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3.5 text-base font-medium text-white shadow-xs duration-200 hover:bg-primary-600 max-sm:w-full cursor-pointer">
-                  Start a Campaign
-                </Button>
-              </a>
-              <Link href="/request-demo">
-                <Button variant="outline" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-gray-600 bg-transparent px-5 py-3.5 text-base font-medium text-white shadow-xs duration-200 hover:border-gray-400 max-sm:w-full cursor-pointer">
-                  Request a Demo
-                </Button>
-              </Link>
+            <div className="mb-17.5">
+              <MarketingLaunchpad tone="dark">
+                <div className="flex flex-wrap gap-3">
+                  <a href={`${authAppUrl()}/sign-up`}>
+                    <Button className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3.5 text-base font-medium text-white shadow-xs duration-200 hover:bg-primary-600 max-sm:w-full cursor-pointer">
+                      Start a Campaign
+                    </Button>
+                  </a>
+                  <Link href="/request-demo">
+                    <Button variant="outline" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-gray-600 bg-transparent px-5 py-3.5 text-base font-medium text-white shadow-xs duration-200 hover:border-gray-400 max-sm:w-full cursor-pointer">
+                      Request a Demo
+                    </Button>
+                  </Link>
+                </div>
+              </MarketingLaunchpad>
             </div>
 
             <div className="flex gap-4 max-sm:flex-col sm:items-center">

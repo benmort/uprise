@@ -28,6 +28,9 @@ export function buildDomainReactions(deps: ReactionDeps): Reaction[] {
   return [
     welcomeEmailReaction(deps),
     invitationEmailReaction(deps),
+    joinRequestSubmittedReaction(deps),
+    joinRequestApprovedReaction(deps),
+    joinRequestRejectedReaction(deps),
     networkCustomerReaction(deps),
     subscriptionTenantReaction(deps),
     paymentReceiptReaction(deps),
@@ -105,6 +108,81 @@ function invitationEmailReaction({ prisma, email, config }: ReactionDeps): React
         templateKey: "invitation",
         vars: { link: `${authAppUrl}/invite/${invite.token}`, tenant: tenant?.name ?? "" },
         purpose: "invitation",
+      });
+    },
+  };
+}
+
+/** tenant.join-request.submitted → notify the tenant's organisers (best-effort). */
+function joinRequestSubmittedReaction({ prisma, email }: ReactionDeps): Reaction {
+  return {
+    trigger: "tenant.join-request.submitted",
+    emits: ["email.email.queued"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as { tenantId: string; email: string; requestedRole: string };
+      if (!p?.tenantId) return;
+      const tenant = await prisma.tenant.findUnique({ where: { id: p.tenantId } });
+      const organisers = await prisma.tenantMember.findMany({
+        where: { tenantId: p.tenantId, role: "ORGANISER" },
+      });
+      const addresses = (
+        await prisma.user.findMany({ where: { id: { in: organisers.map((o) => o.userId) } } })
+      )
+        .map((u) => u.email)
+        .filter((e): e is string => Boolean(e));
+      for (const toAddress of addresses) {
+        await email.sendTransactional({
+          tenantId: p.tenantId,
+          toAddress,
+          templateKey: "join_request_submitted",
+          vars: { tenant: tenant?.name ?? "", email: p.email, requestedRole: p.requestedRole },
+          purpose: "join_request_submitted",
+        });
+      }
+    },
+  };
+}
+
+/** tenant.join-request.approved → tell the applicant they're in (welcome-equivalent). */
+function joinRequestApprovedReaction({ prisma, email, config }: ReactionDeps): Reaction {
+  return {
+    trigger: "tenant.join-request.approved",
+    emits: ["email.email.queued"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as { tenantId: string; userId: string };
+      if (!p?.tenantId || !p.userId) return;
+      const user = await prisma.user.findUnique({ where: { id: p.userId } });
+      if (!user?.email) return;
+      const tenant = await prisma.tenant.findUnique({ where: { id: p.tenantId } });
+      const authAppUrl = config.get<string>("AUTH_APP_URL", "http://localhost:3002").replace(/\/+$/, "");
+      await email.sendTransactional({
+        tenantId: p.tenantId,
+        toAddress: user.email,
+        templateKey: "join_request_approved",
+        vars: { tenant: tenant?.name ?? "", link: `${authAppUrl}/sign-in` },
+        purpose: "join_request_approved",
+      });
+    },
+  };
+}
+
+/** tenant.join-request.rejected → notify the applicant (best-effort). */
+function joinRequestRejectedReaction({ prisma, email }: ReactionDeps): Reaction {
+  return {
+    trigger: "tenant.join-request.rejected",
+    emits: ["email.email.queued"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as { requestId: string; tenantId: string; userId: string };
+      if (!p?.tenantId || !p.userId) return;
+      const user = await prisma.user.findUnique({ where: { id: p.userId } });
+      if (!user?.email) return;
+      const tenant = await prisma.tenant.findUnique({ where: { id: p.tenantId } });
+      await email.sendTransactional({
+        tenantId: p.tenantId,
+        toAddress: user.email,
+        templateKey: "join_request_rejected",
+        vars: { tenant: tenant?.name ?? "" },
+        purpose: "join_request_rejected",
       });
     },
   };

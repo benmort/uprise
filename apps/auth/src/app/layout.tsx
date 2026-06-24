@@ -32,13 +32,16 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         />
         <div className="relative flex h-screen overflow-hidden bg-background">
           <div className="flex w-full flex-col overflow-y-auto lg:w-1/2">
-            {/* Mobile-only brand mark — shown when the right brand panel is hidden (< lg). */}
-            <div className="flex shrink-0 items-center gap-1.5 px-6 pt-6 lg:hidden">
-              <CircleIcon className="h-6 w-6 text-primary" />
-              <span className="text-lg font-bold text-foreground">Yarns</span>
-            </div>
             <div className="flex w-full flex-1 flex-col justify-center px-6 py-8 lg:px-12 lg:py-12">
-              <div className="mx-auto w-full max-w-md">{children}</div>
+              <div className="mx-auto w-full max-w-md">
+                {/* Mobile-only brand mark — sits just above the centred content
+                    (the right brand panel takes over at ≥ lg). */}
+                <div className="mb-8 flex items-center justify-center gap-1.5 lg:hidden">
+                  <CircleIcon className="h-6 w-6 text-primary" />
+                  <span className="text-lg font-bold text-foreground">Yarns</span>
+                </div>
+                {children}
+              </div>
             </div>
           </div>
           <AuthBrandSidebar />
