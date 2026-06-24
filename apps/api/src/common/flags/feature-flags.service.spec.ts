@@ -5,6 +5,10 @@ type Row = { tenantId: string | null; flagKey: string; enabled: boolean };
 function makeService(rows: Row[]): FeatureFlagsService {
   const prisma = {
     featureFlagOverride: { findMany: jest.fn().mockResolvedValue(rows) },
+    // no network → plan layer resolves empty (precedence tests don't exercise plans)
+    tenant: { findUnique: jest.fn().mockResolvedValue({ networkId: null }) },
+    network: { findUnique: jest.fn().mockResolvedValue(null) },
+    plan: { findUnique: jest.fn().mockResolvedValue(null) },
   } as unknown as ConstructorParameters<typeof FeatureFlagsService>[1];
   return new FeatureFlagsService(
     {} as ConstructorParameters<typeof FeatureFlagsService>[0],

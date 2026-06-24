@@ -1443,6 +1443,22 @@ model Subscription {
   @@schema("payment")
 }
 
+// Subscription plan / tier. `key` matches Network.planName (and the Stripe price
+// nickname). `featureFlags` is the entitlement set this plan grants — a map of
+// feature-flag key → bool, the "plan" layer in flag resolution.
+model Plan {
+  id           String    @id @default(cuid())
+  key          String    @unique
+  displayName  String
+  featureFlags Json
+  isDefault    Boolean   @default(false)
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@schema("payment")
+}
+
 model Invoice {
   id                String   @id @default(cuid())
   tenantId          String

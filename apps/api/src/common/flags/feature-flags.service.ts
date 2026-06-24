@@ -15,7 +15,7 @@ import { OutboxService } from "../outbox/outbox.service";
 /** Backwards-compatible alias for the resolved flag map. */
 export type SystemFeatureFlags = FeatureFlagMap;
 
-type Overrides = { tenant: Map<string, boolean>; global: Map<string, boolean> };
+type Overrides = { tenant: Map<string, boolean>; plan: Map<string, boolean>; global: Map<string, boolean> };
 
 export type FlagAdminEntry = {
   key: FeatureFlagKey;
@@ -25,6 +25,7 @@ export type FlagAdminEntry = {
   default: boolean;
   env: boolean | null;
   tenantOverride: boolean | null;
+  planEntitlement: boolean | null;
   globalOverride: boolean | null;
   effective: boolean;
   source: FlagLayer | "default";
@@ -106,6 +107,7 @@ export class FeatureFlagsService {
         default: meta.default,
         env: this.envValue(key) ?? null,
         tenantOverride: overrides.tenant.get(key) ?? null,
+        planEntitlement: overrides.plan.get(key) ?? null,
         globalOverride: overrides.global.get(key) ?? null,
         effective: resolved.enabled,
         source: resolved.source,
@@ -120,7 +122,34 @@ export class FeatureFlagsService {
     const tenant = new Map<string, boolean>();
     const global = new Map<string, boolean>();
     for (const r of rows) (r.tenantId ? tenant : global).set(r.flagKey, r.enabled);
-    return { tenant, global };
+    const plan = await this.loadPlanEntitlements(tenantId);
+    return { tenant, plan, global };
+  }
+
+  /** The tenant's plan entitlements: tenant → network → plan.featureFlags. */
+  private async loadPlanEntitlements(tenantId: string | null): Promise<Map<string, boolean>> {
+    const map = new Map<string, boolean>();
+    if (!tenantId) return map;
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { networkId: true },
+    });
+    if (!tenant?.networkId) return map;
+    const network = await this.prisma.network.findUnique({
+      where: { id: tenant.networkId },
+      select: { planName: true },
+    });
+    if (!network?.planName) return map;
+    const plan = await this.prisma.plan.findUnique({
+      where: { key: network.planName },
+      select: { featureFlags: true, archivedAt: true },
+    });
+    if (!plan || plan.archivedAt) return map;
+    const ff = plan.featureFlags as Record<string, unknown> | null;
+    if (ff && typeof ff === "object") {
+      for (const [k, v] of Object.entries(ff)) if (typeof v === "boolean") map.set(k, v);
+    }
+    return map;
   }
 
   private resolveOne(
@@ -136,7 +165,10 @@ export class FeatureFlagsService {
       const t = o.tenant.get(key);
       if (t !== undefined) return { enabled: t, source: "tenant" };
     }
-    // Plan-entitlement layer slots here in Phase 2.
+    if (meta.controllableBy.includes("plan")) {
+      const p = o.plan.get(key);
+      if (p !== undefined) return { enabled: p, source: "plan" };
+    }
     if (meta.controllableBy.includes("global")) {
       const g = o.global.get(key);
       if (g !== undefined) return { enabled: g, source: "global" };

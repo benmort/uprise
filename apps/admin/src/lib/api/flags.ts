@@ -12,9 +12,22 @@ export type FlagAdminEntry = {
   default: boolean;
   env: boolean | null;
   tenantOverride: boolean | null;
+  planEntitlement: boolean | null;
   globalOverride: boolean | null;
   effective: boolean;
   source: FlagLayer | "default";
+};
+
+/** A subscription plan and the feature-flag entitlements it grants. */
+export type Plan = {
+  id: string;
+  key: string;
+  displayName: string;
+  featureFlags: Record<string, boolean>;
+  isDefault: boolean;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 /** Effective flag map for the current tenant. */
@@ -41,4 +54,26 @@ export async function setGlobalFlag(flag: FeatureFlagKey, enabled: boolean | nul
     method: "PATCH",
     body: JSON.stringify({ flag, enabled }),
   });
+}
+
+// ── Plans (entitlement sets; reads open to flag-readers, writes super-admin) ──
+
+export async function listPlans() {
+  return request<Plan[]>("/plans");
+}
+
+export async function upsertPlan(input: {
+  key: string;
+  displayName: string;
+  featureFlags: Record<string, boolean>;
+  isDefault?: boolean;
+}) {
+  return request<Plan>("/plans", { method: "POST", body: JSON.stringify(input) });
+}
+
+export async function updatePlan(
+  id: string,
+  input: { displayName?: string; featureFlags?: Record<string, boolean>; isDefault?: boolean; archived?: boolean },
+) {
+  return request<Plan>(`/plans/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 }
