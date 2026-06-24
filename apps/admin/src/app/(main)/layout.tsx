@@ -7,10 +7,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   ChevronDown,
+  ChevronLeft,
   LayoutDashboard,
   LogOut,
   Mail,
   MapPin,
+  Menu,
   MessageSquareText,
   Settings,
   ShieldCheck,
@@ -41,10 +43,15 @@ import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
 
 
 type NavMatch = (pathname: string) => boolean;
-type NavChild = { label: string; href: string; match: NavMatch };
+// A child is either a leaf link or a nested branch (prog's IA goes 3 deep, e.g.
+// Prog → Grant Management → Grants → Manage). Leaf vs branch is told apart by
+// the presence of `href`.
+type NavLeaf = { label: string; href: string; match: NavMatch };
+type NavBranch = { label: string; match: NavMatch; children: NavEntry[] };
+type NavEntry = NavLeaf | NavBranch;
 type NavNode =
   | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch }
-  | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavChild[] };
+  | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavEntry[] };
 
 // Cascade sidebar model (matches the design prototype): leaf items + expandable
 // groups whose children appear on an indented rail. Campaign-scoped children use
@@ -52,6 +59,8 @@ type NavNode =
 function buildNav(campaignId: string): NavNode[] {
   const scoped = (suffix: string) =>
     campaignId ? `/canvass/${campaignId}/${suffix}` : "/canvass";
+  // Prefix matcher for the ported prog routes (all under /prog/*).
+  const px = (s: string): NavMatch => (p) => p.startsWith(`/prog/${s}`);
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
     { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox") },
@@ -98,18 +107,147 @@ function buildNav(campaignId: string): NavNode[] {
       ],
     },
     {
+      // Mirrors prog's admin information architecture (its menu-config.tsx),
+      // rehoming the already-ported pages and registering every new /prog/* route.
       type: "group", key: "prog", label: "Prog", icon: Boxes, match: (p) => p.startsWith("/prog"),
       children: [
-        { label: "Billing", href: "/prog/billing", match: (p) => p.startsWith("/prog/billing") },
-        { label: "Plans", href: "/prog/plans", match: (p) => p.startsWith("/prog/plans") },
-        { label: "Transactions", href: "/prog/transactions", match: (p) => p.startsWith("/prog/transactions") },
-        { label: "Invoices", href: "/prog/invoices", match: (p) => p.startsWith("/prog/invoices") },
-        { label: "Products", href: "/prog/products", match: (p) => p.startsWith("/prog/products") },
-        { label: "Support tickets", href: "/prog/support-tickets", match: (p) => p.startsWith("/prog/support-tickets") },
-        { label: "Checkout", href: "/prog/checkout", match: (p) => p.startsWith("/prog/checkout") },
-        { label: "Workspace settings", href: "/prog/tenant-settings", match: (p) => p.startsWith("/prog/tenant-settings") },
-        { label: "Team", href: "/prog/team", match: (p) => p.startsWith("/prog/team") },
-        { label: "Tenants", href: "/prog/tenants", match: (p) => p.startsWith("/prog/tenants") },
+        { label: "Calendar", href: "/prog/calendar", match: px("calendar") },
+        {
+          label: "Channels", match: px("email") /* representative */,
+          children: [
+            { label: "Email", href: "/prog/email", match: px("email") },
+            { label: "Calls", href: "/prog/calls", match: px("calls") },
+            { label: "Chats", href: "/prog/chats", match: px("chats") },
+            { label: "Social Media", href: "/prog/social-media", match: px("social-media") },
+            { label: "Direct Mail", href: "/prog/direct-mail", match: px("direct-mail") },
+          ],
+        },
+        {
+          label: "Audience", match: (p) => px("audience/")(p) || px("queries")(p) || px("tags")(p) || px("reports")(p) || px("activists")(p),
+          children: [
+            { label: "Persons", href: "/prog/audience/persons", match: px("audience/persons") },
+            { label: "Segments", href: "/prog/audience/segments", match: px("audience/segments") },
+            { label: "Queries", href: "/prog/queries", match: px("queries") },
+            { label: "Tags", href: "/prog/tags", match: px("tags") },
+            { label: "Reports", href: "/prog/reports", match: px("reports") },
+            { label: "Activists", href: "/prog/activists", match: px("activists") },
+          ],
+        },
+        {
+          label: "Actions", match: (p) => px("petitions")(p) || px("forms")(p) || px("fundraisers")(p),
+          children: [
+            { label: "Petitions", href: "/prog/petitions", match: px("petitions") },
+            { label: "Forms", href: "/prog/forms", match: px("forms") },
+            { label: "Fundraisers", href: "/prog/fundraisers", match: px("fundraisers") },
+          ],
+        },
+        {
+          label: "Organising", match: (p) => px("ladders")(p) || px("events")(p),
+          children: [
+            { label: "Ladders", href: "/prog/ladders", match: px("ladders") },
+            { label: "Events", href: "/prog/events", match: px("events") },
+          ],
+        },
+        {
+          label: "Grant Management", match: px("grant-management"),
+          children: [
+            { label: "Dashboard", href: "/prog/grant-management/dashboard", match: px("grant-management/dashboard") },
+            { label: "Applications", href: "/prog/grant-management/applications", match: px("grant-management/applications") },
+            { label: "Action Flow", href: "/prog/grant-management/action-flow", match: px("grant-management/action-flow") },
+            {
+              label: "Reviewing", match: px("grant-management/reviewing"),
+              children: [
+                { label: "Manage", href: "/prog/grant-management/reviewing/manage", match: px("grant-management/reviewing/manage") },
+                { label: "Leaderboard", href: "/prog/grant-management/reviewing/Leaderboard", match: px("grant-management/reviewing/Leaderboard") },
+                { label: "Progress", href: "/prog/grant-management/reviewing/Progress", match: px("grant-management/reviewing/Progress") },
+                { label: "Settings", href: "/prog/grant-management/reviewing/Settings", match: px("grant-management/reviewing/Settings") },
+              ],
+            },
+            {
+              label: "Grants", match: px("grant-management/grants"),
+              children: [
+                { label: "Manage", href: "/prog/grant-management/grants/manage", match: px("grant-management/grants/manage") },
+                { label: "Funds", href: "/prog/grant-management/grants/funds", match: px("grant-management/grants/funds") },
+                { label: "Allocations", href: "/prog/grant-management/grants/allocations", match: px("grant-management/grants/allocations") },
+                { label: "Payments", href: "/prog/grant-management/grants/payments", match: px("grant-management/grants/payments") },
+                { label: "Contracts", href: "/prog/grant-management/grants/contracts", match: px("grant-management/grants/contracts") },
+                { label: "Reports", href: "/prog/grant-management/grants/reports", match: px("grant-management/grants/reports") },
+                { label: "Settings", href: "/prog/grant-management/grants/settings", match: px("grant-management/grants/settings") },
+                { label: "Users", href: "/prog/grant-management/grants/users", match: px("grant-management/grants/users") },
+              ],
+            },
+            { label: "Forms", href: "/prog/grant-management/forms", match: px("grant-management/forms") },
+            { label: "Settings", href: "/prog/grant-management/settings", match: px("grant-management/settings") },
+          ],
+        },
+        {
+          label: "Tasks", match: px("tasks"),
+          children: [
+            { label: "List", href: "/prog/tasks/list", match: px("tasks/list") },
+            { label: "Kanban", href: "/prog/tasks/kanban", match: px("tasks/kanban") },
+          ],
+        },
+        {
+          label: "Business", match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p),
+          children: [
+            {
+              label: "Payments", match: (p) => px("transactions")(p) || px("invoices")(p),
+              children: [
+                { label: "Transactions", href: "/prog/transactions", match: px("transactions") },
+                { label: "Invoices", href: "/prog/invoices", match: px("invoices") },
+              ],
+            },
+            { label: "Products", href: "/prog/products", match: px("products") },
+            { label: "Support tickets", href: "/prog/support-tickets", match: px("support-tickets") },
+            { label: "Checkout", href: "/prog/checkout", match: px("checkout") },
+          ],
+        },
+        {
+          label: "Workspace", match: (p) => px("team")(p) || px("billing")(p) || px("tenants")(p) || px("tenant-settings")(p) || px("activity")(p) || px("plans")(p) || px("security")(p),
+          children: [
+            { label: "Team", href: "/prog/team", match: px("team") },
+            { label: "Billing", href: "/prog/billing", match: px("billing") },
+            { label: "Tenants", href: "/prog/tenants", match: px("tenants") },
+            { label: "Settings", href: "/prog/tenant-settings", match: px("tenant-settings") },
+            { label: "Activity", href: "/prog/activity", match: px("activity") },
+            { label: "Plans", href: "/prog/plans", match: px("plans") },
+            { label: "Security", href: "/prog/security", match: px("security") },
+          ],
+        },
+        {
+          label: "Data & Files", match: (p) => px("keywords")(p) || px("questions-custom-fields")(p) || px("personalization-datasets")(p) || px("custom-targets")(p) || px("id-targets")(p) || px("file-manager")(p),
+          children: [
+            { label: "Keywords", href: "/prog/keywords", match: px("keywords") },
+            { label: "Questions & Custom Fields", href: "/prog/questions-custom-fields", match: px("questions-custom-fields") },
+            { label: "Personalization Datasets", href: "/prog/personalization-datasets", match: px("personalization-datasets") },
+            { label: "Custom Targets", href: "/prog/custom-targets", match: px("custom-targets") },
+            { label: "ID Targets", href: "/prog/id-targets", match: px("id-targets") },
+            { label: "File Manager", href: "/prog/file-manager", match: px("file-manager") },
+          ],
+        },
+        {
+          label: "Developer Hub", match: (p) => px("api-keys")(p) || px("ai-assistant")(p) || px("form-elements")(p) || px("uploads")(p) || px("syncs")(p) || px("email-wrappers")(p) || px("page-wrappers")(p) || px("snippets")(p) || px("shortlinks")(p),
+          children: [
+            { label: "API Keys", href: "/prog/api-keys", match: px("api-keys") },
+            { label: "AI Assistant", href: "/prog/ai-assistant", match: px("ai-assistant") },
+            { label: "Form Elements", href: "/prog/form-elements", match: px("form-elements") },
+            { label: "Uploads", href: "/prog/uploads", match: px("uploads") },
+            { label: "Sync", href: "/prog/syncs", match: px("syncs") },
+            { label: "Email Wrappers", href: "/prog/email-wrappers", match: px("email-wrappers") },
+            { label: "Page Wrappers", href: "/prog/page-wrappers", match: px("page-wrappers") },
+            { label: "Snippets", href: "/prog/snippets", match: px("snippets") },
+            { label: "Shortlinks", href: "/prog/shortlinks", match: px("shortlinks") },
+          ],
+        },
+        {
+          label: "Support", match: (p) => px("email-support")(p) || px("knowledge-base")(p) || px("trainings")(p) || px("release-notes")(p),
+          children: [
+            { label: "Email Support", href: "/prog/email-support", match: px("email-support") },
+            { label: "Knowledge Base", href: "/prog/knowledge-base", match: px("knowledge-base") },
+            { label: "Trainings", href: "/prog/trainings", match: px("trainings") },
+            { label: "Release Notes", href: "/prog/release-notes", match: px("release-notes") },
+          ],
+        },
       ],
     },
   ];
@@ -340,15 +478,17 @@ export default function MainLayout({
 
   const nav = useMemo(() => buildNav(campaignId), [campaignId]);
   // Flatten the nav into a search index for the topbar command palette.
-  const searchItems = useMemo<SearchItem[]>(
-    () =>
-      nav.flatMap((node) =>
-        node.type === "leaf"
-          ? [{ label: node.label, href: node.href }]
-          : node.children.map((c) => ({ label: c.label, href: c.href, group: node.label })),
-      ),
-    [nav],
-  );
+  const searchItems = useMemo<SearchItem[]>(() => {
+    const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
+      entries.flatMap((e) =>
+        "href" in e ? [{ label: e.label, href: e.href }] : collect(e.children),
+      );
+    return nav.flatMap((node) =>
+      node.type === "leaf"
+        ? [{ label: node.label, href: node.href }]
+        : collect(node.children).map((c) => ({ ...c, group: node.label })),
+    );
+  }, [nav]);
   const p = pathname || "";
   // Groups toggle independently (prototype: openGroups array). Default-open is the
   // active group, plus Canvass (prototype seeds openGroups:['canvass']); an explicit
@@ -356,6 +496,81 @@ export default function MainLayout({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const isGroupOpen = (node: Extract<NavNode, { type: "group" }>) =>
     openGroups[node.key] ?? (node.match(p) || node.key === "canvass");
+
+  // Responsive sidebar (prog parity): collapse to an icon-rail on desktop, slide-in
+  // drawer on mobile. The hamburger toggles whichever applies to the viewport.
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const toggleNav = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 1024) setCollapsed((c) => !c);
+    else setMobileOpen((o) => !o);
+  }, []);
+  // Close the mobile drawer on navigation.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+  const labelHidden = collapsed ? "lg:hidden" : "";
+
+  // Recursive renderer for a group's children: leaf links + nested collapsible
+  // branches (prog's IA nests up to 3 deep). Branch open-state is keyed by path.
+  const renderEntries = (entries: NavEntry[], parentKey: string) => (
+    <div className={cn("ml-[19px] mb-1.5 mt-px space-y-0.5 border-l-[1.5px] border-border pl-[11px]", labelHidden)}>
+      {entries.map((entry) => {
+        if ("href" in entry) {
+          const childActive = entry.match(p);
+          return (
+            <Link
+              key={entry.href + entry.label}
+              href={entry.href}
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                "flex min-h-9 items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-[16.8px] lg:text-[14px]",
+                childActive
+                  ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
+                  : "font-medium text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                  childActive ? "bg-primary" : "bg-muted-foreground/40",
+                )}
+              />
+              <span>{entry.label}</span>
+            </Link>
+          );
+        }
+        const key = `${parentKey}/${entry.label}`;
+        const branchActive = entry.match(p);
+        const branchOpen = openGroups[key] ?? branchActive;
+        return (
+          <div key={key}>
+            <button
+              type="button"
+              onClick={() => setOpenGroups((o) => ({ ...o, [key]: !branchOpen }))}
+              aria-expanded={branchOpen}
+              className={cn(
+                "flex min-h-9 w-full items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-[16.8px] lg:text-[14px]",
+                branchActive ? "font-bold text-primary" : "font-medium text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 shrink-0 rounded-full",
+                  branchActive ? "bg-primary" : "bg-muted-foreground/40",
+                )}
+              />
+              <span>{entry.label}</span>
+              <ChevronDown
+                className={cn("ml-auto h-3.5 w-3.5 transition-transform", branchOpen ? "rotate-0" : "-rotate-90")}
+              />
+            </button>
+            {branchOpen ? renderEntries(entry.children, key) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   if (!ready) {
     return (
@@ -368,10 +583,34 @@ export default function MainLayout({
   return (
     <TourRoot>
     <div className="h-screen overflow-hidden bg-background">
+      {/* Mobile drawer backdrop — fades with the drawer */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-in-out lg:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        onClick={() => setMobileOpen(false)}
+        aria-hidden
+      />
       <div className="flex h-full w-full">
-        <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-y-auto border-r border-border bg-surface p-4">
-          <div id="tour-logo" className="mb-6">
+        <aside
+          className={cn(
+            "fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col overflow-y-auto border-r border-border bg-surface p-4 transition-[width,transform] duration-300 ease-in-out lg:static lg:translate-x-0",
+            "w-full",
+            collapsed ? "lg:w-[76px] lg:px-2" : "lg:w-[220px]",
+            mobileOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <div id="tour-logo" className={cn("mb-6 flex items-center justify-between", collapsed && "lg:hidden")}>
             <Logo />
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
+              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground lg:hidden"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
           </div>
 
           <nav id="tour-nav" className="space-y-1">
@@ -383,17 +622,20 @@ export default function MainLayout({
                   <Link
                     key={node.key}
                     href={node.href}
+                    onClick={() => setMobileOpen(false)}
+                    title={node.label}
                     className={cn(
-                      "flex min-h-11 items-center gap-2.5 rounded-[11px] px-3 py-2 text-[14.5px] font-label",
+                      "flex min-h-11 items-center gap-2.5 rounded-[11px] px-3 py-2 text-[17.4px] font-label lg:text-[14.5px]",
+                      collapsed && "lg:justify-center lg:px-2",
                       active
                         ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                         : "font-semibold text-foreground hover:bg-surface-variant",
                     )}
                   >
-                    <Icon className="h-[18px] w-[18px]" />
-                    <span>{node.label}</span>
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className={labelHidden}>{node.label}</span>
                     {node.href === "/inbox" && inboxUnreadCount > 0 ? (
-                      <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                      <span className={cn("ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground", labelHidden)}>
                         {inboxUnreadCount}
                       </span>
                     ) : null}
@@ -406,74 +648,72 @@ export default function MainLayout({
                 <div key={node.key}>
                   <button
                     type="button"
-                    onClick={() => setOpenGroups((o) => ({ ...o, [node.key]: !open }))}
+                    onClick={() => {
+                      if (collapsed && typeof window !== "undefined" && window.innerWidth >= 1024) {
+                        // Expand the rail so the group's children are usable.
+                        setCollapsed(false);
+                        setOpenGroups((o) => ({ ...o, [node.key]: true }));
+                        return;
+                      }
+                      setOpenGroups((o) => ({ ...o, [node.key]: !open }));
+                    }}
                     aria-expanded={open}
+                    title={node.label}
                     className={cn(
-                      "flex min-h-11 w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[14.5px] font-label",
+                      "flex min-h-11 w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[17.4px] font-label lg:text-[14.5px]",
+                      collapsed && "lg:justify-center lg:px-2",
                       groupActive
                         ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                         : "font-semibold text-foreground hover:bg-surface-variant",
                     )}
                   >
-                    <Icon className="h-[18px] w-[18px]" />
-                    <span>{node.label}</span>
+                    <Icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className={labelHidden}>{node.label}</span>
                     <ChevronDown
                       className={cn(
                         "ml-auto h-4 w-4 text-muted-foreground transition-transform",
                         open ? "rotate-0" : "-rotate-90",
+                        labelHidden,
                       )}
                     />
                   </button>
-                  {open ? (
-                    <div className="ml-[19px] mb-1.5 mt-px space-y-0.5 border-l-[1.5px] border-border pl-[11px]">
-                      {node.children.map((child) => {
-                        const childActive = child.match(p);
-                        return (
-                          <Link
-                            key={child.href + child.label}
-                            href={child.href}
-                            className={cn(
-                              "flex min-h-9 items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-[14px]",
-                              childActive
-                                ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
-                                : "font-medium text-muted-foreground hover:text-foreground",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 shrink-0 rounded-full",
-                                childActive ? "bg-primary" : "bg-muted-foreground/40",
-                              )}
-                            />
-                            <span>{child.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  ) : null}
+                  {open ? renderEntries(node.children, node.key) : null}
                 </div>
               );
             })}
           </nav>
 
           <div className="mt-auto space-y-1 pt-4">
-            <TourMenuButton />
+            <div className={collapsed ? "lg:hidden" : undefined}>
+              <TourMenuButton />
+            </div>
             <Button
               variant="outline"
-              className="w-full justify-start"
+              title="Log out"
+              className={cn("w-full justify-start", collapsed && "lg:justify-center")}
               onClick={() => {
                 void logout();
               }}
             >
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
+              <LogOut className={cn("h-4 w-4", collapsed ? "lg:mr-0" : "mr-2")} />
+              <span className={cn("text-[16.8px] lg:text-sm", labelHidden)}>Log out</span>
             </Button>
           </div>
         </aside>
 
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-6">
-            <TopbarSearch items={searchItems} />
+          <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4 lg:px-6">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleNav}
+                aria-label="Toggle navigation"
+                className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <TopbarSearch items={searchItems} />
+            </div>
             <div className="flex items-center gap-2.5">
               <ThemeToggle />
               <NotificationsDropdown unreadCount={inboxUnreadCount} />
