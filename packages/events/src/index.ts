@@ -51,6 +51,8 @@ export const EVENT_TYPES = {
   INVITATION_REVOKED: "tenant.invitation.revoked",
   TENANT_RENAMED: "tenant.tenant.renamed",
   TENANT_DELETED: "tenant.tenant.deleted",
+  API_KEY_ISSUED: "tenant.api-key.issued",
+  API_KEY_REVOKED: "tenant.api-key.revoked",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -105,6 +107,8 @@ export interface DomainEventMap {
   "tenant.invitation.revoked": { invitationId: string; tenantId: string };
   "tenant.tenant.renamed": { tenantId: string; name: string };
   "tenant.tenant.deleted": { tenantId: string };
+  "tenant.api-key.issued": { apiKeyId: string; tenantId: string; name: string };
+  "tenant.api-key.revoked": { apiKeyId: string; tenantId: string };
 }
 
 export interface EventMetadata {

@@ -21,6 +21,7 @@ export const YARNS_RESOURCES = [
   "tenant.member",
   "tenant.invitation",
   "tenant.org-profile",
+  "tenant.api-keys",
   "tenant.all",
 
   // identity / IAM (meld doc 03/04)

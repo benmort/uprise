@@ -268,7 +268,24 @@ model Tenant {
   shifts            Shift[]
   suppressions      Suppression[]
   pushSubscriptions PushSubscription[]
+  apiKeys           ApiKey[]
 
+  @@schema("tenant")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  prefix     String
+  keyHash    String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, revokedAt])
   @@schema("tenant")
 }
 
