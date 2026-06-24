@@ -1,0 +1,44 @@
+import { request } from "@/lib/api";
+import type { FeatureFlagKey, FeatureFlagMap, FlagLayer } from "@yarns/flags";
+
+export type { FeatureFlagKey, FeatureFlagMap, FlagLayer };
+
+/** Per-flag admin breakdown returned by GET /system/feature-flags/admin. */
+export type FlagAdminEntry = {
+  key: FeatureFlagKey;
+  description: string;
+  kind: string;
+  controllableBy: FlagLayer[];
+  default: boolean;
+  env: boolean | null;
+  tenantOverride: boolean | null;
+  globalOverride: boolean | null;
+  effective: boolean;
+  source: FlagLayer | "default";
+};
+
+/** Effective flag map for the current tenant. */
+export async function listFlags() {
+  return request<FeatureFlagMap>("/system/feature-flags");
+}
+
+/** Full admin breakdown (default/env/tenant/global/effective + source). */
+export async function getFlagAdmin() {
+  return request<FlagAdminEntry[]>("/system/feature-flags/admin");
+}
+
+/** Set (true/false) or clear (null) the per-tenant override for the current workspace. */
+export async function setTenantFlag(flag: FeatureFlagKey, enabled: boolean | null) {
+  return request<FlagAdminEntry[]>("/system/feature-flags", {
+    method: "PATCH",
+    body: JSON.stringify({ flag, enabled }),
+  });
+}
+
+/** Set/clear a platform-wide global override (super-admin only). */
+export async function setGlobalFlag(flag: FeatureFlagKey, enabled: boolean | null) {
+  return request<FlagAdminEntry[]>("/system/feature-flags/global", {
+    method: "PATCH",
+    body: JSON.stringify({ flag, enabled }),
+  });
+}

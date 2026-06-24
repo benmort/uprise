@@ -58,6 +58,7 @@ export const EVENT_TYPES = {
   API_KEY_REVOKED: "tenant.api-key.revoked",
   FILE_UPLOADED: "tenant.file.uploaded",
   FILE_DELETED: "tenant.file.deleted",
+  FLAG_CHANGED: "system.flag.changed",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -119,6 +120,7 @@ export interface DomainEventMap {
   "tenant.api-key.revoked": { apiKeyId: string; tenantId: string };
   "tenant.file.uploaded": { fileId: string; tenantId: string; name: string };
   "tenant.file.deleted": { fileId: string; tenantId: string };
+  "system.flag.changed": { flagKey: string; tenantId: string | null; enabled: boolean | null };
 }
 
 export interface EventMetadata {

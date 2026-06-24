@@ -33,7 +33,8 @@
     "web-push": "^3.6.7",
     "@yarns/db": "workspace:*",
     "@yarns/events": "workspace:*",
-    "@yarns/permissions": "workspace:*"
+    "@yarns/permissions": "workspace:*",
+    "@yarns/flags": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",

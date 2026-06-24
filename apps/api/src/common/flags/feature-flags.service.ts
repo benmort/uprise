@@ -1,63 +1,192 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import {
+  FEATURE_FLAG_KEYS,
+  FLAG_DEFAULTS,
+  FLAG_META,
+  isFeatureFlagKey,
+  type FeatureFlagKey,
+  type FeatureFlagMap,
+  type FlagLayer,
+} from "@yarns/flags";
+import { PrismaService } from "../../prisma/prisma.service";
+import { OutboxService } from "../outbox/outbox.service";
 
-export type SystemFeatureFlags = {
-  FEATURE_REALTIME_ENABLED: boolean;
-  FEATURE_AI_ASSIST_ENABLED: boolean;
-  FEATURE_BLAST_SCHEDULER_ENABLED: boolean;
-  FEATURE_BULLMQ_UPLOAD_ENABLED: boolean;
-  FEATURE_BULLMQ_BLAST_ENABLED: boolean;
-  FEATURE_JOURNEYS_ENABLED: boolean;
-  FEATURE_WHATSAPP_ENABLED: boolean;
-  BLAST_DRY_RUN: boolean;
+/** Backwards-compatible alias for the resolved flag map. */
+export type SystemFeatureFlags = FeatureFlagMap;
+
+type Overrides = { tenant: Map<string, boolean>; global: Map<string, boolean> };
+
+export type FlagAdminEntry = {
+  key: FeatureFlagKey;
+  description: string;
+  kind: string;
+  controllableBy: readonly FlagLayer[];
+  default: boolean;
+  env: boolean | null;
+  tenantOverride: boolean | null;
+  globalOverride: boolean | null;
+  effective: boolean;
+  source: FlagLayer | "default";
 };
+
+// Short TTL: the API is serverless (many instances), so each resolves from its
+// own memory. The TTL bounds staleness without a DB hit per request; a write
+// invalidates the instance that handled it. No cross-instance invalidation.
+const CACHE_TTL_MS = 30_000;
 
 @Injectable()
 export class FeatureFlagsService {
-  constructor(private readonly config: ConfigService) {}
+  private readonly cache = new Map<string, { map: FeatureFlagMap; expiry: number }>();
 
-  isRealtimeEnabled(): boolean {
-    return this.config.get<boolean>("FEATURE_REALTIME_ENABLED", true);
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
+  ) {}
+
+  // ── Sync env-layer getters (unchanged behaviour; used by hot server paths
+  //    like queue dispatch where the env value is the platform default) ──
+  isRealtimeEnabled(): boolean { return this.envOrDefault("FEATURE_REALTIME_ENABLED"); }
+  isAiAssistEnabled(): boolean { return this.envOrDefault("FEATURE_AI_ASSIST_ENABLED"); }
+  isBlastSchedulerEnabled(): boolean { return this.envOrDefault("FEATURE_BLAST_SCHEDULER_ENABLED"); }
+  isBullmqUploadEnabled(): boolean { return this.envOrDefault("FEATURE_BULLMQ_UPLOAD_ENABLED"); }
+  isBullmqBlastEnabled(): boolean { return this.envOrDefault("FEATURE_BULLMQ_BLAST_ENABLED"); }
+  isJourneysEnabled(): boolean { return this.envOrDefault("FEATURE_JOURNEYS_ENABLED"); }
+  isWhatsappEnabled(): boolean { return this.envOrDefault("FEATURE_WHATSAPP_ENABLED"); }
+  isBlastDryRunEnabled(): boolean { return this.envOrDefault("BLAST_DRY_RUN"); }
+
+  /** Env-layer snapshot (sync, no DB) — the historical shape. */
+  getSystemFeatureFlags(): FeatureFlagMap {
+    const map = {} as FeatureFlagMap;
+    for (const key of FEATURE_FLAG_KEYS) map[key] = this.envOrDefault(key);
+    return map;
   }
 
-  isAiAssistEnabled(): boolean {
-    return this.config.get<boolean>("FEATURE_AI_ASSIST_ENABLED", true);
+  private envOrDefault(key: FeatureFlagKey): boolean {
+    return this.envValue(key) ?? FLAG_DEFAULTS[key];
   }
 
-  isBlastSchedulerEnabled(): boolean {
-    return this.config.get<boolean>("FEATURE_BLAST_SCHEDULER_ENABLED", true);
+  /** The env override: a boolean iff the flag's env var is explicitly set, else undefined. */
+  private envValue(key: FeatureFlagKey): boolean | undefined {
+    const raw = process.env[FLAG_META[key].envVar];
+    if (raw === undefined || raw.trim() === "") return undefined;
+    const v = raw.trim().toLowerCase();
+    return v === "1" || v === "true" || v === "yes" || v === "on";
   }
 
-  isBullmqUploadEnabled(): boolean {
-    return this.config.get<boolean>("FEATURE_BULLMQ_UPLOAD_ENABLED", false);
+  // ── Async layered resolution: env › tenant › (plan, P2) › global › default ──
+
+  async resolveAll(ctx: { tenantId?: string | null }): Promise<FeatureFlagMap> {
+    const tenantId = ctx.tenantId ?? null;
+    const cacheKey = tenantId ?? "_global";
+    const hit = this.cache.get(cacheKey);
+    if (hit && hit.expiry > Date.now()) return hit.map;
+    const overrides = await this.loadOverrides(tenantId);
+    const map = {} as FeatureFlagMap;
+    for (const key of FEATURE_FLAG_KEYS) map[key] = this.resolveOne(key, overrides).enabled;
+    this.cache.set(cacheKey, { map, expiry: Date.now() + CACHE_TTL_MS });
+    return map;
   }
 
-  isBullmqBlastEnabled(): boolean {
-    return this.config.get<boolean>("FEATURE_BULLMQ_BLAST_ENABLED", false);
+  async isEnabled(key: FeatureFlagKey, ctx: { tenantId?: string | null }): Promise<boolean> {
+    return (await this.resolveAll(ctx))[key];
   }
 
-  isJourneysEnabled(): boolean {
-    return this.config.get<boolean>("FEATURE_JOURNEYS_ENABLED", false);
+  async getAdminView(ctx: { tenantId?: string | null }): Promise<FlagAdminEntry[]> {
+    const overrides = await this.loadOverrides(ctx.tenantId ?? null);
+    return FEATURE_FLAG_KEYS.map((key) => {
+      const meta = FLAG_META[key];
+      const resolved = this.resolveOne(key, overrides);
+      return {
+        key,
+        description: meta.description,
+        kind: meta.kind,
+        controllableBy: meta.controllableBy,
+        default: meta.default,
+        env: this.envValue(key) ?? null,
+        tenantOverride: overrides.tenant.get(key) ?? null,
+        globalOverride: overrides.global.get(key) ?? null,
+        effective: resolved.enabled,
+        source: resolved.source,
+      };
+    });
   }
 
-  isWhatsappEnabled(): boolean {
-    return this.config.get<boolean>("FEATURE_WHATSAPP_ENABLED", false);
+  private async loadOverrides(tenantId: string | null): Promise<Overrides> {
+    const rows = await this.prisma.featureFlagOverride.findMany({
+      where: tenantId ? { OR: [{ tenantId }, { tenantId: null }] } : { tenantId: null },
+    });
+    const tenant = new Map<string, boolean>();
+    const global = new Map<string, boolean>();
+    for (const r of rows) (r.tenantId ? tenant : global).set(r.flagKey, r.enabled);
+    return { tenant, global };
   }
 
-  isBlastDryRunEnabled(): boolean {
-    return this.config.get<boolean>("BLAST_DRY_RUN", false);
+  private resolveOne(
+    key: FeatureFlagKey,
+    o: Overrides,
+  ): { enabled: boolean; source: FlagLayer | "default" } {
+    const meta = FLAG_META[key];
+    if (meta.controllableBy.includes("env")) {
+      const env = this.envValue(key);
+      if (env !== undefined) return { enabled: env, source: "env" };
+    }
+    if (meta.controllableBy.includes("tenant")) {
+      const t = o.tenant.get(key);
+      if (t !== undefined) return { enabled: t, source: "tenant" };
+    }
+    // Plan-entitlement layer slots here in Phase 2.
+    if (meta.controllableBy.includes("global")) {
+      const g = o.global.get(key);
+      if (g !== undefined) return { enabled: g, source: "global" };
+    }
+    return { enabled: meta.default, source: "default" };
   }
 
-  getSystemFeatureFlags(): SystemFeatureFlags {
-    return {
-      FEATURE_REALTIME_ENABLED: this.isRealtimeEnabled(),
-      FEATURE_AI_ASSIST_ENABLED: this.isAiAssistEnabled(),
-      FEATURE_BLAST_SCHEDULER_ENABLED: this.isBlastSchedulerEnabled(),
-      FEATURE_BULLMQ_UPLOAD_ENABLED: this.isBullmqUploadEnabled(),
-      FEATURE_BULLMQ_BLAST_ENABLED: this.isBullmqBlastEnabled(),
-      FEATURE_JOURNEYS_ENABLED: this.isJourneysEnabled(),
-      FEATURE_WHATSAPP_ENABLED: this.isWhatsappEnabled(),
-      BLAST_DRY_RUN: this.isBlastDryRunEnabled(),
-    };
+  // ── Writes: set/clear an override + emit the domain event in one transaction ──
+
+  /** enabled=null clears the override (falls back to the next layer). */
+  async setOverride(input: {
+    tenantId: string | null;
+    flagKey: string;
+    enabled: boolean | null;
+    updatedBy?: string | null;
+  }): Promise<void> {
+    if (!isFeatureFlagKey(input.flagKey)) {
+      throw new BadRequestException(`Unknown feature flag: ${input.flagKey}`);
+    }
+    const layer: FlagLayer = input.tenantId ? "tenant" : "global";
+    if (!FLAG_META[input.flagKey].controllableBy.includes(layer)) {
+      throw new BadRequestException(`Flag ${input.flagKey} is not ${layer}-controllable`);
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.featureFlagOverride.deleteMany({
+        where: { tenantId: input.tenantId, flagKey: input.flagKey },
+      });
+      if (input.enabled !== null) {
+        await tx.featureFlagOverride.create({
+          data: {
+            tenantId: input.tenantId,
+            flagKey: input.flagKey,
+            enabled: input.enabled,
+            updatedBy: input.updatedBy ?? null,
+          },
+        });
+      }
+      await this.outbox.append(tx, {
+        tenantId: input.tenantId ?? "system",
+        eventType: "system.flag.changed",
+        aggregateId: input.flagKey,
+        payload: { flagKey: input.flagKey, tenantId: input.tenantId, enabled: input.enabled },
+      });
+    });
+    this.invalidate(input.tenantId);
+  }
+
+  /** Drop cached resolutions. A global change can affect every tenant. */
+  invalidate(tenantId: string | null): void {
+    if (tenantId) this.cache.delete(tenantId);
+    else this.cache.clear();
   }
 }

@@ -40,6 +40,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
+import { FlagsProvider } from "@/components/flags/flags-provider";
 
 
 type NavMatch = (pathname: string) => boolean;
@@ -105,6 +106,7 @@ function buildNav(campaignId: string): NavNode[] {
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
         { label: "Roles", href: "/settings/roles", match: (p) => p.startsWith("/settings/roles") },
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
+        { label: "Feature flags", href: "/settings/flags", match: (p) => p.startsWith("/settings/flags") },
       ],
     },
     {
@@ -683,7 +685,9 @@ export default function MainLayout({
               <UserDropdown email={principal?.email ?? null} />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto p-6">
+            <FlagsProvider>{children}</FlagsProvider>
+          </main>
         </div>
       </div>
     </div>

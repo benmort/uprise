@@ -43,7 +43,7 @@ const nextConfig = {
   reactStrictMode: true,
   // @yarns/ui ships TS/TSX source (the shared design system); api-client/contracts
   // ship built dist but are listed so Next resolves the workspace packages (meld doc 14).
-  transpilePackages: ["@yarns/ui", "@yarns/api-client", "@yarns/contracts"],
+  transpilePackages: ["@yarns/ui", "@yarns/api-client", "@yarns/contracts", "@yarns/flags"],
 };
 
 export default withPWA(nextConfig);

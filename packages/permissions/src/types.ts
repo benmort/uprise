@@ -95,6 +95,8 @@ export const YARNS_RESOURCES = [
 
   // cross-cutting
   "audit.log",
+  "system.feature-flags",
+  "system.feature-flags-global",
   "all",
 ] as const;
 export type Resource = (typeof YARNS_RESOURCES)[number] | string;

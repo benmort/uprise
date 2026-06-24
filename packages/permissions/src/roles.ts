@@ -39,6 +39,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "contacts.contact" },
     { action: "manage", resource: "payment.all" },
     { action: "read", resource: "audit.log" },
+    { action: "manage", resource: "system.feature-flags" },
   ],
 
   organiser: [
@@ -57,6 +58,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "read", resource: "tenant.tenant" },
     { action: "read", resource: "analytics.all" },
     { action: "read", resource: "audit.log" },
+    { action: "read", resource: "system.feature-flags" },
   ],
 
   canvasser: [

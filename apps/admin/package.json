@@ -27,6 +27,7 @@
     "@turf/turf": "^7.3.5",
     "@yarns/api-client": "workspace:*",
     "@yarns/contracts": "workspace:*",
+    "@yarns/flags": "workspace:*",
     "@yarns/ui": "workspace:*",
     "card-validator": "^10.0.4",
     "class-variance-authority": "^0.7.1",
