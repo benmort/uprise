@@ -30,7 +30,8 @@
     "twilio": "^5.3.7",
     "uuid": "^11.0.3",
     "@yarns/db": "workspace:*",
-    "@yarns/events": "workspace:*"
+    "@yarns/events": "workspace:*",
+    "@yarns/permissions": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",
