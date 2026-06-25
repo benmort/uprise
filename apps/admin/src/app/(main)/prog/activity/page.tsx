@@ -177,7 +177,7 @@ export default function ActivityPage() {
             Activity
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            View recent activity across your Yarns blasts
+            View recent activity across your Uprise blasts
           </p>
         </div>
 

@@ -1,6 +1,6 @@
 # 9. Security Architecture
 
-This document provides a comprehensive overview of how the Yarns system is secured, including authentication, authorization, encryption, secrets management, and network-level protections.
+This document provides a comprehensive overview of how the Uprise system is secured, including authentication, authorization, encryption, secrets management, and network-level protections.
 
 ## Authentication Architecture
 
@@ -762,4 +762,4 @@ security-tests:
 - Container and infrastructure security
 - Compliance rule validation
 
-This comprehensive security architecture ensures that Yarns maintains the highest standards of security across all layers of the application stack, protecting user data, maintaining compliance, and preventing security breaches.
+This comprehensive security architecture ensures that Uprise maintains the highest standards of security across all layers of the application stack, protecting user data, maintaining compliance, and preventing security breaches.

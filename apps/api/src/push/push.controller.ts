@@ -47,7 +47,7 @@ export class PushController {
   async broadcast(@Body() body: { title: string; body: string; url?: string }) {
     const org = await this.ensureOrganization();
     return this.push.broadcast(org.id, {
-      title: body.title || "Yarns",
+      title: body.title || "Uprise",
       body: body.body || "",
       url: body.url,
     });

@@ -9,7 +9,7 @@ import MarkdownRenderer from "@/components/MarkdownRenderer";
 const architectureDocs = {
   "1-high-level-system-overview": {
     title: "High-Level System Overview",
-    description: "Comprehensive overview of Yarns's purpose, goals, and architecture",
+    description: "Comprehensive overview of Uprise's purpose, goals, and architecture",
     filePath: "1-high-level-system-overview.md",
   },
   "2-system-component-diagram": {
@@ -128,12 +128,12 @@ export async function generateMetadata({ params }: ArchitecturePageProps) {
 
   if (!docInfo) {
     return {
-      title: "Architecture Documentation - Yarns",
+      title: "Architecture Documentation - Uprise",
     };
   }
 
   return {
-    title: `${docInfo.title} - Yarns Architecture`,
+    title: `${docInfo.title} - Uprise Architecture`,
     description: docInfo.description,
   };
 }

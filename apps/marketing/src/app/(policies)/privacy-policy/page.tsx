@@ -15,7 +15,7 @@ export default function PrivacyPolicyPage() {
 
               <PolicyH2>Introduction</PolicyH2>
               <PolicyP>
-                Yarns (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform and services.
+                Uprise (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform and services.
               </PolicyP>
 
               <PolicyH2>Information We Collect</PolicyH2>

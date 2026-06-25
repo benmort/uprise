@@ -12,7 +12,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Yarns – Multichannel organising platform",
+  title: "Uprise – Multichannel organising platform",
   description: "SMS & WhatsApp broadcasts, canvassing, audiences, journeys and a unified inbox.",
   manifest: "/manifest.webmanifest",
   icons: {

@@ -5,7 +5,7 @@ export default function HomePage() {
   return (
     <Card>
       <CardContent className="py-8 text-center">
-        <h1 className="text-xl font-semibold">Yarns</h1>
+        <h1 className="text-xl font-semibold">Uprise</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           To request access, open the join link your organisation shared with you.
         </p>

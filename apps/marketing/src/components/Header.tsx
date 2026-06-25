@@ -32,10 +32,10 @@ export default function Header() {
       <div className="relative items-center justify-between px-4 py-4 sm:px-8 xl:flex xl:gap-7 xl:px-12.5 xl:py-0 2xl:gap-0">
         <div className="flex w-full items-center justify-between xl:w-3/12">
           <div className="inline-flex items-center gap-1 z-[9999]">
-            <Link aria-label="Yarns logo" href="/">
+            <Link aria-label="Uprise logo" href="/">
               <div className="flex items-center gap-2">
                 <CircleIcon className="h-8 w-8 text-primary" />
-                <span className="text-xl font-bold text-gray-900">Yarns</span>
+                <span className="text-xl font-bold text-gray-900">Uprise</span>
               </div>
             </Link>
 

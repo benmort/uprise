@@ -19,7 +19,7 @@ export default function CompliancePage() {
 
               <PolicyH2>Overview</PolicyH2>
               <PolicyP>
-                Yarns is committed to maintaining the highest standards of compliance with applicable laws, regulations, and industry best practices. This page outlines our compliance framework and commitments.
+                Uprise is committed to maintaining the highest standards of compliance with applicable laws, regulations, and industry best practices. This page outlines our compliance framework and commitments.
               </PolicyP>
 
               <PolicyH2>Data Protection Compliance</PolicyH2>

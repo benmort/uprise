@@ -7,10 +7,10 @@ export default function DevelopersPage() {
       <div className="max-w-4xl mx-auto">
         <div className="max-w-none">
           <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-            Welcome to the Yarns Developer Hub
+            Welcome to the Uprise Developer Hub
           </h2>
           <p className="text-xl text-gray-600 mb-8">
-            Everything you need to integrate with Yarns and build powerful
+            Everything you need to integrate with Uprise and build powerful
             applications on top of the platform.
           </p>
 
@@ -18,7 +18,7 @@ export default function DevelopersPage() {
             <div className="bg-white p-6 rounded-lg shadow-sm border">
               <h3 className="text-xl font-semibold mb-4">🚀 Getting Started</h3>
               <p className="text-gray-600 mb-4">
-                New to Yarns? Start here to understand our architecture and get
+                New to Uprise? Start here to understand our architecture and get
                 your first integration running.
               </p>
               <ul className="space-y-2 text-sm text-gray-600">
@@ -32,7 +32,7 @@ export default function DevelopersPage() {
             <div className="bg-white p-6 rounded-lg shadow-sm border">
               <h3 className="text-xl font-semibold mb-4">📚 Architecture</h3>
               <p className="text-gray-600 mb-4">
-                Dive into how Yarns is built, from the high-level overview to
+                Dive into how Uprise is built, from the high-level overview to
                 security and scalability.
               </p>
               <ul className="space-y-2 text-sm text-gray-600">

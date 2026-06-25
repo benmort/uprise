@@ -19,7 +19,7 @@ export default function SecurityPage() {
 
               <PolicyH2>Overview</PolicyH2>
               <PolicyP>
-                At Yarns, security is fundamental to everything we do. We implement industry-leading security measures to protect our platform, our customers&apos; data, and ensure the highest levels of trust and reliability.
+                At Uprise, security is fundamental to everything we do. We implement industry-leading security measures to protect our platform, our customers&apos; data, and ensure the highest levels of trust and reliability.
               </PolicyP>
 
               <PolicyH2>Security Framework</PolicyH2>

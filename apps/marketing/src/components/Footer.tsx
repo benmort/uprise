@@ -14,7 +14,7 @@ export default function Footer() {
           <div className="lg:col-span-3">
             <div className="flex items-center gap-2 mb-6">
               <CircleIcon className="h-8 w-8 text-primary" />
-              <span className="text-2xl font-bold text-gray-900">Yarns</span>
+              <span className="text-2xl font-bold text-gray-900">Uprise</span>
             </div>
             <p className="text-gray-600 mb-6 max-w-md">
               Built for progressive organisations, nonprofits, and changemakers who want to make a real impact.
@@ -132,7 +132,7 @@ export default function Footer() {
               </span>
               <span className="text-sm text-gray-500">•</span>
               <span className="text-sm text-gray-500">
-                © 2025 Yarns - All Rights Reserved.
+                © 2025 Uprise - All Rights Reserved.
               </span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">

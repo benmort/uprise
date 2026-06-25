@@ -9,8 +9,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Join — Yarns",
-  description: "Request access to a Yarns workspace.",
+  title: "Join – Uprise",
+  description: "Request access to an Uprise workspace.",
 };
 
 /** Public action app (port 3004): no session, no SSO cookie — it only calls public API endpoints. */

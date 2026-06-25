@@ -63,9 +63,9 @@ const FEATURES = [
 
 const FAQ_ITEMS: FaqItem[] = [
   {
-    question: "Can I use Yarns for my organisation and campaigns?",
+    question: "Can I use Uprise for my organisation and campaigns?",
     answer:
-      "Yes, Yarns is built for progressive organisations, nonprofits, and changemakers. You can use it for campaigns, member management, and outreach based on your plan.",
+      "Yes, Uprise is built for progressive organisations, nonprofits, and changemakers. You can use it for campaigns, member management, and outreach based on your plan.",
   },
   {
     question: "Do I get free updates?",
@@ -100,7 +100,7 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: 'What does "team members" mean?',
     answer:
-      "Team members are the number of users who can access your Yarns account and collaborate on campaigns, audiences, and reporting.",
+      "Team members are the number of users who can access your Uprise account and collaborate on campaigns, audiences, and reporting.",
   },
   {
     question: "What are segments?",
@@ -206,7 +206,7 @@ export default function PlansPage() {
               <div className="grid border-stroke max-lg:m-4 max-lg:gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:border-b">
                 <div className="p-7 pb-8 max-lg:rounded-2xl max-lg:border">
                   <p className="text-base text-text-color">
-                    Yarns plans for progressive organisations
+                    Uprise plans for progressive organisations
                   </p>
                 </div>
 

@@ -84,7 +84,7 @@ function welcomeEmailReaction({ email }: ReactionDeps): Reaction {
         tenantId: p.tenantId,
         toAddress: p.email,
         templateKey: "welcome",
-        vars: { name: p.email, appName: "Yarns" },
+        vars: { name: p.email, appName: "Uprise" },
         purpose: "welcome",
       });
     },
@@ -227,7 +227,7 @@ function paymentReceiptReaction({ prisma, email, logger }: ReactionDeps): Reacti
         tenantId: p.tenantId,
         toAddress,
         templateKey: "receipt",
-        vars: { appName: "Yarns", amount: formatAmount(p.amountCents) },
+        vars: { appName: "Uprise", amount: formatAmount(p.amountCents) },
         purpose: "receipt",
       });
     },
@@ -254,7 +254,7 @@ function paymentRefundReaction({ prisma, email, logger }: ReactionDeps): Reactio
         tenantId: p.tenantId,
         toAddress,
         templateKey: "refund",
-        vars: { appName: "Yarns", amount: formatAmount(p.amountCents) },
+        vars: { appName: "Uprise", amount: formatAmount(p.amountCents) },
         purpose: "refund",
       });
     },

@@ -15,12 +15,12 @@ export default function TermsOfServicePage() {
 
               <PolicyH2>Agreement to Terms</PolicyH2>
               <PolicyP>
-                By accessing and using Yarns&apos;s platform and services, you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you disagree with any part of these terms, you may not access our services.
+                By accessing and using Uprise&apos;s platform and services, you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you disagree with any part of these terms, you may not access our services.
               </PolicyP>
 
               <PolicyH2>Description of Service</PolicyH2>
               <PolicyP>
-                Yarns provides an enterprise-grade multi-tenant SaaS platform for progressive organisations, including:
+                Uprise provides an enterprise-grade multi-tenant SaaS platform for progressive organisations, including:
               </PolicyP>
               <PolicyUl>
                 <PolicyLi>Campaign management tools</PolicyLi>
@@ -76,7 +76,7 @@ export default function TermsOfServicePage() {
               <PolicyH2>Intellectual Property</PolicyH2>
               <PolicyH3>Our Rights</PolicyH3>
               <PolicyUl>
-                <PolicyLi>The service and its content are owned by Yarns</PolicyLi>
+                <PolicyLi>The service and its content are owned by Uprise</PolicyLi>
                 <PolicyLi>All trademarks, logos, and brand names are our property</PolicyLi>
                 <PolicyLi>You may not use our intellectual property without permission</PolicyLi>
               </PolicyUl>

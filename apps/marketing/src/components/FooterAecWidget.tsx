@@ -11,7 +11,7 @@ export default function FooterAecWidget() {
         </svg>
       </span>
       <span className="inline-flex text-primary">AEC Approved</span>
-      <span className="inline-flex">Yarns is a non partisan platform.</span>
+      <span className="inline-flex">Uprise is a non partisan platform.</span>
     </div>
   );
 }

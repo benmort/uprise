@@ -1,6 +1,6 @@
 # 8. Scalability and Fault Tolerance
 
-This document outlines how the Yarns system handles load, growth, and failure scenarios, including scaling strategies, caching layers, fault tolerance mechanisms, and performance optimization techniques.
+This document outlines how the Uprise system handles load, growth, and failure scenarios, including scaling strategies, caching layers, fault tolerance mechanisms, and performance optimization techniques.
 
 ## Scalability Architecture
 
@@ -734,4 +734,4 @@ class ResourceOptimizer {
 - Spot instances for fault-tolerant services
 - Automated scaling to match demand patterns
 
-This comprehensive scalability and fault tolerance architecture ensures that Yarns can handle growth, maintain high availability, and provide reliable service under various load conditions and failure scenarios.
+This comprehensive scalability and fault tolerance architecture ensures that Uprise can handle growth, maintain high availability, and provide reliable service under various load conditions and failure scenarios.

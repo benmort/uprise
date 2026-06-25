@@ -1,6 +1,6 @@
 # 3. Component Descriptions
 
-This document provides detailed descriptions of each component in the Yarns ecosystem, including their responsibilities, technology stacks, and integration patterns.
+This document provides detailed descriptions of each component in the Uprise ecosystem, including their responsibilities, technology stacks, and integration patterns.
 
 ## Client Applications
 
@@ -449,4 +449,4 @@ This document provides detailed descriptions of each component in the Yarns ecos
 - Automated testing and quality gates
 - Rollback capabilities and blue-green deployments
 
-This comprehensive component inventory provides the foundation for understanding how each piece fits into the overall Yarns architecture and enables effective development, deployment, and maintenance of the system.
+This comprehensive component inventory provides the foundation for understanding how each piece fits into the overall Uprise architecture and enables effective development, deployment, and maintenance of the system.

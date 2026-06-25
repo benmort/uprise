@@ -11,8 +11,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Sign in – Yarns",
-  description: "Yarns identity & single sign-on.",
+  title: "Sign in – Uprise",
+  description: "Uprise identity & single sign-on.",
 };
 
 // Apply the shared (parent-domain) theme cookie before paint so the SSO screens
@@ -38,7 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                     (the right brand panel takes over at ≥ lg). */}
                 <div className="mb-8 flex items-center justify-center gap-1.5 lg:hidden">
                   <CircleIcon className="h-6 w-6 text-primary" />
-                  <span className="text-lg font-bold text-foreground">Yarns</span>
+                  <span className="text-lg font-bold text-foreground">Uprise</span>
                 </div>
                 {children}
               </div>

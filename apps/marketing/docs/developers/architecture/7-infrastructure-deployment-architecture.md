@@ -1,6 +1,6 @@
 # 7. Infrastructure / Deployment Architecture
 
-This document outlines how the Yarns system is deployed and managed across different environments, including containerization, orchestration, cloud provider setup, and deployment strategies.
+This document outlines how the Uprise system is deployed and managed across different environments, including containerization, orchestration, cloud provider setup, and deployment strategies.
 
 ## Environment Overview
 
@@ -369,7 +369,7 @@ Resources:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
       ReplicationGroupId: yarns-redis-cluster
-      ReplicationGroupDescription: Redis cluster for Yarns
+      ReplicationGroupDescription: Redis cluster for Uprise
       NumCacheClusters: 3
       Engine: redis
       EngineVersion: "7.0"
@@ -554,7 +554,7 @@ scrape_configs:
 ```json
 {
   "dashboard": {
-    "title": "Yarns Service Health",
+    "title": "Uprise Service Health",
     "panels": [
       {
         "title": "Service Response Times",
@@ -808,4 +808,4 @@ service:
 - Service dependency mapping
 - User experience monitoring
 
-This comprehensive infrastructure and deployment architecture ensures reliable, scalable, and secure operation of the Yarns platform across all environments.
+This comprehensive infrastructure and deployment architecture ensures reliable, scalable, and secure operation of the Uprise platform across all environments.

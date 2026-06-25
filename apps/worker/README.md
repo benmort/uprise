@@ -1,4 +1,4 @@
-# Yarns Worker
+# Uprise Worker
 
 BullMQ worker runtime for queue consumers.
 
