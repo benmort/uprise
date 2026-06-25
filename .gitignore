@@ -53,3 +53,6 @@ apps/admin/playwright-report/
 
 # Local ngrok authtoken (merged with the committed ngrok.yml by `pnpm dev:tunnel`)
 ngrok.local.yml
+
+# pnpm deploy output for the Railway worker service
+/worker-deploy/

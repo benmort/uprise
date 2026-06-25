@@ -1,6 +1,7 @@
 {
   "name": "twilio-messenger",
   "private": true,
+  "packageManager": "pnpm@10.15.0",
   "scripts": {
     "dev:all": "concurrently -n apps,tunnel -c blue,magenta \"pnpm dev:apps\" \"pnpm dev:tunnel\"",
     "dev:apps": "pnpm -r --parallel run dev",
