@@ -16,7 +16,7 @@ project, not just a save. This section is the authoritative env matrix; it super
 "Auth domain + wiring" / "CORS" bullets in the consolidation item below for the uprise domain.
 
 **Assumed hostnames** (swap if different): marketing `www.uprise.org.au` (+ apex `uprise.org.au`),
-admin `app.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`, action
+admin `admin.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`, action
 `action.uprise.org.au`, cookie parent `.uprise.org.au`. Note `NEXT_PUBLIC_API_URL` includes the
 `/api/v1` suffix.
 
@@ -26,7 +26,7 @@ admin `app.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`, a
 |---|---|
 | `NEXT_PUBLIC_API_URL` | `https://api.uprise.org.au/api/v1` |
 | `NEXT_PUBLIC_AUTH_APP_URL` | `https://auth.uprise.org.au` |
-| `NEXT_PUBLIC_APP_URL` | `https://app.uprise.org.au` |
+| `NEXT_PUBLIC_APP_URL` | `https://admin.uprise.org.au` |
 
 **yarns-action (Vercel)**
 
@@ -40,7 +40,7 @@ admin `app.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`, a
 | Var | Value |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | `https://api.uprise.org.au/api/v1` |
-| `NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS` | `https://app.uprise.org.au,https://www.uprise.org.au,https://action.uprise.org.au` |
+| `NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS` | `https://admin.uprise.org.au,https://www.uprise.org.au,https://action.uprise.org.au` |
 | `NEXT_PUBLIC_MARKETING_URL` | `https://www.uprise.org.au` |
 
 **yarns-admin (Vercel)**
@@ -62,7 +62,7 @@ admin `app.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`, a
 | `SESSION_COOKIE_DOMAIN` | `.uprise.org.au` |
 | `AUTH_APP_URL` | `https://auth.uprise.org.au` |
 | `API_BASE_URL` | `https://api.uprise.org.au` |
-| `CORS_ALLOWED_ORIGINS` | `https://uprise.org.au,https://www.uprise.org.au,https://app.uprise.org.au,https://auth.uprise.org.au,https://action.uprise.org.au` |
+| `CORS_ALLOWED_ORIGINS` | `https://uprise.org.au,https://www.uprise.org.au,https://admin.uprise.org.au,https://auth.uprise.org.au,https://action.uprise.org.au` |
 | `BASIC_AUTH_USERNAME` / `BASIC_AUTH_PASSWORD` | credentials for the global guard |
 | `STREAM_TOKEN_SECRET` | a long random secret |
 | `CRON_SECRET` | a long random secret (gates the cron dispatch endpoints) |
