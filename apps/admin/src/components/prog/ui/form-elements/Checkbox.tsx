@@ -22,7 +22,7 @@ const Checkbox: React.FC<CheckboxProps> = ({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
-        className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded focus:ring-2"
+        className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-input rounded focus:ring-2"
       />
       {label && (
         <span className="text-sm font-medium text-gray-700 dark:text-gray-400">
