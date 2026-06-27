@@ -16,20 +16,20 @@ Extend `RESOURCES`/`ROLE_PERMISSIONS` with yarns domains: `audience.*`, `messagi
 
 ## Unified role taxonomy
 
-Reconcile prog's `super-admin/owner/admin/member` with yarns' `ORGANISER/CANVASSER`. Stored as `TenantMember.role` strings, validated against `@yarns/permissions`.
+Reconcile prog's `super-admin/owner/admin/member` with yarns' `ORGANISER/VOLUNTEER`. Stored as `TenantMember.role` strings, validated against `@yarns/permissions`.
 
 | Role | Replaces | Scope |
 |---|---|---|
 | `super-admin` | env break-glass | system-wide `manage all` |
 | `owner` | prog owner | full tenant incl. billing/network |
 | `organiser` | yarns ORGANISER + prog admin | manage all campaign/messaging/audience/canvass/journey/integration domains; manage members + invitations; read analytics; **no billing** |
-| `canvasser` | yarns CANVASSER | field-only: read assigned turf/walklist + field-visible contacts; write doorknock/disposition; no audience/blast/integration access |
+| `volunteer` | yarns VOLUNTEER | field-only: read assigned turf/walklist + field-visible contacts; write doorknock/disposition; no audience/blast/integration access |
 | `member` | prog member | read-only tenant member |
 
 `organiser` aliases prog's `admin` rule-set (one product label, admin-equivalent rules). Example matrix additions:
 
 ```ts
-canvasser: [
+volunteer: [
   { action: 'read',   resource: 'canvass.turf' },
   { action: 'read',   resource: 'canvass.walklist' },
   { action: 'manage', resource: 'canvass.doorknock' },
@@ -91,7 +91,7 @@ Expose these as IAM API endpoints (e.g. `/iam/sessions`, `/iam/magic-link`, `/ia
 
 ## Verification
 
-- e2e: session login issues a token; `AbilityGuard` denies a canvasser hitting an audience endpoint, allows an organiser.
+- e2e: session login issues a token; `AbilityGuard` denies a volunteer hitting an audience endpoint, allows an organiser.
 - e2e: all four bypass paths pass without a session (OPTIONS, Twilio webhook, analytics stream-token, cron Bearer).
 - unit: role-matrix tests – each role's `can`/`cannot` over representative resources.
 

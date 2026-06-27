@@ -15,7 +15,7 @@ import { DataTable } from "@/components/canvass/data-table";
 import { RoleChip } from "@/components/canvass/role-chip";
 import { useToast } from "@/components/ui/toast";
 
-type Role = "CANVASSER" | "ORGANISER";
+type Role = "VOLUNTEER" | "ORGANISER";
 type Canvasser = { id: string; displayName: string; email: string | null; role: string };
 
 export default function CanvassersPage() {
@@ -25,13 +25,13 @@ export default function CanvassersPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("CANVASSER");
+  const [role, setRole] = useState<Role>("VOLUNTEER");
   const [busy, setBusy] = useState(false);
 
   const [editing, setEditing] = useState<Canvasser | null>(null);
   const [editForm, setEditForm] = useState<{ displayName: string; role: Role; password: string }>({
     displayName: "",
-    role: "CANVASSER",
+    role: "VOLUNTEER",
     password: "",
   });
   const [editBusy, setEditBusy] = useState(false);
@@ -67,7 +67,7 @@ export default function CanvassersPage() {
 
   const openEdit = (c: Canvasser) => {
     setEditing(c);
-    setEditForm({ displayName: c.displayName, role: c.role === "ORGANISER" ? "ORGANISER" : "CANVASSER", password: "" });
+    setEditForm({ displayName: c.displayName, role: c.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER", password: "" });
   };
 
   const submitEdit = useCallback(async () => {
@@ -117,7 +117,7 @@ export default function CanvassersPage() {
           </Field>
           <Field label="Role" htmlFor="cv-role">
             <Select id="cv-role" value={role} onValueChange={(v) => setRole(v as Role)}>
-              <SelectItem value="CANVASSER">Canvasser</SelectItem>
+              <SelectItem value="VOLUNTEER">Volunteer</SelectItem>
               <SelectItem value="ORGANISER">Organiser</SelectItem>
             </Select>
           </Field>
@@ -141,7 +141,7 @@ export default function CanvassersPage() {
             {
               key: "role",
               header: "Role",
-              cell: (r) => <RoleChip role={r.role === "ORGANISER" ? "ORGANISER" : "CANVASSER"} />,
+              cell: (r) => <RoleChip role={r.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER"} />,
             },
             {
               key: "actions",
@@ -179,7 +179,7 @@ export default function CanvassersPage() {
             value={editForm.role}
             onValueChange={(v) => setEditForm((f) => ({ ...f, role: v as Role }))}
           >
-            <SelectItem value="CANVASSER">Canvasser</SelectItem>
+            <SelectItem value="VOLUNTEER">Volunteer</SelectItem>
             <SelectItem value="ORGANISER">Organiser</SelectItem>
           </Select>
         </Field>

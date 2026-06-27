@@ -180,7 +180,7 @@ describe("API e2e — full surface", () => {
   describe("canvass people + shifts", () => {
     it("canvasser create → update", async () => {
       const email = `e2e+${Date.now()}@yarns.test`;
-      const create = await api.post("/api/v1/canvass/canvassers").send({ displayName: "E2E Canvasser", email, password: "supersecret", role: "CANVASSER" });
+      const create = await api.post("/api/v1/canvass/canvassers").send({ displayName: "E2E Canvasser", email, password: "supersecret", role: "VOLUNTEER" });
       okStatus(create.status);
       const id = data(create.body).id;
       okStatus((await api.patch(`/api/v1/canvass/canvassers/${id}`).send({ displayName: "E2E Canvasser (edited)", role: "ORGANISER" })).status);

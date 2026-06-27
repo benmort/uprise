@@ -42,7 +42,7 @@ export async function request<T>(
 
 export type AuthPrincipal = {
   id: string;
-  role: "OWNER" | "ORGANISER" | "CANVASSER";
+  role: "OWNER" | "ORGANISER" | "VOLUNTEER";
   tenantId: string | null;
 };
 
@@ -776,7 +776,7 @@ export async function createCanvasser(input: {
   displayName: string;
   email: string;
   password: string;
-  role?: "ORGANISER" | "CANVASSER";
+  role?: "ORGANISER" | "VOLUNTEER";
 }) {
   return request<{ id: string; displayName: string; email: string | null; role: string }>(
     "/canvass/canvassers",
@@ -790,7 +790,7 @@ export async function createCanvasser(input: {
 
 export async function updateCanvasser(
   id: string,
-  input: { displayName?: string; role?: "ORGANISER" | "CANVASSER"; password?: string },
+  input: { displayName?: string; role?: "ORGANISER" | "VOLUNTEER"; password?: string },
 ) {
   return request<{ id: string; displayName: string; email: string | null; role: string }>(
     `/canvass/canvassers/${encodeURIComponent(id)}`,

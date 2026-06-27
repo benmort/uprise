@@ -101,7 +101,7 @@ export class SeedService {
     await this.engagement.ensureDefaultDispositions();
 
     await this.upsertUser(tenantId, DEMO_LOGINS.organiser, AppUserRole.ORGANISER);
-    const canvasserId = await this.upsertUser(tenantId, DEMO_LOGINS.canvasser, AppUserRole.CANVASSER);
+    const canvasserId = await this.upsertUser(tenantId, DEMO_LOGINS.canvasser, AppUserRole.VOLUNTEER);
 
     // Campaign
     const campaign =

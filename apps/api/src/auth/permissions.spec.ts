@@ -16,6 +16,13 @@ describe("@yarns/permissions role matrix", () => {
     expect(a.can("read", "tenant.network")).toBe(true);
   });
 
+  it("the isSuperAdmin flag alone grants manage:all (no role string needed)", () => {
+    const a = defineAbilityFor({ id: "u1", type: "user", email: "u@org.au", tenantId: "t1", roles: [], isSuperAdmin: true });
+    expect(a.can("manage", "all")).toBe(true);
+    expect(a.can("delete", "payment.all")).toBe(true);
+    expect(a.can("manage", "tenant.network")).toBe(true);
+  });
+
   it("organiser manages campaign/messaging/audience but not billing or network", () => {
     const a = defineAbilityFor(actor(["organiser"]));
     expect(a.can("manage", "audience.audience")).toBe(true); // .all expansion
@@ -28,8 +35,8 @@ describe("@yarns/permissions role matrix", () => {
     expect(a.can("manage", "tenant.network")).toBe(false);
   });
 
-  it("canvasser is field-only: doorknocks yes, audience/blasts no", () => {
-    const a = defineAbilityFor(actor(["canvasser"]));
+  it("volunteer is field-only: doorknocks yes, audience/blasts no", () => {
+    const a = defineAbilityFor(actor(["volunteer"]));
     expect(a.can("manage", "canvass.doorknock")).toBe(true);
     expect(a.can("create", "canvass.disposition")).toBe(true);
     expect(a.can("read", "canvass.turf")).toBe(true);
@@ -55,6 +62,6 @@ describe("@yarns/permissions role matrix", () => {
 
   it("maps legacy AppUserRole values to unified roles", () => {
     expect(APP_USER_ROLE_TO_ROLE.ORGANISER).toBe("organiser");
-    expect(APP_USER_ROLE_TO_ROLE.CANVASSER).toBe("canvasser");
+    expect(APP_USER_ROLE_TO_ROLE.VOLUNTEER).toBe("volunteer");
   });
 });

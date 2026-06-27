@@ -305,7 +305,7 @@ export class CanvassingService {
       select: { id: true, displayName: true, email: true },
     });
     const roleByUser = new Map(members.map((m) => [m.userId, m.role]));
-    return users.map((u) => ({ ...u, role: roleByUser.get(u.id) ?? AppUserRole.CANVASSER }));
+    return users.map((u) => ({ ...u, role: roleByUser.get(u.id) ?? AppUserRole.VOLUNTEER }));
   }
 
   /**
@@ -318,7 +318,7 @@ export class CanvassingService {
     input: { displayName: string; email: string; password: string; role?: AppUserRole },
   ) {
     const passwordHash = await hashPassword(input.password);
-    const role = input.role ?? AppUserRole.CANVASSER;
+    const role = input.role ?? AppUserRole.VOLUNTEER;
     try {
       const user = await this.prisma.$transaction(async (tx) => {
         const u = await tx.user.create({

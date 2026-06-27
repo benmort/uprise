@@ -27,12 +27,12 @@ describe("RolesGuard", () => {
   });
 
   it("forbids when the user's role is not allowed", () => {
-    const { guard, context } = guardFor([AppUserRole.ORGANISER], { role: AppUserRole.CANVASSER });
+    const { guard, context } = guardFor([AppUserRole.ORGANISER], { role: AppUserRole.VOLUNTEER });
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 
   it("forbids when there is no authenticated user", () => {
-    const { guard, context } = guardFor([AppUserRole.CANVASSER], undefined);
+    const { guard, context } = guardFor([AppUserRole.VOLUNTEER], undefined);
     expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
   });
 });

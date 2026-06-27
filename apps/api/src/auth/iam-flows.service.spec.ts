@@ -314,7 +314,7 @@ describe("IamFlowsService", () => {
         deletedAt: null,
         passwordHash: await hashPassword("currentpw1"),
       });
-      prisma.tenantMember.findMany.mockResolvedValueOnce([{ tenantId: "t1", role: "CANVASSER" }]);
+      prisma.tenantMember.findMany.mockResolvedValueOnce([{ tenantId: "t1", role: "VOLUNTEER" }]);
       await svc.deleteAccount("u1", "currentpw1");
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "u1" },
@@ -378,7 +378,7 @@ describe("IamFlowsService", () => {
     it("requestAccess short-circuits when the user is already a member (no request, no code)", async () => {
       const { svc, prisma, dispatcher } = setup();
       prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
-      prisma.tenantMember.findUnique.mockResolvedValue({ tenantId: "t1", userId: "u1", role: "CANVASSER" });
+      prisma.tenantMember.findUnique.mockResolvedValue({ tenantId: "t1", userId: "u1", role: "VOLUNTEER" });
       const res = await svc.requestAccess({
         email: "a@b.c", password: "longenoughpw", displayName: "A", requestedRole: "staff", tenantSlug: "org-one",
       });
@@ -438,7 +438,7 @@ describe("IamFlowsService", () => {
       const { svc, prisma, outbox } = setup();
       prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
       prisma.tenantJoinRequest.updateMany.mockResolvedValueOnce({ count: 1 }); // wins the race
-      await svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any, approvedBy: "admin1" });
+      await svc.approveJoinRequest("t1", "jr1", { role: "VOLUNTEER" as any, approvedBy: "admin1" });
       expect(prisma.tenantMember.upsert).toHaveBeenCalled();
       const types = outbox.append.mock.calls.map((c: any) => c[1].eventType);
       expect(types).toContain("tenant.member.added");
@@ -448,7 +448,7 @@ describe("IamFlowsService", () => {
     it("approveJoinRequest is a no-op on an already-approved request", async () => {
       const { svc, prisma, outbox } = setup();
       prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "approved" });
-      await svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any });
+      await svc.approveJoinRequest("t1", "jr1", { role: "VOLUNTEER" as any });
       expect(prisma.tenantMember.upsert).not.toHaveBeenCalled();
       expect(outbox.append).not.toHaveBeenCalled();
     });
@@ -457,7 +457,7 @@ describe("IamFlowsService", () => {
       const { svc, prisma, outbox } = setup();
       prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
       prisma.tenantJoinRequest.updateMany.mockResolvedValueOnce({ count: 0 }); // lost the race
-      await svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any });
+      await svc.approveJoinRequest("t1", "jr1", { role: "VOLUNTEER" as any });
       expect(prisma.tenantMember.upsert).not.toHaveBeenCalled();
       expect(outbox.append).not.toHaveBeenCalled();
     });
@@ -465,7 +465,7 @@ describe("IamFlowsService", () => {
     it("approveJoinRequest rejects approving a rejected request", async () => {
       const { svc, prisma } = setup();
       prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "rejected" });
-      await expect(svc.approveJoinRequest("t1", "jr1", { role: "CANVASSER" as any })).rejects.toThrow();
+      await expect(svc.approveJoinRequest("t1", "jr1", { role: "VOLUNTEER" as any })).rejects.toThrow();
     });
 
     it("rejectJoinRequest moves pending → rejected and emits rejected", async () => {
@@ -538,7 +538,7 @@ describe("IamFlowsService", () => {
   describe("select tenant", () => {
     it("pins the tenant when the user is a member", async () => {
       const { svc, prisma, sessions } = setup();
-      prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t2", userId: "u1", role: "CANVASSER" });
+      prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t2", userId: "u1", role: "VOLUNTEER" });
       await svc.selectTenant("u1", "sess", "t2");
       expect(sessions.setTenant).toHaveBeenCalledWith("sess", "t2");
     });
@@ -547,6 +547,24 @@ describe("IamFlowsService", () => {
       const { svc, prisma, sessions } = setup();
       prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
       await expect(svc.selectTenant("u1", "sess", "t9")).rejects.toThrow();
+      expect(sessions.setTenant).not.toHaveBeenCalled();
+    });
+
+    it("lets a super-admin pin an existing tenant they're not a member of", async () => {
+      const { svc, prisma, sessions } = setup();
+      prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", isSuperAdmin: true });
+      prisma.tenant.findFirst.mockResolvedValueOnce({ id: "t9", name: "Other Org" });
+      await svc.selectTenant("u1", "sess", "t9");
+      expect(sessions.setTenant).toHaveBeenCalledWith("sess", "t9");
+    });
+
+    it("rejects a super-admin pinning an unknown tenant", async () => {
+      const { svc, prisma, sessions } = setup();
+      prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", isSuperAdmin: true });
+      prisma.tenant.findFirst.mockResolvedValueOnce(null);
+      await expect(svc.selectTenant("u1", "sess", "ghost")).rejects.toThrow();
       expect(sessions.setTenant).not.toHaveBeenCalled();
     });
   });
@@ -588,7 +606,7 @@ describe("IamFlowsService", () => {
         id: "inv1",
         tenantId: "t1",
         email: "x@y.z",
-        role: "CANVASSER",
+        role: "VOLUNTEER",
         status: "pending",
         expiresAt: new Date(Date.now() + 60_000),
       });

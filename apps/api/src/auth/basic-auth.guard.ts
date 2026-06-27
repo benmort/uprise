@@ -247,16 +247,19 @@ export class BasicAuthGuard implements CanActivate {
       where: { userId: user.id },
       orderBy: { createdAt: "asc" },
     });
-    if (!membership) {
+    // A super-admin (DB flag) can act with no membership; everyone else needs one.
+    if (!membership && !user.isSuperAdmin) {
       throw new UnauthorizedException("User has no tenant membership");
     }
+    const isSuper = user.isSuperAdmin === true;
+    const baseRoles = membership ? rolesFor(membership.role) : [];
     request.user = {
       id: user.id,
-      role: membership.role,
-      tenantId: membership.tenantId,
+      role: membership?.role ?? AppUserRole.OWNER,
+      tenantId: membership?.tenantId ?? null,
       email: user.email,
-      roles: rolesFor(membership.role),
-      isSuperAdmin: false,
+      roles: isSuper ? [...baseRoles, "super-admin"] : baseRoles,
+      isSuperAdmin: isSuper,
     };
     return true;
   }
@@ -271,13 +274,15 @@ export class BasicAuthGuard implements CanActivate {
       ipAddress: request.ip ?? request.socket?.remoteAddress ?? null,
     });
     if (!resolved) throw new UnauthorizedException("Invalid or expired session");
+    const isSuper = resolved.isSuperAdmin === true;
+    const baseRoles = rolesFor(resolved.role as AppUserRole);
     request.user = {
       id: resolved.userId,
       role: resolved.role as AppUserRole,
       tenantId: resolved.tenantId,
       email: resolved.email,
-      roles: rolesFor(resolved.role as AppUserRole),
-      isSuperAdmin: false,
+      roles: isSuper ? [...baseRoles, "super-admin"] : baseRoles,
+      isSuperAdmin: isSuper,
     };
     return true;
   }

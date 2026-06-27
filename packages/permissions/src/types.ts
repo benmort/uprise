@@ -121,8 +121,10 @@ export interface AuthenticatedActor {
   type: ActorType;
   email: string;
   tenantId?: string | null;
-  /** Role identifiers (e.g. 'organiser', 'canvasser', 'owner'). */
+  /** Role identifiers (e.g. 'organiser', 'volunteer', 'owner'). */
   roles: ReadonlyArray<string>;
   /** Per-actor overrides (grants or, with inverted, denies). */
   actorPermissions?: ReadonlyArray<Readonly<PermissionRule>>;
+  /** Tenant-independent god-mode (User.isSuperAdmin) — grants `manage all`. */
+  isSuperAdmin?: boolean;
 }

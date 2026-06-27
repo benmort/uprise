@@ -9,7 +9,8 @@ export interface ResolvedSession {
   userId: string;
   email: string;
   tenantId: string | null;
-  role: string; // AppUserRole value from the membership
+  role: string; // AppUserRole value from the membership (effective OWNER for a membership-less super-admin)
+  isSuperAdmin: boolean;
 }
 
 export interface SessionSummary {
@@ -75,11 +76,26 @@ export class SessionService {
       where: { userId: user.id },
       orderBy: { createdAt: "asc" },
     });
-    if (memberships.length === 0) return null;
-    const active =
-      (session.tenantId && memberships.find((m) => m.tenantId === session.tenantId)) ||
-      memberships[0];
-    return { userId: user.id, email: user.email, tenantId: active.tenantId, role: active.role };
+    // A super-admin may have zero memberships (break-glass) and may operate inside a
+    // tenant they're not a member of — so they resolve even when a normal user wouldn't.
+    if (memberships.length === 0 && !user.isSuperAdmin) return null;
+    const pinned = session.tenantId
+      ? memberships.find((m) => m.tenantId === session.tenantId)
+      : undefined;
+    let tenantId: string | null;
+    let role: string;
+    if (pinned) {
+      tenantId = pinned.tenantId;
+      role = pinned.role;
+    } else if (user.isSuperAdmin) {
+      // Pinned tenant (even without a membership there) wins; else first membership; else none.
+      tenantId = session.tenantId ?? memberships[0]?.tenantId ?? null;
+      role = memberships.find((m) => m.tenantId === tenantId)?.role ?? "OWNER";
+    } else {
+      tenantId = memberships[0].tenantId;
+      role = memberships[0].role;
+    }
+    return { userId: user.id, email: user.email, tenantId, role, isSuperAdmin: user.isSuperAdmin === true };
   }
 
   /** Pin the active tenant on a session (select-tenant). No-op if the token is unknown. */

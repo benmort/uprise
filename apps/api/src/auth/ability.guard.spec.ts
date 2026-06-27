@@ -28,12 +28,12 @@ describe("AbilityGuard", () => {
 
   it("denies a canvasser from managing audiences", () => {
     const g = guardWith({ action: "manage", resource: "audience.audience" });
-    expect(() => g.canActivate(ctx({ id: "u1", roles: ["canvasser"] }))).toThrow(ForbiddenException);
+    expect(() => g.canActivate(ctx({ id: "u1", roles: ["volunteer"] }))).toThrow(ForbiddenException);
   });
 
   it("allows a canvasser to manage doorknocks", () => {
     const g = guardWith({ action: "manage", resource: "canvass.doorknock" });
-    expect(g.canActivate(ctx({ id: "u1", roles: ["canvasser"] }))).toBe(true);
+    expect(g.canActivate(ctx({ id: "u1", roles: ["volunteer"] }))).toBe(true);
   });
 
   it("super-admin (env break-glass) passes any permission", () => {

@@ -178,9 +178,9 @@ export const sessions = {
  * union so the client bundle never pulls in the Prisma runtime. The API validates
  * against the real enum, so any drift here is caught server-side (400).
  */
-export type AppUserRole = "OWNER" | "ORGANISER" | "CANVASSER";
+export type AppUserRole = "OWNER" | "ORGANISER" | "VOLUNTEER";
 
-/** A tenant's membership row (AppUserRole: OWNER | ORGANISER | CANVASSER). */
+/** A tenant's membership row (AppUserRole: OWNER | ORGANISER | VOLUNTEER). */
 export interface TenantMemberSummary {
   id: string;
   tenantId: string;

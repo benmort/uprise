@@ -203,9 +203,12 @@ enum JourneyEnrolmentState {
 enum AppUserRole {
   // OWNER must stay first; migration 20260627100000 inserts it BEFORE ORGANISER so the DB enum
   // order matches this declaration. Do not reorder without a matching migration.
+  // VOLUNTEER was renamed from CANVASSER (migration 20260627120000) via ALTER TYPE RENAME VALUE,
+  // which preserves position + existing rows. SUPER_ADMIN is NOT here — it's a User.isSuperAdmin
+  // boolean (tenant-independent, never selectable in any role picker).
   OWNER
   ORGANISER
-  CANVASSER
+  VOLUNTEER
   @@schema("iam")
 }
 
@@ -384,6 +387,9 @@ model User {
   mobile          String?
   mobileVerified  Boolean          @default(false)
   emailVerified   Boolean          @default(false)
+  // Tenant-independent god-mode flag (cross-tenant access). Set by a DB row update only —
+  // never via any API/role picker. The single source of truth for SUPER_ADMIN.
+  isSuperAdmin    Boolean          @default(false)
   lastSignInAt    DateTime?
   deletedAt       DateTime?
   registeredAt    DateTime         @default(now())

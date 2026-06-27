@@ -266,7 +266,7 @@ describe("CanvassingService", () => {
   });
 
   describe("createCanvasser", () => {
-    it("hashes the password and defaults to CANVASSER", async () => {
+    it("hashes the password and defaults to VOLUNTEER", async () => {
       const user = await service.createCanvasser("org1", {
         displayName: "Ada",
         email: "Ada@Example.com",
@@ -278,9 +278,9 @@ describe("CanvassingService", () => {
       expect(userArg.email).toBe("ada@example.com"); // normalised
       const memberArg = prisma.tenantMember.create.mock.calls[0][0].data;
       expect(memberArg.tenantId).toBe("org1");
-      expect(memberArg.role).toBe("CANVASSER"); // default role on the membership
+      expect(memberArg.role).toBe("VOLUNTEER"); // default role on the membership
       expect(user.id).toBe("u1");
-      expect(user.role).toBe("CANVASSER");
+      expect(user.role).toBe("VOLUNTEER");
     });
 
     it("maps a duplicate email to EMAIL_TAKEN", async () => {
@@ -470,7 +470,7 @@ describe("CanvassingService", () => {
 
   describe("updateCanvasser", () => {
     it("renames + re-hashes the password when provided", async () => {
-      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "CANVASSER" });
+      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
       await service.updateCanvasser("org1", "u1", { displayName: "Ada B", password: "supersecret" });
       const arg = prisma.user.update.mock.calls[0][0];
       expect(arg.data.displayName).toBe("Ada B");
@@ -479,7 +479,7 @@ describe("CanvassingService", () => {
     });
 
     it("does not set passwordHash when no password given", async () => {
-      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "CANVASSER" });
+      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
       await service.updateCanvasser("org1", "u1", { displayName: "Ada" });
       expect(prisma.user.update.mock.calls[0][0].data.passwordHash).toBeUndefined();
     });

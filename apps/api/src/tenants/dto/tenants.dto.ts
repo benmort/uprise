@@ -51,7 +51,11 @@ export class ConfirmAccessDto {
 }
 
 export class ApproveJoinRequestDto {
-  @IsEnum(AppUserRole) role!: AppUserRole;
+  // Approval may only grant ORGANISER or VOLUNTEER — never OWNER (privilege escalation:
+  // an organiser approving a self-signup must not be able to mint an owner by crafting the
+  // body). super-admin isn't an AppUserRole, so it can't appear here at all. Mirrors
+  // approveJoinRequestSchema in @yarns/contracts.
+  @IsIn(["ORGANISER", "VOLUNTEER"]) role!: "ORGANISER" | "VOLUNTEER";
 }
 
 export class RejectJoinRequestDto {

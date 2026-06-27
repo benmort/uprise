@@ -2,11 +2,11 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 export type RoleChipProps = {
-  role: "ORGANISER" | "CANVASSER";
+  role: "ORGANISER" | "VOLUNTEER";
   className?: string;
 };
 
-/** Role badge: Canvasser blue, Organiser purple (per the design). */
+/** Role badge: Volunteer blue, Organiser purple (per the design). */
 export function RoleChip({ role, className }: RoleChipProps) {
   const isOrganiser = role === "ORGANISER";
   return (
@@ -19,7 +19,7 @@ export function RoleChip({ role, className }: RoleChipProps) {
         className,
       )}
     >
-      {isOrganiser ? "Organiser" : "Canvasser"}
+      {isOrganiser ? "Organiser" : "Volunteer"}
     </span>
   );
 }

@@ -259,21 +259,21 @@ describe("BasicAuthGuard", () => {
     it("authenticates a canvasser and attaches their role + org", async () => {
       const passwordHash = await hashPassword("walkfast");
       const guard = createGuardWithUsers({
-        "canv@org.au": { id: "u1", role: "CANVASSER", tenantId: "org1", email: "canv@org.au", passwordHash },
+        "canv@org.au": { id: "u1", role: "VOLUNTEER", tenantId: "org1", email: "canv@org.au", passwordHash },
       });
       const token = Buffer.from("canv@org.au:walkfast").toString("base64");
       const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
       const result = await guard.canActivate(contextSharing(request));
       expect(result).toBe(true);
       expect(request.user).toEqual(
-        expect.objectContaining({ id: "u1", role: "CANVASSER", tenantId: "org1" }),
+        expect.objectContaining({ id: "u1", role: "VOLUNTEER", tenantId: "org1" }),
       );
     });
 
     it("rejects a wrong AppUser password", async () => {
       const passwordHash = await hashPassword("walkfast");
       const guard = createGuardWithUsers({
-        "canv@org.au": { id: "u1", role: "CANVASSER", tenantId: "org1", email: "canv@org.au", passwordHash },
+        "canv@org.au": { id: "u1", role: "VOLUNTEER", tenantId: "org1", email: "canv@org.au", passwordHash },
       });
       const token = Buffer.from("canv@org.au:wrong").toString("base64");
       const request: any = { path: "/api/v1/canvass/assignments", headers: { authorization: `Basic ${token}` } };
@@ -327,13 +327,13 @@ describe("BasicAuthGuard session auth", () => {
 
   it("reads the session token from the auth_token cookie", async () => {
     const sessions = {
-      resolve: jest.fn().mockResolvedValue({ userId: "u2", email: "c@d.e", tenantId: "t1", role: "CANVASSER" }),
+      resolve: jest.fn().mockResolvedValue({ userId: "u2", email: "c@d.e", tenantId: "t1", role: "VOLUNTEER" }),
     } as any;
     const guard = new BasicAuthGuard(config, undefined, sessions);
     const request: any = { path: "/api/v1/inbox", headers: { cookie: "foo=bar; auth_token=cookie_tok" } };
     await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
     expect(sessions.resolve).toHaveBeenCalledWith("cookie_tok", expect.any(Object));
-    expect(request.user.roles).toEqual(["canvasser"]);
+    expect(request.user.roles).toEqual(["volunteer"]);
   });
 
   it("rejects an invalid or expired session token", async () => {

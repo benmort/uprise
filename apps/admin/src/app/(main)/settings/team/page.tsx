@@ -49,14 +49,14 @@ function formatDate(iso: string | null): string {
 const ROLE_LABELS: Record<AppUserRole, string> = {
   OWNER: "Owner",
   ORGANISER: "Organiser",
-  CANVASSER: "Canvasser",
+  VOLUNTEER: "Volunteer",
 };
 
 // All three roles, for the role selectors.
 const ROLE_OPTIONS = [
   { value: "OWNER", label: "Owner (full workspace + billing)" },
   { value: "ORGANISER", label: "Organiser (staff / admin)" },
-  { value: "CANVASSER", label: "Canvasser (volunteer)" },
+  { value: "VOLUNTEER", label: "Volunteer (field)" },
 ] as const;
 
 /** Role badge handling all three AppUserRole values (RoleChip only covers two). */
@@ -88,7 +88,7 @@ export default function TeamPage() {
   const [joinError, setJoinError] = useState("");
   const [busy, setBusy] = useState(false);
   const [approving, setApproving] = useState<JoinRequest | null>(null);
-  const [approveRole, setApproveRole] = useState<"ORGANISER" | "CANVASSER">("CANVASSER");
+  const [approveRole, setApproveRole] = useState<"ORGANISER" | "VOLUNTEER">("VOLUNTEER");
   const [rejecting, setRejecting] = useState<JoinRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -96,7 +96,7 @@ export default function TeamPage() {
   const [invites, setInvites] = useState<TenantInvitationSummary[] | null>(null);
   const [inviteError, setInviteError] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<AppUserRole>("CANVASSER");
+  const [inviteRole, setInviteRole] = useState<AppUserRole>("VOLUNTEER");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [revoking, setRevoking] = useState<TenantInvitationSummary | null>(null);
 
@@ -104,7 +104,7 @@ export default function TeamPage() {
   const [members, setMembers] = useState<TenantMemberSummary[] | null>(null);
   const [membersError, setMembersError] = useState("");
   const [editingMember, setEditingMember] = useState<TenantMemberSummary | null>(null);
-  const [editRole, setEditRole] = useState<AppUserRole>("CANVASSER");
+  const [editRole, setEditRole] = useState<AppUserRole>("VOLUNTEER");
   const [removingMember, setRemovingMember] = useState<TenantMemberSummary | null>(null);
 
   // ── Loaders (each section loads independently so one failure isn't fatal) ──
@@ -144,7 +144,7 @@ export default function TeamPage() {
   const loadAll = useCallback(async () => {
     const session = await getSession();
     const tid = session?.tenantId ?? null;
-    // AuthPrincipal.role only expresses ORGANISER/CANVASSER (an OWNER signs in as
+    // AuthPrincipal.role only expresses ORGANISER/VOLUNTEER (an OWNER signs in as
     // ORGANISER for app purposes); managing the team is organiser-level – matching
     // the API's manage tenant.member / tenant.invitation guards.
     const manage = (session?.role === "ORGANISER" || session?.role === "OWNER") && Boolean(tid);
@@ -212,7 +212,7 @@ export default function TeamPage() {
     }
     showToast({ tone: "success", title: "Invitation sent", description: `${email} has been invited.` });
     setInviteEmail("");
-    setInviteRole("CANVASSER");
+    setInviteRole("VOLUNTEER");
     void loadInvitations(tenantId);
   };
 
@@ -315,7 +315,7 @@ export default function TeamPage() {
                     key: "requestedRole",
                     header: "Requested",
                     cell: (r) => (
-                      <RoleBadge role={r.requestedRole === "staff" ? "ORGANISER" : "CANVASSER"} />
+                      <RoleBadge role={r.requestedRole === "staff" ? "ORGANISER" : "VOLUNTEER"} />
                     ),
                   },
                   { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status.toUpperCase()} /> },
@@ -328,9 +328,9 @@ export default function TeamPage() {
                         <Button
                           size="sm"
                           onClick={() => {
-                            // Privilege-safe default: always CANVASSER; the organiser opts up in
+                            // Privilege-safe default: always VOLUNTEER; the organiser opts up in
                             // the dialog. The applicant's requestedRole is only a hint.
-                            setApproveRole("CANVASSER");
+                            setApproveRole("VOLUNTEER");
                             setApproving(r);
                           }}
                         >
@@ -536,9 +536,9 @@ export default function TeamPage() {
           <FormSelect
             id="approve-role"
             value={approveRole}
-            onChange={(e) => setApproveRole(e.target.value as "ORGANISER" | "CANVASSER")}
+            onChange={(e) => setApproveRole(e.target.value as "ORGANISER" | "VOLUNTEER")}
             options={[
-              { value: "CANVASSER", label: "Canvasser (volunteer)" },
+              { value: "VOLUNTEER", label: "Volunteer (field)" },
               { value: "ORGANISER", label: "Organiser (staff / admin)" },
             ]}
           />

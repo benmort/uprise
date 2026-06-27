@@ -2,24 +2,25 @@ import type { PermissionRule } from "./types";
 
 /**
  * Central role → permissions table. Ported from prog and reconciled with yarns'
- * ORGANISER/CANVASSER. Role rules are always positive (no `inverted`).
+ * ORGANISER/VOLUNTEER. Role rules are always positive (no `inverted`).
  *
- * - `super-admin` is the system-wide bypass (`manage all`), the env break-glass login.
+ * - `super-admin` is the system-wide bypass (`manage all`); granted by the
+ *   User.isSuperAdmin DB flag (and the env break-glass login).
  * - `owner` is the full tenant role incl. billing/network.
  * - `organiser` == prog's `admin` rule-set extended with yarns' campaign/messaging
  *   domains (the yarns ORGANISER maps here). No billing.
- * - `canvasser` is field-only (yarns CANVASSER): read assigned turf/walklist + visible
- *   contacts, write doorknocks/dispositions; no audience/blast/integration access.
+ * - `volunteer` is field-only (yarns VOLUNTEER, formerly CANVASSER): read assigned
+ *   turf/walklist + visible contacts, write doorknocks/dispositions; no audience/blast access.
  * - `member` is a read-only tenant member.
  */
-export const YARNS_ROLES = ["super-admin", "owner", "organiser", "canvasser", "member"] as const;
+export const YARNS_ROLES = ["super-admin", "owner", "organiser", "volunteer", "member"] as const;
 export type Role = (typeof YARNS_ROLES)[number];
 
-/** Maps the legacy Prisma AppUserRole enum values to the unified role ids. */
+/** Maps the Prisma AppUserRole enum values to the unified role ids. */
 export const APP_USER_ROLE_TO_ROLE: Record<string, Role> = {
   OWNER: "owner",
   ORGANISER: "organiser",
-  CANVASSER: "canvasser",
+  VOLUNTEER: "volunteer",
 };
 
 export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
@@ -62,7 +63,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "read", resource: "system.feature-flags" },
   ],
 
-  canvasser: [
+  volunteer: [
     { action: "read", resource: "canvass.turf" },
     { action: "read", resource: "canvass.walklist" },
     { action: "read", resource: "canvass.campaign" },

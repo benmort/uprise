@@ -56,7 +56,7 @@ describe("API e2e — tenant + user creation", () => {
     const inviteEmail = `e2e.invitee.${stamp}@yarns.test`;
     const issued = await api
       .post(`/api/v1/tenants/${tenantId}/invitations`)
-      .send({ email: inviteEmail, role: "CANVASSER" });
+      .send({ email: inviteEmail, role: "VOLUNTEER" });
     expect([200, 201]).toContain(issued.status);
     const token = data(issued.body).token as string;
     expect(token).toEqual(expect.any(String));

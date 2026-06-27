@@ -94,7 +94,7 @@ Data loss is acceptable, so there is no rename/backfill/dual-write dance. The wo
 2. **Rename the scoping column everywhere.** Sweep the codebase: every model's `organizationId` FK becomes `tenantId` (id-only ref to `tenant.Tenant`, per doc 02). This is the one large but mechanical code change – ~98 references across the Prisma schema and services. Do it as a single coherent rename so nothing half-migrates.
 3. **Re-seed.** Recreate demo/dev data via the shared demo seed (the same seed used by tests/tour/demo). Production re-onboards through the new tenancy/IAM flows.
 
-`mapRole` (for any seed/import that carries old roles): `ORGANISER → organiser`, `CANVASSER → canvasser` (doc 04 taxonomy).
+`mapRole` (for any seed/import that carries old roles): `ORGANISER → organiser`, `VOLUNTEER → volunteer` (doc 04 taxonomy).
 
 ## Verification
 

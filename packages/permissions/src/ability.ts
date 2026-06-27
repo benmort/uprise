@@ -43,9 +43,11 @@ function expandRule(rule: PermissionRule): PermissionRule[] {
 export function defineAbilityFor(actor: AuthenticatedActor): AppAbility {
   const { can, cannot, build } = new AbilityBuilder<AppAbility>(createMongoAbility);
 
-  const hasSuperAdmin = (actor.actorPermissions ?? []).some(
-    (r) => r.action === "manage" && r.resource === "all" && !r.inverted,
-  );
+  const hasSuperAdmin =
+    actor.isSuperAdmin === true ||
+    (actor.actorPermissions ?? []).some(
+      (r) => r.action === "manage" && r.resource === "all" && !r.inverted,
+    );
   if (hasSuperAdmin) {
     can("manage", "all");
     return build();

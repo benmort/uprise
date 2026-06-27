@@ -94,8 +94,8 @@ export class CreateCanvasserDto {
   password!: string;
 
   @IsOptional()
-  @IsIn(["ORGANISER", "CANVASSER"])
-  role?: "ORGANISER" | "CANVASSER";
+  @IsIn(["ORGANISER", "VOLUNTEER"])
+  role?: "ORGANISER" | "VOLUNTEER";
 }
 
 export class RecordDoorKnockDto {
@@ -288,8 +288,8 @@ export class UpdateCanvasserDto {
   displayName?: string;
 
   @IsOptional()
-  @IsIn(["ORGANISER", "CANVASSER"])
-  role?: "ORGANISER" | "CANVASSER";
+  @IsIn(["ORGANISER", "VOLUNTEER"])
+  role?: "ORGANISER" | "VOLUNTEER";
 
   @IsOptional()
   @IsString()

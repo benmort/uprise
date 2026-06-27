@@ -46,7 +46,7 @@ describe("SessionService", () => {
     prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
     prisma.tenantMember.findMany.mockResolvedValue([
       { tenantId: "t1", role: "ORGANISER" },
-      { tenantId: "t2", role: "CANVASSER" },
+      { tenantId: "t2", role: "VOLUNTEER" },
     ]);
     const svc = new SessionService(prisma);
     await expect(svc.resolve("t")).resolves.toEqual({
@@ -54,6 +54,7 @@ describe("SessionService", () => {
       email: "a@b.c",
       tenantId: "t1",
       role: "ORGANISER",
+      isSuperAdmin: false,
     });
   });
 
@@ -68,14 +69,15 @@ describe("SessionService", () => {
     prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
     prisma.tenantMember.findMany.mockResolvedValue([
       { tenantId: "t1", role: "ORGANISER" },
-      { tenantId: "t2", role: "CANVASSER" },
+      { tenantId: "t2", role: "VOLUNTEER" },
     ]);
     const svc = new SessionService(prisma);
     await expect(svc.resolve("t")).resolves.toEqual({
       userId: "u1",
       email: "a@b.c",
       tenantId: "t2",
-      role: "CANVASSER",
+      role: "VOLUNTEER",
+      isSuperAdmin: false,
     });
   });
 
@@ -116,6 +118,27 @@ describe("SessionService", () => {
     prisma.tenantMember.findMany.mockResolvedValue([]);
     const svc = new SessionService(prisma);
     await expect(svc.resolve("t")).resolves.toBeNull();
+  });
+
+  it("resolve() lets a super-admin through with no membership (effective OWNER)", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      tenantId: "any-tenant",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c", isSuperAdmin: true });
+    prisma.tenantMember.findMany.mockResolvedValue([]);
+    const svc = new SessionService(prisma);
+    // Not null (a normal user would be); pins the session's tenant; effective OWNER role.
+    await expect(svc.resolve("t")).resolves.toEqual({
+      userId: "u1",
+      email: "a@b.c",
+      tenantId: "any-tenant",
+      role: "OWNER",
+      isSuperAdmin: true,
+    });
   });
 
   it("resolve() returns null for an unknown token", async () => {

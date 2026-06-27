@@ -11,7 +11,7 @@ import { z } from "zod";
 export type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: string };
 
 // ── Principal + membership ────────────────────────────────────────────
-export type AppRole = "OWNER" | "ORGANISER" | "CANVASSER";
+export type AppRole = "OWNER" | "ORGANISER" | "VOLUNTEER";
 
 export interface Membership {
   tenantId: string;
@@ -92,7 +92,7 @@ export const confirmAccessSchema = z.object({
 });
 export type ConfirmAccessRequest = z.infer<typeof confirmAccessSchema>;
 
-export const approveJoinRequestSchema = z.object({ role: z.enum(["ORGANISER", "CANVASSER"]) });
+export const approveJoinRequestSchema = z.object({ role: z.enum(["ORGANISER", "VOLUNTEER"]) });
 export type ApproveJoinRequestRequest = z.infer<typeof approveJoinRequestSchema>;
 
 export const rejectJoinRequestSchema = z.object({ reason: z.string().max(500).optional() });

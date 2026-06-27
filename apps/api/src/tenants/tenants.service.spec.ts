@@ -64,7 +64,7 @@ describe("TenantsService", () => {
 
   it("createInvitation issues a token and emits tenant.invitation.sent", async () => {
     const { svc, outbox } = setup();
-    const res = await svc.createInvitation("t1", { email: "New@X.Y", role: AppUserRole.CANVASSER });
+    const res = await svc.createInvitation("t1", { email: "New@X.Y", role: AppUserRole.VOLUNTEER });
     expect(res.token).toEqual(expect.any(String));
     expect(res.token.length).toBeGreaterThan(20);
     expect(outbox.append).toHaveBeenCalledWith(
@@ -88,14 +88,14 @@ describe("TenantsService", () => {
     const { svc, prisma } = setup();
     prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "ORGANISER" });
     await expect(
-      svc.addMember("t1", { email: "a@b.c", role: AppUserRole.CANVASSER }),
+      svc.addMember("t1", { email: "a@b.c", role: AppUserRole.VOLUNTEER }),
     ).rejects.toThrow("already_member");
   });
 
   it("addMember throws when the user does not exist", async () => {
     const { svc, prisma } = setup();
     prisma.user.findUnique.mockResolvedValueOnce(null);
-    await expect(svc.addMember("t1", { email: "nope@x.y", role: AppUserRole.CANVASSER })).rejects.toThrow();
+    await expect(svc.addMember("t1", { email: "nope@x.y", role: AppUserRole.VOLUNTEER })).rejects.toThrow();
   });
 
   it("createNetwork emits tenant.network.created", async () => {
@@ -125,7 +125,7 @@ describe("TenantsService", () => {
 
   it("updateMemberRole emits tenant.member.role-updated", async () => {
     const { svc, outbox } = setup();
-    await svc.updateMemberRole("t1", "u1", AppUserRole.CANVASSER);
+    await svc.updateMemberRole("t1", "u1", AppUserRole.VOLUNTEER);
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventType: "tenant.member.role-updated" }),

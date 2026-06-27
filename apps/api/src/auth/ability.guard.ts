@@ -32,6 +32,7 @@ export class AbilityGuard implements CanActivate {
       email: user.email ?? "",
       tenantId: user.tenantId,
       roles: user.roles ?? [],
+      isSuperAdmin: user.isSuperAdmin === true,
     };
     const ability = defineAbilityFor(actor);
     if (!ability.can(required.action, required.resource)) {

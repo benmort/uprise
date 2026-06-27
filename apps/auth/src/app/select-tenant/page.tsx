@@ -7,6 +7,12 @@ import { Alert, Button } from "@yarns/ui";
 import { auth, type Membership } from "@yarns/api-client";
 import { validateReturnTo } from "@/lib/return-to";
 
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: "Owner",
+  ORGANISER: "Organiser",
+  VOLUNTEER: "Volunteer",
+};
+
 
 export default function SelectTenantPage() {
   const returnTo = useQueryParams().get("return_to");
@@ -55,7 +61,7 @@ export default function SelectTenantPage() {
             <li key={m.tenantId}>
               <Button variant="outline" className="w-full justify-between" disabled={busy} onClick={() => choose(m.tenantId)}>
                 <span>{m.tenantName}</span>
-                <span className="text-xs text-muted-foreground">{m.role}</span>
+                <span className="text-xs text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
               </Button>
             </li>
           ))}

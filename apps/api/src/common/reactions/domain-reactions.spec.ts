@@ -54,7 +54,7 @@ describe("domain reactions", () => {
 
   it("tenant.join-request.approved → emails the applicant with a sign-in link", async () => {
     const { byTrigger, ev, email } = setup();
-    await byTrigger("tenant.join-request.approved").handle(ev({ tenantId: "t1", userId: "u9", role: "CANVASSER" }));
+    await byTrigger("tenant.join-request.approved").handle(ev({ tenantId: "t1", userId: "u9", role: "VOLUNTEER" }));
     const call = email.sendTransactional.mock.calls[0][0];
     expect(call.toAddress).toBe("applicant@x.y");
     expect(call.templateKey).toBe("join_request_approved");

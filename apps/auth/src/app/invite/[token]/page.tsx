@@ -8,6 +8,12 @@ import { auth, type InvitePreview } from "@yarns/api-client";
 import { completeAuth } from "@/lib/session";
 import { useQueryParams } from "@/lib/use-query";
 
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: "Owner",
+  ORGANISER: "Organiser",
+  VOLUNTEER: "Volunteer",
+};
+
 export default function InvitePage() {
   const token = String(useParams().token ?? "");
   const returnTo = useQueryParams().get("return_to");
@@ -63,7 +69,7 @@ export default function InvitePage() {
               You&apos;re invited to join {preview.tenantName}
             </h1>
             <p className="text-sm text-muted-foreground">
-              You&apos;ve been invited to join <strong>{preview.tenantName}</strong> as <strong>{preview.role}</strong> ({preview.email}).
+              You&apos;ve been invited to join <strong>{preview.tenantName}</strong> as <strong>{ROLE_LABELS[preview.role] ?? preview.role}</strong> ({preview.email}).
             </p>
           </div>
           <form onSubmit={accept} className="space-y-5">

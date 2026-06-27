@@ -115,9 +115,10 @@ export class IamFlowsService {
       return { kind: "invalid" };
     }
     const memberships = await this.membershipsFor(user.id);
-    if (memberships.length === 0) {
+    if (memberships.length === 0 && !user.isSuperAdmin) {
       // A self-signup awaiting approval has a User + a pending join request but no
       // membership — surface a soft "awaiting approval" rather than invalid creds.
+      // (A super-admin may legitimately have no membership — let them through to a session.)
       const pending = await this.prisma.tenantJoinRequest.findFirst({
         where: { userId: user.id, status: "pending" },
       });
@@ -759,12 +760,25 @@ export class IamFlowsService {
   }
 
   // ── Tenant selection ────────────────────────────────────────────────
-  /** Pin the active tenant on the caller's session. Requires a membership in that tenant. */
+  /**
+   * Pin the active tenant on the caller's session. Requires a membership in that
+   * tenant — except a super-admin, who may pin any existing (non-deleted) tenant
+   * for cross-tenant access. The tenant-existence check still stands so a session
+   * can't be pinned to an arbitrary/foreign id.
+   */
   async selectTenant(userId: string, sessionToken: string, tenantId: string): Promise<{ ok: true }> {
     const membership = await this.prisma.tenantMember.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
     });
-    if (!membership) throw new BadRequestException("Not a member of that tenant");
+    if (!membership) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { isSuperAdmin: true },
+      });
+      if (!user?.isSuperAdmin) throw new BadRequestException("Not a member of that tenant");
+      const tenant = await this.prisma.tenant.findFirst({ where: { id: tenantId, deletedAt: null } });
+      if (!tenant) throw new BadRequestException("Unknown tenant");
+    }
     await this.sessions.setTenant(sessionToken, tenantId);
     return { ok: true };
   }
