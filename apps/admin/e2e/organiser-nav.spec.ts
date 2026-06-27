@@ -11,10 +11,10 @@ async function authed(page: Page) {
         window.sessionStorage.setItem("yarn_auth_credentials", JSON.stringify({ username: u, password: p }));
       } catch {}
       try {
-        if (cid) window.localStorage.setItem("yarns.canvasserId", cid);
+        if (cid) window.localStorage.setItem("yarns.volunteerId", cid);
       } catch {}
     },
-    [ctx.user, ctx.pass, ids.canvasserId ?? ""],
+    [ctx.user, ctx.pass, ids.volunteerId ?? ""],
   );
 }
 test.beforeEach(async ({ page }) => authed(page));
@@ -27,7 +27,7 @@ const STATIC_ROUTES: Array<[string, RegExp]> = [
   ["/inbox", /conversation|inbox/i],
   ["/canvass", /canvass/i],
   ["/canvass/new", /campaign/i],
-  ["/canvass/canvassers", /canvasser/i],
+  ["/canvass/volunteers", /volunteer/i],
   ["/canvass/divisions", /division/i],
   ["/engagement", /engagement|survey|script|disposition/i],
   ["/engagement/dispositions", /disposition/i],

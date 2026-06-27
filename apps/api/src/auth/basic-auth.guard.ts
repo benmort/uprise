@@ -219,7 +219,7 @@ export class BasicAuthGuard implements CanActivate {
       return true;
     }
 
-    // Per-user login (canvassers/organisers) — only when a DB is wired. Without
+    // Per-user login (volunteers/organisers) — only when a DB is wired. Without
     // prisma we preserve the original synchronous behaviour exactly.
     if (this.prisma) {
       return this.authenticateAppUser(request, username, password);

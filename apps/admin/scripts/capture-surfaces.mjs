@@ -10,7 +10,7 @@
 // Output: docs/ui-audit/dev/<surface>.png
 //
 // Auth: env super-admin (BASIC_AUTH_*) injected into sessionStorage; the demo
-// canvasser id into localStorage so the field PWA renders the assigned turf.
+// volunteer id into localStorage so the field PWA renders the assigned turf.
 
 import { chromium } from "playwright";
 import { readFileSync, mkdirSync } from "node:fs";
@@ -62,11 +62,11 @@ async function resolveIds() {
   const campaigns = asArray(await api("/canvass/campaigns"));
   const demo = campaigns.find((c) => c.name?.startsWith("Demo")) || campaigns[0];
   ids.campaignId = demo?.id;
-  const canvassers = asArray(await api("/canvass/canvassers"));
-  const cv = canvassers.find((u) => u.email === "demo.canvasser@yarns.test") || canvassers[0];
-  ids.canvasserId = cv?.id;
-  if (ids.canvasserId) {
-    const assigns = asArray(await api(`/canvass/assignments?canvasserId=${ids.canvasserId}`));
+  const volunteers = asArray(await api("/canvass/volunteers"));
+  const cv = volunteers.find((u) => u.email === "demo.volunteer@yarns.test") || volunteers[0];
+  ids.volunteerId = cv?.id;
+  if (ids.volunteerId) {
+    const assigns = asArray(await api(`/canvass/assignments?volunteerId=${ids.volunteerId}`));
     const a = assigns[0];
     ids.turfId = a?.turfId;
     ids.stopId = a?.walkLists?.[0]?.items?.[0]?.id;
@@ -90,7 +90,7 @@ function mainRoutes(id) {
     id.blastId && ["composer", `/blasts/${id.blastId}/composer`],
     ["canvass", "/canvass"],
     ["canvass-new", "/canvass/new"],
-    ["canvass-canvassers", "/canvass/canvassers"],
+    ["canvass-volunteers", "/canvass/volunteers"],
     id.campaignId && ["B2-turf", `/canvass/${id.campaignId}/turf`],
     id.campaignId && ["B3-walklists", `/canvass/${id.campaignId}/walklists`],
     id.campaignId && ["B4-live", `/canvass/${id.campaignId}/live`],
@@ -150,7 +150,7 @@ async function main() {
       origins: [
         {
           origin: WEB,
-          localStorage: [{ name: "yarns.canvasserId", value: ids.canvasserId || "" }],
+          localStorage: [{ name: "yarns.volunteerId", value: ids.volunteerId || "" }],
         },
       ],
     },

@@ -58,10 +58,10 @@ export default async function globalSetup() {
   const ids: Record<string, string | undefined> = {};
   const campaigns = asArray(await get("/canvass/campaigns"));
   ids.campaignId = (campaigns.find((c) => c.name?.startsWith("Demo")) || campaigns[0])?.id;
-  const canvassers = asArray(await get("/canvass/canvassers"));
-  ids.canvasserId = (canvassers.find((u) => u.email === "demo.canvasser@yarns.test") || canvassers[0])?.id;
-  if (ids.canvasserId) {
-    const assigns = asArray(await get(`/canvass/assignments?canvasserId=${ids.canvasserId}`));
+  const volunteers = asArray(await get("/canvass/volunteers"));
+  ids.volunteerId = (volunteers.find((u) => u.email === "demo.volunteer@yarns.test") || volunteers[0])?.id;
+  if (ids.volunteerId) {
+    const assigns = asArray(await get(`/canvass/assignments?volunteerId=${ids.volunteerId}`));
     ids.turfId = assigns[0]?.turfId;
     ids.stopId = assigns[0]?.walkLists?.[0]?.items?.[0]?.id;
   }
@@ -85,7 +85,7 @@ export default async function globalSetup() {
 
   const dir = resolve(__dirname, ".auth");
   mkdirSync(dir, { recursive: true });
-  // Playwright storageState: the host-scoped session cookie + the canvasser id.
+  // Playwright storageState: the host-scoped session cookie + the volunteer id.
   const storageState = {
     cookies: token
       ? [
@@ -101,11 +101,11 @@ export default async function globalSetup() {
           },
         ]
       : [],
-    origins: ids.canvasserId
+    origins: ids.volunteerId
       ? [
           {
             origin: process.env.WEB_URL || "http://localhost:3000",
-            localStorage: [{ name: "yarns.canvasserId", value: ids.canvasserId }],
+            localStorage: [{ name: "yarns.volunteerId", value: ids.volunteerId }],
           },
         ]
       : [],

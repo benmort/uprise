@@ -4,7 +4,7 @@ import { bootE2EApp, client, data } from "./utils/e2e-app";
 /**
  * Full-surface API e2e: boots the real app once, seeds demo data, then drives every
  * controller over HTTP. Reads are asserted broadly; the form-backed entities
- * (campaigns, turfs, walk lists, shifts, canvassers, dispositions, canned responses,
+ * (campaigns, turfs, walk lists, shifts, volunteers, dispositions, canned responses,
  * surveys, scripts) are exercised create→read→update→(delete) to mirror the UI.
  */
 function asArray(v: any): any[] {
@@ -32,8 +32,8 @@ describe("API e2e — full surface", () => {
     const turfs = asArray(data((await api.get(`/api/v1/canvass/turfs?campaignId=${ids.campaignId ?? ""}`)).body));
     ids.turfId = turfs[0]?.id;
 
-    const canvassers = asArray(data((await api.get("/api/v1/canvass/canvassers")).body));
-    ids.canvasserId = (canvassers.find((u) => u.email === "demo.canvasser@yarns.test") || canvassers[0])?.id;
+    const volunteers = asArray(data((await api.get("/api/v1/canvass/volunteers")).body));
+    ids.volunteerId = (volunteers.find((u) => u.email === "demo.volunteer@yarns.test") || volunteers[0])?.id;
 
     const contacts = asArray(data((await api.get("/api/v1/contacts?query=Ada")).body));
     ids.contactId = contacts[0]?.id;
@@ -176,14 +176,14 @@ describe("API e2e — full surface", () => {
     });
   });
 
-  // ── Canvass: canvassers + shifts ──────────────────────────────
+  // ── Canvass: volunteers + shifts ──────────────────────────────
   describe("canvass people + shifts", () => {
-    it("canvasser create → update", async () => {
+    it("volunteer create → update", async () => {
       const email = `e2e+${Date.now()}@yarns.test`;
-      const create = await api.post("/api/v1/canvass/canvassers").send({ displayName: "E2E Canvasser", email, password: "supersecret", role: "VOLUNTEER" });
+      const create = await api.post("/api/v1/canvass/volunteers").send({ displayName: "E2E Volunteer", email, password: "supersecret", role: "VOLUNTEER" });
       okStatus(create.status);
       const id = data(create.body).id;
-      okStatus((await api.patch(`/api/v1/canvass/canvassers/${id}`).send({ displayName: "E2E Canvasser (edited)", role: "ORGANISER" })).status);
+      okStatus((await api.patch(`/api/v1/canvass/volunteers/${id}`).send({ displayName: "E2E Volunteer (edited)", role: "ORGANISER" })).status);
     });
     it("shift create → update → delete", async () => {
       if (!ids.campaignId) return;

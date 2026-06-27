@@ -29,6 +29,7 @@ export class AuthController {
         role: req.user.role,
         tenantId: req.user.tenantId,
         email: req.user.email ?? null,
+        isSuperAdmin: req.user.isSuperAdmin,
         memberships,
         ...flags,
       },

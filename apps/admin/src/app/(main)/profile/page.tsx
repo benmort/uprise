@@ -53,6 +53,7 @@ export default function ProfilePage() {
   const { showToast } = useToast();
   const [email, setEmail] = useState<string | null>(null);
   const [role, setRole] = useState<string>("");
+  const [superAdmin, setSuperAdmin] = useState(false);
   const [data, setData] = useState<UserProfileResponse | null>(null);
   const [avatars, setAvatars] = useState<UserAvatarResponse[]>([]);
   const [form, setForm] = useState<Form>(emptyForm);
@@ -74,6 +75,7 @@ export default function ProfilePage() {
     ]);
     setEmail(session?.email ?? null);
     setRole(session?.role ?? "");
+    setSuperAdmin(session?.isSuperAdmin ?? false);
     if (!profileRes.ok) {
       setError(profileRes.error);
       setLoading(false);
@@ -215,10 +217,19 @@ export default function ProfilePage() {
           <div className="min-w-0">
             <p className="truncate text-lg font-semibold">{fullName || email || "You"}</p>
             {email ? <p className="truncate text-sm text-muted-foreground">{email}</p> : null}
-            {role ? (
-              <span className="mt-1 inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                {role}
-              </span>
+            {role || superAdmin ? (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                {role ? (
+                  <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    {role}
+                  </span>
+                ) : null}
+                {superAdmin ? (
+                  <span className="inline-block rounded-full bg-warning-container px-2 py-0.5 text-xs font-medium text-warning-foreground">
+                    Super Admin
+                  </span>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </CardContent>

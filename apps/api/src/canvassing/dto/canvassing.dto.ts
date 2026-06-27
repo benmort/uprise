@@ -71,7 +71,7 @@ export class AssignTurfDto {
   turfId!: string;
 
   @IsString()
-  canvasserId!: string;
+  volunteerId!: string;
 
   @IsOptional()
   @IsString()
@@ -80,10 +80,10 @@ export class AssignTurfDto {
 
 export class ReleaseTurfDto {
   @IsString()
-  canvasserId!: string;
+  volunteerId!: string;
 }
 
-export class CreateCanvasserDto {
+export class CreateVolunteerDto {
   @IsString()
   displayName!: string;
 
@@ -103,7 +103,7 @@ export class RecordDoorKnockDto {
   contactId!: string;
 
   @IsString()
-  canvasserId!: string;
+  volunteerId!: string;
 
   @IsString()
   localId!: string;
@@ -149,7 +149,7 @@ export class RecordDoorKnockDto {
 
 export class CreateDoorContactDto {
   @IsString()
-  canvasserId!: string;
+  volunteerId!: string;
 
   @IsString()
   turfId!: string;
@@ -282,7 +282,7 @@ export class UpdateWalkListDto {
   listType?: "STATIC" | "DYNAMIC";
 }
 
-export class UpdateCanvasserDto {
+export class UpdateVolunteerDto {
   @IsOptional()
   @IsString()
   displayName?: string;

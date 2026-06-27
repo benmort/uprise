@@ -6,7 +6,7 @@
 // fetching the exact resources GL JS will request for a turf — the style JSON, its
 // vector-tile pyramid over the turf bbox, sprite and glyph ranges — so they land in
 // the "mapbox" CacheFirst service-worker cache (see next.config.mjs). When the
-// canvasser later opens the map offline, GL JS's own requests hit that cache.
+// volunteer later opens the map offline, GL JS's own requests hit that cache.
 //
 // The pure geometry/URL helpers are unit-tested; the networked download path is not.
 

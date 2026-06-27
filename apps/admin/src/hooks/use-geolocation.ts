@@ -6,7 +6,7 @@ export type GpsFix = { lat: number; lng: number; accuracy: number };
 
 /**
  * One-shot GPS capture for door entry (NOT a continuous watch — battery). Call
- * capture() when the canvasser opens a door; it resolves null on denial/timeout
+ * capture() when the volunteer opens a door; it resolves null on denial/timeout
  * so a knock can still be recorded without coordinates.
  */
 export function useGeolocation() {

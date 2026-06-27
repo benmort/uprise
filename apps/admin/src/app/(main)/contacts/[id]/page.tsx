@@ -46,7 +46,7 @@ function TimelineCard({ e }: { e: TimelineEntry }) {
         </div>
         <p className="mt-1 text-sm text-foreground">
           {e.dispositionCode ? e.dispositionCode.replaceAll("_", " ") : "Logged"}
-          {e.canvasser ? ` · ${e.canvasser.name}` : ""}
+          {e.volunteer ? ` · ${e.volunteer.name}` : ""}
         </p>
         {e.notes ? <p className="mt-1 text-xs text-muted-foreground">{e.notes}</p> : null}
       </div>

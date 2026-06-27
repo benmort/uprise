@@ -7,7 +7,7 @@ import { ArrowLeft, ListOrdered, Lock, RefreshCw, UserPlus } from "lucide-react"
 import {
   assignTurf,
   createWalkList,
-  listCanvassers,
+  listVolunteers,
   listTurfContacts,
   listTurfs,
   listWalkLists,
@@ -28,7 +28,7 @@ import { SectionCard } from "@/components/canvass/section-card";
 import { Pencil } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
-type Canvasser = { id: string; displayName: string; email: string | null; role: string };
+type Volunteer = { id: string; displayName: string; email: string | null; role: string };
 type ListType = "STATIC" | "DYNAMIC";
 
 function contactName(c: TurfContact): string {
@@ -46,10 +46,10 @@ export default function WalkListBuilderPage() {
   const [contacts, setContacts] = useState<TurfContact[]>([]);
   const [order, setOrder] = useState<string[]>([]);
   const [walkLists, setWalkLists] = useState<WalkListSummary[]>([]);
-  const [canvassers, setCanvassers] = useState<Canvasser[]>([]);
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [listType, setListType] = useState<ListType>("STATIC");
   const [name, setName] = useState("");
-  const [selectedCanvasser, setSelectedCanvasser] = useState("");
+  const [selectedVolunteer, setSelectedVolunteer] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -59,17 +59,17 @@ export default function WalkListBuilderPage() {
 
   const activeTurf = turfs.find((t) => t.id === turfId) ?? null;
 
-  // Bootstrap: turfs + canvassers.
+  // Bootstrap: turfs + volunteers.
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [t, c] = await Promise.all([listTurfs(campaignId), listCanvassers()]);
+      const [t, c] = await Promise.all([listTurfs(campaignId), listVolunteers()]);
       if (!alive) return;
       if (t.ok) {
         setTurfs(t.data);
         setTurfId((cur) => cur || t.data[0]?.id || "");
       }
-      if (c.ok) setCanvassers(c.data);
+      if (c.ok) setVolunteers(c.data);
       setLoading(false);
     })();
     return () => {
@@ -143,9 +143,9 @@ export default function WalkListBuilderPage() {
   }, [editingWl, wlForm, loadTurf, showToast]);
 
   const handleAssign = useCallback(async () => {
-    if (!turfId || !selectedCanvasser) return;
+    if (!turfId || !selectedVolunteer) return;
     setBusy(true);
-    const res = await assignTurf(turfId, selectedCanvasser);
+    const res = await assignTurf(turfId, selectedVolunteer);
     setBusy(false);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't assign turf", description: res.error });
@@ -154,7 +154,7 @@ export default function WalkListBuilderPage() {
     const [t] = await Promise.all([listTurfs(campaignId), loadTurf()]);
     if (t.ok) setTurfs(t.data);
     showToast({ tone: "success", title: "Turf assigned" });
-  }, [turfId, selectedCanvasser, campaignId, loadTurf, showToast]);
+  }, [turfId, selectedVolunteer, campaignId, loadTurf, showToast]);
 
   if (loading) {
     return (
@@ -294,11 +294,11 @@ export default function WalkListBuilderPage() {
               ) : (
                 <>
                   <Select
-                    value={selectedCanvasser}
-                    onValueChange={setSelectedCanvasser}
-                    placeholder="Select a canvasser…"
+                    value={selectedVolunteer}
+                    onValueChange={setSelectedVolunteer}
+                    placeholder="Select a volunteer…"
                   >
-                    {canvassers.map((c) => (
+                    {volunteers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.displayName}
                       </SelectItem>
@@ -307,7 +307,7 @@ export default function WalkListBuilderPage() {
                   <Button
                     className="mt-3 w-full"
                     onClick={handleAssign}
-                    disabled={busy || !selectedCanvasser}
+                    disabled={busy || !selectedVolunteer}
                   >
                     <UserPlus className="mr-1.5 h-4 w-4" />
                     Assign turf

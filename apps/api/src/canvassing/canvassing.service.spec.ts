@@ -67,21 +67,21 @@ describe("CanvassingService", () => {
 
   describe("assignTurf", () => {
     it("creates an ASSIGNED lock for a free turf", async () => {
-      prisma.turfAssignment.create.mockResolvedValue({ id: "a1", canvasserId: "u1" });
+      prisma.turfAssignment.create.mockResolvedValue({ id: "a1", volunteerId: "u1" });
       const result = await service.assignTurf("org1", "t1", "u1");
       expect(result.id).toBe("a1");
     });
 
-    it("rejects with TURF_LOCKED when another canvasser already holds the lock", async () => {
+    it("rejects with TURF_LOCKED when another volunteer already holds the lock", async () => {
       prisma.turfAssignment.create.mockRejectedValue(p2002());
-      prisma.turfAssignment.findFirst.mockResolvedValue({ canvasserId: "someone_else" });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "someone_else" });
 
       await expect(service.assignTurf("org1", "t1", "u1")).rejects.toThrow();
     });
 
-    it("is idempotent when the same canvasser re-claims", async () => {
+    it("is idempotent when the same volunteer re-claims", async () => {
       prisma.turfAssignment.create.mockRejectedValue(p2002());
-      prisma.turfAssignment.findFirst.mockResolvedValue({ id: "a1", canvasserId: "u1" });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ id: "a1", volunteerId: "u1" });
 
       const result = await service.assignTurf("org1", "t1", "u1");
       expect(result.id).toBe("a1");
@@ -89,12 +89,12 @@ describe("CanvassingService", () => {
   });
 
   describe("releaseTurf", () => {
-    it("releases the canvasser's active lock", async () => {
+    it("releases the volunteer's active lock", async () => {
       prisma.turf.findFirst.mockResolvedValue({ id: "t1", tenantId: "org1" });
       prisma.turfAssignment.updateMany.mockResolvedValue({ count: 1 });
       const res = await service.releaseTurf("org1", "t1", "u1");
       expect(prisma.turfAssignment.updateMany).toHaveBeenCalledWith({
-        where: { turfId: "t1", canvasserId: "u1", status: TurfAssignmentStatus.ASSIGNED },
+        where: { turfId: "t1", volunteerId: "u1", status: TurfAssignmentStatus.ASSIGNED },
         data: { status: "RELEASED", releasedAt: expect.any(Date) },
       });
       expect(res.count).toBe(1);
@@ -109,7 +109,7 @@ describe("CanvassingService", () => {
   describe("recordDoorKnock", () => {
     const baseInput = {
       contactId: "c1",
-      canvasserId: "u1",
+      volunteerId: "u1",
       localId: "local-123",
       dispositionCode: "not_home",
     };
@@ -124,10 +124,10 @@ describe("CanvassingService", () => {
       expect(engagement.recordDisposition).not.toHaveBeenCalled();
     });
 
-    it("rejects when the contact's turf is locked to another canvasser", async () => {
+    it("rejects when the contact's turf is locked to another volunteer", async () => {
       prisma.doorKnock.findUnique.mockResolvedValue(null);
       prisma.contact.findFirst.mockResolvedValue({ turfId: "t1" });
-      prisma.turfAssignment.findFirst.mockResolvedValue({ canvasserId: "another" });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "another" });
 
       await expect(service.recordDoorKnock("org1", baseInput)).rejects.toThrow();
       expect(prisma.doorKnock.create).not.toHaveBeenCalled();
@@ -136,7 +136,7 @@ describe("CanvassingService", () => {
     it("records the knock and the disposition through the engagement layer", async () => {
       prisma.doorKnock.findUnique.mockResolvedValue(null);
       prisma.contact.findFirst.mockResolvedValue({ turfId: "t1" });
-      prisma.turfAssignment.findFirst.mockResolvedValue({ canvasserId: "u1" });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
 
       await service.recordDoorKnock("org1", { ...baseInput, walkListItemId: "wli1" });
 
@@ -155,7 +155,7 @@ describe("CanvassingService", () => {
       prisma.doorKnock.findUnique.mockResolvedValue(null);
       // One mock satisfies both the lock check (.turfId) and the campaign resolve (.turf.campaignId).
       prisma.contact.findFirst.mockResolvedValue({ turfId: "t1", turf: { campaignId: "camp1" } });
-      prisma.turfAssignment.findFirst.mockResolvedValue({ canvasserId: "u1" });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
 
       await service.recordDoorKnock("org1", {
         ...baseInput,
@@ -224,10 +224,10 @@ describe("CanvassingService", () => {
   });
 
   describe("createDoorContact", () => {
-    it("creates a contact in the turf when the canvasser holds the lock", async () => {
-      prisma.turfAssignment.findFirst.mockResolvedValue({ canvasserId: "u1" });
+    it("creates a contact in the turf when the volunteer holds the lock", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
       const c = await service.createDoorContact("org1", {
-        canvasserId: "u1",
+        volunteerId: "u1",
         turfId: "t1",
         firstName: "Sam",
       });
@@ -235,10 +235,10 @@ describe("CanvassingService", () => {
       expect(c.id).toBe("c_new");
     });
 
-    it("rejects when the turf is not assigned to the canvasser", async () => {
-      prisma.turfAssignment.findFirst.mockResolvedValue({ canvasserId: "other" });
+    it("rejects when the turf is not assigned to the volunteer", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "other" });
       await expect(
-        service.createDoorContact("org1", { canvasserId: "u1", turfId: "t1", firstName: "Sam" }),
+        service.createDoorContact("org1", { volunteerId: "u1", turfId: "t1", firstName: "Sam" }),
       ).rejects.toThrow();
       expect(prisma.contact.create).not.toHaveBeenCalled();
     });
@@ -249,8 +249,8 @@ describe("CanvassingService", () => {
       prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
       const base = new Date("2026-06-17T10:00:00Z").getTime();
       prisma.doorKnock.findMany.mockResolvedValue([
-        { id: "k1", canvasserId: "u1", lat: null, lng: null, createdAt: new Date(base), canvasser: { displayName: "Ada" } },
-        { id: "k2", canvasserId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 5000), canvasser: { displayName: "Ada" } },
+        { id: "k1", volunteerId: "u1", lat: null, lng: null, createdAt: new Date(base), volunteer: { displayName: "Ada" } },
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 5000), volunteer: { displayName: "Ada" } },
       ]);
       const { flags } = await service.qaReview("org1", "c1");
       // k1: no GPS; k2: knocked 5s after k1
@@ -265,9 +265,9 @@ describe("CanvassingService", () => {
     });
   });
 
-  describe("createCanvasser", () => {
+  describe("createVolunteer", () => {
     it("hashes the password and defaults to VOLUNTEER", async () => {
-      const user = await service.createCanvasser("org1", {
+      const user = await service.createVolunteer("org1", {
         displayName: "Ada",
         email: "Ada@Example.com",
         password: "supersecret",
@@ -286,7 +286,7 @@ describe("CanvassingService", () => {
     it("maps a duplicate email to EMAIL_TAKEN", async () => {
       prisma.user.create.mockRejectedValue(p2002());
       await expect(
-        service.createCanvasser("org1", { displayName: "Ada", email: "a@b.c", password: "supersecret" }),
+        service.createVolunteer("org1", { displayName: "Ada", email: "a@b.c", password: "supersecret" }),
       ).rejects.toThrow();
     });
   });
@@ -420,10 +420,10 @@ describe("CanvassingService", () => {
             name: "Turf 1",
             assignments: [
               {
-                canvasserId: "u1",
+                volunteerId: "u1",
                 assignedAt: new Date(),
                 lockedUntil: null,
-                canvasser: { id: "u1", displayName: "Ada" },
+                volunteer: { id: "u1", displayName: "Ada" },
               },
             ],
           },
@@ -468,10 +468,10 @@ describe("CanvassingService", () => {
     });
   });
 
-  describe("updateCanvasser", () => {
+  describe("updateVolunteer", () => {
     it("renames + re-hashes the password when provided", async () => {
       prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
-      await service.updateCanvasser("org1", "u1", { displayName: "Ada B", password: "supersecret" });
+      await service.updateVolunteer("org1", "u1", { displayName: "Ada B", password: "supersecret" });
       const arg = prisma.user.update.mock.calls[0][0];
       expect(arg.data.displayName).toBe("Ada B");
       expect(arg.data.passwordHash).toBeTruthy();
@@ -480,13 +480,13 @@ describe("CanvassingService", () => {
 
     it("does not set passwordHash when no password given", async () => {
       prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
-      await service.updateCanvasser("org1", "u1", { displayName: "Ada" });
+      await service.updateVolunteer("org1", "u1", { displayName: "Ada" });
       expect(prisma.user.update.mock.calls[0][0].data.passwordHash).toBeUndefined();
     });
 
     it("throws for an unknown user", async () => {
       prisma.tenantMember.findFirst.mockResolvedValue(null);
-      await expect(service.updateCanvasser("org1", "missing", { displayName: "x" })).rejects.toThrow();
+      await expect(service.updateVolunteer("org1", "missing", { displayName: "x" })).rejects.toThrow();
     });
   });
 });

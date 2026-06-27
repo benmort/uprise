@@ -64,7 +64,7 @@ describe("CampaignsService", () => {
   });
 
   describe("getSummary", () => {
-    it("computes percentages and de-dupes canvassers out", async () => {
+    it("computes percentages and de-dupes volunteers out", async () => {
       prisma.canvassCampaign.findFirst.mockResolvedValue({ id: "c1" });
       prisma.turf.findMany.mockResolvedValue([{ id: "t1" }, { id: "t2" }]);
       // doorsToday, totalKnocks, contactKnocks
@@ -76,16 +76,16 @@ describe("CampaignsService", () => {
         .mockResolvedValueOnce(40) // totalStops
         .mockResolvedValueOnce(10); // visitedStops
       prisma.turfAssignment.findMany.mockResolvedValue([
-        { canvasserId: "u1" },
-        { canvasserId: "u1" },
-        { canvasserId: "u2" },
+        { volunteerId: "u1" },
+        { volunteerId: "u1" },
+        { volunteerId: "u2" },
       ]);
 
       const s = await service.getSummary("org1", "c1");
       expect(s.doorsToday).toBe(5);
       expect(s.turfCompletePct).toBe(25); // 10/40
       expect(s.contactRate).toBe(40); // 8/20
-      expect(s.canvassersOut).toBe(2); // u1 de-duped
+      expect(s.volunteersOut).toBe(2); // u1 de-duped
     });
 
     it("returns zeroes when the campaign has no turfs", async () => {
@@ -94,7 +94,7 @@ describe("CampaignsService", () => {
       prisma.doorKnock.count.mockResolvedValue(0);
       prisma.walkListItem.count.mockResolvedValue(0);
       const s = await service.getSummary("org1", "c1");
-      expect(s).toMatchObject({ doorsToday: 0, turfCompletePct: 0, contactRate: 0, canvassersOut: 0 });
+      expect(s).toMatchObject({ doorsToday: 0, turfCompletePct: 0, contactRate: 0, volunteersOut: 0 });
     });
 
     it("throws for an unknown campaign", async () => {

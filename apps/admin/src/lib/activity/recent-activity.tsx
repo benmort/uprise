@@ -74,7 +74,7 @@ export function buildActivityItems(
       id: `knock-${k.id}`,
       icon: <MapPin className="h-4 w-4" />,
       label: `Door knock${k.dispositionCode ? `: ${k.dispositionCode}` : ""}`,
-      sublabel: k.canvasser || "Canvasser",
+      sublabel: k.volunteer || "Volunteer",
       at: k.at,
       href: "/canvass",
     });

@@ -26,7 +26,7 @@ export type TimelineEntry =
       lng: number | null;
       notes: string | null;
       safetyFlag: boolean | null;
-      canvasser: { id: string; name: string } | null;
+      volunteer: { id: string; name: string } | null;
     };
 
 export type ContactProfile = {

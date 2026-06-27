@@ -20,7 +20,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { CanvassingService } from "./canvassing.service";
 import {
   AssignTurfDto,
-  CreateCanvasserDto,
+  CreateVolunteerDto,
   CreateDoorContactDto,
   CreateShiftDto,
   CreateTurfDto,
@@ -30,7 +30,7 @@ import {
   LoadUniverseDto,
   RecordDoorKnockDto,
   ReleaseTurfDto,
-  UpdateCanvasserDto,
+  UpdateVolunteerDto,
   UpdateShiftDto,
   UpdateTurfDto,
   UpdateWalkListDto,
@@ -62,28 +62,28 @@ export class CanvassingController {
     return this.canvassing.listTurfs(org.id, campaignId);
   }
 
-  @Get("canvassers")
+  @Get("volunteers")
   @Roles(AppUserRole.ORGANISER)
-  async listCanvassers() {
+  async listVolunteers() {
     const org = await this.ensureOrganization();
-    return this.canvassing.listCanvassers(org.id);
+    return this.canvassing.listVolunteers(org.id);
   }
 
-  @Post("canvassers")
+  @Post("volunteers")
   @Roles(AppUserRole.ORGANISER)
-  async createCanvasser(@Body() dto: CreateCanvasserDto) {
+  async createVolunteer(@Body() dto: CreateVolunteerDto) {
     const org = await this.ensureOrganization();
-    return this.canvassing.createCanvasser(org.id, {
+    return this.canvassing.createVolunteer(org.id, {
       ...dto,
       role: dto.role as AppUserRole | undefined,
     });
   }
 
-  @Patch("canvassers/:id")
+  @Patch("volunteers/:id")
   @Roles(AppUserRole.ORGANISER)
-  async updateCanvasser(@Param("id") id: string, @Body() dto: UpdateCanvasserDto) {
+  async updateVolunteer(@Param("id") id: string, @Body() dto: UpdateVolunteerDto) {
     const org = await this.ensureOrganization();
-    return this.canvassing.updateCanvasser(org.id, id, {
+    return this.canvassing.updateVolunteer(org.id, id, {
       ...dto,
       role: dto.role as AppUserRole | undefined,
     });
@@ -172,22 +172,22 @@ export class CanvassingController {
     return this.canvassing.assignTurf(
       org.id,
       dto.turfId,
-      dto.canvasserId,
+      dto.volunteerId,
       dto.lockedUntil ? new Date(dto.lockedUntil) : undefined,
     );
   }
 
-  // Canvasser
+  // Volunteer
   @Get("assignments")
-  async assignments(@Query("canvasserId") canvasserId: string) {
+  async assignments(@Query("volunteerId") volunteerId: string) {
     const org = await this.ensureOrganization();
-    return this.canvassing.listAssignments(org.id, canvasserId);
+    return this.canvassing.listAssignments(org.id, volunteerId);
   }
 
   @Post("turfs/:id/release")
   async releaseTurf(@Param("id") id: string, @Body() dto: ReleaseTurfDto) {
     const org = await this.ensureOrganization();
-    return this.canvassing.releaseTurf(org.id, id, dto.canvasserId);
+    return this.canvassing.releaseTurf(org.id, id, dto.volunteerId);
   }
 
   @Post("door-knocks")

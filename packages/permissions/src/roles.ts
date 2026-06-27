@@ -9,7 +9,7 @@ import type { PermissionRule } from "./types";
  * - `owner` is the full tenant role incl. billing/network.
  * - `organiser` == prog's `admin` rule-set extended with yarns' campaign/messaging
  *   domains (the yarns ORGANISER maps here). No billing.
- * - `volunteer` is field-only (yarns VOLUNTEER, formerly CANVASSER): read assigned
+ * - `volunteer` is field-only (yarns VOLUNTEER, formerly VOLUNTEER): read assigned
  *   turf/walklist + visible contacts, write doorknocks/dispositions; no audience/blast access.
  * - `member` is a read-only tenant member.
  */

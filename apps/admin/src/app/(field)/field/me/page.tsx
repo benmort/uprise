@@ -9,7 +9,7 @@ import {
   releaseTurf,
   type CanvassAssignment,
 } from "@/lib/api";
-import { getCanvasserId } from "@/lib/canvass/canvasser";
+import { getVolunteerId } from "@/lib/canvass/volunteer";
 import { useSyncQueue } from "@/hooks/use-sync-queue";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,12 +36,12 @@ export default function SyncCentrePage() {
   const [releaseId, setReleaseId] = useState<string | null>(null);
 
   const loadAssignments = useCallback(async () => {
-    const canvasserId = getCanvasserId();
-    if (!canvasserId) {
+    const volunteerId = getVolunteerId();
+    if (!volunteerId) {
       setLoading(false);
       return;
     }
-    const res = await getCanvassAssignments(canvasserId);
+    const res = await getCanvassAssignments(volunteerId);
     if (res.ok) setAssignments(res.data);
     setLoading(false);
   }, []);
@@ -69,9 +69,9 @@ export default function SyncCentrePage() {
     const turfId = releaseId;
     setReleaseId(null);
     if (!turfId) return;
-    const canvasserId = getCanvasserId();
-    if (!canvasserId) return;
-    const res = await releaseTurf(turfId, canvasserId);
+    const volunteerId = getVolunteerId();
+    if (!volunteerId) return;
+    const res = await releaseTurf(turfId, volunteerId);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't release turf", description: res.error });
       return;

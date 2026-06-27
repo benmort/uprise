@@ -623,7 +623,7 @@ export type DoorKnockSurveyAnswer = { questionId: string; optionId?: string; val
 
 export type DoorKnockInput = {
   contactId: string;
-  canvasserId: string;
+  volunteerId: string;
   localId: string;
   dispositionCode?: string;
   lat?: number;
@@ -645,7 +645,7 @@ export type TurfSummary = {
   walkListCount: number;
   totalStops: number;
   visitedStops: number;
-  assignedTo: { canvasserId: string; name: string } | null;
+  assignedTo: { volunteerId: string; name: string } | null;
 };
 
 export async function listTurfs(campaignId?: string) {
@@ -653,8 +653,8 @@ export async function listTurfs(campaignId?: string) {
   return request<TurfSummary[]>(`/canvass/turfs${q}`);
 }
 
-export async function getCanvassAssignments(canvasserId: string) {
-  const q = new URLSearchParams({ canvasserId });
+export async function getCanvassAssignments(volunteerId: string) {
+  const q = new URLSearchParams({ volunteerId });
   return request<CanvassAssignment[]>(`/canvass/assignments?${q}`);
 }
 
@@ -666,19 +666,19 @@ export async function submitDoorKnock(input: DoorKnockInput) {
   });
 }
 
-export async function releaseTurf(turfId: string, canvasserId: string) {
+export async function releaseTurf(turfId: string, volunteerId: string) {
   return request<{ count: number }>(`/canvass/turfs/${encodeURIComponent(turfId)}/release`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ canvasserId }),
+    body: JSON.stringify({ volunteerId }),
   });
 }
 
-export async function assignTurf(turfId: string, canvasserId: string, lockedUntil?: string) {
+export async function assignTurf(turfId: string, volunteerId: string, lockedUntil?: string) {
   return request<Record<string, unknown>>("/canvass/turfs/assign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ turfId, canvasserId, lockedUntil }),
+    body: JSON.stringify({ turfId, volunteerId, lockedUntil }),
   });
 }
 
@@ -766,20 +766,20 @@ export async function listTurfContacts(turfId: string) {
   return request<TurfContact[]>(`/canvass/turfs/${encodeURIComponent(turfId)}/contacts`);
 }
 
-export async function listCanvassers() {
+export async function listVolunteers() {
   return request<Array<{ id: string; displayName: string; email: string | null; role: string }>>(
-    "/canvass/canvassers",
+    "/canvass/volunteers",
   );
 }
 
-export async function createCanvasser(input: {
+export async function createVolunteer(input: {
   displayName: string;
   email: string;
   password: string;
   role?: "ORGANISER" | "VOLUNTEER";
 }) {
   return request<{ id: string; displayName: string; email: string | null; role: string }>(
-    "/canvass/canvassers",
+    "/canvass/volunteers",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -788,12 +788,12 @@ export async function createCanvasser(input: {
   );
 }
 
-export async function updateCanvasser(
+export async function updateVolunteer(
   id: string,
   input: { displayName?: string; role?: "ORGANISER" | "VOLUNTEER"; password?: string },
 ) {
   return request<{ id: string; displayName: string; email: string | null; role: string }>(
-    `/canvass/canvassers/${encodeURIComponent(id)}`,
+    `/canvass/volunteers/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -811,7 +811,7 @@ export type WalkListSummary = {
   stopCount: number;
   visitedCount: number;
   assignedTo: {
-    canvasserId: string;
+    volunteerId: string;
     name: string;
     lockedSince: string;
     lockedUntil: string | null;
@@ -853,7 +853,7 @@ export async function getOptOuts() {
 // ── Field extras + ops gaps (G2/G8/G10) ────────────────────────────────────
 
 export async function createDoorContact(input: {
-  canvasserId: string;
+  volunteerId: string;
   turfId: string;
   firstName?: string;
   lastName?: string;
@@ -962,7 +962,7 @@ export async function deleteShift(id: string) {
 }
 
 export async function getQaReview(campaignId: string) {
-  return request<{ flags: Array<{ id: string; canvasser: string | null; reason: string; at: string }> }>(
+  return request<{ flags: Array<{ id: string; volunteer: string | null; reason: string; at: string }> }>(
     `/canvass/campaigns/${encodeURIComponent(campaignId)}/qa`,
   );
 }

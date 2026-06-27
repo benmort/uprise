@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CircleUser, DoorOpen } from "lucide-react";
 import { getCanvassAssignments, type CanvassAssignment } from "@/lib/api";
-import { getCanvasserId } from "@/lib/canvass/canvasser";
+import { getVolunteerId } from "@/lib/canvass/volunteer";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -33,15 +33,15 @@ export default function AssignmentsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const canvasserId = getCanvasserId();
-    if (!canvasserId) {
-      setError("No canvasser identity on this device. Log in as a canvasser.");
+    const volunteerId = getVolunteerId();
+    if (!volunteerId) {
+      setError("No volunteer identity on this device. Log in as a volunteer.");
       setLoading(false);
       return;
     }
     let alive = true;
     void (async () => {
-      const res = await getCanvassAssignments(canvasserId);
+      const res = await getCanvassAssignments(volunteerId);
       if (!alive) return;
       if (!res.ok) setError(res.error);
       else setAssignments(res.data);

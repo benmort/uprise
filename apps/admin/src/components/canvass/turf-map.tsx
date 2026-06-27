@@ -13,8 +13,8 @@ export type LngLat = { lat: number; lng: number };
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
 /**
- * Canvasser/organiser map. `mode="view"` renders walk stops (clustered) + the
- * canvasser position; `mode="edit"` shows the turf polygon for organisers.
+ * Volunteer/organiser map. `mode="view"` renders walk stops (clustered) + the
+ * volunteer position; `mode="edit"` shows the turf polygon for organisers.
  * Loaded via next/dynamic({ ssr:false }) by callers — mapbox-gl touches window
  * and must stay out of the list-mode bundle.
  */

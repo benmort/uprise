@@ -377,9 +377,9 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-xl font-extrabold tabular-nums">
-                    {(campaign.data.summary?.canvassersOut ?? 0).toLocaleString()}
+                    {(campaign.data.summary?.volunteersOut ?? 0).toLocaleString()}
                   </p>
-                  <p className="text-xs text-muted-foreground">canvassers out</p>
+                  <p className="text-xs text-muted-foreground">volunteers out</p>
                 </div>
               </div>
             </div>

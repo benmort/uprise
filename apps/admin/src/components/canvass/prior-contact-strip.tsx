@@ -23,7 +23,7 @@ function summarise(e: TimelineEntry): { icon: typeof DoorOpen; text: string } {
 
 /**
  * The informed-knock strip (#1 field priority): the most recent prior contacts
- * so the canvasser walks up knowing the history. Shows up to `limit` events.
+ * so the volunteer walks up knowing the history. Shows up to `limit` events.
  */
 export function PriorContactStrip({
   timeline,

@@ -156,7 +156,7 @@ export default function CanvassPage() {
         <div>
           <h1 className="text-2xl font-extrabold">Canvassing</h1>
           <p className="text-sm text-muted-foreground">
-            Create a campaign to start cutting turf and assigning canvassers.
+            Create a campaign to start cutting turf and assigning volunteers.
           </p>
         </div>
         <EmptyState
@@ -230,8 +230,8 @@ export default function CanvassPage() {
           icon={<TrendingUp className="h-4 w-4" />}
         />
         <KpiTile
-          label="Canvassers out"
-          value={kpis?.canvassersOut ?? "—"}
+          label="Volunteers out"
+          value={kpis?.volunteersOut ?? "—"}
           icon={<Users className="h-4 w-4" />}
         />
       </div>
@@ -239,7 +239,7 @@ export default function CanvassPage() {
       {turfs.length === 0 ? (
         <EmptyState
           title="No turf in this campaign"
-          description="Draw turf on the map, then build a walk list and assign a canvasser."
+          description="Draw turf on the map, then build a walk list and assign a volunteer."
           ctaLabel={activeId ? "Cut new turf" : undefined}
           onCta={activeId ? () => router.push(`/canvass/${activeId}/turf`) : undefined}
         />

@@ -42,7 +42,7 @@ export type SurveyAnswerInput = {
 
 export type RecordDoorKnockInput = {
   contactId: string;
-  canvasserId: string;
+  volunteerId: string;
   localId: string;
   dispositionCode?: string | null;
   lat?: number | null;
@@ -67,14 +67,14 @@ export class CanvassingService {
 
   // ── Turf assignment (server-owned lock) ─────────────────────────
   /**
-   * Claim a turf for a canvasser. The partial unique index
+   * Claim a turf for a volunteer. The partial unique index
    * (TurfAssignment_one_active_per_turf) guarantees at most one ASSIGNED row per
    * turf, so a second claimant gets a 409 rather than a silent double-assignment.
    */
   async assignTurf(
     tenantId: string,
     turfId: string,
-    canvasserId: string,
+    volunteerId: string,
     lockedUntil?: Date,
   ) {
     const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
@@ -82,33 +82,33 @@ export class CanvassingService {
 
     try {
       return await this.prisma.turfAssignment.create({
-        data: { turfId, canvasserId, status: TurfAssignmentStatus.ASSIGNED, lockedUntil },
+        data: { turfId, volunteerId, status: TurfAssignmentStatus.ASSIGNED, lockedUntil },
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         const current = await this.prisma.turfAssignment.findFirst({
           where: { turfId, status: TurfAssignmentStatus.ASSIGNED },
         });
-        if (current?.canvasserId === canvasserId) return current; // idempotent re-claim
-        throw new ApiHttpException("TURF_LOCKED", "This turf is already assigned to another canvasser");
+        if (current?.volunteerId === volunteerId) return current; // idempotent re-claim
+        throw new ApiHttpException("TURF_LOCKED", "This turf is already assigned to another volunteer");
       }
       throw error;
     }
   }
 
-  async releaseTurf(tenantId: string, turfId: string, canvasserId: string) {
+  async releaseTurf(tenantId: string, turfId: string, volunteerId: string) {
     const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
     if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
     return this.prisma.turfAssignment.updateMany({
-      where: { turfId, canvasserId, status: TurfAssignmentStatus.ASSIGNED },
+      where: { turfId, volunteerId, status: TurfAssignmentStatus.ASSIGNED },
       data: { status: TurfAssignmentStatus.RELEASED, releasedAt: new Date() },
     });
   }
 
-  /** The turfs (and their walk lists) currently locked to a canvasser. */
-  async listAssignments(tenantId: string, canvasserId: string) {
+  /** The turfs (and their walk lists) currently locked to a volunteer. */
+  async listAssignments(tenantId: string, volunteerId: string) {
     const assignments = await this.prisma.turfAssignment.findMany({
-      where: { canvasserId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
+      where: { volunteerId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
       include: {
         turf: {
           include: { walkLists: { include: { items: { orderBy: { orderIndex: "asc" }, include: { contact: true } } } } },
@@ -126,7 +126,7 @@ export class CanvassingService {
   // ── Door knocks (idempotent + lock-enforced) ────────────────────
   /**
    * Record a door knock. Idempotent on (org, localId) so a re-synced offline
-   * knock is deduped. Enforces the turf lock: a canvasser can only knock a
+   * knock is deduped. Enforces the turf lock: a volunteer can only knock a
    * contact whose turf is currently assigned to them (else 409). When a
    * disposition is given it's recorded through the shared engagement layer, so
    * it lands on the contact timeline AND fires journey triggers.
@@ -156,7 +156,7 @@ export class CanvassingService {
   async createDoorContact(
     tenantId: string,
     input: {
-      canvasserId: string;
+      volunteerId: string;
       turfId: string;
       firstName?: string;
       lastName?: string;
@@ -166,11 +166,11 @@ export class CanvassingService {
       lng?: number;
     },
   ) {
-    // The canvasser must hold this turf's lock to add to it.
+    // The volunteer must hold this turf's lock to add to it.
     const lock = await this.prisma.turfAssignment.findFirst({
       where: { turfId: input.turfId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
     });
-    if (!lock || lock.canvasserId !== input.canvasserId) {
+    if (!lock || lock.volunteerId !== input.volunteerId) {
       throw new ApiHttpException("TURF_NOT_ASSIGNED", "This turf is not assigned to you");
     }
     return this.prisma.contact.create({
@@ -194,13 +194,13 @@ export class CanvassingService {
     });
     if (existing) return existing; // idempotent replay
 
-    await this.assertCanvasserOwnsContactTurf(tenantId, input.contactId, input.canvasserId);
+    await this.assertVolunteerOwnsContactTurf(tenantId, input.contactId, input.volunteerId);
 
     const knock = await this.prisma.doorKnock.create({
       data: {
         tenantId,
         contactId: input.contactId,
-        canvasserId: input.canvasserId,
+        volunteerId: input.volunteerId,
         walkListItemId: input.walkListItemId ?? null,
         localId: input.localId,
         dispositionCode: input.dispositionCode ?? null,
@@ -225,7 +225,7 @@ export class CanvassingService {
         contactId: input.contactId,
         code: input.dispositionCode,
         channel: EngagementChannel.DOOR,
-        recordedById: input.canvasserId,
+        recordedById: input.volunteerId,
       });
     }
 
@@ -252,7 +252,7 @@ export class CanvassingService {
             valueText: answer.valueText ?? null,
             channel: EngagementChannel.DOOR,
             campaignId,
-            recordedById: input.canvasserId,
+            recordedById: input.volunteerId,
           });
         } catch (error) {
           this.logger.warn(
@@ -267,10 +267,10 @@ export class CanvassingService {
     return knock;
   }
 
-  private async assertCanvasserOwnsContactTurf(
+  private async assertVolunteerOwnsContactTurf(
     tenantId: string,
     contactId: string,
-    canvasserId: string,
+    volunteerId: string,
   ): Promise<void> {
     const contact = await this.prisma.contact.findFirst({
       where: { id: contactId, tenantId },
@@ -282,7 +282,7 @@ export class CanvassingService {
     const lock = await this.prisma.turfAssignment.findFirst({
       where: { turfId: contact.turfId, status: TurfAssignmentStatus.ASSIGNED },
     });
-    if (!lock || lock.canvasserId !== canvasserId) {
+    if (!lock || lock.volunteerId !== volunteerId) {
       throw new ApiHttpException(
         "TURF_NOT_ASSIGNED",
         "This contact's turf is not assigned to you",
@@ -290,8 +290,8 @@ export class CanvassingService {
     }
   }
 
-  /** Canvassers (and organisers) available for turf assignment. */
-  async listCanvassers(tenantId: string) {
+  /** Volunteers (and organisers) available for turf assignment. */
+  async listVolunteers(tenantId: string) {
     // Identity (User) and membership (TenantMember) are separate tables: the
     // role lives on the membership, name/email on the user.
     const members = await this.prisma.tenantMember.findMany({
@@ -310,10 +310,10 @@ export class CanvassingService {
 
   /**
    * Provision a field login: create a User (identity) + a TenantMember (the
-   * tenant-scoped role) with a hashed password. Used by the canvasser-management
+   * tenant-scoped role) with a hashed password. Used by the volunteer-management
    * invite flow. Email is unique; a clash returns 409.
    */
-  async createCanvasser(
+  async createVolunteer(
     tenantId: string,
     input: { displayName: string; email: string; password: string; role?: AppUserRole },
   ) {
@@ -341,8 +341,8 @@ export class CanvassingService {
     }
   }
 
-  /** Edit a canvasser/organiser: rename, change role, or reset the password. */
-  async updateCanvasser(
+  /** Edit a volunteer/organiser: rename, change role, or reset the password. */
+  async updateVolunteer(
     tenantId: string,
     id: string,
     input: { displayName?: string; role?: AppUserRole; password?: string },
@@ -401,7 +401,7 @@ export class CanvassingService {
       where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       orderBy: { createdAt: "desc" },
       include: {
-        assignments: { where: { status: TurfAssignmentStatus.ASSIGNED }, include: { canvasser: true } },
+        assignments: { where: { status: TurfAssignmentStatus.ASSIGNED }, include: { volunteer: true } },
         _count: { select: { contacts: true, walkLists: true } },
         walkLists: { select: { items: { select: { status: true } } } },
       },
@@ -420,7 +420,7 @@ export class CanvassingService {
         totalStops,
         visitedStops,
         assignedTo: t.assignments[0]
-          ? { canvasserId: t.assignments[0].canvasserId, name: t.assignments[0].canvasser.displayName }
+          ? { volunteerId: t.assignments[0].volunteerId, name: t.assignments[0].volunteer.displayName }
           : null,
       };
     });
@@ -706,28 +706,28 @@ export class CanvassingService {
 
     const knocks = await this.prisma.doorKnock.findMany({
       where: { tenantId, contact: { turfId: { in: turfIds } } },
-      orderBy: [{ canvasserId: "asc" }, { createdAt: "asc" }],
-      include: { canvasser: { select: { displayName: true } } },
+      orderBy: [{ volunteerId: "asc" }, { createdAt: "asc" }],
+      include: { volunteer: { select: { displayName: true } } },
     });
 
-    const flags: Array<{ id: string; canvasser: string | null; reason: string; at: Date }> = [];
-    let prev: { canvasserId: string | null; at: Date } | null = null;
+    const flags: Array<{ id: string; volunteer: string | null; reason: string; at: Date }> = [];
+    let prev: { volunteerId: string | null; at: Date } | null = null;
     for (const k of knocks) {
       if (k.lat == null || k.lng == null) {
-        flags.push({ id: k.id, canvasser: k.canvasser?.displayName ?? null, reason: "No GPS captured", at: k.createdAt });
+        flags.push({ id: k.id, volunteer: k.volunteer?.displayName ?? null, reason: "No GPS captured", at: k.createdAt });
       }
-      if (prev && prev.canvasserId === k.canvasserId) {
+      if (prev && prev.volunteerId === k.volunteerId) {
         const gapSec = (k.createdAt.getTime() - prev.at.getTime()) / 1000;
         if (gapSec >= 0 && gapSec < 20) {
           flags.push({
             id: k.id,
-            canvasser: k.canvasser?.displayName ?? null,
+            volunteer: k.volunteer?.displayName ?? null,
             reason: `Knocked ${Math.round(gapSec)}s after previous`,
             at: k.createdAt,
           });
         }
       }
-      prev = { canvasserId: k.canvasserId, at: k.createdAt };
+      prev = { volunteerId: k.volunteerId, at: k.createdAt };
     }
     return { flags };
   }
@@ -746,7 +746,7 @@ export class CanvassingService {
             name: true,
             assignments: {
               where: { status: TurfAssignmentStatus.ASSIGNED },
-              include: { canvasser: { select: { id: true, displayName: true } } },
+              include: { volunteer: { select: { id: true, displayName: true } } },
             },
           },
         },
@@ -764,8 +764,8 @@ export class CanvassingService {
         visitedCount: w.items.length,
         assignedTo: lock
           ? {
-              canvasserId: lock.canvasserId,
-              name: lock.canvasser.displayName,
+              volunteerId: lock.volunteerId,
+              name: lock.volunteer.displayName,
               lockedSince: lock.assignedAt,
               lockedUntil: lock.lockedUntil,
             }

@@ -256,7 +256,7 @@ describe("BasicAuthGuard", () => {
       return new BasicAuthGuard(config, prisma);
     }
 
-    it("authenticates a canvasser and attaches their role + org", async () => {
+    it("authenticates a volunteer and attaches their role + org", async () => {
       const passwordHash = await hashPassword("walkfast");
       const guard = createGuardWithUsers({
         "canv@org.au": { id: "u1", role: "VOLUNTEER", tenantId: "org1", email: "canv@org.au", passwordHash },

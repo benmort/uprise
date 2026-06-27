@@ -20,7 +20,7 @@ export const DEMO_TAG = "demo:yarns";
 
 export const DEMO_LOGINS = {
   organiser: { email: "demo.organiser@yarns.test", password: "demo-organiser-pw", displayName: "Demo Organiser" },
-  canvasser: { email: "demo.canvasser@yarns.test", password: "demo-canvasser-pw", displayName: "Demo Canvasser" },
+  volunteer: { email: "demo.volunteer@yarns.test", password: "demo-volunteer-pw", displayName: "Demo Volunteer" },
 } as const;
 
 export const DEMO_CAMPAIGN = { name: "Demo — Spring Doorknock" } as const;

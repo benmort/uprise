@@ -536,7 +536,7 @@ export const canvassingTourSteps: TourStep[] = [
     title: "Canvassing",
     content: "Uprise now runs door-knocking alongside texting, on one shared contact spine.",
     detail:
-      "Organisers cut turf and assign it here; canvassers knock from the mobile field app. Door knocks and texts land on the same timeline. Let's walk it.",
+      "Organisers cut turf and assign it here; volunteers knock from the mobile field app. Door knocks and texts land on the same timeline. Let's walk it.",
     selector: "#tour-canvass-kpis",
     route: "/canvass",
   },
@@ -544,7 +544,7 @@ export const canvassingTourSteps: TourStep[] = [
     icon: BarChart3,
     title: "Campaign at a glance",
     content: "Pick a campaign in the switcher; these four tiles track it live.",
-    detail: "Doors today, turf complete, contact rate and canvassers currently out.",
+    detail: "Doors today, turf complete, contact rate and volunteers currently out.",
     selector: "#tour-canvass-kpis",
     route: "/canvass",
   },
@@ -562,14 +562,14 @@ export const canvassingTourSteps: TourStep[] = [
     title: "Build & assign walk lists",
     content: "Each turf card's Manage → opens the walk-list builder.",
     detail:
-      "Stops are route-optimised into a short walking path, you set Static/Dynamic, then assign a canvasser — a server-held lock prevents double-assignment.",
+      "Stops are route-optimised into a short walking path, you set Static/Dynamic, then assign a volunteer — a server-held lock prevents double-assignment.",
     selector: "#tour-canvass-ops",
     route: "/canvass",
   },
   {
     icon: Radio,
     title: "Live war-room",
-    content: "Watch the doors land in real time while canvassers are out.",
+    content: "Watch the doors land in real time while volunteers are out.",
     detail: "Who's out, doors today, idle alerts and a feed of recent knocks — polled live.",
     selector: "#tour-canvass-ops",
     route: "/canvass",
@@ -593,11 +593,11 @@ export const canvassingTourSteps: TourStep[] = [
   },
   {
     icon: UserPlus,
-    title: "Canvassers",
-    content: "Invite canvassers and issue their field logins here.",
-    detail: "Creating a canvasser provisions an AppUser with a role and a hashed password — that's their /field login.",
+    title: "Volunteers",
+    content: "Invite volunteers and issue their field logins here.",
+    detail: "Creating a volunteer provisions an AppUser with a role and a hashed password — that's their /field login.",
     selector: "#tour-nav",
-    route: "/canvass/canvassers",
+    route: "/canvass/volunteers",
   },
   {
     icon: PlusCircle,
@@ -610,7 +610,7 @@ export const canvassingTourSteps: TourStep[] = [
   {
     icon: DoorOpen,
     title: "The field app (/field)",
-    content: "Canvassers get a separate offline-first mobile app — no sidebar, one-handed.",
+    content: "Volunteers get a separate offline-first mobile app — no sidebar, one-handed.",
     detail:
       "Assignments → walk view (list or map, next-stop highlighted) → door entry. Every knock saves on the phone and syncs when back online. A first-run primer covers how-to + safety.",
     // No route: /field is outside this shell, so we describe it here.
@@ -618,7 +618,7 @@ export const canvassingTourSteps: TourStep[] = [
   {
     icon: ShieldCheck,
     title: "The informed knock",
-    content: "At each door the canvasser sees the resident's recent contact history first.",
+    content: "At each door the volunteer sees the resident's recent contact history first.",
     detail:
       "Prior texts and knocks, plus a one-tap disposition pad (GPS auto-captured), notes, a “do not return” safety flag, and add-a-household. Every disposition flows onto the shared contact profile.",
   },
@@ -697,7 +697,7 @@ export const journeysTourSteps: TourStep[] = [
     title: "Journeys",
     content: "Cross-channel automations: trigger → wait → condition → action.",
     detail:
-      "e.g. “Not home ×2 → wait 2 days → text; if they reply interested → create a door task for the nearest canvasser.”",
+      "e.g. “Not home ×2 → wait 2 days → text; if they reply interested → create a door task for the nearest volunteer.”",
     selector: "#tour-nav",
     route: "/journeys",
   },

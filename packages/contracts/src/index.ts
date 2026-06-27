@@ -25,6 +25,8 @@ export interface AuthPrincipal {
   role: AppRole;
   tenantId: string | null;
   memberships: Membership[];
+  /** Env break-glass super-admin (tenant-independent; not a role). Surfaced by GET /auth/check. */
+  isSuperAdmin?: boolean;
   // Account flags surfaced by GET /auth/check (optional — older callers may omit).
   emailVerified?: boolean;
   mobileVerified?: boolean;

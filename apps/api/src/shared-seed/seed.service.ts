@@ -29,8 +29,8 @@ import {
 export type SeedResult = {
   tenantId: string;
   organiserEmail: string;
-  canvasserEmail: string;
-  canvasserId: string;
+  volunteerEmail: string;
+  volunteerId: string;
   campaignId: string;
   turfId: string;
   walkListId: string;
@@ -101,7 +101,7 @@ export class SeedService {
     await this.engagement.ensureDefaultDispositions();
 
     await this.upsertUser(tenantId, DEMO_LOGINS.organiser, AppUserRole.ORGANISER);
-    const canvasserId = await this.upsertUser(tenantId, DEMO_LOGINS.canvasser, AppUserRole.VOLUNTEER);
+    const volunteerId = await this.upsertUser(tenantId, DEMO_LOGINS.volunteer, AppUserRole.VOLUNTEER);
 
     // Campaign
     const campaign =
@@ -167,8 +167,8 @@ export class SeedService {
     }
     const stopId = walkList?.items[0]?.id ?? null;
 
-    // Assign the turf to the demo canvasser (idempotent re-claim).
-    await this.canvassing.assignTurf(tenantId, turf.id, canvasserId);
+    // Assign the turf to the demo volunteer (idempotent re-claim).
+    await this.canvassing.assignTurf(tenantId, turf.id, volunteerId);
 
     // A few door knocks (idempotent on localId; wires dispositions + journeys).
     for (const k of DEMO_KNOCKS) {
@@ -176,7 +176,7 @@ export class SeedService {
       if (!contactId) continue;
       await this.canvassing.recordDoorKnock(tenantId, {
         contactId,
-        canvasserId,
+        volunteerId,
         localId: `demo:knock:${k.contactIndex}`,
         dispositionCode: k.dispositionCode,
         walkListItemId: walkList?.items[k.contactIndex]?.id ?? null,
@@ -269,8 +269,8 @@ export class SeedService {
     return {
       tenantId,
       organiserEmail: DEMO_LOGINS.organiser.email,
-      canvasserEmail: DEMO_LOGINS.canvasser.email,
-      canvasserId,
+      volunteerEmail: DEMO_LOGINS.volunteer.email,
+      volunteerId,
       campaignId: campaign.id,
       turfId: turf.id,
       walkListId: walkList?.id ?? "",
@@ -457,7 +457,7 @@ export class SeedService {
     await this.prisma.cannedResponse.deleteMany({ where: { tenantId, title: { in: DEMO_CANNED.map((c) => c.title) } } });
     await this.prisma.blast.deleteMany({ where: { tenantId, title: EXAMPLE_BLAST_TITLE } });
     await this.prisma.audience.deleteMany({ where: { tenantId, name: EXAMPLE_AUDIENCE_NAME } });
-    const demoEmails = [DEMO_LOGINS.organiser.email, DEMO_LOGINS.canvasser.email];
+    const demoEmails = [DEMO_LOGINS.organiser.email, DEMO_LOGINS.volunteer.email];
     const demoUsers = await this.prisma.user.findMany({
       where: { email: { in: demoEmails } },
       select: { id: true },

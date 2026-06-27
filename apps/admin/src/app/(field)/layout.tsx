@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useSyncQueue } from "@/hooks/use-sync-queue";
 import { getSession, goToLogin } from "@/lib/session";
-import { setCanvasserId } from "@/lib/canvass/canvasser";
+import { setVolunteerId } from "@/lib/canvass/volunteer";
 import { OfflineBanner } from "@/components/canvass/offline-banner";
 import { SyncStatusBadge } from "@/components/canvass/sync-status-badge";
 
 /**
- * Mobile-first shell for the canvasser field PWA — deliberately sidebar-less
+ * Mobile-first shell for the volunteer field PWA — deliberately sidebar-less
  * (the desktop 220px aside is wrong for one-handed field use). Top bar carries
  * the offline banner and live sync status.
  */
@@ -19,7 +19,7 @@ export default function FieldLayout({ children }: { children: React.ReactNode })
   const [ready, setReady] = useState(false);
 
   // The httpOnly session cookie is the proof of auth (meld doc 14). Resolve the
-  // principal to seed the canvasser id the field pages read from localStorage.
+  // principal to seed the volunteer id the field pages read from localStorage.
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -29,7 +29,7 @@ export default function FieldLayout({ children }: { children: React.ReactNode })
         goToLogin();
         return;
       }
-      setCanvasserId(session.id);
+      setVolunteerId(session.id);
       setReady(true);
     })();
     return () => {

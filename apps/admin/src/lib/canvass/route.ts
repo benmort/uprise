@@ -62,7 +62,7 @@ function twoOpt(route: Stop[]): Stop[] {
 
 /**
  * Order stops into a short walking route, starting from `start` if given (the
- * canvasser's current position). Stops without coordinates are appended in their
+ * volunteer's current position). Stops without coordinates are appended in their
  * original order at the end.
  */
 export function optimiseRoute(stops: Stop[], start?: { lat: number; lng: number }): Stop[] {
@@ -70,7 +70,7 @@ export function optimiseRoute(stops: Stop[], start?: { lat: number; lng: number 
   const unlocated = stops.filter((s) => !Number.isFinite(s.lat) || !Number.isFinite(s.lng));
   if (located.length <= 2) return [...located, ...unlocated];
 
-  // Start nearest to the canvasser's position when provided.
+  // Start nearest to the volunteer's position when provided.
   let startIndex = 0;
   if (start) {
     let bestDist = Infinity;

@@ -22,7 +22,7 @@ type PushState = {
 
 /**
  * Field push (G14): registers a web-push subscription for this device when the
- * server feature is on and the canvasser grants permission. Safe no-op when push
+ * server feature is on and the volunteer grants permission. Safe no-op when push
  * is unsupported or unconfigured.
  */
 export function useFieldPush() {

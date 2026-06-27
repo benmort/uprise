@@ -1,18 +1,18 @@
 "use client";
 
-// The authenticated canvasser's AppUser id. The login flow should set this from
+// The authenticated volunteer's AppUser id. The login flow should set this from
 // the /auth/check response (which now returns the principal); until then it can
 // be seeded manually for testing. Kept tiny + storage-backed so the field pages
 // don't need a provider.
 
-const KEY = "yarns.canvasserId";
+const KEY = "yarns.volunteerId";
 
-export function getCanvasserId(): string | null {
+export function getVolunteerId(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(KEY);
 }
 
-export function setCanvasserId(id: string): void {
+export function setVolunteerId(id: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(KEY, id);
 }

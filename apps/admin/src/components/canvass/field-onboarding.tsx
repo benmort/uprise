@@ -11,7 +11,7 @@ const STEPS = [
   { icon: ShieldAlert, title: "Stay safe", body: "If a door feels unsafe, leave. You can flag “do not return” so nobody is sent back." },
 ];
 
-/** First-run 60-second how-to + safety primer for canvassers. Shows once per device. */
+/** First-run 60-second how-to + safety primer for volunteers. Shows once per device. */
 export function FieldOnboarding() {
   const [seen, setSeen] = useLocalStorage<boolean>("yarns.fieldOnboarded", false);
   const [step, setStep] = useState(0);

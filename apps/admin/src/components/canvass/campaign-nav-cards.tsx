@@ -23,7 +23,7 @@ export function CampaignNavCards({ campaignId, className, id }: { campaignId: st
     { href: `/canvass/${campaignId}/goals`, label: "Goals", desc: "Targets & progress", icon: Target },
     { href: `/canvass/${campaignId}/shifts`, label: "Shifts", desc: "Schedule & sign-ups", icon: CalendarClock },
     { href: `/canvass/${campaignId}/qa`, label: "QA", desc: "Flagged knocks to review", icon: ClipboardCheck },
-    { href: "/canvass/canvassers", label: "Canvassers", desc: "Team & assignments", icon: Users },
+    { href: "/canvass/volunteers", label: "Volunteers", desc: "Team & assignments", icon: Users },
   ];
   return (
     <div id={id} className={`grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 ${className ?? ""}`}>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Pencil, UserPlus } from "lucide-react";
-import { createCanvasser, listCanvassers, updateCanvasser } from "@/lib/api";
+import { createVolunteer, listVolunteers, updateVolunteer } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -16,11 +16,11 @@ import { RoleChip } from "@/components/canvass/role-chip";
 import { useToast } from "@/components/ui/toast";
 
 type Role = "VOLUNTEER" | "ORGANISER";
-type Canvasser = { id: string; displayName: string; email: string | null; role: string };
+type Volunteer = { id: string; displayName: string; email: string | null; role: string };
 
-export default function CanvassersPage() {
+export default function VolunteersPage() {
   const { showToast } = useToast();
-  const [rows, setRows] = useState<Canvasser[]>([]);
+  const [rows, setRows] = useState<Volunteer[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -28,7 +28,7 @@ export default function CanvassersPage() {
   const [role, setRole] = useState<Role>("VOLUNTEER");
   const [busy, setBusy] = useState(false);
 
-  const [editing, setEditing] = useState<Canvasser | null>(null);
+  const [editing, setEditing] = useState<Volunteer | null>(null);
   const [editForm, setEditForm] = useState<{ displayName: string; role: Role; password: string }>({
     displayName: "",
     role: "VOLUNTEER",
@@ -37,7 +37,7 @@ export default function CanvassersPage() {
   const [editBusy, setEditBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await listCanvassers();
+    const res = await listVolunteers();
     if (res.ok) setRows(res.data);
     setLoading(false);
   }, []);
@@ -52,7 +52,7 @@ export default function CanvassersPage() {
       return;
     }
     setBusy(true);
-    const res = await createCanvasser({ displayName: name.trim(), email: email.trim(), password, role });
+    const res = await createVolunteer({ displayName: name.trim(), email: email.trim(), password, role });
     setBusy(false);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't create login", description: res.error });
@@ -65,7 +65,7 @@ export default function CanvassersPage() {
     showToast({ tone: "success", title: "Field login created", description: res.data.email ?? "" });
   }, [name, email, password, role, load, showToast]);
 
-  const openEdit = (c: Canvasser) => {
+  const openEdit = (c: Volunteer) => {
     setEditing(c);
     setEditForm({ displayName: c.displayName, role: c.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER", password: "" });
   };
@@ -77,7 +77,7 @@ export default function CanvassersPage() {
       return;
     }
     setEditBusy(true);
-    const res = await updateCanvasser(editing.id, {
+    const res = await updateVolunteer(editing.id, {
       displayName: editForm.displayName.trim(),
       role: editForm.role,
       password: editForm.password || undefined,
@@ -89,7 +89,7 @@ export default function CanvassersPage() {
     }
     setEditing(null);
     await load();
-    showToast({ tone: "success", title: "Canvasser updated" });
+    showToast({ tone: "success", title: "Volunteer updated" });
   }, [editing, editForm, load, showToast]);
 
   return (
@@ -101,10 +101,10 @@ export default function CanvassersPage() {
             Canvass
           </Link>
         </Button>
-        <h1 className="text-2xl font-extrabold">Canvassers</h1>
+        <h1 className="text-2xl font-extrabold">Volunteers</h1>
       </div>
 
-      <SectionCard title="Invite a canvasser" description="Issues a field login (email + password).">
+      <SectionCard title="Invite a volunteer" description="Issues a field login (email + password).">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Full name" htmlFor="cv-name" required>
             <Input id="cv-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
@@ -134,7 +134,7 @@ export default function CanvassersPage() {
         <DataTable
           rows={rows}
           rowKey={(r) => r.id}
-          empty="No canvassers yet."
+          empty="No volunteers yet."
           columns={[
             { key: "name", header: "Name", cell: (r) => r.displayName },
             { key: "email", header: "Email", cell: (r) => r.email ?? "—" },
@@ -159,7 +159,7 @@ export default function CanvassersPage() {
 
       <FormDialog
         open={!!editing}
-        title="Edit canvasser"
+        title="Edit volunteer"
         onClose={() => setEditing(null)}
         onSubmit={submitEdit}
         busy={editBusy}

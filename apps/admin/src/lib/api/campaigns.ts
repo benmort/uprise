@@ -51,7 +51,7 @@ export type CampaignKpis = {
   doorsToday: number;
   turfCompletePct: number;
   contactRate: number;
-  canvassersOut: number;
+  volunteersOut: number;
   knockedStops: number;
   totalStops: number;
 };
@@ -72,8 +72,8 @@ export async function getCampaignResults(id: string) {
 
 export type CampaignLive = {
   doorsToday: number;
-  canvassers: Array<{
-    canvasserId: string;
+  volunteers: Array<{
+    volunteerId: string;
     name: string;
     turf: string;
     doorsToday: number;
@@ -84,7 +84,7 @@ export type CampaignLive = {
     id: string;
     at: string;
     dispositionCode: string | null;
-    canvasser: string | null;
+    volunteer: string | null;
   }>;
 };
 

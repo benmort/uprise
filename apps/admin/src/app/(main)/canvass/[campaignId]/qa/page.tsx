@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@/components/canvass/section-card";
 
-type Flag = { id: string; canvasser: string | null; reason: string; at: string };
+type Flag = { id: string; volunteer: string | null; reason: string; at: string };
 
 export default function QaPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -58,7 +58,7 @@ export default function QaPage() {
                 <AlertTriangle className="h-4 w-4 shrink-0 text-warning-foreground" />
                 <span className="flex-1 text-foreground">
                   {f.reason}
-                  {f.canvasser ? ` · ${f.canvasser}` : ""}
+                  {f.volunteer ? ` · ${f.volunteer}` : ""}
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                   {new Date(f.at).toLocaleString()}

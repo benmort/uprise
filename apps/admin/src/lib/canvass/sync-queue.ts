@@ -70,7 +70,7 @@ export class SyncQueue {
         });
         break;
       }
-      // Terminal (e.g. turf not assigned to this canvasser): park as CONFLICT.
+      // Terminal (e.g. turf not assigned to this volunteer): park as CONFLICT.
       await this.store.update(record.localId, {
         status: "CONFLICT",
         attempts: record.attempts + 1,
@@ -98,7 +98,7 @@ export class SyncQueue {
     await this.store.update(localId, { status: "PENDING" });
   }
 
-  /** Drop a conflicted record permanently (canvasser chose not to keep it). */
+  /** Drop a conflicted record permanently (volunteer chose not to keep it). */
   async discard(localId: string): Promise<void> {
     await this.store.remove(localId);
   }

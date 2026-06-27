@@ -1023,18 +1023,18 @@ model Turf {
 model TurfAssignment {
   id          String               @id @default(cuid())
   turfId      String
-  canvasserId String
+  volunteerId String
   status      TurfAssignmentStatus @default(ASSIGNED)
   lockedUntil DateTime?
   assignedAt  DateTime             @default(now())
   releasedAt  DateTime?
   turf        Turf                 @relation(fields: [turfId], references: [id], onDelete: Cascade)
-  canvasser   User              @relation(fields: [canvasserId], references: [id], onDelete: Cascade)
+  volunteer   User              @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
 
   // One active lock per turf: enforced by a partial unique index in the
-  // migration (status = 'ASSIGNED'), so two canvassers can't both own a turf.
+  // migration (status = 'ASSIGNED'), so two volunteers can't both own a turf.
   @@index([turfId, status])
-  @@index([canvasserId, status])
+  @@index([volunteerId, status])
   @@schema("canvass")
 }
 
@@ -1076,7 +1076,7 @@ model DoorKnock {
   id              String       @id @default(cuid())
   tenantId  String
   contactId       String
-  canvasserId     String?
+  volunteerId     String?
   walkListItemId  String?
   localId         String       // client-generated idempotency key
   dispositionCode String?
@@ -1089,11 +1089,11 @@ model DoorKnock {
   createdAt       DateTime     @default(now())
   tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact         Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  canvasser       User?     @relation(fields: [canvasserId], references: [id], onDelete: SetNull)
+  volunteer       User?     @relation(fields: [volunteerId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, localId])
   @@index([tenantId, contactId, createdAt])
-  @@index([canvasserId, createdAt])
+  @@index([volunteerId, createdAt])
   @@schema("canvass")
 }
 
@@ -1106,7 +1106,7 @@ model Shift {
   tenantId String
   campaignId     String?
   turfId         String?
-  canvasserId    String?
+  volunteerId    String?
   name           String
   location       String?
   startsAt       DateTime
@@ -1118,7 +1118,7 @@ model Shift {
   campaign       CanvassCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, campaignId, startsAt])
-  @@index([tenantId, canvasserId])
+  @@index([tenantId, volunteerId])
   @@schema("canvass")
 }
 

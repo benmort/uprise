@@ -360,7 +360,7 @@ export class ContactsService {
       this.prisma.doorKnock.findMany({
         where: { tenantId, contactId },
         orderBy: { createdAt: "asc" },
-        include: { canvasser: { select: { id: true, displayName: true } } },
+        include: { volunteer: { select: { id: true, displayName: true } } },
       }),
       this.prisma.questionResponse.findMany({
         where: { tenantId, contactId },
@@ -395,7 +395,7 @@ export class ContactsService {
         lng: k.lng,
         notes: k.notes,
         safetyFlag: k.safetyFlag,
-        canvasser: k.canvasser ? { id: k.canvasser.id, name: k.canvasser.displayName } : null,
+        volunteer: k.volunteer ? { id: k.volunteer.id, name: k.volunteer.displayName } : null,
       })),
     ].sort((a, b) => b.at.getTime() - a.at.getTime());
 

@@ -13,7 +13,7 @@ import {
 } from "@/lib/api";
 import { getContactProfile, type ContactProfile } from "@/lib/api/contacts";
 import { getSurvey, listSurveys } from "@/lib/api/engagement";
-import { getCanvasserId, newLocalId } from "@/lib/canvass/canvasser";
+import { getVolunteerId, newLocalId } from "@/lib/canvass/volunteer";
 import { useGeolocation } from "@/hooks/use-geolocation";
 import { useSyncQueue } from "@/hooks/use-sync-queue";
 import { DispositionPad } from "@/components/canvass/disposition-pad";
@@ -51,9 +51,9 @@ export default function DoorEntryPage() {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const canvasserId = getCanvasserId();
+      const volunteerId = getVolunteerId();
       const [aRes, dRes] = await Promise.all([
-        canvasserId ? getCanvassAssignments(canvasserId) : Promise.resolve({ ok: false as const, error: "no id" }),
+        volunteerId ? getCanvassAssignments(volunteerId) : Promise.resolve({ ok: false as const, error: "no id" }),
         listDispositions("DOOR"),
       ]);
       if (!alive) return;
@@ -130,14 +130,14 @@ export default function DoorEntryPage() {
     // Guard against a double-tap recording two knocks (distinct localIds) before
     // the first enqueue completes — the server would accept both as separate knocks.
     if (submittingRef.current) return;
-    // A knock without a canvasser id is rejected server-side as a terminal CONFLICT,
+    // A knock without a volunteer id is rejected server-side as a terminal CONFLICT,
     // stranding it in the sync centre. Bail with a clear message instead.
-    const canvasserId = getCanvasserId();
-    if (!canvasserId) {
+    const volunteerId = getVolunteerId();
+    if (!volunteerId) {
       showToast({
         tone: "error",
         title: "Not signed in",
-        description: "Your canvasser session was lost — sign in again to record knocks.",
+        description: "Your volunteer session was lost — sign in again to record knocks.",
       });
       return;
     }
@@ -153,7 +153,7 @@ export default function DoorEntryPage() {
         localId,
         {
           contactId: stop.contact.id as string,
-          canvasserId,
+          volunteerId,
           localId,
           dispositionCode: code,
           walkListItemId: stop.id,
@@ -168,7 +168,7 @@ export default function DoorEntryPage() {
         capturedAt,
       );
     } catch (error) {
-      // IDB write failed — let the canvasser retry rather than silently lose the knock.
+      // IDB write failed — let the volunteer retry rather than silently lose the knock.
       submittingRef.current = false;
       setSaving(false);
       showToast({
@@ -297,12 +297,12 @@ function AddHouseholdMember({ turfId }: { turfId: string }) {
   const [busy, setBusy] = useState(false);
 
   async function add() {
-    const canvasserId = getCanvasserId();
-    if (!canvasserId || !name.trim()) return;
+    const volunteerId = getVolunteerId();
+    if (!volunteerId || !name.trim()) return;
     setBusy(true);
     const [firstName, ...rest] = name.trim().split(/\s+/);
     const res = await createDoorContact({
-      canvasserId,
+      volunteerId,
       turfId,
       firstName,
       lastName: rest.join(" ") || undefined,

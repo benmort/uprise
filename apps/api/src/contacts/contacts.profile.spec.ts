@@ -39,7 +39,7 @@ describe("ContactsService.getProfile", () => {
       { id: "in1", receivedAt: new Date("2026-06-10"), body: "Hi", fromPhone: "x", toPhone: "y", blastId: null },
     ]);
     prisma.doorKnock.findMany.mockResolvedValue([
-      { id: "dk1", createdAt: new Date("2026-06-12"), dispositionCode: "SPOKE", lat: null, lng: null, notes: null, safetyFlag: null, canvasser: { id: "u1", displayName: "Sam" } },
+      { id: "dk1", createdAt: new Date("2026-06-12"), dispositionCode: "SPOKE", lat: null, lng: null, notes: null, safetyFlag: null, volunteer: { id: "u1", displayName: "Sam" } },
     ]);
     prisma.contactSourceRecord.findMany.mockResolvedValue([
       { id: "sr1", sourceSystem: "action_network", externalId: "an:1", createdAt: new Date("2026-06-09") },

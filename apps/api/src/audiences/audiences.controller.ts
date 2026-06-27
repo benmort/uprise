@@ -17,7 +17,7 @@ import { AudiencesService } from "./audiences.service";
 import { AudienceContactsDto, CreateAudienceDto, ListAudiencesDto } from "./dto/audience.dto";
 import { RequirePermission } from "../auth/require-permission.decorator";
 
-// Audiences are an organiser/owner domain (canvassers have no access). The cron
+// Audiences are an organiser/owner domain (volunteers have no access). The cron
 // dispatch route is deliberately left ungated — it runs with a Bearer token and
 // has no request.user.
 const READ = { action: "read", resource: "audience.audience" } as const;

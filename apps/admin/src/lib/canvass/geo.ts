@@ -1,5 +1,5 @@
 // Dependency-free geo helpers for turf work. The full app also pulls in
-// @turf/turf for richer geometry; these cover the two operations the canvasser
+// @turf/turf for richer geometry; these cover the two operations the volunteer
 // flow needs offline: point-in-polygon (which turf a household falls in) and a
 // bounding box (for the offline tile-pack download).
 

@@ -81,7 +81,7 @@ function buildNav(campaignId: string, role?: string | null): NavNode[] {
         { label: "Turf map", href: scoped("turf"), match: (p) => p.includes("/turf") },
         { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists") },
         { label: "Live", href: scoped("live"), match: (p) => p.includes("/live") },
-        { label: "Canvassers", href: "/canvass/canvassers", match: (p) => p.startsWith("/canvass/canvassers") },
+        { label: "Volunteers", href: "/canvass/volunteers", match: (p) => p.startsWith("/canvass/volunteers") },
         { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions") },
         { label: "Results", href: scoped("results"), match: (p) => p.includes("/results") },
       ],
@@ -225,7 +225,7 @@ export default function MainLayout({
         goToLogin();
         return;
       }
-      // Canvassers don't belong in the organiser shell — bounce them to the field
+      // Volunteers don't belong in the organiser shell — bounce them to the field
       // app (defence-in-depth; organiser mutations are also @Roles-gated server-side).
       if (session.role === "VOLUNTEER") {
         router.replace("/field");

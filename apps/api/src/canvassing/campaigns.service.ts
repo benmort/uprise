@@ -9,7 +9,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 
-// Disposition codes where the canvasser reached a human (see engagement-defaults).
+// Disposition codes where the volunteer reached a human (see engagement-defaults).
 const CONTACT_CODES = ["spoke_to_target", "spoke_to_other"];
 
 function startOfToday(): Date {
@@ -74,7 +74,7 @@ export class CampaignsService {
     };
   }
 
-  /** Headline KPIs for the overview: doors today, turf %, contact rate, canvassers out. */
+  /** Headline KPIs for the overview: doors today, turf %, contact rate, volunteers out. */
   async getSummary(tenantId: string, id: string) {
     const campaign = await this.prisma.canvassCampaign.findFirst({
       where: { id, tenantId },
@@ -110,17 +110,17 @@ export class CampaignsService {
         turfIds.length > 0
           ? this.prisma.turfAssignment.findMany({
               where: { turfId: { in: turfIds }, status: TurfAssignmentStatus.ASSIGNED },
-              select: { canvasserId: true },
+              select: { volunteerId: true },
             })
           : Promise.resolve([]),
       ]);
 
-    const canvassersOut = new Set(locks.map((l) => l.canvasserId)).size;
+    const volunteersOut = new Set(locks.map((l) => l.volunteerId)).size;
     return {
       doorsToday,
       turfCompletePct: totalStops > 0 ? Math.round((visitedStops / totalStops) * 100) : 0,
       contactRate: totalKnocks > 0 ? Math.round((contactKnocks / totalKnocks) * 100) : 0,
-      canvassersOut,
+      volunteersOut,
       knockedStops: visitedStops,
       totalStops,
     };
@@ -188,7 +188,7 @@ export class CampaignsService {
   async getLive(tenantId: string, id: string) {
     const turfIds = await this.campaignTurfIds(tenantId, id);
     if (turfIds.length === 0) {
-      return { canvassers: [], recentKnocks: [], doorsToday: 0 };
+      return { volunteers: [], recentKnocks: [], doorsToday: 0 };
     }
     const contactFilter = { contact: { turfId: { in: turfIds } } };
 
@@ -196,39 +196,39 @@ export class CampaignsService {
       this.prisma.turfAssignment.findMany({
         where: { turfId: { in: turfIds }, status: TurfAssignmentStatus.ASSIGNED },
         include: {
-          canvasser: { select: { id: true, displayName: true } },
+          volunteer: { select: { id: true, displayName: true } },
           turf: { select: { id: true, name: true } },
         },
       }),
       this.prisma.doorKnock.findMany({
         where: { tenantId, createdAt: { gte: startOfToday() }, ...contactFilter },
-        select: { canvasserId: true, createdAt: true },
+        select: { volunteerId: true, createdAt: true },
       }),
       this.prisma.doorKnock.findMany({
         where: { tenantId, ...contactFilter },
         orderBy: { createdAt: "desc" },
         take: 20,
-        include: { canvasser: { select: { id: true, displayName: true } } },
+        include: { volunteer: { select: { id: true, displayName: true } } },
       }),
     ]);
 
-    const doorsByCanvasser = new Map<string, { count: number; last: Date }>();
+    const doorsByVolunteer = new Map<string, { count: number; last: Date }>();
     for (const k of knocksToday) {
-      if (!k.canvasserId) continue;
-      const cur = doorsByCanvasser.get(k.canvasserId);
-      if (!cur) doorsByCanvasser.set(k.canvasserId, { count: 1, last: k.createdAt });
+      if (!k.volunteerId) continue;
+      const cur = doorsByVolunteer.get(k.volunteerId);
+      if (!cur) doorsByVolunteer.set(k.volunteerId, { count: 1, last: k.createdAt });
       else {
         cur.count += 1;
         if (k.createdAt > cur.last) cur.last = k.createdAt;
       }
     }
 
-    const canvassers = locks.map((l) => {
-      const stat = doorsByCanvasser.get(l.canvasserId);
+    const volunteers = locks.map((l) => {
+      const stat = doorsByVolunteer.get(l.volunteerId);
       const idleMs = stat ? Date.now() - stat.last.getTime() : Infinity;
       return {
-        canvasserId: l.canvasserId,
-        name: l.canvasser.displayName,
+        volunteerId: l.volunteerId,
+        name: l.volunteer.displayName,
         turf: l.turf.name,
         doorsToday: stat?.count ?? 0,
         lastActionAt: stat?.last ?? null,
@@ -237,13 +237,13 @@ export class CampaignsService {
     });
 
     return {
-      canvassers,
+      volunteers,
       doorsToday: knocksToday.length,
       recentKnocks: recent.map((k) => ({
         id: k.id,
         at: k.createdAt,
         dispositionCode: k.dispositionCode,
-        canvasser: k.canvasser?.displayName ?? null,
+        volunteer: k.volunteer?.displayName ?? null,
       })),
     };
   }

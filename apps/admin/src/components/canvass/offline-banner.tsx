@@ -3,7 +3,7 @@
 import { CloudOff } from "lucide-react";
 import { useOnlineStatus } from "@/hooks/use-online-status";
 
-/** Sticky bar shown only when the device is offline. Reassures the canvasser
+/** Sticky bar shown only when the device is offline. Reassures the volunteer
  *  that knocks are saved locally and will sync. */
 export function OfflineBanner() {
   const online = useOnlineStatus();

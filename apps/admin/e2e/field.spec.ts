@@ -11,15 +11,15 @@ async function authed(page: Page) {
         window.sessionStorage.setItem("yarn_auth_credentials", JSON.stringify({ username: u, password: p }));
       } catch {}
       try {
-        if (cid) window.localStorage.setItem("yarns.canvasserId", cid);
+        if (cid) window.localStorage.setItem("yarns.volunteerId", cid);
       } catch {}
     },
-    [ctx.user, ctx.pass, ids.canvasserId ?? ""],
+    [ctx.user, ctx.pass, ids.volunteerId ?? ""],
   );
 }
 test.beforeEach(async ({ page }) => authed(page));
 
-/** Field canvasser PWA — the demo canvasser id is injected so the assigned turf renders. */
+/** Field volunteer PWA — the demo volunteer id is injected so the assigned turf renders. */
 test("field home renders", async ({ page }) => {
   await page.goto("/field", { waitUntil: "domcontentloaded" });
   await expect(page).not.toHaveURL(/\/login/);
@@ -33,7 +33,7 @@ test("field sync centre renders", async ({ page }) => {
 });
 
 test("walk map + door render with seeded turf", async ({ page }) => {
-  test.skip(!ids.turfId, "no seeded turf assigned to demo canvasser");
+  test.skip(!ids.turfId, "no seeded turf assigned to demo volunteer");
   await page.goto(`/field/${ids.turfId}`, { waitUntil: "domcontentloaded" });
   await expect(page).not.toHaveURL(/\/login/);
   if (ids.stopId) {

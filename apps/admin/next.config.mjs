@@ -1,7 +1,7 @@
 import withPWAInit from "next-pwa";
 
 // PWA is off in dev by default (the SW caches the dev bundle and fights HMR).
-// Set ENABLE_PWA=true in .env.local to exercise the offline canvasser app locally.
+// Set ENABLE_PWA=true in .env.local to exercise the offline volunteer app locally.
 const pwaDisabled = process.env.NODE_ENV === "development" && process.env.ENABLE_PWA !== "true";
 
 const withPWA = withPWAInit({
@@ -9,7 +9,7 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: pwaDisabled,
-  // Offline support for the canvasser PWA. Door-knock mutations are NEVER cached
+  // Offline support for the volunteer PWA. Door-knock mutations are NEVER cached
   // here — they go through the app-level sync queue (lib/canvass/sync-queue.ts).
   runtimeCaching: [
     {

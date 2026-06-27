@@ -10,7 +10,7 @@ export type PushSubscriptionInput = {
 };
 
 /**
- * Web-push to field canvassers. Gated on FEATURE_PUSH_ENABLED + VAPID keys — when
+ * Web-push to field volunteers. Gated on FEATURE_PUSH_ENABLED + VAPID keys — when
  * unconfigured, subscribe/broadcast no-op cleanly so nothing throws in dev/prod.
  */
 @Injectable()

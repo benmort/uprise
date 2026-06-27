@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { Check, DoorOpen, DownloadCloud, Loader2 } from "lucide-react";
 import { getCanvassAssignments, type CanvassAssignment } from "@/lib/api";
-import { getCanvasserId } from "@/lib/canvass/canvasser";
+import { getVolunteerId } from "@/lib/canvass/volunteer";
 import { optimiseRoute, type Stop } from "@/lib/canvass/route";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useGeolocation } from "@/hooks/use-geolocation";
@@ -39,14 +39,14 @@ export default function WalkViewPage() {
   const { fix, capture } = useGeolocation();
 
   useEffect(() => {
-    const canvasserId = getCanvasserId();
-    if (!canvasserId) {
+    const volunteerId = getVolunteerId();
+    if (!volunteerId) {
       setLoading(false);
       return;
     }
     let alive = true;
     void (async () => {
-      const res = await getCanvassAssignments(canvasserId);
+      const res = await getCanvassAssignments(volunteerId);
       if (!alive) return;
       if (res.ok) setAssignment(res.data.find((a) => a.turfId === turfId) ?? null);
       setLoading(false);
@@ -56,7 +56,7 @@ export default function WalkViewPage() {
     };
   }, [turfId]);
 
-  // Locate the canvasser once when the map opens (battery: not a continuous watch).
+  // Locate the volunteer once when the map opens (battery: not a continuous watch).
   useEffect(() => {
     if (mode === "map") void capture();
   }, [mode, capture]);

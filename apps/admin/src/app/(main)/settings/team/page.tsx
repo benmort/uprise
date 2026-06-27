@@ -497,7 +497,7 @@ export default function TeamPage() {
                     <th className="py-2">Capability</th>
                     <th className="py-2 text-center">Owner</th>
                     <th className="py-2 text-center">Organiser</th>
-                    <th className="py-2 text-center">Canvasser</th>
+                    <th className="py-2 text-center">Volunteer</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -511,7 +511,7 @@ export default function TeamPage() {
                         {s.organiser ? <Check className="mx-auto h-4 w-4 text-success" /> : "–"}
                       </td>
                       <td className="py-2 text-center">
-                        {s.canvasser ? <Check className="mx-auto h-4 w-4 text-success" /> : "–"}
+                        {s.volunteer ? <Check className="mx-auto h-4 w-4 text-success" /> : "–"}
                       </td>
                     </tr>
                   ))}
@@ -614,11 +614,11 @@ export default function TeamPage() {
 // Capability matrix (folded in from the old settings/roles page). Mirrors the API's
 // @RequirePermission guards – Owner has everything Organiser does, plus billing/tenant ops.
 const SCOPES = [
-  { label: "Knock doors / log dispositions (field app)", owner: true, organiser: true, canvasser: true },
-  { label: "View assigned turf & walk lists", owner: true, organiser: true, canvasser: true },
-  { label: "Cut turf, build & assign walk lists", owner: true, organiser: true, canvasser: false },
-  { label: "Author surveys, scripts, dispositions, journeys", owner: true, organiser: true, canvasser: false },
-  { label: "Invite members & manage the team", owner: true, organiser: true, canvasser: false },
-  { label: "View results, live war-room, QA", owner: true, organiser: true, canvasser: false },
-  { label: "Manage workspace settings & billing", owner: true, organiser: false, canvasser: false },
+  { label: "Knock doors / log dispositions (field app)", owner: true, organiser: true, volunteer: true },
+  { label: "View assigned turf & walk lists", owner: true, organiser: true, volunteer: true },
+  { label: "Cut turf, build & assign walk lists", owner: true, organiser: true, volunteer: false },
+  { label: "Author surveys, scripts, dispositions, journeys", owner: true, organiser: true, volunteer: false },
+  { label: "Invite members & manage the team", owner: true, organiser: true, volunteer: false },
+  { label: "View results, live war-room, QA", owner: true, organiser: true, volunteer: false },
+  { label: "Manage workspace settings & billing", owner: true, organiser: false, volunteer: false },
 ];

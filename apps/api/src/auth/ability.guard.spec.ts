@@ -26,12 +26,12 @@ describe("AbilityGuard", () => {
     expect(g.canActivate(ctx({ id: "u1", roles: ["organiser"] }))).toBe(true);
   });
 
-  it("denies a canvasser from managing audiences", () => {
+  it("denies a volunteer from managing audiences", () => {
     const g = guardWith({ action: "manage", resource: "audience.audience" });
     expect(() => g.canActivate(ctx({ id: "u1", roles: ["volunteer"] }))).toThrow(ForbiddenException);
   });
 
-  it("allows a canvasser to manage doorknocks", () => {
+  it("allows a volunteer to manage doorknocks", () => {
     const g = guardWith({ action: "manage", resource: "canvass.doorknock" });
     expect(g.canActivate(ctx({ id: "u1", roles: ["volunteer"] }))).toBe(true);
   });

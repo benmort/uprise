@@ -79,8 +79,8 @@ export default function LiveWarRoomPage() {
   }
   if (!live) return null;
 
-  const out = live.canvassers.length;
-  const idle = live.canvassers.filter((c) => c.idle);
+  const out = live.volunteers.length;
+  const idle = live.volunteers.filter((c) => c.idle);
 
   return (
     <div className="page-stack">
@@ -103,7 +103,7 @@ export default function LiveWarRoomPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <KpiTile label="Canvassers out" value={out} icon={<Users className="h-4 w-4" />} />
+        <KpiTile label="Volunteers out" value={out} icon={<Users className="h-4 w-4" />} />
         <KpiTile label="Doors today" value={live.doorsToday} icon={<DoorOpen className="h-4 w-4" />} />
         <KpiTile label="Idle" value={idle.length} icon={<AlertTriangle className="h-4 w-4" />} />
       </div>
@@ -112,7 +112,7 @@ export default function LiveWarRoomPage() {
         <SectionCard title="Alerts">
           <ul className="space-y-1.5">
             {idle.map((c) => (
-              <li key={c.canvasserId} className="flex items-center gap-2 text-sm">
+              <li key={c.volunteerId} className="flex items-center gap-2 text-sm">
                 <AlertTriangle className="h-4 w-4 text-warning-foreground" />
                 <span className="text-foreground">
                   {c.name} idle on {c.turf} — no knock in 30+ min
@@ -124,11 +124,11 @@ export default function LiveWarRoomPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <SectionCard title="Canvassers">
+        <SectionCard title="Volunteers">
           <DataTable
-            rows={live.canvassers}
-            rowKey={(c) => c.canvasserId}
-            empty="No canvassers out right now."
+            rows={live.volunteers}
+            rowKey={(c) => c.volunteerId}
+            empty="No volunteers out right now."
             columns={[
               { key: "name", header: "Name", cell: (c) => c.name },
               { key: "turf", header: "Turf", cell: (c) => c.turf },
@@ -152,7 +152,7 @@ export default function LiveWarRoomPage() {
                 <li key={k.id} className="flex items-center justify-between gap-2 text-sm">
                   <span className="truncate text-foreground">
                     {(k.dispositionCode ?? "knock").replaceAll("_", " ")}
-                    {k.canvasser ? ` · ${k.canvasser}` : ""}
+                    {k.volunteer ? ` · ${k.volunteer}` : ""}
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(k.at)}</span>
                 </li>
@@ -165,7 +165,7 @@ export default function LiveWarRoomPage() {
       <FormDialog
         open={broadcastOpen}
         title="Message the field"
-        description="Sends a push notification to every canvasser with notifications on."
+        description="Sends a push notification to every volunteer with notifications on."
         onClose={() => setBroadcastOpen(false)}
         onSubmit={sendBroadcast}
         submitLabel="Send"
