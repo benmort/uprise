@@ -84,7 +84,7 @@ export default function FeatureFlagsPage() {
     <main className="mx-auto max-w-4xl space-y-6 p-1">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Flags</h1>
+          <h1 className="text-2xl font-bold text-foreground">Feature flags</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Turn features on or off for this workspace. The effective value resolves through
             env kill-switch → workspace override → plan → platform default.

@@ -8,6 +8,7 @@ import {
   Boxes,
   ChevronDown,
   ChevronLeft,
+  Crown,
   LayoutDashboard,
   LogOut,
   Mail,
@@ -57,7 +58,7 @@ type NavNode =
 // Cascade sidebar model (matches the design prototype): leaf items + expandable
 // groups whose children appear on an indented rail. Campaign-scoped children use
 // the current campaign id when one exists, else fall back to the canvass overview.
-function buildNav(campaignId: string): NavNode[] {
+function buildNav(campaignId: string, role?: string | null): NavNode[] {
   const scoped = (suffix: string) =>
     campaignId ? `/canvass/${campaignId}/${suffix}` : "/canvass";
   // Prefix matcher for the ported prog routes (all under /prog/*).
@@ -99,16 +100,31 @@ function buildNav(campaignId: string): NavNode[] {
     { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys") },
     { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance") },
     {
-      type: "group", key: "settings", label: "Settings", icon: Settings, match: (p) => p.startsWith("/settings"),
+      type: "group", key: "settings", label: "Settings", icon: Settings,
+      match: (p) =>
+        p.startsWith("/settings") &&
+        !p.startsWith("/settings/flags") &&
+        !p.startsWith("/settings/plans"),
       children: [
         { label: "General", href: "/settings", match: (p) => p === "/settings" },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
-        { label: "Flags", href: "/settings/flags", match: (p) => p === "/settings/flags" },
-        { label: "Plans", href: "/settings/plans", match: (p) => p.startsWith("/settings/plans") },
       ],
     },
+    // Super Admin: platform-level controls (OWNER only). Pages also enforce.
+    ...(role === "OWNER"
+      ? [
+          {
+            type: "group" as const, key: "super-admin", label: "Super Admin", icon: Crown,
+            match: (p: string) => p.startsWith("/settings/flags") || p.startsWith("/settings/plans"),
+            children: [
+              { label: "Feature flags", href: "/settings/flags", match: (p: string) => p === "/settings/flags" },
+              { label: "Plans", href: "/settings/plans", match: (p: string) => p.startsWith("/settings/plans") },
+            ],
+          },
+        ]
+      : []),
     {
       // Mirrors prog's admin information architecture (its menu-config.tsx),
       // rehoming the already-ported pages and registering every new /prog/* route.
@@ -211,7 +227,7 @@ export default function MainLayout({
       }
       // Canvassers don't belong in the organiser shell — bounce them to the field
       // app (defence-in-depth; organiser mutations are also @Roles-gated server-side).
-      if (session.role === "CANVASSER") {
+      if (session.role === "VOLUNTEER") {
         router.replace("/field");
         return;
       }
@@ -424,7 +440,7 @@ export default function MainLayout({
     };
   }, [ready]);
 
-  const nav = useMemo(() => buildNav(campaignId), [campaignId]);
+  const nav = useMemo(() => buildNav(campaignId, principal?.role), [campaignId, principal?.role]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
