@@ -46,23 +46,9 @@ export class FeatureFlagsService {
     private readonly outbox: OutboxService,
   ) {}
 
-  // ── Sync env-layer getters (unchanged behaviour; used by hot server paths
-  //    like queue dispatch where the env value is the platform default) ──
-  isRealtimeEnabled(): boolean { return this.envOrDefault("FEATURE_REALTIME_ENABLED"); }
-  isAiAssistEnabled(): boolean { return this.envOrDefault("FEATURE_AI_ASSIST_ENABLED"); }
-  isBlastSchedulerEnabled(): boolean { return this.envOrDefault("FEATURE_BLAST_SCHEDULER_ENABLED"); }
-  isBullmqUploadEnabled(): boolean { return this.envOrDefault("FEATURE_BULLMQ_UPLOAD_ENABLED"); }
-  isBullmqBlastEnabled(): boolean { return this.envOrDefault("FEATURE_BULLMQ_BLAST_ENABLED"); }
+  // ── Sync env-layer getter — only FEATURE_JOURNEYS_ENABLED still resolves from
+  //    an env kill-switch; every other flag is plan-/global-driven via resolveAll. ──
   isJourneysEnabled(): boolean { return this.envOrDefault("FEATURE_JOURNEYS_ENABLED"); }
-  isWhatsappEnabled(): boolean { return this.envOrDefault("FEATURE_WHATSAPP_ENABLED"); }
-  isBlastDryRunEnabled(): boolean { return this.envOrDefault("BLAST_DRY_RUN"); }
-
-  /** Env-layer snapshot (sync, no DB) — the historical shape. */
-  getSystemFeatureFlags(): FeatureFlagMap {
-    const map = {} as FeatureFlagMap;
-    for (const key of FEATURE_FLAG_KEYS) map[key] = this.envOrDefault(key);
-    return map;
-  }
 
   private envOrDefault(key: FeatureFlagKey): boolean {
     return this.envValue(key) ?? FLAG_DEFAULTS[key];
@@ -105,7 +91,7 @@ export class FeatureFlagsService {
         kind: meta.kind,
         controllableBy: meta.controllableBy,
         default: meta.default,
-        env: this.envValue(key) ?? null,
+        env: meta.controllableBy.includes("env") ? (this.envValue(key) ?? null) : null,
         tenantOverride: overrides.tenant.get(key) ?? null,
         planEntitlement: overrides.plan.get(key) ?? null,
         globalOverride: overrides.global.get(key) ?? null,

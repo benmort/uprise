@@ -26,12 +26,13 @@ export interface FlagDef {
   readonly envVar: string;
 }
 
-// release/entitlement flags: gateable by plan + per-tenant + global + env.
+// release/entitlement flags still gated by an env kill-switch (legacy default).
 const RELEASE: readonly FlagLayer[] = ["env", "tenant", "plan", "global"];
-// ops flags: infra/operational switches, env-only (not tenant/plan controllable).
-const OPS_ENV_ONLY: readonly FlagLayer[] = ["env"];
-// ops flags an admin may also flip platform-wide via the global layer.
-const OPS_GLOBAL: readonly FlagLayer[] = ["env", "global"];
+// plan-driven product features: set per plan (cascading network → tenant), with a
+// per-workspace override + global platform fallback. No env kill-switch.
+const PLAN_DRIVEN: readonly FlagLayer[] = ["tenant", "plan", "global"];
+// platform-wide infra/test switches: one global toggle, no env, no per-tenant scope.
+const GLOBAL_ONLY: readonly FlagLayer[] = ["global"];
 
 export const FLAGS = [
   {
@@ -39,7 +40,7 @@ export const FLAGS = [
     description: "Realtime inbox/analytics streaming (SSE).",
     default: true,
     kind: "ops",
-    controllableBy: OPS_GLOBAL,
+    controllableBy: GLOBAL_ONLY,
     envVar: "FEATURE_REALTIME_ENABLED",
   },
   {
@@ -47,7 +48,7 @@ export const FLAGS = [
     description: "AI reply suggestions in the inbox.",
     default: true,
     kind: "release",
-    controllableBy: RELEASE,
+    controllableBy: PLAN_DRIVEN,
     envVar: "FEATURE_AI_ASSIST_ENABLED",
   },
   {
@@ -55,7 +56,7 @@ export const FLAGS = [
     description: "Scheduling blasts to send later.",
     default: true,
     kind: "release",
-    controllableBy: RELEASE,
+    controllableBy: PLAN_DRIVEN,
     envVar: "FEATURE_BLAST_SCHEDULER_ENABLED",
   },
   {
@@ -71,7 +72,7 @@ export const FLAGS = [
     description: "WhatsApp as a messaging channel (also requires Twilio WhatsApp config).",
     default: false,
     kind: "release",
-    controllableBy: RELEASE,
+    controllableBy: PLAN_DRIVEN,
     envVar: "FEATURE_WHATSAPP_ENABLED",
   },
   {
@@ -79,7 +80,7 @@ export const FLAGS = [
     description: "Route audience CSV imports through the BullMQ worker (vs inline).",
     default: false,
     kind: "ops",
-    controllableBy: OPS_ENV_ONLY,
+    controllableBy: GLOBAL_ONLY,
     envVar: "FEATURE_BULLMQ_UPLOAD_ENABLED",
   },
   {
@@ -87,7 +88,7 @@ export const FLAGS = [
     description: "Route blast sends through the BullMQ worker (vs inline).",
     default: false,
     kind: "ops",
-    controllableBy: OPS_ENV_ONLY,
+    controllableBy: GLOBAL_ONLY,
     envVar: "FEATURE_BULLMQ_BLAST_ENABLED",
   },
   {
@@ -95,7 +96,7 @@ export const FLAGS = [
     description: "Simulate blast sends without dispatching to the carrier.",
     default: false,
     kind: "ops",
-    controllableBy: OPS_GLOBAL,
+    controllableBy: GLOBAL_ONLY,
     envVar: "BLAST_DRY_RUN",
   },
 ] as const satisfies readonly FlagDef[];

@@ -176,7 +176,7 @@ describe("AudiencesService integration-like flow", () => {
     const configMock = {
       get: (_key: string, fallback?: string) => fallback ?? "default",
     } as ConfigService;
-    const flags = { isBullmqUploadEnabled: () => true } as any;
+    const flags = { isEnabled: async () => true } as any;
     const queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "audience-import_import_queued", queued: true }) };
 
     const service = new AudiencesService(prismaMock, configMock, flags, queue as any);

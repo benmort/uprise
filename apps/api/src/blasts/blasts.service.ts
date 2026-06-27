@@ -113,7 +113,7 @@ type RecipientTraceInput = {
 @Injectable()
 export class BlastsService {
   private readonly logger = new Logger(BlastsService.name);
-  private readonly flags: Pick<FeatureFlagsService, "isBullmqBlastEnabled">;
+  private readonly flags: Pick<FeatureFlagsService, "isEnabled">;
   private readonly queue: DispatchQueue;
   private readonly webhookEvents: Pick<WebhookEventService, "claim" | "release">;
   private readonly outbox: Pick<OutboxService, "append">;
@@ -132,7 +132,7 @@ export class BlastsService {
     outbox?: OutboxService,
   ) {
     this.flags = flags ?? {
-      isBullmqBlastEnabled: () => false,
+      isEnabled: async () => false,
     };
     this.queue = queue ?? {
       enqueue: async (job) => ({ jobId: job.id, queued: true }),
@@ -253,7 +253,7 @@ export class BlastsService {
     const proofNumber = typeof dto.proofNumber === "string" ? dto.proofNumber.trim() : "";
     if (proofNumber && previews[0]?.rendered) {
       const to = normalizePhoneE164(proofNumber);
-      const dryRunEnabled = this.isBlastDryRunEnabled();
+      const dryRunEnabled = await this.isBlastDryRunEnabled();
       const sendOptions = this.buildSendOptions(
         blast,
         previews[0].recipient as Record<string, unknown>,
@@ -316,14 +316,14 @@ export class BlastsService {
       });
       return u;
     });
-    if (this.isBullmqBlastEnabled()) {
+    if (await this.isBullmqBlastEnabled()) {
       await this.enqueueBlastSendBatch({ blastId: id }, runAt);
     }
     return updated;
   }
 
   async requestSendNow(id: string) {
-    if (!this.isBullmqBlastEnabled()) {
+    if (!(await this.isBullmqBlastEnabled())) {
       return this.sendNow(id);
     }
     const queued = await this.enqueueBlastSendBatch({ blastId: id });
@@ -336,7 +336,7 @@ export class BlastsService {
   }
 
   async requestRetryFailed(id: string) {
-    if (!this.isBullmqBlastEnabled()) {
+    if (!(await this.isBullmqBlastEnabled())) {
       return this.retryFailed(id);
     }
     const queued = await this.enqueueBlastRetryFailed({ blastId: id });
@@ -472,12 +472,12 @@ export class BlastsService {
     return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
   }
 
-  private isBullmqBlastEnabled(): boolean {
-    return this.flags.isBullmqBlastEnabled();
+  private isBullmqBlastEnabled(): Promise<boolean> {
+    return this.flags.isEnabled("FEATURE_BULLMQ_BLAST_ENABLED", { tenantId: null });
   }
 
-  private isBlastDryRunEnabled(): boolean {
-    return this.config.get<boolean>("BLAST_DRY_RUN", false);
+  private isBlastDryRunEnabled(): Promise<boolean> {
+    return this.flags.isEnabled("BLAST_DRY_RUN", { tenantId: null });
   }
 
   /** Pull the rendering context (contact metadata) back off a stored recipient row. */
@@ -1081,7 +1081,7 @@ export class BlastsService {
       distinct: ["phoneE164"],
     });
     const sentPhones = new Set(sentRecipients.map((recipient) => recipient.phoneE164));
-    const dryRunEnabled = this.isBlastDryRunEnabled();
+    const dryRunEnabled = await this.isBlastDryRunEnabled();
     if (dryRunEnabled && pendingRecipients.length > 0) {
       this.logger.warn(
         `BLAST_DRY_RUN enabled: simulating blast sends (blastId=${blast.id}, batchSize=${pendingRecipients.length})`,
@@ -1218,7 +1218,7 @@ export class BlastsService {
           jobId: string;
         }
       | undefined;
-    if (this.isBullmqBlastEnabled() && statusUpdate.remaining > 0) {
+    if ((await this.isBullmqBlastEnabled()) && statusUpdate.remaining > 0) {
       continuation = await this.enqueueBlastSendBatch({
         blastId: blast.id,
         requestedBatchSize: batchSize,
@@ -1273,7 +1273,7 @@ export class BlastsService {
 
     const results: Array<Record<string, unknown>> = [];
     for (const blast of due) {
-      if (this.isBullmqBlastEnabled()) {
+      if (await this.isBullmqBlastEnabled()) {
         const queued = await this.enqueueBlastSendBatch(
           { blastId: blast.id, requestedBatchSize: dispatchBatchSize },
           blast.scheduledFor && blast.scheduledFor > new Date() ? blast.scheduledFor : undefined,
@@ -1320,7 +1320,7 @@ export class BlastsService {
     const failedRecipients = await this.prisma.blastRecipient.findMany({
       where: { blastId: id, status: BlastRecipientStatus.FAILED },
     });
-    const dryRunEnabled = this.isBlastDryRunEnabled();
+    const dryRunEnabled = await this.isBlastDryRunEnabled();
     if (dryRunEnabled && failedRecipients.length > 0) {
       this.logger.warn(
         `BLAST_DRY_RUN enabled: simulating retry sends (blastId=${blast.id}, recipients=${failedRecipients.length})`,

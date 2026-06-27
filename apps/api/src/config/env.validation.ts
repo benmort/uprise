@@ -70,7 +70,6 @@ export type ValidatedEnv = {
   TWILIO_RATE_LIMIT_COOLDOWN_MS: number;
   TWILIO_WHATSAPP_FROM: string;
   TWILIO_WHATSAPP_MESSAGING_SERVICE_SID: string;
-  FEATURE_WHATSAPP_ENABLED: boolean;
   TWILIO_CONTENT_API_ENABLED: boolean;
   WHATSAPP_SESSION_WINDOW_HOURS: number;
   FEATURE_PUSH_ENABLED: boolean;
@@ -94,12 +93,6 @@ export type ValidatedEnv = {
   QUIET_HOURS_START: number;
   QUIET_HOURS_END: number;
   REQUIRE_OPTOUT_LANGUAGE: boolean;
-  FEATURE_REALTIME_ENABLED: boolean;
-  FEATURE_AI_ASSIST_ENABLED: boolean;
-  FEATURE_BLAST_SCHEDULER_ENABLED: boolean;
-  BLAST_DRY_RUN: boolean;
-  FEATURE_BULLMQ_UPLOAD_ENABLED: boolean;
-  FEATURE_BULLMQ_BLAST_ENABLED: boolean;
 };
 
 export function validateEnv(config: Env): ValidatedEnv {
@@ -213,7 +206,6 @@ export function validateEnv(config: Env): ValidatedEnv {
     TWILIO_WHATSAPP_FROM: config.TWILIO_WHATSAPP_FROM?.trim() || "",
     TWILIO_WHATSAPP_MESSAGING_SERVICE_SID:
       config.TWILIO_WHATSAPP_MESSAGING_SERVICE_SID?.trim() || "",
-    FEATURE_WHATSAPP_ENABLED: boolish(config, "FEATURE_WHATSAPP_ENABLED", false),
     TWILIO_CONTENT_API_ENABLED: boolish(config, "TWILIO_CONTENT_API_ENABLED", false),
     WHATSAPP_SESSION_WINDOW_HOURS: numberInRange(
       config,
@@ -294,32 +286,7 @@ export function validateEnv(config: Env): ValidatedEnv {
     QUIET_HOURS_START: numberInRange(config, "QUIET_HOURS_START", 0, 23, 21, errors),
     QUIET_HOURS_END: numberInRange(config, "QUIET_HOURS_END", 0, 23, 8, errors),
     REQUIRE_OPTOUT_LANGUAGE: boolish(config, "REQUIRE_OPTOUT_LANGUAGE", true),
-    FEATURE_REALTIME_ENABLED: boolish(config, "FEATURE_REALTIME_ENABLED", true),
-    FEATURE_AI_ASSIST_ENABLED: boolish(config, "FEATURE_AI_ASSIST_ENABLED", true),
-    FEATURE_BLAST_SCHEDULER_ENABLED: boolish(config, "FEATURE_BLAST_SCHEDULER_ENABLED", true),
-    BLAST_DRY_RUN: boolish(config, "BLAST_DRY_RUN", false),
-    FEATURE_BULLMQ_UPLOAD_ENABLED: boolish(config, "FEATURE_BULLMQ_UPLOAD_ENABLED", false),
-    FEATURE_BULLMQ_BLAST_ENABLED: boolish(config, "FEATURE_BULLMQ_BLAST_ENABLED", false),
   };
-
-  if (
-    (output.FEATURE_BULLMQ_UPLOAD_ENABLED || output.FEATURE_BULLMQ_BLAST_ENABLED) &&
-    !output.BULLMQ_REDIS_URL
-  ) {
-    errors.push(
-      "BULLMQ_REDIS_URL (or REDIS_URL) is required when FEATURE_BULLMQ_UPLOAD_ENABLED or FEATURE_BULLMQ_BLAST_ENABLED is true",
-    );
-  }
-
-  if (
-    output.FEATURE_WHATSAPP_ENABLED &&
-    !output.TWILIO_WHATSAPP_FROM &&
-    !output.TWILIO_WHATSAPP_MESSAGING_SERVICE_SID
-  ) {
-    errors.push(
-      "TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_MESSAGING_SERVICE_SID is required when FEATURE_WHATSAPP_ENABLED is true",
-    );
-  }
 
   if (errors.length > 0) {
     throw new Error(`Environment validation failed:\n- ${errors.join("\n- ")}`);

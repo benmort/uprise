@@ -781,6 +781,7 @@ describe("BlastsService integration-like flow", () => {
       twilioMock,
       eventsMock,
       consentMock,
+      { isEnabled: async () => true } as any,
     );
 
     const result = await service.sendNow("blast_dry");
@@ -846,6 +847,7 @@ describe("BlastsService integration-like flow", () => {
       twilioMock,
       eventsMock,
       consentMock,
+      { isEnabled: async () => true } as any,
     );
 
     const result = await service.retryFailed("blast_retry_dry");
@@ -878,7 +880,7 @@ describe("BlastsService integration-like flow", () => {
         findMany: jest.fn().mockResolvedValue([{ id: "blast_1", scheduledFor: new Date() }]),
       },
     };
-    const flags = { isBullmqBlastEnabled: () => true } as any;
+    const flags = { isEnabled: async () => true } as any;
     const queue = {
       enqueue: jest.fn().mockResolvedValue({ jobId: "blast-send_blast_1", queued: true }),
     };

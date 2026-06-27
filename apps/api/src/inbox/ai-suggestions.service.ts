@@ -36,7 +36,7 @@ export class AiSuggestionsService {
       EngagementChannel.SMS,
       input.ownerId,
     );
-    const ranked = this.flags.isAiAssistEnabled()
+    const ranked = (await this.flags.isEnabled("FEATURE_AI_ASSIST_ENABLED", { tenantId: input.tenantId }))
       ? this.rankByRelevance(library, input.message)
       : library;
 

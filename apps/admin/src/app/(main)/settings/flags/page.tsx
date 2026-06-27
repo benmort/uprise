@@ -86,8 +86,8 @@ export default function FeatureFlagsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Feature flags</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Turn features on or off for this workspace. The effective value resolves through
-            env kill-switch → workspace override → plan → platform default.
+            Turn features on or off. The effective value resolves through
+            workspace override → plan → platform default.
           </p>
         </div>
         <Link

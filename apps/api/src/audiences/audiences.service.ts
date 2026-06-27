@@ -58,7 +58,7 @@ function parseSyncStats(summary: string | null | undefined): Record<string, unkn
 @Injectable()
 export class AudiencesService {
   private readonly logger = new Logger(AudiencesService.name);
-  private readonly flags: Pick<FeatureFlagsService, "isBullmqUploadEnabled">;
+  private readonly flags: Pick<FeatureFlagsService, "isEnabled">;
   private readonly queue: DispatchQueue;
 
   constructor(
@@ -69,7 +69,7 @@ export class AudiencesService {
     private readonly contacts?: ContactsService,
   ) {
     this.flags = flags ?? {
-      isBullmqUploadEnabled: () => false,
+      isEnabled: async () => false,
     };
     this.queue = queue ?? {
       enqueue: async (job) => ({ jobId: job.id, queued: true }),
@@ -284,8 +284,8 @@ export class AudiencesService {
     return Math.min(Math.max(1000, Math.trunc(fallback)), 28000);
   }
 
-  private isBullmqUploadEnabled(): boolean {
-    return this.flags.isBullmqUploadEnabled();
+  private isBullmqUploadEnabled(): Promise<boolean> {
+    return this.flags.isEnabled("FEATURE_BULLMQ_UPLOAD_ENABLED", { tenantId: null });
   }
 
   private async enqueueImportBatch(
@@ -377,7 +377,7 @@ export class AudiencesService {
       },
     });
 
-    if (this.isBullmqUploadEnabled()) {
+    if (await this.isBullmqUploadEnabled()) {
       await this.enqueueImportBatch({ importId: created.id });
       return this.getImportStatus(audienceId, created.id);
     }
@@ -574,7 +574,7 @@ export class AudiencesService {
           syncedAt: new Date(),
         },
       });
-    } else if (this.isBullmqUploadEnabled()) {
+    } else if (await this.isBullmqUploadEnabled()) {
       await this.enqueueImportBatch(
         {
           importId: job.id,
@@ -613,7 +613,7 @@ export class AudiencesService {
 
     const results: Array<Record<string, unknown>> = [];
     for (const job of due) {
-      if (this.isBullmqUploadEnabled()) {
+      if (await this.isBullmqUploadEnabled()) {
         const queued = await this.enqueueImportBatch({
           importId: job.id,
           requestedBatchSize: batchSize,

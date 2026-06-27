@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, Sse } from "@nestjs/common";
-import { map, Observable, takeUntil, timer } from "rxjs";
+import { from, map, Observable, switchMap, takeUntil, timer } from "rxjs";
 import { AnalyticsService } from "./analytics.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
@@ -66,24 +66,20 @@ export class AnalyticsController {
   @Sse("stream")
   stream(): Observable<MessageEvent> {
     const maxConnectionMs = 25_000;
-
-    if (!this.flags.isRealtimeEnabled()) {
-      return new Observable<MessageEvent>((subscriber) => {
-        subscriber.next({ data: { type: "realtime.disabled" } } as MessageEvent);
-        subscriber.complete();
-      });
-    }
+    const disabled$ = new Observable<MessageEvent>((subscriber) => {
+      subscriber.next({ data: { type: "realtime.disabled" } } as MessageEvent);
+      subscriber.complete();
+    });
 
     const events$ = this.realtime.stream.pipe(
-      map(
-        (event) =>
-          ({
-            data: event,
-          }) as MessageEvent,
-      ),
+      map((event) => ({ data: event }) as MessageEvent),
+      // Close the SSE stream before Vercel's 30s function timeout.
+      takeUntil(timer(maxConnectionMs)),
     );
 
-    // Close the SSE stream before Vercel's 30s function timeout.
-    return events$.pipe(takeUntil(timer(maxConnectionMs)));
+    // FEATURE_REALTIME_ENABLED is a platform-wide toggle (resolved via the global layer).
+    return from(this.flags.isEnabled("FEATURE_REALTIME_ENABLED", { tenantId: null })).pipe(
+      switchMap((enabled) => (enabled ? events$ : disabled$)),
+    );
   }
 }
