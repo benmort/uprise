@@ -167,7 +167,7 @@ export function TurfMap({
           type="button"
           onClick={fitToBounds}
           title="Snap back to the division bounds"
-          className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-lg border border-border bg-white/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
+          className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
         >
           <Crosshair className="h-3.5 w-3.5" />
           Recenter

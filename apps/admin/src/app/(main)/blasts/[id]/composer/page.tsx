@@ -884,19 +884,19 @@ export default function BlastComposerPage() {
           <CardContent>
             <div className="mx-auto w-full max-w-[300px]">
               <div className="relative overflow-hidden rounded-[2.4rem] border border-white/10 bg-black p-2 shadow-[0_30px_65px_rgba(0,0,0,0.45)]">
-                <div className="relative aspect-[486/1024] overflow-hidden rounded-[2rem] bg-white">
+                <div className="relative aspect-[486/1024] overflow-hidden rounded-[2rem] bg-white dark:bg-[#0b141a]">
                   <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-1.5">
                     <div className="h-6 w-28 rounded-full border border-white/10 bg-black">
                       <div className="mx-auto mt-[6px] h-3 w-3 rounded-full bg-[#0f172a]" />
                     </div>
                   </div>
                   <div
-                    className={`flex h-full items-start justify-end p-5 pt-14 ${isWhatsapp ? "bg-[#e5ddd5]" : ""}`}
+                    className={`flex h-full items-start justify-end p-5 pt-14 ${isWhatsapp ? "bg-[#e5ddd5] dark:bg-[#0b141a]" : ""}`}
                   >
                     <div
                       className={`max-w-[86%] px-3 py-2 text-sm leading-relaxed shadow-sm ${
                         isWhatsapp
-                          ? "rounded-lg rounded-tr-sm bg-[#dcf8c6] text-[#111b21]"
+                          ? "rounded-lg rounded-tr-sm bg-[#dcf8c6] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]"
                           : "rounded-2xl rounded-br-md bg-primary text-primary-foreground"
                       }`}
                     >

@@ -70,7 +70,7 @@ type ThreadMessage = {
 function ChannelBadge({ channel }: { channel?: MessageChannel }) {
   if (channel !== "WHATSAPP") return null;
   return (
-    <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b]">
+    <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b] dark:text-[#25d366]">
       WhatsApp
     </span>
   );
@@ -1289,11 +1289,11 @@ export default function InboxPage() {
                           className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
                             message.type === "outbound"
                               ? isWa
-                                ? "bg-[#dcf8c6] text-[#111b21]"
+                                ? "bg-[#dcf8c6] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]"
                                 : "bg-primary text-primary-foreground"
                               : isWa
-                                ? "bg-[#f0f0f0] text-[#111b21]"
-                                : "bg-white text-foreground"
+                                ? "bg-[#f0f0f0] text-[#111b21] dark:bg-[#202c33] dark:text-[#e9edef]"
+                                : "bg-surface-variant text-foreground"
                           }`}
                         >
                           {reaction ? (

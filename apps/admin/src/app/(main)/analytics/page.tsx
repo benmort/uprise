@@ -264,7 +264,7 @@ export default function AnalyticsPage() {
             ))}
           </select>
           {visibleBlasts.find((b) => b.id === selectedBlastId)?.channel === "WHATSAPP" ? (
-            <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b]">
+            <span className="rounded bg-[#25d366]/15 px-1.5 py-0.5 text-[10px] font-medium text-[#128c4b] dark:text-[#25d366]">
               WhatsApp
             </span>
           ) : null}
