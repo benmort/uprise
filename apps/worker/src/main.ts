@@ -1,9 +1,14 @@
 import "reflect-metadata";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { type Server } from "node:http";
 import { config as dotenvConfig } from "dotenv";
 import { NestFactory } from "@nestjs/core";
 import { Job, Queue, QueueEvents, Worker } from "bullmq";
+import express, { type NextFunction, type Request, type Response } from "express";
+import { createBullBoard } from "@bull-board/api";
+import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
+import { ExpressAdapter } from "@bull-board/express";
 import type { EventEnvelope } from "@yarns/events";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
 import { SegmentEvaluatorService } from "../../api/src/audiences/segment-evaluator.service";
@@ -105,6 +110,90 @@ async function drainOutbox(
     logger.error("worker", "Outbox relay drain failed", undefined, { error: String(err) });
   }
   return published;
+}
+
+const BULL_BOARD_BASE_PATH = "/admin/queues";
+
+/**
+ * HTTP basic-auth gate for the Bull Board path. Compares the decoded
+ * `Authorization: Basic` header against BASIC_AUTH_USERNAME / BASIC_AUTH_PASSWORD.
+ * If neither credential env is set the board is refused outright (closed by
+ * default) rather than served wide open.
+ */
+function basicAuthGuard(logger: DomainLogger): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    const expectedUser = (process.env.BASIC_AUTH_USERNAME ?? "").trim();
+    const expectedPass = process.env.BASIC_AUTH_PASSWORD ?? "";
+    const challenge = () => {
+      res.setHeader("WWW-Authenticate", 'Basic realm="yarns queues"');
+      res.status(401).send("Authentication required");
+    };
+    if (!expectedUser || !expectedPass) {
+      logger.warn("worker", "Bull Board access refused: BASIC_AUTH_USERNAME/PASSWORD not configured");
+      challenge();
+      return;
+    }
+    const header = req.headers.authorization ?? "";
+    if (!header.startsWith("Basic ")) {
+      challenge();
+      return;
+    }
+    let decoded = "";
+    try {
+      decoded = Buffer.from(header.slice("Basic ".length), "base64").toString("utf8");
+    } catch {
+      challenge();
+      return;
+    }
+    const sep = decoded.indexOf(":");
+    const user = sep === -1 ? decoded : decoded.slice(0, sep);
+    const pass = sep === -1 ? "" : decoded.slice(sep + 1);
+    if (user === expectedUser && pass === expectedPass) {
+      next();
+      return;
+    }
+    challenge();
+  };
+}
+
+/**
+ * Mount Bull Board (+ a /health endpoint) on a small express server listening on
+ * WORKER_HEALTH_PORT. One BullMQAdapter per queue, all built with the SAME Redis
+ * connection + prefix the workers use, so the board reads the live `yarns:*` keys.
+ * The whole /admin/queues path is gated behind HTTP basic auth.
+ */
+function startBullBoardServer(
+  connection: { url: string },
+  prefix: string,
+  logger: DomainLogger,
+): { server: Server; queues: Queue[] } {
+  const queues = Object.values(QUEUE_NAMES).map(
+    (name) => new Queue(name, { connection, prefix }),
+  );
+
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath(BULL_BOARD_BASE_PATH);
+  createBullBoard({
+    queues: queues.map((queue) => new BullMQAdapter(queue)),
+    serverAdapter,
+  });
+
+  const httpApp = express();
+  httpApp.disable("x-powered-by");
+  httpApp.get("/health", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+  httpApp.use(BULL_BOARD_BASE_PATH, basicAuthGuard(logger), serverAdapter.getRouter());
+
+  const port = Number(process.env.WORKER_HEALTH_PORT ?? "3210");
+  const server = httpApp.listen(port, () => {
+    logger.log("worker", "Bull Board mounted", {
+      url: `http://0.0.0.0:${port}${BULL_BOARD_BASE_PATH}`,
+      queues: queues.map((queue) => queue.name),
+    });
+  });
+
+  return { server, queues };
 }
 
 async function bootstrap(): Promise<void> {
@@ -264,6 +353,13 @@ async function bootstrap(): Promise<void> {
     void drainOutbox(prisma, domainEventsQueue, logger);
   }, relayIntervalMs);
 
+  // Interactive queue dashboard (Bull Board) on WORKER_HEALTH_PORT, basic-auth gated.
+  const { server: bullBoardServer, queues: bullBoardQueues } = startBullBoardServer(
+    connection,
+    prefix,
+    logger,
+  );
+
   logger.log("worker", "BullMQ worker booted", {
     prefix,
     queues: workers.map((worker) => worker.name),
@@ -275,8 +371,10 @@ async function bootstrap(): Promise<void> {
   const shutdown = async () => {
     logger.warn("worker", "Shutting down BullMQ worker");
     clearInterval(relayInterval);
+    await new Promise<void>((res) => bullBoardServer.close(() => res()));
     await Promise.all(workers.map((worker) => worker.close()));
     await Promise.all(queueEvents.map((events) => events.close()));
+    await Promise.all(bullBoardQueues.map((queue) => queue.close()));
     await domainEventsQueue.close();
     await app.close();
     process.exit(0);
