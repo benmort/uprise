@@ -1,36 +1,38 @@
-# ngrok tunnels for yarns local development — reuses prog's reserved domains.
+# ngrok tunnels for uprise local development — exposes the apps on dev.uprise.org.au.
 #
 #   pnpm dev:all      (terminal A — runs the four apps on localhost)
-#   pnpm dev:tunnel   (terminal B — exposes them on the dev.prog.network subdomains)
+#   pnpm dev:tunnel   (terminal B — exposes them on the dev.uprise.org.au subdomains)
 #
 # Prerequisites (see docs/development/ngrok-dev.md):
-#   - The prog ngrok account, which reserves dev.prog.network, auth.dev.prog.network
-#     and the *.dev.prog.network wildcard, with DNS CNAMEs already pointing at ngrok.
+#   - The uprise ngrok account must RESERVE these hostnames before they can be used
+#     (else ERR_NGROK_319): dev.uprise.org.au plus the *.dev.uprise.org.au wildcard
+#     (covers auth/app/api), each with a DNS CNAME in the uprise.org.au zone pointing
+#     at the target ngrok shows on https://dashboard.ngrok.com/domains.
 #   - Authtoken set once on this machine: `ngrok config add-authtoken <token>`
 #     (NOT committed here — keep the secret in your local ngrok config).
 version: "2"
 
 tunnels:
-  # Marketing site → dev.prog.network
+  # Marketing site → dev.uprise.org.au
   marketing:
     addr: 3003
     proto: http
-    domain: dev.prog.network
+    domain: dev.uprise.org.au
 
-  # Auth / SSO identity app → auth.dev.prog.network
+  # Auth / SSO identity app → auth.dev.uprise.org.au
   auth:
     addr: 3002
     proto: http
-    domain: auth.dev.prog.network
+    domain: auth.dev.uprise.org.au
 
-  # Organiser app (web) → app.dev.prog.network (under the *.dev.prog.network reservation)
-  web:
+  # Organiser admin app → admin.dev.uprise.org.au (under the *.dev.uprise.org.au reservation)
+  admin:
     addr: 3000
     proto: http
-    domain: app.dev.prog.network
+    domain: admin.dev.uprise.org.au
 
-  # API → api.dev.prog.network (frontend calls + provider webhooks)
+  # API → api.dev.uprise.org.au (frontend calls + provider webhooks)
   api:
     addr: 3001
     proto: http
-    domain: api.dev.prog.network
+    domain: api.dev.uprise.org.au

@@ -130,17 +130,18 @@ launch (alongside `prisma migrate deploy` for the `TenantJoinRequest` table and 
 **Deferred from:** PART 3 (prog ngrok + subdomain dev tooling). We kept yarns' in-session
 tenant model for now.
 
-Prog routes tenants by subdomain (`<tenant>.dev.prog.network` → organiser app), parsing the
+Prog routes tenants by subdomain (`<tenant>.dev.uprise.org.au` → organiser app), parsing the
 host to the tenant and redirecting to the tenant subdomain after login. yarns currently picks
 the tenant in-session via `/select-tenant` and serves the organiser app on one host
-(`app.dev.prog.network`).
+(`admin.dev.uprise.org.au`).
 
 Switching would mean:
 - Host→tenant parsing in `apps/admin/src/middleware.ts` (a `buildTenantUrl` / `extractTenantFromHost`
   helper, cf. prog `clients/auth-client/lib/utils/tenancy.ts`).
 - Redirect-to-subdomain after login in `apps/auth/src/lib/session.ts` (`completeAuth`), reworking
   the `/select-tenant` step.
-- The `*.dev.prog.network` ngrok wildcard is already reserved, so the tunnel side is ready.
+- The `*.dev.uprise.org.au` ngrok wildcard must be reserved on the uprise ngrok account (+ DNS
+  CNAMEs in the `uprise.org.au` zone) before the tunnel works — see `docs/development/ngrok-dev.md`.
 
 Decision: revisit once the in-session flow is settled; it reworks the SSO/select-tenant flow
 shipped in the auth port.

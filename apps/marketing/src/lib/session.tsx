@@ -10,7 +10,7 @@ import { auth, type AuthPrincipal } from "@yarns/api-client";
  * the mobile menu and the homepage launchpad — so they can never disagree.
  *
  * This deliberately replaces the earlier advisory `session_hint` cookie, which
- * collided by name with prog's cookie on the shared `.dev.prog.network` dev
+ * collided by name with prog's cookie on the shared `.dev.uprise.org.au` dev
  * domain and could surface a prog account. checkSession proves a real yarns
  * session against the yarns API, so the identity shown is always correct.
  */

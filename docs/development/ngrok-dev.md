@@ -1,6 +1,6 @@
-# Local dev under the prog ngrok subdomains
+# Local dev under the uprise ngrok subdomains
 
-Run the yarns apps locally but reach them over prog's stable HTTPS subdomains, so cross-app
+Run the uprise apps locally but reach them over stable HTTPS subdomains, so cross-app
 SSO and provider webhooks (Twilio/SendGrid/Stripe) behave like a deployed environment
 instead of bare `localhost:PORT`.
 
@@ -8,20 +8,22 @@ instead of bare `localhost:PORT`.
 
 | ngrok domain | local | yarns app |
 |---|---|---|
-| `dev.prog.network` | `localhost:3003` | marketing |
-| `auth.dev.prog.network` | `localhost:3002` | auth (SSO) |
-| `app.dev.prog.network` | `localhost:3000` | web (organiser) |
-| `api.dev.prog.network` | `localhost:3001` | api (frontend calls + webhooks) |
+| `dev.uprise.org.au` | `localhost:3003` | marketing |
+| `auth.dev.uprise.org.au` | `localhost:3002` | auth (SSO) |
+| `admin.dev.uprise.org.au` | `localhost:3000` | admin (organiser) |
+| `api.dev.uprise.org.au` | `localhost:3001` | api (frontend calls + webhooks) |
 
-`app.*` and `api.*` sit under prog's reserved `*.dev.prog.network` wildcard. Tenancy is
+`admin.*` and `api.*` sit under the reserved `*.dev.uprise.org.au` wildcard. Tenancy is
 still chosen in-session (`/select-tenant`) — subdomains map apps, not tenants. (Per-tenant
 subdomain routing is a deferred item in `docs/TODO.md`.)
 
 ## Prerequisites
 
-- The **prog ngrok account**, which reserves `dev.prog.network`, `auth.dev.prog.network`
-  and the `*.dev.prog.network` wildcard, with DNS CNAMEs already pointing at ngrok. The
-  free tier cannot use reserved domains.
+- The **uprise ngrok account** must **reserve** `dev.uprise.org.au` and the
+  `*.dev.uprise.org.au` wildcard on https://dashboard.ngrok.com/domains, each with a DNS
+  CNAME in the `uprise.org.au` zone pointing at the target ngrok shows. Until they are
+  reserved, `dev:tunnel` fails with `ERR_NGROK_319`. The free tier cannot use reserved
+  domains.
 - A **`ngrok.local.yml`** in the repo root holding just your authtoken (gitignored — the
   secret never enters git). `dev:tunnel` merges it with the committed `ngrok.yml`:
   ```yaml
@@ -51,30 +53,30 @@ pnpm dev:tunnel    # the ngrok tunnels on their own (optional, second terminal)
 see ngrok errors under the `tunnel` label while the apps keep running.
 
 Then copy the **"ngrok / prog-subdomain dev"** block from each app's `.env.example` into its
-`.env` (api, web, auth, marketing) and restart `dev:all`. The key overrides:
+`.env` (api, admin, auth, marketing) and restart `dev:all`. The key overrides:
 
-- **api**: `SESSION_COOKIE_DOMAIN=.dev.prog.network`, `AUTH_APP_URL=https://auth.dev.prog.network`,
-  `API_BASE_URL=https://api.dev.prog.network`,
-  `CORS_ALLOWED_ORIGINS=https://app.dev.prog.network,https://auth.dev.prog.network,https://dev.prog.network`
-- **web / marketing**: `NEXT_PUBLIC_API_URL=https://api.dev.prog.network/api/v1`,
-  `NEXT_PUBLIC_AUTH_APP_URL=https://auth.dev.prog.network`
-- **auth**: `NEXT_PUBLIC_API_URL=https://api.dev.prog.network/api/v1`,
-  `NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS=https://app.dev.prog.network`
+- **api**: `SESSION_COOKIE_DOMAIN=.dev.uprise.org.au`, `AUTH_APP_URL=https://auth.dev.uprise.org.au`,
+  `API_BASE_URL=https://api.dev.uprise.org.au`,
+  `CORS_ALLOWED_ORIGINS=https://admin.dev.uprise.org.au,https://auth.dev.uprise.org.au,https://dev.uprise.org.au`
+- **admin / marketing**: `NEXT_PUBLIC_API_URL=https://api.dev.uprise.org.au/api/v1`,
+  `NEXT_PUBLIC_AUTH_APP_URL=https://auth.dev.uprise.org.au`
+- **auth**: `NEXT_PUBLIC_API_URL=https://api.dev.uprise.org.au/api/v1`,
+  `NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS=https://admin.dev.uprise.org.au`
 
-The `.dev.prog.network` cookie domain lets the `auth_token` session cookie issued by the API
+The `.dev.uprise.org.au` cookie domain lets the `auth_token` session cookie issued by the API
 be shared across all four subdomains (SSO). Webhook callback URLs derive from `API_BASE_URL`,
-so providers POST to `https://api.dev.prog.network/api/v1/...`.
+so providers POST to `https://api.dev.uprise.org.au/api/v1/...`.
 
 ## Smoke check
 
 ```
-curl -sI https://dev.prog.network                       # marketing 200
-curl -sI https://auth.dev.prog.network/sign-in          # auth 200
-curl -s  https://api.dev.prog.network/api/v1/health     # api ok
+curl -sI https://dev.uprise.org.au                       # marketing 200
+curl -sI https://auth.dev.uprise.org.au/sign-in          # auth 200
+curl -s  https://api.dev.uprise.org.au/api/v1/health     # api ok
 ```
 
-Open `https://app.dev.prog.network/dashboard` unauthenticated → it should bounce to
-`https://auth.dev.prog.network/sign-in?return_to=…`; signing in lands back on
-`app.dev.prog.network`.
+Open `https://admin.dev.uprise.org.au/dashboard` unauthenticated → it should bounce to
+`https://auth.dev.uprise.org.au/sign-in?return_to=…`; signing in lands back on
+`admin.dev.uprise.org.au`.
 
 Plain `pnpm dev:all` on `localhost` (the default `.env` block) keeps working without ngrok.
