@@ -560,11 +560,19 @@ export default function MainLayout({
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
-          <div id="tour-logo" className={cn("mb-6 flex items-center justify-between", collapsed && "lg:hidden")}>
+          <div
+            id="tour-logo"
+            className={cn(
+              "mb-6 flex min-h-9 items-center",
+              collapsed ? "lg:justify-center" : "justify-between",
+            )}
+          >
             <div className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/uprise-icon.svg" alt="" className="h-7 w-7 shrink-0" />
-              <Logo />
+              <img src="/images/uprise-icon.svg" alt="Uprise" className="h-7 w-7 shrink-0" />
+              <span className={labelHidden}>
+                <Logo />
+              </span>
             </div>
             <button
               type="button"
