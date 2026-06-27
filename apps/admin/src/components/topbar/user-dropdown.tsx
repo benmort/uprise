@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, LogOut, Settings, UserCircle } from "lucide-react";
-import { Avatar, Dropdown, DropdownItem } from "@yarns/ui";
-import { profile } from "@yarns/api-client";
+import { Dropdown, DropdownItem } from "@uprise/ui";
+import { profile } from "@uprise/api-client";
 import { logout } from "@/lib/session";
+import { UserAvatar } from "@/components/user-profile/user-avatar";
 
 /**
  * Topbar user dropdown (prog parity): avatar (selected avatar, else email initials) +
@@ -45,7 +46,7 @@ export function UserDropdown({ email }: { email: string | null }) {
           onClick={toggle}
           className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 text-foreground transition-colors hover:bg-surface-variant"
         >
-          <Avatar src={avatarUrl} name={displayName || email} className="h-9 w-9" />
+          <UserAvatar src={avatarUrl} name={displayName || email} className="h-10 w-10" />
           <span className="hidden text-sm font-medium md:block">{name}</span>
           <ChevronDown
             className={`hidden h-4 w-4 text-muted-foreground transition-transform md:block ${open ? "rotate-180" : ""}`}

@@ -15,16 +15,17 @@ import {
   Input,
   Textarea,
   StatusBadge,
-} from "@yarns/ui";
+} from "@uprise/ui";
 import { SectionCard } from "@/components/canvass/section-card";
 import { DataTable } from "@/components/canvass/data-table";
+import { UserAvatar } from "@/components/user-profile/user-avatar";
 import {
   tenants,
   type AppUserRole,
   type JoinRequest,
   type TenantInvitationSummary,
   type TenantMemberSummary,
-} from "@yarns/api-client";
+} from "@uprise/api-client";
 import { getSession } from "@/lib/session";
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -446,14 +447,20 @@ export default function TeamPage() {
                     key: "user",
                     header: "User",
                     cell: (m) => (
-                      <div className="font-medium">
-                        <span>{m.user?.displayName || m.user?.email || m.userId}</span>
-                        {m.userId === currentUserId ? (
-                          <span className="ml-2 text-xs text-muted-foreground">(you)</span>
-                        ) : null}
-                        {m.user?.displayName && m.user?.email ? (
-                          <div className="text-xs font-normal text-muted-foreground">{m.user.email}</div>
-                        ) : null}
+                      <div className="flex items-center gap-3">
+                        <UserAvatar
+                          name={m.user?.displayName || m.user?.email || m.userId}
+                          className="h-9 w-9"
+                        />
+                        <div className="min-w-0 font-medium">
+                          <span>{m.user?.displayName || m.user?.email || m.userId}</span>
+                          {m.userId === currentUserId ? (
+                            <span className="ml-2 text-xs text-muted-foreground">(you)</span>
+                          ) : null}
+                          {m.user?.displayName && m.user?.email ? (
+                            <div className="text-xs font-normal text-muted-foreground">{m.user.email}</div>
+                          ) : null}
+                        </div>
                       </div>
                     ),
                   },

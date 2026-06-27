@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Check, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
-  Avatar,
   Button,
   Card,
   CardContent,
@@ -14,11 +12,13 @@ import {
   Input,
   Skeleton,
   Textarea,
-} from "@yarns/ui";
-import { profile, type UserAvatarResponse, type UserProfileResponse } from "@yarns/api-client";
+} from "@uprise/ui";
+import { profile, type UserAvatarResponse, type UserProfileResponse } from "@uprise/api-client";
 import { useToast } from "@/components/ui/toast";
 import { getSession } from "@/lib/session";
-import { AvatarCropper } from "@/components/profile/avatar-cropper";
+import { Modal } from "@/components/prog/ui/modal";
+import UserProfileCard from "@/components/user-profile/UserProfileCard";
+import AvatarEditCard from "@/components/user-profile/AvatarEditCard";
 
 type Form = {
   displayName: string;
@@ -48,7 +48,7 @@ const emptyForm: Form = {
   websiteUrl: "",
 };
 
-/** Self-service profile (prog parity, yarns conventions): identity card, avatars, personal info. */
+/** Self-service profile (prog parity): identity card + avatar edit modal + personal info. */
 export default function ProfilePage() {
   const { showToast } = useToast();
   const [email, setEmail] = useState<string | null>(null);
@@ -60,10 +60,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [newAvatarUrl, setNewAvatarUrl] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [cropSrc, setCropSrc] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [showAvatarEdit, setShowAvatarEdit] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -104,13 +101,14 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const selectedAvatar = avatars.find((a) => a.isSelected) ?? null;
+  const selectedUrl = avatars.find((a) => a.isSelected)?.url ?? data?.avatarUrl ?? null;
 
   const save = async () => {
     setSaving(true);
     // Keep a real name on the topbar: fall back to given+family when display name is blank.
     const composed =
-      form.displayName.trim() || [form.givenName, form.familyName].map((s) => s.trim()).filter(Boolean).join(" ");
+      form.displayName.trim() ||
+      [form.givenName, form.familyName].map((s) => s.trim()).filter(Boolean).join(" ");
     const res = await profile.update({
       displayName: composed || undefined,
       givenName: form.givenName.trim() || undefined,
@@ -133,56 +131,6 @@ export default function ProfilePage() {
     showToast({ tone: "success", title: "Profile saved" });
   };
 
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) setCropSrc(URL.createObjectURL(file));
-    e.target.value = ""; // allow re-picking the same file
-  };
-
-  const uploadCropped = async (blob: Blob) => {
-    setUploading(true);
-    const res = await profile.uploadAvatar(blob);
-    setUploading(false);
-    if (cropSrc) URL.revokeObjectURL(cropSrc);
-    setCropSrc(null);
-    if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't upload avatar", description: res.error });
-      return;
-    }
-    showToast({ tone: "success", title: "Avatar updated" });
-    void load();
-  };
-
-  const addAvatar = async () => {
-    const url = newAvatarUrl.trim();
-    if (!url) return;
-    const res = await profile.addAvatar(url);
-    if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't add avatar", description: res.error });
-      return;
-    }
-    setNewAvatarUrl("");
-    void load();
-  };
-
-  const selectAvatar = async (id: string) => {
-    const res = await profile.selectAvatar(id);
-    if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't select avatar", description: res.error });
-      return;
-    }
-    void load();
-  };
-
-  const deleteAvatar = async (id: string) => {
-    const res = await profile.deleteAvatar(id);
-    if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't delete avatar", description: res.error });
-      return;
-    }
-    void load();
-  };
-
   if (loading) {
     return (
       <div className="page-stack">
@@ -196,12 +144,15 @@ export default function ProfilePage() {
   if (error && !data) {
     return (
       <div className="page-stack">
-        <EmptyState title="Couldn't load your profile" description={error} ctaLabel="Retry" onCta={() => void load()} />
+        <EmptyState
+          title="Couldn't load your profile"
+          description={error}
+          ctaLabel="Retry"
+          onCta={() => void load()}
+        />
       </div>
     );
   }
-
-  const fullName = [form.givenName, form.familyName].filter(Boolean).join(" ") || form.displayName;
 
   return (
     <div className="page-stack">
@@ -210,115 +161,27 @@ export default function ProfilePage() {
         <p className="text-sm text-muted-foreground">Your name, avatar and personal details.</p>
       </div>
 
-      {/* Identity card */}
-      <Card>
-        <CardContent className="flex items-center gap-4 py-5">
-          <Avatar src={selectedAvatar?.url} name={fullName || email} className="h-16 w-16 text-lg" />
-          <div className="min-w-0">
-            <p className="truncate text-lg font-semibold">{fullName || email || "You"}</p>
-            {email ? <p className="truncate text-sm text-muted-foreground">{email}</p> : null}
-            {role || superAdmin ? (
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {role ? (
-                  <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                    {role}
-                  </span>
-                ) : null}
-                {superAdmin ? (
-                  <span className="inline-block rounded-full bg-warning-container px-2 py-0.5 text-xs font-medium text-warning-foreground">
-                    Super Admin
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
+      <UserProfileCard
+        profile={data}
+        avatarUrl={selectedUrl}
+        email={email}
+        role={role}
+        superAdmin={superAdmin}
+        onEditAvatar={() => setShowAvatarEdit(true)}
+      />
 
-      {/* Avatars */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Avatar</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {avatars.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No avatars yet. Add one by image URL below.</p>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {avatars.map((a) => (
-                <div key={a.id} className="group relative">
-                  <button
-                    type="button"
-                    onClick={() => void selectAvatar(a.id)}
-                    className={`rounded-full ring-2 ring-offset-2 ring-offset-surface transition ${
-                      a.isSelected ? "ring-primary" : "ring-transparent hover:ring-border"
-                    }`}
-                    title={a.isSelected ? "Selected" : "Use this avatar"}
-                  >
-                    <Avatar src={a.url} className="h-14 w-14" />
-                  </button>
-                  {a.isSelected ? (
-                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      <Check className="h-3 w-3" />
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void deleteAvatar(a.id)}
-                      className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:text-error"
-                      title="Delete avatar"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={onPickFile}
-            />
-            <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-              <Upload className="mr-2 h-4 w-4" />
-              {uploading ? "Uploading…" : "Upload a photo"}
-            </Button>
-          </div>
-
-          <details className="text-sm">
-            <summary className="cursor-pointer text-muted-foreground">Or add by image URL</summary>
-            <div className="mt-2 flex flex-wrap items-end gap-2">
-              <Field label="Image URL" htmlFor="avatar-url" className="flex-1 min-w-[16rem]">
-                <Input
-                  id="avatar-url"
-                  placeholder="https://…"
-                  value={newAvatarUrl}
-                  onChange={(e) => setNewAvatarUrl(e.target.value)}
-                />
-              </Field>
-              <Button variant="outline" onClick={() => void addAvatar()} disabled={!newAvatarUrl.trim()}>
-                Add
-              </Button>
-            </div>
-          </details>
-        </CardContent>
-      </Card>
-
-      {cropSrc ? (
-        <AvatarCropper
-          imageSrc={cropSrc}
-          busy={uploading}
-          onCancel={() => {
-            URL.revokeObjectURL(cropSrc);
-            setCropSrc(null);
-          }}
-          onCropped={(blob) => void uploadCropped(blob)}
-        />
-      ) : null}
+      <Modal isOpen={showAvatarEdit} onClose={() => setShowAvatarEdit(false)} className="m-4 max-w-[700px]">
+        <div className="no-scrollbar max-h-[85vh] overflow-y-auto p-4 lg:p-8">
+          <AvatarEditCard
+            inModal
+            onClose={() => setShowAvatarEdit(false)}
+            onSave={() => {
+              setShowAvatarEdit(false);
+              void load();
+            }}
+          />
+        </div>
+      </Modal>
 
       {/* Personal information */}
       <Card>
