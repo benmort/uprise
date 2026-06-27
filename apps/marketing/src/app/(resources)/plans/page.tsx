@@ -51,13 +51,12 @@ const FEATURES = [
   { label: "Team members", values: ["3", "10", "25"] },
   { label: "Segments", values: ["5", "20", "Unlimited"] },
   { label: "Email campaigns", values: [true, true, true], type: "check" as const },
-  { label: "Forms & petitions", values: [true, true, true], type: "check" as const },
   { label: "SMS campaigns", values: [false, true, true], type: "check" as const },
+  { label: "Calling campaigns", values: [false, false, true], type: "check" as const },
+  { label: "Forms & petitions", values: [true, true, true], type: "check" as const },
   { label: "Surveys & fundraisers", values: [false, true, true], type: "check" as const },
   { label: "Basic reporting", values: [true, true, true], type: "check" as const },
   { label: "Advanced analytics", values: [false, true, true], type: "check" as const },
-  { label: "All channels (email, calls, SMS)", values: [false, false, true], type: "check" as const },
-  { label: "Grant management", values: [false, false, true], type: "check" as const },
   { label: "API access & priority support", values: [false, false, true], type: "check" as const },
 ];
 
