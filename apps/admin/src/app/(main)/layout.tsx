@@ -561,7 +561,11 @@ export default function MainLayout({
           )}
         >
           <div id="tour-logo" className={cn("mb-6 flex items-center justify-between", collapsed && "lg:hidden")}>
-            <Logo />
+            <div className="flex items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/images/uprise-icon.svg" alt="" className="h-7 w-7 shrink-0" />
+              <Logo />
+            </div>
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
