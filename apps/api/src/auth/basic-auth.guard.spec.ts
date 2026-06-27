@@ -64,7 +64,7 @@ describe("BasicAuthGuard", () => {
       method: "OPTIONS",
       path: "/api/v1/auth/check",
       headers: {
-        origin: "https://yarns.org.au",
+        origin: "https://uprise.org.au",
         "access-control-request-method": "GET",
       },
     });

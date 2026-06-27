@@ -5,7 +5,7 @@
 // be seeded manually for testing. Kept tiny + storage-backed so the field pages
 // don't need a provider.
 
-const KEY = "yarns.volunteerId";
+const KEY = "uprise.volunteerId";
 
 export function getVolunteerId(): string | null {
   if (typeof window === "undefined") return null;

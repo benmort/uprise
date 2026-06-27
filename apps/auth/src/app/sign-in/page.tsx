@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, Mail } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input, PasswordInput } from "@yarns/ui";
-import { auth, isTwofaChallenge } from "@yarns/api-client";
+import { Alert, Button, Field, Input, PasswordInput } from "@uprise/ui";
+import { auth, isTwofaChallenge } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
 

@@ -1,20 +1,20 @@
-# Handoff: Yarns Canvassing (door-knocking + P2P texting, unified)
+# Handoff: Uprise Canvassing (door-knocking + P2P texting, unified)
 
 ## Overview
-Yarns is a P2P SMS campaigning tool (build an audience → blast a templated message → work
+Uprise is a P2P SMS campaigning tool (build an audience → blast a templated message → work
 the replies in a shared inbox). This design adds a **best-in-class canvassing layer** and a
 **shared contact spine** so that door knocks and texts live on one timeline. It spans two
 surfaces — a **mobile PWA for canvassers** (offline-first, one-handed) and a **desktop
 organiser app** — plus a shared engagement library and a cross-channel journeys engine.
 
-The interactive prototype is a single Design Component: **`Yarns Canvassing.dc.html`**.
+The interactive prototype is a single Design Component: **`Uprise Canvassing.dc.html`**.
 A dark "prototype" strip at the top of the file switches between all 16 surfaces; in-app
 navigation (sidebar, in-flow buttons) also works.
 
 ## About the design files
 The file in this bundle is a **design reference created in HTML/JS** (a streaming Design
 Component). It demonstrates intended **look, layout, copy and behaviour** — it is **not
-production code to copy directly**. The task is to **recreate these designs in the Yarns
+production code to copy directly**. The task is to **recreate these designs in the Uprise
 codebase's existing environment** (Next.js 14 App Router, React client components, Radix
 primitives + Tailwind, class-variance-authority, the `cn()` helper, the hand-built
 `components/ui/` primitives, and the existing Material-3-flavoured CSS-variable tokens),
@@ -63,7 +63,7 @@ and as pill/dot chips.
 
 ### Typography
 - **UI / body:** Open Sans (weights 300–800). Headings use 700–800.
-- **Logo wordmark only:** Quicksand 700 (the "Yarns" lockup). Do **not** use Quicksand for UI.
+- **Logo wordmark only:** Quicksand 700 (the "Uprise" lockup). Do **not** use Quicksand for UI.
 - **Numerals:** `font-variant-numeric: tabular-nums` on anything counted (doors, %, IDs, times).
 - **Scale (px):** 11, 12, 12.5, 13.5, 14, 15, 16, 18, 20, 24, 28, 30. Page titles 28–30/800;
   section headings 14–18/800; body 13.5–15.
@@ -305,15 +305,15 @@ turf, walk view (list/map), stops + statuses, current door stop + door stage (pa
 survey step + answers, timeline filter, inbox selection + filter, turf universe, walk-list mode.
 
 ## Assets
-- **Logo:** "Yarns" wordmark (Quicksand 700) + a three-loop knot mark in `#2f5bd6` (drawn as inline
-  SVG in the prototype — replace with the real Yarns logo asset from the codebase).
+- **Logo:** "Uprise" wordmark (Quicksand 700) + a three-loop knot mark in `#2f5bd6` (drawn as inline
+  SVG in the prototype — replace with the real Uprise logo asset from the codebase).
 - **Icons:** Lucide (inline SVG in the prototype; use `lucide-react` in the app).
 - **Maps:** SVG placeholders — replace with the existing Mapbox `TurfMap` component (`view` mode
   for canvasser, `edit` mode for the turf-cutting tool).
 - **Fonts:** Open Sans + Quicksand via Google Fonts.
 
 ## Files
-- `Yarns Canvassing.dc.html` — the full interactive prototype (all 16 surfaces). Open it directly
+- `Uprise Canvassing.dc.html` — the full interactive prototype (all 16 surfaces). Open it directly
   in a browser; use the top strip to navigate. The markup/logic inside is the reference for layout,
   copy, colours and behaviour.
 
@@ -358,13 +358,13 @@ would round out true omni-channel.)
 
 ## How to export this to Claude Code (prompt export / import)
 
-This `design_handoff_yarns_canvassing/` folder **is** the export. Workflow:
+This `design_handoff_uprise_canvassing/` folder **is** the export. Workflow:
 
 1. **Download** the folder as a zip (a download card is provided in the chat).
-2. **Unzip into your Yarns repo** (e.g. `docs/design_handoff_yarns_canvassing/`), or keep it
+2. **Unzip into your Uprise repo** (e.g. `docs/design_handoff_uprise_canvassing/`), or keep it
    alongside the repo.
 3. **Open Claude Code** in the repo root and point it at this folder, e.g.:
-   > "Read `design_handoff_yarns_canvassing/README.md` and open `Yarns Canvassing.dc.html` for
+   > "Read `design_handoff_uprise_canvassing/README.md` and open `Uprise Canvassing.dc.html` for
    > reference. Implement the **Door entry** screen (A3) as a new route in our Next.js app under
    > the `(main)` route group, using our existing `components/ui` primitives, Tailwind tokens and
    > the `request<T>()` wrapper. Match the colours, spacing and copy in the README exactly. Don't

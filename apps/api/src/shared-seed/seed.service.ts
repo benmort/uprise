@@ -5,7 +5,7 @@ import {
   AudienceSource,
   Prisma,
   WalkListItemListType,
-} from "@yarns/db";
+} from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { hashPassword } from "../auth/password.util";
 import { EngagementService } from "../shared-engagement/engagement.service";

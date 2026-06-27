@@ -1,4 +1,4 @@
-import { BlastRecipientStatus, TxSmsStatus } from "@yarns/db";
+import { BlastRecipientStatus, TxSmsStatus } from "@uprise/db";
 import { ConfigService } from "@nestjs/config";
 import { BlastsService } from "./blasts.service";
 import { TemplateRendererService } from "./template-renderer.service";

@@ -11,13 +11,20 @@ import {
   PasswordInput,
   PasswordStrength,
   isPasswordStrong,
-} from "@yarns/ui";
-import { auth, tenants, type Membership } from "@yarns/api-client";
+} from "@uprise/ui";
+import { auth, tenants, type Membership } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 import { useQueryParams } from "@/lib/use-query";
 
+/** Auto-suggest a clean slug from the org name (trims stray hyphens). */
 const slugify = (s: string) =>
   s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+
+/** Sanitise what the user types directly in the Workspace URL field: lowercase,
+ *  map invalid chars to '-', and ALLOW hyphens anywhere (incl. trailing) so they
+ *  can type "my-org-team" naturally. Final validation still uses the strict regex. */
+const sanitizeSlugInput = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 64);
 
 type SlugState = "idle" | "checking" | "available" | "unavailable";
 
@@ -178,7 +185,7 @@ export default function SignUpPage() {
                 placeholder="your-org"
                 onChange={(e) => {
                   setSlugTouched(true);
-                  setSlug(slugify(e.target.value));
+                  setSlug(sanitizeSlugInput(e.target.value));
                 }}
                 className="pr-10"
               />

@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@yarns/ui", "@yarns/api-client", "@yarns/contracts"],
+  transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts"],
 };
 
 export default nextConfig;

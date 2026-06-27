@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole } from "@yarns/db";
+import { AppUserRole } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";

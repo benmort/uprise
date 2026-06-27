@@ -1,4 +1,4 @@
-import { AppUserRole } from "@yarns/db";
+import { AppUserRole } from "@uprise/db";
 import { TenantsService } from "./tenants.service";
 
 function setup() {

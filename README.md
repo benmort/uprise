@@ -1,6 +1,6 @@
-# Yarns SMS Blast Platform
+# Uprise SMS Blast Platform
 
-Yarns is a Twilio-powered SMS blast platform with five primary surfaces:
+Uprise is a Twilio-powered SMS blast platform with five primary surfaces:
 
 - Dashboard
 - Audience Management
@@ -18,7 +18,7 @@ This repository is configured for **Vercel + BullMQ worker deployment**:
 
 - **Web (`apps/admin`)**
   - Next.js App Router UI
-  - Yarns design system
+  - Uprise design system
   - Routes: `/dashboard`, `/audience`, `/analytics`, `/inbox`, `/blasts/:id`, `/blasts/:id/composer`
 
 - **API (`apps/api`)**
@@ -107,14 +107,14 @@ Optional:
 - `AUDIENCE_IMPORT_MAX_RUN_MS` (default: `22000`, runtime guard for single import cycle)
 - `TWILIO_STATUS_CALLBACK_URL` (optional override; defaults to `<API_BASE_URL>/api/v1/twilio-status-callback`)
 - `CORS_ALLOWED_ORIGINS` (comma-separated allowlist, recommended in production)
-  - example: `https://yarns.org.au,https://www.yarns.org.au`
+  - example: `https://uprise.org.au,https://www.uprise.org.au`
 - `RATE_LIMIT_WINDOW_MS` (default: `60000`)
 - `RATE_LIMIT_MAX_REQUESTS` (default: `300`)
 - `FEATURE_REALTIME_ENABLED`
 - `FEATURE_AI_ASSIST_ENABLED`
 - `FEATURE_BLAST_SCHEDULER_ENABLED`
 - `BULLMQ_REDIS_URL` (required when BullMQ feature flags are enabled)
-- `BULLMQ_PREFIX` (default: `yarns`)
+- `BULLMQ_PREFIX` (default: `uprise`)
 - `BULLMQ_DEFAULT_ATTEMPTS` (default: `4`)
 - `BULLMQ_DEFAULT_BACKOFF_MS` (default: `2000`)
 - `BULLMQ_UPLOAD_QUEUE_CONCURRENCY` (default: `2`)
@@ -131,7 +131,7 @@ Create a Vercel project with root directory `apps/admin`.
 Set web env vars:
 
 - `NEXT_PUBLIC_API_URL` -> your API deployment URL + `/api/v1`
-  - example: `https://yarns-api.vercel.app/api/v1`
+  - example: `https://uprise-api.vercel.app/api/v1`
 - `NEXT_PUBLIC_ACTION_NETWORK_BASE_URL` (optional override)
 - `NEXT_PUBLIC_INTERNAL_SOURCE_BASE_URL` (optional UI default)
 

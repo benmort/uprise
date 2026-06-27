@@ -25,7 +25,7 @@ import { getSession } from '@/lib/session';
 /**
  * Activity – read-only recent-activity timeline.
  *
- * yarns has no generic audit log, so the closest real "recent activity" surface
+ * uprise has no generic audit log, so the closest real "recent activity" surface
  * is the analytics recent-blasts feed. Each recent blast becomes a timeline entry
  * (title, status, timestamp); the dashboard performance numbers ride along as a
  * header summary. Visual port of prog's activity-log timeline; gray/dark classes

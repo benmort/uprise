@@ -1,6 +1,6 @@
 # 07 – Transactional Email (net-new)
 
-M1. The email counterpart of transactional SMS (doc 06). Net-new email domain providing **transactional email** — verification codes, magic-links, password-reset, receipts, invitations. Nothing comparable exists in yarns.
+M1. The email counterpart of transactional SMS (doc 06). Net-new email domain providing **transactional email** — verification codes, magic-links, password-reset, receipts, invitations. Nothing comparable exists in uprise.
 
 ## Parity with transactional SMS (doc 06)
 
@@ -70,7 +70,7 @@ Transactional emails (magic-link, verification, receipts) are called via `Transa
 
 ## Webhook – `/email-webhook`
 
-Port `process-webhook.handler.ts` verbatim onto yarns' webhook controller (doc 12 `WebhookEvent` + `claim`):
+Port `process-webhook.handler.ts` verbatim onto uprise' webhook controller (doc 12 `WebhookEvent` + `claim`):
 
 - Per-event `claim(provider='sendgrid', eventId=sg_event_id)`.
 - Resolve the `Email` by `sg_message_id` (strip the `.filterN` suffix) → `providerMessageId`; fallback to an `emailId` custom-arg.

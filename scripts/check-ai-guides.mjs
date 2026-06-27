@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Validates the yarns AI-guide system:
+// Validates the uprise AI-guide system:
 //  1. every how-to guide carries the required frontmatter keys;
 //  2. every guide referenced in dev/ai/guide-map.md exists;
 //  3. every how-to guide on disk is referenced from the guide-map (no orphans).

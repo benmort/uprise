@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Cropper from "react-easy-crop";
-import { Button } from "@yarns/ui";
+import { Button } from "@uprise/ui";
 import { getCroppedImg, type CropArea } from "@/lib/crop-image";
 
 /**

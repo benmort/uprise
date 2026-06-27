@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MessageKind, TxSmsStatus } from "@yarns/db";
+import { MessageKind, TxSmsStatus } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { TwilioService } from "../twilio/twilio.service";
 import { OutboxService } from "../common/outbox/outbox.service";

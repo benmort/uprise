@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus, MessageChannel } from "@yarns/db";
+import { BlastRecipientStatus, MessageChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
 

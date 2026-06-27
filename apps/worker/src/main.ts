@@ -9,7 +9,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
-import type { EventEnvelope } from "@yarns/events";
+import type { EventEnvelope } from "@uprise/events";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
 import { SegmentEvaluatorService } from "../../api/src/audiences/segment-evaluator.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
@@ -125,7 +125,7 @@ function basicAuthGuard(logger: DomainLogger): (req: Request, res: Response, nex
     const expectedUser = (process.env.BASIC_AUTH_USERNAME ?? "").trim();
     const expectedPass = process.env.BASIC_AUTH_PASSWORD ?? "";
     const challenge = () => {
-      res.setHeader("WWW-Authenticate", 'Basic realm="yarns queues"');
+      res.setHeader("WWW-Authenticate", 'Basic realm="uprise queues"');
       res.status(401).send("Authentication required");
     };
     if (!expectedUser || !expectedPass) {
@@ -159,7 +159,7 @@ function basicAuthGuard(logger: DomainLogger): (req: Request, res: Response, nex
 /**
  * Mount Bull Board (+ a /health endpoint) on a small express server listening on
  * WORKER_HEALTH_PORT. One BullMQAdapter per queue, all built with the SAME Redis
- * connection + prefix the workers use, so the board reads the live `yarns:*` keys.
+ * connection + prefix the workers use, so the board reads the live `uprise:*` keys.
  * The whole /admin/queues path is gated behind HTTP basic auth.
  */
 function startBullBoardServer(

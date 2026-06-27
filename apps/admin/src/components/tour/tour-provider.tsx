@@ -7,12 +7,12 @@ import { createPortal } from "react-dom";
 
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { Button } from "@/components/ui/button";
-import { notifyPathname, tourNav } from "@/lib/tours/yarns-tour";
-import { YarnsTourContext, useYarnsTour, useYarnsTourState } from "@/lib/tours/use-yarns-tour";
+import { notifyPathname, tourNav } from "@/lib/tours/uprise-tour";
+import { UpriseTourContext, useUpriseTour, useUpriseTourState } from "@/lib/tours/use-uprise-tour";
 
 import { FloatingTourCard } from "./floating-tour-card";
 
-const FIRST_RUN_KEY = "yarns.tour.firstRunDone";
+const FIRST_RUN_KEY = "uprise.tour.firstRunDone";
 
 /**
  * Holds tour state in context, bridges navigation to the Next router, and auto-starts
@@ -21,7 +21,7 @@ const FIRST_RUN_KEY = "yarns.tour.firstRunDone";
 export function TourRoot({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const state = useYarnsTourState();
+  const state = useUpriseTourState();
   const [firstRunDone, setFirstRunDone] = useLocalStorage<boolean>(FIRST_RUN_KEY, false);
   const startedRef = useRef(false);
   const startManualRef = useRef(state.startManual);
@@ -45,16 +45,16 @@ export function TourRoot({ children }: { children: React.ReactNode }) {
   }, [firstRunDone, setFirstRunDone]);
 
   return (
-    <YarnsTourContext.Provider value={state}>
+    <UpriseTourContext.Provider value={state}>
       {children}
       <FloatingTourCard />
-    </YarnsTourContext.Provider>
+    </UpriseTourContext.Provider>
   );
 }
 
 /** Header control: opens a menu to resume, or pick a tour to walk / auto-play. */
 export function TourMenuButton() {
-  const { tours, activeTourId, canResume, savedStep, totalSteps, startTour, resume } = useYarnsTour();
+  const { tours, activeTourId, canResume, savedStep, totalSteps, startTour, resume } = useUpriseTour();
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ left: number; bottom: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);

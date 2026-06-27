@@ -1,4 +1,4 @@
-import { TxSmsStatus } from "@yarns/db";
+import { TxSmsStatus } from "@uprise/db";
 import { assertValidTxSmsTransition } from "./tx-sms-state.machine";
 
 describe("tx-sms state machine", () => {

@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Alert, Button, Field, Input, PasswordInput } from "@yarns/ui";
-import { auth, type InvitePreview } from "@yarns/api-client";
+import { Alert, Button, Field, Input, PasswordInput } from "@uprise/ui";
+import { auth, type InvitePreview } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 import { useQueryParams } from "@/lib/use-query";
 

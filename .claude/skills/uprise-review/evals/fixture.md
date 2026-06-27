@@ -1,6 +1,6 @@
-# yarns-review eval fixture
+# uprise-review eval fixture
 
-Frozen input for the yarns-review eval. A cold session runs the skill against this exact diff and is graded against `answer-key.md`.
+Frozen input for the uprise-review eval. A cold session runs the skill against this exact diff and is graded against `answer-key.md`.
 
 ## Diff under review
 

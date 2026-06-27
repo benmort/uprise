@@ -1,4 +1,4 @@
-import { DispositionLayer, EngagementChannel } from "@yarns/db";
+import { DispositionLayer, EngagementChannel } from "@uprise/db";
 
 export type DispositionDefSeed = {
   code: string;

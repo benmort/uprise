@@ -1,5 +1,5 @@
-import { PrismaClient } from "@yarns/db";
-import type { EventEnvelope, Reaction } from "@yarns/events";
+import { PrismaClient } from "@uprise/db";
+import type { EventEnvelope, Reaction } from "@uprise/events";
 import { ReactionRegistry } from "./reaction-registry";
 import type { PrismaService } from "../../prisma/prisma.service";
 

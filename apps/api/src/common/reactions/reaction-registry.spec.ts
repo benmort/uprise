@@ -1,5 +1,5 @@
-import { Prisma } from "@yarns/db";
-import type { EventEnvelope, Reaction } from "@yarns/events";
+import { Prisma } from "@uprise/db";
+import type { EventEnvelope, Reaction } from "@uprise/events";
 import { ReactionRegistry } from "./reaction-registry";
 
 function p2002(): Prisma.PrismaClientKnownRequestError {

@@ -1,4 +1,4 @@
-import { DispositionLayer, EngagementChannel } from "@yarns/db";
+import { DispositionLayer, EngagementChannel } from "@uprise/db";
 import { EngagementService } from "./engagement.service";
 
 describe("EngagementService", () => {

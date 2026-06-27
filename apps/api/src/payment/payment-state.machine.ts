@@ -1,4 +1,4 @@
-import { PaymentStatus } from "@yarns/db";
+import { PaymentStatus } from "@uprise/db";
 import { assertTransition, type TransitionMap } from "../common/fsm/assert-transition";
 
 // Based on prog's payment aggregate, with one deliberate deviation: prog forbade

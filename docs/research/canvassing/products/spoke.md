@@ -1,6 +1,6 @@
 # Spoke – product dossier
 
-Spoke is an open-source peer-to-peer (P2P) text-distribution platform. It was created by Saikat Chakrabarti and Sheena Pakanati, originally maintained by MoveOn.org, and has since been forked and re-developed several times. It is a direct open-source peer to yarns: same problem space (volunteer-driven P2P SMS at scale), same broad stack (Node/TypeScript + Postgres + GraphQL). Because the source and schema are public, its data model is the most useful thing here. [1][2][5]
+Spoke is an open-source peer-to-peer (P2P) text-distribution platform. It was created by Saikat Chakrabarti and Sheena Pakanati, originally maintained by MoveOn.org, and has since been forked and re-developed several times. It is a direct open-source peer to uprise: same problem space (volunteer-driven P2P SMS at scale), same broad stack (Node/TypeScript + Postgres + GraphQL). Because the source and schema are public, its data model is the most useful thing here. [1][2][5]
 
 There are several live lineages, and they matter for which "Spoke" you mean:
 
@@ -53,7 +53,7 @@ Spoke does **not** do door-knocking or field canvassing. There is no walk list, 
 
 The relationship to canvassing is one-directional and via VAN: Spoke's survey/question responses are deliberately modelled to map onto VAN's **Survey Questions** and **Activist Codes** – the same canvass-result vocabulary a door program uses. So Spoke is a *sibling channel* to a canvass that shares a CRM, not a canvassing tool itself. [9][12]
 
-This is exactly the gap yarns is targeting: yarns wants door-knock and P2P text sharing one script/survey model and one inbox. Spoke shows the survey-response → CRM-disposition mapping but only for the text channel.
+This is exactly the gap uprise is targeting: uprise wants door-knock and P2P text sharing one script/survey model and one inbox. Spoke shows the survey-response → CRM-disposition mapping but only for the text channel.
 
 ---
 
@@ -159,7 +159,7 @@ Three distinct constructs, easy to confuse: [4][6][9]
 
 Reusability – the key weakness: scripts/interaction steps and canned responses are **owned by a single campaign** (`campaignId` FK). There is no first-class "shared script library" or "shared survey" entity reusable across campaigns. The only cross-campaign reuse mechanisms are: copying a campaign, the **Bulk Script Editor** find-and-replace across campaigns, and the org-level **tag** taxonomy. Surveys can't be authored once and attached to many campaigns. [4][7]
 
-This is the single most important schema lesson for yarns (see §11): if you want one script/survey to drive *both* a door interface and a text interface, the script/survey must be a standalone, reusable entity – not a child of a campaign.
+This is the single most important schema lesson for uprise (see §11): if you want one script/survey to drive *both* a door interface and a text interface, the script/survey must be a standalone, reusable entity – not a child of a campaign.
 
 ---
 
@@ -172,7 +172,7 @@ What exists in the neighbourhood:
 - Branching **interaction steps** – conditional *within a single conversation*, not across time or campaigns.
 - **graphile-worker** (Politics Rewired fork) – a generic DB-backed job queue used internally for async send/sync; it's infrastructure, not a user-facing journey builder. [2][5]
 
-To run an "engagement ladder" with Spoke you create separate campaigns and re-load contacts into each – sequencing is a human/operational process, not a product feature. This is a clear differentiation opportunity for yarns.
+To run an "engagement ladder" with Spoke you create separate campaigns and re-load contacts into each – sequencing is a human/operational process, not a product feature. This is a clear differentiation opportunity for uprise.
 
 ---
 
@@ -230,25 +230,25 @@ Gaps:
 
 ---
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
-yarns is also Node + Postgres, so the schema lessons transfer directly.
+uprise is also Node + Postgres, so the schema lessons transfer directly.
 
 Borrow:
-- **The interaction-step pattern, but lifted out of the campaign.** Spoke's self-referential question→answer-option→child-script tree is a clean way to model a branching script that is *simultaneously* a survey. Adopt the shape (a node carries `script` + optional `question`; children carry `answer_option` + follow-up script; `parent_id` builds the branch). yarns' requirement that one script/survey drive *both* the door and the text interface means this tree must be a **standalone, reusable `script`/`survey` entity** that campaigns/journeys *reference*, not own. This is the headline correction to Spoke.
+- **The interaction-step pattern, but lifted out of the campaign.** Spoke's self-referential question→answer-option→child-script tree is a clean way to model a branching script that is *simultaneously* a survey. Adopt the shape (a node carries `script` + optional `question`; children carry `answer_option` + follow-up script; `parent_id` builds the branch). uprise' requirement that one script/survey drive *both* the door and the text interface means this tree must be a **standalone, reusable `script`/`survey` entity** that campaigns/journeys *reference*, not own. This is the headline correction to Spoke.
 - **Log the answer in the same action as the conversation move.** Spoke's best idea: picking the answer that captures the reply both advances the script and writes the `question_response`. Replicate this for both door and text so disposition capture is frictionless and identical across channels.
-- **Two-tier disposition: structured per-script answers + reusable org-level tags.** Keep campaign/script-specific outcomes as question responses; keep recurring attributes (language, needs follow-up, volunteer-interested) as org-wide tags that any channel can apply. This split is sound – carry it over, and make the tag taxonomy power yarns' journeys (a tag can be a journey trigger).
-- **Answer-attached actions.** Spoke's `answerActions`/`answerActionsData` on a step (fire a sync/side-effect when an answer is chosen) is a tidy hook. yarns can use the same pattern to trigger journey enrolment, CRM sync, or a canned-response surface when a disposition is logged.
+- **Two-tier disposition: structured per-script answers + reusable org-level tags.** Keep campaign/script-specific outcomes as question responses; keep recurring attributes (language, needs follow-up, volunteer-interested) as org-wide tags that any channel can apply. This split is sound – carry it over, and make the tag taxonomy power uprise' journeys (a tag can be a journey trigger).
+- **Answer-attached actions.** Spoke's `answerActions`/`answerActionsData` on a step (fire a sync/side-effect when an answer is chosen) is a tidy hook. uprise can use the same pattern to trigger journey enrolment, CRM sync, or a canned-response surface when a disposition is logged.
 - **Dynamic assignment + batch model** for the texting inbox; and reuse the inbox-bucket UX (needs-reply / send-later / past) – it's proven.
 - **Compliance primitives**: uneditable opener, texting-hours/quiet-hours enforcement, org-wide opt-out propagation, opt-out as its own entity.
 - **Async sync via a DB-backed job queue** (Politics Rewired uses graphile-worker on Postgres) rather than ad-hoc inline calls.
 
 Avoid:
-- **Don't make contacts per-campaign.** This is Spoke's biggest structural mistake for yarns' goals. yarns needs a **first-class Contact/Person** that persists across campaigns, channels (door + text), journeys, and dispositions – with campaign participation as a join. Without it you cannot do journeys, cross-channel history, or "this person was door-knocked then texted." Build the global person entity from day one.
-- **Don't bind canned responses (or scripts/surveys) to a single campaign.** Make canned responses a shared, taggable library reusable across door and text. yarns' brief explicitly wants script/survey tooling that drives canned responses in *both* interfaces – Spoke's per-campaign ownership directly blocks that.
-- **Don't let canned/quick responses skip data capture.** Spoke's canned responses log nothing. In yarns, surfacing a canned response from a survey answer should still record the disposition. Couple the response to the answer.
+- **Don't make contacts per-campaign.** This is Spoke's biggest structural mistake for uprise' goals. uprise needs a **first-class Contact/Person** that persists across campaigns, channels (door + text), journeys, and dispositions – with campaign participation as a join. Without it you cannot do journeys, cross-channel history, or "this person was door-knocked then texted." Build the global person entity from day one.
+- **Don't bind canned responses (or scripts/surveys) to a single campaign.** Make canned responses a shared, taggable library reusable across door and text. uprise' brief explicitly wants script/survey tooling that drives canned responses in *both* interfaces – Spoke's per-campaign ownership directly blocks that.
+- **Don't let canned/quick responses skip data capture.** Spoke's canned responses log nothing. In uprise, surfacing a canned response from a survey answer should still record the disposition. Couple the response to the answer.
 - **Don't conflate workflow state with outcome.** Keep `messageStatus`-style workflow state separate from disposition (question response). Spoke does keep them separate – preserve that.
-- **Don't treat sequencing as an operational afterthought.** Spoke has no journeys, forcing manual campaign-cloning. Since journeys are a core yarns feature, model a per-person journey/enrolment state machine explicitly, driven by dispositions and tags from both channels.
+- **Don't treat sequencing as an operational afterthought.** Spoke has no journeys, forcing manual campaign-cloning. Since journeys are a core uprise feature, model a per-person journey/enrolment state machine explicitly, driven by dispositions and tags from both channels.
 
 ---
 

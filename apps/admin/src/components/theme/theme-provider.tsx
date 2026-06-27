@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
 /**
  * Theme system (prog parity). Cookie-persisted light/dark, toggled by adding/removing
- * `.dark` on <html> — the @yarns/ui token layer re-skins off that class. The no-flash
+ * `.dark` on <html> — the @uprise/ui token layer re-skins off that class. The no-flash
  * script in the root layout applies the class before paint; this provider keeps React
  * state in sync and writes the cookie on change.
  */
@@ -26,7 +26,7 @@ function readThemeCookie(): Theme | null {
 }
 
 function writeThemeCookie(theme: Theme) {
-  // Parent-domain so it can be shared across the *.yarns apps when SESSION_COOKIE_DOMAIN
+  // Parent-domain so it can be shared across the *.uprise apps when SESSION_COOKIE_DOMAIN
   // is set; falls back to host-only on localhost.
   const domain = process.env.NEXT_PUBLIC_COOKIE_DOMAIN;
   const domainPart = domain ? `; domain=${domain}` : "";

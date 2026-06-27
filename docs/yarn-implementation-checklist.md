@@ -1,4 +1,4 @@
-# Yarns SMS Blast Implementation Checklist
+# Uprise SMS Blast Implementation Checklist
 
 ## Milestone 1: Platform Foundation
 - [ ] API bootstraps with NestJS and Prisma.
@@ -32,7 +32,7 @@
 
 ## Milestone 6: Web Product Surfaces
 - [ ] App shell includes persistent navigation for Dashboard, Audience, Analytics, Inbox, plus Create Blast CTA.
-- [ ] Design system tokens and typography align with Yarns branding.
+- [ ] Design system tokens and typography align with Uprise branding.
 - [ ] Dashboard shows KPI cards and recent blasts.
 - [ ] Audience page supports CSV upload, integration sync, segmented list UI.
 - [ ] Blast composer route supports templating, personalization chips, preview, and send/proof actions.

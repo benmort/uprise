@@ -21,7 +21,7 @@ import {
   type MessageChannel,
   type WhatsappTemplate,
 } from "@/lib/api";
-import { tourComposerIntent } from "@/lib/tours/yarns-tour";
+import { tourComposerIntent } from "@/lib/tours/uprise-tour";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

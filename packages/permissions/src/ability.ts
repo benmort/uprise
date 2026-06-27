@@ -1,6 +1,6 @@
 import { AbilityBuilder, createMongoAbility, type MongoAbility } from "@casl/ability";
 import type { Action, AuthenticatedActor, PermissionRule, Resource } from "./types";
-import { YARNS_RESOURCES } from "./types";
+import { UPRISE_RESOURCES } from "./types";
 import { ROLE_PERMISSIONS, isKnownRole } from "./roles";
 
 export type AppAbility = MongoAbility<[Action, Resource]>;
@@ -8,7 +8,7 @@ export type AppAbility = MongoAbility<[Action, Resource]>;
 /** `<domain>` → concrete `<domain>.<entity>` resources, to expand `.all` wildcards. */
 const DOMAIN_RESOURCES: Record<string, string[]> = (() => {
   const byDomain: Record<string, string[]> = {};
-  for (const resource of YARNS_RESOURCES) {
+  for (const resource of UPRISE_RESOURCES) {
     if (resource === "all") continue;
     const dot = resource.indexOf(".");
     if (dot < 0) continue;

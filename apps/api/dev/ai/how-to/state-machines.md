@@ -1,6 +1,6 @@
 ---
 name: state-machines
-description: How yarns models an aggregate lifecycle – a Prisma enum, a TransitionMap, a throwing guard, and a non-throwing twin for callbacks.
+description: How uprise models an aggregate lifecycle – a Prisma enum, a TransitionMap, a throwing guard, and a non-throwing twin for callbacks.
 layer: api
 topic: fsm
 use_when: Adding or changing a status field whose transitions must be enforced, or wiring a provider status callback.

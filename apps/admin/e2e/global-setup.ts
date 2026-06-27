@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 const REPO = resolve(__dirname, "../../..");
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 const COOKIE_HOST = process.env.E2E_COOKIE_DOMAIN || "localhost";
-const ORGANISER = { email: "demo.organiser@yarns.test", password: "demo-organiser-pw" };
+const ORGANISER = { email: "demo.organiser@uprise.test", password: "demo-organiser-pw" };
 
 function readEnv(key: string): string {
   if (process.env[key]) return process.env[key] as string;
@@ -59,7 +59,7 @@ export default async function globalSetup() {
   const campaigns = asArray(await get("/canvass/campaigns"));
   ids.campaignId = (campaigns.find((c) => c.name?.startsWith("Demo")) || campaigns[0])?.id;
   const volunteers = asArray(await get("/canvass/volunteers"));
-  ids.volunteerId = (volunteers.find((u) => u.email === "demo.volunteer@yarns.test") || volunteers[0])?.id;
+  ids.volunteerId = (volunteers.find((u) => u.email === "demo.volunteer@uprise.test") || volunteers[0])?.id;
   if (ids.volunteerId) {
     const assigns = asArray(await get(`/canvass/assignments?volunteerId=${ids.volunteerId}`));
     ids.turfId = assigns[0]?.turfId;
@@ -105,7 +105,7 @@ export default async function globalSetup() {
       ? [
           {
             origin: process.env.WEB_URL || "http://localhost:3000",
-            localStorage: [{ name: "yarns.volunteerId", value: ids.volunteerId }],
+            localStorage: [{ name: "uprise.volunteerId", value: ids.volunteerId }],
           },
         ]
       : [],

@@ -1,6 +1,6 @@
 # Fixture release input (frozen input)
 
-This is the raw "what merged to `main`" summary handed to the `yarns-operate` skill for a
+This is the raw "what merged to `main`" summary handed to the `uprise-operate` skill for a
 **release** run. It is a description of merged changes, not a tracker item. The skill must
 turn it into a deploy walk – it must not run any deploy step.
 
@@ -8,7 +8,7 @@ turn it into a deploy walk – it must not run any deploy step.
 constructed for the eval (the env keys, the `audience-import` queue, and
 `BULLMQ_UPLOAD_QUEUE_CONCURRENCY` are real). Treat the changeset as given; do not grep the
 tree to confirm the exact migration exists. The eval grades the deploy-walk reasoning. Note
-that yarns migrations live under `packages/db/prisma/migrations/`, and `prisma migrate deploy`
+that uprise migrations live under `packages/db/prisma/migrations/`, and `prisma migrate deploy`
 is run from `apps/api` (per `docs/prod-deploy-runbook.md`).
 
 ---

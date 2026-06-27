@@ -1,4 +1,4 @@
-import { CallStatus } from "@yarns/db";
+import { CallStatus } from "@uprise/db";
 import {
   assertValidCallTransition,
   canTransitionCall,

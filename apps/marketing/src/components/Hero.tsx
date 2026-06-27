@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Button } from "@yarns/ui";
+import { Button } from "@uprise/ui";
 import Image from "next/image";
 import { authAppUrl } from "@/lib/links";
 import MarketingLaunchpad from "./MarketingLaunchpad";

@@ -11,10 +11,10 @@ export type Action = (typeof STANDARD_ACTIONS)[number] | string;
  * A `<domain>.all` wildcard grants the action on every resource in that domain.
  * The literal `all` is the super-resource granted only via `manage`.
  *
- * Covers yarns' current domains; payment/email/telephony entries are reserved
+ * Covers uprise' current domains; payment/email/telephony entries are reserved
  * for when those domains are ported (meld docs 06–09) so the matrix is forward-compatible.
  */
-export const YARNS_RESOURCES = [
+export const UPRISE_RESOURCES = [
   // tenancy (meld doc 03)
   "tenant.tenant",
   "tenant.network",
@@ -99,7 +99,7 @@ export const YARNS_RESOURCES = [
   "system.feature-flags-global",
   "all",
 ] as const;
-export type Resource = (typeof YARNS_RESOURCES)[number] | string;
+export type Resource = (typeof UPRISE_RESOURCES)[number] | string;
 
 export interface PermissionRule {
   action: Action;

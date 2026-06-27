@@ -1,4 +1,4 @@
-import { JourneyTriggerType } from "@yarns/db";
+import { JourneyTriggerType } from "@uprise/db";
 
 export const JOURNEY_TRIGGER_PORT = "JourneyTriggerPort";
 

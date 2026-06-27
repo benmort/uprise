@@ -40,7 +40,7 @@ import { createBlastAndOpen } from "@/lib/blasts";
 import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
 import { KpiTile } from "@/components/canvass/kpi-tile";
 import { Button } from "@/components/ui/button";
-import { QuickActions } from "@yarns/ui";
+import { QuickActions } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 import { OverviewModuleCard } from "@/components/overview/overview-module-card";
 import { ActivityFeed } from "@/components/overview/activity-feed";

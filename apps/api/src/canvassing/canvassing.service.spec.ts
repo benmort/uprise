@@ -1,4 +1,4 @@
-import { Prisma, TurfAssignmentStatus } from "@yarns/db";
+import { Prisma, TurfAssignmentStatus } from "@uprise/db";
 import { CanvassingService } from "./canvassing.service";
 
 function p2002(): Prisma.PrismaClientKnownRequestError {

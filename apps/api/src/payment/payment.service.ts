@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { PaymentStatus, PaymentType, Prisma } from "@yarns/db";
+import { PaymentStatus, PaymentType, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";

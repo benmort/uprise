@@ -1,6 +1,6 @@
 ---
 name: guide-map
-description: Single entry point for AI work in yarns – routes to layer-local guides with minimal context overhead.
+description: Single entry point for AI work in uprise – routes to layer-local guides with minimal context overhead.
 layer: root
 topic: navigation
 use_when: Starting any task. Read this first to route to the right guide.
@@ -31,15 +31,15 @@ Single entry point and router to layer-local guides. Read this, then read every 
 | Wire a Nest module / pass the DI boot gate | `apps/api/dev/ai/how-to/module-wiring.md` |
 | Write backend unit tests (mocked-prisma conventions) | `apps/api/dev/ai/how-to/testing-unit.md` |
 | Build a backend service / controller / DTO | `apps/api/dev/ai/how-to/services-controllers-dtos.md` |
-| Apply the design system (Tailwind v4 + `@yarns/ui`) | `apps/admin/dev/ai/how-to/design-system.md` |
+| Apply the design system (Tailwind v4 + `@uprise/ui`) | `apps/admin/dev/ai/how-to/design-system.md` |
 | Build a Next page / call the API from the web apps | `apps/admin/dev/ai/how-to/app-router-and-api-client.md` |
 | Apply web security (cookie SSO, CORS, secrets) | `apps/admin/dev/ai/how-to/web-security.md` |
 | Show loading / empty / error / no-permission states | `apps/admin/dev/ai/how-to/feedback-states.md` |
 | Permission-gate UI | `apps/admin/dev/ai/how-to/permission-gating.md` |
-| Add a domain event type to `@yarns/events` | `packages/dev/ai/how-to/events-catalogue.md` |
-| Work with `@yarns/db` / the Prisma client | `packages/dev/ai/how-to/db-and-prisma.md` |
-| Work with `@yarns/permissions` (abilities/roles) | `packages/dev/ai/how-to/permissions-package.md` |
-| Build/consume a `@yarns/*` package | `packages/dev/ai/how-to/package-build.md` |
+| Add a domain event type to `@uprise/events` | `packages/dev/ai/how-to/events-catalogue.md` |
+| Work with `@uprise/db` / the Prisma client | `packages/dev/ai/how-to/db-and-prisma.md` |
+| Work with `@uprise/permissions` (abilities/roles) | `packages/dev/ai/how-to/permissions-package.md` |
+| Build/consume a `@uprise/*` package | `packages/dev/ai/how-to/package-build.md` |
 
 ## Non-negotiables
 
@@ -51,7 +51,7 @@ Single entry point and router to layer-local guides. Read this, then read every 
 
 ## Guide standards
 
-Every how-to has: YAML frontmatter (`name`, `description`, `layer`, `topic`, `use_when`, `last_reviewed`) → a purpose sentence → **Canonical** (real yarns file) → **Must have** → **Anti-patterns** → **Checklist** ending in the **Gate** (cite `dev/ai/how-to/definition-of-done.md`) → **Related guides**.
+Every how-to has: YAML frontmatter (`name`, `description`, `layer`, `topic`, `use_when`, `last_reviewed`) → a purpose sentence → **Canonical** (real uprise file) → **Must have** → **Anti-patterns** → **Checklist** ending in the **Gate** (cite `dev/ai/how-to/definition-of-done.md`) → **Related guides**.
 
 ## Structure
 
@@ -60,7 +60,7 @@ CLAUDE.md  apps/api/CLAUDE.md  apps/admin/CLAUDE.md   ← navigation + hard rule
 dev/ai/{guide-map,conventions}.md + how-to/        ← root: navigation + process
 apps/api/dev/ai/how-to/                             ← backend pattern guides
 apps/admin/dev/ai/how-to/                             ← frontend pattern guides (web/auth/marketing)
-packages/dev/ai/how-to/                             ← @yarns/* package guides
+packages/dev/ai/how-to/                             ← @uprise/* package guides
 .claude/skills/<skill>/SKILL.md                     ← codified workflows, invoked on demand
 ```
 
@@ -70,8 +70,8 @@ packages/dev/ai/how-to/                             ← @yarns/* package guides
 
 - **Backend work** → `.claude/skills/api-engineer/SKILL.md` (backend invariants + index of every api/packages guide).
 - **Frontend work** → `.claude/skills/web-engineer/SKILL.md` (frontend invariants + index of web/packages guides).
-- **Reviewing a diff** → `.claude/skills/yarns-review/SKILL.md` (guide-aware, evidence-based; the built-in code-review is for throwaway diffs only).
-- **Executing a work-unit** → `.claude/skills/yarns-implement/SKILL.md` (classify → route to a layer engineer → end at review).
-- **Handing work to a cold agent** → `.claude/skills/yarns-dispatch/SKILL.md` (brief + worktree from a task description).
+- **Reviewing a diff** → `.claude/skills/uprise-review/SKILL.md` (guide-aware, evidence-based; the built-in code-review is for throwaway diffs only).
+- **Executing a work-unit** → `.claude/skills/uprise-implement/SKILL.md` (classify → route to a layer engineer → end at review).
+- **Handing work to a cold agent** → `.claude/skills/uprise-dispatch/SKILL.md` (brief + worktree from a task description).
 - **Closing a session** → `.claude/skills/session-wrap/SKILL.md` (DoD validation + sweep + memory).
-- **Deploy / incident** → `.claude/skills/yarns-operate/SKILL.md` (proposes a deploy walk / triage; humans execute).
+- **Deploy / incident** → `.claude/skills/uprise-operate/SKILL.md` (proposes a deploy walk / triage; humans execute).

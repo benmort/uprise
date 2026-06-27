@@ -1,4 +1,4 @@
-// @yarns/ui — the shared Radix/Tailwind/CVA design system (meld doc 14), extracted
+// @uprise/ui — the shared Radix/Tailwind/CVA design system (meld doc 14), extracted
 // from apps/admin so apps/auth (and future apps) render identically. Consumed as
 // source via Next `transpilePackages`. Tailwind v4 tokens ship in ./globals.css
 // (CSS-first @theme). (breadcrumbs stays in apps/admin — it depends on next/link.)

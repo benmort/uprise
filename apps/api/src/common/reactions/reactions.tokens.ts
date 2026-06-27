@@ -1,4 +1,4 @@
-import type { Reaction } from "@yarns/events";
+import type { Reaction } from "@uprise/events";
 
 /** DI token for the array of registered reactions. Domains add their reactions
  *  to this provider as they are ported (docs 06–11). */

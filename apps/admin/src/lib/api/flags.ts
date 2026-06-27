@@ -1,5 +1,5 @@
 import { request } from "@/lib/api";
-import type { FeatureFlagKey, FeatureFlagMap, FlagLayer } from "@yarns/flags";
+import type { FeatureFlagKey, FeatureFlagMap, FlagLayer } from "@uprise/flags";
 
 export type { FeatureFlagKey, FeatureFlagMap, FlagLayer };
 

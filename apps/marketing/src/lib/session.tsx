@@ -1,18 +1,18 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { auth, type AuthPrincipal } from "@yarns/api-client";
+import { auth, type AuthPrincipal } from "@uprise/api-client";
 
 /**
  * Single source of truth for the marketing site's signed-in state. Calls the
- * yarns API's /auth/check ONCE (credentialed, via the shared httpOnly session
+ * uprise API's /auth/check ONCE (credentialed, via the shared httpOnly session
  * cookie) and shares the verified principal with every consumer — the header,
  * the mobile menu and the homepage launchpad — so they can never disagree.
  *
  * This deliberately replaces the earlier advisory `session_hint` cookie, which
  * collided by name with prog's cookie on the shared `.dev.uprise.org.au` dev
- * domain and could surface a prog account. checkSession proves a real yarns
- * session against the yarns API, so the identity shown is always correct.
+ * domain and could surface a prog account. checkSession proves a real uprise
+ * session against the uprise API, so the identity shown is always correct.
  */
 type SessionState = { loading: boolean; user: AuthPrincipal | null };
 

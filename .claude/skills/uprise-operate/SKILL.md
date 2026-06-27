@@ -1,19 +1,19 @@
 ---
-name: yarns-operate
+name: uprise-operate
 description: Proposes a deploy walk or an incident triage note for a human to execute – it never runs deploy, migration, or infra commands itself. Use when shipping a set of merged changes to prod ("how do we deploy this", "what's the deploy walk", "release this", "sequence the migration"), or when triaging an alert/symptom ("the blast failure rate is spiking", "queue backlog is growing", "health is flapping", "what do I check first"). Output is a confirmation-gated plan; the operator runs the commands.
 ---
 
-# yarns operate
+# uprise operate
 
-Turn a set of merged changes into a **deploy walk**, or an alert/symptom into a **triage note**. The output is a plan a human executes – this skill writes the steps, it never runs `prisma migrate deploy`, never flips a Vercel/Render env, never pauses a queue or restores a snapshot. Every action that touches a real database, secret store, queue, or live traffic is surfaced for the operator to run after confirming. yarns is board-free: the unit of work is the merged commit set / the plan file / the runbook in front of you, not a ticket.
+Turn a set of merged changes into a **deploy walk**, or an alert/symptom into a **triage note**. The output is a plan a human executes – this skill writes the steps, it never runs `prisma migrate deploy`, never flips a Vercel/Render env, never pauses a queue or restores a snapshot. Every action that touches a real database, secret store, queue, or live traffic is surfaced for the operator to run after confirming. uprise is board-free: the unit of work is the merged commit set / the plan file / the runbook in front of you, not a ticket.
 
 Read `dev/ai/guide-map.md` first to route the changes to their layer guides, then drive the plan off the four operational runbooks under `docs/`.
 
 ## Invariants
 
-- **Propose, never execute.** This skill produces a plan. It does not run `prisma migrate deploy`, `prisma migrate dev` (banned everywhere in yarns), env/secret writes, `queue:drain`/`queue:replay-failed`, snapshot restores, or any redeploy. State the exact command the operator runs and stop. Running it yourself is the cardinal failure of this skill.
+- **Propose, never execute.** This skill produces a plan. It does not run `prisma migrate deploy`, `prisma migrate dev` (banned everywhere in uprise), env/secret writes, `queue:drain`/`queue:replay-failed`, snapshot restores, or any redeploy. State the exact command the operator runs and stop. Running it yourself is the cardinal failure of this skill.
 - **Confirmation-gated by default.** Every step that mutates prod – migrations, env/secret changes, feature-flag flips, queue operations, rollbacks – is flagged as confirmation-required and grouped so the operator sees the blast radius before acting. A read-only check (`GET /health`, `prisma migrate status`, a dashboard) is not gated; a write is.
-- **Migrations are additive and forward-only.** yarns applies them with `prisma migrate deploy`, never `migrate dev`. There are no destructive down-migrations; rollback is snapshot-restore + redeploy of the previous image, or a feature-flag flip, per `docs/migration-runbook.md`. A deploy walk that proposes a down-migration or `migrate dev` is wrong.
+- **Migrations are additive and forward-only.** uprise applies them with `prisma migrate deploy`, never `migrate dev`. There are no destructive down-migrations; rollback is snapshot-restore + redeploy of the previous image, or a feature-flag flip, per `docs/migration-runbook.md`. A deploy walk that proposes a down-migration or `migrate dev` is wrong.
 - **Migrate before the code that needs it.** Schema additions land before the API/worker build that reads them, so the new code never hits a column that does not exist yet. Sequence is explicit in the walk.
 - **Workers are not Vercel.** The API and web are serverless on Vercel; BullMQ workers run as an always-on Render process (`docs/bullmq-deployment.md`). A change touching a queue, job type, or worker concurrency impacts the Render worker deploy, not just the Vercel API – the walk must say so.
 - **Flags over reverts to disable a feature.** To turn a feature off in prod, flip its flag (`FEATURE_*`), don't revert code – the deploy runbook's rollback note is built on this.
@@ -61,12 +61,12 @@ Read `dev/ai/guide-map.md` first to route the changes to their layer guides, the
 ## Anti-patterns
 
 - **Running the command.** Executing `prisma migrate deploy`, an env write, a queue drain, or a redeploy instead of writing it for the operator. This skill never executes prod actions.
-- Proposing `prisma migrate dev` or a destructive down-migration – banned in yarns; rollback is snapshot + redeploy or a flag flip.
+- Proposing `prisma migrate dev` or a destructive down-migration – banned in uprise; rollback is snapshot + redeploy or a flag flip.
 - Sequencing the code redeploy before the migration that its new columns depend on.
 - Silently treating a queue/job change as a plain API deploy – missing that the Render worker must redeploy and the `FEATURE_BULLMQ_*` cutover applies.
 - A release walk with no rollback note, or an incident note with no recovery path.
 - Reverting code to disable a feature when a `FEATURE_*` flag flip would do it.
-- Inventing a ticket / story / change-request id to hang the release on – yarns is board-free; the unit is the commit set / plan file / runbook.
+- Inventing a ticket / story / change-request id to hang the release on – uprise is board-free; the unit is the commit set / plan file / runbook.
 - The em-dash character anywhere; US spelling in prose for the repo.
 
 ## Checklist

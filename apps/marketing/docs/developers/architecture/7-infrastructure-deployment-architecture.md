@@ -46,7 +46,7 @@ This document outlines how the Uprise system is deployed and managed across diff
 // Environment-based configuration loading
 const config = {
   development: {
-    database: { url: 'postgresql://localhost:5432/yarns_dev' },
+    database: { url: 'postgresql://localhost:5432/uprise_dev' },
     redis: { url: 'redis://localhost:6379' },
     external: {
       stripe: { publishableKey: 'pk_test_...' },
@@ -142,7 +142,7 @@ RUN npm run build
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f https://http-event-bridge.service.dev.yarns.network/health || exit 1
+  CMD curl -f https://http-event-bridge.service.dev.uprise.network/health || exit 1
 
 EXPOSE 8001
 CMD ["npm", "run", "start:event-streaming"]
@@ -163,15 +163,15 @@ CMD ["npm", "run", "start:event-streaming"]
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: yarns-production
+  name: uprise-production
   labels:
     environment: production
     team: platform
 ```
 
 **Namespaces**:
-- `yarns-production`: Production workloads
-- `yarns-staging`: Staging environment
+- `uprise-production`: Production workloads
+- `uprise-staging`: Staging environment
 - `monitoring`: Observability stack
 - `ingress-nginx`: Ingress controllers
 
@@ -189,7 +189,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service
-  namespace: yarns-production
+  namespace: uprise-production
 spec:
   replicas: 3
   selector:
@@ -202,7 +202,7 @@ spec:
     spec:
       containers:
       - name: user-service
-        image: yarns-user-service:latest
+        image: uprise-user-service:latest
         ports:
         - containerPort: 3007
         env:
@@ -239,7 +239,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: user-service
-  namespace: yarns-production
+  namespace: uprise-production
 spec:
   selector:
     app: user-service
@@ -262,8 +262,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: yarns-ingress
-  namespace: yarns-production
+  name: uprise-ingress
+  namespace: uprise-production
   annotations:
     kubernetes.io/ingress.class: "nginx"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
@@ -272,11 +272,11 @@ metadata:
 spec:
   tls:
   - hosts:
-    - api.yarns.com
-    - app.yarns.com
-    secretName: yarns-tls
+    - api.uprise.com
+    - app.uprise.com
+    secretName: uprise-tls
   rules:
-  - host: api.yarns.com
+  - host: api.uprise.com
     http:
       paths:
       - path: /api/(.*)
@@ -286,7 +286,7 @@ spec:
             name: api-gateway
             port:
               number: 80
-  - host: app.yarns.com
+  - host: app.uprise.com
     http:
       paths:
       - path: /(.*)
@@ -368,7 +368,7 @@ Resources:
   RedisCluster:
     Type: AWS::ElastiCache::ReplicationGroup
     Properties:
-      ReplicationGroupId: yarns-redis-cluster
+      ReplicationGroupId: uprise-redis-cluster
       ReplicationGroupDescription: Redis cluster for Uprise
       NumCacheClusters: 3
       Engine: redis
@@ -467,7 +467,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service-blue
-  namespace: yarns-production
+  namespace: uprise-production
 spec:
   replicas: 3
   selector:
@@ -481,7 +481,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service-green
-  namespace: yarns-production
+  namespace: uprise-production
 spec:
   replicas: 1
   selector:
@@ -633,7 +633,7 @@ spec:
             - -c
             - |
               pg_dump -h $DB_HOST -U $DB_USER $DB_NAME > /backup/backup.sql
-              aws s3 cp /backup/backup.sql s3://yarns-backups/$(date +%Y-%m-%d).sql
+              aws s3 cp /backup/backup.sql s3://uprise-backups/$(date +%Y-%m-%d).sql
 ```
 
 **Backup Strategy**:
@@ -757,7 +757,7 @@ Resources:
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      Name: yarns-cloudtrail
+      Name: uprise-cloudtrail
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true

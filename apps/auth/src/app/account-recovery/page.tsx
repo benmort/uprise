@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { Alert, Button, Field, Input } from "@yarns/ui";
-import { auth } from "@yarns/api-client";
+import { Alert, Button, Field, Input } from "@uprise/ui";
+import { auth } from "@uprise/api-client";
 
 export default function AccountRecoveryPage() {
   const [email, setEmail] = useState("");

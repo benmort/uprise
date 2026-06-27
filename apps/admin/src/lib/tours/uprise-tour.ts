@@ -38,7 +38,7 @@ import {
   EXAMPLE_BLAST_TITLE,
 } from "@/lib/seed-constants";
 
-export const YARNS_TOUR_ID = "yarns-app-walkthrough";
+export const UPRISE_TOUR_ID = "uprise-app-walkthrough";
 
 export interface TourStep {
   icon: LucideIcon;
@@ -173,7 +173,7 @@ const gotoComposerWhatsapp = (): void => {
 };
 
 // ─── Steps ────────────────────────────────────────────────────────────────────
-export const yarnsTourSteps: TourStep[] = [
+export const upriseTourSteps: TourStep[] = [
   // ── Orientation: sidebar + header (anchored on the dashboard) ──────────────
   {
     icon: Sparkles,
@@ -420,7 +420,7 @@ export const yarnsTourSteps: TourStep[] = [
 // Walks the WhatsApp-specific UI: channel toggle, template picker + variable
 // mapping, WhatsApp preview, opt-in compliance, per-channel inbox + 24h window,
 // and channel surfacing in dashboard/analytics. Uses the same seeded example blast.
-export const WHATSAPP_TOUR_ID = "yarns-whatsapp-channel";
+export const WHATSAPP_TOUR_ID = "uprise-whatsapp-channel";
 
 export const whatsappTourSteps: TourStep[] = [
   {
@@ -528,7 +528,7 @@ export const whatsappTourSteps: TourStep[] = [
 // Campaign-scoped pages (/canvass/[id]/…) need a real campaign id we can't know
 // statically, so those are spotlighted from the overview's links + described;
 // /field lives outside this shell (TourRoot is (main)-only) so it's descriptive.
-export const CANVASSING_TOUR_ID = "yarns-canvassing";
+export const CANVASSING_TOUR_ID = "uprise-canvassing";
 
 export const canvassingTourSteps: TourStep[] = [
   {
@@ -633,7 +633,7 @@ export const canvassingTourSteps: TourStep[] = [
 ];
 
 // ─── Engagement library tour ────────────────────────────────────────────────
-export const ENGAGEMENT_TOUR_ID = "yarns-engagement";
+export const ENGAGEMENT_TOUR_ID = "uprise-engagement";
 
 export const engagementTourSteps: TourStep[] = [
   {
@@ -689,7 +689,7 @@ export const engagementTourSteps: TourStep[] = [
 ];
 
 // ─── Journeys tour ──────────────────────────────────────────────────────────
-export const JOURNEYS_TOUR_ID = "yarns-journeys";
+export const JOURNEYS_TOUR_ID = "uprise-journeys";
 
 export const journeysTourSteps: TourStep[] = [
   {
@@ -734,13 +734,13 @@ export interface TourDefinition {
   steps: TourStep[];
 }
 
-export const YARNS_TOURS: TourDefinition[] = [
+export const UPRISE_TOURS: TourDefinition[] = [
   {
-    id: YARNS_TOUR_ID,
+    id: UPRISE_TOUR_ID,
     label: "Full app walkthrough",
     description: "Every screen, end to end.",
     icon: Sparkles,
-    steps: yarnsTourSteps,
+    steps: upriseTourSteps,
   },
   {
     id: WHATSAPP_TOUR_ID,
@@ -773,5 +773,5 @@ export const YARNS_TOURS: TourDefinition[] = [
 ];
 
 export function getTourById(id: string | null | undefined): TourDefinition {
-  return YARNS_TOURS.find((tour) => tour.id === id) ?? YARNS_TOURS[0];
+  return UPRISE_TOURS.find((tour) => tour.id === id) ?? UPRISE_TOURS[0];
 }

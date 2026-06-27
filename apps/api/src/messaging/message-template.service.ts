@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Prisma } from "@yarns/db";
+import { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateMessageTemplateDto, UpdateMessageTemplateDto } from "./dto/message-template.dto";
 

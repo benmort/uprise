@@ -33,7 +33,7 @@ function num(v: unknown): number {
 export default function WalkViewPage() {
   const router = useRouter();
   const { turfId } = useParams<{ turfId: string }>();
-  const [mode, setMode] = useLocalStorage<WalkMode>("yarns.walkMode", "list");
+  const [mode, setMode] = useLocalStorage<WalkMode>("uprise.walkMode", "list");
   const [assignment, setAssignment] = useState<CanvassAssignment | null>(null);
   const [loading, setLoading] = useState(true);
   const { fix, capture } = useGeolocation();

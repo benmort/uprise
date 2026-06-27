@@ -1,4 +1,4 @@
-import { Card, CardContent } from "@yarns/ui";
+import { Card, CardContent } from "@uprise/ui";
 
 /** Bare index — joining is per-workspace via /join/[slug]. */
 export default function HomePage() {

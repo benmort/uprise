@@ -1,24 +1,24 @@
 ---
-name: yarns-review
-description: Guide-aware, evidence-based code review of a yarns diff – routes every changed file through its layer guide, verifies claims against the actual code/tests, and returns a severity-ranked verdict with file:line + confidence. Use when reviewing a branch, a commit set, or a PR; when asked to "review this diff", "is this safe to merge", "check this against house conventions", or to second-opinion a change touching the outbox, FSMs, permissions, migrations, webhooks, or transactions.
+name: uprise-review
+description: Guide-aware, evidence-based code review of a uprise diff – routes every changed file through its layer guide, verifies claims against the actual code/tests, and returns a severity-ranked verdict with file:line + confidence. Use when reviewing a branch, a commit set, or a PR; when asked to "review this diff", "is this safe to merge", "check this against house conventions", or to second-opinion a change touching the outbox, FSMs, permissions, migrations, webhooks, or transactions.
 ---
 
-# yarns review
+# uprise review
 
-Review a yarns diff against the house conventions, with evidence. Every finding cites `file:line`, states a confidence, and is backed by the code or test that proves it – never by assertion. The output is a verdict a human can act on without re-reading the diff.
+Review a uprise diff against the house conventions, with evidence. Every finding cites `file:line`, states a confidence, and is backed by the code or test that proves it – never by assertion. The output is a verdict a human can act on without re-reading the diff.
 
 Read `dev/ai/guide-map.md` first. It routes each changed file to its layer guide; this skill turns those guides into a checklist run over the actual change.
 
 ## Authority
 
-The built-in harness `code-review` skill is for **throwaway diffs** – quick correctness and cleanup passes you do not need to defend. Use **this** skill when the change touches a house convention: anything under the api outbox / transactions / FSM / permissions / webhooks / migrations / module-wiring surface, any `@yarns/*` package, any new endpoint or migration, or any diff headed for `main`. When in doubt, this skill is the authority; the built-in one is the fast path only.
+The built-in harness `code-review` skill is for **throwaway diffs** – quick correctness and cleanup passes you do not need to defend. Use **this** skill when the change touches a house convention: anything under the api outbox / transactions / FSM / permissions / webhooks / migrations / module-wiring surface, any `@uprise/*` package, any new endpoint or migration, or any diff headed for `main`. When in doubt, this skill is the authority; the built-in one is the fast path only.
 
 ## Artefact contract
 
 **Consumes**
 
 - A diff to review, identified as one of: a branch (`git diff main...HEAD`), a commit set (`git show <sha>`, `git diff <a>..<b>`), or a PR (`gh pr diff <n>`). Pin the exact range you reviewed and state it in the verdict.
-- Optionally the task brief / plan file / TODO notes / docs runbook the change implements. There is **no** board, no story, no epic, no dev/product registry in yarns – the unit of work is the brief or the plan file. If a brief is supplied, the claims-vs-evidence check measures the diff against it; if not, against the commit message and the guides.
+- Optionally the task brief / plan file / TODO notes / docs runbook the change implements. There is **no** board, no story, no epic, no dev/product registry in uprise – the unit of work is the brief or the plan file. If a brief is supplied, the claims-vs-evidence check measures the diff against it; if not, against the commit message and the guides.
 
 **Produces** – a single verdict with these sections:
 
@@ -36,10 +36,10 @@ The built-in harness `code-review` skill is for **throwaway diffs** – quick co
 
 - `apps/api/src/**` state-write + event → `apps/api/dev/ai/how-to/outbox-and-reactions.md` + `apps/api/dev/ai/how-to/transactions.md` (append is INSIDE the same `prisma.$transaction` as the row write; no append in a second transaction or after the callback closes).
 - status change → `apps/api/dev/ai/how-to/state-machines.md` (goes through the `*-state.machine.ts` guard on a row loaded `FOR UPDATE`, never an ad-hoc status branch).
-- new/changed endpoint → `apps/api/dev/ai/how-to/permissions.md` (`@RequirePermission` + CASL via `@yarns/permissions`, or a justified `isPublicWebhookPath` allowlist entry; DTOs are class-validator-validated).
+- new/changed endpoint → `apps/api/dev/ai/how-to/permissions.md` (`@RequirePermission` + CASL via `@uprise/permissions`, or a justified `isPublicWebhookPath` allowlist entry; DTOs are class-validator-validated).
 - provider webhook → `apps/api/dev/ai/how-to/webhooks.md` (raw-body signature verify, `claim` before side effects, `release` on throw).
 - BullMQ job → `apps/api/dev/ai/how-to/bullmq-jobs.md` (stable idempotent `getXJobId`).
-- migration → `apps/api/dev/ai/how-to/migrations.md` (additive, hand-written, `prisma migrate deploy` – never `migrate dev`; client regenerated; `@yarns/db` rebuilt).
+- migration → `apps/api/dev/ai/how-to/migrations.md` (additive, hand-written, `prisma migrate deploy` – never `migrate dev`; client regenerated; `@uprise/db` rebuilt).
 - Nest module wiring → `apps/api/dev/ai/how-to/module-wiring.md` (provider resolvable; the boot smoke is the only check that catches a DI break).
 - `apps/admin/src/**` → `apps/admin/dev/ai/how-to/app-router-and-api-client.md`, `design-system.md`, `feedback-states.md`, `permission-gating.md`, `web-security.md` as the file fits.
 - `packages/**` → the matching `packages/dev/ai/how-to/*` guide; an edit to a package `src` without a dist rebuild leaves consumers on the old build.
@@ -59,7 +59,7 @@ Any "all / every / none" claim – "every endpoint has `@RequirePermission`", "n
 ```
 grep -rn "@Post\|@Get\|@Patch\|@Delete" <changed controllers>   # then confirm each carries @RequirePermission or is allowlisted
 grep -rn "this\.prisma" <changed service>                        # inside a $transaction callback this is the wrong client
-grep -rn "migrate dev\|EntityManager\|@Transactional\|RequestContext\|ZodValidationPipe" <range>   # slingshot-isms that must be zero in yarns
+grep -rn "migrate dev\|EntityManager\|@Transactional\|RequestContext\|ZodValidationPipe" <range>   # slingshot-isms that must be zero in uprise
 ```
 
 ### 5. Run layer-scoped validation, not repo-root
@@ -67,7 +67,7 @@ grep -rn "migrate dev\|EntityManager\|@Transactional\|RequestContext\|ZodValidat
 Validate the layers the diff touched, scoped with `pnpm --filter`, never a blunt repo-root run:
 
 - `pnpm --filter api typecheck` and `pnpm --filter api test` for backend changes – the latter includes `app.module.boot.spec.ts`, the **only** check that catches a Nest provider-resolution break (typecheck and build do not).
-- `pnpm --filter <pkg> typecheck` / `test` for each `@yarns/*` package touched; rebuild its dist if `src` changed.
+- `pnpm --filter <pkg> typecheck` / `test` for each `@uprise/*` package touched; rebuild its dist if `src` changed.
 - `pnpm --filter <app> build` for a Next app whose Tailwind/config changed – the build is the real gate there.
 
 State each command and its result. If you could not run something (no DB, no built client), that goes in the unverifiable list – do not infer green.
@@ -82,7 +82,7 @@ Run `dev/ai/how-to/definition-of-done.md` line 4 (security) against every new/ch
 - Calling a pre-existing gap a regression because you did not read the parent (skipping step 3).
 - Sampling a census claim instead of `grep`-ing the full scope (skipping step 4).
 - Running `pnpm -r test` at repo root and reporting a blanket pass instead of `--filter`-scoping to the touched layers.
-- Flagging yarns idioms as wrong because they differ from slingshot – `prisma.$transaction`, class-validator DTOs, `@RequirePermission` + CASL, `OutboxService.append`, enum + `*-state.machine.ts`, BullMQ `getXJobId` are the house conventions, not smells.
+- Flagging uprise idioms as wrong because they differ from slingshot – `prisma.$transaction`, class-validator DTOs, `@RequirePermission` + CASL, `OutboxService.append`, enum + `*-state.machine.ts`, BullMQ `getXJobId` are the house conventions, not smells.
 - Inventing a board/story/epic to hang the review on – the unit of work is the brief or the plan file.
 - A clean-looking verdict with no unverifiable list – if everything was verifiable, say so explicitly.
 
@@ -101,5 +101,5 @@ Run `dev/ai/how-to/definition-of-done.md` line 4 (security) against every new/ch
 
 - `dev/ai/guide-map.md` – the router every file is checked through.
 - `dev/ai/how-to/definition-of-done.md` – the evidence gate the verdict applies.
-- `dev/ai/conventions.md` – the commands and the yarns-not-slingshot idioms.
+- `dev/ai/conventions.md` – the commands and the uprise-not-slingshot idioms.
 - `apps/api/dev/ai/how-to/transactions.md`, `outbox-and-reactions.md`, `state-machines.md`, `permissions.md`, `webhooks.md`, `migrations.md` – the backend checklists the method routes to.

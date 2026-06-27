@@ -3,7 +3,7 @@ import { bootE2EApp, client, data } from "./utils/e2e-app";
 
 /**
  * Tenant + user creation e2e (meld doc 12 / WS1) — the prog onboarding coverage,
- * adapted to yarns' REST surface over real Postgres. register (public) →
+ * adapted to uprise' REST surface over real Postgres. register (public) →
  * create-tenant (admin) → issue invitation → accept → member listed. Uniqueness is
  * keyed off Date.now so re-runs don't collide.
  */
@@ -22,7 +22,7 @@ describe("API e2e — tenant + user creation", () => {
 
   it("self-registration creates a user + tenant + owner membership and returns a session", async () => {
     const body = {
-      email: `e2e.reg.${stamp}@yarns.test`,
+      email: `e2e.reg.${stamp}@uprise.test`,
       password: "e2e-strong-password",
       orgName: `E2E Org ${stamp}`,
       slug: `e2e-org-${stamp}`,
@@ -36,7 +36,7 @@ describe("API e2e — tenant + user creation", () => {
 
   it("rejects a duplicate registration email (409)", async () => {
     const body = {
-      email: `e2e.reg.${stamp}@yarns.test`,
+      email: `e2e.reg.${stamp}@uprise.test`,
       password: "e2e-strong-password",
       orgName: "Dup",
       slug: `e2e-org-dup-${stamp}`,
@@ -53,7 +53,7 @@ describe("API e2e — tenant + user creation", () => {
     expect(tenantId).toEqual(expect.any(String));
 
     // 2. issue an invitation
-    const inviteEmail = `e2e.invitee.${stamp}@yarns.test`;
+    const inviteEmail = `e2e.invitee.${stamp}@uprise.test`;
     const issued = await api
       .post(`/api/v1/tenants/${tenantId}/invitations`)
       .send({ email: inviteEmail, role: "VOLUNTEER" });

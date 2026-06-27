@@ -8,7 +8,7 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { EngagementChannel } from "@yarns/db";
+import { EngagementChannel } from "@uprise/db";
 
 export class ScriptStepInputDto {
   @IsOptional()

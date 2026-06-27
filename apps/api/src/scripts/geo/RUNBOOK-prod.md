@@ -1,4 +1,4 @@
-# Prod geo load runbook (co-located in the yarns app DB)
+# Prod geo load runbook (co-located in the uprise app DB)
 
 One-time (then quarterly-refresh) load of the national address universe into **production
 Neon** — the `geo` schema co-located in the app DB. The schema + PostGIS are already migrated
@@ -8,8 +8,8 @@ exact ordered prod sequence. Run on a host with `psql`, ~10 GB free disk, and th
 ## 0. Prerequisite — rotate the DB password FIRST
 
 The prod `neondb_owner` password was exposed in a chat transcript. Before loading:
-1. Neon Console → yarns project → **Roles** → reset `neondb_owner` password.
-2. Let the Vercel↔Neon integration repush envs (or update `DATABASE_URL*` on `yarns-api`).
+1. Neon Console → uprise project → **Roles** → reset `neondb_owner` password.
+2. Let the Vercel↔Neon integration repush envs (or update `DATABASE_URL*` on `uprise-api`).
 3. Use the **new** unpooled URL below.
 
 ```bash

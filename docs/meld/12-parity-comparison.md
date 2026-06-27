@@ -1,4 +1,4 @@
-# Prog ↔ Yarns — Full Parity Comparison (2026-06-22)
+# Prog ↔ Uprise — Full Parity Comparison (2026-06-22)
 
 > **Closure addendum (2026-06-23).** The gap-closure below was executed in six milestones (M1–M6, commits `02c82ae`·`3556f9e`·`e045ff7`·`4162e84`·`09da620`·`b78cd8d`) and adversarially re-verified by a 7-agent workflow (`wf_28778f9a`), whose three real findings were then fixed (`f02090d`). Post-closure state:
 > - **Audience → AT_PARITY** for the ported scope: identity resolution (`recordSourceRecord`/`resolveIdentity`) + Contact-spine stamping + `audience.imported` are now wired into the Action Network import. **Segments are intentionally not ported** (product decision — see `12-parity-outstanding.md`), so the dormant evaluator stays out of scope rather than counting as a gap.
@@ -10,7 +10,7 @@
 
 ## Overall verdict
 
-Yarns has reached behavioural **near-parity** with prog on every money- and message-critical surface — payment (92%), email (88%), identity (88%), tenant (82%) and telephony (82%) are all functionally complete, with several capabilities that exceed prog (real Stripe/SendGrid/Twilio REST adapters where prog ships Noop stubs; session revoke-all on password reset; an explicit no-membership login rejection; a blast lifecycle richer than prog's). The single drag on the portfolio is **audience (65%, GAPS_REMAIN)**: its segment-evaluation engine and identity-resolution primitives are verified complete and at parity in isolation, but they are entirely **unreachable in the running app** — there is no segment write boundary, the SEGMENT_EVAL queue has a consumer with no producer, and `recordSourceRecord`/`resolveIdentity` have zero production callers. Across the five near-parity domains the residual work is concentrated in **durable outbox-event emission** (lifecycle/transition events that downstream reactions would consume) plus a handful of read-enrichment and validation polish items — none blocking. Excluding deferred-by-design items (event-sourced aggregates/replay, multi-org aggregate, OWNER enum, OTT handoff), mean behavioural parity is **~83%**.
+Uprise has reached behavioural **near-parity** with prog on every money- and message-critical surface — payment (92%), email (88%), identity (88%), tenant (82%) and telephony (82%) are all functionally complete, with several capabilities that exceed prog (real Stripe/SendGrid/Twilio REST adapters where prog ships Noop stubs; session revoke-all on password reset; an explicit no-membership login rejection; a blast lifecycle richer than prog's). The single drag on the portfolio is **audience (65%, GAPS_REMAIN)**: its segment-evaluation engine and identity-resolution primitives are verified complete and at parity in isolation, but they are entirely **unreachable in the running app** — there is no segment write boundary, the SEGMENT_EVAL queue has a consumer with no producer, and `recordSourceRecord`/`resolveIdentity` have zero production callers. Across the five near-parity domains the residual work is concentrated in **durable outbox-event emission** (lifecycle/transition events that downstream reactions would consume) plus a handful of read-enrichment and validation polish items — none blocking. Excluding deferred-by-design items (event-sourced aggregates/replay, multi-org aggregate, OWNER enum, OTT handoff), mean behavioural parity is **~83%**.
 
 | Domain | Verdict | Parity % | Headline gap |
 |---|---|---|---|
@@ -37,10 +37,10 @@ Yarns has reached behavioural **near-parity** with prog on every money- and mess
 
 **Open:**
 - *EnsureCustomer at checkout* — **P1**. No lazy create/lookup of a customer from networkId+email before checkout; only the network-created reaction provisions one. *(in tracker)*
-- *PaymentMethod attach/detach/setDefault write path* — **P2**. Yarns has only projection + read + GET; prog ships 3 handlers + 3 adapter methods incl. one-default-per-customer enforcement. **Tracker miss.** Mitigated because cards flow through the proxied Stripe portal.
+- *PaymentMethod attach/detach/setDefault write path* — **P2**. Uprise has only projection + read + GET; prog ships 3 handlers + 3 adapter methods incl. one-default-per-customer enforcement. **Tracker miss.** Mitigated because cards flow through the proxied Stripe portal.
 - *No-op reaction for payment.succeeded* — **P2/cosmetic** (downgraded from P1). Events ARE emitted; prog's `PaymentCompletedReaction` is itself a documented no-op and prog has zero refund/receipt/entitlement reactions, so the only delta is an unmapped-log cosmetic.
 
-**Architectural stance (NA by design):** Refund as a first-class ES aggregate; event-sourced Payment/Customer/Refund replay; FOR-UPDATE row-locking on mark* (low-risk, webhook claim dedups the common case). Yarns uses Prisma rows + FSM + outbox per doc-00 decision 1.
+**Architectural stance (NA by design):** Refund as a first-class ES aggregate; event-sourced Payment/Customer/Refund replay; FOR-UPDATE row-locking on mark* (low-risk, webhook claim dedups the common case). Uprise uses Prisma rows + FSM + outbox per doc-00 decision 1.
 
 ---
 
@@ -60,7 +60,7 @@ Yarns has reached behavioural **near-parity** with prog on every money- and mess
 - *Intermediate + engagement lifecycle events not emitted* — **P2**. Only queued/delivered/bounced reach the outbox; sending/sent/failed and open/click (and dropped→FAILED) emit nothing. Low impact — no consumer. *(in tracker)*
 - *SendGrid ECDSA webhook signature verification* — **P2**. Path gates only on an optional shared secret and is auth-allowlisted (publicly reachable); documented hardening item, not a prog regression. *(in tracker)*
 
-**Architectural stance (NA by design):** Event-sourced email-message aggregate/replay. (Prog source not present in this checkout; prog-side claims accepted on the verified yarns side + tracker.)
+**Architectural stance (NA by design):** Event-sourced email-message aggregate/replay. (Prog source not present in this checkout; prog-side claims accepted on the verified uprise side + tracker.)
 
 ---
 
@@ -128,7 +128,7 @@ Yarns has reached behavioural **near-parity** with prog on every money- and mess
 ## Audience — GAPS_REMAIN (65%)
 
 **At parity in isolation (closed):**
-- Segment-evaluation engine — at parity + superset (emailDomain/hasSource/all clauses, include-unwrap, wholesale delete-then-insert rewrite, plus yarns-native consentState/turf and all/any combinators; tenant-scoped). **Engine code is genuinely complete.**
+- Segment-evaluation engine — at parity + superset (emailDomain/hasSource/all clauses, include-unwrap, wholesale delete-then-insert rewrite, plus uprise-native consentState/turf and all/any combinators; tenant-scoped). **Engine code is genuinely complete.**
 - hasSource clause + `ContactSourceRecord` store (composite-unique, indexed); idempotent single source-record upsert (`recordSourceRecord`); identity resolution (`resolveIdentity` — earliest-createdAt canonical, transitive re-point); Person upsert/canonical spine (`getOrCreate*`, `dedupUpsert`, `mergeContacts` re-pointing all child rows); materialised `AudienceSegmentMember` read consumed by blasts.
 
 **Open — the engine and primitives are unreachable in the running app:**

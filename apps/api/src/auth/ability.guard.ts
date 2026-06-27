@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { Request } from "express";
-import { defineAbilityFor, type AuthenticatedActor } from "@yarns/permissions";
+import { defineAbilityFor, type AuthenticatedActor } from "@uprise/permissions";
 import { AuthUser } from "./auth-user";
 import { REQUIRE_PERMISSION_KEY, type RequiredPermission } from "./require-permission.decorator";
 

@@ -1,6 +1,6 @@
 # 08 – Payment Domain (net-new)
 
-M2. Net-new payment domain – nothing comparable in yarns. Standalone (no M1 dependency); can run in parallel with M1.
+M2. Net-new payment domain – nothing comparable in uprise. Standalone (no M1 dependency); can run in parallel with M1.
 
 Source: `/Users/benjaminmort/code/prog/core-orchestration/apps/platform/src/services/payment/*` (`payment.aggregate.ts`, `process-webhook.handler.ts`, `StripeAdapter`).
 

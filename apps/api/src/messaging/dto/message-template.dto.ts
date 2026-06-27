@@ -1,4 +1,4 @@
-import { MessageChannel, MessageKind } from "@yarns/db";
+import { MessageChannel, MessageKind } from "@uprise/db";
 import {
   IsArray,
   IsBoolean,

@@ -67,12 +67,12 @@ describe("QueueStatsService", () => {
     const service = new QueueStatsService(
       {
         hasRedisConfigured: false,
-        queuePrefix: "yarns",
+        queuePrefix: "uprise",
       } as QueueConfigService,
     );
     const stats = await service.getStats();
 
-    expect(stats.queuePrefix).toBe("yarns");
+    expect(stats.queuePrefix).toBe("uprise");
     expect(stats.queues).toEqual([]);
     expect(stats.redis.configured).toBe(false);
     expect(stats.redis.connected).toBe(false);
@@ -99,7 +99,7 @@ describe("QueueStatsService", () => {
       {
         hasRedisConfigured: true,
         redisUrl: "redis://localhost:6379",
-        queuePrefix: "yarns",
+        queuePrefix: "uprise",
         queueConnection: { url: "redis://localhost:6379" },
       } as QueueConfigService,
     );
@@ -136,7 +136,7 @@ describe("QueueStatsService", () => {
       {
         hasRedisConfigured: true,
         redisUrl: "redis://localhost:6379",
-        queuePrefix: "yarns",
+        queuePrefix: "uprise",
         queueConnection: { url: "redis://localhost:6379" },
       } as QueueConfigService,
     );

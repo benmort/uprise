@@ -1,4 +1,4 @@
-# yarns — cross-cutting TODO
+# uprise — cross-cutting TODO
 
 Running backlog of deferred, repo-wide items that don't belong to a single PR. Keep this
 updated as work lands.
@@ -6,7 +6,7 @@ updated as work lands.
 ## Deferred
 
 ### Production environment variables — uprise.org.au cutover
-**Deferred from:** the Yarns → Uprise rebrand + the live `www.uprise.org.au` launch. Symptom that
+**Deferred from:** the Uprise → Uprise rebrand + the live `www.uprise.org.au` launch. Symptom that
 surfaced it: the marketing sign-in/up buttons link to `http://localhost:3002` because
 `NEXT_PUBLIC_AUTH_APP_URL` is unset on the Vercel project and the localhost default
 (`apps/marketing/src/lib/links.ts`, `apps/marketing/src/app/layout.tsx`) gets baked in at build.
@@ -20,7 +20,7 @@ admin `admin.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`,
 `action.uprise.org.au`, cookie parent `.uprise.org.au`. Note `NEXT_PUBLIC_API_URL` includes the
 `/api/v1` suffix.
 
-**yarns-marketing (Vercel)**
+**uprise-marketing (Vercel)**
 
 | Var | Value |
 |---|---|
@@ -28,14 +28,14 @@ admin `admin.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`,
 | `NEXT_PUBLIC_AUTH_APP_URL` | `https://auth.uprise.org.au` |
 | `NEXT_PUBLIC_APP_URL` | `https://admin.uprise.org.au` |
 
-**yarns-action (Vercel)**
+**uprise-action (Vercel)**
 
 | Var | Value |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | `https://api.uprise.org.au/api/v1` |
 | `NEXT_PUBLIC_AUTH_APP_URL` | `https://auth.uprise.org.au` |
 
-**yarns-auth (Vercel)**
+**uprise-auth (Vercel)**
 
 | Var | Value |
 |---|---|
@@ -43,7 +43,7 @@ admin `admin.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`,
 | `NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS` | `https://admin.uprise.org.au,https://www.uprise.org.au,https://action.uprise.org.au` |
 | `NEXT_PUBLIC_MARKETING_URL` | `https://www.uprise.org.au` |
 
-**yarns-admin (Vercel)**
+**uprise-admin (Vercel)**
 
 | Var | Value |
 |---|---|
@@ -53,7 +53,7 @@ admin `admin.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`,
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | _optional_ – `pk.*` token; only the canvass map needs it (list mode works without) |
 | `NEXT_PUBLIC_ACTION_NETWORK_BASE_URL` | _optional_ – defaults to `https://actionnetwork.org/api/v2` |
 
-**yarns-api (Vercel) — required**
+**uprise-api (Vercel) — required**
 
 | Var | Value |
 |---|---|
@@ -69,7 +69,7 @@ admin `admin.uprise.org.au`, auth `auth.uprise.org.au`, API `api.uprise.org.au`,
 
 (`NODE_ENV=production` is set by Vercel automatically.)
 
-**yarns-api — feature secrets (set per feature you turn on)**
+**uprise-api — feature secrets (set per feature you turn on)**
 
 | Feature | Vars |
 |---|---|
@@ -86,14 +86,14 @@ Everything else in `apps/api/.env.example` (`RATE_LIMIT_*`, `BLAST_*`, `AUDIENCE
 `BULLMQ_*_CONCURRENCY`, `TWILIO_SEND_*`, `ACTION_NETWORK_SYNC_*`, `QUIET_HOURS_*`,
 `STREAM_TOKEN_TTL_SECONDS`) is **tuning with sane defaults** — only set to override.
 
-**yarns-worker (Railway, not Vercel)** — also the cause of the current
+**uprise-worker (Railway, not Vercel)** — also the cause of the current
 `relation "events.OutboxEvent" does not exist` (`42P01`) crash spam:
 
 | Var | Value |
 |---|---|
 | `DATABASE_URL` | **the same Neon string as the API** — a mismatch here is why the relay can't find `events.OutboxEvent` |
 | `BULLMQ_REDIS_URL` | same Redis as the API |
-| `BULLMQ_PREFIX` | `yarns` |
+| `BULLMQ_PREFIX` | `uprise` |
 | `OUTBOX_RELAY_INTERVAL_MS` | `750` |
 | `FEATURE_BULLMQ_UPLOAD_ENABLED` / `FEATURE_BULLMQ_BLAST_ENABLED` | `true` |
 
@@ -114,11 +114,11 @@ keys, set per-project in Vercel + Railway, then redeploy each project (build-tim
 works without it — email-verification codes + join-request/invite notifications just don't
 deliver (the dispatcher/reactions degrade: logged, never thrown).
 
-`SENDGRID_API_KEY` + `SENDGRID_FROM_EMAIL` are **unset everywhere** — blank in yarns' env and
+`SENDGRID_API_KEY` + `SENDGRID_FROM_EMAIL` are **unset everywhere** — blank in uprise' env and
 blank across every prog `.env*` too (prog's real key lives only in its hosting secrets, not the
 repo). To enable delivery:
 - Pull the real key from prog's hosting dashboard (Railway/Vercel env) or SendGrid directly.
-- Set `SENDGRID_API_KEY` + a **verified-sender** `SENDGRID_FROM_EMAIL` in yarns' deploy env /
+- Set `SENDGRID_API_KEY` + a **verified-sender** `SENDGRID_FROM_EMAIL` in uprise' deploy env /
   secrets manager (never commit it). For local testing, add them to the gitignored `apps/api/.env`.
 - Keys are already declared/documented in `apps/api/.env.example` + `.env.prod.example`.
 
@@ -127,11 +127,11 @@ launch (alongside `prisma migrate deploy` for the `TenantJoinRequest` table and 
 `apps/action` origin to prod `CORS_ALLOWED_ORIGINS`).
 
 ### Adopt per-tenant subdomain routing
-**Deferred from:** PART 3 (prog ngrok + subdomain dev tooling). We kept yarns' in-session
+**Deferred from:** PART 3 (prog ngrok + subdomain dev tooling). We kept uprise' in-session
 tenant model for now.
 
 Prog routes tenants by subdomain (`<tenant>.dev.uprise.org.au` → organiser app), parsing the
-host to the tenant and redirecting to the tenant subdomain after login. yarns currently picks
+host to the tenant and redirecting to the tenant subdomain after login. uprise currently picks
 the tenant in-session via `/select-tenant` and serves the organiser app on one host
 (`admin.dev.uprise.org.au`).
 
@@ -147,29 +147,29 @@ Decision: revisit once the in-session flow is settled; it reworks the SSO/select
 shipped in the auth port.
 
 ### Finish the Vercel → prog-network consolidation
-**Deferred from:** moving all yarns apps to the `prog-network` Vercel team. Done so far:
-`yarns-admin` (transferred from common-threads `yarns-web`, same project id, Root Directory now
-`apps/admin`) and `yarns-api` (holds `api.yarns.org.au`) live in prog-network and serve their
-domains; `yarns-marketing` (`apps/marketing`) and `yarns-action` (`apps/action`) created with
-Root Directory + `NEXT_PUBLIC_API_URL` (+ `NEXT_PUBLIC_APP_URL` for marketing) set; `yarns-auth`
-(`apps/auth`) scaffolded. common-threads is now yarns-free.
+**Deferred from:** moving all uprise apps to the `prog-network` Vercel team. Done so far:
+`uprise-admin` (transferred from common-threads `uprise-web`, same project id, Root Directory now
+`apps/admin`) and `uprise-api` (holds `api.uprise.org.au`) live in prog-network and serve their
+domains; `uprise-marketing` (`apps/marketing`) and `uprise-action` (`apps/action`) created with
+Root Directory + `NEXT_PUBLIC_API_URL` (+ `NEXT_PUBLIC_APP_URL` for marketing) set; `uprise-auth`
+(`apps/auth`) scaffolded. common-threads is now uprise-free.
 
 Remaining:
-- **Auth domain + wiring.** `yarns-auth` has no custom domain (`yarns-auth-prog-network.vercel.app`).
-  Give it one, then set `NEXT_PUBLIC_AUTH_APP_URL` on **both** `yarns-marketing` and `yarns-action`
+- **Auth domain + wiring.** `uprise-auth` has no custom domain (`uprise-auth-prog-network.vercel.app`).
+  Give it one, then set `NEXT_PUBLIC_AUTH_APP_URL` on **both** `uprise-marketing` and `uprise-action`
   (currently unset → their sign-in/up links don't resolve in prod).
 - **Custom domains for marketing + action.** Both still on `*.vercel.app`; assign the intended
   production hostnames.
 - **CORS.** Add the marketing/action (and auth) production origins to `apps/api`'s
   `CORS_ALLOWED_ORIGINS` (`apps/api/src/bootstrap.ts:25`) once their domains exist, or their
   `checkSession()`/form calls fail cross-origin.
-- **Move the `yarns.org.au` domain registration to prog-network.** It serves from prog-network/
-  `yarns-admin` but the apex registration still sits under common-threads (`vercel domains ls`) —
+- **Move the `uprise.org.au` domain registration to prog-network.** It serves from prog-network/
+  `uprise-admin` but the apex registration still sits under common-threads (`vercel domains ls`) —
   a cross-team attachment. Functionally fine; move it for clean ownership.
 - **Re-link local `.vercel`.** `apps/admin/.vercel` and `apps/api/.vercel` still carry the old
-  common-threads `orgId` (and admin's old name `yarns-web`). Re-link if using CLI deploys:
-  `vercel link --yes --scope prog-network --project yarns-admin` (and `… --project yarns-api`).
-- **Confirm Git auto-deploy** is connected for the new projects (`github.com/benmort/yarns`).
+  common-threads `orgId` (and admin's old name `uprise-web`). Re-link if using CLI deploys:
+  `vercel link --yes --scope prog-network --project uprise-admin` (and `… --project uprise-api`).
+- **Confirm Git auto-deploy** is connected for the new projects (`github.com/benmort/uprise`).
 
 Decision: operator/dashboard steps — finish alongside the signup-approval prod wiring (the
 `apps/action` CORS origin overlaps with the SendGrid item above).

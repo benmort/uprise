@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { EngagementChannel } from "@yarns/db";
+import { EngagementChannel } from "@uprise/db";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
 import { CannedResponsesService } from "../shared-engagement/canned-responses.service";
 

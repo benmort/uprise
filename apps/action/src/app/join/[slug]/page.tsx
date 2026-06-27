@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { CheckCircle } from "lucide-react";
-import { Alert, Button, Card, CardContent, Field, Input, OtpInput, PasswordInput } from "@yarns/ui";
-import { auth, getAuthAppUrl } from "@yarns/api-client";
+import { Alert, Button, Card, CardContent, Field, Input, OtpInput, PasswordInput } from "@uprise/ui";
+import { auth, getAuthAppUrl } from "@uprise/api-client";
 
 type Role = "staff" | "volunteer";
 type Step = "form" | "verify" | "pending" | "already-member";

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHash, randomBytes } from "crypto";
-import { Prisma } from "@yarns/db";
+import { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { CreateApiKeyDto } from "./dto/api-keys.dto";

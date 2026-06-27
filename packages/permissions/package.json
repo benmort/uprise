@@ -1,5 +1,5 @@
 {
-  "name": "@yarns/permissions",
+  "name": "@uprise/permissions",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",

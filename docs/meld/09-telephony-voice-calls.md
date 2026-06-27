@@ -1,6 +1,6 @@
 # 09 – Telephony: Voice Calls (net-new)
 
-M4. Voice calling is net-new to yarns (yarns is SMS/WhatsApp only). SMS is already canonical in yarns (`Blast`/`OutboundMessage`), and transactional SMS is doc 06 – this doc covers **voice calls only**.
+M4. Voice calling is net-new to uprise (uprise is SMS/WhatsApp only). SMS is already canonical in uprise (`Blast`/`OutboundMessage`), and transactional SMS is doc 06 – this doc covers **voice calls only**.
 
 Source: `/Users/benjaminmort/code/prog/core-orchestration/apps/platform/src/services/telephony/{domain/call.aggregate.ts,process-twilio-webhook.handler.ts,twilio.adapter.ts}`.
 

@@ -14,13 +14,13 @@ importers:
 
   apps/action:
     dependencies:
-      '@yarns/api-client':
+      '@uprise/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@yarns/contracts':
+      '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@yarns/ui':
+      '@uprise/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -93,16 +93,16 @@ importers:
       '@turf/turf':
         specifier: ^7.3.5
         version: 7.3.5
-      '@yarns/api-client':
+      '@uprise/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@yarns/contracts':
+      '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@yarns/flags':
+      '@uprise/flags':
         specifier: workspace:*
         version: link:../../packages/flags
-      '@yarns/ui':
+      '@uprise/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       card-validator:
@@ -205,21 +205,21 @@ importers:
       '@nestjs/platform-express':
         specifier: ^10.4.15
         version: 10.4.17(@nestjs/common@10.4.17(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.17)
+      '@uprise/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@uprise/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@uprise/flags':
+        specifier: workspace:*
+        version: link:../../packages/flags
+      '@uprise/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@vercel/blob':
         specifier: ^2.4.0
         version: 2.4.0
-      '@yarns/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@yarns/events':
-        specifier: workspace:*
-        version: link:../../packages/events
-      '@yarns/flags':
-        specifier: workspace:*
-        version: link:../../packages/flags
-      '@yarns/permissions':
-        specifier: workspace:*
-        version: link:../../packages/permissions
       bullmq:
         specifier: ^5.76.8
         version: 5.76.8
@@ -308,13 +308,13 @@ importers:
 
   apps/auth:
     dependencies:
-      '@yarns/api-client':
+      '@uprise/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@yarns/contracts':
+      '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@yarns/ui':
+      '@uprise/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -354,13 +354,13 @@ importers:
 
   apps/marketing:
     dependencies:
-      '@yarns/api-client':
+      '@uprise/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@yarns/contracts':
+      '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@yarns/ui':
+      '@uprise/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       lucide-react:
@@ -427,21 +427,21 @@ importers:
       '@nestjs/platform-express':
         specifier: ^10.4.15
         version: 10.4.17(@nestjs/common@10.4.17(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.17)
+      '@uprise/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@uprise/events':
+        specifier: workspace:*
+        version: link:../../packages/events
+      '@uprise/flags':
+        specifier: workspace:*
+        version: link:../../packages/flags
+      '@uprise/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@vercel/blob':
         specifier: ^2.4.0
         version: 2.4.0
-      '@yarns/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@yarns/events':
-        specifier: workspace:*
-        version: link:../../packages/events
-      '@yarns/flags':
-        specifier: workspace:*
-        version: link:../../packages/flags
-      '@yarns/permissions':
-        specifier: workspace:*
-        version: link:../../packages/permissions
       bullmq:
         specifier: ^5.76.8
         version: 5.76.8
@@ -500,7 +500,7 @@ importers:
 
   packages/api-client:
     dependencies:
-      '@yarns/contracts':
+      '@uprise/contracts':
         specifier: workspace:*
         version: link:../contracts
     devDependencies:

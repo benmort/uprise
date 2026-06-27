@@ -1,6 +1,6 @@
 # Impactive (now "ActBlue Field Tools", formerly Outvote)
 
-Research dossier for the **yarns** P2P SMS organising platform. Focus: how Impactive couples texting with in-person/relational canvassing around a shared contact, plus shared scripts/surveys, sequences and disposition taxonomies.
+Research dossier for the **uprise** P2P SMS organising platform. Focus: how Impactive couples texting with in-person/relational canvassing around a shared contact, plus shared scripts/surveys, sequences and disposition taxonomies.
 
 > **Naming note.** The product was launched as **Outvote** (2017), rebranded to **Impactive** (2020), acquired by **ActBlue** on 17 September 2025 ("Impactive by ActBlue"), and rebranded again to **ActBlue Field Tools** in 2026 [9][10][11]. Marketing site is still `impactive.io`; help/docs now live under `help.actblue.com` [6]. This dossier uses "Impactive" throughout for continuity. Older docs sit under `outvote.zendesk.com` / `support.impactive.io` (both now redirect or are gated).
 
@@ -32,7 +32,7 @@ Channels span text, email, phone, social DM and in-person, all reporting into on
 
 ## 3. Canvassing / door-knock UX
 
-**Critical finding for yarns: Impactive's "canvassing" is relational/list-based, not native map-based door-knocking.** It does NOT cut turf or draw walk maps itself – it explicitly points campaigns to **MiniVAN** for turf-cutting and route optimisation, and positions its own strength as relational outreach to people a volunteer already knows [16][1]. There are no native street maps, walk lists by geography, or route optimisation in the product as documented.
+**Critical finding for uprise: Impactive's "canvassing" is relational/list-based, not native map-based door-knocking.** It does NOT cut turf or draw walk maps itself – it explicitly points campaigns to **MiniVAN** for turf-cutting and route optimisation, and positions its own strength as relational outreach to people a volunteer already knows [16][1]. There are no native street maps, walk lists by geography, or route optimisation in the product as documented.
 
 **Three canvassing modes** [1][15]:
 
@@ -67,7 +67,7 @@ Channels span text, email, phone, social DM and in-person, all reporting into on
 - **Canned responses.** Volunteers select from canned responses for common cases (wrong number, opt-out, etc.); data captured via tags/custom fields [8].
 - **Queueing.** Filtered/segmented queues by script-received, response status and custom fields [1]. Precise round-robin/claim mechanics not documented – Unknown, not found.
 - **Compliance.** Abusive-message filtering, block hostile contacts, automated opt-out keyword monitoring, per-contact frequency caps, disconnected-number filtering [1].
-- **Relationship to the canvassing/action side (the coupling, for yarns).** This is the key reference point. The **same contact record, the same tag/custom-field taxonomy, and the same script-and-response model** are reused across P2P texting, relational outreach and canvassing reports [1][7][8][15]. Coupling is achieved by a **shared data model and shared script/tag library**, not by a single unified inbox that merges door and text events. Concrete cross-channel mechanic: scripts can embed **RSVP/event links**, converting a text conversation directly into a scheduled in-person shift (one case study scheduled ~2,000 shifts in days) [2]. So texting → in-person is driven by links and shared contacts, with canvassing reports flowing back onto the same record.
+- **Relationship to the canvassing/action side (the coupling, for uprise).** This is the key reference point. The **same contact record, the same tag/custom-field taxonomy, and the same script-and-response model** are reused across P2P texting, relational outreach and canvassing reports [1][7][8][15]. Coupling is achieved by a **shared data model and shared script/tag library**, not by a single unified inbox that merges door and text events. Concrete cross-channel mechanic: scripts can embed **RSVP/event links**, converting a text conversation directly into a scheduled in-person shift (one case study scheduled ~2,000 shifts in days) [2]. So texting → in-person is driven by links and shared contacts, with canvassing reports flowing back onto the same record.
 
 ## 6. Survey & script tooling
 
@@ -83,7 +83,7 @@ Channels span text, email, phone, social DM and in-person, all reporting into on
   - **Opt-in automation and keyword triggers** for broadcast subscriber growth [3].
   - **Scheduling** of broadcasts (send now or later) and per-contact no-contact windows / frequency caps [12].
   - **Assigned list canvassing** framed as escalating engagement "over time" – but this is a human relationship cadence, not platform-automated sequencing [1][15].
-- **Verdict for yarns:** Impactive is a weak reference for journeys. Its automation is keyword/branch-based within a single broadcast, plus human-driven relational nurture. There is no automated, time-based, cross-channel engagement-ladder engine documented [12][3]. (Treat as "Unknown – not found" for any true multi-step journey automation.)
+- **Verdict for uprise:** Impactive is a weak reference for journeys. Its automation is keyword/branch-based within a single broadcast, plus human-driven relational nurture. There is no automated, time-based, cross-channel engagement-ladder engine documented [12][3]. (Treat as "Unknown – not found" for any true multi-step journey automation.)
 
 ## 8. Disposition / tag taxonomy
 
@@ -122,19 +122,19 @@ Post-acquisition pricing under "ActBlue Field Tools" not re-confirmed – treat 
 - Thin third-party review depth (G2/Capterra largely empty); App Store is the main public review signal [reviews-meta][18].
 - Coupling is via shared data + RSVP links, **not** a single merged door+text timeline/inbox – there's headroom to do better [2][1].
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow**
 1. **One contact record, many channels.** Texting, calling and canvassing all file against the same contact with the same tag/custom-field set. This is the cleanest way to make a door knock and a text thread "couple" – do this at the data layer first [1][7].
-2. **Two-layer script model: initial script + response scripts keyed to outcome.** Reuse the identical construct in BOTH the door UI and the text inbox so a script written once drives canned responses everywhere [1][6][8]. This directly matches yarns' "shareable script/survey that drives canned responses in both door and text".
+2. **Two-layer script model: initial script + response scripts keyed to outcome.** Reuse the identical construct in BOTH the door UI and the text inbox so a script written once drives canned responses everywhere [1][6][8]. This directly matches uprise' "shareable script/survey that drives canned responses in both door and text".
 3. **Surveys as tag/custom-field objects that round-trip to a CRM.** Map cleanly to external activist-code/survey-question semantics so data is portable [7].
 4. **Assignment trio: assigned / self-claim-with-lockout / open search.** The shared-list "contact disappears when claimed" lock-out is a simple, effective concurrency model for both turf and text queues [15].
 5. **Embed action links in scripts** (RSVP/event/donate) so a text conversation converts to an in-person action – a lightweight coupling primitive worth copying [2][12].
 6. **Offline-first canvass capture with later sync** [1][16].
 
 **Avoid / improve on**
-1. **Don't outsource maps.** Impactive's biggest weakness is no native turf/maps/routing. yarns' new door-knock feature should own walk lists, household/address units and routing natively – this is a clear differentiation gap to close, not copy [16][1].
-2. **Build a real journeys engine.** Impactive has none. yarns' "journeys" (time-based, cross-channel, branchable engagement ladders that span door + text) would be a genuine leap beyond keyword-branch automation [12][3].
+1. **Don't outsource maps.** Impactive's biggest weakness is no native turf/maps/routing. uprise' new door-knock feature should own walk lists, household/address units and routing natively – this is a clear differentiation gap to close, not copy [16][1].
+2. **Build a real journeys engine.** Impactive has none. uprise' "journeys" (time-based, cross-channel, branchable engagement ladders that span door + text) would be a genuine leap beyond keyword-branch automation [12][3].
 3. **Ship a canonical disposition taxonomy with sane defaults** (e.g. not home, not interested, supporter, moved, wrong number, opt-out) that admins can extend – don't make every org reinvent it, since BYO tags hurt cross-org consistency and analytics [8][1].
 4. **Make coupling a unified timeline, not just shared rows.** Go past Impactive's "same record" approach to a single merged contact timeline/inbox where a canvasser sees the prior text thread and a texter sees the last door result inline [1][2].
 5. **Don't inherit the US-voter-file dependency.** Keep the data model channel- and jurisdiction-agnostic so it works outside US electoral contexts [4][9].

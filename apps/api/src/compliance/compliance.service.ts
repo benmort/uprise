@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { ConsentState } from "@yarns/db";
+import { ConsentState } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()

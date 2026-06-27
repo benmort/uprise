@@ -1,6 +1,6 @@
-# Eval – yarns-dispatch answer key
+# Eval – uprise-dispatch answer key
 
-Grades a run of the `yarns-dispatch` skill against `fixture-task.md`. The candidate produces a **dispatch brief** (and prepares a worktree). A cold grader who cannot see the skill scores the brief against the checks below.
+Grades a run of the `uprise-dispatch` skill against `fixture-task.md`. The candidate produces a **dispatch brief** (and prepares a worktree). A cold grader who cannot see the skill scores the brief against the checks below.
 
 Pass = every MUST met and no FAIL tripped. Score the brief that was authored, not chat chatter around it.
 
@@ -18,7 +18,7 @@ The brief cites guides routed from `dev/ai/guide-map.md` that fit this task, **b
 - `apps/api/dev/ai/how-to/permissions.md` (the contacts-manage `@RequirePermission` on the new endpoint – the real decorator is `@RequirePermission({ action: "manage", resource: "contacts.contact" })`, a single `{ action, resource }` perm).
 - At least one of `apps/api/dev/ai/how-to/transactions.md` / `apps/api/dev/ai/how-to/services-controllers-dtos.md` / `packages/dev/ai/how-to/events-catalogue.md`.
 
-MUST also instruct the agent to read the **Canonical yarns files** the guides name (an existing FSM as the pattern, e.g. `apps/api/src/blasts/blast-state.machine.ts`, plus `OutboxService` and the existing `apps/api/src/contacts/` domain) rather than pasting them. Citing only the guides without the Canonical-files instruction is a partial – note it.
+MUST also instruct the agent to read the **Canonical uprise files** the guides name (an existing FSM as the pattern, e.g. `apps/api/src/blasts/blast-state.machine.ts`, plus `OutboxService` and the existing `apps/api/src/contacts/` domain) rather than pasting them. Citing only the guides without the Canonical-files instruction is a partial – note it.
 
 ## MUST – states the gate
 
@@ -47,7 +47,7 @@ Success criteria require the agent to hand back commands-run + counts and to dec
 
 ## FAIL conditions (any one fails the run)
 
-- Treats the input as a story / ticket / epic, or invents a tracker / registry id. yarns is board-free.
+- Treats the input as a story / ticket / epic, or invents a tracker / registry id. uprise is board-free.
 - Boot smoke (`app.module.boot.spec.ts`) absent from the gate.
 - slingshot idioms in the work/deliverables: `@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`.
 - Pulls the out-of-scope message-pausing reaction into the deliverables.

@@ -67,7 +67,7 @@ The atomic unit is the **Person**, surfaced via the **Person Screen** (the conta
 
 ## 5. P2P texting / inbox
 
-This is Reach's biggest divergence from a P2P SMS platform like yarns. **Reach has no shared texting inbox and no platform-mediated conversation thread.** [10 marketing]
+This is Reach's biggest divergence from a P2P SMS platform like uprise. **Reach has no shared texting inbox and no platform-mediated conversation thread.** [10 marketing]
 
 - Texting is a **Contact Action**: the volunteer picks a Contact Script, taps "Use this Script", and Reach **launches the device's own SMS or email app with the message pre-filled**. The message "comes directly from the user's own phone number or email address." [6][11]
 - Reach therefore **logs the *attempt*** (which script, when, what channel) but **does not capture the reply**. There is no inbound message store, no conversation model, no two-way thread inside Reach. [6][export 8]
@@ -82,7 +82,7 @@ Reusable, admin-built, and shared across both the door and the (device-launched)
 
 - **Six survey question types:** Numerical Scale, Single Choice, Multiple Choice, Short Text, Long Text, Yes/No. [10] Questions live in a **Question Library** and group into **Question Sets**; one question per campaign is the **Primary Question**. [survey 8][person 8]
 - **Contact Scripts:** admin creates multiple active SMS and email scripts; volunteers pick from a list per contact action. [6] Scripts support **templating** (person's name, user's name, basic profile fields) and **image attachments** (JPG/PNG/GIF). Email scripts add a subject line. [6]
-- **Reusability across channels:** the *same survey questions* serve community canvassing, relational outreach, and User Surveys delivered via Action Cards – one Question Set, many surfaces. [9][survey 8] Scripts are channel-specific (separate Email vs Messaging tabs) but the script *content* is authored once and reused by all volunteers. [6] This is the closest analogue to yarns' "shareable script/survey that drives canned responses in both door and text interfaces" – Reach gets the *shared authoring* right but doesn't surface scripts as *canned responses to an inbound reply*, because there's no inbox.
+- **Reusability across channels:** the *same survey questions* serve community canvassing, relational outreach, and User Surveys delivered via Action Cards – one Question Set, many surfaces. [9][survey 8] Scripts are channel-specific (separate Email vs Messaging tabs) but the script *content* is authored once and reused by all volunteers. [6] This is the closest analogue to uprise' "shareable script/survey that drives canned responses in both door and text interfaces" – Reach gets the *shared authoring* right but doesn't surface scripts as *canned responses to an inbound reply*, because there's no inbox.
 
 ---
 
@@ -114,7 +114,7 @@ Tags are fully campaign-defined; documented examples are organising states like 
 1. **Custom survey questions** standing in for dispositions: "Not Home", "Hostile", language barrier. [2]
 2. **VAN mapping** – Reach survey responses can map to VAN **canvass results**, with documented examples "Not Home" and "Moved" syncing to VAN's canvass-results field. [van 8]
 
-So a yarns-style canonical disposition list (e.g. Answered / No Answer / Not Home / Refused / Wrong Number / Moved / Deceased / Do Not Contact) **does not ship out of the box** – each campaign reinvents it as questions/tags.
+So a uprise-style canonical disposition list (e.g. Answered / No Answer / Not Home / Refused / Wrong Number / Moved / Deceased / Do Not Contact) **does not ship out of the box** – each campaign reinvents it as questions/tags.
 
 ---
 
@@ -152,20 +152,20 @@ So a yarns-style canonical disposition list (e.g. Answered / No Answer / Not Hom
 
 ---
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow**
-1. **One contact, every channel, one "Last Reached" clock.** Reach's best idea: door, call, text and email are all just *Contact Actions logged against the same Person*, sharing one history and recency timer. [11][person 8] yarns should make a knock and a text update the *same* contact timeline so an organiser sees "texted Tue, door-knocked Sat, replied Sun" in one view. This is exactly the door↔text coupling yarns wants – but yarns can go further than Reach by capturing the *content* of both sides, which Reach can't.
-2. **Author surveys/scripts once, reuse everywhere.** A single Question Set powering the door survey, the text survey, and an in-app User Survey is the right model for yarns' "shared script/survey driving canned responses in both interfaces". [9][survey 8] Add the piece Reach lacks: expose those scripted lines as **canned replies inside the P2P inbox**, keyed to the same survey, so the door and inbox literally share one script object.
+1. **One contact, every channel, one "Last Reached" clock.** Reach's best idea: door, call, text and email are all just *Contact Actions logged against the same Person*, sharing one history and recency timer. [11][person 8] uprise should make a knock and a text update the *same* contact timeline so an organiser sees "texted Tue, door-knocked Sat, replied Sun" in one view. This is exactly the door↔text coupling uprise wants – but uprise can go further than Reach by capturing the *content* of both sides, which Reach can't.
+2. **Author surveys/scripts once, reuse everywhere.** A single Question Set powering the door survey, the text survey, and an in-app User Survey is the right model for uprise' "shared script/survey driving canned responses in both interfaces". [9][survey 8] Add the piece Reach lacks: expose those scripted lines as **canned replies inside the P2P inbox**, keyed to the same survey, so the door and inbox literally share one script object.
 3. **Human-verified matching.** Let the volunteer confirm "yes, this is my friend Jacob" rather than auto-matching – better data and trust. [11]
 4. **Tag history as an audit log** (who added/removed what, when) – cheap, valuable for data hygiene and dispute resolution. [export 8]
 5. **Flat, unlimited-user pricing** as a volunteer-growth lever. [4]
 
 **Avoid / improve on**
-1. **Don't hand texting off to the native SMS app.** Reach's fatal limitation for a P2P texting platform: no inbox, no captured replies, no thread. [6] yarns' whole reason to exist is the *opposite* – keep the conversation in-platform. Treat Reach as the cautionary case, not the model, for messaging.
-2. **Don't ship without a canonical disposition taxonomy.** Reach forcing every campaign to fake dispositions as survey questions is a real weakness. [2] yarns should ship a **first-class, shared disposition set across door and text** (e.g. Answered, No Answer, Not Home, Refused, Wrong Number, Moved, Do Not Contact) with campaign-extensible custom outcomes on top.
-3. **Build the journey engine Reach skipped.** Action Cards + manual push is not automation. [9] yarns' "journeys" should be real time-based, condition-driven sequences (e.g. no reply in 48h → follow-up text; positive door ID → enrol in volunteer-recruitment journey) – auto-advancing, not admin-curated.
-4. **Don't rely on an external walk-list app.** Reach openly tells users to also run MiniVAN for turf/maps. [2] If yarns wants real door-knocking, it needs native turf assignment and a map, or it inherits Reach's "supplement, not replacement" ceiling.
+1. **Don't hand texting off to the native SMS app.** Reach's fatal limitation for a P2P texting platform: no inbox, no captured replies, no thread. [6] uprise' whole reason to exist is the *opposite* – keep the conversation in-platform. Treat Reach as the cautionary case, not the model, for messaging.
+2. **Don't ship without a canonical disposition taxonomy.** Reach forcing every campaign to fake dispositions as survey questions is a real weakness. [2] uprise should ship a **first-class, shared disposition set across door and text** (e.g. Answered, No Answer, Not Home, Refused, Wrong Number, Moved, Do Not Contact) with campaign-extensible custom outcomes on top.
+3. **Build the journey engine Reach skipped.** Action Cards + manual push is not automation. [9] uprise' "journeys" should be real time-based, condition-driven sequences (e.g. no reply in 48h → follow-up text; positive door ID → enrol in volunteer-recruitment journey) – auto-advancing, not admin-curated.
+4. **Don't rely on an external walk-list app.** Reach openly tells users to also run MiniVAN for turf/maps. [2] If uprise wants real door-knocking, it needs native turf assignment and a map, or it inherits Reach's "supplement, not replacement" ceiling.
 
 ---
 
@@ -186,6 +186,6 @@ So a yarns-style canonical disposition list (e.g. Answered / No Answer / Not Hom
 
 ---
 
-### 3-sentence summary for yarns
+### 3-sentence summary for uprise
 
-Reach's single strongest, directly-applicable idea is the **unified Person record**: door-knocks, calls, texts and emails are all logged as "Contact Actions" against one contact with a shared history and "Last Reached" clock, and the same reusable Question Sets/Contact Scripts feed every channel – but yarns should go beyond Reach by keeping the actual conversation and inbound replies *in-platform* rather than handing texting off to the volunteer's native SMS app (Reach's defining weakness for a P2P texting product). Reach has **no real conversation inbox, no native disposition taxonomy, and no automated journey engine** (engagement is manual Action-Card publishing), so yarns should treat all three as clear differentiation opportunities: ship a first-class shared door/text disposition set and a true time/condition-based journey engine. Finally, borrow Reach's flat unlimited-user pricing, human-verified contact matching, and tag-change audit log – but build the native maps/turf that Reach lacks if yarns wants door-knocking to stand alone rather than being a "supplement" to MiniVAN.
+Reach's single strongest, directly-applicable idea is the **unified Person record**: door-knocks, calls, texts and emails are all logged as "Contact Actions" against one contact with a shared history and "Last Reached" clock, and the same reusable Question Sets/Contact Scripts feed every channel – but uprise should go beyond Reach by keeping the actual conversation and inbound replies *in-platform* rather than handing texting off to the volunteer's native SMS app (Reach's defining weakness for a P2P texting product). Reach has **no real conversation inbox, no native disposition taxonomy, and no automated journey engine** (engagement is manual Action-Card publishing), so uprise should treat all three as clear differentiation opportunities: ship a first-class shared door/text disposition set and a true time/condition-based journey engine. Finally, borrow Reach's flat unlimited-user pricing, human-verified contact matching, and tag-change audit log – but build the native maps/turf that Reach lacks if uprise wants door-knocking to stand alone rather than being a "supplement" to MiniVAN.

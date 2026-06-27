@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { FLAG_DEFAULTS, type FeatureFlagKey, type FeatureFlagMap } from "@yarns/flags";
+import { FLAG_DEFAULTS, type FeatureFlagKey, type FeatureFlagMap } from "@uprise/flags";
 import { listFlags } from "@/lib/api/flags";
 
 type FlagsContextValue = {

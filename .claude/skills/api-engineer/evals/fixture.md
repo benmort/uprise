@@ -1,8 +1,8 @@
 # Fixture – synthetic work-unit for the api-engineer eval
 
-Hand this brief verbatim to the run under test. There is no board ticket – yarns works from a task brief / plan file.
+Hand this brief verbatim to the run under test. There is no board ticket – uprise works from a task brief / plan file.
 
-**Synthetic / illustrative:** treat the premise below as given. It mirrors real yarns shapes (the payment domain, `PaymentStatus`, the `payment.payment.refunded` event) but the "no `REFUNDED` yet" framing is a constructed gap for the eval. Do NOT grep the live tree to confirm the gap exists – the real codebase may already carry these; the eval grades the routing-and-planning reasoning, not a literal absence claim.
+**Synthetic / illustrative:** treat the premise below as given. It mirrors real uprise shapes (the payment domain, `PaymentStatus`, the `payment.payment.refunded` event) but the "no `REFUNDED` yet" framing is a constructed gap for the eval. Do NOT grep the live tree to confirm the gap exists – the real codebase may already carry these; the eval grades the routing-and-planning reasoning, not a literal absence claim.
 
 ---
 

@@ -1,8 +1,8 @@
 # Action Network – product dossier
 
-Research date: 2026-06-16. Prepared for the yarns canvassing + journeys build. Australian English throughout.
+Research date: 2026-06-16. Prepared for the uprise canvassing + journeys build. Australian English throughout.
 
-Action Network (actionnetwork.org) is a long-running US progressive advocacy/organising platform built by Action Squared, the same outfit behind Action Builder. yarns already integrates with it (yarns syncs audiences from Action Network), so its person/tag/ladder model is directly relevant. The single most important finding: Action Network's **ladders of engagement** are the closest market analogue to yarns "journeys", and Action Network itself does **no canvassing** and **no P2P texting** – that work is pushed to its sibling product Action Builder and to broadcast SMS respectively. [1][2][7][13]
+Action Network (actionnetwork.org) is a long-running US progressive advocacy/organising platform built by Action Squared, the same outfit behind Action Builder. uprise already integrates with it (uprise syncs audiences from Action Network), so its person/tag/ladder model is directly relevant. The single most important finding: Action Network's **ladders of engagement** are the closest market analogue to uprise "journeys", and Action Network itself does **no canvassing** and **no P2P texting** – that work is pushed to its sibling product Action Builder and to broadcast SMS respectively. [1][2][7][13]
 
 ---
 
@@ -45,7 +45,7 @@ Core action types and tooling: [4][8]
 
 - The nearest concept in the API is the **outreach** resource (a record that an activist contacted a target), but that is for letters-to-legislators and call campaigns – not field canvassing of voters/supporters at the door. The record-outreach helper has `targets`, `subject`, `message`, `duration` (calls) – nothing geospatial or door-related. [3]
 - Canvassing is deliberately the job of **Action Builder** (the sibling), which has explicit "canvassing tasks": door-knocking / house visits, phone-banking and text-banking, with turf creation (and Google Maps routing limits of 21 addresses). Action Builder maps its responses back to Action Network **tags** via the integration. [2][7]
-- **Relevance to yarns:** Action Network is the *mobilisation/CRM* layer that yarns already syncs from. It is not a competitor for the door-knock feature itself – Action Builder is the closer analogue for canvassing. The integration pattern worth noting is "AB door/field responses → AN tags", i.e. field outcomes collapse into a flat tag namespace on the central person record. [2]
+- **Relevance to uprise:** Action Network is the *mobilisation/CRM* layer that uprise already syncs from. It is not a competitor for the door-knock feature itself – Action Builder is the closer analogue for canvassing. The integration pattern worth noting is "AB door/field responses → AN tags", i.e. field outcomes collapse into a flat tag namespace on the central person record. [2]
 
 ---
 
@@ -88,7 +88,7 @@ OSDI-based. The API conforms to **OSDI 1.1.1**, returns HAL+JSON, entry point `h
 - **Compliance:** standard short-code/A2P language required ("Msg & data rates may apply. Reply STOP to stop. Reply HELP for help."). Number types: toll-free (~$0.4888/mo+), short codes (~$1,222/mo+). [9][14]
 - **Channels:** email and SMS coexist as parallel broadcast channels inside ladders (you can test email vs SMS in the same series). [6]
 
-**Relevance to yarns:** Action Network is the polar opposite of yarns on messaging – pure broadcast with keyword auto-replies, no conversational P2P. yarns' P2P inbox is a genuine differentiator AN does not attempt. What AN does well that yarns should match: SMS and email are the *same* automation/targeting surface, not bolted-on silos.
+**Relevance to uprise:** Action Network is the polar opposite of uprise on messaging – pure broadcast with keyword auto-replies, no conversational P2P. uprise' P2P inbox is a genuine differentiator AN does not attempt. What AN does well that uprise should match: SMS and email are the *same* automation/targeting surface, not bolted-on silos.
 
 ---
 
@@ -102,13 +102,13 @@ Strong, and the reusability model is the standout. [10][12]
 - **Reusable questions ("Core and Custom Questions"):** pre-built in the Questions and Custom Fields page (Details menu). **Editing a pre-built question updates it on every form/survey it's attached to** – questions stay in sync across actions, and each pre-built question maps to a custom field on the person record. This is the key reuse pattern: one canonical question → consistent custom-field data wherever it's asked. [10]
 - **No scripting concept for live conversation.** There is no canvasser/texter script with branching canned responses – questions are for form/survey self-submission. (The branching "scripted conversation" idea exists only inside ladders as automated decision trees – see §7.)
 
-**Relevance to yarns:** the "edit once, propagate everywhere, backed by one canonical custom field" model is exactly what yarns wants for shareable scripts/surveys that drive both door and text interfaces. Borrow it directly: a question is a first-class reusable object bound to a single field, not copied per script.
+**Relevance to uprise:** the "edit once, propagate everywhere, backed by one canonical custom field" model is exactly what uprise wants for shareable scripts/surveys that drive both door and text interfaces. Borrow it directly: a question is a first-class reusable object bound to a single field, not copied per script.
 
 ---
 
 ## 7. Journeys / engagement ladders (the key analogue)
 
-**Ladders** are Action Network's automation engine: "an automated series of actions an activist goes through if they meet certain conditions, called **triggers**." They are the direct analogue to yarns "journeys". [1][7][15]
+**Ladders** are Action Network's automation engine: "an automated series of actions an activist goes through if they meet certain conditions, called **triggers**." They are the direct analogue to uprise "journeys". [1][7][15]
 
 **Mental model:** a ladder has **rungs** (steps). Activists climb the ladder over time as they meet conditions. The pitch is "design sophisticated campaign journeys... and the ability to send activists down different paths with decision trees means you can simulate a conversation – like asking about an activist's interests or volunteer capacity – entirely automatically." [1][15]
 
@@ -156,7 +156,7 @@ Pricing is **per email/action volume**, not per seat – cheap to add users, sca
 ## 10. Strengths & gaps
 
 **Strengths**
-- OSDI-standard, well-documented API with webhooks – clean to integrate (yarns already does). [4][13]
+- OSDI-standard, well-documented API with webhooks – clean to integrate (uprise already does). [4][13]
 - Single targeting/automation surface across email and SMS – no channel silos. [6]
 - Reusable canonical questions bound to custom fields – edit once, sync everywhere. [10]
 - Mature ladder engine: branching decision trees, delays, re-entry, time-windowed conditional evaluation, templates. [1][15]
@@ -172,22 +172,22 @@ Pricing is **per email/action volume**, not per seat – cheap to add users, sca
 
 ---
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow (especially for the journeys engine):**
-1. **Ladder structure as the journeys model.** Trigger → wait → condition (decision tree) → action, with channels (door, SMS, email) as interchangeable rung payloads. yarns can go further than AN by making a **door-knock task** or **P2P text send** first-class rung actions alongside automated sends. [1][15]
+1. **Ladder structure as the journeys model.** Trigger → wait → condition (decision tree) → action, with channels (door, SMS, email) as interchangeable rung payloads. uprise can go further than AN by making a **door-knock task** or **P2P text send** first-class rung actions alongside automated sends. [1][15]
 2. **Time-windowed re-entry / evaluation.** AN's "trigger on each email, evaluate engagement after 120 days, sunset if cold" is a clean reusable pattern. Build journeys that can re-trigger and run delayed conditional checks against engagement, not just linear one-shot sequences. [1]
-3. **"Simulate a conversation" branching as the design metaphor.** Frame the journey builder around survey-answer branches ("if they said A → response X"). This is exactly the script/canned-response coupling yarns wants between door and text. [1][7]
-4. **One canonical reusable question → one field, edit-once-propagates.** Make script/survey questions first-class objects bound to a single custom field, shared across door and text interfaces, so editing the question updates every script and the data lands in one place. This is AN's best idea for yarns' shared script/survey tooling. [10]
+3. **"Simulate a conversation" branching as the design metaphor.** Frame the journey builder around survey-answer branches ("if they said A → response X"). This is exactly the script/canned-response coupling uprise wants between door and text. [1][7]
+4. **One canonical reusable question → one field, edit-once-propagates.** Make script/survey questions first-class objects bound to a single custom field, shared across door and text interfaces, so editing the question updates every script and the data lands in one place. This is AN's best idea for uprise' shared script/survey tooling. [10]
 5. **Templates for journeys** (welcome, reactivation, action-follow-up) to lower the blank-canvas barrier. [1][15]
-6. **Build journeys directly from an action.** AN lets you spin a ladder off an existing action/message – yarns should let a journey be created from a canvass result or text reply in one step. [15]
+6. **Build journeys directly from an action.** AN lets you spin a ladder off an existing action/message – uprise should let a journey be created from a canvass result or text reply in one step. [15]
 7. **Unified targeting across channels** – one segment/filter engine feeding door, SMS and journeys, mirroring AN's "same filters for email and SMS". [6]
 
 **Avoid:**
-1. **Don't let tags be the only outcome model.** AN's flat, name-matched tag namespace becomes a mess at scale and can't express door dispositions cleanly. yarns should give canvassing/text **structured, typed dispositions** (an enum/taxonomy) *plus* tags, not tags alone. [1][8]
-2. **Don't split canvassing into a separate product.** AN forces users into Action Builder for door work and syncs back via tags – a lossy, two-system seam. yarns' thesis (couple door + P2P inbox in one system) is the right call; keep door outcomes and text conversations on the *same* person timeline. [2]
-3. **Don't ship broadcast-only SMS.** AN's keyword-auto-reply model is not conversation. yarns' P2P inbox is the differentiator – keep journeys able to *hand off to a human* in the inbox, not just auto-send. [6][14]
-4. **Don't lock schema to the UI.** AN custom fields being API-read-only blocks programmatic provisioning – let yarns scripts/surveys define their fields programmatically. [11]
+1. **Don't let tags be the only outcome model.** AN's flat, name-matched tag namespace becomes a mess at scale and can't express door dispositions cleanly. uprise should give canvassing/text **structured, typed dispositions** (an enum/taxonomy) *plus* tags, not tags alone. [1][8]
+2. **Don't split canvassing into a separate product.** AN forces users into Action Builder for door work and syncs back via tags – a lossy, two-system seam. uprise' thesis (couple door + P2P inbox in one system) is the right call; keep door outcomes and text conversations on the *same* person timeline. [2]
+3. **Don't ship broadcast-only SMS.** AN's keyword-auto-reply model is not conversation. uprise' P2P inbox is the differentiator – keep journeys able to *hand off to a human* in the inbox, not just auto-send. [6][14]
+4. **Don't lock schema to the UI.** AN custom fields being API-read-only blocks programmatic provisioning – let uprise scripts/surveys define their fields programmatically. [11]
 
 ---
 

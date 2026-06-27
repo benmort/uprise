@@ -2,7 +2,7 @@
 
 Captured every route with seeded demo data (`docs/ui-audit/dev/*.png`) and compared
 against the design reference: the 3 zip screenshots (`docs/ui-audit/design/*.png` —
-Dashboard, Inbox, Audience), the `Yarns Canvassing.dc.html` prototype, and the
+Dashboard, Inbox, Audience), the `Uprise Canvassing.dc.html` prototype, and the
 handoff README token spec.
 
 **Headline: the app is overwhelmingly on-design** — the surfaces were built to the

@@ -1,4 +1,4 @@
-# Yarns Launch Checklist
+# Uprise Launch Checklist
 
 ## Pre-Launch Gates
 

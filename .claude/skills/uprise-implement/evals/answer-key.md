@@ -1,6 +1,6 @@
-# Eval answer key: yarns-implement on the 2-layer work-unit fixture
+# Eval answer key: uprise-implement on the 2-layer work-unit fixture
 
-Grades a cold session that ran `yarns-implement` against `fixture-work-unit.md`
+Grades a cold session that ran `uprise-implement` against `fixture-work-unit.md`
 ("archive a turf"). The cold session cannot see this key. Score each item; the run
 **passes** only if every MUST item is met.
 
@@ -37,8 +37,8 @@ Grades a cold session that ran `yarns-implement` against `fixture-work-unit.md`
    - the archive event emitted via **`OutboxService.append(tx, …)` inside the same
      `prisma.$transaction(async tx => …)`** that writes the state, citing
      `apps/api/dev/ai/how-to/transactions.md` and/or `apps/api/dev/ai/how-to/outbox-and-reactions.md`,
-     with the event type added to `@yarns/events` (`packages/dev/ai/how-to/events-catalogue.md`).
-   - the endpoint gated with **`@RequirePermission`** (CASL / `@yarns/permissions`),
+     with the event type added to `@uprise/events` (`packages/dev/ai/how-to/events-catalogue.md`).
+   - the endpoint gated with **`@RequirePermission`** (CASL / `@uprise/permissions`),
      citing `apps/api/dev/ai/how-to/permissions.md`. Gating is opt-in: the `AbilityGuard`
      allows any undecorated route (`if (!required) return true`) and nothing scans for the
      decorator, so the new turf-archive endpoint must carry it as a convention – a missing
@@ -55,7 +55,7 @@ Grades a cold session that ran `yarns-implement` against `fixture-work-unit.md`
 10. Walks the gate **`dev/ai/how-to/definition-of-done.md`** with evidence: `pnpm -r typecheck`,
     `pnpm --filter api test` **including the `app.module.boot.spec.ts` boot smoke**, build of
     the changed web app, and the security line for the new endpoint.
-11. Ends at **`yarns-review`** (`.claude/skills/yarns-review/SKILL.md`) against the diff and
+11. Ends at **`uprise-review`** (`.claude/skills/uprise-review/SKILL.md`) against the diff and
     only declares done once it is clean. A run that declares done without review fails.
 
 ### SHOULD – quality signals (not pass/fail, but a strong run shows them)
@@ -69,13 +69,13 @@ Grades a cold session that ran `yarns-implement` against `fixture-work-unit.md`
 
 ## Automatic fail conditions
 
-- References a story board, Plane, epics, a dev/product registry, or any tracker – yarns
+- References a story board, Plane, epics, a dev/product registry, or any tracker – uprise
   is board-free.
 - Uses any slingshot idiom: `@Transactional`, `EntityManager`, `RequestContext`, MikroORM,
   `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`.
 - Recommends `prisma migrate dev`.
 - Emits the domain event outside the state-writing transaction.
-- Declares done with no gate evidence, or without running `yarns-review`.
+- Declares done with no gate evidence, or without running `uprise-review`.
 - Auto-spawns sub-agents despite no multi-agent opt-in.
 - Contains an em-dash character (must use spaced en-dashes); non-Australian spelling.
 

@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
-import { marketing } from '@yarns/api-client';
-import { FormInput, FormTextarea, FormLabel, Alert } from '@yarns/ui';
+import { marketing } from '@uprise/api-client';
+import { FormInput, FormTextarea, FormLabel, Alert } from '@uprise/ui';
 
 const contactSchema = z.object({
   name: z.string().min(1, 'Name is required'),

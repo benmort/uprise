@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { Dropdown } from "@yarns/ui";
+import { Dropdown } from "@uprise/ui";
 import { ActivityFeed } from "@/components/overview/activity-feed";
 import { useRecentActivity } from "@/lib/activity/use-recent-activity";
 

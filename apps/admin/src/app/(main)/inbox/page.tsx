@@ -44,7 +44,7 @@ import {
 
 type InboxFilter = "all" | "unresolved" | "awaiting-response" | "responded" | "priority";
 const FILTER_KEYS: InboxFilter[] = ["all", "unresolved", "awaiting-response", "responded", "priority"];
-const INBOX_ROUTE_STATE_KEY = "yarns.inbox.routeState";
+const INBOX_ROUTE_STATE_KEY = "uprise.inbox.routeState";
 
 type ConversationRow = {
   contactPhone: string;

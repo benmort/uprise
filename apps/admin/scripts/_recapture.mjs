@@ -6,13 +6,13 @@ const U = env.match(/^BASIC_AUTH_USERNAME=(.*)$/m)[1].trim();
 const P = env.match(/^BASIC_AUTH_PASSWORD=(.*)$/m)[1].trim();
 const h = "Basic " + Buffer.from(`${U}:${P}`).toString("base64");
 const api = async (p) => (await (await fetch("http://localhost:3001/api/v1" + p, { headers: { Authorization: h } })).json()).data;
-const cv = (await api("/canvass/volunteers")).find((u) => u.email === "demo.volunteer@yarns.test");
+const cv = (await api("/canvass/volunteers")).find((u) => u.email === "demo.volunteer@uprise.test");
 const a = (await api(`/canvass/assignments?volunteerId=${cv.id}`))[0];
 const OUT = resolve("docs/ui-audit/dev");
 const b = await chromium.launch({ channel: "chrome" });
 const auth = ([u, p]) => sessionStorage.setItem("yarn_auth_credentials", JSON.stringify({ username: u, password: p }));
 
-const ctx2 = await b.newContext({ storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "yarns.volunteerId", value: cv.id }, { name: "yarns.fieldOnboarded", value: "true" }] }] } });
+const ctx2 = await b.newContext({ storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "uprise.volunteerId", value: cv.id }, { name: "uprise.fieldOnboarded", value: "true" }] }] } });
 await ctx2.addInitScript(auth, [U, P]);
 const m = await ctx2.newPage();
 await m.setViewportSize({ width: 392, height: 812 });
@@ -21,7 +21,7 @@ await m.waitForTimeout(1500);
 await m.screenshot({ path: resolve(OUT, "A3-door.png"), fullPage: true });
 console.log("A3 done");
 
-const ctx = await b.newContext({ storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "yarns.volunteerId", value: cv.id }] }] } });
+const ctx = await b.newContext({ storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "uprise.volunteerId", value: cv.id }] }] } });
 await ctx.addInitScript(auth, [U, P]);
 const d = await ctx.newPage();
 await d.setViewportSize({ width: 1280, height: 900 });

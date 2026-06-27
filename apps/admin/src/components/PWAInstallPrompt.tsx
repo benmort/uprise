@@ -8,7 +8,7 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
-const INSTALL_PROMPT_SNOOZE_KEY = "yarns.installPrompt.snoozeUntil";
+const INSTALL_PROMPT_SNOOZE_KEY = "uprise.installPrompt.snoozeUntil";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export function PWAInstallPrompt() {

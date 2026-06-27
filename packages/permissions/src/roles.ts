@@ -1,20 +1,20 @@
 import type { PermissionRule } from "./types";
 
 /**
- * Central role → permissions table. Ported from prog and reconciled with yarns'
+ * Central role → permissions table. Ported from prog and reconciled with uprise'
  * ORGANISER/VOLUNTEER. Role rules are always positive (no `inverted`).
  *
  * - `super-admin` is the system-wide bypass (`manage all`); granted by the
  *   User.isSuperAdmin DB flag (and the env break-glass login).
  * - `owner` is the full tenant role incl. billing/network.
- * - `organiser` == prog's `admin` rule-set extended with yarns' campaign/messaging
- *   domains (the yarns ORGANISER maps here). No billing.
- * - `volunteer` is field-only (yarns VOLUNTEER, formerly VOLUNTEER): read assigned
+ * - `organiser` == prog's `admin` rule-set extended with uprise' campaign/messaging
+ *   domains (the uprise ORGANISER maps here). No billing.
+ * - `volunteer` is field-only (uprise VOLUNTEER, formerly VOLUNTEER): read assigned
  *   turf/walklist + visible contacts, write doorknocks/dispositions; no audience/blast access.
  * - `member` is a read-only tenant member.
  */
-export const YARNS_ROLES = ["super-admin", "owner", "organiser", "volunteer", "member"] as const;
-export type Role = (typeof YARNS_ROLES)[number];
+export const UPRISE_ROLES = ["super-admin", "owner", "organiser", "volunteer", "member"] as const;
+export type Role = (typeof UPRISE_ROLES)[number];
 
 /** Maps the Prisma AppUserRole enum values to the unified role ids. */
 export const APP_USER_ROLE_TO_ROLE: Record<string, Role> = {
@@ -86,5 +86,5 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
 };
 
 export function isKnownRole(role: string): role is Role {
-  return (YARNS_ROLES as readonly string[]).includes(role);
+  return (UPRISE_ROLES as readonly string[]).includes(role);
 }

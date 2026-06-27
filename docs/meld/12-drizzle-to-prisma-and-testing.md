@@ -6,25 +6,25 @@ Cross-cutting reference, written alongside the foundation. Patterns every domain
 
 Full functional parity with prog is mandatory (doc 00 Mandate). For each prog domain, build a checklist from prog's own catalogues and do not close the milestone until every line is ported and tested:
 
-1. **Handlers** – enumerate every handler in `prog/.../apps/platform/src/services/<domain>/` (e.g. tenant has 25+, identity 25+, payment 15+). Each becomes a yarns service method or controller route. Tick when ported + tested.
-2. **Events** – enumerate every event the domain publishes (the `*.events.ts` / `event-types.ts` entries). Each becomes a `@yarns/events` catalogue entry emitted via the outbox at the right transition.
-3. **Reactions** – enumerate prog's cross-domain reactions (`prog/.../reactions/`). Each becomes a yarns `Reaction` (doc 05) – e.g. `UserCreated → SendWelcomeEmail`, `SubscriptionCreated → UpdateTenant`.
-4. **FSM transitions** – every transition in the prog aggregate's `TransitionMap` exists in the yarns `*-state.machine.ts`.
-5. **Webhook event types** – every provider event type prog handles is handled in yarns.
-6. **Adapter surface** – every method on prog's adapter (SendGrid/Stripe/Twilio) has a yarns equivalent.
+1. **Handlers** – enumerate every handler in `prog/.../apps/platform/src/services/<domain>/` (e.g. tenant has 25+, identity 25+, payment 15+). Each becomes a uprise service method or controller route. Tick when ported + tested.
+2. **Events** – enumerate every event the domain publishes (the `*.events.ts` / `event-types.ts` entries). Each becomes a `@uprise/events` catalogue entry emitted via the outbox at the right transition.
+3. **Reactions** – enumerate prog's cross-domain reactions (`prog/.../reactions/`). Each becomes a uprise `Reaction` (doc 05) – e.g. `UserCreated → SendWelcomeEmail`, `SubscriptionCreated → UpdateTenant`.
+4. **FSM transitions** – every transition in the prog aggregate's `TransitionMap` exists in the uprise `*-state.machine.ts`.
+5. **Webhook event types** – every provider event type prog handles is handled in uprise.
+6. **Adapter surface** – every method on prog's adapter (SendGrid/Stripe/Twilio) has a uprise equivalent.
 
-A domain is "done" only when its checklist is fully ticked and the yarns suite is green. Record the checklist in the domain's PR description.
+A domain is "done" only when its checklist is fully ticked and the uprise suite is green. Record the checklist in the domain's PR description.
 
 ## No-regression gate
 
-Every foundation step and milestone must leave the **entire** existing yarns suite green – api jest, web vitest, Playwright e2e – plus a manual smoke of the existing surfaces (audiences, blasts, contacts, inbox, whatsapp, canvassing, journeys, geo, integrations, analytics, compliance). A port is not complete if it turns an existing test red.
+Every foundation step and milestone must leave the **entire** existing uprise suite green – api jest, web vitest, Playwright e2e – plus a manual smoke of the existing surfaces (audiences, blasts, contacts, inbox, whatsapp, canvassing, journeys, geo, integrations, analytics, compliance). A port is not complete if it turns an existing test red.
 
 ## Drizzle → Prisma translation
 
-| prog (Drizzle) | yarns (Prisma) |
+| prog (Drizzle) | uprise (Prisma) |
 |---|---|
 | `platform.table('x_view', …)` CQRS projection | a single `model X` – collapse aggregate + read-model into ONE CRUD row; drop the `_view` suffix. |
-| `uuid('id').primaryKey().defaultRandom()` | `String @id @default(cuid())` – yarns uses cuid everywhere, not uuid. |
+| `uuid('id').primaryKey().defaultRandom()` | `String @id @default(cuid())` – uprise uses cuid everywhere, not uuid. |
 | `timestamp(..,{withTimezone:true})` | `DateTime` (`@default(now())` / `@updatedAt`). |
 | `jsonb('x')` | `Json?` (recipientList, metadata, ruleDefinition, source-record data). |
 | `text('status')` free-text FSM | a Prisma **enum** + a `*-state.machine.ts` guard (below). |
@@ -37,7 +37,7 @@ Every foundation step and milestone must leave the **entire** existing yarns sui
 
 ## FSM port pattern
 
-yarns already does the row-level version in `apps/api/src/blasts/blast-state.machine.ts` + `assertValidBlastTransition`. For each ported aggregate:
+uprise already does the row-level version in `apps/api/src/blasts/blast-state.machine.ts` + `assertValidBlastTransition`. For each ported aggregate:
 
 1. Status → Prisma enum.
 2. prog's `TransitionMap` → a `*-state.machine.ts`, copied **verbatim** (the maps are correct).
@@ -79,7 +79,7 @@ model WebhookEvent {
 
 ## Testing strategy
 
-yarns uses jest for api (unit + `*.integration.spec.ts` with mocked Prisma), jest-e2e (`apps/api/src/e2e/*.e2e.spec.ts`), vitest for web, Playwright for browser e2e.
+uprise uses jest for api (unit + `*.integration.spec.ts` with mocked Prisma), jest-e2e (`apps/api/src/e2e/*.e2e.spec.ts`), vitest for web, Playwright for browser e2e.
 
 - **State-machine unit tests** – copy `blast-state.machine.spec.ts` per machine: every legal transition passes, every illegal throws. prog's maps are the fixtures.
 - **Service integration tests** (mocked Prisma + mocked adapter) – mirror `blasts.integration.spec.ts`: correct FSM transition, outbox event written in the same tx, idempotent no-op on replay.

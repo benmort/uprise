@@ -1,5 +1,5 @@
 import { IsEnum, IsObject, IsOptional, IsString } from "class-validator";
-import { CanvassCampaignStatus } from "@yarns/db";
+import { CanvassCampaignStatus } from "@uprise/db";
 
 export class CreateCampaignDto {
   @IsString()

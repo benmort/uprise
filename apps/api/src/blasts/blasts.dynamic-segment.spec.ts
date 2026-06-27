@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { AudienceKind, MessageChannel } from "@yarns/db";
+import { AudienceKind, MessageChannel } from "@uprise/db";
 import { BlastsService } from "./blasts.service";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";

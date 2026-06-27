@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { put } from "@vercel/blob";
-import { UserAvatar, UserProfile } from "@yarns/db";
+import { UserAvatar, UserProfile } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 export interface UserProfileInput {

@@ -206,7 +206,7 @@ export default function SecurityPage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For security-related questions or to report security issues:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
+                <PolicyLi>Email: contact@uprise.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Security Updates</PolicyH2>

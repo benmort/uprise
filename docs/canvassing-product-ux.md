@@ -1,4 +1,4 @@
-# Yarns Canvassing – Product UI/UX Definition
+# Uprise Canvassing – Product UI/UX Definition
 
 The complete interface surface for a world-leading door-knocking app, unified with
 the P2P texting inbox around one persistent contact. Scope: every page and
@@ -7,9 +7,9 @@ Date: 2026-06-16.
 
 ---
 
-## Yarns today – the existing product UI/UX (baseline)
+## Uprise today – the existing product UI/UX (baseline)
 
-What the app is before canvassing, so the additions sit in context. Yarns is a
+What the app is before canvassing, so the additions sit in context. Uprise is a
 P2P SMS campaigning tool: build an audience, blast a templated message, then work
 the replies in a shared inbox. Next.js 14 App Router, all screens client-rendered.
 

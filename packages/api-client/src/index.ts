@@ -20,9 +20,9 @@ import type {
   UpdateProfileRequest,
   UserAvatarResponse,
   UserProfileResponse,
-} from "@yarns/contracts";
+} from "@uprise/contracts";
 
-export * from "@yarns/contracts";
+export * from "@uprise/contracts";
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -174,7 +174,7 @@ export const sessions = {
 
 // ── Tenant members + invitations (admin; manage tenant.member/.invitation) ──
 /**
- * Membership/invitation role. Mirrors the @yarns/db `AppUserRole` enum as a string
+ * Membership/invitation role. Mirrors the @uprise/db `AppUserRole` enum as a string
  * union so the client bundle never pulls in the Prisma runtime. The API validates
  * against the real enum, so any drift here is caught server-side (400).
  */

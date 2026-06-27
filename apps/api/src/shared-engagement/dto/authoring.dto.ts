@@ -1,5 +1,5 @@
 import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString } from "class-validator";
-import { EngagementChannel, QuestionType, SupportLevel } from "@yarns/db";
+import { EngagementChannel, QuestionType, SupportLevel } from "@uprise/db";
 
 // ── Surveys ────────────────────────────────────────────────────────────────
 export class SurveyOptionDto {

@@ -2,7 +2,7 @@ import { ConfigService } from "@nestjs/config";
 import {
   BlastRecipientStatus,
   BlastStatus,
-} from "@yarns/db";
+} from "@uprise/db";
 import { BasicAuthGuard } from "../auth/basic-auth.guard";
 import { BlastsService } from "../blasts/blasts.service";
 

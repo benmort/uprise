@@ -1,4 +1,4 @@
-import { MessageChannel } from "@yarns/db";
+import { MessageChannel } from "@uprise/db";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 
 /**

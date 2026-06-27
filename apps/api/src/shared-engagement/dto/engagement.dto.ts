@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsInt, IsOptional, IsString } from "class-validator";
-import { CannedVisibility, EngagementChannel, SupportLevel } from "@yarns/db";
+import { CannedVisibility, EngagementChannel, SupportLevel } from "@uprise/db";
 
 export class RecordDispositionDto {
   @IsString()

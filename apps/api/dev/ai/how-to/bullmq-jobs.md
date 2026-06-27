@@ -1,6 +1,6 @@
 ---
 name: bullmq-jobs
-description: How to enqueue and consume background work in yarns – deterministic jobIds, producer/worker split, CRON_SECRET dispatch endpoints.
+description: How to enqueue and consume background work in uprise – deterministic jobIds, producer/worker split, CRON_SECRET dispatch endpoints.
 layer: api
 topic: queue
 use_when: Adding a background job, a queue consumer, or a cron-driven dispatch endpoint.

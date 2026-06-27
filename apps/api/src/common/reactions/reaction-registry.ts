@@ -1,6 +1,6 @@
 import { Inject, Injectable, OnModuleInit } from "@nestjs/common";
-import { Prisma } from "@yarns/db";
-import { assertReactionsLoopSafe, type EventEnvelope, type Reaction } from "@yarns/events";
+import { Prisma } from "@uprise/db";
+import { assertReactionsLoopSafe, type EventEnvelope, type Reaction } from "@uprise/events";
 import { PrismaService } from "../../prisma/prisma.service";
 import { DomainLogger } from "../logging/domain-logger.service";
 import { REACTIONS } from "./reactions.tokens";

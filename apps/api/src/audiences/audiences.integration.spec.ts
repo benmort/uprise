@@ -1,6 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 import { AudiencesService } from "./audiences.service";
-import { AudienceImportStatus } from "@yarns/db";
+import { AudienceImportStatus } from "@uprise/db";
 
 describe("AudiencesService integration-like flow", () => {
   it("starts csv import and resumes in bounded batches", async () => {

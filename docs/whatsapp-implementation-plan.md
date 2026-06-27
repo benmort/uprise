@@ -2,7 +2,7 @@
 
 ## Context
 
-Yarns is SMS-only today. Every outbound message funnels through a single
+Uprise is SMS-only today. Every outbound message funnels through a single
 `TwilioService.sendMessage()`; every inbound arrives at one webhook
 (`/inbound-text-message-hook`) and lands in `inbox.recordInbound()`; delivery
 receipts hit `/twilio-status-callback`. The data model has **no channel concept** at
@@ -188,7 +188,7 @@ the same URL with `From: whatsapp:+...`. Changes:
   24h window** and implies `OPTED_IN` — upsert `ContactConsent`.
 - Handle `MediaUrl0`/`MediaContentType0` params (WhatsApp media) → store on `InboundMessage`.
 - STOP/opt-out: parse STOP keywords on both channels → set `ContactConsent.OPTED_OUT`. (This
-  also retro-fixes the current gap where Yarns has no STOP handling at all.)
+  also retro-fixes the current gap where Uprise has no STOP handling at all.)
 
 ### Inbox (`apps/api/src/inbox/inbox.service.ts`, `.repository.ts`, `.controller.ts`)
 
@@ -254,7 +254,7 @@ API client (`apps/admin/src/lib/api.ts`) — thread `channel` through:
 
 ### Tour
 
-Add a couple of steps to `apps/admin/src/lib/tours/yarns-tour.ts` pointing at the composer
+Add a couple of steps to `apps/admin/src/lib/tours/uprise-tour.ts` pointing at the composer
 channel toggle and the template picker once the UI exists. Low priority.
 
 ---
@@ -310,5 +310,5 @@ channel toggle and the template picker once the UI exists. Low priority.
   analytics/finance, no code impact.
 - **Per-channel conversations** mean a contact can appear twice in the inbox. This is correct
   but worth a one-line note in the UI so responders aren't surprised.
-- **Existing STOP gap**: Yarns currently has no opt-out handling on SMS either. This plan adds
+- **Existing STOP gap**: Uprise currently has no opt-out handling on SMS either. This plan adds
   it for both channels — a compliance win beyond WhatsApp.

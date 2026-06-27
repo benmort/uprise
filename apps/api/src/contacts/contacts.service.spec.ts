@@ -1,4 +1,4 @@
-import { Prisma } from "@yarns/db";
+import { Prisma } from "@uprise/db";
 import { ContactsService } from "./contacts.service";
 
 function p2002(): Prisma.PrismaClientKnownRequestError {

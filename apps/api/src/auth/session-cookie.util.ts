@@ -18,7 +18,7 @@ export function readSessionToken(req: Request): string | undefined {
 
 /**
  * Cookie options for the session (meld doc 14). When SESSION_COOKIE_DOMAIN is set
- * (e.g. ".yarns.org.au" in prod, ".lvh.me" in dev) the cookie is scoped to the
+ * (e.g. ".uprise.org.au" in prod, ".lvh.me" in dev) the cookie is scoped to the
  * parent domain so every subdomain app shares one session (SSO). Unset → the
  * cookie is bound to the exact request host (single-app behaviour).
  */

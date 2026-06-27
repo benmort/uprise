@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { Prisma } from "@yarns/db";
-import type { DomainEventMap, EventMetadata } from "@yarns/events";
+import { Prisma } from "@uprise/db";
+import type { DomainEventMap, EventMetadata } from "@uprise/events";
 
 export interface AppendInput<K extends keyof DomainEventMap = keyof DomainEventMap> {
   tenantId: string;

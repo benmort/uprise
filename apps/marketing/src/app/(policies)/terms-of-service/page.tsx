@@ -116,7 +116,7 @@ export default function TermsOfServicePage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For questions about these Terms, contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
+                <PolicyLi>Email: contact@uprise.org.au</PolicyLi>
               </PolicyUl>
             </PolicyProse>
           </div>

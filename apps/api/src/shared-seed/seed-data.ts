@@ -7,7 +7,7 @@
  * (the web bundle can't import apps/api); keep the two in sync.
  */
 
-// Tour/example campaign-of-record (owned here, was inline in yarns-tour.ts).
+// Tour/example campaign-of-record (owned here, was inline in uprise-tour.ts).
 export const DEFAULT_TOUR_TEMPLATE =
   "Hi {{first_name}}! We're building our volunteer team in {{city}} and would love your help at an upcoming community action. Reply YES to join or STOP to opt out.";
 
@@ -16,11 +16,11 @@ export const EXAMPLE_BLAST_TITLE = "Tour Example Blast";
 
 // Stable marker stamped on demo rows so clearDemo() can find them and seedDemo()
 // stays idempotent.
-export const DEMO_TAG = "demo:yarns";
+export const DEMO_TAG = "demo:uprise";
 
 export const DEMO_LOGINS = {
-  organiser: { email: "demo.organiser@yarns.test", password: "demo-organiser-pw", displayName: "Demo Organiser" },
-  volunteer: { email: "demo.volunteer@yarns.test", password: "demo-volunteer-pw", displayName: "Demo Volunteer" },
+  organiser: { email: "demo.organiser@uprise.test", password: "demo-organiser-pw", displayName: "Demo Organiser" },
+  volunteer: { email: "demo.volunteer@uprise.test", password: "demo-volunteer-pw", displayName: "Demo Volunteer" },
 } as const;
 
 export const DEMO_CAMPAIGN = { name: "Demo — Spring Doorknock" } as const;

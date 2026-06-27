@@ -40,14 +40,14 @@ const groups = await sock.groupFetchAllParticipating();
 await sock.sendMessage("12036304...@g.us", { text: "Hi everyone — action tonight!" });
 ```
 
-### How it would slot into yarns (if ever built)
+### How it would slot into uprise (if ever built)
 
 A **separate, isolated micro-service** ("wa-bridge"), never part of the main API process:
 1. Holds the linked-account session in a persistent auth store (survives restarts).
-2. Exposes a tiny internal API (`POST /groups/:id/message`) the yarns API calls as a job.
+2. Exposes a tiny internal API (`POST /groups/:id/message`) the uprise API calls as a job.
 3. Runs in its own container/host with locked-down secrets and no other responsibilities.
 
-The yarns app would treat "post to group X" as a dispatched job; the bridge does the send.
+The uprise app would treat "post to group X" as a dispatched job; the bridge does the send.
 
 ## The risks (why it's excluded)
 

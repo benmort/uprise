@@ -2,7 +2,7 @@
 
 _Research date: 16 June 2026. Australian English. Primary sources: getthru.io, help.getthru.io. Secondary: Capterra, G2, NTEN._
 
-ThruText is the peer-to-peer (P2P) texting product from **GetThru** (formerly "Get Through" / GetThru.io). It is the closest direct peer to yarns' P2P SMS inbox. GetThru also sells **ThruTalk** (P2P phone dialling); the two share one admin account, pricing model, and help centre but are separate products [1][9]. This dossier focuses on ThruText.
+ThruText is the peer-to-peer (P2P) texting product from **GetThru** (formerly "Get Through" / GetThru.io). It is the closest direct peer to uprise' P2P SMS inbox. GetThru also sells **ThruTalk** (P2P phone dialling); the two share one admin account, pricing model, and help centre but are separate products [1][9]. This dossier focuses on ThruText.
 
 ---
 
@@ -45,7 +45,7 @@ What it is **not**: a marketing/broadcast SMS tool, a true workflow-automation/d
 
 **ThruText does not do door-knocking.** There is no walk-list, map, route, or in-person canvasser app. It is purely a texting product.
 
-Its relationship to canvassing is **data-level, through VAN**, and this is the most relevant pattern for yarns:
+Its relationship to canvassing is **data-level, through VAN**, and this is the most relevant pattern for uprise:
 
 - ThruText treats a completed text conversation as a **canvass-type contact attempt** in VAN. VAN must have a canvass type "Text" and a result code "Texted" configured [12][13].
 - When an initial message sends from a VAN-integrated campaign, ThruText writes a **"Texted"** contact-history result to the linked voter record [13].
@@ -108,7 +108,7 @@ The key design point: **ThruText's own data model is thin (groups, campaigns, co
 - **Automatic** opt-out on keyword triggers (STOP/UNSUBSCRIBE etc.).
 - **Manual** opt-out by admin or texter.
 - A **global opt-out reply** (admin-authored) acknowledges the request.
-- GetThru treats opt-out language ("reply STOP to opt out") as best practice and complies with 10DLC/TCPA [17]. Note: under the 2025 TCPA "any reasonable means" guidance, keyword-only detection is increasingly considered insufficient industry-wide – relevant for yarns' own opt-out NLP design [17].
+- GetThru treats opt-out language ("reply STOP to opt out") as best practice and complies with 10DLC/TCPA [17]. Note: under the 2025 TCPA "any reasonable means" guidance, keyword-only detection is increasingly considered insufficient industry-wide – relevant for uprise' own opt-out NLP design [17].
 
 ---
 
@@ -204,22 +204,22 @@ Access model: SaaS web app; admins invite texters by email/permanent link; texte
 
 ---
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow**
 
-- **Texted→Canvassed result upgrade.** yarns wants door + text coupled on a shared contact. ThruText's pattern – a contact attempt is "lightly touched" (Texted) until a survey answer upgrades it to a full "Canvassed" – is exactly the **shared-disposition logic yarns should own natively** across both door and text, instead of outsourcing it to VAN. Build this as a first-class, channel-aware outcome model.
-- **Three-tier canned responses:** admin shared/recommended + personal saved + single-step auto-reply, all in one searchable panel, editable before send, global-or-per-campaign. This directly informs yarns' "canned responses driven by the same script/survey in both door and text interfaces."
+- **Texted→Canvassed result upgrade.** uprise wants door + text coupled on a shared contact. ThruText's pattern – a contact attempt is "lightly touched" (Texted) until a survey answer upgrades it to a full "Canvassed" – is exactly the **shared-disposition logic uprise should own natively** across both door and text, instead of outsourcing it to VAN. Build this as a first-class, channel-aware outcome model.
+- **Three-tier canned responses:** admin shared/recommended + personal saved + single-step auto-reply, all in one searchable panel, editable before send, global-or-per-campaign. This directly informs uprise' "canned responses driven by the same script/survey in both door and text interfaces."
 - **Self-assignment with configurable batch size** – great for scaling volunteers without admin micromanagement; applies equally to door turf and text batches.
 - **Reusable global surveys + four question types** (Yes/No, single, multi, freeform) as the shared data-capture primitive across channels.
 - **Opt-out as a first-class action with a global acknowledgement reply.**
 
 **Avoid / improve on**
 
-- **Don't make conversations campaign-scoped.** yarns should make the **contact the spine**: one per-person timeline that shows door visits, text threads, surveys and journey state together. ThruText's biggest structural weakness for a coupled door+text product is that it has no unified per-contact view.
-- **Don't outsource the data model to VAN.** Own dispositions, surveys and the contact graph natively so yarns works without a voter file – then sync to VAN/external CRMs as an export, not a dependency. (Note freeform-doesn't-sync as the cautionary tale.)
-- **Don't ship manual-only follow-ups.** yarns' "journeys" are the explicit differentiator. Build true multi-step, condition-triggered sequences (survey answer → wait → text → if no reply → door visit task) – the thing ThruText conspicuously lacks.
-- **Make scripts/surveys genuinely cross-channel from day one** – one script/survey object that drives canned responses and data capture in *both* the door app and the text inbox. ThruText only achieves this accidentally via VAN; yarns should make it native.
+- **Don't make conversations campaign-scoped.** uprise should make the **contact the spine**: one per-person timeline that shows door visits, text threads, surveys and journey state together. ThruText's biggest structural weakness for a coupled door+text product is that it has no unified per-contact view.
+- **Don't outsource the data model to VAN.** Own dispositions, surveys and the contact graph natively so uprise works without a voter file – then sync to VAN/external CRMs as an export, not a dependency. (Note freeform-doesn't-sync as the cautionary tale.)
+- **Don't ship manual-only follow-ups.** uprise' "journeys" are the explicit differentiator. Build true multi-step, condition-triggered sequences (survey answer → wait → text → if no reply → door visit task) – the thing ThruText conspicuously lacks.
+- **Make scripts/surveys genuinely cross-channel from day one** – one script/survey object that drives canned responses and data capture in *both* the door app and the text inbox. ThruText only achieves this accidentally via VAN; uprise should make it native.
 - **Improve survey UX:** allow de-selecting single-choice answers (no "Undecided" hack); sync all answer types including freeform.
 
 ---

@@ -10,7 +10,7 @@
       "Bash(pnpm --filter admin build)",
       "Bash(pnpm --filter auth build)",
       "Bash(pnpm --filter marketing build)",
-      "Bash(pnpm --filter @yarns/db prisma:generate)",
+      "Bash(pnpm --filter @uprise/db prisma:generate)",
       "Bash(pnpm check:ai-guides)",
       "Bash(node scripts/check-ai-guides.mjs)",
       "Bash(git status:*)",
@@ -25,7 +25,7 @@
     ],
     "deny": [
       "Bash(prisma migrate dev:*)",
-      "Bash(pnpm --filter @yarns/db prisma:migrate:*)"
+      "Bash(pnpm --filter @uprise/db prisma:migrate:*)"
     ]
   }
 }

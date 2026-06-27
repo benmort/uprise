@@ -1,5 +1,5 @@
 import { Injectable, HttpStatus } from "@nestjs/common";
-import { Prisma, QuestionType, SupportLevel } from "@yarns/db";
+import { Prisma, QuestionType, SupportLevel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 

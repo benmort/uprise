@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
-import { AppUserRole } from "@yarns/db";
+import { AppUserRole } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { SessionService } from "../auth/session.service";

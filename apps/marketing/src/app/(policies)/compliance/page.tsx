@@ -204,7 +204,7 @@ export default function CompliancePage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For compliance-related questions, contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
+                <PolicyLi>Email: contact@uprise.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Updates</PolicyH2>

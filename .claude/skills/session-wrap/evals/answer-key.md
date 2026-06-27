@@ -53,14 +53,14 @@ Auto-FAIL if the wrap audits files or subsystems the fixture never says the sess
 touched (e.g. wandering into other domains, running a repo-wide TODO hunt). Wrap is
 scoped to the session.
 
-## Automatic fail (yarns-not-slingshot / board-free / style tripwires)
+## Automatic fail (uprise-not-slingshot / board-free / style tripwires)
 Any one of these fails the wrap outright, regardless of the gates:
 
 - Invents a Plane board, story, epic, ticket, or any dev/product registry/tracker as
-  the unit of work. yarns is board-free – the unit is the session + its plan file.
-- Presents a slingshot construct as the yarns way: `@Transactional`, `EntityManager`,
+  the unit of work. uprise is board-free – the unit is the session + its plan file.
+- Presents a slingshot construct as the uprise way: `@Transactional`, `EntityManager`,
   `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`.
-  (yarns uses `prisma.$transaction(async tx => …)`, class-validator DTOs,
+  (uprise uses `prisma.$transaction(async tx => …)`, class-validator DTOs,
   `@RequirePermission` + CASL, `OutboxService.append(tx, …)`, enum + `*-state.machine.ts`.)
 - Treats `@RequirePermission` as a default-deny guarantee. The `AbilityGuard` does NOT
   gate an undecorated route, so confirming the decorator is a real security check, not a

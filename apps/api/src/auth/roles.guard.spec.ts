@@ -1,6 +1,6 @@
 import { ExecutionContext, ForbiddenException } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { AppUserRole } from "@yarns/db";
+import { AppUserRole } from "@uprise/db";
 import { RolesGuard } from "./roles.guard";
 
 describe("RolesGuard", () => {

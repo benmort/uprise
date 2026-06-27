@@ -16,24 +16,24 @@ Scaffold four empty packages (filled by later docs):
 
 | Package | Purpose | Filled by |
 |---|---|---|
-| `@yarns/db` | `schema.prisma` + generated Prisma client | this doc |
-| `@yarns/permissions` | CASL roles/abilities (ported from prog) | doc 04 |
-| `@yarns/events` | typed domain-event catalogue + `Reaction` interface | doc 05 |
-| `@yarns/contracts` | shared Zod DTOs + `{ok,data,error}` envelope types | as needed |
+| `@uprise/db` | `schema.prisma` + generated Prisma client | this doc |
+| `@uprise/permissions` | CASL roles/abilities (ported from prog) | doc 04 |
+| `@uprise/events` | typed domain-event catalogue + `Reaction` interface | doc 05 |
+| `@uprise/contracts` | shared Zod DTOs + `{ok,data,error}` envelope types | as needed |
 
-Each package: `package.json` (`"name": "@yarns/<x>"`, `"main"`/`"types"` or `exports`), `tsconfig.json` extending the root, `src/index.ts`. Reference from apps with `"@yarns/<x>": "workspace:*"`.
+Each package: `package.json` (`"name": "@uprise/<x>"`, `"main"`/`"types"` or `exports`), `tsconfig.json` extending the root, `src/index.ts`. Reference from apps with `"@uprise/<x>": "workspace:*"`.
 
-## 2. `@yarns/db` – the shared Prisma client
+## 2. `@uprise/db` – the shared Prisma client
 
 **Problem today:** the single schema lives at `apps/api/prisma/schema.prisma`, generates into `apps/api/src/generated/prisma`, and the worker copies it via `apps/worker/scripts/copy-prisma-generated.mjs` and imports through brittle relative paths (`../../api/src/generated/prisma`).
 
 **Move:**
 
-1. Create `packages/db/` with `prisma/schema.prisma` (moved from `apps/api/prisma/`) and generator `output = "../generated"`; export `PrismaClient` + all types from `packages/db/src/index.ts` as `@yarns/db`.
-2. `apps/api`, `apps/worker`, and any future package import `import { PrismaClient, Prisma } from "@yarns/db"`.
-3. `apps/api/src/prisma/prisma.service.ts` wraps `@yarns/db`'s `PrismaClient` (unchanged behaviour).
-4. **Delete** `apps/worker/scripts/copy-prisma-generated.mjs` and re-point `apps/worker/src/main.ts` imports to `@yarns/db`.
-5. Move the `prisma:generate`/`prisma:migrate`/`prisma:deploy` scripts to `packages/db` (run via `pnpm --filter @yarns/db ...`); update root scripts and the migration runbook (`docs/migration-runbook.md`) accordingly.
+1. Create `packages/db/` with `prisma/schema.prisma` (moved from `apps/api/prisma/`) and generator `output = "../generated"`; export `PrismaClient` + all types from `packages/db/src/index.ts` as `@uprise/db`.
+2. `apps/api`, `apps/worker`, and any future package import `import { PrismaClient, Prisma } from "@uprise/db"`.
+3. `apps/api/src/prisma/prisma.service.ts` wraps `@uprise/db`'s `PrismaClient` (unchanged behaviour).
+4. **Delete** `apps/worker/scripts/copy-prisma-generated.mjs` and re-point `apps/worker/src/main.ts` imports to `@uprise/db`.
+5. Move the `prisma:generate`/`prisma:migrate`/`prisma:deploy` scripts to `packages/db` (run via `pnpm --filter @uprise/db ...`); update root scripts and the migration runbook (`docs/migration-runbook.md`) accordingly.
 
 This makes the Prisma client the single most-shared artefact – which is exactly what the `packages/` tier is for – and removes the copy-script foot-gun.
 
@@ -49,7 +49,7 @@ multiSchema (doc 02) is GA in Prisma 6. Do the bump here, before any schema rest
 
 ```bash
 pnpm install
-pnpm --filter @yarns/db prisma:generate
+pnpm --filter @uprise/db prisma:generate
 pnpm --filter api typecheck && pnpm --filter api build
 pnpm --filter api test
 pnpm --filter worker build
@@ -62,7 +62,7 @@ Gate: all green, no remaining import of `apps/api/src/generated/prisma`, copy-sc
 
 - `pnpm-workspace.yaml` – add `packages/*`.
 - `packages/db/**` – new; holds `schema.prisma` + generated client.
-- `apps/api/src/prisma/prisma.service.ts` – wrap `@yarns/db`.
-- `apps/worker/src/main.ts` – import `@yarns/db`; remove copy-script step.
+- `apps/api/src/prisma/prisma.service.ts` – wrap `@uprise/db`.
+- `apps/worker/src/main.ts` – import `@uprise/db`; remove copy-script step.
 - `apps/worker/scripts/copy-prisma-generated.mjs` – delete.
-- `apps/api/package.json`, `apps/worker/package.json`, root `package.json` – `@yarns/db` dep + script moves.
+- `apps/api/package.json`, `apps/worker/package.json`, root `package.json` – `@uprise/db` dep + script moves.

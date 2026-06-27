@@ -5,7 +5,7 @@ import {
   ConsentState,
   JourneyTriggerType,
   MessageChannel,
-} from "@yarns/db";
+} from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { TwilioService } from "../twilio/twilio.service";

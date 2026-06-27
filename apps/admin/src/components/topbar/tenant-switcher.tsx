@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { Building2, Check } from "lucide-react";
-import { Dropdown, DropdownItem } from "@yarns/ui";
-import { auth, type Membership } from "@yarns/api-client";
+import { Dropdown, DropdownItem } from "@uprise/ui";
+import { auth, type Membership } from "@uprise/api-client";
 
 /**
  * Tenant switcher (prog parity). Rendered only when the principal belongs to more than

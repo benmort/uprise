@@ -27,7 +27,7 @@ import {
   listConversations,
   type MessageChannel,
 } from "@/lib/api";
-import { tenants, type AuthPrincipal } from "@yarns/api-client";
+import { tenants, type AuthPrincipal } from "@uprise/api-client";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, goToLogin, logout } from "@/lib/session";
 import { ThemeToggle } from "@/components/theme/theme-toggle";

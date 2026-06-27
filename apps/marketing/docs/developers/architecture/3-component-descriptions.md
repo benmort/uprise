@@ -4,7 +4,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ## Client Applications
 
-### Admin Client (`yarns-admin-client`)
+### Admin Client (`uprise-admin-client`)
 **Location**: `/services/clients/admin-client/`
 **Technology**: Next.js 14, React, TypeScript
 **Port**: 3000
@@ -39,7 +39,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Auth Client (`yarns-auth-client`)
+### Auth Client (`uprise-auth-client`)
 **Location**: `/services/clients/auth-client/`
 **Technology**: Next.js 14, React, TypeScript
 **Port**: 3001
@@ -73,7 +73,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Marketing Client (`yarns-marketing-client`)
+### Marketing Client (`uprise-marketing-client`)
 **Location**: `/services/clients/marketing-client/`
 **Technology**: Next.js 14, React, TypeScript
 **Port**: 3002
@@ -167,7 +167,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ## Business Services
 
-### User Service (`yarns-user-service`)
+### User Service (`uprise-user-service`)
 **Location**: `/services/user-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3007
@@ -201,7 +201,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Tenant Service (`yarns-tenant-service`)
+### Tenant Service (`uprise-tenant-service`)
 **Location**: `/services/tenant-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3006
@@ -235,7 +235,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Payment Service (`yarns-payment-service`)
+### Payment Service (`uprise-payment-service`)
 **Location**: `/services/payment-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3005
@@ -269,7 +269,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Email Service (`yarns-email-service`)
+### Email Service (`uprise-email-service`)
 **Location**: `/services/email-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL, Rust
 **Port**: 3003
@@ -303,7 +303,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Monitoring Service (`yarns-monitoring-service`)
+### Monitoring Service (`uprise-monitoring-service`)
 **Location**: `/services/monitoring-service/`
 **Technology**: Next.js 14, TypeScript, PostgreSQL
 **Port**: 3004
@@ -337,7 +337,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ## Shared Infrastructure Packages
 
-### Environment Configuration (`@yarns/environment-configuration`)
+### Environment Configuration (`@uprise/environment-configuration`)
 **Location**: `/packages/environment-configuration/`
 
 **Purpose**: Centralized configuration management across all services and environments.
@@ -357,7 +357,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Event-Based Service Client (`@yarns/event-based-service-client`)
+### Event-Based Service Client (`@uprise/event-based-service-client`)
 **Location**: `/packages/event-based-service-client/`
 
 **Purpose**: Standardized client library for service-to-service communication using events.
@@ -377,7 +377,7 @@ This document provides detailed descriptions of each component in the Uprise eco
 
 ---
 
-### Shared Infrastructure (`@yarns/shared-infrastructure`)
+### Shared Infrastructure (`@uprise/shared-infrastructure`)
 **Location**: `/packages/shared-infrastructure/`
 
 **Purpose**: Common utilities, types, and infrastructure components shared across all services.

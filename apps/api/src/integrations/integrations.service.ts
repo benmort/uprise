@@ -7,7 +7,7 @@ import {
   IntegrationJobStatus,
   IntegrationType,
   Prisma,
-} from "@yarns/db";
+} from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ContactsService } from "../contacts/contacts.service";
 import { OutboxService } from "../common/outbox/outbox.service";

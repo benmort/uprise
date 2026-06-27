@@ -1,6 +1,6 @@
-# yarns-review eval – answer key
+# uprise-review eval – answer key
 
-Grades a cold run of `yarns-review` against the diff frozen in `fixture.md` (commit `f02090d`). The graded session cannot see this file. A correct review must surface the substantive items below, fire the provenance check, and raise no false criticals.
+Grades a cold run of `uprise-review` against the diff frozen in `fixture.md` (commit `f02090d`). The graded session cannot see this file. A correct review must surface the substantive items below, fire the provenance check, and raise no false criticals.
 
 ## Setup the run must do
 
@@ -31,7 +31,7 @@ A passing review names each of these, with the right `file:line` region and the 
 ## Census / scope checks expected
 
 - A `grep` over the changed services for `this.prisma` used *inside* a `$transaction` callback (the wrong client) – mechanically, not sampled. Correct result: the three fixed cases now use `tx`; the residual registration append is its own transaction (so its `this.prisma.$transaction` is correct usage, just non-atomic with the session write).
-- A `grep` for slingshot-isms over the range (`@Transactional`, `EntityManager`, `RequestContext`, `ZodValidationPipe`, `migrate dev`) – expected count **zero**. A review that flags `prisma.$transaction` or class-validator usage as a smell has failed the yarns-not-slingshot rule.
+- A `grep` for slingshot-isms over the range (`@Transactional`, `EntityManager`, `RequestContext`, `ZodValidationPipe`, `migrate dev`) – expected count **zero**. A review that flags `prisma.$transaction` or class-validator usage as a smell has failed the uprise-not-slingshot rule.
 
 ## Validation expected
 
@@ -54,8 +54,8 @@ A passing review explicitly lists what it could not confirm – e.g. test/typech
 - No provenance step / no `git log -p` (or parent read) evidence in the verdict.
 - A census claim ("all paths now atomic", "no `this.prisma` misuse") asserted without a `grep` + count.
 - Reporting a blanket repo-root test pass instead of `--filter`-scoped, or claiming green without running and without an unverifiable note.
-- Treating any yarns idiom (`prisma.$transaction`, class-validator DTO, `@RequirePermission`/CASL, `OutboxService.append`) as a defect.
-- Presenting a slingshot construct (`@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`) as the yarns way, or recommending `prisma migrate dev`.
-- Inventing a board/story/epic/tracker id as the review's unit of work (yarns is board-free; the unit is the commit `f02090d`).
+- Treating any uprise idiom (`prisma.$transaction`, class-validator DTO, `@RequirePermission`/CASL, `OutboxService.append`) as a defect.
+- Presenting a slingshot construct (`@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`) as the uprise way, or recommending `prisma migrate dev`.
+- Inventing a board/story/epic/tracker id as the review's unit of work (uprise is board-free; the unit is the commit `f02090d`).
 - Flagging a missing `@RequirePermission` on these diffs as auto-protected: nothing in this commit adds an endpoint, but if a review reasons about route security it must not claim undecorated routes are default-denied (the `AbilityGuard` allows them).
 - Emitting an em-dash (the long-dash character) anywhere in the review, or using US spelling where Australian is expected.

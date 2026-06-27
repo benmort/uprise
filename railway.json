@@ -5,7 +5,7 @@
     "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter worker build && pnpm --filter worker deploy --legacy --prod worker-deploy"
   },
   "deploy": {
-    "preDeployCommand": "pnpm --filter @yarns/db exec prisma migrate deploy",
+    "preDeployCommand": "pnpm --filter @uprise/db exec prisma migrate deploy",
     "startCommand": "node worker-deploy/dist/worker/src/main.js",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10

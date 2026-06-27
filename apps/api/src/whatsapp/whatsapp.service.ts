@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Prisma } from "@yarns/db";
+import { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { TwilioService } from "../twilio/twilio.service";
 

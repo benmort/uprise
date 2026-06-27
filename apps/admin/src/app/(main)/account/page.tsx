@@ -14,8 +14,8 @@ import {
   OtpInput,
   PasswordInput,
   Skeleton,
-} from "@yarns/ui";
-import { auth, profile, sessions as sessionsApi, type SessionSummaryResponse } from "@yarns/api-client";
+} from "@uprise/ui";
+import { auth, profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
 import { useToast } from "@/components/ui/toast";
 import { getSession, logout } from "@/lib/session";
 
@@ -27,7 +27,7 @@ type Flags = {
   twofaEnabled: boolean;
 };
 
-/** Self-service account (prog parity, yarns conventions): email, password, 2FA, danger zone. */
+/** Self-service account (prog parity, uprise conventions): email, password, 2FA, danger zone. */
 export default function AccountPage() {
   const { showToast } = useToast();
   const [flags, setFlags] = useState<Flags | null>(null);

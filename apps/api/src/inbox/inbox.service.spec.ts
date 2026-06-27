@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus } from "@yarns/db";
+import { BlastRecipientStatus } from "@uprise/db";
 import { InboxService } from "./inbox.service";
 
 describe("InboxService", () => {

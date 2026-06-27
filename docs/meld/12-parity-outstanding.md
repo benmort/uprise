@@ -1,6 +1,6 @@
 # Parity — Outstanding Items
 
-Living tracker of prog→yarns parity work on branch `feat/prog-parity`.
+Living tracker of prog→uprise parity work on branch `feat/prog-parity`.
 Status: **DONE** (closed this round) · **NOT PORTED** (intentional — see scope) · **DEFERRED-BY-DESIGN** (contradicts a locked meld decision) · **INFRA** (needs the live stack).
 
 Last reconciled: 2026-06-23 after the M1–M6 gap-closure (commits 02c82ae · 3556f9e · e045ff7 · 4162e84 · 09da620 · b78cd8d). 428 api tests green; all 9 builds green; recursive typecheck clean.
@@ -22,7 +22,7 @@ Last reconciled: 2026-06-23 after the M1–M6 gap-closure (commits 02c82ae · 35
 - [x] **DONE** `MessageTemplate` CRUD + `type/category/variables/fromNumber` + undeclared-`{{var}}` guard (migration 20260623110000).
 - [x] **DONE** `undelivered` distinction — `UNDELIVERED` enum member; Twilio `undelivered` maps to it on recipients + transactional rows.
 - **NOT PORTED** `segmentCount` capture — no column exists on the messaging models; an unread metric, not a behavioural gap. Skipped (would need a speculative schema + metric design).
-- Consumers for `telephony.*` events — events are now emitted (the prog parity bar); a canvassing/analytics consumer is yarns-specific future work, not a prog gap.
+- Consumers for `telephony.*` events — events are now emitted (the prog parity bar); a canvassing/analytics consumer is uprise-specific future work, not a prog gap.
 
 ## Email (M3 — e045ff7)
 - [x] **DONE** Full lifecycle events — `email.email.sending/sent/failed/opened/clicked` alongside queued/delivered/bounced.
@@ -51,9 +51,9 @@ Last reconciled: 2026-06-23 after the M1–M6 gap-closure (commits 02c82ae · 35
 - [x] **DONE** Outbox/reactions real-DB integration test — proves the `ReactionDedup` unique index enforces at-most-once dispatch (self-skips without a DB).
 
 ## Deferred-by-design (no action — contradict locked meld decisions)
-- Event-sourced aggregates / replay (yarns = Prisma rows + FSM + outbox, doc 00 decision 1).
-- Multi-org `Organisation` aggregate (yarns folds to 1:1 `OrgProfile`, doc 11).
-- Owner-as-distinct-`OWNER` enum role (yarns uses `ORGANISER`; last-owner guard instead).
+- Event-sourced aggregates / replay (uprise = Prisma rows + FSM + outbox, doc 00 decision 1).
+- Multi-org `Organisation` aggregate (uprise folds to 1:1 `OrgProfile`, doc 11).
+- Owner-as-distinct-`OWNER` enum role (uprise uses `ORGANISER`; last-owner guard instead).
 - OTT cross-app handoff (superseded by cookie SSO, doc 14).
 
 ## Remaining (infra / not behavioural)

@@ -21,10 +21,10 @@ export type BlastWatchSettings = {
   profile: AlertSoundProfile;
 };
 
-export const RESPONDER_ALERT_SETTINGS_KEY = "yarns.inbox.alertSettings";
-export const RESPONDER_BLAST_WATCH_KEY = "yarns.inbox.blastWatch";
-export const RESPONDER_OWNERSHIP_KEY = "yarns.inbox.ownership";
-export const RESPONDER_SNOOZE_KEY = "yarns.inbox.snooze";
+export const RESPONDER_ALERT_SETTINGS_KEY = "uprise.inbox.alertSettings";
+export const RESPONDER_BLAST_WATCH_KEY = "uprise.inbox.blastWatch";
+export const RESPONDER_OWNERSHIP_KEY = "uprise.inbox.ownership";
+export const RESPONDER_SNOOZE_KEY = "uprise.inbox.snooze";
 const RESPONDER_ALERT_SOUND_SRC = "/sounds/short-clapstick.wav";
 
 export const DEFAULT_RESPONDER_ALERT_SETTINGS: ResponderAlertSettings = {

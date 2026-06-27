@@ -3,13 +3,13 @@
 > - **Empty reactions registry** — closed by WS2 (commit edd3807): `apps/api/src/common/reactions/domain-reactions.ts` wires welcome-email, invitation-email, network→Stripe-customer, subscription→tenant.
 > The remaining open items below are the genuine WS3 backlog (segment CRUD + eval enqueue, 2FA enable/mobile-capture, checkout/portal endpoints, network read/billing-write, subdomain-availability, member lifecycle events) plus the deferred-by-design set (ES aggregates/replay, multi-org, OTT — no action).
 
-# Prog → Yarns Parity Matrix
+# Prog → Uprise Parity Matrix
 
 ## tenant
 
 _Summary: Core tenant/network/member/invitation write paths now exist (most UPGRADED from MISSING), but every emitted event is a dangling producer — no reaction consumes any of them — and network billing, soft-delete, slug pre-flight, and several lifecycle events remain unbuilt._
 
-| Artifact | Kind | Status | Prog ref | Yarns ref | Note |
+| Artifact | Kind | Status | Prog ref | Uprise ref | Note |
 |---|---|---|---|---|---|
 | CreateTenantHandler.execute | handler | FUNCTIONAL_ONLY | prog/.../services/tenant/application/create-tenant.handler.ts | tenants.service.ts:46 createTenant() + tenants.controller.ts POST /tenants | Real CreateTenant exists: normalises/validates slug, slug-availability guard, networkId validation, creates Tenant + bootstraps owner TenantMember in one tx, emits tenant.tenant.created + tenant.member.added. Gaps: owner role is ORGANISER not OWNER; slug only trim+lowercase (no SLUG_RE); events have no consumer. |
 | CreateNetworkHandler.execute | handler | FUNCTIONAL_ONLY | prog/.../application/network.handler.ts (CreateNetworkHandler) | tenants.service.ts:207 createNetwork() + networks.controller.ts POST /networks | Network creation exists, emits tenant.network.created. Gap: no consumer (Stripe-customer reaction unbuilt), planName/subscriptionStatus not set here. |
@@ -30,7 +30,7 @@ _Summary: Core tenant/network/member/invitation write paths now exist (most UPGR
 | DeclineInvitationHandler.execute | handler | PARTIAL | prog/.../application/invitations.handler.ts (DeclineInvitationHandler) | tenants.service.ts:199 revokeInvitation() sets status 'declined' + DELETE /tenants/:id/invitations/:invitationId | Admin-side revoke-by-id, not invitee-side decline-by-token. No POST /iam/invite/decline, no event. |
 | GetInvitationByTokenHandler.execute | handler | PARITY | prog/.../application/invitations.handler.ts (GetInvitationByTokenHandler) | iam-flows.service.ts:231 previewInvite() + loadValidInvite():271; GET /iam/invite/:token | Resolves invite by single-use token, returns {email,tenantName,role} with status/expiry validation. Minor shape diff. |
 | GetTenantInvitationsHandler.execute | handler | FUNCTIONAL_ONLY | prog/.../application/invitations.handler.ts (GetTenantInvitationsHandler) | tenants.service.ts:194 listInvitations() + tenants.controller.ts GET /tenants/:id/invitations | List-invitations-for-tenant (all statuses, gated manage tenant.invitation). |
-| CheckPermissionHandler.execute | handler | PARITY | prog/.../application/rbac.handler.ts (CheckPermissionHandler) | ability.guard.ts (AbilityGuard.canActivate) + @yarns/permissions defineAbilityFor | Same CASL model enforced inline via @RequirePermission; new controllers use it. Equivalent permission decision. |
+| CheckPermissionHandler.execute | handler | PARITY | prog/.../application/rbac.handler.ts (CheckPermissionHandler) | ability.guard.ts (AbilityGuard.canActivate) + @uprise/permissions defineAbilityFor | Same CASL model enforced inline via @RequirePermission; new controllers use it. Equivalent permission decision. |
 | GetUserRolesHandler.execute | handler | PARITY | prog/.../application/rbac.handler.ts (GetUserRolesHandler) | basic-auth.guard.ts:21 rolesFor() + GET /auth/check + iam-flows.membershipsFor | Role(s) per tenant resolved from TenantMember, surfaced on req.user and /auth/check. |
 | CheckTenantAccessHandler.execute | handler | PARITY | prog/.../application/rbac.handler.ts (CheckTenantAccessHandler) | iam-flows.service.ts:285 selectTenant() + session.service.resolve() membership gate | Has-access enforced: selectTenant rejects non-members, session.resolve returns null without membership. |
 | CreateOrganisationHandler.execute | handler | FUNCTIONAL_ONLY | prog/.../application/organisation.handler.ts (CreateOrganisationHandler) | org-profile.service.ts:73 ensureProfile() prisma.orgProfile.create | Organisation folded into lazily-created 1:1 OrgProfile; auto-created from tenant name; no create command, no event, one org max. |
@@ -39,7 +39,7 @@ _Summary: Core tenant/network/member/invitation write paths now exist (most UPGR
 | RenameOrganisationHandler / UpdateOrganisationHandler | handler | FUNCTIONAL_ONLY | prog/.../application/organisation.handler.ts (Rename/Update) | org-profile.service.ts:103 updateProfile({name}) + PATCH /org-profile | PATCH name works; no general change-set, no event. |
 | SaveOrganisationContactsHandler / GetOrganisationContactsHandler | handler | FUNCTIONAL_ONLY | prog/.../application/organisation-profile.handler.ts (contacts) | org-profile.service.ts:171 addContact/updateContact/deleteContact + /org-profile/contacts | Same fields; per-row CRUD vs prog full-set replace; no event; email-has-@ validation absent. |
 | SaveOrganisationAddressesHandler / GetOrganisationAddressesHandler | handler | FUNCTIONAL_ONLY | prog/.../application/organisation-profile.handler.ts (addresses) | org-profile.service.ts:192 addAddress/updateAddress/deleteAddress + /org-profile/addresses | Same fields (line1/line2 name drift); per-row CRUD; no event. |
-| SaveOrganisationCredentialsHandler / GetOrganisationCredentialsHandler | handler | PARITY | prog/.../application/organisation-profile.handler.ts (credentials) | org-profile.service.ts:112 setCredential()/getProfile + PUT /org-profile/credential | Full field parity, 1:1 upsert. Yarns stronger: TFN encrypted at rest + masked, emits tenant.org-credential.updated. Caveat: event has no consumer. |
+| SaveOrganisationCredentialsHandler / GetOrganisationCredentialsHandler | handler | PARITY | prog/.../application/organisation-profile.handler.ts (credentials) | org-profile.service.ts:112 setCredential()/getProfile + PUT /org-profile/credential | Full field parity, 1:1 upsert. Uprise stronger: TFN encrypted at rest + masked, emits tenant.org-credential.updated. Caveat: event has no consumer. |
 | tenant.TenantCreated | event | FUNCTIONAL_ONLY | prog/.../services/tenant/events.ts:3 | tenants.service.ts:62 + registration.service.ts:78 outbox 'tenant.tenant.created'; catalogued | Emitted on createTenant and register, catalogued. Gap: NO reaction consumes it. |
 | tenant.TenantRenamed | event | MISSING | prog/.../events.ts:4 | none | updateTenant writes name/settings but emits no rename event. |
 | tenant.TenantDeleted | event | MISSING | prog/.../events.ts:5 | none | No soft-delete write path, no event. |
@@ -49,23 +49,23 @@ _Summary: Core tenant/network/member/invitation write paths now exist (most UPGR
 | tenant.TenantInvitationCreated | event | FUNCTIONAL_ONLY | prog/.../events.ts:9 | tenants.service.ts:184 outbox 'tenant.invitation.sent'; catalogued | Emitted (minor namespace drift). Gap: no consumer, so invitation email not triggered. |
 | tenant.TenantInvitationAccepted | event | MISSING | prog/.../events.ts:10 | none (inline in iam-flows.acceptInvite:237) | Accept in a tx but emits no event, not catalogued. |
 | tenant.TenantInvitationDeclined | event | MISSING | prog/.../events.ts:11 | none (revokeInvitation:199 sets 'declined' but emits nothing) | Decline/revoke transition exists but emits no event. |
-| network.NetworkCreated | event | FUNCTIONAL_ONLY | prog/.../events.ts:13 | tenants.service.ts:212 outbox 'tenant.network.created'; catalogued | Emitted (yarns namespaces under tenant.*). Gap: no consumer; Stripe-customer reaction unbuilt. |
+| network.NetworkCreated | event | FUNCTIONAL_ONLY | prog/.../events.ts:13 | tenants.service.ts:212 outbox 'tenant.network.created'; catalogued | Emitted (uprise namespaces under tenant.*). Gap: no consumer; Stripe-customer reaction unbuilt. |
 | network.NetworkPlanChanged | event | MISSING | prog/.../events.ts:14 | none | No Network billing write, no plan-change event. |
 | network.NetworkStatusChanged | event | MISSING | prog/.../events.ts:15 | none | Network.subscriptionStatus never written; no status-change event. |
 | organisation.OrganisationCreated/Renamed/Updated | event | MISSING | prog/.../events.ts:17-19 | none (inline prisma writes) | Behaviours exist but emit no org-lifecycle event; none catalogued. |
 | organisation.OrganisationContactsSaved/AddressesSaved | event | MISSING | prog/.../events.ts:20-21 | none | Inline prisma CRUD, no event. |
-| organisation.OrganisationCredentialsSaved | event | FUNCTIONAL_ONLY | prog/.../events.ts:22 | org-profile.service.ts:152 outbox 'tenant.org-credential.updated'; catalogued | Yarns DOES emit on credential save (prog emits none) but type/namespace differs and no reaction consumes it. |
+| organisation.OrganisationCredentialsSaved | event | FUNCTIONAL_ONLY | prog/.../events.ts:22 | org-profile.service.ts:152 outbox 'tenant.org-credential.updated'; catalogued | Uprise DOES emit on credential save (prog emits none) but type/namespace differs and no reaction consumes it. |
 | Tenant aggregate FSM | fsm | NA_HYBRID | prog/.../domain/tenant.aggregate.ts | schema.prisma Tenant/TenantMember/TenantInvitation; tenants.service.ts + registration.service.ts + iam-flows.service.ts | State-stored not event-sourced. Most transitions implemented as service methods. Invariant gaps live in handler rows. |
 | Network aggregate FSM | fsm | NA_HYBRID | prog/.../domain/network.aggregate.ts | schema.prisma Network model + tenants.service.createNetwork (create only) | ES replay not ported. createNetwork exists; changePlan/changeStatus do NOT. |
 | Organisation aggregate FSM | fsm | NA_HYBRID | prog/.../domain/organisation.aggregate.ts | org-profile.service.ts (OrgProfile + OrgContact/OrgAddress/OrgCredential) | ES replay not ported; folded into 1:1 OrgProfile. Equivalent for single-org. |
-| Tenant/Network/Organisation Repositories | adapter | NA_HYBRID | prog/.../tenant.repository.ts, network.repository.ts, organisation.repository.ts | prisma.service.ts + common/outbox/outbox.service.ts | Prog append-only event store; yarns Prisma row state + transactional outbox. Deliberate swap. |
+| Tenant/Network/Organisation Repositories | adapter | NA_HYBRID | prog/.../tenant.repository.ts, network.repository.ts, organisation.repository.ts | prisma.service.ts + common/outbox/outbox.service.ts | Prog append-only event store; uprise Prisma row state + transactional outbox. Deliberate swap. |
 | Webhook event-type strings (tenant) | webhook | NA_HYBRID | prog/.../services/tenant/ (none) | n/a | Prog's tenant service handles no inbound webhooks. Nothing to port. |
 
 ## identity
 
 _Summary: Self-serve register, magic-link, recovery, email-verification send, and avatar/2FA-send flows are at or near parity — but 2FA is completely unreachable (no enable, no mobile capture), identity is event-silent beyond a single unconsumed iam.user.created, and sign-in audit (lastSignInAt) is never recorded._
 
-| Artifact | Kind | Status | Prog ref | Yarns ref | Note |
+| Artifact | Kind | Status | Prog ref | Uprise ref | Note |
 |---|---|---|---|---|---|
 | RegisterUserHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../register-user.handler.ts | registration.service.ts:register (POST /auth/register) | First-class self-serve register (dedup, hashPassword, displayName derive), emits iam.user.created. Differs: coupled to first-tenant creation; acceptInvite is a second user-minting path. |
 | CreateUserHandler (legacy alias) | handler | FUNCTIONAL_ONLY | apps/platform/.../register-user.handler.ts:64 | registration.service.ts:register | Capability present via register/acceptInvite; no separate named alias. Not MISSING. |
@@ -76,13 +76,13 @@ _Summary: Self-serve register, magic-link, recovery, email-verification send, an
 | SendMagicLinkHandler | handler | PARITY | apps/platform/.../magic-link.handler.ts:17 | iam-flows.service.ts:requestMagicLink | Single-use 15m token, never leaks existence, sends via dispatcher 'magic_link'. |
 | VerifyMagicLinkHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../magic-link.handler.ts:53 | iam-flows.service.ts:consumeMagicLink | Consumes token, issues session. Records no sign-in event. |
 | RequestPasswordResetHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../password-reset.handler.ts:17 | iam-flows.service.ts:forgotPassword | Single-use 30m token + recovery email. Collapses prog's two ops into one. No event, no flag. |
-| SendAccountRecoveryLinkHandler | handler | PARITY | apps/platform/.../password-reset.handler.ts:43 | iam-flows.service.ts:forgotPassword | By-email lookup, token, recovery email. Yarns returns {ok:true} without leaking existence — improvement. |
+| SendAccountRecoveryLinkHandler | handler | PARITY | apps/platform/.../password-reset.handler.ts:43 | iam-flows.service.ts:forgotPassword | By-email lookup, token, recovery email. Uprise returns {ok:true} without leaking existence — improvement. |
 | VerifyAccountRecoveryTokenHandler | handler | MISSING | apps/platform/.../password-reset.handler.ts:76 | none | Only POST /auth/reset-password (consuming). No non-consuming validity check. UX-only gap. |
 | ResetPasswordHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../password-reset.handler.ts:90 | iam-flows.service.ts:resetPassword | Consumes token, rotates hash in a tx, revokes all sessions (improvement). No event; 8-char min added. |
 | UpdateProfileHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../update-profile.handler.ts | profile.service.ts:upsertProfile | Writes only UserProfile — does NOT mirror displayName onto User; rows drift. No event, no empty-name guard. |
 | GetCurrentUserHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../get-current-user.handler.ts | auth.controller.ts:check (GET /auth/check) + profile.controller GET /iam/profile | /auth/check returns id/role/tenantId/memberships only; omits mobileVerified/twofaEnabled. |
 | GetUserHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../get-user.handler.ts | profile.service.ts:getProfile (lazy-seeds) + direct prisma.user reads | Lazy-seeds UserProfile from User. No dedicated GetUser query op. |
-| SessionActorResolver | handler | PARITY | apps/platform/.../session-actor.resolver.ts | session.service.ts:resolve + basic-auth.guard.ts | Opaque-token → actor with membership-based tenant selection. Yarns adds session-pinned tenant. Slightly richer. |
+| SessionActorResolver | handler | PARITY | apps/platform/.../session-actor.resolver.ts | session.service.ts:resolve + basic-auth.guard.ts | Opaque-token → actor with membership-based tenant selection. Uprise adds session-pinned tenant. Slightly richer. |
 | IssueOttHandler | handler | MISSING | apps/platform/.../exchange-ott.handler.ts:12 | none | No OTT issue concept; SSO is the shared parent-domain cookie only. |
 | ExchangeOttHandler | handler | MISSING | apps/platform/.../exchange-ott.handler.ts:28 | none | No OTT exchange. |
 | SendMobileVerificationHandler | handler | MISSING | apps/platform/.../mobile-verification.handler.ts:14 | none | MobileVerification table + SMS seam exist but no send-mobile op. User.mobile never written. |
@@ -106,12 +106,12 @@ _Summary: Self-serve register, magic-link, recovery, email-verification send, an
 
 _Summary: Contact spine, identity resolution, and the segment evaluator are richly built but operationally dead — there is zero segment CRUD, nobody enqueues SEGMENT_EVAL_RUN, resolveIdentity and recordSourceRecord are never invoked, and the domain emits no events despite peers using the outbox._
 
-| Artifact | Kind | Status | Prog ref | Yarns ref | Note |
+| Artifact | Kind | Status | Prog ref | Uprise ref | Note |
 |---|---|---|---|---|---|
-| AddPersonHandler | handler | FUNCTIONAL_ONLY | prog/.../audience/handlers.ts:21 | contacts.service.ts:26 getOrCreateByPhone / :54 getOrCreateByAddress | Prog keys on email (unique-email invariant) + PersonAdded event. Yarns keys on (tenant,phone)/(tenant,address); email enrich-only; no event; partial-index uniqueness. |
-| CreateOrUpdatePersonHandler | handler | FUNCTIONAL_ONLY | prog/.../audience/handlers.ts:64 | contacts.service.ts:91 dedupUpsert + :457 enrich | Prog upserts-by-email with rename + events. Yarns resolves by phone/address, enrich fills blanks only, no rename, no event. |
-| ManageSourceRecordsHandler | handler | PARTIAL | prog/.../audience/handlers.ts:144 | contacts.service.ts:227 recordSourceRecord | Yarns does idempotent single-record upsert only — no remove, no batch reconcile, no events. Never called outside specs; table empty in practice. |
-| GetPersonHandler | handler | PARTIAL | prog/.../audience/handlers.ts:212 + read-model.ts:39 getByCanonical | contacts.service.ts:298 getProfile / :395 search | Yarns by-id read is richer (timeline/dispositions/surveys) but NO canonical-lookup equivalent; resolveIdentity never runs so canonicalContactId always null. |
+| AddPersonHandler | handler | FUNCTIONAL_ONLY | prog/.../audience/handlers.ts:21 | contacts.service.ts:26 getOrCreateByPhone / :54 getOrCreateByAddress | Prog keys on email (unique-email invariant) + PersonAdded event. Uprise keys on (tenant,phone)/(tenant,address); email enrich-only; no event; partial-index uniqueness. |
+| CreateOrUpdatePersonHandler | handler | FUNCTIONAL_ONLY | prog/.../audience/handlers.ts:64 | contacts.service.ts:91 dedupUpsert + :457 enrich | Prog upserts-by-email with rename + events. Uprise resolves by phone/address, enrich fills blanks only, no rename, no event. |
+| ManageSourceRecordsHandler | handler | PARTIAL | prog/.../audience/handlers.ts:144 | contacts.service.ts:227 recordSourceRecord | Uprise does idempotent single-record upsert only — no remove, no batch reconcile, no events. Never called outside specs; table empty in practice. |
+| GetPersonHandler | handler | PARTIAL | prog/.../audience/handlers.ts:212 + read-model.ts:39 getByCanonical | contacts.service.ts:298 getProfile / :395 search | Uprise by-id read is richer (timeline/dispositions/surveys) but NO canonical-lookup equivalent; resolveIdentity never runs so canonicalContactId always null. |
 | ListSourceRecordsHandler | handler | MISSING | prog/.../audience/handlers.ts:228 | none | No read over ContactSourceRecord; getProfile omits provenance. |
 | CreateSegmentHandler | handler | MISSING | prog/.../audience/segment.handlers.ts:24 | none | Zero segment writes (grep: only mocked prisma in specs). AudiencesController exposes only Audience CRUD. Users cannot create a dynamic segment. |
 | UpdateSegmentHandler | handler | MISSING | prog/.../audience/segment.handlers.ts:72 | none | No update path; no rule-changed→re-evaluate trigger. |
@@ -129,7 +129,7 @@ _Summary: Contact spine, identity resolution, and the segment evaluator are rich
 | audience.SegmentRenamed | event | MISSING | prog/.../audience/segment.events.ts:2 | none | No rename behaviour. |
 | audience.SegmentUpdated | event | MISSING | prog/.../audience/segment.events.ts:3 | none | No update behaviour; no rule-changed→re-evaluate. |
 | audience.SegmentDeleted | event | MISSING | prog/.../audience/segment.events.ts:4 | none | No delete behaviour. |
-| Person aggregate (FSM/replay) | fsm | NA_HYBRID | prog/.../audience/person.aggregate.ts:26 | contacts.service.ts (Contact via Prisma rows) | Event-sourced in prog; mutable Prisma row in yarns. Unique-email invariant NOT carried (phone is key). |
+| Person aggregate (FSM/replay) | fsm | NA_HYBRID | prog/.../audience/person.aggregate.ts:26 | contacts.service.ts (Contact via Prisma rows) | Event-sourced in prog; mutable Prisma row in uprise. Unique-email invariant NOT carried (phone is key). |
 | Segment aggregate (FSM + soft-delete) | fsm | NA_HYBRID | prog/.../audience/domain/segment.aggregate.ts:18 | AudienceSegment row (schema.prisma:410) | Plain row, type enum matches; no soft-delete state, no replay, and no write path at all. |
 | Identity resolution (canonical person) | reaction | FUNCTIONAL_ONLY | prog/.../audience/person.aggregate.ts:49 + handlers.ts:217 getByCanonical | contacts.service.ts:185 resolveIdentity | Richer than prog (group by email/phone, collapse chains). Never invoked from non-test code; canonicalContactId never set. |
 | Provider adapter (external linkage) | adapter | PARTIAL | none (prog uses ManageSourceRecords) | integrations/action-network.connector.ts:491 syncList | Connector emits externalId; ingestion writes it onto AudienceContact (:586-608) NOT ContactSourceRecord, never calls recordSourceRecord. Provenance dropped. |
@@ -139,13 +139,13 @@ _Summary: Contact spine, identity resolution, and the segment evaluator are rich
 
 _Summary: The SendGrid send path, webhook ingestion, dedup, and status FSM are at parity (and stronger than prog's noop stub) — but the two highest-value comms (welcome + invitation emails) never fire because the reaction registry is empty, there's no template-management surface, and lifecycle events beyond queued are never emitted._
 
-| Artifact | Kind | Status | Prog ref | Yarns ref | Note |
+| Artifact | Kind | Status | Prog ref | Uprise ref | Note |
 |---|---|---|---|---|---|
 | QueueEmailHandler (direct/non-template send) | handler | PARTIAL | prog .../email/handlers.ts:36-64 | email.service.ts:59 sendTransactional | Always resolves a template key; no raw subject/html entrypoint. Queued→sending→sent pipeline behaviourally identical. |
 | GetEmailHandler | handler | MISSING | prog .../email/handlers.ts:66-75 | none | Only internal webhook-correlation finds. No public getEmail, no route. Status columns never read back. |
-| TemplateEmailSender | handler | FUNCTIONAL_ONLY | prog .../email/handlers.ts:84-117 | email.service.ts:59 sendTransactional | Collapsed into one generic send. resolveTemplate gates on isActive + @@unique, falls back to defaults. Yarns adds tenantId/contactId/purpose. |
+| TemplateEmailSender | handler | FUNCTIONAL_ONLY | prog .../email/handlers.ts:84-117 | email.service.ts:59 sendTransactional | Collapsed into one generic send. resolveTemplate gates on isActive + @@unique, falls back to defaults. Uprise adds tenantId/contactId/purpose. |
 | SendMagicLinkEmailHandler | handler | FUNCTIONAL_ONLY | prog .../email/handlers.ts:126-135 | iam-flows.service.ts:105-111 (dispatcher templateKey 'magic_link') | Reachable via dispatcher seam → TransactionalMessagingService → EmailService. |
-| SendEmailVerificationEmailHandler | handler | FUNCTIONAL_ONLY | prog .../email/handlers.ts:142-151 | iam-flows.service.ts:170-176 (templateKey 'verification') | Reachable via dispatcher (purpose 'email_verification'). In prog a reaction target; yarns a direct IAM call. |
+| SendEmailVerificationEmailHandler | handler | FUNCTIONAL_ONLY | prog .../email/handlers.ts:142-151 | iam-flows.service.ts:170-176 (templateKey 'verification') | Reachable via dispatcher (purpose 'email_verification'). In prog a reaction target; uprise a direct IAM call. |
 | SendAccountRecoveryEmailHandler | handler | FUNCTIONAL_ONLY | prog .../email/handlers.ts:158-167 | iam-flows.service.ts:133-139 (templateKey 'recovery') | Reachable from forgotPassword (purpose 'password_reset'). |
 | SendWelcomeEmailHandler | handler | PARTIAL | prog .../email/handlers.ts:174-183 | none ('welcome' template defined, no caller) | registration emits iam.user.created but REACTIONS is empty — reaction does not exist. No welcome email ever sends. |
 | SendInvitationEmailHandler | handler | PARTIAL | prog .../email/handlers.ts:194-205 | none ('invitation' template defined, no caller) | tenant.invitation.sent emitted but REACTIONS empty — no consumer. Invitees never get a link. |
@@ -165,7 +165,7 @@ _Summary: The SendGrid send path, webhook ingestion, dedup, and status FSM are a
 | email.EmailFailed | event | FUNCTIONAL_ONLY | prog .../email/events.ts:6 | none (status FAILED + errorMessage, no event) | Set on send exception + webhook 'dropped'. No event. |
 | email.EmailOpened | event | FUNCTIONAL_ONLY | prog .../email/events.ts:7 | none (openedAt via webhook, no event) | First-write-wins timestamp; no engagement event. |
 | email.EmailClicked | event | FUNCTIONAL_ONLY | prog .../email/events.ts:8 | none (clickedAt via webhook, no event) | First-write-wins timestamp; no event. |
-| EmailMessage status FSM | fsm | PARITY | prog .../email-message.aggregate.ts:21-28 | email-state.machine.ts:6-13 | Equivalent guard semantics. Divergence: yarns makes DELIVERED terminal + adds SENT→FAILED. |
+| EmailMessage status FSM | fsm | PARITY | prog .../email-message.aggregate.ts:21-28 | email-state.machine.ts:6-13 | Equivalent guard semantics. Divergence: uprise makes DELIVERED terminal + adds SENT→FAILED. |
 | Webhook 'delivered' | webhook | PARITY | prog .../process-webhook.handler.ts:11,100-101 | email.service.ts:159-161 | Maps to DELIVERED; idempotent if terminal. |
 | Webhook 'bounce' | webhook | PARITY | prog .../process-webhook.handler.ts:11,102-104 | email.service.ts:162-166 | Maps to BOUNCED with reason. |
 | Webhook 'dropped' | webhook | PARITY | prog .../process-webhook.handler.ts:11,105-107 | email.service.ts:167-171 | Maps to FAILED; stores reason in errorMessage. |
@@ -182,7 +182,7 @@ _Summary: The SendGrid send path, webhook ingestion, dedup, and status FSM are a
 
 _Summary: Stripe webhook ingestion, signature verification, dedup, the Payment FSM, and the refund/succeeded paths are at or above parity (real Stripe REST vs prog's noop) — but the entire paid-conversion surface is non-functional: checkout/portal adapters are dead code, payment-method management is wholly absent, and no read queries or cross-domain reactions exist._
 
-| Artifact | Kind | Status | Prog ref | Yarns ref | Note |
+| Artifact | Kind | Status | Prog ref | Uprise ref | Note |
 |---|---|---|---|---|---|
 | RecordPaymentHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../payment/handlers.ts:40-59 | payment.service.ts recordPayment() (38-58) | Same validation + parity fields. Direct prisma.create status RECORDED; emits NO recorded event. CRUD insert not aggregate. |
 | GetPaymentHandler | handler | PARTIAL | apps/platform/.../payment/handlers.ts:61-69 | payment.service.ts load() (60-64) | Private load() with payment_not_found, internal-only. No query handler, no route. |
@@ -210,7 +210,7 @@ _Summary: Stripe webhook ingestion, signature verification, dedup, the Payment F
 | PAYMENT_REFUNDED event | event | PARITY | apps/platform/.../payment/events.ts:5 | payment.service.ts refund outbox.append (132-137) | Emitted transactionally; asserted by spec. Name differs; no reaction consumes it yet. |
 | REFUND_CREATED/PROCESSED/SUCCEEDED/FAILED events | event | NA_HYBRID | apps/platform/.../payment/events.ts:8-11 | none | Refund written as single row status 'succeeded'. Per-state events are ES detail, not ported. Outcome preserved. |
 | CUSTOMER_CREATED event | event | NA_HYBRID | apps/platform/.../billing.events.ts:2 | none | Customer is a webhook/CRUD projection; no CustomerCreated event. ES-internal. |
-| SUBSCRIPTION_CREATED/UPDATED/DELETED + INVOICE_PAID events | event | NA_HYBRID | apps/platform/.../billing.events.ts:13-16 | billing.service.ts projectSubscription/projectInvoice (31-69) | Projection-only markers in prog; yarns upserts rows from webhook. No event by design. |
+| SUBSCRIPTION_CREATED/UPDATED/DELETED + INVOICE_PAID events | event | NA_HYBRID | apps/platform/.../billing.events.ts:13-16 | billing.service.ts projectSubscription/projectInvoice (31-69) | Projection-only markers in prog; uprise upserts rows from webhook. No event by design. |
 | PAYMENT_METHOD_ADDED/DEFAULT_SET/REMOVED events | event | MISSING | apps/platform/.../billing.events.ts:19-21 | none | projectPaymentMethod never invoked; add/setDefault/remove absent — neither events nor behaviour. |
 | Payment aggregate FSM | fsm | PARITY | apps/platform/.../payment.aggregate.ts:15-22 | payment-state.machine.ts PAYMENT_TRANSITIONS (8-15) | All states present; same edges + shared helper. One deliberate addition: partially_refunded→partially_refunded for unlimited partials. Stronger. |
 | Refund aggregate FSM | fsm | NA_HYBRID | apps/platform/.../domain/refund.aggregate.ts:13-18 | none | Refund row straight to 'succeeded'; money-safety via Payment FSM + (paymentId, processorRefundId) unique constraint. ES detail not ported. |
@@ -221,7 +221,7 @@ _Summary: Stripe webhook ingestion, signature verification, dedup, the Payment F
 | Webhook: charge.refunded | webhook | PARITY | prog .../process-webhook.handler.ts:71-73,111-145 | payment.service.ts dispatchStripeEvent (214-227) | Computes delta vs already-refunded cents, refund() when delta>0, idempotent. More correct on repeated deliveries. |
 | Webhook: customer.subscription.* | webhook | PARITY | prog .../process-webhook.handler.ts:74-80 | payment.service.ts dispatchStripeEvent (228-244) | Projects subscription_view. Passes Stripe status through. Equivalent outcome. |
 | Webhook: invoice.paid | webhook | PARITY | prog .../process-webhook.handler.ts:81-83 | payment.service.ts dispatchStripeEvent (245-259) | Projects invoice_view. Equivalent. |
-| Webhook: customer.created/updated | webhook | PARITY | none | payment.service.ts dispatchStripeEvent (260-269) → projectCustomer | Net-new coverage: how yarns populates Customer rows (replacing prog's EnsureCustomer path). |
+| Webhook: customer.created/updated | webhook | PARITY | none | payment.service.ts dispatchStripeEvent (260-269) → projectCustomer | Net-new coverage: how uprise populates Customer rows (replacing prog's EnsureCustomer path). |
 | Webhook dedup (claim on provider,eventId) | webhook | PARITY | prog .../process-webhook.handler.ts:52-58 | payment.service.ts processStripeEvent (152-163) + webhook-event.service.ts | Claims before acting; releases claim on error so Stripe retries reprocess. Safer than prog. |
 | Webhook signature verification (HMAC) | webhook | PARITY | none | stripe.service.ts verifyWebhookSignature (24-42) + webhooks.controller.ts paymentWebhook (40-53) | Net-new mandatory raw-body HMAC with tolerance + timingSafeEqual. Security improvement. |
 | StripeAdapter.createCustomer | adapter | MISSING | apps/platform/.../stripe.adapter.ts:60 | none | No createCustomer; Customers learned only from webhooks. EnsureCustomer/checkout cannot work. |
@@ -236,7 +236,7 @@ _Summary: Stripe webhook ingestion, signature verification, dedup, the Payment F
 
 _Summary: Voice calls, the SMS/call status FSMs, real Twilio adapters, and call.initiated emission are at or above parity — but the SMS webhook lacks an idempotency claim, transactional SMS never advances past SENT (dead DELIVERED edges), call lifecycle and blast events are never durably emitted, and there is no template CRUD._
 
-| Artifact | Kind | Status | Prog ref | Yarns ref | Note |
+| Artifact | Kind | Status | Prog ref | Uprise ref | Note |
 |---|---|---|---|---|---|
 | SendSmsHandler | handler | FUNCTIONAL_ONLY | apps/platform/.../telephony/handlers.ts:38 | transactional-messaging.service.ts:60 sendSms + twilio.service.ts:437; messages.controller.ts:9 POST /messages | No generic single-SMS aggregate. Generic POST /messages is pure passthrough (no row, no event). Only transactional path persists state; inline send not request-then-provider. |
 | GetSmsHandler | handler | MISSING | apps/platform/.../telephony/handlers.ts:60 | none (Messages list reads are Twilio-API-backed) | No get-by-id read over local state; no GET /messages/:id, no SmsView. |
@@ -250,7 +250,7 @@ _Summary: Voice calls, the SMS/call status FSMs, real Twilio adapters, and call.
 | GetSmsCampaignHandler | handler | PARITY | apps/platform/.../campaign.handlers.ts:106 | blasts.service.ts:1274 listBlasts / :121 getBlastOrThrow | Covers and exceeds the campaign view. |
 | CreateMessageTemplateHandler | handler | PARTIAL | apps/platform/.../template.handlers.ts:26 | none (model schema.prisma:553; read by resolveBody) | No create/update/delete handler. Model lacks type/variables/category/fromNumber; no undeclared-variable validation; no call_script type. |
 | GetMessageTemplateHandler | handler | PARTIAL | apps/platform/.../template.handlers.ts:59 | transactional-messaging.service.ts:48 (internal findUnique) | Lookup only as internal findUnique; no public get-by-id read. |
-| ProcessTwilioWebhookHandler | webhook | PARTIAL | apps/platform/.../process-twilio-webhook.handler.ts:43 | webhooks.controller.ts:133/:160; blasts.service.ts:716; calls.service.ts:115 | Prog has ONE handler with claimOnce dedup. Yarns splits in two. Voice path full parity (claim+FSM+release). SMS path has NO webhook-event claim — column guards only. |
+| ProcessTwilioWebhookHandler | webhook | PARTIAL | apps/platform/.../process-twilio-webhook.handler.ts:43 | webhooks.controller.ts:133/:160; blasts.service.ts:716; calls.service.ts:115 | Prog has ONE handler with claimOnce dedup. Uprise splits in two. Voice path full parity (claim+FSM+release). SMS path has NO webhook-event claim — column guards only. |
 | Webhook 'sms:delivered' | webhook | FUNCTIONAL_ONLY | process-twilio-webhook.handler.ts:82 | blasts.service.ts:763 | Sets BlastRecipient.DELIVERED + OutboundMessage.status. But OutboundMessage path writes only status, never txStatus — DELIVERED never driven for TRANSACTIONAL. NumSegments not captured. |
 | Webhook 'sms:undelivered' | webhook | FUNCTIONAL_ONLY | process-twilio-webhook.handler.ts:88 | blasts.service.ts:71 (collapsed into FAILED) | undelivered collapsed with failed into BlastRecipientStatus.FAILED. Transactional UNDELIVERED never reached. |
 | Webhook 'sms:failed' | webhook | PARITY | process-twilio-webhook.handler.ts:91 | blasts.service.ts:791,857 | →FAILED with classifyFailureScope (scope+category+code). Richer than prog. |

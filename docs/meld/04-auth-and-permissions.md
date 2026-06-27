@@ -1,29 +1,29 @@
 # 04 – Auth & Permissions (CASL)
 
-Foundation step 5. Port prog's CASL package, define a unified role taxonomy, and replace yarns' `BasicAuthGuard` with a session guard + ability guard – preserving every existing auth bypass.
+Foundation step 5. Port prog's CASL package, define a unified role taxonomy, and replace uprise' `BasicAuthGuard` with a session guard + ability guard – preserving every existing auth bypass.
 
 Source: `/Users/benjaminmort/code/prog/core-orchestration/packages/permissions/src/{roles,ability,types}.ts` and `apps/platform/src/.../shared-infrastructure` (`require-auth`, `require-permissions`).
 
-## `@yarns/permissions`
+## `@uprise/permissions`
 
 Port prog's permissions package near-verbatim into `packages/permissions`:
 
 - `defineAbilityFor(actor)` → CASL `Ability`.
 - `ROLE_PERMISSIONS` matrix.
-- The `.all` wildcard expansion (`expandRule`) ports unchanged – it already does the per-domain fan-out yarns needs.
+- The `.all` wildcard expansion (`expandRule`) ports unchanged – it already does the per-domain fan-out uprise needs.
 
-Extend `RESOURCES`/`ROLE_PERMISSIONS` with yarns domains: `audience.*`, `messaging.*` (blast/inbound/template/consent), `canvass.*`, `journey.*`, `integration.*`, `geo.*`, `analytics.*`, `compliance.*`.
+Extend `RESOURCES`/`ROLE_PERMISSIONS` with uprise domains: `audience.*`, `messaging.*` (blast/inbound/template/consent), `canvass.*`, `journey.*`, `integration.*`, `geo.*`, `analytics.*`, `compliance.*`.
 
 ## Unified role taxonomy
 
-Reconcile prog's `super-admin/owner/admin/member` with yarns' `ORGANISER/VOLUNTEER`. Stored as `TenantMember.role` strings, validated against `@yarns/permissions`.
+Reconcile prog's `super-admin/owner/admin/member` with uprise' `ORGANISER/VOLUNTEER`. Stored as `TenantMember.role` strings, validated against `@uprise/permissions`.
 
 | Role | Replaces | Scope |
 |---|---|---|
 | `super-admin` | env break-glass | system-wide `manage all` |
 | `owner` | prog owner | full tenant incl. billing/network |
-| `organiser` | yarns ORGANISER + prog admin | manage all campaign/messaging/audience/canvass/journey/integration domains; manage members + invitations; read analytics; **no billing** |
-| `volunteer` | yarns VOLUNTEER | field-only: read assigned turf/walklist + field-visible contacts; write doorknock/disposition; no audience/blast/integration access |
+| `organiser` | uprise ORGANISER + prog admin | manage all campaign/messaging/audience/canvass/journey/integration domains; manage members + invitations; read analytics; **no billing** |
+| `volunteer` | uprise VOLUNTEER | field-only: read assigned turf/walklist + field-visible contacts; write doorknock/disposition; no audience/blast/integration access |
 | `member` | prog member | read-only tenant member |
 
 `organiser` aliases prog's `admin` rule-set (one product label, admin-equivalent rules). Example matrix additions:
@@ -78,7 +78,7 @@ type AuthActor = {
 **`AbilityGuard`** (replaces/augments `RolesGuard`):
 
 - Read `@RequirePermission({ action, resource })`.
-- Build ability via `@yarns/permissions` `defineAbilityFor(actor)`; `can(...)` or throw `ForbiddenException`.
+- Build ability via `@uprise/permissions` `defineAbilityFor(actor)`; `can(...)` or throw `ForbiddenException`.
 - Keep the existing `@Roles()`/`RolesGuard` working in parallel until callers migrate (a route may carry both during transition).
 
 The `{ok,data,error}` envelope is untouched – guards throw Nest `HttpException`s the existing exception filter wraps.
@@ -87,7 +87,7 @@ The `{ok,data,error}` envelope is untouched – guards throw Nest `HttpException
 
 Build the session/magic-link/password-reset/2FA handlers on the doc 03 models. 2FA and verification SMS/email go through the **transactional dispatcher** (doc 06), never the blast path. Magic-link/verification emails go through the email domain (doc 07).
 
-Expose these as IAM API endpoints (e.g. `/iam/sessions`, `/iam/magic-link`, `/iam/2fa`, `/iam/invitations/:token`). The session endpoint sets an **httpOnly cookie scoped to the parent domain** so it can back the standalone auth frontend (doc 14) and SSO across all apps. The auth UI itself is a separate thin frontend (`apps/auth`) — see doc 14 — built after this doc, consuming these endpoints + `@yarns/contracts`/`@yarns/ui`/`@yarns/api-client`.
+Expose these as IAM API endpoints (e.g. `/iam/sessions`, `/iam/magic-link`, `/iam/2fa`, `/iam/invitations/:token`). The session endpoint sets an **httpOnly cookie scoped to the parent domain** so it can back the standalone auth frontend (doc 14) and SSO across all apps. The auth UI itself is a separate thin frontend (`apps/auth`) — see doc 14 — built after this doc, consuming these endpoints + `@uprise/contracts`/`@uprise/ui`/`@uprise/api-client`.
 
 ## Verification
 
@@ -97,7 +97,7 @@ Expose these as IAM API endpoints (e.g. `/iam/sessions`, `/iam/magic-link`, `/ia
 
 ## Files
 
-- `packages/permissions/**` – ported CASL + yarns role matrix.
+- `packages/permissions/**` – ported CASL + uprise role matrix.
 - `apps/api/src/auth/session-auth.guard.ts` – new; ports the four bypasses.
 - `apps/api/src/auth/ability.guard.ts` + `@RequirePermission` decorator + `@Public()` decorator – new.
 - `apps/api/src/auth/basic-auth.guard.ts` – bypass logic source; retire after migration.

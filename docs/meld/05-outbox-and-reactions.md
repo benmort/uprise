@@ -1,6 +1,6 @@
 # 05 – Outbox & Reactions Backbone
 
-Foundation step 6. The hybrid choreography layer: Prisma rows stay the source of truth; a transactional outbox emits domain events; in-process reactions consume them. Transport is BullMQ (yarns already depends on it).
+Foundation step 6. The hybrid choreography layer: Prisma rows stay the source of truth; a transactional outbox emits domain events; in-process reactions consume them. Transport is BullMQ (uprise already depends on it).
 
 Source patterns (prog, re-expressed on Prisma + BullMQ): `apps/platform/src/shared/outbox/outbox-relay.ts`, `apps/platform/src/reactions/{reaction.registry,reaction.consumer,reaction.types}.ts`, `packages/event-based-service-client/src/event-types.ts`.
 
@@ -11,7 +11,7 @@ model OutboxEvent {
   id          String    @id @default(cuid())
   seq         BigInt    @default(autoincrement())   // FIFO + relay cursor
   tenantId    String
-  eventType   String                                 // a @yarns/events key
+  eventType   String                                 // a @uprise/events key
   aggregateId String                                 // the row this is about
   payload     Json
   metadata    Json                                   // correlationId, causationId, actorId
@@ -73,7 +73,7 @@ await prisma.$transaction(async (tx) => {
 
 ## Transport decision: BullMQ, not Redis Streams
 
-prog uses Redis Streams to fan one event out to N consumer groups across many services. yarns has exactly one consumer (the in-process reaction registry) and already depends on BullMQ with a configured connection (`QueueConfigService`, `apps/api/src/common/queue/bullmq-dispatch.queue.ts`). BullMQ gives retries, backoff, jobId dedup, and the existing `QueueStatsService` observability for free. Redis Streams would add `XGROUP`/`XACK`/cursor machinery for zero benefit at one consumer.
+prog uses Redis Streams to fan one event out to N consumer groups across many services. uprise has exactly one consumer (the in-process reaction registry) and already depends on BullMQ with a configured connection (`QueueConfigService`, `apps/api/src/common/queue/bullmq-dispatch.queue.ts`). BullMQ gives retries, backoff, jobId dedup, and the existing `QueueStatsService` observability for free. Redis Streams would add `XGROUP`/`XACK`/cursor machinery for zero benefit at one consumer.
 
 - Extend `DispatchQueueName` in `apps/api/src/common/queue/dispatch-queue.ts` + `QUEUE_NAMES`/`QUEUE_JOB_TYPES` in `queue.constants.ts` with `domain-events`.
 - Add a `domain-events` worker in `apps/worker/src/main.ts` (alongside the existing five).
@@ -83,11 +83,11 @@ prog uses Redis Streams to fan one event out to N consumer groups across many se
 
 Port prog's `Reaction` interface + registry, Nest-native and BullMQ-fed:
 
-- `@yarns/events` exports `interface Reaction { trigger: string; emits: string[]; handle(evt): Promise<void> }` and the loop-safety contract `emits ∩ triggers = ∅`.
+- `@uprise/events` exports `interface Reaction { trigger: string; emits: string[]; handle(evt): Promise<void> }` and the loop-safety contract `emits ∩ triggers = ∅`.
 - `ReactionsModule` (`apps/api/src/common/reactions/`) collects all `@Injectable()` reactions, builds `Map<eventType, Reaction>` at boot, and runs prog's `loopUnsafeTriggers` fail-fast check.
 - The `domain-events` worker resolves `ReactionRegistry` from the Nest application context (as prog's `main.reactions.ts` does), looks up the event, claims `ReactionDedup`, runs `handle`, and catches-and-logs so a side-effect failure never poisons the queue.
 
-## `@yarns/events` catalogue
+## `@uprise/events` catalogue
 
 ```ts
 export const EVENT_TYPES = {

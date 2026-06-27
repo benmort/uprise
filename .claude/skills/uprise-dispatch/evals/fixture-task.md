@@ -1,6 +1,6 @@
 # Fixture task description (frozen input)
 
-This is the raw task description handed to the `yarns-dispatch` skill. It is a paragraph of intent, not a tracker item. The skill must turn it into a dispatch brief + a worktree.
+This is the raw task description handed to the `uprise-dispatch` skill. It is a paragraph of intent, not a tracker item. The skill must turn it into a dispatch brief + a worktree.
 
 ---
 

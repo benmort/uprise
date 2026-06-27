@@ -1,5 +1,5 @@
 /**
- * Typed feature-flag catalogue — the single source of truth for yarns flags.
+ * Typed feature-flag catalogue — the single source of truth for uprise flags.
  *
  * A flag's effective value resolves through a precedence chain (highest first):
  *   env override  →  per-tenant override  →  plan entitlement  →  global override  →  default

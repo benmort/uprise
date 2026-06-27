@@ -10,7 +10,7 @@ by their real repo-relative paths, and applies each to the four parts of the bri
 
 The run must read `dev/ai/guide-map.md` first, then cite these guides by their actual paths. All four are mandatory; web-security is bonus context (no credential touch here).
 
-- [ ] `apps/admin/dev/ai/how-to/design-system.md` – rendering the list/rows/buttons from `@yarns/ui`.
+- [ ] `apps/admin/dev/ai/how-to/design-system.md` – rendering the list/rows/buttons from `@uprise/ui`.
 - [ ] `apps/admin/dev/ai/how-to/feedback-states.md` – the four states on a data surface.
 - [ ] `apps/admin/dev/ai/how-to/permission-gating.md` – the billing-permission gate.
 - [ ] `apps/admin/dev/ai/how-to/app-router-and-api-client.md` – the route + the typed fetch.
@@ -21,7 +21,7 @@ A run that cites a guide path that does not exist, or names a slingshot/board ar
 ## Must assert (graded points)
 
 **Design system (from design-system.md)**
-- [ ] Builds the list, rows and the Remove button from `@yarns/ui` primitives (e.g. `Card`/list markup, `Button`, `EmptyState`, `Skeleton`) via the `@/components/ui/*` shim – does not fork or hand-roll a primitive.
+- [ ] Builds the list, rows and the Remove button from `@uprise/ui` primitives (e.g. `Card`/list markup, `Button`, `EmptyState`, `Skeleton`) via the `@/components/ui/*` shim – does not fork or hand-roll a primitive.
 - [ ] Colours come from design tokens (`bg-surface`, `text-foreground`, `border-border`, etc.) – **no raw hex**. Names this explicitly.
 
 **Feedback states (from feedback-states.md)**
@@ -29,15 +29,15 @@ A run that cites a guide path that does not exist, or names a slingshot/board ar
 - [ ] Checks `ApiResult.ok` before reading `res.data`; no infinite spinner, no swallowed error.
 
 **Permission gating (from permission-gating.md)**
-- [ ] Derives the gate from the session principal (`getSession()` → `AuthPrincipal`) / the `@yarns/permissions` CASL ability – not an ad-hoc `role === "ORGANISER"` string check.
+- [ ] Derives the gate from the session principal (`getSession()` → `AuthPrincipal`) / the `@uprise/permissions` CASL ability – not an ad-hoc `role === "ORGANISER"` string check.
 - [ ] **Hide for permission:** an organiser without billing permission (and a canvasser) does not get the page/control rendered – shows the no-permission state rather than a dead control.
 - [ ] **Disable for transient:** the per-row Remove button stays visible but `disabled` while its removal is in flight – not hidden.
 - [ ] States that UI gating is advisory and the matching API route must be `@RequirePermission`-gated server-side.
 
 **App Router + API client (from app-router-and-api-client.md)**
 - [ ] New page lives in the `(main)` route group (organiser shell); covered by the middleware matcher as a protected route.
-- [ ] Fetches via `@yarns/api-client` `request<T>` / a `lib/api` helper – **not a bare `fetch`** to the API; reads the base via `getApiUrl()`, not a hardcoded host.
-- [ ] Types the payment-method shape from `@yarns/contracts`, not a local re-declared interface.
+- [ ] Fetches via `@uprise/api-client` `request<T>` / a `lib/api` helper – **not a bare `fetch`** to the API; reads the base via `getApiUrl()`, not a hardcoded host.
+- [ ] Types the payment-method shape from `@uprise/contracts`, not a local re-declared interface.
 - [ ] `"use client"` is scoped to the interactive island (the list with the Remove action), not slapped on the whole page.
 
 **Close (from `dev/ai/how-to/definition-of-done.md`)**
@@ -45,7 +45,7 @@ A run that cites a guide path that does not exist, or names a slingshot/board ar
 
 ## Auto-fail conditions
 
-- References Plane, a story/epic, or a dev/product registry (yarns is board-free – the unit of work is the task brief / plan file / runbook).
+- References Plane, a story/epic, or a dev/product registry (uprise is board-free – the unit of work is the task brief / plan file / runbook).
 - Names a slingshot artefact (`@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`).
 - Proposes a raw hex colour, a bare `fetch` to the API, a login form / credential / secret in `apps/admin`, or reading `auth_token` from JS.
 - Cites a guide path that does not exist in the repo.

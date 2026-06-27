@@ -1,5 +1,5 @@
 import { IsArray, IsEnum, IsInt, IsObject, IsOptional, IsString, Min } from "class-validator";
-import { JourneyRungType, JourneyStatus, JourneyTriggerType } from "@yarns/db";
+import { JourneyRungType, JourneyStatus, JourneyTriggerType } from "@uprise/db";
 
 export class JourneyRungDto {
   @IsOptional()

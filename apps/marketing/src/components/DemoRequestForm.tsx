@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
-import { marketing } from '@yarns/api-client';
-import { FormInput, FormTextarea, FormSelect, FormLabel, Alert } from '@yarns/ui';
+import { marketing } from '@uprise/api-client';
+import { FormInput, FormTextarea, FormSelect, FormLabel, Alert } from '@uprise/ui';
 
 const ROLE_OPTIONS = [
   { value: 'campaign-manager', label: 'Campaign Manager' },

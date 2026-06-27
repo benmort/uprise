@@ -1,6 +1,6 @@
 ---
 name: domain-boundaries
-description: How yarns keeps domains decoupled – one Postgres schema namespace and one Nest module per domain, joined only by id and event.
+description: How uprise keeps domains decoupled – one Postgres schema namespace and one Nest module per domain, joined only by id and event.
 layer: api
 topic: architecture
 use_when: Adding a model, wiring a new module, or reaching for another domain's data/service.
@@ -9,7 +9,7 @@ last_reviewed: 2026-06-23
 
 # Domain boundaries
 
-yarns is a modular monolith: each domain owns one Postgres `@@schema` namespace and one `apps/api/src/<domain>/` module, and the only links between them are an id string or a domain event.
+uprise is a modular monolith: each domain owns one Postgres `@@schema` namespace and one `apps/api/src/<domain>/` module, and the only links between them are an id string or a domain event.
 
 Canonical: `packages/db/prisma/schema.prisma` (`datasource.schemas = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops", "payment", "telephony"]`; every model carries `@@schema("<domain>")`); `apps/api/src/<domain>/` (e.g. `payment/`, `email/`, `journeys/`); `apps/api/src/journeys/journey-trigger.port.ts` (`JOURNEY_TRIGGER_PORT` + `JourneyTriggerPort`).
 

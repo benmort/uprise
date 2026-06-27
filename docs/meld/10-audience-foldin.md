@@ -1,14 +1,14 @@
 # 10 – Audience Fold-In
 
-M3. Fold prog's audience concepts into yarns' canonical `Contact`/`Audience` models rather than porting prog's parallel `Person`/`Segment` tables. No new top-level module – extends `apps/api/src/audiences` and `contacts`.
+M3. Fold prog's audience concepts into uprise' canonical `Contact`/`Audience` models rather than porting prog's parallel `Person`/`Segment` tables. No new top-level module – extends `apps/api/src/audiences` and `contacts`.
 
 Source: `/Users/benjaminmort/code/prog/core-orchestration/apps/platform/src/services/audience/*` (`segment-evaluation.handler.ts`, `source_record_view`, segment rule definitions).
 
 ## Reconciliation
 
-| prog concept | yarns decision | How |
+| prog concept | uprise decision | How |
 |---|---|---|
-| `Person` (email-unique, `canonicalPersonId`, `tenantId`) | **fold into `Contact`** | add `canonicalContactId` self-ref + identity resolution; no `Person` table. yarns keys on `phoneE164`/`addressNorm`; add email resolution alongside. |
+| `Person` (email-unique, `canonicalPersonId`, `tenantId`) | **fold into `Contact`** | add `canonicalContactId` self-ref + identity resolution; no `Person` table. uprise keys on `phoneE164`/`addressNorm`; add email resolution alongside. |
 | `SourceRecord` | **net-new `ContactSourceRecord`** | provenance for multi-source reconciliation; 1:1 translate of `source_record_view`. |
 | `Segment` (`ruleDefinition`, type) | **fold into `AudienceSegment`** | already has `definition Json`; add `type` + materialised membership. |
 | segment **rule-eval engine** | **port as `SegmentEvaluatorService`** | evaluate `definition` against Contacts/source records, rewrite membership. |
@@ -57,7 +57,7 @@ A service reconciles duplicate contacts (same email OR `phoneE164`) under one `c
 `apps/api/src/audiences/segment-evaluator.service.ts` – port `segment-evaluation.handler.ts`. Clause types:
 
 - prog-native: `{type:'emailDomain',domain}`, `{type:'hasSource',sourceSystem}` (join `ContactSourceRecord`), `{type:'all'}`.
-- yarns-native (new): `{type:'consentState',channel,state}`, `{type:'turf',turfId}`.
+- uprise-native (new): `{type:'consentState',channel,state}`, `{type:'turf',turfId}`.
 
 Evaluation **wholesale-rewrites** `AudienceSegmentMember` for the segment (stale members removed). A dynamic-segment `Blast` resolves recipients from `AudienceSegmentMember` – extend `getBlastRecipients` (`apps/api/src/blasts/blasts.service.ts`) with a `DYNAMIC_SEGMENT` branch alongside the existing `WHATSAPP_OPTED_IN` branch.
 

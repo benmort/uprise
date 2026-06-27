@@ -13,7 +13,7 @@ const STEPS = [
 
 /** First-run 60-second how-to + safety primer for volunteers. Shows once per device. */
 export function FieldOnboarding() {
-  const [seen, setSeen] = useLocalStorage<boolean>("yarns.fieldOnboarded", false);
+  const [seen, setSeen] = useLocalStorage<boolean>("uprise.fieldOnboarded", false);
   const [step, setStep] = useState(0);
 
   if (seen) return null;

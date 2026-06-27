@@ -48,7 +48,7 @@ How it relates to canvassing in practice:
 - Hustle tags can sync to NGP VAN **canvass results** (alongside survey responses and activist codes) [16]. So data captured over text lands in the same VAN objects a door canvasser would write to – making VAN the shared layer between the two activities, not Hustle itself.
 - Its "relational organising" framing is about volunteers texting people they already know, not about field canvassing. Notably, one comparison source (CallHub) flatly lists "relational organizing" as something Hustle does NOT do [14] – this contradicts Hustle's own marketing [4][5]. The honest read: Hustle does *relational texting* (assign agents their own contacts) but lacks the relational-organising scaffolding (contact-import-from-phonebook social graph, friend-to-friend turf, relational journeys) that purpose-built tools like Impactive offer.
 
-For yarns: Hustle is a texting-first tool that defers all field/canvass coupling to VAN. There is no shared-contact door↔text experience inside Hustle.
+For uprise: Hustle is a texting-first tool that defers all field/canvass coupling to VAN. There is no shared-contact door↔text experience inside Hustle.
 
 ---
 
@@ -182,23 +182,23 @@ Access model: agents log in via web or mobile apps; roles are Organisation Admin
 
 ---
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow:**
 
-1. **Tag visibility tiers.** Hustle's three-level model (contact-profile / opt-out-reason / admin-only) is a clean, copyable governance pattern. yarns should adopt the same tiering and apply it identically in both the door and text interfaces so a shared tag means the same thing on both surfaces.
-2. **Survey-as-canned-response coupling.** The VAN Survey goal's trick – response options auto-generate radio buttons *and* pre-seed a response-script slot for each answer – is exactly the "script/survey drives canned responses in both interfaces" pattern yarns is targeting. Build one survey object whose answers generate both (a) the door disposition buttons and (b) the matching text canned reply.
-3. **Initial / Reply / Reminders workflow split.** A crisp model for agent state. yarns can extend it so a door "not home" or a text "Yes, interested" both feed the same Reminders/follow-up queue around the shared contact.
+1. **Tag visibility tiers.** Hustle's three-level model (contact-profile / opt-out-reason / admin-only) is a clean, copyable governance pattern. uprise should adopt the same tiering and apply it identically in both the door and text interfaces so a shared tag means the same thing on both surfaces.
+2. **Survey-as-canned-response coupling.** The VAN Survey goal's trick – response options auto-generate radio buttons *and* pre-seed a response-script slot for each answer – is exactly the "script/survey drives canned responses in both interfaces" pattern uprise is targeting. Build one survey object whose answers generate both (a) the door disposition buttons and (b) the matching text canned reply.
+3. **Initial / Reply / Reminders workflow split.** A crisp model for agent state. uprise can extend it so a door "not home" or a text "Yes, interested" both feed the same Reminders/follow-up queue around the shared contact.
 4. **Reusable script library with merge variables and admin-vs-agent scopes.** Admin-authored canonical scripts plus agent-private supplements is a sensible balance of consistency and flexibility.
-5. **Lead-action disposition tied to follow-up.** The "mark Yes → flows into Reminders" linkage is the seed of a journey; yarns should make every disposition (door or text) a journey trigger.
+5. **Lead-action disposition tied to follow-up.** The "mark Yes → flows into Reminders" linkage is the seed of a journey; uprise should make every disposition (door or text) a journey trigger.
 
 **Avoid / do better:**
 
-1. **Don't outsource the door↔text coupling to a third-party CRM.** Hustle only unifies field and text data *inside VAN*, not inside its own product. yarns's whole thesis is a shared contact across door and text – make that a first-class native object, not a VAN side-effect.
-2. **Don't ship single-step automation and call it journeys.** Hustle's "Keywords & Automations" plus one-hop Reminders is not a sequence engine. yarns should build genuine multi-step, time-delayed, cross-channel (door + text) journeys with branching on disposition.
-3. **Don't skip a shared team inbox.** Hustle's agent-owns-contacts model blocks pooled triage. yarns should support both assignment *and* a shared queue, especially since door visits and text replies about the same contact need to land in one place.
-4. **Avoid one-question-per-survey and most-recent-only result limits.** yarns should let a script/survey carry multiple questions and preserve full response history per contact across both channels.
-5. **Be transparent on pricing and offer a trial.** Hustle's opaque MMS/call rates, inconsistent setup fee, and no-trial posture are friction yarns can win on.
+1. **Don't outsource the door↔text coupling to a third-party CRM.** Hustle only unifies field and text data *inside VAN*, not inside its own product. uprise's whole thesis is a shared contact across door and text – make that a first-class native object, not a VAN side-effect.
+2. **Don't ship single-step automation and call it journeys.** Hustle's "Keywords & Automations" plus one-hop Reminders is not a sequence engine. uprise should build genuine multi-step, time-delayed, cross-channel (door + text) journeys with branching on disposition.
+3. **Don't skip a shared team inbox.** Hustle's agent-owns-contacts model blocks pooled triage. uprise should support both assignment *and* a shared queue, especially since door visits and text replies about the same contact need to land in one place.
+4. **Avoid one-question-per-survey and most-recent-only result limits.** uprise should let a script/survey carry multiple questions and preserve full response history per contact across both channels.
+5. **Be transparent on pricing and offer a trial.** Hustle's opaque MMS/call rates, inconsistent setup fee, and no-trial posture are friction uprise can win on.
 
 ---
 

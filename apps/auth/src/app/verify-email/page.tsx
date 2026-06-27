@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input } from "@yarns/ui";
-import { auth } from "@yarns/api-client";
+import { Alert, Button, Field, Input } from "@uprise/ui";
+import { auth } from "@uprise/api-client";
 
 
 export default function VerifyEmailPage() {

@@ -1,5 +1,5 @@
 import { SetMetadata } from "@nestjs/common";
-import { AppUserRole } from "@yarns/db";
+import { AppUserRole } from "@uprise/db";
 
 export const ROLES_KEY = "roles";
 

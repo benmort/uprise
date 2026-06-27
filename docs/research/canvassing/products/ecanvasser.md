@@ -112,7 +112,7 @@ What exists:
 - **All real messaging is integration-delivered, primarily via CallHub** [2]. The CallHub integration syncs Ecanvasser contact lists into CallHub and then enables: phone dialler campaigns, **peer-to-peer texting** (1:1 at scale), **broadcast SMS** (personalised bulk), and SMS follow-up when a call fails [2]. The intended pattern: canvass the door in Ecanvasser → push those contacts to CallHub → continue the relationship by phone/text [2].
 - Email broadcast is reached via NationBuilder/Mailchimp integrations, not natively [8][1].
 
-**Relevance to yarns:** Ecanvasser is the inverse of yarns. yarns is texting-first adding doors; Ecanvasser is doors-first and *outsources* texting. The "doors → P2P text follow-up" hand-off that Ecanvasser only achieves by bolting on CallHub is exactly the coupling yarns can own natively. The Open/Snoozed/Closed follow-up triage is a useful precedent for an inbox state model.
+**Relevance to uprise:** Ecanvasser is the inverse of uprise. uprise is texting-first adding doors; Ecanvasser is doors-first and *outsources* texting. The "doors → P2P text follow-up" hand-off that Ecanvasser only achieves by bolting on CallHub is exactly the coupling uprise can own natively. The Open/Snoozed/Closed follow-up triage is a useful precedent for an inbox state model.
 
 ---
 
@@ -128,7 +128,7 @@ What exists:
 
 **Scripts / talking points.** Delivered as a **"Talking Points"** feature for script standardisation – canvassers see approved talking points in the app, and can update them as part of an interaction [4][22]. This is content shown to the canvasser; it is *not* described as a branching script that triggers different canned answers based on contact response.
 
-**Reusability across channels.** **Weak.** Surveys and talking points live inside Ecanvasser's door app. Because texting happens in a *separate* tool (CallHub), there is **no shared script/survey object that drives canned responses in both a door interface and a text inbox**. This is precisely the cross-channel reuse yarns intends to build and that Ecanvasser does *not* have.
+**Reusability across channels.** **Weak.** Surveys and talking points live inside Ecanvasser's door app. Because texting happens in a *separate* tool (CallHub), there is **no shared script/survey object that drives canned responses in both a door interface and a text inbox**. This is precisely the cross-channel reuse uprise intends to build and that Ecanvasser does *not* have.
 
 ---
 
@@ -158,7 +158,7 @@ Default/example outcome codes seen in support and reporting docs [11][22]:
 
 Common extensions teams layer on: support level and issue category, applied via **custom field tags** on top of the interaction rather than as additional status codes [11]. Outcomes feed conversion-rate calculations and can build Dynamic Smart Lists for follow-up [11][22].
 
-**Takeaway for yarns:** Ecanvasser treats disposition as *configurable per org* (a small default set + custom statuses + a rating axis + tag layering), rather than a hard-coded taxonomy. That flexibility is worth copying, but note the cost: customisable-everything makes cross-org benchmarking and shared scripts harder.
+**Takeaway for uprise:** Ecanvasser treats disposition as *configurable per org* (a small default set + custom statuses + a rating axis + tag layering), rather than a hard-coded taxonomy. That flexibility is worth copying, but note the cost: customisable-everything makes cross-org benchmarking and shared scripts harder.
 
 ---
 
@@ -206,21 +206,21 @@ The unlimited-users + volume-based model is field-team friendly: you can deploy 
 
 ---
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow**
-1. **Turf/list assignment primitives.** Adopt static-vs-dynamic lists, and especially **auto-split-and-assign** for carving a universe into per-canvasser chunks – plus **time-bound lists** to open/close turf on schedule [20][4]. yarns can apply the same list primitive to *both* a walk list and a texting send list.
-2. **Houses-first, multi-contact-per-address model – but go further.** Ecanvasser's address-grouping is useful, but its lack of a real household object is a stated weakness. yarns should ship a **first-class household entity** so household-level survey answers ("how many voters here?", "yard sign?") and per-person answers can coexist [22][3].
+1. **Turf/list assignment primitives.** Adopt static-vs-dynamic lists, and especially **auto-split-and-assign** for carving a universe into per-canvasser chunks – plus **time-bound lists** to open/close turf on schedule [20][4]. uprise can apply the same list primitive to *both* a walk list and a texting send list.
+2. **Houses-first, multi-contact-per-address model – but go further.** Ecanvasser's address-grouping is useful, but its lack of a real household object is a stated weakness. uprise should ship a **first-class household entity** so household-level survey answers ("how many voters here?", "yard sign?") and per-person answers can coexist [22][3].
 3. **Publish gate + team scoping for surveys/scripts.** Unpublished-by-default with an approval step, and team-scoped assignment, are good guardrails for volunteer-facing content [6][5].
 4. **Configurable disposition model:** small sensible default set (Interested / Declined / Not Home / Follow-up) + custom statuses + a rating axis + tag layering [22][11]. Ship sane defaults so cross-org reporting still works.
-5. **Outcome-triggered follow-up + the Open/Snoozed/Closed conversation state.** Map field/text outcomes straight into yarns' inbox states; "Follow-up required" should drop a contact into the right journey/list automatically [3][11].
+5. **Outcome-triggered follow-up + the Open/Snoozed/Closed conversation state.** Map field/text outcomes straight into uprise' inbox states; "Follow-up required" should drop a contact into the right journey/list automatically [3][11].
 6. **Offline-first capture with explicit sync semantics**, and surface the staleness clearly – Ecanvasser's hourly-refresh footgun (two teams hit the same door) is a warning to make assignment locks real-time, not eventually-consistent [4][20].
 7. **Unlimited-seat, volume-based pricing** fits volunteer-heavy organising; per-seat would throttle adoption [14].
 
 **Avoid / beat**
-1. **The biggest opportunity: do natively what Ecanvasser bolts on.** Ecanvasser only reaches "knock the door → text the follow-up" by exporting to CallHub. yarns should make **the door interaction and the P2P text thread two views of one contact timeline**, no export [2].
-2. **Don't ship static talking points only.** Build **response-driven scripts/surveys whose answers fire canned responses in BOTH the door UI and the text inbox** – the shared script/survey object Ecanvasser lacks is yarns' core differentiator [4][5][2].
-3. **Don't stop at lists for "journeys."** Lists + manual follow-up is not a journey. yarns should ship a real **multi-step engagement sequence** (e.g. door not-home → text → re-knock → text reminder) that a contact progresses through automatically [7][3].
+1. **The biggest opportunity: do natively what Ecanvasser bolts on.** Ecanvasser only reaches "knock the door → text the follow-up" by exporting to CallHub. uprise should make **the door interaction and the P2P text thread two views of one contact timeline**, no export [2].
+2. **Don't ship static talking points only.** Build **response-driven scripts/surveys whose answers fire canned responses in BOTH the door UI and the text inbox** – the shared script/survey object Ecanvasser lacks is uprise' core differentiator [4][5][2].
+3. **Don't stop at lists for "journeys."** Lists + manual follow-up is not a journey. uprise should ship a real **multi-step engagement sequence** (e.g. door not-home → text → re-knock → text reminder) that a contact progresses through automatically [7][3].
 4. **Don't let "configurable everything" kill shared scripts.** Ecanvasser's fully-custom statuses fragment reporting and prevent reusable scripts. Keep a strong shared default taxonomy so scripts and benchmarks travel across orgs [22].
 5. **Don't underinvest in mobile stability/map accuracy** – the recurring complaint that undercuts an otherwise good product [3].
 

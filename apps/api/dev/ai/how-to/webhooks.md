@@ -1,6 +1,6 @@
 ---
 name: webhooks
-description: How to add a provider webhook in yarns – verify the raw-body signature, claim-before-act idempotency, release on throw.
+description: How to add a provider webhook in uprise – verify the raw-body signature, claim-before-act idempotency, release on throw.
 layer: api
 topic: webhooks
 use_when: Adding or changing any inbound provider webhook (Stripe, SendGrid, Twilio).

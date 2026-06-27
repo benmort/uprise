@@ -1,6 +1,6 @@
 ---
 name: db-and-prisma
-description: How @yarns/db wraps the generated Prisma client and how to change the schema.
+description: How @uprise/db wraps the generated Prisma client and how to change the schema.
 layer: packages
 topic: database
 use_when: Editing the Prisma schema, adding a model/enum, or regenerating the client.
@@ -9,16 +9,16 @@ last_reviewed: 2026-06-23
 
 # DB and Prisma
 
-`@yarns/db` is the generated Prisma client re-exported as a package; the api, worker and seeds import it rather than reaching into Prisma directly.
+`@uprise/db` is the generated Prisma client re-exported as a package; the api, worker and seeds import it rather than reaching into Prisma directly.
 
 Canonical: `packages/db/prisma/schema.prisma` (`datasource db` with `schemas = [...]` multiSchema, every model/enum tagged `@@schema("<domain>")`; `generator client` outputs to `../generated`) and `packages/db/package.json` (`main`/`types` point at `generated/`; scripts `prisma:generate`, `prisma:deploy`).
 
 ## Must have
 - The schema is multiSchema: each model and enum declares `@@schema("<domain>")` where the domain is one of the `schemas` array (`iam`, `tenant`, `audience`, `messaging`, `canvass`, `journey`, `integration`, `analytics`, `events`, `email`, `ops`, `payment`, `telephony`, `public`). A new model with no `@@schema` will not generate.
 - Keep an entity's domain consistent – its `@@schema` must match the namespace its events and permissions use (e.g. an audience model is `@@schema("audience")`).
-- After any schema edit, regenerate the client: `pnpm --filter @yarns/db prisma:generate` (the `postinstall` also runs it). Then rebuild any package/app that needs the new types.
+- After any schema edit, regenerate the client: `pnpm --filter @uprise/db prisma:generate` (the `postinstall` also runs it). Then rebuild any package/app that needs the new types.
 - Apply schema changes with hand-written, additive migrations via `prisma migrate deploy` (the `prisma:deploy` script). Never `migrate dev` – it drops the raw partial-unique indexes.
-- `@yarns/db` re-exports the generated client; consumers import from `@yarns/db`, never from `packages/db/generated/*` directly.
+- `@uprise/db` re-exports the generated client; consumers import from `@uprise/db`, never from `packages/db/generated/*` directly.
 
 ## Anti-patterns
 - Editing files under `packages/db/generated/` – they are generated output and are overwritten on the next `prisma:generate`.
@@ -28,9 +28,9 @@ Canonical: `packages/db/prisma/schema.prisma` (`datasource db` with `schemas = [
 
 ## Checklist
 - [ ] New models/enums carry `@@schema("<domain>")` matching the `schemas` array.
-- [ ] `pnpm --filter @yarns/db prisma:generate` run.
+- [ ] `pnpm --filter @uprise/db prisma:generate` run.
 - [ ] Migration is additive, hand-written, applied with `prisma:deploy` (not `migrate dev`).
-- [ ] Consumers import from `@yarns/db`, not `generated/`.
+- [ ] Consumers import from `@uprise/db`, not `generated/`.
 - [ ] Gate: walk `dev/ai/how-to/definition-of-done.md`.
 
 ## Related guides

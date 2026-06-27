@@ -2,13 +2,13 @@ import {
   defineAbilityFor,
   APP_USER_ROLE_TO_ROLE,
   type AuthenticatedActor,
-} from "@yarns/permissions";
+} from "@uprise/permissions";
 
 function actor(roles: string[]): AuthenticatedActor {
   return { id: "u1", type: "user", email: "u@org.au", tenantId: "t1", roles };
 }
 
-describe("@yarns/permissions role matrix", () => {
+describe("@uprise/permissions role matrix", () => {
   it("super-admin can manage everything", () => {
     const a = defineAbilityFor(actor(["super-admin"]));
     expect(a.can("manage", "all")).toBe(true);

@@ -18,7 +18,7 @@ export type TileManifest = {
   updatedAt: string;
 };
 
-const DB_NAME = "yarns-tilecache";
+const DB_NAME = "uprise-tilecache";
 const DB_VERSION = 1;
 const STORE = "manifests";
 

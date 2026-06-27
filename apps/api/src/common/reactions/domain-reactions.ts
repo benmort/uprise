@@ -1,5 +1,5 @@
 import type { ConfigService } from "@nestjs/config";
-import type { EventEnvelope, Reaction } from "@yarns/events";
+import type { EventEnvelope, Reaction } from "@uprise/events";
 import type { PrismaService } from "../../prisma/prisma.service";
 import type { EmailService } from "../../email/email.service";
 import type { StripeService } from "../../payment/stripe.service";

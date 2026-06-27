@@ -2,7 +2,7 @@
 
 Research date: 2026-06-16. Australian English. Citations [n] map to the Sources list.
 
-The single most important structural fact for yarns: NGP VAN does **not** ship a native peer-to-peer texting inbox. It ships a shared voter/contact database (VAN) plus a mobile door-knocking app (MiniVAN) and phone-bank tools, and it lets **the same Survey Questions and Activist Codes** drive scripts across door, phone and (third-party) text channels by writing back to one contact record. Yarns' bet (door + P2P text in one product around a shared record) is the thing VAN approximates only by stitching first-party canvassing onto third-party texting.
+The single most important structural fact for uprise: NGP VAN does **not** ship a native peer-to-peer texting inbox. It ships a shared voter/contact database (VAN) plus a mobile door-knocking app (MiniVAN) and phone-bank tools, and it lets **the same Survey Questions and Activist Codes** drive scripts across door, phone and (third-party) text channels by writing back to one contact record. Uprise' bet (door + P2P text in one product around a shared record) is the thing VAN approximates only by stitching first-party canvassing onto third-party texting.
 
 ---
 
@@ -58,7 +58,7 @@ VAN is a suite, not a single app. Components relevant here [1][7][12]:
 
 ## 6. Survey & script tooling
 
-This is VAN's strongest area and the closest analogue to yarns' "shareable script/survey that drives canned responses in both door and text" ambition [12].
+This is VAN's strongest area and the closest analogue to uprise' "shareable script/survey that drives canned responses in both door and text" ambition [12].
 
 - **Building blocks (reusable across channels):**
   - **Survey Questions** – a question with predefined response options; created once, reused everywhere.
@@ -77,7 +77,7 @@ This is VAN's strongest area and the closest analogue to yarns' "shareable scrip
 
 - **In VAN/MiniVAN field tooling: essentially none.** Canvassing is event-by-event; there is no trigger→action sequence engine on the field side. The ladder of engagement is expressed through **Activist Codes** (tags accumulate on a record over time) and through manually re-cutting universes for the next touch, not through automation [10][12].
 - **Automation lives on the EveryAction / NGP digital side**, not in canvassing: **email/SMS automation series** (welcome series, donor re-solicitation, re-engagement) and Online Actions forms that capture engagement data into the central database [3][13][14]. These are marketing-style drip sequences, not multi-channel organiser journeys that thread door+text+phone touches for one contact.
-- **Net:** VAN has the *data* to power a ladder (every touch on one record) but **no native journey/sequence engine** that turns "knocked + said maybe" into an automated next-step across channels. This is a real gap and an opportunity for yarns. (A purpose-built cross-channel journey engine in VAN – Unknown, not found.)
+- **Net:** VAN has the *data* to power a ladder (every touch on one record) but **no native journey/sequence engine** that turns "knocked + said maybe" into an automated next-step across channels. This is a real gap and an opportunity for uprise. (A purpose-built cross-channel journey engine in VAN – Unknown, not found.)
 
 ## 8. Disposition / outcome taxonomy
 
@@ -112,7 +112,7 @@ Busy · Deceased · Disconnected · Do Not Call · Left Message · Moved · Non-
 ## 10. Strengths & gaps
 
 **Strengths**
-- **One shared content library across channels** – Survey Questions and Activist Codes built once, reused in door/phone/(text) scripts. This is the model yarns wants [12].
+- **One shared content library across channels** – Survey Questions and Activist Codes built once, reused in door/phone/(text) scripts. This is the model uprise wants [12].
 - **One shared contact record** – door, phone and synced text outcomes all land on the VANID with history [6][10].
 - **Branched scripts** that physically guide novice volunteers down the right path on the door [12].
 - **Distributed/location-based assignment** – low-friction volunteer self-start without an organiser cutting turf [5].
@@ -126,21 +126,21 @@ Busy · Deceased · Disconnected · Do Not Call · Left Message · Moved · Non-
 - **Reliability/UX debt:** unreliable cross-canvasser sync, GPS placement issues, battery drain, household entry click-heavy; steep learning curve for admins [11]. The platform itself has had well-documented reliability problems under peak load [7].
 - **Closed ecosystem / US voter-file-shaped** – not adaptable to non-US or non-electoral contexts without heavy lifting [7].
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow**
-1. **A single reusable Survey Question + tag library that scripts compose from**, with the *same* objects driving both the door interface and the text inbox. VAN proves the org-side value of "create the question once, use it everywhere." Yarns should make this native across door + text rather than via sync [12].
-2. **Survey response options as the canned responses.** In MiniVAN a Survey Question's options are tap targets; in OpenVPB the same options are dropdowns; in a text inbox they become quick-reply chips. One definition, channel-appropriate rendering. This is exactly yarns' "canned responses in both door and text" goal [12].
+1. **A single reusable Survey Question + tag library that scripts compose from**, with the *same* objects driving both the door interface and the text inbox. VAN proves the org-side value of "create the question once, use it everywhere." Uprise should make this native across door + text rather than via sync [12].
+2. **Survey response options as the canned responses.** In MiniVAN a Survey Question's options are tap targets; in OpenVPB the same options are dropdowns; in a text inbox they become quick-reply chips. One definition, channel-appropriate rendering. This is exactly uprise' "canned responses in both door and text" goal [12].
 3. **Branched scripts** to lead inexperienced volunteers, with each response routing the next step – directly applicable to both door and text [12].
-4. **Contact-type-aware disposition taxonomy** with explicit **terminal codes that flag data quality** (Moved, Wrong Number, Deceased) and require confirmation – yarns should bake guardrails in, not bolt on later [2][12].
+4. **Contact-type-aware disposition taxonomy** with explicit **terminal codes that flag data quality** (Moved, Wrong Number, Deceased) and require confirmation – uprise should bake guardrails in, not bolt on later [2][12].
 5. **Distributed, location-based self-assignment** for canvassers as a first-class mode, not just pre-cut turf [5].
 6. **Auto-commit field data** with an organiser review step before it's trusted [1].
 
 **Avoid / beat**
-1. **Don't split channels across products.** VAN's biggest weakness is that texting is a separate tool synced back. Yarns' edge is a **genuinely shared contact timeline and per-contact assignment** where a door conversation and a text thread are the same record in one inbox – build the thing VAN can only approximate.
+1. **Don't split channels across products.** VAN's biggest weakness is that texting is a separate tool synced back. Uprise' edge is a **genuinely shared contact timeline and per-contact assignment** where a door conversation and a text thread are the same record in one inbox – build the thing VAN can only approximate.
 2. **Don't leave journeys to manual re-cutting.** Ship a **trigger→action journey engine** ("knocked + maybe" → schedule a follow-up text; "not home x2" → drip a reminder) – the explicit gap in VAN.
 3. **Don't repeat the sync/reliability failures** – cross-canvasser real-time state, accurate map pins, low battery cost and minimal taps for household members are the named complaints; treat them as launch requirements [11].
-4. **Don't over-gate.** VAN's closed, committee-brokered access is a moat for them but a barrier; yarns can win the non-electoral / international / smaller-org space VAN ignores.
+4. **Don't over-gate.** VAN's closed, committee-brokered access is a moat for them but a barrier; uprise can win the non-electoral / international / smaller-org space VAN ignores.
 
 ## 12. Sources
 
@@ -161,6 +161,6 @@ Busy · Deceased · Disconnected · Do Not Call · Left Message · Moved · Non-
 
 ---
 
-### 3-sentence summary for yarns
+### 3-sentence summary for uprise
 
-NGP VAN already does the thing yarns most cares about – **a single reusable library of Survey Questions and Activist Codes whose response options become the canned answers in both the door app (MiniVAN) and phone/text scripts**, all writing back to one shared contact record (VANID) – which validates yarns' "shared script/survey across channels" thesis. But VAN has **no native P2P texting inbox** (texting is outsourced to ThruText/GetThru and merely synced back) and **no cross-channel journey/sequence engine** (ladders are manual via tags and re-cut universes), so yarns' winning wedge is making the door conversation and the text thread genuinely the *same* timeline with shared per-contact assignment plus trigger→action journeys. Borrow VAN's reusable survey-driven scripts, branched flows, contact-type-aware disposition taxonomy (with guardrails on terminal "bad data" codes) and location-based distributed assignment; avoid its split-product channels, manual ladders and well-documented sync/GPS/battery reliability debt.
+NGP VAN already does the thing uprise most cares about – **a single reusable library of Survey Questions and Activist Codes whose response options become the canned answers in both the door app (MiniVAN) and phone/text scripts**, all writing back to one shared contact record (VANID) – which validates uprise' "shared script/survey across channels" thesis. But VAN has **no native P2P texting inbox** (texting is outsourced to ThruText/GetThru and merely synced back) and **no cross-channel journey/sequence engine** (ladders are manual via tags and re-cut universes), so uprise' winning wedge is making the door conversation and the text thread genuinely the *same* timeline with shared per-contact assignment plus trigger→action journeys. Borrow VAN's reusable survey-driven scripts, branched flows, contact-type-aware disposition taxonomy (with guardrails on terminal "bad data" codes) and location-based distributed assignment; avoid its split-product channels, manual ladders and well-documented sync/GPS/battery reliability debt.

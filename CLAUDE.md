@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Core guidance for AI agents working in yarns. Layer-specific detail lives in `apps/api/CLAUDE.md` and `apps/admin/CLAUDE.md`; deep patterns live in the guides routed from `dev/ai/guide-map.md`.
+Core guidance for AI agents working in uprise. Layer-specific detail lives in `apps/api/CLAUDE.md` and `apps/admin/CLAUDE.md`; deep patterns live in the guides routed from `dev/ai/guide-map.md`.
 
 ## CORE RULES
 
@@ -8,14 +8,14 @@ Binding – follow on every task.
 
 1. **Plan before executing** – for non-trivial work, plan and get approval before editing.
 2. **Use the guide map** – start at `dev/ai/guide-map.md` and read every guide whose frontmatter (`use_when`) fits the task. The guide-read is unconditional, not gated on whether the task "seems" to need one.
-3. **Architecture canon is `docs/meld/`** – the meld docs (00–14) are the authoritative design of how yarns is built (outbox/reactions, schema namespacing, FSM, SSO). Read the relevant one before changing a subsystem.
+3. **Architecture canon is `docs/meld/`** – the meld docs (00–14) are the authoritative design of how uprise is built (outbox/reactions, schema namespacing, FSM, SSO). Read the relevant one before changing a subsystem.
 4. **Australian English everywhere; en-dashes, never em-dashes** – `organise`, `colour`, `authorise`, `analyse`. Use a spaced en-dash for parenthetical breaks; never the em-dash character.
-5. **Imports** – cross-package code is imported via the `@yarns/*` workspace packages (`@yarns/db`, `@yarns/events`, `@yarns/permissions`, `@yarns/contracts`, `@yarns/ui`, `@yarns/api-client`). Within an app, use relative imports. yarns has **no** intra-app path aliases – do not invent `@api/`-style ones.
+5. **Imports** – cross-package code is imported via the `@uprise/*` workspace packages (`@uprise/db`, `@uprise/events`, `@uprise/permissions`, `@uprise/contracts`, `@uprise/ui`, `@uprise/api-client`). Within an app, use relative imports. uprise has **no** intra-app path aliases – do not invent `@api/`-style ones.
 6. **Keep changes minimal** – simplicity first; change only what the task needs.
 7. **Research before changing** – read the existing code (the Canonical reference in the relevant guide) first.
 8. **Validate every code change** – `pnpm -r typecheck` and `pnpm --filter api test` (which includes the `app.module.boot.spec.ts` DI boot smoke), plus a build of any app you changed. Docs-only work can skip. See `dev/ai/how-to/definition-of-done.md`.
-9. **Migrations are additive, applied with `prisma migrate deploy`** – never `prisma migrate dev` (it drops the raw partial-unique indexes). Hand-write the SQL, regenerate the client, rebuild `@yarns/db`. See `apps/api/dev/ai/how-to/migrations.md`.
-10. **Rebuild `@yarns/*` dist after editing its `src`** (`pnpm --filter @yarns/<pkg> build`) so consumers pick it up – except `@yarns/ui`, which apps consume from source via `transpilePackages`.
+9. **Migrations are additive, applied with `prisma migrate deploy`** – never `prisma migrate dev` (it drops the raw partial-unique indexes). Hand-write the SQL, regenerate the client, rebuild `@uprise/db`. See `apps/api/dev/ai/how-to/migrations.md`.
+10. **Rebuild `@uprise/*` dist after editing its `src`** (`pnpm --filter @uprise/<pkg> build`) so consumers pick it up – except `@uprise/ui`, which apps consume from source via `transpilePackages`.
 11. **State writes that matter emit their domain event in the same transaction** – `OutboxService.append(tx, evt)` inside the `prisma.$transaction` that writes the row. See `apps/api/dev/ai/how-to/outbox-and-reactions.md`.
 12. **Create docs only when asked** – first-write documentation on explicit request, not by default.
 13. **Claim only what you've verified** – say "done"/"green" only with the command output to back it; flag anything unrun or untested as such; when you can't confirm a fact, say so plainly rather than guess.
@@ -45,7 +45,7 @@ You are an expert engineer – bring judgement, don't just comply.
 ## PROJECT STRUCTURE
 
 ```
-yarns/  (pnpm workspace – apps/* + packages/*)
+uprise/  (pnpm workspace – apps/* + packages/*)
 ├── apps/
 │   ├── api/         # NestJS modular monolith – ALL backend domains under src/<domain>/  (see apps/api/CLAUDE.md)
 │   ├── worker/      # BullMQ consumers + the outbox relay
@@ -53,12 +53,12 @@ yarns/  (pnpm workspace – apps/* + packages/*)
 │   ├── auth/        # Next.js standalone auth/SSO app (port 3002)
 │   └── marketing/   # Next.js marketing site (port 3003)
 └── packages/
-    ├── db/          # @yarns/db – Prisma schema (multiSchema) + generated client
-    ├── events/      # @yarns/events – domain-event catalogue + Reaction contract
-    ├── permissions/ # @yarns/permissions – CASL abilities + roles
-    ├── contracts/   # @yarns/contracts – shared DTO/contract types
-    ├── api-client/  # @yarns/api-client – typed client for the Next apps
-    └── ui/          # @yarns/ui – Tailwind v4 CSS-first design system (source-consumed)
+    ├── db/          # @uprise/db – Prisma schema (multiSchema) + generated client
+    ├── events/      # @uprise/events – domain-event catalogue + Reaction contract
+    ├── permissions/ # @uprise/permissions – CASL abilities + roles
+    ├── contracts/   # @uprise/contracts – shared DTO/contract types
+    ├── api-client/  # @uprise/api-client – typed client for the Next apps
+    └── ui/          # @uprise/ui – Tailwind v4 CSS-first design system (source-consumed)
 ```
 
 Hybrid event model: Prisma rows are the source of truth + a transactional outbox + reactions (BullMQ `domain-events`). FSMs are enum + `*-state.machine.ts`. Cross-schema references are id-only (no cross-schema FKs).

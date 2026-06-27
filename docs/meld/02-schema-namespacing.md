@@ -4,7 +4,7 @@ Foundation step 3. Enable Prisma `multiSchema`, map every domain to a Postgres s
 
 ## Why
 
-prog and slingshot both isolate domains into their own Postgres schemas. Mirroring that in yarns makes each domain independently ownable and migratable, and is the single biggest lever for a low-friction slingshot merge later (doc 13).
+prog and slingshot both isolate domains into their own Postgres schemas. Mirroring that in uprise makes each domain independently ownable and migratable, and is the single biggest lever for a low-friction slingshot merge later (doc 13).
 
 ## Enable multiSchema
 
@@ -64,8 +64,8 @@ Data loss is acceptable (doc 00 Mandate), so this is a clean recreate, not delic
 ## Verification
 
 ```bash
-pnpm --filter @yarns/db prisma:migrate reset
-pnpm --filter @yarns/db run seed
+pnpm --filter @uprise/db prisma:migrate reset
+pnpm --filter @uprise/db run seed
 pnpm --filter api test
 ```
 

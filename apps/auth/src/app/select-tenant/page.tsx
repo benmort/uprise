@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button } from "@yarns/ui";
-import { auth, type Membership } from "@yarns/api-client";
+import { Alert, Button } from "@uprise/ui";
+import { auth, type Membership } from "@uprise/api-client";
 import { validateReturnTo } from "@/lib/return-to";
 
 const ROLE_LABELS: Record<string, string> = {

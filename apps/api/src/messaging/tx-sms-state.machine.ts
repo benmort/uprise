@@ -1,4 +1,4 @@
-import { TxSmsStatus } from "@yarns/db";
+import { TxSmsStatus } from "@uprise/db";
 import { assertTransition, type TransitionMap } from "../common/fsm/assert-transition";
 
 // Mirrors prog's sms-message aggregate: pending → queued → sent → delivered |

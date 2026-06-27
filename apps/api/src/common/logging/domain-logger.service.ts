@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 
 @Injectable()
 export class DomainLogger {
-  private readonly root = new Logger("YarnsApi");
+  private readonly root = new Logger("UpriseApi");
 
   debug(domain: string, message: string, context?: Record<string, unknown>): void {
     this.root.debug(this.format(domain, message, context));

@@ -1,11 +1,11 @@
 ---
-name: yarns-dispatch
+name: uprise-dispatch
 description: Turn a task description into a self-contained dispatch brief and a fresh git worktree for a cold agent. Use when handing work to a sub-agent or a new session, "dispatch this", "write a brief", "prep a worktree", or "spin up an agent for this task".
 ---
 
-# Yarns dispatch
+# Uprise dispatch
 
-Prepare a cold agent to execute a unit of work it cannot see the context for. The input is a **task description** – a paragraph of what to build – not a tracker item. yarns is board-free: there is no Plane, no stories/epics, no dev/product registry. The unit of work is the task brief you are about to write, backed by the plan file / TODO notes / a docs runbook.
+Prepare a cold agent to execute a unit of work it cannot see the context for. The input is a **task description** – a paragraph of what to build – not a tracker item. uprise is board-free: there is no Plane, no stories/epics, no dev/product registry. The unit of work is the task brief you are about to write, backed by the plan file / TODO notes / a docs runbook.
 
 Output is two things: a **dispatch brief** the agent reads first, and a **git worktree** it runs in.
 
@@ -30,8 +30,8 @@ Output is two things: a **dispatch brief** the agent reads first, and a **git wo
 The brief is a single document with these sections, in order. Anything missing means the agent will guess.
 
 1. **Task** – one or two imperative sentences: what to build, restated from the task description. No "should" / "consider".
-2. **Read-first inputs** – the guides the task routes to (from `guide-map.md`) **and** the Canonical yarns files those guides name. Cite by repo-relative path. This is the section the agent reads before touching code.
-3. **The work** – the concrete steps / surface to change, in imperatives. Name the schema namespace, event, FSM, endpoint, or queue involved. Keep diffs minimal; rebuild any `@yarns/*` dist touched.
+2. **Read-first inputs** – the guides the task routes to (from `guide-map.md`) **and** the Canonical uprise files those guides name. Cite by repo-relative path. This is the section the agent reads before touching code.
+3. **The work** – the concrete steps / surface to change, in imperatives. Name the schema namespace, event, FSM, endpoint, or queue involved. Keep diffs minimal; rebuild any `@uprise/*` dist touched.
 4. **Deliverables** – the files/behaviour expected to exist at the end, and the new test(s) covering new behaviour.
 5. **Gate** – verbatim: `pnpm --filter api test` green incl. the `app.module.boot.spec.ts` boot smoke; `pnpm -r typecheck` green; the DoD security line (new/changed endpoints carry `@RequirePermission`; webhooks `claim`-guard; DTOs class-validator-validated; no secret/PII in logs); state+event writes atomic via `OutboxService.append(tx, …)`; migrations additive via `prisma migrate deploy`. Cite `dev/ai/how-to/definition-of-done.md`.
 6. **Blast-radius boundary** – what is out of scope, and the confirmation-gated actions (real-DB migration apply, mass sends, destructive/foreign deletions). The agent surfaces these, it does not run them.
@@ -46,12 +46,12 @@ The brief is a single document with these sections, in order. Anything missing m
 
 ## Anti-patterns
 
-- Treating the input as a story / tracker item, or inventing an epic, ticket, or registry id – yarns is board-free.
+- Treating the input as a story / tracker item, or inventing an epic, ticket, or registry id – uprise is board-free.
 - Pasting code or whole-file context into the brief instead of citing the Canonical file (`dev/ai/how-to/prompting-agents.md`).
 - Omitting the boot smoke from the gate – a green typecheck and build still ship a broken DI graph.
 - Leaving scope open ("make it production-ready") with no deliverables or success criteria.
 - Letting the agent run confirmation-gated actions (real-DB migration, mass send, foreign deletion) because the brief never named them.
-- slingshot idioms in the work section: `@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`. yarns uses `prisma.$transaction(async tx => …)`, class-validator DTOs, `@RequirePermission` + CASL, `OutboxService.append`, enum + `*-state.machine.ts` FSMs, BullMQ `DispatchQueue` with idempotent `getXJobId`.
+- slingshot idioms in the work section: `@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`. uprise uses `prisma.$transaction(async tx => …)`, class-validator DTOs, `@RequirePermission` + CASL, `OutboxService.append`, enum + `*-state.machine.ts` FSMs, BullMQ `DispatchQueue` with idempotent `getXJobId`.
 - Running the brief on the caller's working tree instead of a dedicated worktree.
 
 ## Checklist

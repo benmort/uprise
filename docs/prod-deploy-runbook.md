@@ -1,4 +1,4 @@
-# Yarns production deploy runbook
+# Uprise production deploy runbook
 
 Exact steps to take the `feat/canvassing-domain` work to production (Neon + Vercel + Twilio/Meta). Run top to bottom; each step is idempotent unless noted. Commands assume repo root `/…/common-threads/yarns`.
 

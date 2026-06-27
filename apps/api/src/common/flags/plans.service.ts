@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@yarns/db";
-import { isFeatureFlagKey } from "@yarns/flags";
+import { Prisma } from "@uprise/db";
+import { isFeatureFlagKey } from "@uprise/flags";
 import { PrismaService } from "../../prisma/prisma.service";
 
 /** Keep only valid catalogue flag keys with boolean values. */

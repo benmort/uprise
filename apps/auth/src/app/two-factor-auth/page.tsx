@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, OtpInput } from "@yarns/ui";
-import { auth } from "@yarns/api-client";
+import { Alert, Button, OtpInput } from "@uprise/ui";
+import { auth } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
 

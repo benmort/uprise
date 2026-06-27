@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { MessageChannel } from "@yarns/db";
+import { MessageChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 
 /**

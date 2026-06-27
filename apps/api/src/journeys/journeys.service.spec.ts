@@ -1,4 +1,4 @@
-import { JourneyEnrolmentState, JourneyStatus, JourneyTriggerType } from "@yarns/db";
+import { JourneyEnrolmentState, JourneyStatus, JourneyTriggerType } from "@uprise/db";
 import { JourneysService } from "./journeys.service";
 
 describe("JourneysService", () => {

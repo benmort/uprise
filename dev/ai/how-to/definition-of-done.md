@@ -1,6 +1,6 @@
 ---
 name: definition-of-done
-description: The evidence gate for declaring any yarns work done – each line verified and stated with evidence, never asserted.
+description: The evidence gate for declaring any uprise work done – each line verified and stated with evidence, never asserted.
 layer: root
 topic: process
 use_when: Declaring any piece of work done, or ending a build session.
@@ -18,14 +18,14 @@ The single answer to "am I done?" – before declaring work done, verify and **s
 3. **Build** – any app/package you changed builds (`pnpm --filter <name> build`). The Next apps' build is the real gate for Tailwind/config changes.
 4. **Security** – new/changed endpoints carry `@RequirePermission` (or a justified public-allowlist entry). Authentication is enforced globally, but permission-gating is opt-in: `AbilityGuard` lets any undecorated route through, and nothing scans for the missing decorator – an undecorated endpoint is silently reachable by any authenticated user. Also: provider webhooks `claim`-guard before acting; DTOs are class-validator-validated; no secret/PII in logs.
 5. **Events & transactions** – a state write that has a domain event emits it via `OutboxService.append(tx, …)` in the **same** `prisma.$transaction`; FSM transitions go through the state machine's guard.
-6. **Migrations** – schema changes are additive, hand-written, applied with `prisma migrate deploy` (never `migrate dev`); client regenerated; `@yarns/db` rebuilt.
+6. **Migrations** – schema changes are additive, hand-written, applied with `prisma migrate deploy` (never `migrate dev`); client regenerated; `@uprise/db` rebuilt.
 7. **No unverified claims** – anything not run/tested is declared as such.
 
 ## Anti-patterns
 
 - "Typecheck should pass" – it was not run. Run it; paste it.
 - Skipping the api test run because "it's a small change" – the boot smoke catches DI breaks a typecheck can't.
-- Editing a `@yarns/*` package's `src` and not rebuilding its dist – consumers still see the old build.
+- Editing a `@uprise/*` package's `src` and not rebuilding its dist – consumers still see the old build.
 - `prisma migrate dev` – drops the raw partial-unique indexes.
 - Emitting a domain event outside the transaction that wrote the row – a crash between them loses the event.
 
@@ -36,7 +36,7 @@ The single answer to "am I done?" – before declaring work done, verify and **s
 - [ ] Changed apps/packages built.
 - [ ] Security line verified for every new/changed entry point.
 - [ ] State+event writes atomic; FSM guards used.
-- [ ] Migrations additive via `migrate deploy`; client regenerated; `@yarns/db` rebuilt.
+- [ ] Migrations additive via `migrate deploy`; client regenerated; `@uprise/db` rebuilt.
 - [ ] Everything not run/tested explicitly declared as such.
 
 ## Related guides

@@ -7,7 +7,7 @@ import type { OutboxRecord, OutboxStatus, OutboxStore } from "./sync-queue";
 // store-agnostic and unit-tested against InMemoryOutboxStore; this is the thin
 // persistence layer used in the PWA.
 
-const DB_NAME = "yarns-canvass";
+const DB_NAME = "uprise-canvass";
 const DB_VERSION = 1;
 const OUTBOX = "outbox";
 

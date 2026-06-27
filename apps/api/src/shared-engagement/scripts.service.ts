@@ -1,5 +1,5 @@
 import { Injectable, HttpStatus } from "@nestjs/common";
-import { EngagementChannel } from "@yarns/db";
+import { EngagementChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 

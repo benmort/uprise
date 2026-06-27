@@ -310,7 +310,7 @@ apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
 metadata:
   name: default
-  namespace: yarns-production
+  namespace: uprise-production
 spec:
   selector:
     matchLabels:
@@ -388,7 +388,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: database-credentials
-  namespace: yarns-production
+  namespace: uprise-production
 type: Opaque
 data:
   username: <base64-encoded-username>
@@ -522,7 +522,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: YarnsWebACL
+      Name: UpriseWebACL
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -740,7 +740,7 @@ security-tests:
 
   - name: DAST (Dynamic Application Security Testing)
     tool: OWASP ZAP
-    target: https://api.yarns.com
+    target: https://api.uprise.com
 
   - name: Dependency Scanning
     tool: npm audit

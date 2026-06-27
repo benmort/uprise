@@ -1,6 +1,6 @@
 "use client";
 
-import { auth, getAuthAppUrl, type AuthPrincipal } from "@yarns/api-client";
+import { auth, getAuthAppUrl, type AuthPrincipal } from "@uprise/api-client";
 
 /**
  * Client session helpers (meld doc 14). apps/admin no longer holds credentials —

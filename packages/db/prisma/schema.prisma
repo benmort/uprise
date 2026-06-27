@@ -1545,7 +1545,7 @@ enum CallStatus {
   @@schema("telephony")
 }
 
-// One outbound voice call. Net-new to yarns (SMS/WhatsApp live in messaging).
+// One outbound voice call. Net-new to uprise (SMS/WhatsApp live in messaging).
 // id-only contactId ref to public.Contact (cross-schema decoupling rule).
 model Call {
   id              String     @id @default(cuid())

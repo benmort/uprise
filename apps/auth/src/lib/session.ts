@@ -1,4 +1,4 @@
-import type { Membership } from "@yarns/contracts";
+import type { Membership } from "@uprise/contracts";
 import { validateReturnTo } from "./return-to";
 
 /**

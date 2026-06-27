@@ -1,11 +1,11 @@
-# yarns direction – door-knocking coupled with the P2P inbox
+# uprise direction – door-knocking coupled with the P2P inbox
 
-How the market findings (see `synthesis.md` and `products/`) map onto yarns'
+How the market findings (see `synthesis.md` and `products/`) map onto uprise'
 actual code. This is **direction, not an implementation spec** – it names the
 shape, the reusable pieces, and the forks to settle in a later planning round.
 Date: 2026-06-16.
 
-## Where yarns stands today (the relevant code)
+## Where uprise stands today (the relevant code)
 
 - **Conversations key on a phone string, not a person.**
   `ConversationState` is unique on `(organizationId, contactPhone)`
@@ -26,7 +26,7 @@ Date: 2026-06-16.
 - **Integration sync** (`apps/api/src/integrations/`) maps external contacts and
   already stuffs custom fields into `AudienceContact.metadata`.
 
-yarns today repeats the exact structural mistake the ThruText and Spoke dossiers
+uprise today repeats the exact structural mistake the ThruText and Spoke dossiers
 flag as their worst: **conversation and contact data keyed to a campaign/phone,
 not a persistent person.** Fixing this is the foundation for coupling door and
 text.
@@ -95,7 +95,7 @@ layer** that both the inbox and the door interface consume. New Prisma models
    Workflows + AN ladders. Triggers: disposition set, message received, survey
    answer, no-answer-after-N. Actions: queue a blast/P2P text, create a door-knock
    task, tag, wait, hand to a human. **Door tasks and text sends are first-class
-   rung actions.** This is yarns' clearest differentiator – no competitor does
+   rung actions.** This is uprise' clearest differentiator – no competitor does
    cross-channel door+text automation.
 4. **Two-way handoff.** A "next action" on `Contact` lets a texter route a contact
    to a canvasser's walk list and a canvasser flag a contact for texting.
@@ -132,7 +132,7 @@ layer** that both the inbox and the door interface consume. New Prisma models
 
 The market has no product that unifies door-knocking and a P2P texting inbox
 around one contact with shared scripts/surveys and real cross-channel automation.
-That is precisely yarns' opening. The work divides into: (1) a persistent
+That is precisely uprise' opening. The work divides into: (1) a persistent
 `Contact` spine, (2) a shared `Script`/`Survey`/`CannedResponse`/`Disposition`
 layer feeding both interfaces, (3) a canvassing domain, and (4) a journeys
 engine on the existing queue infrastructure. Do (1) and (2) first – they make the

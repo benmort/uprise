@@ -1,4 +1,4 @@
-import { request as cookieRequest, getApiUrl, type ApiResult } from "@yarns/api-client";
+import { request as cookieRequest, getApiUrl, type ApiResult } from "@uprise/api-client";
 
 export { getApiUrl };
 export type { ApiResult };
@@ -27,7 +27,7 @@ export type AudienceImportProgress = {
 };
 
 /**
- * Cookie-based request (meld doc 14). Delegates to @yarns/api-client, which sends
+ * Cookie-based request (meld doc 14). Delegates to @uprise/api-client, which sends
  * the httpOnly session cookie (credentials:include) and bounces to the auth app on
  * 401. The legacy third arg is accepted for call-site compatibility but ignored —
  * auth is the cookie, not a per-call header.

@@ -1,10 +1,10 @@
 # Synthesis – canvassing + P2P texting product landscape
 
 Cross-product analysis of the 11 dossiers in `products/`. Read those for the
-cited detail; this file distils the patterns that matter for yarns' door-knocking
+cited detail; this file distils the patterns that matter for uprise' door-knocking
 + P2P inbox build. Date: 2026-06-16.
 
-The four questions yarns cares about:
+The four questions uprise cares about:
 1. How door-knocking couples to a texting inbox.
 2. Shared script / canned-response architecture across channels.
 3. Shared survey model and where responses land.
@@ -36,7 +36,7 @@ Legend: ✅ native and strong · 🟡 partial / weak / via add-on · ❌ none ·
 - **Nobody owns the whole stack well.** The market splits into canvassing-first
   (VAN, Qomon, Ecanvasser) and texting-first (ThruText, Hustle, Spoke,
   CallHub), with relational platforms (Impactive, Reach, OutreachCircle)
-  straddling. The door↔inbox coupling yarns wants is a real gap.
+  straddling. The door↔inbox coupling uprise wants is a real gap.
 - **Where coupling exists today it is a data sync, not a unified inbox.** VAN is
   the integration hub: ThruText/Hustle write text outcomes back to the VANID;
   MiniVAN writes door outcomes to the same record. There is no product where a
@@ -52,7 +52,7 @@ Legend: ✅ native and strong · 🟡 partial / weak / via add-on · ❌ none ·
 ## 2. Door ↔ inbox coupling – the patterns
 
 Four distinct coupling mechanisms appear across the products. They are not
-exclusive; yarns should do all four.
+exclusive; uprise should do all four.
 
 1. **Shared contact spine.** One person record carries every touch – door, text,
    call, email – on a single timeline with a shared "last reached" clock.
@@ -69,7 +69,7 @@ exclusive; yarns should do all four.
 
 3. **Auto follow-up on outcome.** An outcome triggers the next touch – e.g.
    "not home" → queue a follow-up text. Only CallHub Workflows and AN ladders do
-   this as real automation; everyone else is manual. **Lesson: this is yarns'
+   this as real automation; everyone else is manual. **Lesson: this is uprise'
    journeys engine, and it is a differentiator.**
 
 4. **Two-way handoff.** A door knock can flag a contact for texting and vice
@@ -104,7 +104,7 @@ Action Network and ThruText:
 
 **The gap every product leaves:** canned responses are usually fragmented per
 channel (CallHub) or per campaign (Spoke), and several (Spoke) let a canned
-reply send *without* logging a disposition – silently dropping data. yarns
+reply send *without* logging a disposition – silently dropping data. uprise
 should make **one shared script/survey/canned-response library** that:
 - drives door disposition buttons AND text canned replies from the same object;
 - always captures a disposition when a canned response is used;
@@ -124,7 +124,7 @@ should make **one shared script/survey/canned-response library** that:
   answer fires a handler that syncs to VAN / Action Network) is the clean
   mechanism.
 
-**Lesson for yarns:** model `Survey` → `Question` (typed) → `QuestionOption`,
+**Lesson for uprise:** model `Survey` → `Question` (typed) → `QuestionOption`,
 with a `QuestionResponse` stored against the shared contact and tagged with the
 channel + campaign it came from. The same `Survey` is attachable to a door
 workflow and a text journey.
@@ -138,7 +138,7 @@ Two reference engines, both worth studying:
 - **Action Network – ladders of engagement.** trigger → wait → decision-tree →
   action; email and SMS are interchangeable rungs; supports branching
   ("simulate a conversation"), time-windowed re-entry and sunsetting (e.g.
-  re-evaluate engagement after 120 days). The closest market analogue to yarns
+  re-evaluate engagement after 120 days). The closest market analogue to uprise
   "journeys".
 - **CallHub – Workflows.** A clean trigger/condition/action grammar: triggers
   (tag added, message received, call/text disposition), conditions (if/else),
@@ -148,11 +148,11 @@ Two reference engines, both worth studying:
 Everyone else is manual (Reach action cards, OutreachCircle reminders) or
 single-hop (Hustle keyword auto-reply + one reminder).
 
-**Lesson for yarns:** build a real trigger → condition → action journey engine on
+**Lesson for uprise:** build a real trigger → condition → action journey engine on
 the existing BullMQ queues, where **door-knock tasks and P2P text sends are
 first-class rung actions**, dispositions/tags are triggers, and any rung can
 hand off to a human in the inbox. This is the single biggest feature gap in the
-market and yarns' clearest differentiator.
+market and uprise' clearest differentiator.
 
 ---
 
@@ -192,5 +192,5 @@ From the field-app complaints in the dossiers (MiniVAN, Qomon):
 - Genuine offline maps – cache tiles (Qomon's map is unavailable offline).
 - GPS pin accuracy; battery drain; minimal taps for household entry.
 - Server-owned conversation queue distribution so two texters never collide
-  (CallHub does this well; yarns' current ownership is client-side localStorage
+  (CallHub does this well; uprise' current ownership is client-side localStorage
   only – see `apps/admin/src/lib/responder-alerts.ts`).

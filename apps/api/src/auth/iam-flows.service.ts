@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "crypto";
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole, Prisma } from "@yarns/db";
+import { AppUserRole, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { SessionService } from "./session.service";

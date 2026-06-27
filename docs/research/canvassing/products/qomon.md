@@ -1,6 +1,6 @@
 # Qomon – Product Dossier
 
-Research date: 2026-06-16. Prepared for the yarns canvassing + P2P texting platform.
+Research date: 2026-06-16. Prepared for the uprise canvassing + P2P texting platform.
 
 Qomon (qomon.com) is a modern "Supporter Activation Platform" combining a CRM, a field/mobile organising app (canvassing, phone banking), communications (email, broadcast SMS), events, petitions/forms, fundraising and mapping. Originally French (Paris), now Paris + Washington D.C. based, certified B Corp, serving 1,500+ organisations across 70+ countries [1][2][7].
 
@@ -56,7 +56,7 @@ From the homepage and product navigation [2]:
 
 ## 3. Canvassing / door-knock UX (detailed)
 
-This is Qomon's strongest area and the most relevant reference for yarns.
+This is Qomon's strongest area and the most relevant reference for uprise.
 
 **Setting up a canvassing action (organiser side)** [4 (create-action article)]. Three creation paths:
 1. From scratch (Actions tab > Create Action > Canvassing).
@@ -109,13 +109,13 @@ Reconstructed from CRM help articles and product pages [2][CRM help collection][
 
 ## 5. P2P texting / inbox
 
-**Important for yarns: Qomon does NOT have a true P2P texting inbox.** There are two distinct messaging capabilities and neither is a two-way conversational inbox:
+**Important for uprise: Qomon does NOT have a true P2P texting inbox.** There are two distinct messaging capabilities and neither is a two-way conversational inbox:
 
 1. **Broadcast SMS/MMS** [9]. One-way mass messaging to filtered contact lists. The first 11 characters of your chosen name appear as the sender. An automatic "STOP SMS" footer is appended for compliance (removable only for informational messages). An "Optimize" button strips problematic special characters. The help docs make **no mention of two-way replies, a conversation/inbox view, or reply management** – it is send-and-report only.
 
 2. **"Sharing" / supporter amplification action** [P2P texting blog; share-action help]. This is what Qomon *calls* peer-to-peer, but it is relational broadcast, not 1:1 texting: an organiser drafts a message and assigns it to volunteers, who then share it with their own networks via their phone's native SMS, plus Facebook, X/Twitter, Slack, Instagram, email, etc. Recipients get it from a known person (the trust mechanic), but there is no inbox, no reply threading, and Qomon does not host the conversation.
 
-**Relationship to canvassing.** Messaging is a *downstream next step* from canvassing, not coupled to it. After a door or call interaction, the volunteer/organiser can queue follow-up emails (automatic, response-triggered) and SMS, and trigger automatic SMS during actions [SMS auto help][4]. But there is no shared conversational surface where a door interaction and a text thread live together. **This is precisely the gap yarns is built to fill.**
+**Relationship to canvassing.** Messaging is a *downstream next step* from canvassing, not coupled to it. After a door or call interaction, the volunteer/organiser can queue follow-up emails (automatic, response-triggered) and SMS, and trigger automatic SMS during actions [SMS auto help][4]. But there is no shared conversational surface where a door interaction and a text thread live together. **This is precisely the gap uprise is built to fill.**
 
 There is also an **automatic SMS** feature that fires SMS during actions based on triggers, and email automation triggered by survey responses/status/opportunities [4][SMS auto help].
 
@@ -125,7 +125,7 @@ There is also an **automatic SMS** feature that fires SMS during actions based o
 
 **Surveys** [Help: create-a-survey]. Built from sections + questions. Eight question types: Checkbox, Date, Numeric, Photos, Range, Short Answer, Signature, Single Response. Four default templates are provided and customisable. **Conditional questions** (Qomon's term for skip logic) display follow-ups and create branching paths based on answers. Publishing makes a survey "instantly available on the mobile app."
 
-**Cross-channel reuse.** Surveys are the shared data-collection layer across actions: they "launch automatically as part of a canvassing or calling action," and can be started manually from the mobile app via "Start a survey" [create-a-survey]. Advanced/Expert plans allow **multiple surveys, each linked to a specific action** [create-a-survey][Help: using-multiple-surveys]. So the same survey object can drive both door and phone interactions – good precedent for yarns' goal of one script/survey across door + text. Online/web forms exist as a separate "Forms" product, but the help docs primarily describe surveys surfacing on the mobile app rather than confirming the identical survey object renders in a public web form.
+**Cross-channel reuse.** Surveys are the shared data-collection layer across actions: they "launch automatically as part of a canvassing or calling action," and can be started manually from the mobile app via "Start a survey" [create-a-survey]. Advanced/Expert plans allow **multiple surveys, each linked to a specific action** [create-a-survey][Help: using-multiple-surveys]. So the same survey object can drive both door and phone interactions – good precedent for uprise' goal of one script/survey across door + text. Online/web forms exist as a separate "Forms" product, but the help docs primarily describe surveys surfacing on the mobile app rather than confirming the identical survey object renders in a public web form.
 
 **Scripts / talking points.** Lighter than the survey tooling. Canvassing actions carry "talking points and links" attached at action setup [4]. There is **no evidence of a structured scripted-conversation engine with canned responses** the way a P2P texting tool would have (no documented branching script with reply snippets). The calling action references "going through your survey" rather than a separate script object. **Canned responses as a first-class, reusable, cross-channel object: Unknown, not found** – Qomon leans on surveys + talking points, not a canned-response library.
 
@@ -193,20 +193,20 @@ Access is SaaS, web dashboard for organisers + iOS/Android app for volunteers, w
 
 ---
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 **Borrow (especially canvassing UX & maps):**
-1. **Three turf-definition modes.** "Selected area (incl. addresses with no contact)", "my selected contacts", and "streets without contacts" is an elegant model – it lets canvassers work known supporters *and* cold streets in one action, creating contacts in the field. yarns should treat addresses as first-class, canvassable without a pre-existing contact.
-2. **Map ↔ list toggle with an explicit battery trade-off.** Qomon tells volunteers map view costs more battery and offers list view as the default work surface. yarns should ship both and make list-mode fully functional (Qomon's map being offline-unavailable is a *gap to avoid* – yarns should cache map tiles for true offline maps).
+1. **Three turf-definition modes.** "Selected area (incl. addresses with no contact)", "my selected contacts", and "streets without contacts" is an elegant model – it lets canvassers work known supporters *and* cold streets in one action, creating contacts in the field. uprise should treat addresses as first-class, canvassable without a pre-existing contact.
+2. **Map ↔ list toggle with an explicit battery trade-off.** Qomon tells volunteers map view costs more battery and offers list view as the default work surface. uprise should ship both and make list-mode fully functional (Qomon's map being offline-unavailable is a *gap to avoid* – uprise should cache map tiles for true offline maps).
 3. **Suggested paths clustering nearby contacts** + turn-by-turn. Cheap route optimisation that materially raises doors/hour.
-4. **One survey object that auto-launches in multiple actions** (door + call). This is the cross-channel reuse yarns wants; extend it so the *same* survey/script also drives the P2P text inbox with canned responses – the thing Qomon does NOT do.
+4. **One survey object that auto-launches in multiple actions** (door + call). This is the cross-channel reuse uprise wants; extend it so the *same* survey/script also drives the P2P text inbox with canned responses – the thing Qomon does NOT do.
 5. **Minimal hard disposition + rich soft data.** A 4-button door status (Present/Absent/Refusal/Come back later) plus support level + tags + survey is fast at the door and analytically rich. Don't over-engineer the disposition matrix; push nuance into tags/survey.
 6. **Real-time write-back to a unified contact timeline** so a door knock, a call and a text all land on one contact record.
 7. **AI/proximity team assignment** as a planning-time accelerator.
-8. **Action Flows model** for journeys: action (sign/RSVP/door survey answer) triggers next message/action. Good shape for yarns "journeys."
+8. **Action Flows model** for journeys: action (sign/RSVP/door survey answer) triggers next message/action. Good shape for uprise "journeys."
 
 **Avoid / improve on:**
-- **The messaging gap is yarns' wedge.** Qomon's "P2P" is broadcast/share, with no inbox or reply threading. yarns' differentiator is a real 1:1 conversational inbox that is *coupled to* the canvass – e.g. a "Come back later" or "Absent" door outcome should be able to drop the contact into a P2P text thread with the same script/canned responses. Make the door→text handoff a single tap.
+- **The messaging gap is uprise' wedge.** Qomon's "P2P" is broadcast/share, with no inbox or reply threading. uprise' differentiator is a real 1:1 conversational inbox that is *coupled to* the canvass – e.g. a "Come back later" or "Absent" door outcome should be able to drop the contact into a P2P text thread with the same script/canned responses. Make the door→text handoff a single tap.
 - **Offline map.** Don't repeat Qomon's "map not available offline" limitation; cache tiles.
 - **Dedup/import quality.** Invest early in deduplication and reversible imports; Qomon's biggest operational complaint.
 - **Don't gate multi-survey behind premium tiers** if shared scripts are core to your value prop.

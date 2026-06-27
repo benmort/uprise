@@ -13,7 +13,7 @@ import {
   TenantInvitation,
   TenantJoinRequest,
   TenantMember,
-} from "@yarns/db";
+} from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 
@@ -39,7 +39,7 @@ export interface CreateInvitationInput {
  * Tenant provisioning + membership/invitation admin (meld doc 12 / prog tenant domain).
  * Each write commits the row(s) + an outbox event in one transaction (doc 05), so the
  * cross-domain reactions (welcome/invitation email, network→Stripe customer) fire off the
- * event, not an inline call. yarns' TenantMember.role is AppUserRole (OWNER/ORGANISER/VOLUNTEER);
+ * event, not an inline call. uprise' TenantMember.role is AppUserRole (OWNER/ORGANISER/VOLUNTEER);
  * a tenant's creator is the OWNER (full tenant + billing role).
  */
 @Injectable()

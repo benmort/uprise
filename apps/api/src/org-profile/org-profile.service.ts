@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { OrgCredential, Prisma } from "@yarns/db";
+import { OrgCredential, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";

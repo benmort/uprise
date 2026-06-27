@@ -1,4 +1,4 @@
-import { AppUserRole } from "@yarns/db";
+import { AppUserRole } from "@uprise/db";
 import { IsEmail, IsEnum, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class CreateTenantDto {
@@ -54,7 +54,7 @@ export class ApproveJoinRequestDto {
   // Approval may only grant ORGANISER or VOLUNTEER — never OWNER (privilege escalation:
   // an organiser approving a self-signup must not be able to mint an owner by crafting the
   // body). super-admin isn't an AppUserRole, so it can't appear here at all. Mirrors
-  // approveJoinRequestSchema in @yarns/contracts.
+  // approveJoinRequestSchema in @uprise/contracts.
   @IsIn(["ORGANISER", "VOLUNTEER"]) role!: "ORGANISER" | "VOLUNTEER";
 }
 

@@ -8,8 +8,8 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
-import { AppUserRole } from "@yarns/db";
-import { APP_USER_ROLE_TO_ROLE } from "@yarns/permissions";
+import { AppUserRole } from "@uprise/db";
+import { APP_USER_ROLE_TO_ROLE } from "@uprise/permissions";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuthUser } from "./auth-user";
 import { SessionService } from "./session.service";

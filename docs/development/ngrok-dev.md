@@ -6,7 +6,7 @@ instead of bare `localhost:PORT`.
 
 ## Domain → app mapping
 
-| ngrok domain | local | yarns app |
+| ngrok domain | local | uprise app |
 |---|---|---|
 | `dev.uprise.org.au` | `localhost:3003` | marketing |
 | `auth.dev.uprise.org.au` | `localhost:3002` | auth (SSO) |

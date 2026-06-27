@@ -1,4 +1,4 @@
-import { CanvassCampaignStatus } from "@yarns/db";
+import { CanvassCampaignStatus } from "@uprise/db";
 import { CampaignsService } from "./campaigns.service";
 
 describe("CampaignsService", () => {

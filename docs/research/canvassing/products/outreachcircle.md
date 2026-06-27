@@ -59,7 +59,7 @@ OutreachCircle does have in-person door canvassing, but it is framed as one chan
 
 ## 6. Survey & script tooling
 
-This is OutreachCircle's strongest cross-channel idea for yarns.
+This is OutreachCircle's strongest cross-channel idea for uprise.
 
 - Shared survey + script per action: every Contact & Survey action bundles one survey and one sample script that supporters reuse regardless of whether they knock, call, text or email [10][11]. One authored artefact, many channels.
 - Survey builder: native builder for short, single-question surveys with customisable answer options; you can also reuse an existing VAN survey instead of building new [4][17]. Multiple response/answer types exist (e.g. join-OutreachCircle links and other response types) [4].
@@ -111,21 +111,21 @@ Gaps
 - US-only, progressive-leaning; no evidence of non-US or non-partisan-neutral deployment [9; Unknown – not found].
 - Disposition taxonomy only partially documented publicly (contacted-side codes not confirmed) [11; Unknown – not found].
 
-## 11. What yarns should borrow / avoid
+## 11. What uprise should borrow / avoid
 
 Borrow
-- The unified "Contact & Survey" action as the organising primitive. yarns' headline differentiator – door + P2P SMS coupled around a shared contact – maps almost exactly to OutreachCircle's model. Adopt: one action owns one contact list + one survey + one script, and the channel (door/text) is a property of the attempt, not a separate silo [10][11].
-- Author-once, use-everywhere survey + script. A single script/survey artefact must render in both the door UI and the text inbox, exactly as yarns intends. OutreachCircle proves the demand and the basic shape; yarns can go further by binding survey answers to canned/suggested responses (the piece OutreachCircle does not clearly do) [4][10][11].
+- The unified "Contact & Survey" action as the organising primitive. uprise' headline differentiator – door + P2P SMS coupled around a shared contact – maps almost exactly to OutreachCircle's model. Adopt: one action owns one contact list + one survey + one script, and the channel (door/text) is a property of the attempt, not a separate silo [10][11].
+- Author-once, use-everywhere survey + script. A single script/survey artefact must render in both the door UI and the text inbox, exactly as uprise intends. OutreachCircle proves the demand and the basic shape; uprise can go further by binding survey answers to canned/suggested responses (the piece OutreachCircle does not clearly do) [4][10][11].
 - Channel choice per contact. Letting the volunteer pick door vs text per contact (rather than forcing a campaign-level channel) lowers friction and fits relational organising.
 - Split, named disposition code sets (contact vs non-contact). Ship sensible defaults (Not Home, Bad Number, Gated, Moved, Refused, plus a support scale) but make sets editable per campaign, and crucially make the same set valid across door and text so outcomes are comparable [11].
 - Tag-driven routing + tracking links as the cheap-but-effective backbone of engagement ladders [13].
 
 Avoid / do better
-- Don't ship door-knocking as an afterthought. OutreachCircle's weakness is exactly the field-ops depth yarns is building: real turf-cutting, route ordering, offline maps and reliable sync. This is yarns' opening – make the canvassing feature first-class, not a channel toggle [search; Unknown – not found].
-- Make the unified contact timeline explicit. OutreachCircle's docs leave it unclear whether a contact's text thread and door visit reconcile into one history. yarns should guarantee a single contact timeline spanning SMS conversation + door dispositions + journey events, and design the data model around it from day one.
+- Don't ship door-knocking as an afterthought. OutreachCircle's weakness is exactly the field-ops depth uprise is building: real turf-cutting, route ordering, offline maps and reliable sync. This is uprise' opening – make the canvassing feature first-class, not a channel toggle [search; Unknown – not found].
+- Make the unified contact timeline explicit. OutreachCircle's docs leave it unclear whether a contact's text thread and door visit reconcile into one history. uprise should guarantee a single contact timeline spanning SMS conversation + door dispositions + journey events, and design the data model around it from day one.
 - Build true journeys, not just reminder emails. Differentiate with trigger-based, delayed, branching sequences (e.g. "no door contact after 2 attempts → enqueue P2P text → if positive reply → invite to event"). OutreachCircle stops at tags + manual follow-up [13].
-- Get sync rock-solid. The most damaging reviews are about integration/data-accuracy failures, not concept. If yarns syncs to a CRM/voter file, make reconciliation and counts trustworthy and observable [15].
-- Close the survey-answer → canned-response loop. yarns explicitly wants survey answers to drive canned responses in both door and text interfaces; OutreachCircle shares scripts/surveys but doesn't clearly wire answers to suggested next messages. This is a concrete, ownable gap.
+- Get sync rock-solid. The most damaging reviews are about integration/data-accuracy failures, not concept. If uprise syncs to a CRM/voter file, make reconciliation and counts trustworthy and observable [15].
+- Close the survey-answer → canned-response loop. uprise explicitly wants survey answers to drive canned responses in both door and text interfaces; OutreachCircle shares scripts/surveys but doesn't clearly wire answers to suggested next messages. This is a concrete, ownable gap.
 
 ## 12. Sources
 

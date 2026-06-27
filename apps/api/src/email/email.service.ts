@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
-import { EmailStatus, Prisma } from "@yarns/db";
+import { EmailStatus, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";

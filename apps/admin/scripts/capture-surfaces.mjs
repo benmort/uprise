@@ -63,7 +63,7 @@ async function resolveIds() {
   const demo = campaigns.find((c) => c.name?.startsWith("Demo")) || campaigns[0];
   ids.campaignId = demo?.id;
   const volunteers = asArray(await api("/canvass/volunteers"));
-  const cv = volunteers.find((u) => u.email === "demo.volunteer@yarns.test") || volunteers[0];
+  const cv = volunteers.find((u) => u.email === "demo.volunteer@uprise.test") || volunteers[0];
   ids.volunteerId = cv?.id;
   if (ids.volunteerId) {
     const assigns = asArray(await api(`/canvass/assignments?volunteerId=${ids.volunteerId}`));
@@ -150,7 +150,7 @@ async function main() {
       origins: [
         {
           origin: WEB,
-          localStorage: [{ name: "yarns.volunteerId", value: ids.volunteerId || "" }],
+          localStorage: [{ name: "uprise.volunteerId", value: ids.volunteerId || "" }],
         },
       ],
     },

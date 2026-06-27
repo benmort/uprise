@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, PasswordInput, PasswordStrength, isPasswordStrong } from "@yarns/ui";
-import { auth } from "@yarns/api-client";
+import { Alert, Button, Field, PasswordInput, PasswordStrength, isPasswordStrong } from "@uprise/ui";
+import { auth } from "@uprise/api-client";
 
 export default function ResetPasswordPage() {
   const token = useQueryParams().get("token");

@@ -1,4 +1,4 @@
-import { assertReactionsLoopSafe, type EventEnvelope, type Reaction } from "@yarns/events";
+import { assertReactionsLoopSafe, type EventEnvelope, type Reaction } from "@uprise/events";
 import { buildDomainReactions, type ReactionDeps } from "./domain-reactions";
 
 function setup() {

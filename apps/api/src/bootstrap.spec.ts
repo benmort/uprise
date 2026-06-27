@@ -45,15 +45,15 @@ describe("bootstrap CORS configuration", () => {
   }
 
   it("normalizes origins for consistent matching", () => {
-    expect(normalizeOrigin(" HTTPS://YARNS.ORG.AU/ ")).toBe("https://yarns.org.au");
-    expect(parseAllowedOrigins("https://yarns.org.au/, https://www.yarns.org.au")).toEqual(
-      new Set(["https://yarns.org.au", "https://www.yarns.org.au"]),
+    expect(normalizeOrigin(" HTTPS://UPRISE.ORG.AU/ ")).toBe("https://uprise.org.au");
+    expect(parseAllowedOrigins("https://uprise.org.au/, https://www.uprise.org.au")).toEqual(
+      new Set(["https://uprise.org.au", "https://www.uprise.org.au"]),
     );
   });
 
   it("allows configured origin and denies non-allowlisted origin without throwing", async () => {
     const { app, prisma, getOriginHandler } = createApp(
-      "https://yarns.org.au,https://www.yarns.org.au/",
+      "https://uprise.org.au,https://www.uprise.org.au/",
     );
     await configureNestApp(app);
     expect(prisma.enableShutdownHooks).toHaveBeenCalledTimes(1);
@@ -63,7 +63,7 @@ describe("bootstrap CORS configuration", () => {
     if (!originHandler) throw new Error("Missing CORS origin handler");
 
     const allowed = await new Promise<{ error: Error | null; allow?: boolean }>((resolve) => {
-      originHandler("https://YARNS.ORG.AU/", (error, allow) => resolve({ error, allow }));
+      originHandler("https://UPRISE.ORG.AU/", (error, allow) => resolve({ error, allow }));
     });
     expect(allowed.error).toBeNull();
     expect(allowed.allow).toBe(true);

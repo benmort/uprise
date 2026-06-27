@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Prisma } from "@yarns/db";
+import { Prisma } from "@uprise/db";
 import { PrismaService } from "../../prisma/prisma.service";
 
 /**

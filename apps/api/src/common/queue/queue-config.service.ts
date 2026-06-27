@@ -14,7 +14,7 @@ export class QueueConfigService {
   }
 
   get queuePrefix(): string {
-    return this.config.get<string>("BULLMQ_PREFIX", "yarns").trim() || "yarns";
+    return this.config.get<string>("BULLMQ_PREFIX", "uprise").trim() || "uprise";
   }
 
   get defaultAttempts(): number {

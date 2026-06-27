@@ -9,7 +9,7 @@ last_reviewed: 2026-06-23
 
 # Module wiring
 
-How to wire a Nest module into the yarns API so the full DI graph still compiles.
+How to wire a Nest module into the uprise API so the full DI graph still compiles.
 
 Canonical: `apps/api/src/app.module.ts` (the `imports[]` aggregate), `apps/api/src/app.module.boot.spec.ts` (the DI boot smoke), `apps/api/src/common/outbox/outbox.module.ts` (`@Global() OutboxModule`), `apps/api/src/common/reactions/reactions.module.ts` (`REACTIONS` provided via `useFactory` + `inject`).
 

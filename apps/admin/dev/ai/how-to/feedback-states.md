@@ -1,6 +1,6 @@
 ---
 name: feedback-states
-description: Every data surface handles four states – loading, empty, error, no-permission – using the shared @yarns/ui primitives.
+description: Every data surface handles four states – loading, empty, error, no-permission – using the shared @uprise/ui primitives.
 layer: web
 topic: ux
 use_when: Building any page or component that fetches data or renders a list/detail view.

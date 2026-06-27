@@ -1,18 +1,18 @@
-# Prog admin → yarns port — comparison + checklist
+# Prog admin → uprise port — comparison + checklist
 
-Porting prog's admin-client (85 routes) into yarns `apps/admin` as pixel-perfect,
+Porting prog's admin-client (85 routes) into uprise `apps/admin` as pixel-perfect,
 non-functional replicas under a collapsable **Prog** sidebar group. Pages are vendored from
 prog verbatim (own UI kit under `src/components/prog/`, prog's `dark:` variants kept,
 providers/API stripped → static mock data).
 
-**Match:** ✅ exact equivalent in yarns · ◑ loose cousin (different scope/medium) · ✗ none.
-**Action:** `vendor` (port it) · `reuse` (yarns already has it) · `skip`.
+**Match:** ✅ exact equivalent in uprise · ◑ loose cousin (different scope/medium) · ✗ none.
+**Action:** `vendor` (port it) · `reuse` (uprise already has it) · `skip`.
 **Status:** `[x]` done · `[ ]` pending.
 
 > **Batch 1 = sections H + I** (Business/billing + Workspace settings). Everything else pending.
 
 ## A. Dashboard & core
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin` dashboard | `/dashboard` | ✅ | reuse | [ ] |
 | `/admin/profile` | `/profile` | ✅ | reuse | [ ] |
@@ -21,7 +21,7 @@ providers/API stripped → static mock data).
 | `/admin/calendar` | — | ✗ | vendor | [ ] |
 
 ## B. Actions
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/surveys` | `/engagement/surveys` | ✅ | reuse | [ ] |
 | `/admin/petitions` | — | ✗ | vendor | [ ] |
@@ -29,7 +29,7 @@ providers/API stripped → static mock data).
 | `/admin/fundraisers` | — | ✗ | vendor | [ ] |
 
 ## C. Channels
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/email` (+`/[hash]`) | `/inbox` (different medium) | ◑ | vendor | [ ] |
 | `/admin/chats` | `/inbox` | ◑ | vendor | [ ] |
@@ -38,18 +38,18 @@ providers/API stripped → static mock data).
 | `/admin/direct-mail` | — | ✗ | vendor | [ ] |
 
 ## D. Audience
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/audience` | `/audience` | ✅ | reuse | [ ] |
 | `/admin/audience/persons` | `/audience/[id]`,`/contacts/[id]` | ◑ | vendor | [ ] |
-| `/admin/audience/segments` (+`new`,`[id]`,`[id]/edit`) | `/audience` (yarns=audiences, not segments) | ◑ | vendor | [ ] |
+| `/admin/audience/segments` (+`new`,`[id]`,`[id]/edit`) | `/audience` (uprise=audiences, not segments) | ◑ | vendor | [ ] |
 | `/admin/reports` | `/analytics` | ◑ | vendor | [ ] |
 | `/admin/tags` | tag-chips, no page | ◑ | vendor | [ ] |
 | `/admin/queries` | — | ✗ | vendor | [ ] |
 | `/admin/activists` | `/audience`/`/contacts` | ◑ | vendor | [ ] |
 
 ## E. Organising
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/ladders` | — | ✗ | vendor | [ ] |
 | `/admin/events` | `/canvass/[id]/shifts` (diff) | ◑ | vendor | [ ] |
@@ -58,13 +58,13 @@ providers/API stripped → static mock data).
 `dashboard`, `applications`, `action-flow`, `forms`, `settings`, `reviewing/{manage,Leaderboard,Progress,Settings}`, `grants/{manage,funds,allocations,payments,contracts,reports,settings,users}`. — [ ]
 
 ## G. Tasks
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/tasks/list` | — | ✗ | vendor | [ ] |
 | `/admin/tasks/kanban` | — (needs @dnd-kit) | ✗ | vendor | [ ] |
 
 ## H. Business / billing — **BATCH 1**
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/billing` | — | ✗ | vendor | [ ] |
 | `/admin/plans` | marketing `/plans` only | ◑ | vendor | [ ] |
@@ -75,7 +75,7 @@ providers/API stripped → static mock data).
 | `/admin/checkout` | — | ✗ | vendor | [ ] |
 
 ## I. Workspace settings — **BATCH 1**
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/tenant/settings` | `/settings` | ◑ | vendor | [ ] |
 | `/admin/team` | `/settings/roles` | ◑ | vendor | [ ] |
@@ -85,7 +85,7 @@ providers/API stripped → static mock data).
 `keywords`, `questions-custom-fields`, `personalization-datasets`, `custom-targets`, `id-targets`, `file-manager`. — [ ]
 
 ## K. Developer hub
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/syncs` | `/settings/integrations` | ◑ | vendor | [ ] |
 | `api-keys`,`ai-assistant`,`form-elements`,`uploads`,`email-wrappers`,`page-wrappers`,`snippets`,`shortlinks` | — | ✗ | vendor | [ ] |
@@ -94,7 +94,7 @@ providers/API stripped → static mock data).
 `email-support`, `knowledge-base`, `trainings`, `release-notes`. — [ ]
 
 ## M–O. Onboarding / Security
-| Route | Yarns | Match | Action | Status |
+| Route | Uprise | Match | Action | Status |
 |---|---|---|---|---|
 | `/admin/onboarding` | TourRoot (diff) | ◑ | vendor | [ ] |
 | `/admin/security` | auth app handles it | ◑ | vendor | [ ] |
@@ -109,5 +109,5 @@ providers/API stripped → static mock data).
 ## Notes
 - Vendored UI kit: `apps/admin/src/components/prog/` (ui + shared/forms). Keep prog `dark:`
   variants verbatim — **WS1 dark sweep must exclude `(main)/prog/**` and `components/prog/**`**.
-- yarns-native screens with no prog counterpart (not part of this port): `/canvass/*`,
+- uprise-native screens with no prog counterpart (not part of this port): `/canvass/*`,
   `/channels/{text,whatsapp}`, `/journeys`, `/compliance`, `/engagement/{scripts,dispositions,canned-responses}`, `/settings/data`.

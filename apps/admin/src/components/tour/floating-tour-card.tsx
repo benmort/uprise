@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
-import { navigateAndWait, tourScroll } from "@/lib/tours/yarns-tour";
-import { AUTO_DWELL_MS, useYarnsTour } from "@/lib/tours/use-yarns-tour";
+import { navigateAndWait, tourScroll } from "@/lib/tours/uprise-tour";
+import { AUTO_DWELL_MS, useUpriseTour } from "@/lib/tours/use-uprise-tour";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
 const CARD_W = 320;
@@ -168,7 +168,7 @@ function SpotlightOverlay({
       height="100vh"
     >
       <defs>
-        <mask id="yarns-tour-spotlight-mask">
+        <mask id="uprise-tour-spotlight-mask">
           <rect x="0" y="0" width="100%" height="100%" fill="white" />
           <rect
             style={{
@@ -189,7 +189,7 @@ function SpotlightOverlay({
         width="100%"
         height="100%"
         fill={`rgba(0,0,0,${DIM_OPACITY})`}
-        mask="url(#yarns-tour-spotlight-mask)"
+        mask="url(#uprise-tour-spotlight-mask)"
       />
     </svg>
   );
@@ -269,7 +269,7 @@ export function FloatingTourCard() {
     resumeAuto,
     switchToManual,
     close,
-  } = useYarnsTour();
+  } = useUpriseTour();
 
   const [target, setTarget] = useState<TargetInfo | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -457,7 +457,7 @@ export function FloatingTourCard() {
           />
 
           {/* Content — fades when step changes */}
-          <div key={currentStep} style={{ animation: "yarnsTourFadeIn 150ms ease both" }}>
+          <div key={currentStep} style={{ animation: "upriseTourFadeIn 150ms ease both" }}>
             <p className="px-4 text-[13px] font-medium leading-snug text-foreground">{step.content}</p>
             {step.detail ? (
               <>
@@ -520,7 +520,7 @@ export function FloatingTourCard() {
       </div>
 
       <style>{`
-        @keyframes yarnsTourFadeIn {
+        @keyframes upriseTourFadeIn {
           from { opacity: 0; transform: translateY(4px); }
           to   { opacity: 1; transform: translateY(0); }
         }

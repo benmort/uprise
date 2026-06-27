@@ -155,7 +155,7 @@ export function validateEnv(config: Env): ValidatedEnv {
       errors,
     ),
     BULLMQ_REDIS_URL: resolvedBullmqRedisUrl,
-    BULLMQ_PREFIX: config.BULLMQ_PREFIX?.trim() || "yarns",
+    BULLMQ_PREFIX: config.BULLMQ_PREFIX?.trim() || "uprise",
     BULLMQ_DEFAULT_ATTEMPTS: numberInRange(config, "BULLMQ_DEFAULT_ATTEMPTS", 1, 20, 19, errors),
     BULLMQ_DEFAULT_BACKOFF_MS: numberInRange(
       config,
@@ -218,7 +218,7 @@ export function validateEnv(config: Env): ValidatedEnv {
     FEATURE_PUSH_ENABLED: boolish(config, "FEATURE_PUSH_ENABLED", false),
     VAPID_PUBLIC_KEY: config.VAPID_PUBLIC_KEY?.trim() || "",
     VAPID_PRIVATE_KEY: config.VAPID_PRIVATE_KEY?.trim() || "",
-    VAPID_SUBJECT: config.VAPID_SUBJECT?.trim() || "mailto:hello@yarns.app",
+    VAPID_SUBJECT: config.VAPID_SUBJECT?.trim() || "mailto:hello@uprise.app",
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
     ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),

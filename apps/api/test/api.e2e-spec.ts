@@ -33,7 +33,7 @@ describe("API e2e — full surface", () => {
     ids.turfId = turfs[0]?.id;
 
     const volunteers = asArray(data((await api.get("/api/v1/canvass/volunteers")).body));
-    ids.volunteerId = (volunteers.find((u) => u.email === "demo.volunteer@yarns.test") || volunteers[0])?.id;
+    ids.volunteerId = (volunteers.find((u) => u.email === "demo.volunteer@uprise.test") || volunteers[0])?.id;
 
     const contacts = asArray(data((await api.get("/api/v1/contacts?query=Ada")).body));
     ids.contactId = contacts[0]?.id;
@@ -179,7 +179,7 @@ describe("API e2e — full surface", () => {
   // ── Canvass: volunteers + shifts ──────────────────────────────
   describe("canvass people + shifts", () => {
     it("volunteer create → update", async () => {
-      const email = `e2e+${Date.now()}@yarns.test`;
+      const email = `e2e+${Date.now()}@uprise.test`;
       const create = await api.post("/api/v1/canvass/volunteers").send({ displayName: "E2E Volunteer", email, password: "supersecret", role: "VOLUNTEER" });
       okStatus(create.status);
       const id = data(create.body).id;

@@ -9,7 +9,7 @@ import {
   MessageKind,
   Prisma,
   TxSmsStatus,
-} from "@yarns/db";
+} from "@uprise/db";
 import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 import { assertValidBlastTransition } from "./blast-state.machine";

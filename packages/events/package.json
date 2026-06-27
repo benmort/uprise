@@ -1,5 +1,5 @@
 {
-  "name": "@yarns/events",
+  "name": "@uprise/events",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",

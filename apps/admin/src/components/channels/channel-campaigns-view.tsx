@@ -33,7 +33,7 @@ export function ChannelCampaignsView({ channel, title, description }: ChannelCam
   const router = useRouter();
   const { showToast } = useToast();
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const searchKey = `yarns.channels.${channel}.search`;
+  const searchKey = `uprise.channels.${channel}.search`;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");

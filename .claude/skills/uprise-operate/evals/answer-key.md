@@ -1,6 +1,6 @@
-# Answer key – yarns-operate eval
+# Answer key – uprise-operate eval
 
-Grades a `yarns-operate` run over `fixture-release.md`. The candidate produces a **deploy
+Grades a `uprise-operate` run over `fixture-release.md`. The candidate produces a **deploy
 walk** for a release that includes a migration *and* a queue change. A cold grader who cannot
 see the skill scores the walk against the checks below.
 
@@ -74,7 +74,7 @@ Partial (note, don't fail) if env or smoke is present but the runbook citation i
 - Misses the worker/queue impact (treats a queue change as API-only).
 - No rollback note.
 - Reverts code to disable a feature where a `FEATURE_*` flag flip would do it.
-- Invents a ticket / story / change-request id – yarns is board-free; the unit is the merged
+- Invents a ticket / story / change-request id – uprise is board-free; the unit is the merged
   commit set.
 - slingshot idioms (`@Transactional`, `EntityManager`, `RequestContext`, MikroORM,
   `ZodValidationPipe`, admin-RPC-POST, `BaseCommandHandler`) anywhere in the walk.

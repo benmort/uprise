@@ -1,4 +1,4 @@
-import { PaymentStatus } from "@yarns/db";
+import { PaymentStatus } from "@uprise/db";
 import { assertValidPaymentTransition } from "./payment-state.machine";
 
 describe("payment state machine", () => {

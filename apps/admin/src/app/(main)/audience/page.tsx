@@ -49,7 +49,7 @@ type UploadState = {
   failedRows?: number;
 };
 
-const AUDIENCE_SEARCH_KEY = "yarns.audience.search";
+const AUDIENCE_SEARCH_KEY = "uprise.audience.search";
 const FILE_UPLOAD_PROGRESS_WEIGHT = 10;
 
 function clampProgress(value: number): number {

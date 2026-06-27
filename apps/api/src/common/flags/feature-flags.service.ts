@@ -8,7 +8,7 @@ import {
   type FeatureFlagKey,
   type FeatureFlagMap,
   type FlagLayer,
-} from "@yarns/flags";
+} from "@uprise/flags";
 import { PrismaService } from "../../prisma/prisma.service";
 import { OutboxService } from "../outbox/outbox.service";
 

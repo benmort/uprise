@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { BlastRecipientStatus, BlastStatus } from "@yarns/db";
+import { BlastRecipientStatus, BlastStatus } from "@uprise/db";
 import { BlastsService } from "./blasts.service";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";

@@ -1,4 +1,4 @@
-import { EmailStatus } from "@yarns/db";
+import { EmailStatus } from "@uprise/db";
 import { assertTransition, type TransitionMap } from "../common/fsm/assert-transition";
 
 // QUEUED → SENDING → SENT → DELIVERED | BOUNCED | FAILED. open/click are

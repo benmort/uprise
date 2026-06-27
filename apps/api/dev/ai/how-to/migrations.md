@@ -1,6 +1,6 @@
 ---
 name: migrations
-description: How to change the schema in yarns – additive hand-written SQL applied with migrate deploy, never migrate dev.
+description: How to change the schema in uprise – additive hand-written SQL applied with migrate deploy, never migrate dev.
 layer: api
 topic: db
 use_when: Adding or altering any Prisma model, enum, or index.
@@ -9,15 +9,15 @@ last_reviewed: 2026-06-23
 
 # Migrations
 
-yarns ships hand-written, additive migration SQL applied with `prisma migrate deploy`. `migrate dev` is banned because it regenerates from the schema and drops the raw partial-unique indexes we maintain by hand.
+uprise ships hand-written, additive migration SQL applied with `prisma migrate deploy`. `migrate dev` is banned because it regenerates from the schema and drops the raw partial-unique indexes we maintain by hand.
 
 Canonical: `packages/db/prisma/migrations/` (timestamped dirs each holding a hand-written `migration.sql` – see `20260623110000_telephony_parity/migration.sql`: `ALTER TYPE "messaging"."BlastRecipientStatus" ADD VALUE IF NOT EXISTS 'UNDELIVERED'` then `ALTER TABLE "messaging"."MessageTemplate" ADD COLUMN ...`), `packages/db/package.json` (`prisma:generate` → `prisma generate`, `prisma:deploy` → `prisma migrate deploy`; `prisma:migrate` runs `migrate dev` – do NOT use it).
 
 ## Must have
 - Create a new timestamped dir under `packages/db/prisma/migrations/` (e.g. `YYYYMMDDHHMMSS_short_name/migration.sql`) and write the SQL by hand. Mirror the schema change in `schema.prisma`.
-- Changes are ADDITIVE: `ADD COLUMN` (nullable or with a default), `ADD VALUE IF NOT EXISTS` for enums, `CREATE INDEX`. Use schema-qualified names (`"messaging"."MessageTemplate"`) – yarns is multi-schema.
-- Apply with `prisma migrate deploy` (`pnpm --filter @yarns/db prisma:deploy`). NEVER `prisma migrate dev` – it drops the raw partial-unique indexes.
-- After applying: regenerate the client (`pnpm --filter @yarns/db prisma:generate`) and rebuild `@yarns/db` so consumers see the new types.
+- Changes are ADDITIVE: `ADD COLUMN` (nullable or with a default), `ADD VALUE IF NOT EXISTS` for enums, `CREATE INDEX`. Use schema-qualified names (`"messaging"."MessageTemplate"`) – uprise is multi-schema.
+- Apply with `prisma migrate deploy` (`pnpm --filter @uprise/db prisma:deploy`). NEVER `prisma migrate dev` – it drops the raw partial-unique indexes.
+- After applying: regenerate the client (`pnpm --filter @uprise/db prisma:generate`) and rebuild `@uprise/db` so consumers see the new types.
 - An enum `ADD VALUE` is safe in the same transaction only if that value is NOT used (e.g. in a column default or data backfill) within the same migration; if you need to use it, split it into a later migration.
 
 ## Anti-patterns
@@ -29,7 +29,7 @@ Canonical: `packages/db/prisma/migrations/` (timestamped dirs each holding a han
 ## Checklist
 - [ ] New timestamped dir + hand-written `migration.sql`; schema-qualified, additive SQL; `schema.prisma` updated to match.
 - [ ] Applied with `prisma migrate deploy` (never `migrate dev`).
-- [ ] Client regenerated (`prisma:generate`) and `@yarns/db` rebuilt.
+- [ ] Client regenerated (`prisma:generate`) and `@uprise/db` rebuilt.
 - [ ] Enum `ADD VALUE` not consumed in the same migration.
 - [ ] Gate: walk `dev/ai/how-to/definition-of-done.md`.
 

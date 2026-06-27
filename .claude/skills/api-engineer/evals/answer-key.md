@@ -2,7 +2,7 @@
 
 Grades a cold run of the `api-engineer` skill against a synthetic work-unit. The grader compares the run's output (the guides it says to read + the invariants it names + the slice it proposes) to this key. The grader does not see this file.
 
-The fixture is synthetic and labelled so: it borrows real yarns shapes (the payment domain, `PaymentStatus`, the `payment.payment.refunded` event) but the "`REFUNDED` not yet wired" gap is constructed for the exercise. Grade the routing-and-planning reasoning, not whether the gap is literally true in the live tree.
+The fixture is synthetic and labelled so: it borrows real uprise shapes (the payment domain, `PaymentStatus`, the `payment.payment.refunded` event) but the "`REFUNDED` not yet wired" gap is constructed for the exercise. Grade the routing-and-planning reasoning, not whether the gap is literally true in the live tree.
 
 ## Fixture (the work-unit handed to the run)
 
@@ -31,7 +31,7 @@ Email reacts to the `payment.payment.refunded` **event** – the payment domain 
 
 ## Strong run also cites (bonus, not required to pass)
 
-- `packages/dev/ai/how-to/events-catalogue.md` – add `payment.payment.refunded` to `EVENT_TYPES` + `DomainEventMap` (flat, serialisable, carries `tenantId`); rebuild `@yarns/events`.
+- `packages/dev/ai/how-to/events-catalogue.md` – add `payment.payment.refunded` to `EVENT_TYPES` + `DomainEventMap` (flat, serialisable, carries `tenantId`); rebuild `@uprise/events`.
 - `apps/api/dev/ai/how-to/migrations.md` + `packages/dev/ai/how-to/db-and-prisma.md` – `ADD VALUE IF NOT EXISTS 'REFUNDED'` to the payment status enum via `migrate deploy`, not consumed in the same migration; regenerate the client.
 - `apps/api/dev/ai/how-to/services-controllers-dtos.md` – thin controller + `@RequirePermission` on any new/changed endpoint.
 - `dev/ai/how-to/definition-of-done.md` – the closing gate with evidence incl. the boot smoke.
@@ -44,11 +44,11 @@ Email reacts to the `payment.payment.refunded` **event** – the payment domain 
 | Strong | Pass, plus events-catalogue + migrations/db + DoD gate, and proposes the slice in order (enum+migration, then event type, then state-machine guard, then transactional service with `outbox.append(tx)`, then email reaction, then unit tests, then boot smoke). |
 | Fail | Any of: misses state-machines, transactions, outbox-and-reactions, or testing-unit; OR places the `outbox.append` outside the transaction; OR has the payment domain call the email service directly instead of reacting to the event. |
 
-## Automatic fail (board-free / yarns-not-slingshot tripwires)
+## Automatic fail (board-free / uprise-not-slingshot tripwires)
 
 The run fails outright if it:
 
-- references a Plane board, story, epic, or any dev/product registry (yarns has none – the unit of work is the brief).
-- prescribes any slingshot construct: `@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, or `BaseCommandHandler`. (yarns uses `prisma.$transaction(async tx => …)`, class-validator DTOs, `@RequirePermission` + CASL, `OutboxService.append(tx, …)`, enum + `*-state.machine.ts` FSMs, BullMQ `getXJobId` dedup, additive `migrate deploy` migrations.)
+- references a Plane board, story, epic, or any dev/product registry (uprise has none – the unit of work is the brief).
+- prescribes any slingshot construct: `@Transactional`, `EntityManager`, `RequestContext`, MikroORM, `ZodValidationPipe`, admin-RPC-POST, or `BaseCommandHandler`. (uprise uses `prisma.$transaction(async tx => …)`, class-validator DTOs, `@RequirePermission` + CASL, `OutboxService.append(tx, …)`, enum + `*-state.machine.ts` FSMs, BullMQ `getXJobId` dedup, additive `migrate deploy` migrations.)
 - recommends `prisma migrate dev`.
 - emits an em-dash (the long-dash character that this file deliberately never prints) anywhere in its output, or writes in non-Australian English.

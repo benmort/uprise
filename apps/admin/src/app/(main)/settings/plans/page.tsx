@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Archive, ArchiveRestore, ChevronLeft, Loader2, Pencil, Plus, ShieldAlert, Star } from "lucide-react";
-import { FEATURE_FLAG_KEYS, FLAG_META, type FeatureFlagKey } from "@yarns/flags";
+import { FEATURE_FLAG_KEYS, FLAG_META, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import { listPlans, updatePlan, upsertPlan, type Plan } from "@/lib/api/flags";
 import { Badge } from "@/components/prog/ui/badge";

@@ -117,7 +117,7 @@ spec:
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
         - name: POSTGRES_DB
-          value: yarns_replica
+          value: uprise_replica
         ports:
         - containerPort: 5432
 ```
@@ -477,7 +477,7 @@ apiVersion: linkerd.io/v1alpha1
 kind: ServiceProfile
 metadata:
   name: user-service
-  namespace: yarns-production
+  namespace: uprise-production
 spec:
   routes:
   - name: getUser

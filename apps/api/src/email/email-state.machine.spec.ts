@@ -1,4 +1,4 @@
-import { EmailStatus } from "@yarns/db";
+import { EmailStatus } from "@uprise/db";
 import { assertValidEmailTransition, canTransitionEmail } from "./email-state.machine";
 
 describe("email state machine", () => {

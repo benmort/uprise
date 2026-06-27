@@ -24,7 +24,7 @@ export class PushService {
   ) {
     const pub = this.config.get<string>("VAPID_PUBLIC_KEY", "");
     const priv = this.config.get<string>("VAPID_PRIVATE_KEY", "");
-    const subject = this.config.get<string>("VAPID_SUBJECT", "mailto:hello@yarns.app");
+    const subject = this.config.get<string>("VAPID_SUBJECT", "mailto:hello@uprise.app");
     this.enabled = this.config.get<boolean>("FEATURE_PUSH_ENABLED", false) && Boolean(pub && priv);
     if (this.enabled) webpush.setVapidDetails(subject, pub, priv);
   }

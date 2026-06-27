@@ -157,7 +157,7 @@ export default function DonationsPolicyPage() {
               <PolicyH2>Contact Information</PolicyH2>
               <PolicyP>For questions about donations, contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
+                <PolicyLi>Email: contact@uprise.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Updates to Policy</PolicyH2>

@@ -1,7 +1,7 @@
 # Fixture: a 2-layer work-unit brief
 
-Frozen input for the yarns-implement eval. A cold session is given this brief plus the
-yarns-implement skill, then graded against `answer-key.md`.
+Frozen input for the uprise-implement eval. A cold session is given this brief plus the
+uprise-implement skill, then graded against `answer-key.md`.
 
 ---
 

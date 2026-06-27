@@ -6,7 +6,7 @@ import {
   profile,
   sessions as sessionsApi,
   type SessionSummaryResponse,
-} from '@yarns/api-client';
+} from '@uprise/api-client';
 import {
   Card,
   CardContent,

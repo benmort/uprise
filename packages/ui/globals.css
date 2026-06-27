@@ -1,11 +1,11 @@
 /**
- * @yarns/ui design-system stylesheet (Tailwind v4, CSS-first).
+ * @uprise/ui design-system stylesheet (Tailwind v4, CSS-first).
  *
  * Default theme = the prog marketing palette (brand blue #465fff, Outfit, 0.6rem
  * radius, TailAdmin neutrals/shadows/type-scale), adopted globally across all apps.
  * Shared semantic tokens live as HSL channels in :root and are mapped via
  * `@theme inline` so a `.dark` block / per-tenant override can re-skin by changing
- * channels alone. yarns DOMAIN tokens (knock, support, warning, containers,
+ * channels alone. uprise DOMAIN tokens (knock, support, warning, containers,
  * surface) are preserved untouched — apps/admin depends on them.
  */
 
@@ -37,7 +37,7 @@
   --on-tertiary: 0 0% 100%;
   --tertiary-container: 0 60% 50%;
 
-  /* ---- yarns DOMAIN tokens (preserved — do not restyle) ---- */
+  /* ---- uprise DOMAIN tokens (preserved — do not restyle) ---- */
   --error: 0 72% 38%;
   --on-error: 0 0% 100%;
   --error-container: 9 100% 92%;
@@ -97,7 +97,7 @@
   --on-tertiary: 0 0% 100%;
   --tertiary-container: 0 60% 35%;
 
-  /* ---- yarns DOMAIN tokens (dark) ---- */
+  /* ---- uprise DOMAIN tokens (dark) ---- */
   --error: 0 72% 58%;
   --on-error: 0 0% 100%;
   --error-container: 0 60% 22%;

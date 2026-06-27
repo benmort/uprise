@@ -1,6 +1,6 @@
 # 03 – Tenancy & IAM Data Model
 
-Foundation step 4. Add prog's Network→Tenant→Membership + full IAM as Prisma CRUD tables, replacing yarns' `Organization`/`AppUser`.
+Foundation step 4. Add prog's Network→Tenant→Membership + full IAM as Prisma CRUD tables, replacing uprise' `Organization`/`AppUser`.
 
 > **Data loss is acceptable** (product-owner decision). So this is a **clean drop-and-recreate to the best end-state models** – not a delicate in-place rename. Design for clarity, not migration safety. Re-seed afterwards via the shared demo seed. This makes what was the riskiest step a routine one.
 
@@ -21,7 +21,7 @@ model Network {                                  // billing boundary, above Tena
   @@schema("tenant")
 }
 
-model Tenant {                                   // replaces yarns Organization
+model Tenant {                                   // replaces uprise Organization
   id          String   @id @default(cuid())
   slug        String   @unique
   name        String
@@ -62,7 +62,7 @@ model TenantInvitation {
 }
 
 // --- schema "iam" ---
-model User {                                     // replaces yarns AppUser identity
+model User {                                     // replaces uprise AppUser identity
   id             String    @id @default(cuid())
   email          String    @unique
   displayName    String
@@ -99,8 +99,8 @@ Data loss is acceptable, so there is no rename/backfill/dual-write dance. The wo
 ## Verification
 
 ```bash
-pnpm --filter @yarns/db prisma:migrate reset   # clean DB, fresh schema
-pnpm --filter @yarns/db run seed               # shared demo seed
+pnpm --filter @uprise/db prisma:migrate reset   # clean DB, fresh schema
+pnpm --filter @uprise/db run seed               # shared demo seed
 pnpm --filter api test
 pnpm --filter admin build
 ```

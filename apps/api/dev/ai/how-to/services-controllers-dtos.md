@@ -1,6 +1,6 @@
 ---
 name: services-controllers-dtos
-description: Build a yarns backend slice – thin controller, service that owns the logic, class-validator DTO, cross-domain sends via the dispatcher seam.
+description: Build a uprise backend slice – thin controller, service that owns the logic, class-validator DTO, cross-domain sends via the dispatcher seam.
 layer: api
 topic: service-shape
 use_when: Adding or changing a backend endpoint, service method, DTO, or a cross-domain transactional send.

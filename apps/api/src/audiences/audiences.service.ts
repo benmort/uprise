@@ -8,7 +8,7 @@ import {
   ConsentState,
   MessageChannel,
   Prisma,
-} from "@yarns/db";
+} from "@uprise/db";
 import { parse } from "csv-parse/sync";
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";

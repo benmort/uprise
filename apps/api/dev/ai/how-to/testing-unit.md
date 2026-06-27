@@ -1,6 +1,6 @@
 ---
 name: testing-unit
-description: Unit-test a yarns service with a hand-mocked Prisma client, plus the boot smoke that the unit tests can't replace.
+description: Unit-test a uprise service with a hand-mocked Prisma client, plus the boot smoke that the unit tests can't replace.
 layer: api
 topic: testing
 use_when: Writing or changing a backend service spec, or adding behaviour that needs a test.

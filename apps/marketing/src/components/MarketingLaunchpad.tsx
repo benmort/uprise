@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Inbox, PlusCircle, Users } from "lucide-react";
-import { QuickActions } from "@yarns/ui";
+import { QuickActions } from "@uprise/ui";
 import { adminAppUrl } from "@/lib/links";
 import { useSession } from "@/lib/session";
 

@@ -10,11 +10,11 @@ import {
   resetExampleData,
   seedExampleData,
   WHATSAPP_TOUR_ID,
-  YARNS_TOURS,
-  YARNS_TOUR_ID,
+  UPRISE_TOURS,
+  UPRISE_TOUR_ID,
   type TourDefinition,
   type TourStep,
-} from "./yarns-tour";
+} from "./uprise-tour";
 
 export type { TourStep };
 
@@ -23,10 +23,10 @@ export type TourMode = "manual" | "auto";
 /** Dwell between auto-play steps — long enough for a navigation + first paint to land. */
 export const AUTO_DWELL_MS = 3700;
 
-const TOUR_PROGRESS_KEY = "yarns.tour.progress";
-const TOUR_ACTIVE_ID_KEY = "yarns.tour.activeId";
+const TOUR_PROGRESS_KEY = "uprise.tour.progress";
+const TOUR_ACTIVE_ID_KEY = "uprise.tour.activeId";
 
-export interface YarnsTourState {
+export interface UpriseTourState {
   active: boolean;
   currentStep: number;
   totalSteps: number;
@@ -57,17 +57,17 @@ export interface YarnsTourState {
 
 const noop = () => {};
 
-export const YarnsTourContext = createContext<YarnsTourState>({
+export const UpriseTourContext = createContext<UpriseTourState>({
   active: false,
   currentStep: 0,
-  totalSteps: getTourById(YARNS_TOUR_ID).steps.length,
+  totalSteps: getTourById(UPRISE_TOUR_ID).steps.length,
   step: null,
   mode: "manual",
   paused: false,
   savedStep: null,
   canResume: false,
-  tours: YARNS_TOURS,
-  activeTourId: YARNS_TOUR_ID,
+  tours: UPRISE_TOURS,
+  activeTourId: UPRISE_TOUR_ID,
   startTour: noop,
   start: noop,
   startManual: noop,
@@ -82,13 +82,13 @@ export const YarnsTourContext = createContext<YarnsTourState>({
   close: noop,
 });
 
-export function useYarnsTourState(): YarnsTourState {
+export function useUpriseTourState(): UpriseTourState {
   const [active, setActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [mode, setMode] = useState<TourMode>("manual");
   const [paused, setPaused] = useState(false);
   const [savedStep, setSavedStep] = useLocalStorage<number | null>(TOUR_PROGRESS_KEY, null);
-  const [activeTourId, setActiveTourId] = useLocalStorage<string>(TOUR_ACTIVE_ID_KEY, YARNS_TOUR_ID);
+  const [activeTourId, setActiveTourId] = useLocalStorage<string>(TOUR_ACTIVE_ID_KEY, UPRISE_TOUR_ID);
 
   // The WhatsApp tour walks composer/inbox controls that only render when the
   // FEATURE_WHATSAPP_ENABLED flag is on. Hide it from the menu when the flag is off
@@ -105,7 +105,7 @@ export function useYarnsTourState(): YarnsTourState {
   }, []);
 
   const tours = useMemo(
-    () => (whatsappEnabled ? YARNS_TOURS : YARNS_TOURS.filter((tour) => tour.id !== WHATSAPP_TOUR_ID)),
+    () => (whatsappEnabled ? UPRISE_TOURS : UPRISE_TOURS.filter((tour) => tour.id !== WHATSAPP_TOUR_ID)),
     [whatsappEnabled],
   );
 
@@ -160,8 +160,8 @@ export function useYarnsTourState(): YarnsTourState {
     [setActiveTourId, setSavedStep],
   );
 
-  const startManual = useCallback(() => startTour(YARNS_TOUR_ID, "manual"), [startTour]);
-  const startAuto = useCallback(() => startTour(YARNS_TOUR_ID, "auto"), [startTour]);
+  const startManual = useCallback(() => startTour(UPRISE_TOUR_ID, "manual"), [startTour]);
+  const startAuto = useCallback(() => startTour(UPRISE_TOUR_ID, "auto"), [startTour]);
 
   const resume = useCallback(() => {
     void seedExampleData();
@@ -225,6 +225,6 @@ export function useYarnsTourState(): YarnsTourState {
   };
 }
 
-export function useYarnsTour(): YarnsTourState {
-  return useContext(YarnsTourContext);
+export function useUpriseTour(): UpriseTourState {
+  return useContext(UpriseTourContext);
 }

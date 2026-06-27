@@ -4,7 +4,7 @@ M1. Model prog's 2FA/verification SMS as a distinct message class that **bypasse
 
 ## Problem
 
-yarns has **only** marketing SMS: every send goes through `BlastsService`, applying consent (`apps/api/src/messaging/consent.service.ts` `canSend`), compliance (`apps/api/src/compliance/compliance.service.ts` `validateMessageForSend` – STOP-language + quiet hours), and suppression.
+uprise has **only** marketing SMS: every send goes through `BlastsService`, applying consent (`apps/api/src/messaging/consent.service.ts` `canSend`), compliance (`apps/api/src/compliance/compliance.service.ts` `validateMessageForSend` – STOP-language + quiet hours), and suppression.
 
 prog's 2FA path sends straight to the provider with no consent/STOP/suppression/quiet-hours:
 

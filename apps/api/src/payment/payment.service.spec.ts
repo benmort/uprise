@@ -1,4 +1,4 @@
-import { PaymentType } from "@yarns/db";
+import { PaymentType } from "@uprise/db";
 import { PaymentService } from "./payment.service";
 
 function setup(paymentRow?: any) {
@@ -121,7 +121,7 @@ describe("PaymentService", () => {
 
   it("refund is idempotent on a duplicate (P2002) — no double-count, no throw", async () => {
     const { svc, prisma } = setup({ id: "p1", status: "SUCCEEDED", amountCents: 1000, refundedCents: 0, tenantId: "t1" });
-    const { Prisma } = require("@yarns/db");
+    const { Prisma } = require("@uprise/db");
     prisma.$transaction.mockRejectedValueOnce(
       new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "6.19.3" }),
     );

@@ -1,6 +1,6 @@
 ---
 name: transactions
-description: How yarns writes atomically – state-write plus outbox emit in one prisma.$transaction, with SELECT … FOR UPDATE closing concurrent-transition races.
+description: How uprise writes atomically – state-write plus outbox emit in one prisma.$transaction, with SELECT … FOR UPDATE closing concurrent-transition races.
 layer: api
 topic: persistence
 use_when: Writing a state change that emits an event, or guarding an aggregate against concurrent transitions.

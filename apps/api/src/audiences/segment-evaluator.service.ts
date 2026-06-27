@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { ConsentState, MessageChannel } from "@yarns/db";
+import { ConsentState, MessageChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 
 type Clause = Record<string, unknown>;
 
 /**
- * Dynamic-segment evaluator (meld doc 10) — the yarns port of prog's
+ * Dynamic-segment evaluator (meld doc 10) — the uprise port of prog's
  * `segment-evaluation.handler.ts`. Resolves which Contacts belong to an
  * `AudienceSegment` from its `definition` rule and **wholesale-rewrites**
  * `AudienceSegmentMember` so every evaluation is authoritative (stale members
@@ -15,7 +15,7 @@ type Clause = Record<string, unknown>;
  * Clause types:
  *   prog-native  — `{ type: 'emailDomain', domain }`, `{ type: 'hasSource', sourceSystem }`,
  *                  `{ type: 'all' }`
- *   yarns-native — `{ type: 'consentState', channel, state }`, `{ type: 'turf', turfId }`
+ *   uprise-native — `{ type: 'consentState', channel, state }`, `{ type: 'turf', turfId }`
  *   combinators  — `{ all: [clause, …] }` (intersection), `{ any: [clause, …] }` (union)
  *
  * Like prog, an `{ include: {...} }` wrapper is unwrapped; a bare clause object is

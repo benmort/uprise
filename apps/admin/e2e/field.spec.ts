@@ -11,7 +11,7 @@ async function authed(page: Page) {
         window.sessionStorage.setItem("yarn_auth_credentials", JSON.stringify({ username: u, password: p }));
       } catch {}
       try {
-        if (cid) window.localStorage.setItem("yarns.volunteerId", cid);
+        if (cid) window.localStorage.setItem("uprise.volunteerId", cid);
       } catch {}
     },
     [ctx.user, ctx.pass, ids.volunteerId ?? ""],

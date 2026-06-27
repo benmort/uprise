@@ -78,7 +78,7 @@ export default function PrivacyPolicyPage() {
               <PolicyH2>Contact Us</PolicyH2>
               <PolicyP>If you have questions about this Privacy Policy, please contact us at:</PolicyP>
               <PolicyUl>
-                <PolicyLi>Email: contact@yarns.org.au</PolicyLi>
+                <PolicyLi>Email: contact@uprise.org.au</PolicyLi>
               </PolicyUl>
 
               <PolicyH2>Changes to This Policy</PolicyH2>

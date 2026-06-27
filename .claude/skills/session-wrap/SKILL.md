@@ -1,6 +1,6 @@
 ---
 name: session-wrap
-description: End-of-session close-out for yarns – DoD validation, remaining-work sweep, honest git posture, and a memory check, ending in a safe-to-leave verdict. Use when wrapping up, ending a session, "are we good to leave this", "close this out", or before stepping away from a branch.
+description: End-of-session close-out for uprise – DoD validation, remaining-work sweep, honest git posture, and a memory check, ending in a safe-to-leave verdict. Use when wrapping up, ending a session, "are we good to leave this", "close this out", or before stepping away from a branch.
 ---
 
 # Session wrap
@@ -22,10 +22,10 @@ Board-free: the unit of work is the task brief / plan file / TODO notes / docs r
 Walk `dev/ai/how-to/definition-of-done.md` against **what the session touched** – do not restate the guide, verify it. For each line that applies to this session's changes, state the evidence:
 - Typecheck run (`pnpm -r typecheck` or the `--filter`s you touched) – paste the result.
 - `pnpm --filter api test` green incl. the `app.module.boot.spec.ts` boot smoke (the DI gate typecheck/build miss); new behaviour has a test or the exception is justified.
-- Changed apps/packages built; any edited `@yarns/*` dist rebuilt.
-- Security: new/changed endpoints carry `@RequirePermission` (CASL via `@yarns/permissions`); webhooks `claim`-guard; DTOs class-validator-validated.
+- Changed apps/packages built; any edited `@uprise/*` dist rebuilt.
+- Security: new/changed endpoints carry `@RequirePermission` (CASL via `@uprise/permissions`); webhooks `claim`-guard; DTOs class-validator-validated.
 - State+event writes atomic – `OutboxService.append(tx, …)` inside the same `prisma.$transaction`; FSM transitions via the `*-state.machine.ts` guard.
-- Migrations additive, applied with `prisma migrate deploy` (never `migrate dev`); client regenerated; `@yarns/db` rebuilt.
+- Migrations additive, applied with `prisma migrate deploy` (never `migrate dev`); client regenerated; `@uprise/db` rebuilt.
 
 Lines that don't apply (docs-only session, no migration, no new endpoint) are marked N/A with one word of why – not silently dropped.
 

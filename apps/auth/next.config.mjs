@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // @yarns/ui is consumed as TS/TSX source; api-client/contracts as built dist.
-  transpilePackages: ["@yarns/ui", "@yarns/api-client", "@yarns/contracts"],
+  // @uprise/ui is consumed as TS/TSX source; api-client/contracts as built dist.
+  transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts"],
   // Keep the pre-rename paths working (in-flight emails, bookmarks, old links).
   // Query strings (?token=, ?return_to=) are carried over automatically.
   async redirects() {
