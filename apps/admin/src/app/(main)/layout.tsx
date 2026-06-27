@@ -104,9 +104,9 @@ function buildNav(campaignId: string): NavNode[] {
         { label: "General", href: "/settings", match: (p) => p === "/settings" },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
-        { label: "Roles", href: "/settings/roles", match: (p) => p.startsWith("/settings/roles") },
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
-        { label: "Feature flags", href: "/settings/flags", match: (p) => p.startsWith("/settings/flags") },
+        { label: "Flags", href: "/settings/flags", match: (p) => p === "/settings/flags" },
+        { label: "Plans", href: "/settings/plans", match: (p) => p.startsWith("/settings/plans") },
       ],
     },
     {

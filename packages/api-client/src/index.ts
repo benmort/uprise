@@ -172,6 +172,38 @@ export const sessions = {
   revokeOthers: () => post<OkResponse>("/iam/my-sessions/revoke-others", {}),
 };
 
+// ── Tenant members + invitations (admin; manage tenant.member/.invitation) ──
+/**
+ * Membership/invitation role. Mirrors the @yarns/db `AppUserRole` enum as a string
+ * union so the client bundle never pulls in the Prisma runtime. The API validates
+ * against the real enum, so any drift here is caught server-side (400).
+ */
+export type AppUserRole = "OWNER" | "ORGANISER" | "CANVASSER";
+
+/** A tenant's membership row (AppUserRole: OWNER | ORGANISER | CANVASSER). */
+export interface TenantMemberSummary {
+  id: string;
+  tenantId: string;
+  userId: string;
+  role: AppUserRole;
+  addedBy: string | null;
+  createdAt: string;
+  user: { email: string; displayName: string | null };
+}
+
+/** A pending/expired/revoked invitation row. */
+export interface TenantInvitationSummary {
+  id: string;
+  tenantId: string;
+  email: string;
+  role: AppUserRole;
+  status: string;
+  token: string | null;
+  expiresAt: string | null;
+  invitedBy: string | null;
+  createdAt: string;
+}
+
 // ── Tenants (sign-up subdomain check) ────────────────────────────────
 export const tenants = {
   checkAvailability: (slug: string) =>
@@ -193,6 +225,34 @@ export const tenants = {
     request<OkResponse>(
       `/tenants/${encodeURIComponent(tenantId)}/join-requests/${encodeURIComponent(requestId)}/reject`,
       { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  // Members — manage tenant.member.
+  listMembers: (tenantId: string) =>
+    request<TenantMemberSummary[]>(`/tenants/${encodeURIComponent(tenantId)}/members`),
+  updateMemberRole: (tenantId: string, userId: string, role: AppUserRole) =>
+    request<TenantMemberSummary>(
+      `/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(userId)}`,
+      { method: "PATCH", body: JSON.stringify({ role }) },
+    ),
+  removeMember: (tenantId: string, userId: string) =>
+    request<OkResponse>(
+      `/tenants/${encodeURIComponent(tenantId)}/members/${encodeURIComponent(userId)}`,
+      { method: "DELETE" },
+    ),
+
+  // Invitations — manage tenant.invitation.
+  listInvitations: (tenantId: string) =>
+    request<TenantInvitationSummary[]>(`/tenants/${encodeURIComponent(tenantId)}/invitations`),
+  createInvitation: (tenantId: string, body: { email: string; role: AppUserRole }) =>
+    request<{ id: string; token: string }>(
+      `/tenants/${encodeURIComponent(tenantId)}/invitations`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  revokeInvitation: (tenantId: string, invitationId: string) =>
+    request<OkResponse>(
+      `/tenants/${encodeURIComponent(tenantId)}/invitations/${encodeURIComponent(invitationId)}`,
+      { method: "DELETE" },
     ),
 };
 

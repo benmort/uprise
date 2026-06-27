@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -302,20 +303,28 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Feature Toggles</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={featureFlagsLoading}
-            onClick={() => void refreshFeatureFlags({ notifyOnError: true })}
-          >
-            Refresh Toggles
-          </Button>
+          <CardTitle>Flags</CardTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={featureFlagsLoading}
+              onClick={() => void refreshFeatureFlags({ notifyOnError: true })}
+            >
+              Refresh
+            </Button>
+            <Link
+              href="/settings/flags"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-surface-variant"
+            >
+              Manage flags →
+            </Link>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {featureFlagsError && !featureFlags ? (
             <EmptyState
-              title="Feature toggles are unavailable"
+              title="Flags are unavailable"
               description={featureFlagsError}
               ctaLabel="Retry"
               onCta={() => void refreshFeatureFlags({ notifyOnError: true })}
@@ -375,14 +384,26 @@ export default function SettingsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Queue & Redis Stats</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={queueStatsLoading}
-            onClick={() => void refreshQueueStats({ notifyOnError: true })}
-          >
-            Refresh Stats
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={queueStatsLoading}
+              onClick={() => void refreshQueueStats({ notifyOnError: true })}
+            >
+              Refresh Stats
+            </Button>
+            {process.env.NEXT_PUBLIC_BULLMQ_URL ? (
+              <a
+                href={process.env.NEXT_PUBLIC_BULLMQ_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-surface-variant"
+              >
+                Open queue dashboard →
+              </a>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {queueStatsError && !queueStats ? (
