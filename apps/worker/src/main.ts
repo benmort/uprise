@@ -183,6 +183,10 @@ function startBullBoardServer(
   httpApp.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });
+  // Root → the queue dashboard, so worker.uprise.org.au lands on Bull Board.
+  httpApp.get("/", (_req, res) => {
+    res.redirect(302, BULL_BOARD_BASE_PATH);
+  });
   httpApp.use(BULL_BOARD_BASE_PATH, basicAuthGuard(logger), serverAdapter.getRouter());
 
   const port = Number(process.env.WORKER_HEALTH_PORT ?? "3210");
