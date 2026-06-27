@@ -65,7 +65,7 @@ export class RegistrationService {
       });
       const tenant = await tx.tenant.create({ data: { slug, name: orgName } });
       await tx.tenantMember.create({
-        data: { tenantId: tenant.id, userId: user.id, role: AppUserRole.ORGANISER, addedBy: user.id },
+        data: { tenantId: tenant.id, userId: user.id, role: AppUserRole.OWNER, addedBy: user.id },
       });
       await this.outbox.append(tx, {
         tenantId: tenant.id,
@@ -83,7 +83,7 @@ export class RegistrationService {
         tenantId: tenant.id,
         eventType: "tenant.member.added",
         aggregateId: tenant.id,
-        payload: { tenantId: tenant.id, userId: user.id, role: AppUserRole.ORGANISER },
+        payload: { tenantId: tenant.id, userId: user.id, role: AppUserRole.OWNER },
       });
       return { userId: user.id, tenantId: tenant.id };
     });
@@ -103,7 +103,7 @@ export class RegistrationService {
       tenantId,
       token,
       expiresAt,
-      memberships: [{ tenantId, tenantName: orgName, role: AppUserRole.ORGANISER }],
+      memberships: [{ tenantId, tenantName: orgName, role: AppUserRole.OWNER }],
     };
   }
 }

@@ -201,6 +201,9 @@ enum JourneyEnrolmentState {
 }
 
 enum AppUserRole {
+  // OWNER must stay first; migration 20260627100000 inserts it BEFORE ORGANISER so the DB enum
+  // order matches this declaration. Do not reorder without a matching migration.
+  OWNER
   ORGANISER
   CANVASSER
   @@schema("iam")

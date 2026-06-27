@@ -39,8 +39,8 @@ export interface CreateInvitationInput {
  * Tenant provisioning + membership/invitation admin (meld doc 12 / prog tenant domain).
  * Each write commits the row(s) + an outbox event in one transaction (doc 05), so the
  * cross-domain reactions (welcome/invitation email, network→Stripe customer) fire off the
- * event, not an inline call. yarns' TenantMember.role is AppUserRole (ORGANISER/CANVASSER);
- * a tenant owner is an ORGANISER.
+ * event, not an inline call. yarns' TenantMember.role is AppUserRole (OWNER/ORGANISER/CANVASSER);
+ * a tenant's creator is the OWNER (full tenant + billing role).
  */
 @Injectable()
 export class TenantsService {
@@ -89,7 +89,7 @@ export class TenantsService {
           data: {
             tenantId: tenant.id,
             userId: ownerUserId,
-            role: AppUserRole.ORGANISER,
+            role: AppUserRole.OWNER,
             addedBy: ownerUserId,
           },
         });
@@ -97,7 +97,7 @@ export class TenantsService {
           tenantId: tenant.id,
           eventType: "tenant.member.added",
           aggregateId: tenant.id,
-          payload: { tenantId: tenant.id, userId: ownerUserId, role: AppUserRole.ORGANISER },
+          payload: { tenantId: tenant.id, userId: ownerUserId, role: AppUserRole.OWNER },
         });
       }
       return tenant;
@@ -148,9 +148,13 @@ export class TenantsService {
   }
 
   // ── Members ──────────────────────────────────────────────────────────
-  async listMembers(tenantId: string): Promise<TenantMember[]> {
+  async listMembers(tenantId: string) {
     await this.getTenant(tenantId);
-    return this.prisma.tenantMember.findMany({ where: { tenantId }, orderBy: { createdAt: "asc" } });
+    return this.prisma.tenantMember.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: "asc" },
+      include: { user: { select: { email: true, displayName: true } } },
+    });
   }
 
   /** Directly add an EXISTING user (by id or email) to a tenant. */
@@ -185,16 +189,16 @@ export class TenantsService {
     });
   }
 
-  /** Guard: a tenant must keep at least one ORGANISER (owner-equivalent). */
-  private async assertNotLastOrganiser(tenantId: string, userId: string): Promise<void> {
+  /** Guard: a tenant must keep at least one OWNER (the workspace owner). */
+  private async assertNotLastOwner(tenantId: string, userId: string): Promise<void> {
     const member = await this.prisma.tenantMember.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
     });
-    if (member?.role !== AppUserRole.ORGANISER) return;
-    const organisers = await this.prisma.tenantMember.count({
-      where: { tenantId, role: AppUserRole.ORGANISER },
+    if (member?.role !== AppUserRole.OWNER) return;
+    const owners = await this.prisma.tenantMember.count({
+      where: { tenantId, role: AppUserRole.OWNER },
     });
-    if (organisers <= 1) throw new BadRequestException("Cannot remove or demote the last organiser of a tenant");
+    if (owners <= 1) throw new BadRequestException("Cannot remove or demote the last owner of a tenant");
   }
 
   async updateMemberRole(tenantId: string, userId: string, role: AppUserRole): Promise<TenantMember> {
@@ -202,8 +206,8 @@ export class TenantsService {
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
-    if (existing.role === AppUserRole.ORGANISER && role !== AppUserRole.ORGANISER) {
-      await this.assertNotLastOrganiser(tenantId, userId);
+    if (existing.role === AppUserRole.OWNER && role !== AppUserRole.OWNER) {
+      await this.assertNotLastOwner(tenantId, userId);
     }
     return this.prisma.$transaction(async (tx) => {
       const member = await tx.tenantMember.update({
@@ -225,7 +229,7 @@ export class TenantsService {
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
-    await this.assertNotLastOrganiser(tenantId, userId);
+    await this.assertNotLastOwner(tenantId, userId);
     await this.prisma.$transaction(async (tx) => {
       await tx.tenantMember.delete({ where: { tenantId_userId: { tenantId, userId } } });
       await this.outbox.append(tx, {

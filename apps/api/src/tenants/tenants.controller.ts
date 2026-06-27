@@ -26,8 +26,9 @@ import {
 } from "./dto/tenants.dto";
 
 // Tenant provisioning + membership/invitation admin (meld doc 12). Creating/updating a tenant
-// is an owner/super-admin op (manage tenant.tenant); member + invitation ops are organiser-level
-// (manage tenant.member / tenant.invitation — already in the CASL matrix).
+// is an owner/super-admin op (manage tenant.tenant); member + invitation ops require manage
+// tenant.member / tenant.invitation (granted to OWNER via tenant.all and to ORGANISER — already
+// in the CASL matrix).
 const TENANT_MANAGE = { action: "manage", resource: "tenant.tenant" } as const;
 const TENANT_READ = { action: "read", resource: "tenant.tenant" } as const;
 const MEMBER_MANAGE = { action: "manage", resource: "tenant.member" } as const;

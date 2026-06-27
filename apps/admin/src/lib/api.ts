@@ -42,7 +42,7 @@ export async function request<T>(
 
 export type AuthPrincipal = {
   id: string;
-  role: "ORGANISER" | "CANVASSER";
+  role: "OWNER" | "ORGANISER" | "CANVASSER";
   tenantId: string | null;
 };
 

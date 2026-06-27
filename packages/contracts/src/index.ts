@@ -11,7 +11,7 @@ import { z } from "zod";
 export type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; error: string };
 
 // ── Principal + membership ────────────────────────────────────────────
-export type AppRole = "ORGANISER" | "CANVASSER";
+export type AppRole = "OWNER" | "ORGANISER" | "CANVASSER";
 
 export interface Membership {
   tenantId: string;

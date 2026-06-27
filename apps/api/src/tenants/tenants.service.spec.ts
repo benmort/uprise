@@ -44,7 +44,7 @@ describe("TenantsService", () => {
       expect.objectContaining({ data: expect.objectContaining({ slug: "acme", name: "Acme Inc" }) }),
     );
     expect(prisma.tenantMember.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ userId: "u1", role: AppUserRole.ORGANISER }) }),
+      expect.objectContaining({ data: expect.objectContaining({ userId: "u1", role: AppUserRole.OWNER }) }),
     );
     const events = outbox.append.mock.calls.map((c: any) => c[1].eventType);
     expect(events).toEqual(["tenant.tenant.created", "tenant.member.added"]);
@@ -132,9 +132,10 @@ describe("TenantsService", () => {
     );
   });
 
-  it("refuses to remove the last organiser of a tenant", async () => {
+  it("refuses to remove the last owner of a tenant", async () => {
     const { svc, prisma } = setup();
-    prisma.tenantMember.count.mockResolvedValueOnce(1); // only one organiser left
+    prisma.tenantMember.findUnique.mockResolvedValue({ tenantId: "t1", userId: "u1", role: "OWNER" });
+    prisma.tenantMember.count.mockResolvedValueOnce(1); // only one owner left
     await expect(svc.removeMember("t1", "u1")).rejects.toThrow();
   });
 

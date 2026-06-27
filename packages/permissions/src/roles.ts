@@ -17,6 +17,7 @@ export type Role = (typeof YARNS_ROLES)[number];
 
 /** Maps the legacy Prisma AppUserRole enum values to the unified role ids. */
 export const APP_USER_ROLE_TO_ROLE: Record<string, Role> = {
+  OWNER: "owner",
   ORGANISER: "organiser",
   CANVASSER: "canvasser",
 };
