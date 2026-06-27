@@ -13,6 +13,12 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "Sign in – Uprise",
   description: "Uprise identity & single sign-on.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/uprise-icon.svg"],
+  },
 };
 
 // Apply the shared (parent-domain) theme cookie before paint so the SSO screens

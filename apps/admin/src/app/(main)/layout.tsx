@@ -439,11 +439,10 @@ export default function MainLayout({
   }, [nav]);
   const p = pathname || "";
   // Groups toggle independently (prototype: openGroups array). Default-open is the
-  // active group, plus Canvass (prototype seeds openGroups:['canvass']); an explicit
-  // user toggle overrides the default.
+  // active group only; an explicit user toggle overrides the default.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const isGroupOpen = (node: Extract<NavNode, { type: "group" }>) =>
-    openGroups[node.key] ?? (node.match(p) || node.key === "canvass");
+    openGroups[node.key] ?? node.match(p);
 
   // Responsive sidebar (prog parity): collapse to an icon-rail on desktop, slide-in
   // drawer on mobile. The hamburger toggles whichever applies to the viewport.
@@ -518,7 +517,14 @@ export default function MainLayout({
                 className={cn("ml-auto h-3.5 w-3.5 transition-transform", branchOpen ? "rotate-0" : "-rotate-90")}
               />
             </button>
-            {branchOpen ? renderEntries(entry.children, key) : null}
+            <div
+              className={cn(
+                "grid transition-[grid-template-rows] duration-300 ease-in-out",
+                branchOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+              )}
+            >
+              <div className="overflow-hidden">{renderEntries(entry.children, key)}</div>
+            </div>
           </div>
         );
       })}
@@ -636,7 +642,14 @@ export default function MainLayout({
                       )}
                     />
                   </button>
-                  {open ? renderEntries(node.children, node.key) : null}
+                  <div
+                    className={cn(
+                      "grid transition-[grid-template-rows] duration-300 ease-in-out",
+                      open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                    )}
+                  >
+                    <div className="overflow-hidden">{renderEntries(node.children, node.key)}</div>
+                  </div>
                 </div>
               );
             })}

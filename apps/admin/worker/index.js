@@ -9,12 +9,12 @@ self.addEventListener("push", (event) => {
   } catch (e) {
     data = { body: event.data ? event.data.text() : "" };
   }
-  const title = data.title || "Yarns";
+  const title = data.title || "Uprise";
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",
-      icon: "/images/yarns-logo-full.png",
-      badge: "/images/yarns-logo-full.png",
+      icon: "/images/uprise-icon.svg",
+      badge: "/images/uprise-icon.svg",
       data: { url: data.url || "/field" },
     }),
   );

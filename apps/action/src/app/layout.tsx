@@ -11,6 +11,12 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "Join – Uprise",
   description: "Request access to an Uprise workspace.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/uprise-icon.svg"],
+  },
 };
 
 /** Public action app (port 3004): no session, no SSO cookie — it only calls public API endpoints. */

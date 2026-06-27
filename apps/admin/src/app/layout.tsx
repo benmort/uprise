@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   description: "SMS & WhatsApp broadcasts, canvassing, audiences, journeys and a unified inbox.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/images/yarns-icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/images/yarns-icon.svg", type: "image/svg+xml" }],
-    shortcut: ["/images/yarns-icon.svg"],
+    icon: [{ url: "/images/uprise-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/images/uprise-icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/images/uprise-icon.svg"],
   },
 };
 

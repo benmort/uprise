@@ -14,6 +14,12 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "Uprise – multichannel organising platform",
   description: "SMS & WhatsApp broadcasts, voice, canvassing, audiences and a unified inbox for organisers.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/uprise-icon.svg"],
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
