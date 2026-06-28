@@ -1464,6 +1464,20 @@ model Plan {
   featureFlags Json
   isDefault    Boolean   @default(false)
   archivedAt   DateTime?
+  // ── Marketing/pricing + visibility (editable via the admin Plans page) ──
+  // publiclyVisible=false hides a plan from the public pricing page (super-admin only).
+  publiclyVisible       Boolean @default(true)
+  order                 Int     @default(0)
+  popular               Boolean @default(false)
+  description           String?
+  priceMonthly          Int?
+  priceMonthlyOriginal  Int?
+  priceAnnually         Int?
+  priceAnnuallyOriginal Int?
+  // Enforced per-tenant limits: { contacts, teamMembers, segments }; a null/absent member = unlimited.
+  limits                Json?
+  // Display-only feature-table column for the pricing page: [{ label, value: boolean|string }].
+  features              Json?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

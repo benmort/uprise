@@ -472,6 +472,8 @@ export default function MainLayout({
         .map((e) => ("children" in e ? { ...e, children: filterEntries(e.children) } : e))
         .filter((e) => !("children" in e) || e.children.length > 0);
     return buildNav(campaignId, isSuperAdmin)
+      // Prog is super-admin only (per the access matrix), like the Super Admin group.
+      .filter((n) => n.key !== "prog" || isSuperAdmin)
       .filter((n) => flagOn(n.flag))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
       .filter((n) => n.type !== "group" || n.children.length > 0);
