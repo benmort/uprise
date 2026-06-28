@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Archive, ArchiveRestore, ChevronLeft, Loader2, Pencil, Plus, ShieldAlert, Star } from "lucide-react";
-import { FEATURE_FLAG_KEYS, FLAG_META, type FeatureFlagKey } from "@uprise/flags";
+import { FEATURE_FLAG_KEYS, FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import { listPlans, updatePlan, upsertPlan, type Plan } from "@/lib/api/flags";
 import { Badge } from "@/components/prog/ui/badge";
@@ -26,16 +26,32 @@ const PLAN_FLAGS: FeatureFlagKey[] = FEATURE_FLAG_KEYS.filter((k) =>
   FLAG_META[k].controllableBy.includes("plan"),
 );
 
+// Friendly label + section grouping for the entitlements table (mirrors the nav).
+const NAV_LABEL: Record<string, string> = Object.fromEntries(NAV_FLAGS.map((n) => [n.key, n.label]));
+const NAV_SECTION: Record<string, string> = Object.fromEntries(NAV_FLAGS.map((n) => [n.key, n.section]));
+// Core product flags (not tied to a single nav item) sit under "Core features"; the
+// rest group by nav section, in nav order.
+const SECTION_ORDER = ["Core features", "Inbox", "Channels", "Canvass", "Engagement", "Compliance", "Prog"];
+const FLAG_GROUPS: { section: string; flags: FeatureFlagKey[] }[] = (() => {
+  const by: Record<string, FeatureFlagKey[]> = {};
+  for (const f of PLAN_FLAGS) {
+    const s = NAV_SECTION[f] ?? "Core features";
+    (by[s] ||= []).push(f);
+  }
+  return SECTION_ORDER.filter((s) => by[s]?.length).map((s) => ({ section: s, flags: by[s] }));
+})();
+
 function isPermissionError(msg: string) {
   return /forbidden|permission|not allowed|403/i.test(msg);
 }
 
 function flagLabel(flag: FeatureFlagKey) {
+  if (NAV_LABEL[flag]) return NAV_LABEL[flag];
   return flag
     .replace(/^FEATURE_/, "")
     .replace(/_ENABLED$/, "")
     .replaceAll("_", " ")
-    .toLowerCase();
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function Toggle({
@@ -245,95 +261,103 @@ export default function PlansPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky left-0 z-10 bg-card">Plan</TableHead>
-                  {PLAN_FLAGS.map((f) => (
-                    <TableHead key={f} className="whitespace-nowrap" title={FLAG_META[f].description}>
-                      {flagLabel(f)}
-                    </TableHead>
-                  ))}
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {plans.map((plan) => {
-                  const archived = plan.archivedAt !== null;
-                  return (
-                    <TableRow key={plan.id} className={cn(archived && "opacity-60")}>
-                      <TableCell className="sticky left-0 z-10 bg-card align-top">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">{plan.displayName}</span>
-                          {plan.isDefault ? <Badge variant="info">Default</Badge> : null}
-                          {archived ? <Badge variant="secondary">Archived</Badge> : null}
-                        </div>
-                        <div className="mt-0.5 font-mono text-xs text-muted-foreground">{plan.key}</div>
-                      </TableCell>
-                      {PLAN_FLAGS.map((f) => (
-                        <TableCell key={f} className="align-top">
-                          <Toggle
-                            checked={plan.featureFlags[f] === true}
-                            disabled={pending === `${plan.id}:${f}` || archived}
-                            onChange={(next) => void toggleFlag(plan, f, next)}
-                            label={`${plan.displayName}: ${flagLabel(f)}`}
-                          />
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="sticky left-0 z-10 min-w-[220px] bg-card">Feature</TableHead>
+                    {plans.map((plan) => {
+                      const archived = plan.archivedAt !== null;
+                      return (
+                        <TableHead key={plan.id} className={cn("min-w-[160px] text-center align-top", archived && "opacity-60")}>
+                          <div className="flex flex-col items-center gap-1 py-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-foreground">{plan.displayName}</span>
+                              {plan.isDefault ? <Badge variant="info">Default</Badge> : null}
+                              {archived ? <Badge variant="secondary">Archived</Badge> : null}
+                            </div>
+                            <div className="font-mono text-[11px] font-normal text-muted-foreground">{plan.key}</div>
+                            <div className="flex items-center gap-0.5">
+                              <Button
+                                type="button" variant="ghost" size="icon" title="Rename" disabled={!!pending}
+                                onClick={() => {
+                                  setRenaming(plan);
+                                  setRenameValue(plan.displayName);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              {!plan.isDefault && !archived ? (
+                                <Button
+                                  type="button" variant="ghost" size="icon" title="Make default" disabled={!!pending}
+                                  onClick={() => void makeDefault(plan)}
+                                >
+                                  {pending === `default:${plan.id}` ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Star className="h-3.5 w-3.5" />
+                                  )}
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button" variant="ghost" size="icon" title={archived ? "Unarchive" : "Archive"} disabled={!!pending}
+                                onClick={() => void setArchived(plan, !archived)}
+                              >
+                                {pending === `archive:${plan.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : archived ? (
+                                  <ArchiveRestore className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Archive className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {FLAG_GROUPS.map((group) => (
+                    <Fragment key={group.section}>
+                      <TableRow className="bg-muted/40 hover:bg-muted/40">
+                        <TableCell
+                          colSpan={plans.length + 1}
+                          className="py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                        >
+                          {group.section}
                         </TableCell>
+                      </TableRow>
+                      {group.flags.map((f) => (
+                        <TableRow key={f}>
+                          <TableCell className="sticky left-0 z-10 bg-card">
+                            <span className="text-sm text-foreground" title={FLAG_META[f].description}>
+                              {flagLabel(f)}
+                            </span>
+                          </TableCell>
+                          {plans.map((plan) => {
+                            const archived = plan.archivedAt !== null;
+                            return (
+                              <TableCell key={plan.id} className="text-center">
+                                <div className="flex justify-center">
+                                  <Toggle
+                                    checked={plan.featureFlags[f] === true}
+                                    disabled={pending === `${plan.id}:${f}` || archived}
+                                    onChange={(next) => void toggleFlag(plan, f, next)}
+                                    label={`${plan.displayName}: ${flagLabel(f)}`}
+                                  />
+                                </div>
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
                       ))}
-                      <TableCell className="align-top text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            title="Rename"
-                            disabled={!!pending}
-                            onClick={() => {
-                              setRenaming(plan);
-                              setRenameValue(plan.displayName);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          {!plan.isDefault && !archived ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              title="Make default"
-                              disabled={!!pending}
-                              onClick={() => void makeDefault(plan)}
-                            >
-                              {pending === `default:${plan.id}` ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Star className="h-4 w-4" />
-                              )}
-                            </Button>
-                          ) : null}
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            title={archived ? "Unarchive" : "Archive"}
-                            disabled={!!pending}
-                            onClick={() => void setArchived(plan, !archived)}
-                          >
-                            {pending === `archive:${plan.id}` ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : archived ? (
-                              <ArchiveRestore className="h-4 w-4" />
-                            ) : (
-                              <Archive className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                    </Fragment>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
