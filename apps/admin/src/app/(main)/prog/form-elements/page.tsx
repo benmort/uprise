@@ -56,7 +56,7 @@ export default function FormElementsPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-screen-2xl p-4 pb-10 md:p-6 md:pb-6">
+    <div className="page-stack">
       {/* Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Form Elements</h2>

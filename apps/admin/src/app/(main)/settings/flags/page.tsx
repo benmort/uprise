@@ -178,7 +178,7 @@ export default function FeatureFlagsPage() {
     selected?.type === "network" ? f.networkOverride : f.tenantOverride;
 
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-1">
+    <main className="page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Feature flags</h1>

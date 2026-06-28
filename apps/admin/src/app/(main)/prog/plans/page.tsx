@@ -421,7 +421,7 @@ function PlanTableThree() {
 
 export default function PlanPage() {
   return (
-    <div className="mx-auto max-w-screen-2xl">
+    <div className="page-stack">
       <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Plans</h2>
         <Breadcrumbs

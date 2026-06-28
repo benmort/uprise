@@ -578,7 +578,7 @@ export default function TaskListPage() {
   ];
 
   return (
-    <div className="p-4 mx-auto max-w-screen-2xl md:p-6">
+    <div className="page-stack">
       {/* Breadcrumb */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Task List</h2>

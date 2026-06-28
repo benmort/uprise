@@ -187,7 +187,7 @@ export default function EmailPage() {
   );
 
   return (
-    <div className="p-4 mx-auto max-w-7xl md:p-6">
+    <div className="page-stack">
       <div className="">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Inbox</h2>

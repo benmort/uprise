@@ -170,7 +170,7 @@ export default function SupportTicketsPage() {
   const solvedTickets = mockTickets.filter(t => t.status === 'solved').length;
 
   return (
-    <div className="p-4 mx-auto max-w-7xl md:p-6">
+    <div className="page-stack">
       <div>
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">

@@ -22,7 +22,7 @@ export default function NewTenantPage() {
 
   return (
     <AdminOrHigher>
-      <section className="flex-1 p-4 lg:p-8">
+      <section className="page-stack">
         <div className="max-w-xl space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create Tenant</h1>

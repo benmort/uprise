@@ -23,7 +23,7 @@ export default function TenantMembersPage() {
 
   return (
     <AdminOrHigher>
-      <section className="flex-1 p-4 lg:p-8">
+      <section className="page-stack">
         <div className="space-y-6 max-w-2xl">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/tenants/${tenantId}`)}>

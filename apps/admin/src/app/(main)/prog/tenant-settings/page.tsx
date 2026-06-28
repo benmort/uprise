@@ -149,8 +149,8 @@ export default function TenantSettingsPage() {
 
   return (
     <AdminOrHigher>
-      <section className="flex-1 p-4 lg:p-8">
-        <div className="mx-auto max-w-screen-2xl space-y-6">
+      <section className="page-stack">
+        <div className="contents">
           {/* Header */}
           <div className="flex flex-wrap items-center justify-between gap-3 pb-6">
             <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Settings</h2>

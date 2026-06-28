@@ -75,7 +75,7 @@ export default function FileManagerPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">File Manager</h1>

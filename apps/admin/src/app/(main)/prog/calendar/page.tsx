@@ -135,7 +135,7 @@ export default function CommunicationsCalendarPage() {
   }, [modalMode]);
 
   return (
-    <div className="p-4 mx-auto max-w-7xl md:p-6">
+    <div className="page-stack">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Calendar</h2>

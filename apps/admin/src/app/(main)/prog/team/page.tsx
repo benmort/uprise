@@ -726,8 +726,7 @@ export default function TeamPage() {
 
   return (
     <CanManageUsers>
-      <section className="flex-1">
-        <div className="space-y-6">
+      <div className="page-stack">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Team</h1>
@@ -754,8 +753,7 @@ export default function TeamPage() {
           <Suspense fallback={<InvitationsListSkeleton />}>
             <InvitationsList key={invitationsRefreshTrigger} refreshTrigger={invitationsRefreshTrigger} />
           </Suspense>
-        </div>
-      </section>
+      </div>
     </CanManageUsers>
   );
 }

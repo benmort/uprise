@@ -105,8 +105,8 @@ function CheckoutContent() {
   }
 
   return (
-    <section className="pb-10 overflow-hidden bg-gray-50 dark:bg-transparent">
-      <div className="w-full gap-6 px-4 mx-auto max-w-7xl sm:px-8 xl:px-0">
+    <section className="page-stack">
+      <div className="w-full gap-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Checkout</h2>
           <Breadcrumbs

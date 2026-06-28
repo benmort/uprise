@@ -750,13 +750,11 @@ function CurrentPlan() {
 export default function BillingPage() {
   return (
     <CanManageBilling>
-      <section className="flex-1">
-        <div className="space-y-6">
-          <Suspense fallback={<BillingSkeleton />}>
-            <CurrentPlan />
-          </Suspense>
-        </div>
-      </section>
+      <div className="page-stack">
+        <Suspense fallback={<BillingSkeleton />}>
+          <CurrentPlan />
+        </Suspense>
+      </div>
     </CanManageBilling>
   );
 }

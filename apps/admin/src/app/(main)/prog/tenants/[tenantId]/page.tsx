@@ -37,7 +37,7 @@ export default function TenantDetailPage() {
   if (loading) {
     return (
       <AdminOrHigher>
-        <section className="flex-1 p-4 lg:p-8">
+        <section className="page-stack">
           <div className="text-gray-600 dark:text-gray-400">Loading...</div>
         </section>
       </AdminOrHigher>
@@ -47,7 +47,7 @@ export default function TenantDetailPage() {
   if (!tenant) {
     return (
       <AdminOrHigher>
-        <section className="flex-1 p-4 lg:p-8">
+        <section className="page-stack">
           <p className="text-muted-foreground">Tenant not found.</p>
           <Button variant="outline" className="mt-4" onClick={() => router.push('/admin/tenants')}>
             Back to Tenants
@@ -59,7 +59,7 @@ export default function TenantDetailPage() {
 
   return (
     <AdminOrHigher>
-      <section className="flex-1 p-4 lg:p-8">
+      <section className="page-stack">
         <div className="space-y-6 max-w-2xl">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => router.push('/admin/tenants')}>

@@ -196,7 +196,7 @@ export default function PlansPage() {
   );
 
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-1">
+    <main className="page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link

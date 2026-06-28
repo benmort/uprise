@@ -105,7 +105,7 @@ export default function SingleInvoicePage() {
   };
 
   return (
-    <div className="p-4 mx-auto max-w-7xl md:p-6">
+    <div className="page-stack">
       <div>
         <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03] w-full">
           {/* Header */}
