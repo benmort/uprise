@@ -9,8 +9,10 @@
  * `GET /system/feature-flags` response stays backwards compatible.
  */
 
+import { NAV_FLAGS, type NavFlagKey } from "./nav";
+
 /** What the flag does for the product. */
-export type FlagKind = "release" | "ops" | "experiment";
+export type FlagKind = "release" | "ops" | "experiment" | "navigation";
 
 /** A layer that may set a flag, in precedence order (env wins, default is the floor). */
 export type FlagLayer = "env" | "tenant" | "plan" | "global";
@@ -34,7 +36,7 @@ const PLAN_DRIVEN: readonly FlagLayer[] = ["tenant", "plan", "global"];
 // platform-wide infra/test switches: one global toggle, no env, no per-tenant scope.
 const GLOBAL_ONLY: readonly FlagLayer[] = ["global"];
 
-export const FLAGS = [
+const CORE_FLAGS = [
   {
     key: "FEATURE_REALTIME_ENABLED",
     description: "Realtime inbox/analytics streaming (SSE).",
@@ -101,13 +103,32 @@ export const FLAGS = [
   },
 ] as const satisfies readonly FlagDef[];
 
-/** Union of every catalogue flag key. */
-export type FeatureFlagKey = (typeof FLAGS)[number]["key"];
+// Navigation flags (one per gateable admin menu item, 1st + 2nd level) are generated
+// from the NAV_FLAGS registry: plan-driven, default ON, so plans/overrides RESTRICT.
+const NAV_FLAG_DEFS: readonly FlagDef[] = NAV_FLAGS.map((n) => ({
+  key: n.key,
+  description: `Show the "${n.label}" menu item${n.level === 2 ? " (sub-item)" : ""}.`,
+  default: true,
+  kind: "navigation" as const,
+  controllableBy: PLAN_DRIVEN,
+  envVar: n.key,
+}));
+
+/** The full catalogue: core product/ops flags + the generated navigation flags. */
+export const FLAGS: readonly FlagDef[] = [...CORE_FLAGS, ...NAV_FLAG_DEFS];
+
+export { NAV_FLAGS };
+export type { NavFlag, NavFlagKey } from "./nav";
+
+/** Union of every catalogue flag key (core literals + navigation flag keys). */
+export type FeatureFlagKey = (typeof CORE_FLAGS)[number]["key"] | NavFlagKey;
 
 /** The effective on/off map returned to clients, keyed by flag. */
 export type FeatureFlagMap = Record<FeatureFlagKey, boolean>;
 
-export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = FLAGS.map((f) => f.key);
+export const FEATURE_FLAG_KEYS: readonly FeatureFlagKey[] = FLAGS.map(
+  (f) => f.key,
+) as readonly FeatureFlagKey[];
 
 export const FLAG_META: Record<FeatureFlagKey, FlagDef> = Object.fromEntries(
   FLAGS.map((f) => [f.key, f]),

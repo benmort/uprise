@@ -42,63 +42,66 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
 import { FlagsProvider } from "@/components/flags/flags-provider";
+import { listFlags } from "@/lib/api/flags";
+import { FLAG_DEFAULTS, type FeatureFlagKey, type FeatureFlagMap } from "@uprise/flags";
 
 
 type NavMatch = (pathname: string) => boolean;
 // A child is either a leaf link or a nested branch (prog's IA goes 3 deep, e.g.
 // Prog → Grant Management → Grants → Manage). Leaf vs branch is told apart by
-// the presence of `href`.
-type NavLeaf = { label: string; href: string; match: NavMatch };
-type NavBranch = { label: string; match: NavMatch; children: NavEntry[] };
+// the presence of `href`. `flag` (optional) plan-driven-gates the node: hidden
+// unless the flag resolves on for the tenant (super-admins always see it).
+type NavLeaf = { label: string; href: string; match: NavMatch; flag?: FeatureFlagKey };
+type NavBranch = { label: string; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
 type NavEntry = NavLeaf | NavBranch;
 type NavNode =
-  | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch }
-  | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavEntry[] };
+  | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch; flag?: FeatureFlagKey }
+  | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
 
 // Cascade sidebar model (matches the design prototype): leaf items + expandable
 // groups whose children appear on an indented rail. Campaign-scoped children use
 // the current campaign id when one exists, else fall back to the canvass overview.
-function buildNav(campaignId: string, role?: string | null): NavNode[] {
+function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
   const scoped = (suffix: string) =>
     campaignId ? `/canvass/${campaignId}/${suffix}` : "/canvass";
   // Prefix matcher for the ported prog routes (all under /prog/*).
   const px = (s: string): NavMatch => (p) => p.startsWith(`/prog/${s}`);
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
-    { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox") },
+    { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_INBOX" },
     {
-      type: "group", key: "channels", label: "Channels", icon: MessageSquareText, match: (p) => p.startsWith("/channels"),
+      type: "group", key: "channels", label: "Channels", icon: MessageSquareText, match: (p) => p.startsWith("/channels"), flag: "FEATURE_NAV_CHANNELS",
       children: [
-        { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text") },
-        { label: "WhatsApp", href: "/channels/whatsapp", match: (p) => p.startsWith("/channels/whatsapp") },
+        { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text"), flag: "FEATURE_NAV_CHANNELS_TEXT" },
+        { label: "WhatsApp", href: "/channels/whatsapp", match: (p) => p.startsWith("/channels/whatsapp"), flag: "FEATURE_WHATSAPP_ENABLED" },
       ],
     },
     {
-      type: "group", key: "canvass", label: "Canvass", icon: MapPin, match: (p) => p.startsWith("/canvass"),
+      type: "group", key: "canvass", label: "Canvass", icon: MapPin, match: (p) => p.startsWith("/canvass"), flag: "FEATURE_NAV_CANVASS",
       children: [
         { label: "Overview", href: "/canvass", match: (p) => p === "/canvass" },
-        { label: "Campaigns", href: "/canvass/campaigns", match: (p) => p.startsWith("/canvass/campaigns") },
-        { label: "Turf map", href: scoped("turf"), match: (p) => p.includes("/turf") },
-        { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists") },
-        { label: "Live", href: scoped("live"), match: (p) => p.includes("/live") },
-        { label: "Volunteers", href: "/canvass/volunteers", match: (p) => p.startsWith("/canvass/volunteers") },
-        { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions") },
-        { label: "Results", href: scoped("results"), match: (p) => p.includes("/results") },
+        { label: "Campaigns", href: "/canvass/campaigns", match: (p) => p.startsWith("/canvass/campaigns"), flag: "FEATURE_NAV_CANVASS_CAMPAIGNS" },
+        { label: "Turf map", href: scoped("turf"), match: (p) => p.includes("/turf"), flag: "FEATURE_NAV_CANVASS_TURF" },
+        { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists"), flag: "FEATURE_NAV_CANVASS_WALKLISTS" },
+        { label: "Live", href: scoped("live"), match: (p) => p.includes("/live"), flag: "FEATURE_NAV_CANVASS_LIVE" },
+        { label: "Volunteers", href: "/canvass/volunteers", match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
+        { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
+        { label: "Results", href: scoped("results"), match: (p) => p.includes("/results"), flag: "FEATURE_NAV_CANVASS_RESULTS" },
       ],
     },
     {
       type: "group", key: "engagement", label: "Engagement", icon: Sparkles,
-      match: (p) => p.startsWith("/engagement") || p.startsWith("/audience"),
+      match: (p) => p.startsWith("/engagement") || p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT",
       children: [
-        { label: "Audience", href: "/audience", match: (p) => p.startsWith("/audience") },
-        { label: "Surveys", href: "/engagement/surveys", match: (p) => p.startsWith("/engagement/surveys") },
-        { label: "Scripts", href: "/engagement/scripts", match: (p) => p.startsWith("/engagement/scripts") },
-        { label: "Dispositions", href: "/engagement/dispositions", match: (p) => p.startsWith("/engagement/dispositions") },
-        { label: "Canned responses", href: "/engagement/canned-responses", match: (p) => p.startsWith("/engagement/canned-responses") },
+        { label: "Audience", href: "/audience", match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
+        { label: "Surveys", href: "/engagement/surveys", match: (p) => p.startsWith("/engagement/surveys"), flag: "FEATURE_NAV_ENGAGEMENT_SURVEYS" },
+        { label: "Scripts", href: "/engagement/scripts", match: (p) => p.startsWith("/engagement/scripts"), flag: "FEATURE_NAV_ENGAGEMENT_SCRIPTS" },
+        { label: "Dispositions", href: "/engagement/dispositions", match: (p) => p.startsWith("/engagement/dispositions"), flag: "FEATURE_NAV_ENGAGEMENT_DISPOSITIONS" },
+        { label: "Canned responses", href: "/engagement/canned-responses", match: (p) => p.startsWith("/engagement/canned-responses"), flag: "FEATURE_NAV_ENGAGEMENT_CANNED" },
       ],
     },
-    { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys") },
-    { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance") },
+    { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
+    { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
     {
       type: "group", key: "settings", label: "Settings", icon: Settings,
       match: (p) =>
@@ -112,8 +115,8 @@ function buildNav(campaignId: string, role?: string | null): NavNode[] {
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
       ],
     },
-    // Super Admin: platform-level controls (OWNER only). Pages also enforce.
-    ...(role === "OWNER"
+    // Super Admin: platform-level controls (super-admins only). Pages also enforce.
+    ...(isSuperAdmin
       ? [
           {
             type: "group" as const, key: "super-admin", label: "Super Admin", icon: Crown,
@@ -128,11 +131,11 @@ function buildNav(campaignId: string, role?: string | null): NavNode[] {
     {
       // Mirrors prog's admin information architecture (its menu-config.tsx),
       // rehoming the already-ported pages and registering every new /prog/* route.
-      type: "group", key: "prog", label: "Prog", icon: Boxes, match: (p) => p.startsWith("/prog"),
+      type: "group", key: "prog", label: "Prog", icon: Boxes, match: (p) => p.startsWith("/prog"), flag: "FEATURE_NAV_PROG",
       children: [
-        { label: "Calendar", href: "/prog/calendar", match: px("calendar") },
+        { label: "Calendar", href: "/prog/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
         {
-          label: "Channels", match: (p) => px("email")(p) || px("calls")(p) || px("chats")(p) || px("social-media")(p),
+          label: "Channels", match: (p) => px("email")(p) || px("calls")(p) || px("chats")(p) || px("social-media")(p), flag: "FEATURE_NAV_PROG_CHANNELS",
           children: [
             { label: "Email", href: "/prog/email", match: px("email") },
             { label: "Calls", href: "/prog/calls", match: px("calls") },
@@ -141,20 +144,20 @@ function buildNav(campaignId: string, role?: string | null): NavNode[] {
           ],
         },
         {
-          label: "Organising", match: px("events"),
+          label: "Organising", match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING",
           children: [
             { label: "Events", href: "/prog/events", match: px("events") },
           ],
         },
         {
-          label: "Tasks", match: px("tasks"),
+          label: "Tasks", match: px("tasks"), flag: "FEATURE_NAV_PROG_TASKS",
           children: [
             { label: "List", href: "/prog/tasks/list", match: px("tasks/list") },
             { label: "Kanban", href: "/prog/tasks/kanban", match: px("tasks/kanban") },
           ],
         },
         {
-          label: "Business", match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p),
+          label: "Business", match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p), flag: "FEATURE_NAV_PROG_BUSINESS",
           children: [
             {
               label: "Payments", match: (p) => px("transactions")(p) || px("invoices")(p),
@@ -169,7 +172,7 @@ function buildNav(campaignId: string, role?: string | null): NavNode[] {
           ],
         },
         {
-          label: "Workspace", match: (p) => px("team")(p) || px("billing")(p) || px("tenants")(p) || px("tenant-settings")(p) || px("activity")(p) || px("plans")(p) || px("security")(p),
+          label: "Workspace", match: (p) => px("team")(p) || px("billing")(p) || px("tenants")(p) || px("tenant-settings")(p) || px("activity")(p) || px("plans")(p) || px("security")(p), flag: "FEATURE_NAV_PROG_WORKSPACE",
           children: [
             { label: "Team", href: "/prog/team", match: px("team") },
             { label: "Billing", href: "/prog/billing", match: px("billing") },
@@ -181,13 +184,13 @@ function buildNav(campaignId: string, role?: string | null): NavNode[] {
           ],
         },
         {
-          label: "Data & Files", match: px("file-manager"),
+          label: "Data & Files", match: px("file-manager"), flag: "FEATURE_NAV_PROG_DATA",
           children: [
             { label: "File Manager", href: "/prog/file-manager", match: px("file-manager") },
           ],
         },
         {
-          label: "Developer Hub", match: (p) => px("api-keys")(p) || px("ai-assistant")(p) || px("form-elements")(p),
+          label: "Developer Hub", match: (p) => px("api-keys")(p) || px("ai-assistant")(p) || px("form-elements")(p), flag: "FEATURE_NAV_PROG_DEVHUB",
           children: [
             { label: "API Keys", href: "/prog/api-keys", match: px("api-keys") },
             { label: "AI Assistant", href: "/prog/ai-assistant", match: px("ai-assistant") },
@@ -211,6 +214,8 @@ export default function MainLayout({
   const [creatingBlast, setCreatingBlast] = useState(false);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [pendingJoinCount, setPendingJoinCount] = useState(0);
+  // Resolved feature flags for the current tenant — gates the nav (super-admins bypass).
+  const [navFlags, setNavFlags] = useState<FeatureFlagMap>(FLAG_DEFAULTS);
   const inboxUnreadRef = useRef(0);
   const { showToast } = useToast();
 
@@ -440,7 +445,36 @@ export default function MainLayout({
     };
   }, [ready]);
 
-  const nav = useMemo(() => buildNav(campaignId, principal?.role), [campaignId, principal?.role]);
+  const isSuperAdmin = principal?.isSuperAdmin === true;
+  // Load the tenant's resolved flags for nav gating (super-admins bypass anyway).
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    void (async () => {
+      const res = await listFlags();
+      if (alive && res.ok) setNavFlags(res.data);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [ready]);
+  const flagOn = useCallback(
+    (flag?: FeatureFlagKey) => !flag || isSuperAdmin || navFlags[flag] !== false,
+    [isSuperAdmin, navFlags],
+  );
+  // Build the nav, then drop any node whose plan-driven flag is off (1st + 2nd level);
+  // empty groups/branches are pruned. Super-admins keep the full nav.
+  const nav = useMemo(() => {
+    const filterEntries = (entries: NavEntry[]): NavEntry[] =>
+      entries
+        .filter((e) => flagOn(e.flag))
+        .map((e) => ("children" in e ? { ...e, children: filterEntries(e.children) } : e))
+        .filter((e) => !("children" in e) || e.children.length > 0);
+    return buildNav(campaignId, isSuperAdmin)
+      .filter((n) => flagOn(n.flag))
+      .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
+      .filter((n) => n.type !== "group" || n.children.length > 0);
+  }, [campaignId, isSuperAdmin, flagOn]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
@@ -454,6 +488,18 @@ export default function MainLayout({
     );
   }, [nav]);
   const p = pathname || "";
+  // Hard-gate routes: if the current path belongs to a flag-off node, bounce to the
+  // dashboard (the nav already hides it; this stops direct navigation). Super-admins exempt.
+  useEffect(() => {
+    if (!ready || isSuperAdmin) return;
+    const blocked = (entries: Array<NavNode | NavEntry>): boolean =>
+      entries.some((e) => {
+        const ge = e as { flag?: FeatureFlagKey; match: NavMatch; children?: NavEntry[] };
+        if (ge.flag && !flagOn(ge.flag) && ge.match(p)) return true;
+        return ge.children ? blocked(ge.children) : false;
+      });
+    if (blocked(buildNav(campaignId, isSuperAdmin))) router.replace("/dashboard");
+  }, [ready, isSuperAdmin, campaignId, p, flagOn, router]);
   // Groups toggle independently (prototype: openGroups array). Default-open is the
   // active group only; an explicit user toggle overrides the default.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
