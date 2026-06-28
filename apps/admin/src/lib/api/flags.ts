@@ -26,7 +26,16 @@ export type NetworkLite = { id: string; name: string; planName: string | null };
 /** The override-editor target: exactly one of a tenant or a network. */
 export type FlagTarget = { tenantId?: string | null; networkId?: string | null };
 
-/** A subscription plan and the feature-flag entitlements it grants. */
+/** Per-plan usage limits; a null member means unlimited. */
+export type PlanLimits = {
+  contacts: number | null;
+  teamMembers: number | null;
+  segments: number | null;
+};
+/** A row in a plan's public feature table: a tick (boolean) or a value (string). */
+export type PlanFeatureRow = { label: string; value: boolean | string };
+
+/** A subscription plan: feature-flag entitlements + pricing/marketing/limits. */
 export type Plan = {
   id: string;
   key: string;
@@ -34,8 +43,36 @@ export type Plan = {
   featureFlags: Record<string, boolean>;
   isDefault: boolean;
   archivedAt: string | null;
+  publiclyVisible: boolean;
+  order: number;
+  popular: boolean;
+  description: string | null;
+  priceMonthly: number | null;
+  priceMonthlyOriginal: number | null;
+  priceAnnually: number | null;
+  priceAnnuallyOriginal: number | null;
+  limits: PlanLimits | null;
+  features: PlanFeatureRow[] | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** The pricing/marketing/limits fields editable on a plan (all optional). */
+export type PlanEditable = {
+  displayName?: string;
+  featureFlags?: Record<string, boolean>;
+  isDefault?: boolean;
+  archived?: boolean;
+  publiclyVisible?: boolean;
+  order?: number;
+  popular?: boolean;
+  description?: string | null;
+  priceMonthly?: number | null;
+  priceMonthlyOriginal?: number | null;
+  priceAnnually?: number | null;
+  priceAnnuallyOriginal?: number | null;
+  limits?: PlanLimits | null;
+  features?: PlanFeatureRow[] | null;
 };
 
 /** Effective flag map for the current tenant. */
@@ -70,19 +107,13 @@ export async function listPlans() {
   return request<Plan[]>("/plans");
 }
 
-export async function upsertPlan(input: {
-  key: string;
-  displayName: string;
-  featureFlags: Record<string, boolean>;
-  isDefault?: boolean;
-}) {
+export async function upsertPlan(
+  input: { key: string; displayName: string; featureFlags: Record<string, boolean> } & PlanEditable,
+) {
   return request<Plan>("/plans", { method: "POST", body: JSON.stringify(input) });
 }
 
-export async function updatePlan(
-  id: string,
-  input: { displayName?: string; featureFlags?: Record<string, boolean>; isDefault?: boolean; archived?: boolean },
-) {
+export async function updatePlan(id: string, input: PlanEditable) {
   return request<Plan>(`/plans/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 

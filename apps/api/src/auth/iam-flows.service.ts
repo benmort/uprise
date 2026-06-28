@@ -11,6 +11,7 @@ import {
   type TransactionalDispatcher,
 } from "../messaging/transactional-dispatcher";
 import { hashPassword, verifyPassword } from "./password.util";
+import { PlanLimitsService } from "../common/flags/plan-limits.service";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
@@ -56,6 +57,7 @@ export class IamFlowsService {
     @Inject(TRANSACTIONAL_DISPATCHER) private readonly dispatcher: TransactionalDispatcher,
     private readonly logger: DomainLogger,
     private readonly outbox: OutboxService,
+    private readonly planLimits: PlanLimitsService,
   ) {}
 
   // ── shared helpers ──────────────────────────────────────────────────
@@ -582,6 +584,14 @@ export class IamFlowsService {
     tx: Prisma.TransactionClient,
     args: { tenantId: string; userId: string; role: AppUserRole; addedBy?: string | null },
   ): Promise<void> {
+    // Plan limit: only a genuinely new seat counts (an existing member re-runs as a
+    // no-op below, so it must not trip the limit).
+    const existing = await tx.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId: args.tenantId, userId: args.userId } },
+      select: { userId: true },
+    });
+    if (!existing) await this.planLimits.assertTeamSeatAvailable(tx, args.tenantId);
+
     await tx.tenantMember.upsert({
       where: { tenantId_userId: { tenantId: args.tenantId, userId: args.userId } },
       create: { tenantId: args.tenantId, userId: args.userId, role: args.role, addedBy: args.addedBy ?? null },

@@ -32,8 +32,9 @@ function setup() {
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const outbox = { append: jest.fn() } as any;
-  const svc = new TenantsService(prisma, outbox);
-  return { svc, prisma, outbox };
+  const planLimits = { assertCanAddTeamMember: jest.fn(async () => undefined) } as any;
+  const svc = new TenantsService(prisma, outbox, planLimits);
+  return { svc, prisma, outbox, planLimits };
 }
 
 describe("TenantsService", () => {

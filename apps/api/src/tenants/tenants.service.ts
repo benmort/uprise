@@ -16,6 +16,7 @@ import {
 } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
+import { PlanLimitsService } from "../common/flags/plan-limits.service";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -47,6 +48,7 @@ export class TenantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    private readonly planLimits: PlanLimitsService,
   ) {}
 
   private normaliseSlug(raw: string): string {
@@ -174,6 +176,9 @@ export class TenantsService {
       where: { tenantId_userId: { tenantId, userId: user.id } },
     });
     if (already) throw new ConflictException("already_member");
+
+    // Plan limit: a new seat must fit the tenant's team-member allowance.
+    await this.planLimits.assertCanAddTeamMember(tenantId);
 
     return this.prisma.$transaction(async (tx) => {
       const member = await tx.tenantMember.create({

@@ -1,64 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { plans as plansApi, type PublicPlan } from "@uprise/api-client";
 import FaqSection, { type FaqItem } from "@/components/FaqSection";
 import PaymentSecuritySection from "@/components/PaymentSecuritySection";
-
-// Plan data aligned with /admin/plans page
-const PLANS_BASE = [
-  {
-    id: "starter",
-    name: "Starter",
-    badge: "Saving 17%",
-    badgeStyle: "bg-success-50 text-success-600",
-    priceMonthly: 49,
-    oldPriceMonthly: 59,
-    priceAnnually: 499,
-    oldPriceAnnually: 708,
-    description: "For small teams and local campaigns",
-    popular: false,
-  },
-  {
-    id: "growth",
-    name: "Growth",
-    badge: "Popular",
-    badgeStyle: "bg-brand-100 text-brand-500",
-    priceMonthly: 149,
-    oldPriceMonthly: 179,
-    priceAnnually: 1599,
-    oldPriceAnnually: 2148,
-    description: "For growing organisations and regional campaigns",
-    popular: true,
-    gradient: true,
-  },
-  {
-    id: "scale",
-    name: "Scale",
-    badge: "Saving 17%",
-    badgeStyle: "bg-success-50 text-success-600",
-    priceMonthly: 298,
-    oldPriceMonthly: 358,
-    priceAnnually: 3199,
-    oldPriceAnnually: 4296,
-    description: "For larger teams and multi-region operations",
-    popular: false,
-  },
-] as const;
-
-const FEATURES = [
-  { label: "Contacts", values: ["Up to 5,000", "Up to 25,000", "Up to 100,000"] },
-  { label: "Team members", values: ["3", "10", "25"] },
-  { label: "Segments", values: ["5", "20", "Unlimited"] },
-  { label: "Email campaigns", values: [true, true, true], type: "check" as const },
-  { label: "SMS campaigns", values: [false, true, true], type: "check" as const },
-  { label: "Calling campaigns", values: [false, false, true], type: "check" as const },
-  { label: "Forms & petitions", values: [true, true, true], type: "check" as const },
-  { label: "Surveys & fundraisers", values: [false, true, true], type: "check" as const },
-  { label: "Basic reporting", values: [true, true, true], type: "check" as const },
-  { label: "Advanced analytics", values: [false, true, true], type: "check" as const },
-  { label: "API access & priority support", values: [false, false, true], type: "check" as const },
-];
 
 const FAQ_ITEMS: FaqItem[] = [
   {
@@ -150,14 +96,62 @@ function DashIcon() {
   );
 }
 
+function formatLimit(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "Unlimited";
+  return value >= 1000 ? `Up to ${value.toLocaleString()}` : String(value);
+}
+
+/** Savings % between an original and a current price (0 if no discount). */
+function savingsPercent(price: number | null, original: number | null): number {
+  if (!price || !original || original <= price) return 0;
+  return Math.round((1 - price / original) * 100);
+}
+
 export default function PlansPage() {
   const [monthly, setMonthly] = useState(true);
+  const [plans, setPlans] = useState<PublicPlan[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const plans = PLANS_BASE.map((plan) => ({
-    ...plan,
-    price: monthly ? plan.priceMonthly : plan.priceAnnually,
-    oldPrice: monthly ? plan.oldPriceMonthly : plan.oldPriceAnnually,
-  }));
+  useEffect(() => {
+    let live = true;
+    void plansApi.listPublic().then((res) => {
+      if (!live) return;
+      if (res.ok) setPlans([...res.data].sort((a, b) => a.order - b.order));
+      else setError(res.error);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  // The feature-table rows: the three usage limits, then the union of feature
+  // labels across plans (preserving first-seen order so all plans share columns).
+  const featureLabels = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of plans ?? []) {
+      for (const f of p.features ?? []) {
+        if (!seen.has(f.label)) {
+          seen.add(f.label);
+          out.push(f.label);
+        }
+      }
+    }
+    return out;
+  }, [plans]);
+
+  const cols = (plans?.length ?? 0) + 1;
+  const gridStyle = { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` } as const;
+
+  function priceFor(plan: PublicPlan) {
+    const price = monthly ? plan.priceMonthly : plan.priceAnnually;
+    const original = monthly ? plan.priceMonthlyOriginal : plan.priceAnnuallyOriginal;
+    return { price, original };
+  }
+
+  function featureValue(plan: PublicPlan, label: string): boolean | string | undefined {
+    return plan.features?.find((f) => f.label === label)?.value;
+  }
 
   return (
     <main>
@@ -200,112 +194,151 @@ export default function PlansPage() {
             </div>
           </div>
 
-          <div className="mt-11 w-full rounded-3xl border border-stroke bg-white">
-            <div className="w-full overflow-x-auto">
-              <div className="grid border-stroke max-lg:m-4 max-lg:gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:border-b">
-                <div className="p-7 pb-8 max-lg:rounded-2xl max-lg:border">
-                  <p className="text-base text-text-color">
-                    Uprise plans for progressive organisations
-                  </p>
+          {error ? (
+            <p className="mt-11 text-base text-text-color-secondary">
+              Pricing is unavailable right now. Please try again shortly.
+            </p>
+          ) : plans === null ? (
+            <div className="mt-11 h-64 w-full max-w-[770px] animate-pulse rounded-3xl bg-gray-100" />
+          ) : plans.length === 0 ? (
+            <p className="mt-11 text-base text-text-color-secondary">No plans available.</p>
+          ) : (
+            <div className="mt-11 w-full rounded-3xl border border-stroke bg-white">
+              <div className="w-full overflow-x-auto">
+                <div className="grid border-stroke max-lg:m-4 max-lg:gap-4 lg:border-b" style={gridStyle}>
+                  <div className="p-7 pb-8 max-lg:rounded-2xl max-lg:border">
+                    <p className="text-base text-text-color">
+                      Uprise plans for progressive organisations
+                    </p>
+                  </div>
+
+                  {plans.map((plan) => {
+                    const { price, original } = priceFor(plan);
+                    const saving = savingsPercent(price, original);
+                    return (
+                      <div
+                        key={plan.id}
+                        className="relative border-l border-stroke max-lg:rounded-2xl max-lg:border z-10"
+                      >
+                        {plan.popular && (
+                          <div className="absolute -z-10 h-full w-full bg-[linear-gradient(180deg,#ECF3FF_0%,rgba(236,243,255,0.00)_21.53%)] max-lg:rounded-2xl" />
+                        )}
+                        <div className="flex h-full flex-col justify-between px-8 pb-8 pt-7 max-md:px-5 lg:px-6 xl:px-8">
+                          <div className="relative z-10 flex-1">
+                            <div className="mb-5 flex flex-wrap items-center gap-2">
+                              <p className="text-xl font-semibold text-text-color">
+                                {plan.displayName}
+                              </p>
+                              {plan.popular ? (
+                                <span className="inline-flex h-5.5 items-center justify-center whitespace-nowrap rounded-full bg-brand-100 px-2 text-xs font-medium text-brand-500">
+                                  Popular
+                                </span>
+                              ) : saving > 0 ? (
+                                <span className="inline-flex h-5.5 items-center justify-center whitespace-nowrap rounded-full bg-success-50 px-2 text-xs font-medium text-success-600">
+                                  Saving {saving}%
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mb-2.5">
+                              <p className="flex items-center gap-2">
+                                {original && original > (price ?? 0) ? (
+                                  <span className="text-[26px] font-medium text-dark-4 line-through">
+                                    ${original}
+                                  </span>
+                                ) : null}
+                                <span className="text-4xl font-bold text-text-color">
+                                  ${price ?? 0}
+                                </span>
+                              </p>
+                            </div>
+                            <p className="mb-1 text-base font-medium text-text-color">
+                              per {monthly ? "month" : "year"}
+                            </p>
+                            <p className="mb-5 text-base text-text-color-tertiary">
+                              {plan.description}
+                            </p>
+                          </div>
+                          <Link
+                            href="/sign-up"
+                            className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-5 py-3.5 text-sm font-medium text-white duration-200 hover:bg-brand-600 sm:text-base lg:gap-1 lg:px-2 lg:text-sm xl:gap-2 xl:px-5 xl:text-base"
+                          >
+                            <span>Choose {plan.displayName}</span>
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {plans.map((plan) => (
+                <div
+                  className="grid rounded-lg text-center text-sm font-medium *:px-7 *:py-3.5 *:text-text-color-secondary max-lg:hidden"
+                  style={gridStyle}
+                >
+                  <p className="text-left">Key Features</p>
+                  {plans.map((plan) => (
+                    <p key={plan.id} className="border-l border-stroke">
+                      {plan.displayName}
+                    </p>
+                  ))}
+                </div>
+
+                {/* Usage limits */}
+                {[
+                  { label: "Contacts", get: (p: PublicPlan) => formatLimit(p.limits?.contacts) },
+                  { label: "Team members", get: (p: PublicPlan) => formatLimit(p.limits?.teamMembers) },
+                  { label: "Segments", get: (p: PublicPlan) => formatLimit(p.limits?.segments) },
+                ].map((row) => (
                   <div
-                    key={plan.id}
-                    className="relative border-l border-stroke max-lg:rounded-2xl max-lg:border z-10"
+                    key={row.label}
+                    className="flex grid-cols-4 border-t border-stroke text-center text-xs font-medium *:px-2 *:py-2.5 *:text-text-color sm:text-sm md:text-base md:*:px-7 md:*:py-6 lg:grid"
+                    style={gridStyle}
                   >
-                    {"gradient" in plan && plan.gradient && (
-                      <div className="absolute -z-10 h-full w-full bg-[linear-gradient(180deg,#ECF3FF_0%,rgba(236,243,255,0.00)_21.53%)] max-lg:rounded-2xl" />
-                    )}
-                    <div className="flex h-full flex-col justify-between px-8 pb-8 pt-7 max-md:px-5 lg:px-6 xl:px-8">
-                      <div className="relative z-10 flex-1">
-                        <div className="mb-5 flex flex-wrap items-center gap-2">
-                          <p className="text-xl font-semibold text-text-color">
-                            {plan.name}
-                          </p>
-                          <span
-                            className={`inline-flex h-5.5 items-center justify-center whitespace-nowrap rounded-full px-2 text-xs font-medium ${plan.badgeStyle}`}
-                          >
-                            {plan.badge}
-                          </span>
-                        </div>
-                        <div className="mb-2.5">
-                          <p className="flex items-center gap-2">
-                            <span className="text-[26px] font-medium text-dark-4 line-through">
-                              ${plan.oldPrice}
-                            </span>
-                            <span className="text-4xl font-bold text-text-color">
-                              ${plan.price}
-                            </span>
-                          </p>
-                        </div>
-                        <p className="mb-1 text-base font-medium text-text-color">
-                          per {monthly ? "month" : "year"}
-                        </p>
-                        <p className="mb-5 text-base text-text-color-tertiary">
-                          {plan.description}
-                        </p>
-                      </div>
-                      <Link
-                        href="/sign-up"
-                        className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-5 py-3.5 text-sm font-medium text-white duration-200 hover:bg-brand-600 sm:text-base lg:gap-1 lg:px-2 lg:text-sm xl:gap-2 xl:px-5 xl:text-base"
+                    <p className="flex gap-3 text-left max-xl:w-full">{row.label}</p>
+                    {plans.map((plan) => (
+                      <p
+                        key={plan.id}
+                        className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20"
                       >
-                        <span>Choose {plan.name}</span>
-                      </Link>
-                    </div>
+                        {row.get(plan)}
+                      </p>
+                    ))}
                   </div>
                 ))}
-              </div>
 
-              <div className="grid grid-cols-4 rounded-lg text-center text-sm font-medium *:px-7 *:py-3.5 *:text-text-color-secondary max-lg:hidden">
-                <p className="text-left">Key Features</p>
-                <p className="border-l border-stroke">Starter</p>
-                <p className="border-l border-stroke">Growth</p>
-                <p className="border-l border-stroke">Scale</p>
-              </div>
-
-              <div className="flex grid-cols-4 border-t border-stroke bg-gray-50 text-center text-xs font-medium *:px-2 *:py-2.5 *:text-text-color-secondary sm:text-sm md:text-base md:*:px-7 md:*:py-3.5 lg:hidden">
-                <p className="flex gap-3 text-left max-xl:w-full">Key Feature</p>
-                <p className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20">
-                  Starter
-                </p>
-                <p className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20">
-                  Growth
-                </p>
-                <p className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20">
-                  Scale
-                </p>
-              </div>
-
-              {FEATURES.map((feature) => (
-                <div
-                  key={feature.label}
-                  className="flex grid-cols-4 border-t border-stroke text-center text-xs font-medium *:px-2 *:py-2.5 *:text-text-color sm:text-sm md:text-base md:*:px-7 md:*:py-6 lg:grid"
-                >
-                  <p className="flex gap-3 text-left max-xl:w-full">
-                    {feature.label}
-                  </p>
-                  {feature.type === "check"
-                    ? (feature.values as boolean[]).map((v, i) => (
+                {/* Feature ticks */}
+                {featureLabels.map((label) => (
+                  <div
+                    key={label}
+                    className="flex grid-cols-4 border-t border-stroke text-center text-xs font-medium *:px-2 *:py-2.5 *:text-text-color sm:text-sm md:text-base md:*:px-7 md:*:py-6 lg:grid"
+                    style={gridStyle}
+                  >
+                    <p className="flex gap-3 text-left max-xl:w-full">{label}</p>
+                    {plans.map((plan) => {
+                      const v = featureValue(plan, label);
+                      if (typeof v === "string") {
+                        return (
+                          <p
+                            key={plan.id}
+                            className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20"
+                          >
+                            {v}
+                          </p>
+                        );
+                      }
+                      return (
                         <div
-                          key={i}
+                          key={plan.id}
                           className="flex items-center justify-center border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20"
                         >
                           {v ? <CheckIcon /> : <DashIcon />}
                         </div>
-                      ))
-                    : (feature.values as string[]).map((v, i) => (
-                        <p
-                          key={i}
-                          className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20"
-                        >
-                          {v}
-                        </p>
-                      ))}
-                </div>
-              ))}
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </section>
       <PaymentSecuritySection />

@@ -291,3 +291,36 @@ export const marketing = {
   newsletter: (email: string, captchaToken?: string) =>
     post<OkResponse>("/marketing/newsletter", { email }, captchaToken),
 };
+
+// ── Public pricing (no auth) — the marketing pricing page ────────────
+/** A row in a plan's public feature table: a tick (boolean) or a value (string). */
+export interface PublicPlanFeature {
+  label: string;
+  value: boolean | string;
+}
+/** Per-plan usage limits; a null member means unlimited. */
+export interface PublicPlanLimits {
+  contacts: number | null;
+  teamMembers: number | null;
+  segments: number | null;
+}
+/** A publicly-visible subscription plan as rendered on the marketing pricing page. */
+export interface PublicPlan {
+  id: string;
+  key: string;
+  displayName: string;
+  description: string | null;
+  popular: boolean;
+  order: number;
+  priceMonthly: number | null;
+  priceMonthlyOriginal: number | null;
+  priceAnnually: number | null;
+  priceAnnuallyOriginal: number | null;
+  limits: PublicPlanLimits | null;
+  features: PublicPlanFeature[] | null;
+}
+
+export const plans = {
+  /** Publicly-visible, non-archived plans, ordered by tier (no auth). */
+  listPublic: () => request<PublicPlan[]>("/plans/public", undefined, { redirectOn401: false }),
+};

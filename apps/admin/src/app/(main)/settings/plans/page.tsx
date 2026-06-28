@@ -2,10 +2,17 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, ChevronLeft, Loader2, Pencil, Plus, ShieldAlert, Star } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronLeft, EyeOff, Loader2, Pencil, Plus, ShieldAlert, Star, X } from "lucide-react";
 import { FEATURE_FLAG_KEYS, FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
-import { listPlans, updatePlan, upsertPlan, type Plan } from "@/lib/api/flags";
+import {
+  listPlans,
+  updatePlan,
+  upsertPlan,
+  type Plan,
+  type PlanEditable,
+  type PlanFeatureRow,
+} from "@/lib/api/flags";
 import { Badge } from "@/components/prog/ui/badge";
 import { Button } from "@/components/prog/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/prog/ui/card";
@@ -88,6 +95,78 @@ function Toggle({
   );
 }
 
+// ── Edit form: plan fields as strings (blank number = unset/unlimited) ──
+type EditFeatureRow = { label: string; mode: "tick" | "text"; bool: boolean; text: string };
+type EditForm = {
+  displayName: string;
+  description: string;
+  order: string;
+  popular: boolean;
+  publiclyVisible: boolean;
+  priceMonthly: string;
+  priceMonthlyOriginal: string;
+  priceAnnually: string;
+  priceAnnuallyOriginal: string;
+  contacts: string;
+  teamMembers: string;
+  segments: string;
+  features: EditFeatureRow[];
+};
+
+const numToStr = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n));
+const strToNum = (s: string): number | null => {
+  const t = s.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+};
+
+function formFromPlan(plan: Plan): EditForm {
+  return {
+    displayName: plan.displayName,
+    description: plan.description ?? "",
+    order: String(plan.order ?? 0),
+    popular: plan.popular ?? false,
+    publiclyVisible: plan.publiclyVisible ?? true,
+    priceMonthly: numToStr(plan.priceMonthly),
+    priceMonthlyOriginal: numToStr(plan.priceMonthlyOriginal),
+    priceAnnually: numToStr(plan.priceAnnually),
+    priceAnnuallyOriginal: numToStr(plan.priceAnnuallyOriginal),
+    contacts: numToStr(plan.limits?.contacts),
+    teamMembers: numToStr(plan.limits?.teamMembers),
+    segments: numToStr(plan.limits?.segments),
+    features: (plan.features ?? []).map((f) => ({
+      label: f.label,
+      mode: typeof f.value === "boolean" ? "tick" : "text",
+      bool: typeof f.value === "boolean" ? f.value : false,
+      text: typeof f.value === "string" ? f.value : "",
+    })),
+  };
+}
+
+function editToPayload(form: EditForm): PlanEditable {
+  const features: PlanFeatureRow[] = form.features
+    .filter((r) => r.label.trim() !== "")
+    .map((r) => ({ label: r.label.trim(), value: r.mode === "tick" ? r.bool : r.text }));
+  return {
+    displayName: form.displayName.trim(),
+    description: form.description.trim() === "" ? null : form.description.trim(),
+    order: strToNum(form.order) ?? 0,
+    popular: form.popular,
+    publiclyVisible: form.publiclyVisible,
+    priceMonthly: strToNum(form.priceMonthly),
+    priceMonthlyOriginal: strToNum(form.priceMonthlyOriginal),
+    priceAnnually: strToNum(form.priceAnnually),
+    priceAnnuallyOriginal: strToNum(form.priceAnnuallyOriginal),
+    limits: {
+      contacts: strToNum(form.contacts),
+      teamMembers: strToNum(form.teamMembers),
+      segments: strToNum(form.segments),
+    },
+    features,
+  };
+}
+
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,9 +180,9 @@ export default function PlansPage() {
   const [newKey, setNewKey] = useState("");
   const [newName, setNewName] = useState("");
 
-  // Rename modal
-  const [renaming, setRenaming] = useState<Plan | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  // Edit modal
+  const [editing, setEditing] = useState<Plan | null>(null);
+  const [form, setForm] = useState<EditForm | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +201,16 @@ export default function PlansPage() {
 
   function writeError(res: { error: string }, fallback: string) {
     setActionError(isPermissionError(res.error) ? fallback : res.error);
+  }
+
+  function openEdit(plan: Plan) {
+    setEditing(plan);
+    setForm(formFromPlan(plan));
+    setActionError(null);
+  }
+
+  function patchForm(patch: Partial<EditForm>) {
+    setForm((prev) => (prev ? { ...prev, ...patch } : prev));
   }
 
   async function toggleFlag(plan: Plan, flag: FeatureFlagKey, next: boolean) {
@@ -152,19 +241,20 @@ export default function PlansPage() {
     }
   }
 
-  async function renamePlan(e: React.FormEvent) {
+  async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
-    if (!renaming || !renameValue.trim() || pending) return;
-    const plan = renaming;
-    setPending(`rename:${plan.id}`);
+    if (!editing || !form || !form.displayName.trim() || pending) return;
+    const plan = editing;
+    setPending(`save:${plan.id}`);
     setActionError(null);
-    const res = await updatePlan(plan.id, { displayName: renameValue.trim() });
+    const res = await updatePlan(plan.id, editToPayload(form));
     setPending(null);
     if (res.ok) {
       setPlans((prev) => prev.map((p) => (p.id === plan.id ? res.data : p)));
-      setRenaming(null);
+      setEditing(null);
+      setForm(null);
     } else {
-      writeError(res, "Only a super-admin can rename plans.");
+      writeError(res, "Only a super-admin can edit plans.");
     }
   }
 
@@ -207,9 +297,9 @@ export default function PlansPage() {
           </Link>
           <h1 className="text-2xl font-bold text-foreground">Plans</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Subscription plans and the features each one grants. A plan&apos;s key must match the
-            network&apos;s plan name. Tenants inherit a plan&apos;s entitlements unless a workspace or
-            env override says otherwise.
+            Subscription plans: pricing and limits for the public page, plus the features each one
+            grants. A plan&apos;s key must match the network&apos;s plan name. Tenants inherit a
+            plan&apos;s entitlements unless a workspace or env override says otherwise.
           </p>
         </div>
         {!denied && !loading && !error ? headerActions : null}
@@ -245,7 +335,7 @@ export default function PlansPage() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <h3 className="mb-1 text-lg font-medium text-foreground">No plans yet</h3>
             <p className="mb-4 max-w-sm text-sm text-muted-foreground">
-              Create your first plan to start defining which features it grants.
+              Create your first plan to start defining its pricing and which features it grants.
             </p>
             <Button type="button" onClick={() => setCreateOpen(true)}>
               <Plus className="h-4 w-4" /> New plan
@@ -257,7 +347,8 @@ export default function PlansPage() {
           <CardHeader className="border-b py-5">
             <CardTitle>Plans &amp; entitlements</CardTitle>
             <CardDescription>
-              Toggle which plan-controllable features each plan grants. Changes save immediately.
+              Edit a plan&apos;s pricing, limits and visibility, or toggle the features it grants.
+              Changes save immediately.
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0">
@@ -268,22 +359,32 @@ export default function PlansPage() {
                     <TableHead className="sticky left-0 z-10 min-w-[220px] bg-card">Feature</TableHead>
                     {plans.map((plan) => {
                       const archived = plan.archivedAt !== null;
+                      const price =
+                        plan.priceMonthly === null || plan.priceMonthly === undefined
+                          ? null
+                          : plan.priceMonthly;
                       return (
-                        <TableHead key={plan.id} className={cn("min-w-[160px] text-center align-top", archived && "opacity-60")}>
+                        <TableHead key={plan.id} className={cn("min-w-[170px] text-center align-top", archived && "opacity-60")}>
                           <div className="flex flex-col items-center gap-1 py-1">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center justify-center gap-1.5">
                               <span className="font-semibold text-foreground">{plan.displayName}</span>
                               {plan.isDefault ? <Badge variant="info">Default</Badge> : null}
+                              {plan.popular ? <Badge variant="secondary">Popular</Badge> : null}
+                              {!plan.publiclyVisible ? (
+                                <Badge variant="secondary" className="gap-1">
+                                  <EyeOff className="h-3 w-3" /> Hidden
+                                </Badge>
+                              ) : null}
                               {archived ? <Badge variant="secondary">Archived</Badge> : null}
                             </div>
                             <div className="font-mono text-[11px] font-normal text-muted-foreground">{plan.key}</div>
+                            <div className="text-[11px] font-normal text-muted-foreground">
+                              {price === null ? "No price set" : price === 0 ? "Free" : `$${price}/mo`}
+                            </div>
                             <div className="flex items-center gap-0.5">
                               <Button
-                                type="button" variant="ghost" size="icon" title="Rename" disabled={!!pending}
-                                onClick={() => {
-                                  setRenaming(plan);
-                                  setRenameValue(plan.displayName);
-                                }}
+                                type="button" variant="ghost" size="icon" title="Edit plan" disabled={!!pending}
+                                onClick={() => openEdit(plan)}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
@@ -368,7 +469,7 @@ export default function PlansPage() {
           <div>
             <h2 className="text-lg font-semibold text-foreground">New plan</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              The key must match the network&apos;s plan name; the display name is what admins see.
+              The key must match the network&apos;s plan name; set pricing and limits after creating.
             </p>
           </div>
           <div className="space-y-2">
@@ -402,46 +503,193 @@ export default function PlansPage() {
         </form>
       </Modal>
 
-      {/* Rename plan */}
+      {/* Edit plan */}
       <Modal
-        isOpen={renaming !== null}
-        onClose={() => setRenaming(null)}
-        className="max-w-md bg-card p-6 text-card-foreground"
+        isOpen={editing !== null}
+        onClose={() => {
+          setEditing(null);
+          setForm(null);
+        }}
+        className="max-h-[88vh] max-w-2xl overflow-y-auto bg-card p-6 text-card-foreground"
       >
-        <form onSubmit={renamePlan} className="space-y-5">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Rename plan</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Changes the display name only. The key{" "}
-              <span className="font-mono">{renaming?.key}</span> stays fixed.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rename-name">Display name</Label>
-            <Input
-              id="rename-name"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => setRenaming(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={
-                !renameValue.trim() ||
-                renameValue.trim() === renaming?.displayName ||
-                pending === `rename:${renaming?.id}`
-              }
-            >
-              {pending === `rename:${renaming?.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Save
-            </Button>
-          </div>
-        </form>
+        {editing && form ? (
+          <form onSubmit={saveEdit} className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Edit plan</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Key <span className="font-mono">{editing.key}</span> is fixed. Pricing and limits show
+                on the public pricing page; leave a price blank for &ldquo;no price&rdquo; and a limit
+                blank for unlimited.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="e-name">Display name</Label>
+                <Input id="e-name" value={form.displayName} onChange={(e) => patchForm({ displayName: e.target.value })} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="e-desc">Description</Label>
+                <Input
+                  id="e-desc"
+                  value={form.description}
+                  onChange={(e) => patchForm({ description: e.target.value })}
+                  placeholder="For small teams and local campaigns"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="e-order">Display order</Label>
+                <Input id="e-order" type="number" value={form.order} onChange={(e) => patchForm({ order: e.target.value })} />
+              </div>
+              <div className="flex items-end gap-6">
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <Toggle checked={form.popular} onChange={(v) => patchForm({ popular: v })} label="Popular" />
+                  Popular
+                </label>
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <Toggle
+                    checked={form.publiclyVisible}
+                    onChange={(v) => patchForm({ publiclyVisible: v })}
+                    label="Publicly visible"
+                  />
+                  Publicly visible
+                </label>
+              </div>
+            </div>
+
+            <fieldset className="space-y-3">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pricing</legend>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="e-pm">Monthly price ($)</Label>
+                  <Input id="e-pm" type="number" value={form.priceMonthly} onChange={(e) => patchForm({ priceMonthly: e.target.value })} placeholder="49" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="e-pmo">Monthly original ($)</Label>
+                  <Input id="e-pmo" type="number" value={form.priceMonthlyOriginal} onChange={(e) => patchForm({ priceMonthlyOriginal: e.target.value })} placeholder="59" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="e-pa">Annual price ($)</Label>
+                  <Input id="e-pa" type="number" value={form.priceAnnually} onChange={(e) => patchForm({ priceAnnually: e.target.value })} placeholder="499" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="e-pao">Annual original ($)</Label>
+                  <Input id="e-pao" type="number" value={form.priceAnnuallyOriginal} onChange={(e) => patchForm({ priceAnnuallyOriginal: e.target.value })} placeholder="708" />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Limits <span className="font-normal normal-case">(blank = unlimited; enforced for contacts &amp; team)</span>
+              </legend>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="e-contacts">Contacts</Label>
+                  <Input id="e-contacts" type="number" value={form.contacts} onChange={(e) => patchForm({ contacts: e.target.value })} placeholder="5000" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="e-team">Team members</Label>
+                  <Input id="e-team" type="number" value={form.teamMembers} onChange={(e) => patchForm({ teamMembers: e.target.value })} placeholder="3" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="e-seg">Segments</Label>
+                  <Input id="e-seg" type="number" value={form.segments} onChange={(e) => patchForm({ segments: e.target.value })} placeholder="5" />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3">
+              <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Feature rows <span className="font-normal normal-case">(public pricing table)</span>
+              </legend>
+              <div className="space-y-2">
+                {form.features.map((row, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      value={row.label}
+                      onChange={(e) =>
+                        patchForm({
+                          features: form.features.map((r, j) => (j === i ? { ...r, label: e.target.value } : r)),
+                        })
+                      }
+                      placeholder="Feature name"
+                      className="flex-1"
+                    />
+                    {row.mode === "tick" ? (
+                      <Toggle
+                        checked={row.bool}
+                        onChange={(v) =>
+                          patchForm({ features: form.features.map((r, j) => (j === i ? { ...r, bool: v } : r)) })
+                        }
+                        label={`${row.label} included`}
+                      />
+                    ) : (
+                      <Input
+                        value={row.text}
+                        onChange={(e) =>
+                          patchForm({ features: form.features.map((r, j) => (j === i ? { ...r, text: e.target.value } : r)) })
+                        }
+                        placeholder="Value"
+                        className="w-32"
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        patchForm({
+                          features: form.features.map((r, j) =>
+                            j === i ? { ...r, mode: r.mode === "tick" ? "text" : "tick" } : r,
+                          ),
+                        })
+                      }
+                    >
+                      {row.mode === "tick" ? "Tick" : "Text"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      title="Remove row"
+                      onClick={() => patchForm({ features: form.features.filter((_, j) => j !== i) })}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    patchForm({ features: [...form.features, { label: "", mode: "tick", bool: true, text: "" }] })
+                  }
+                >
+                  <Plus className="h-4 w-4" /> Add row
+                </Button>
+              </div>
+            </fieldset>
+
+            <div className="flex justify-end gap-2 border-t border-border pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditing(null);
+                  setForm(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!form.displayName.trim() || pending === `save:${editing.id}`}>
+                {pending === `save:${editing.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Save changes
+              </Button>
+            </div>
+          </form>
+        ) : null}
       </Modal>
     </main>
   );

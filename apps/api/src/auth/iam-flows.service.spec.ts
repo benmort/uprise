@@ -62,8 +62,12 @@ function setup() {
   const dispatcher = { sendEmail: jest.fn(), sendSms: jest.fn() } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
   const outbox = { append: jest.fn() } as any;
-  const svc = new IamFlowsService(prisma, sessions, config, dispatcher, logger, outbox);
-  return { svc, prisma, sessions, dispatcher, outbox };
+  const planLimits = {
+    assertTeamSeatAvailable: jest.fn(async () => undefined),
+    assertCanAddTeamMember: jest.fn(async () => undefined),
+  } as any;
+  const svc = new IamFlowsService(prisma, sessions, config, dispatcher, logger, outbox, planLimits);
+  return { svc, prisma, sessions, dispatcher, outbox, planLimits };
 }
 
 describe("IamFlowsService", () => {
