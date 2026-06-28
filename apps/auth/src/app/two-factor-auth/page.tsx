@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, OtpInput, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
+import { Alert, Button, OtpInput, Spinner, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
@@ -79,7 +79,7 @@ export default function TwoFactorPage() {
         {error ? <Alert variant="error" title={error} /> : null}
         {info ? <Alert variant="success" title={info} /> : null}
         <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
-          {busy ? "Verifying…" : "Verify My Account"}
+          {busy ? (<><Spinner className="mr-2" />Verifying…</>) : "Verify My Account"}
         </Button>
       </form>
       <TurnstileWidget ref={captchaRef} />

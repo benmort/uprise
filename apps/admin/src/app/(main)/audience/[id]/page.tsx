@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@uprise/ui";
 
 type AudienceDetail = {
   id: string;
@@ -121,7 +122,7 @@ export default function AudienceShowPage() {
             disabled={!id || deleting}
             onClick={() => setConfirmOpen(true)}
           >
-            {deleting ? "Deleting..." : "Delete Audience"}
+            {deleting ? (<><Spinner className="mr-2" />Deleting...</>) : "Delete Audience"}
           </Button>
           <Button asChild variant="outline" size="sm">
             <Link href="/audience">Back to Audiences</Link>

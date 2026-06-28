@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
+import { Alert, Button, Field, Input, Spinner, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
@@ -86,7 +86,7 @@ export default function MagicLinkPage() {
         {sent ? <Alert variant="success" title="Magic link sent" message="If that email has an account, a sign-in link is on its way. Check your inbox." /> : null}
         <TurnstileWidget ref={captchaRef} />
         <Button type="submit" className="w-full" disabled={busy || resendCountdown > 0}>
-          {busy ? "Sending…" : "Send Magic Link"}
+          {busy ? (<><Spinner className="mr-2" />Sending…</>) : "Send Magic Link"}
         </Button>
       </form>
       <div className="mt-5 text-sm text-muted-foreground">

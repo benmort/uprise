@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
+import { Alert, Button, Field, Input, Spinner, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 
 
@@ -68,7 +68,7 @@ export default function VerifyEmailPage() {
           <TurnstileWidget ref={captchaRef} />
           <div className="flex gap-2">
             <Button type="button" variant="outline" className="flex-1" disabled={busy || !email} onClick={sendCode}>Send code</Button>
-            <Button type="submit" className="flex-1" disabled={busy}>{busy ? "Verifying…" : "Verify My Account"}</Button>
+            <Button type="submit" className="flex-1" disabled={busy}>{busy ? (<><Spinner className="mr-2" />Verifying…</>) : "Verify My Account"}</Button>
           </div>
         </form>
       )}

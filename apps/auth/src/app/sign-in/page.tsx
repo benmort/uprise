@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, Mail } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input, PasswordInput, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
+import { Alert, Button, Field, Input, PasswordInput, Spinner, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth, isTwofaChallenge } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
@@ -57,7 +57,7 @@ export default function LoginPage() {
         {error ? <Alert variant="error" title={error} /> : null}
         <TurnstileWidget ref={captchaRef} />
         <Button type="submit" className="w-full" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? (<><Spinner className="mr-2" />Signing in…</>) : "Sign in"}
         </Button>
         <div className="relative py-3">
           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-input" /></div>

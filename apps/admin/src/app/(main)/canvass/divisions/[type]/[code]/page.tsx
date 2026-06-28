@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, DoorClosed, Scissors, Users } from "lucide-react";
+import { Spinner } from "@uprise/ui";
 import {
   createTurfFromDivision,
   getDivision,
@@ -98,7 +99,7 @@ export default function DivisionDetailPage() {
           </select>
           <Button disabled={busy} onClick={cutTurf}>
             <Scissors className="mr-1.5 h-4 w-4" />
-            {busy ? "Cutting…" : "Cut turf from division"}
+            {busy ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf from division"}
           </Button>
         </div>
       </div>

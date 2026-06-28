@@ -11,6 +11,7 @@ import {
   PasswordInput,
   PasswordStrength,
   isPasswordStrong,
+  Spinner,
   TurnstileWidget,
   type TurnstileHandle,
 } from "@uprise/ui";
@@ -80,7 +81,7 @@ export default function ResetPasswordPage() {
             <PasswordInput id="confirm" autoComplete="new-password" placeholder="Re-enter new password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </Field>
           <TurnstileWidget ref={captchaRef} />
-          <Button type="submit" className="w-full" disabled={busy || !canSubmit}>{busy ? "Resetting Password…" : "Reset Password"}</Button>
+          <Button type="submit" className="w-full" disabled={busy || !canSubmit}>{busy ? (<><Spinner className="mr-2" />Resetting Password…</>) : "Reset Password"}</Button>
         </form>
       )}
     </div>

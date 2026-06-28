@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { Alert, Button, Field, Input, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
+import { Alert, Button, Field, Input, Spinner, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 
 export default function AccountRecoveryPage() {
@@ -57,7 +57,7 @@ export default function AccountRecoveryPage() {
         {done ? <Alert variant="success" title="Recovery link sent" message="If that email has an account, a reset link is on its way." /> : null}
         <TurnstileWidget ref={captchaRef} />
         <Button type="submit" className="w-full" disabled={busy || resendCountdown > 0}>
-          {busy ? "Sending Recovery Link…" : "Send Recovery Link"}
+          {busy ? (<><Spinner className="mr-2" />Sending Recovery Link…</>) : "Send Recovery Link"}
         </Button>
       </form>
       <div className="mt-5 text-sm text-muted-foreground">

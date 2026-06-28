@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Alert, Button, Field, Input, PasswordInput } from "@uprise/ui";
+import { Alert, Button, Field, Input, PasswordInput, Spinner } from "@uprise/ui";
 import { auth, type InvitePreview } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 import { useQueryParams } from "@/lib/use-query";
@@ -84,7 +84,7 @@ export default function InvitePage() {
             <Field label="Set a password" htmlFor="password" hint="At least 8 characters (skip if you already have an account)" error={error ?? undefined}>
               <PasswordInput id="password" autoComplete="new-password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
-            <Button type="submit" className="w-full" disabled={busy}>{busy ? "Joining…" : "Accept Invitation"}</Button>
+            <Button type="submit" className="w-full" disabled={busy}>{busy ? (<><Spinner className="mr-2" />Joining…</>) : "Accept Invitation"}</Button>
           </form>
         </>
       ) : (

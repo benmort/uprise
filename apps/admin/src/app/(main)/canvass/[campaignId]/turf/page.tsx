@@ -14,6 +14,7 @@ import {
   type TurfSummary,
 } from "@/lib/api";
 import { createTurfFromAreas } from "@/lib/api/geo";
+import { Spinner } from "@uprise/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
@@ -198,7 +199,7 @@ export default function TurfCuttingPage() {
             </p>
             <Button className="mt-3 w-full" onClick={handleSave} disabled={saving || !hasSelection}>
               <Save className="mr-1.5 h-4 w-4" />
-              {saving ? "Saving…" : "Save & re-bucket"}
+              {saving ? (<><Spinner className="mr-2" />Saving…</>) : "Save & re-bucket"}
             </Button>
           </SectionCard>
 

@@ -11,6 +11,7 @@ import {
   PasswordInput,
   PasswordStrength,
   isPasswordStrong,
+  Spinner,
   TurnstileWidget,
   type TurnstileHandle,
 } from "@uprise/ui";
@@ -268,7 +269,7 @@ export default function SignUpPage() {
               Back
             </Button>
             <Button type="submit" className="flex-1" disabled={busy || !canCreate}>
-              {busy ? "Creating…" : "Create account"}
+              {busy ? (<><Spinner className="mr-2" />Creating…</>) : "Create account"}
             </Button>
           </div>
         </form>

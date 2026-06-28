@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PlusCircle } from "lucide-react";
+import { Spinner } from "@uprise/ui";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,7 +143,7 @@ export function ChannelCampaignsView({ channel, title, description }: ChannelCam
           </Button>
           <Button className="shrink-0 gap-1.5" disabled={creating} onClick={createBlast}>
             <PlusCircle className="h-4 w-4" />
-            {creating ? "Creating..." : "New blast"}
+            {creating ? (<><Spinner className="mr-2" />Creating...</>) : "New blast"}
           </Button>
         </div>
       </CardHeader>

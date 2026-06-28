@@ -11,6 +11,7 @@ import {
   Field,
   Input,
   Skeleton,
+  Spinner,
   Textarea,
 } from "@uprise/ui";
 import { profile, type UserAvatarResponse, type UserProfileResponse } from "@uprise/api-client";
@@ -263,7 +264,7 @@ export default function ProfilePage() {
 
           <div className="flex justify-end">
             <Button onClick={() => void save()} disabled={saving}>
-              {saving ? "Saving…" : "Save changes"}
+              {saving ? (<><Spinner className="mr-2" />Saving…</>) : "Save changes"}
             </Button>
           </div>
         </CardContent>

@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Cropper from "react-easy-crop";
-import { Button } from "@uprise/ui";
+import { Button, Spinner } from "@uprise/ui";
 import { getCroppedImg, type CropArea } from "@/lib/crop-image";
 
 /**
@@ -65,7 +65,7 @@ export function AvatarCropper({
             Cancel
           </Button>
           <Button onClick={() => void apply()} disabled={busy || !area}>
-            {busy ? "Uploading…" : "Upload"}
+            {busy ? (<><Spinner className="mr-2" />Uploading…</>) : "Upload"}
           </Button>
         </div>
       </div>

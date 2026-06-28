@@ -14,6 +14,7 @@ import {
   OtpInput,
   PasswordInput,
   Skeleton,
+  Spinner,
 } from "@uprise/ui";
 import { auth, profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -184,7 +185,7 @@ export default function AccountPage() {
               onClick={() => void submit()}
               disabled={busy || !current || next.length < 8 || mismatch}
             >
-              {busy ? "Saving…" : "Update password"}
+              {busy ? (<><Spinner className="mr-2" />Saving…</>) : "Update password"}
             </Button>
           </div>
         </CardContent>
@@ -231,7 +232,7 @@ export default function AccountPage() {
           </Field>
           <div className="flex justify-end">
             <Button onClick={() => void submit()} disabled={busy || !newEmail || !password}>
-              {busy ? "Saving…" : "Update email"}
+              {busy ? (<><Spinner className="mr-2" />Saving…</>) : "Update email"}
             </Button>
           </div>
         </CardContent>
@@ -452,7 +453,7 @@ export default function AccountPage() {
                   Cancel
                 </Button>
                 <Button variant="destructive" onClick={() => void confirm()} disabled={busy || !password}>
-                  {busy ? "Deleting…" : "Permanently delete"}
+                  {busy ? (<><Spinner className="mr-2" />Deleting…</>) : "Permanently delete"}
                 </Button>
               </div>
             </div>

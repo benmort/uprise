@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SendHorizontal } from "lucide-react";
+import { Spinner } from "@uprise/ui";
 import {
   getApiUrl,
   getAiSuggestions,
@@ -1368,7 +1369,7 @@ export default function InboxPage() {
                   onClick={() => void handleSendReply()}
                 >
                   <SendHorizontal className="h-4 w-4" />
-                  {sending ? "Sending..." : "Send"}
+                  {sending ? (<><Spinner className="mr-2" />Sending...</>) : "Send"}
                 </Button>
               </div>
             </div>
