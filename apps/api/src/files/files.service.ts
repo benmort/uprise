@@ -34,16 +34,18 @@ export class FilesService {
 
   async upload(file: UploadedFile | undefined, folder?: string) {
     if (!file?.buffer) throw new BadRequestException("No file provided");
+    // Blob credentials resolve from the env: a static BLOB_READ_WRITE_TOKEN (local/dev) or,
+    // in the Vercel runtime, OIDC (VERCEL_OIDC_TOKEN + BLOB_STORE_ID). Require at least one.
     const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token) throw new BadRequestException("File storage is not configured");
+    if (!token && !process.env.BLOB_STORE_ID) throw new BadRequestException("File storage is not configured");
 
     const org = await this.ensureOrganization();
     const safeName = (file.originalname || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
     const key = `files/${org.id}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`;
     const { url } = await put(key, file.buffer, {
       access: "public",
-      token,
       contentType: file.mimetype || "application/octet-stream",
+      ...(token ? { token } : {}),
     });
 
     return this.prisma.$transaction(async (tx) => {
@@ -74,10 +76,11 @@ export class FilesService {
     if (!existing) throw new NotFoundException("File not found");
 
     const token = process.env.BLOB_READ_WRITE_TOKEN;
-    // Best-effort blob delete; the row delete + event are the source of truth.
-    if (token) {
+    // Best-effort blob delete; the row delete + event are the source of truth. Credentials
+    // resolve from the env (static token, or OIDC + BLOB_STORE_ID in the Vercel runtime).
+    if (token || process.env.BLOB_STORE_ID) {
       try {
-        await del(existing.url, { token });
+        await del(existing.url, token ? { token } : undefined);
       } catch {
         /* blob already gone or transient — proceed to remove the row */
       }

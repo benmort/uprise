@@ -80,14 +80,16 @@ export class ProfileService {
     file?: { buffer?: Buffer; originalname?: string; mimetype?: string },
   ): Promise<UserAvatar> {
     if (!file?.buffer) throw new BadRequestException("No image provided");
+    // Blob credentials resolve from the env: a static BLOB_READ_WRITE_TOKEN (local/dev) or,
+    // in the Vercel runtime, OIDC (VERCEL_OIDC_TOKEN + BLOB_STORE_ID). Require at least one.
     const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token) throw new BadRequestException("Image storage is not configured");
+    if (!token && !process.env.BLOB_STORE_ID) throw new BadRequestException("Image storage is not configured");
     const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
     const key = `avatars/${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`;
     const { url } = await put(key, file.buffer, {
       access: "public",
-      token,
       contentType: file.mimetype || "image/jpeg",
+      ...(token ? { token } : {}),
     });
     const avatar = await this.addAvatar(userId, url);
     return avatar.isSelected ? avatar : this.selectAvatar(userId, avatar.id);

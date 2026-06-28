@@ -138,16 +138,18 @@ export class CanvassingService {
    */
   async uploadDoorPhoto(file?: { buffer?: Buffer; originalname?: string; mimetype?: string }) {
     if (!file?.buffer) throw new ApiHttpException("NO_FILE", "No photo provided");
+    // Blob credentials resolve from the env: a static BLOB_READ_WRITE_TOKEN (local/dev) or,
+    // in the Vercel runtime, OIDC (VERCEL_OIDC_TOKEN + BLOB_STORE_ID). Require at least one.
     const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token) {
+    if (!token && !process.env.BLOB_STORE_ID) {
       throw new ApiHttpException("PHOTO_STORAGE_NOT_CONFIGURED", "Photo storage is not configured");
     }
     const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
     const key = `door-knocks/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`;
     const { url } = await put(key, file.buffer, {
       access: "public",
-      token,
       contentType: file.mimetype,
+      ...(token ? { token } : {}),
     });
     return { url };
   }

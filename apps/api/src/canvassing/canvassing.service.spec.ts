@@ -215,11 +215,14 @@ describe("CanvassingService", () => {
 
     it("rejects when blob storage is not configured", async () => {
       const prev = process.env.BLOB_READ_WRITE_TOKEN;
+      const prevStore = process.env.BLOB_STORE_ID;
       delete process.env.BLOB_READ_WRITE_TOKEN;
+      delete process.env.BLOB_STORE_ID;
       await expect(
         service.uploadDoorPhoto({ buffer: Buffer.from("x"), originalname: "a.jpg", mimetype: "image/jpeg" }),
       ).rejects.toThrow();
       if (prev !== undefined) process.env.BLOB_READ_WRITE_TOKEN = prev;
+      if (prevStore !== undefined) process.env.BLOB_STORE_ID = prevStore;
     });
   });
 
