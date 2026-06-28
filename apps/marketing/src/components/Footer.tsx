@@ -13,7 +13,8 @@ export default function Footer() {
           {/* Company Info */}
           <div className="lg:col-span-3">
             <div className="flex items-center gap-2 mb-6">
-              <CircleIcon className="h-8 w-8 text-primary" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/uprise-icon.svg" alt="" className="h-8 w-8" />
               <span className="text-2xl font-bold text-gray-900">Uprise</span>
             </div>
             <p className="text-gray-600 mb-6 max-w-md">

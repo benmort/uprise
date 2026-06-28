@@ -29,14 +29,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
   return (
     <html lang="en">
-      <body className={outfit.variable}>
+      <body className={`${outfit.variable} bg-gray-50`}>
         <script
           dangerouslySetInnerHTML={{
             __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};window.__APP_URL__=${JSON.stringify(appUrl)};window.__TURNSTILE_SITE_KEY__=${JSON.stringify(turnstileSiteKey)};`,
           }}
         />
         <SessionProvider>
-          <div className="flex min-h-screen flex-col bg-background">
+          <div className="flex flex-col bg-background">
             <MarketingChrome>{children}</MarketingChrome>
             <ScrollToTop />
           </div>
