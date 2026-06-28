@@ -27,7 +27,10 @@ export function sessionCookieOptions(config: ConfigService, expires?: Date): Coo
   return {
     httpOnly: true,
     sameSite: "lax",
-    secure: config.get<string>("NODE_ENV") === "production",
+    // Secure in production AND whenever the cookie is scoped to a parent domain for
+    // cross-subdomain SSO — that path is always served over HTTPS (the dev tunnel or
+    // prod), and a non-Secure cross-site cookie is dropped by browsers, breaking SSO.
+    secure: config.get<string>("NODE_ENV") === "production" || domain.length > 0,
     path: "/",
     ...(domain ? { domain } : {}),
     ...(expires ? { expires } : {}),
