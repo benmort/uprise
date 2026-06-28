@@ -6,10 +6,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
+  Building2,
   ChevronDown,
   ChevronLeft,
   Crown,
+  Database,
   LayoutDashboard,
+  Loader2,
   LogOut,
   Mail,
   MapPin,
@@ -78,21 +81,25 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       ],
     },
     {
-      type: "group", key: "organising", label: "Organising", icon: Megaphone, match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING",
+      type: "group", key: "organising", label: "Organising", icon: Megaphone,
+      match: (p) => p.startsWith("/canvass/volunteers") || px("events")(p), flag: "FEATURE_NAV_PROG_ORGANISING",
       children: [
+        { label: "Volunteers", href: "/canvass/volunteers", match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
         { label: "Events", href: "/prog/events", match: px("events") },
       ],
     },
     {
-      type: "group", key: "canvass", label: "Canvass", icon: MapPin, match: (p) => p.startsWith("/canvass"), flag: "FEATURE_NAV_CANVASS",
+      type: "group", key: "canvass", label: "Canvass", icon: MapPin,
+      match: (p) =>
+        p.startsWith("/canvass") &&
+        !p.startsWith("/canvass/volunteers") &&
+        !p.startsWith("/canvass/divisions"),
+      flag: "FEATURE_NAV_CANVASS",
       children: [
-        { label: "Overview", href: "/canvass", match: (p) => p === "/canvass" },
-        { label: "Campaigns", href: "/canvass/campaigns", match: (p) => p.startsWith("/canvass/campaigns"), flag: "FEATURE_NAV_CANVASS_CAMPAIGNS" },
+        { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
         { label: "Turf map", href: scoped("turf"), match: (p) => p.includes("/turf"), flag: "FEATURE_NAV_CANVASS_TURF" },
         { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists"), flag: "FEATURE_NAV_CANVASS_WALKLISTS" },
         { label: "Live", href: scoped("live"), match: (p) => p.includes("/live"), flag: "FEATURE_NAV_CANVASS_LIVE" },
-        { label: "Volunteers", href: "/canvass/volunteers", match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
-        { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
         { label: "Results", href: scoped("results"), match: (p) => p.includes("/results"), flag: "FEATURE_NAV_CANVASS_RESULTS" },
       ],
     },
@@ -110,21 +117,49 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
     { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
     { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
     {
+      type: "group", key: "data-files", label: "Data & files", icon: Database,
+      match: (p) =>
+        p.startsWith("/settings/data") ||
+        p.startsWith("/canvass/divisions") ||
+        p.startsWith("/prog/file-manager"),
+      children: [
+        { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
+        { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
+        { label: "File Manager", href: "/prog/file-manager", match: (p) => p.startsWith("/prog/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
+      ],
+    },
+    {
       type: "group", key: "settings", label: "Settings", icon: Settings,
       match: (p) =>
         p.startsWith("/settings") &&
         !p.startsWith("/settings/flags") &&
-        !p.startsWith("/settings/plans"),
+        !p.startsWith("/settings/plans") &&
+        !p.startsWith("/settings/data"),
       children: [
         { label: "General", href: "/settings", match: (p) => p === "/settings" },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
-        { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
       ],
     },
     // Super Admin: platform-level controls (super-admins only). Pages also enforce.
     ...(isSuperAdmin
       ? [
+          {
+            type: "group" as const, key: "workspace", label: "Workspace", icon: Building2,
+            match: (p: string) =>
+              px("team")(p) || px("billing")(p) || px("tenants")(p) || px("tenant-settings")(p) ||
+              px("activity")(p) || px("plans")(p) || px("security")(p),
+            flag: "FEATURE_NAV_PROG_WORKSPACE" as const,
+            children: [
+              { label: "Team", href: "/prog/team", match: px("team") },
+              { label: "Billing", href: "/prog/billing", match: px("billing") },
+              { label: "Tenants", href: "/prog/tenants", match: px("tenants") },
+              { label: "Settings", href: "/prog/tenant-settings", match: px("tenant-settings") },
+              { label: "Activity", href: "/prog/activity", match: px("activity") },
+              { label: "Plans", href: "/prog/plans", match: px("plans") },
+              { label: "Security", href: "/prog/security", match: px("security") },
+            ],
+          },
           {
             type: "group" as const, key: "super-admin", label: "Super Admin", icon: Crown,
             match: (p: string) => p.startsWith("/settings/flags") || p.startsWith("/settings/plans"),
@@ -138,7 +173,19 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
     {
       // Mirrors prog's admin information architecture (its menu-config.tsx),
       // rehoming the already-ported pages and registering every new /prog/* route.
-      type: "group", key: "prog", label: "Prog", icon: Boxes, match: (p) => p.startsWith("/prog") && !p.startsWith("/prog/events"), flag: "FEATURE_NAV_PROG",
+      type: "group", key: "prog", label: "Prog", icon: Boxes,
+      match: (p) =>
+        p.startsWith("/prog") &&
+        !p.startsWith("/prog/events") &&
+        !p.startsWith("/prog/file-manager") &&
+        !p.startsWith("/prog/team") &&
+        !p.startsWith("/prog/billing") &&
+        !p.startsWith("/prog/tenants") &&
+        !p.startsWith("/prog/tenant-settings") &&
+        !p.startsWith("/prog/activity") &&
+        !p.startsWith("/prog/plans") &&
+        !p.startsWith("/prog/security"),
+      flag: "FEATURE_NAV_PROG",
       children: [
         { label: "Calendar", href: "/prog/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
         {
@@ -170,24 +217,6 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
             { label: "Products", href: "/prog/products", match: px("products") },
             { label: "Support tickets", href: "/prog/support-tickets", match: px("support-tickets") },
             { label: "Checkout", href: "/prog/checkout", match: px("checkout") },
-          ],
-        },
-        {
-          label: "Workspace", match: (p) => px("team")(p) || px("billing")(p) || px("tenants")(p) || px("tenant-settings")(p) || px("activity")(p) || px("plans")(p) || px("security")(p), flag: "FEATURE_NAV_PROG_WORKSPACE",
-          children: [
-            { label: "Team", href: "/prog/team", match: px("team") },
-            { label: "Billing", href: "/prog/billing", match: px("billing") },
-            { label: "Tenants", href: "/prog/tenants", match: px("tenants") },
-            { label: "Settings", href: "/prog/tenant-settings", match: px("tenant-settings") },
-            { label: "Activity", href: "/prog/activity", match: px("activity") },
-            { label: "Plans", href: "/prog/plans", match: px("plans") },
-            { label: "Security", href: "/prog/security", match: px("security") },
-          ],
-        },
-        {
-          label: "Data & Files", match: px("file-manager"), flag: "FEATURE_NAV_PROG_DATA",
-          children: [
-            { label: "File Manager", href: "/prog/file-manager", match: px("file-manager") },
           ],
         },
         {
@@ -598,7 +627,8 @@ export default function MainLayout({
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center gap-2 text-muted-foreground" role="status" aria-live="polite">
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
         Loading...
       </div>
     );
