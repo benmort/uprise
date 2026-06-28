@@ -20,6 +20,7 @@
     "seed:demo": "ts-node src/scripts/seed-demo.ts",
     "seed:clear": "ts-node src/scripts/seed-demo.ts --clear",
     "seed:plans": "ts-node src/scripts/seed-plans.ts",
+    "seed:admin": "ts-node src/scripts/seed-admin-user.ts",
     "geo:map": "ts-node src/scripts/geo/map.ts",
     "geo:load-boundaries": "ts-node src/scripts/geo/load-boundaries.ts"
   },
