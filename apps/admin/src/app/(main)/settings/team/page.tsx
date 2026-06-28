@@ -77,12 +77,67 @@ function RoleBadge({ role }: { role: AppUserRole }) {
   );
 }
 
+// ── Combined "requests & invitations" list ────────────────────────────
+type PendingKind = "request" | "invitation";
+type PendingFilter = "all" | "requests" | "invitations";
+const PENDING_FILTERS: PendingFilter[] = ["all", "requests", "invitations"];
+
+type PendingRow = {
+  kind: PendingKind;
+  id: string;
+  email: string;
+  role: AppUserRole;
+  status: string;
+  createdAt: string;
+  expiresAt: string | null;
+  request?: JoinRequest;
+  invitation?: TenantInvitationSummary;
+};
+
+/** Persist the filter in the URL hash (#pending=…) so reload/share keeps the view. */
+function readPendingFilter(): PendingFilter {
+  if (typeof window === "undefined") return "all";
+  const v = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("pending");
+  return PENDING_FILTERS.includes(v as PendingFilter) ? (v as PendingFilter) : "all";
+}
+
+function writePendingFilter(value: PendingFilter) {
+  if (typeof window === "undefined") return;
+  const h = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  if (value === "all") h.delete("pending");
+  else h.set("pending", value);
+  const qs = h.toString();
+  window.history.replaceState(null, "", window.location.pathname + window.location.search + (qs ? `#${qs}` : ""));
+}
+
+/** Source badge distinguishing a self sign-up from an emailed invitation. */
+function TypeBadge({ kind }: { kind: PendingKind }) {
+  const isReq = kind === "request";
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-[0.04em] ${
+        isReq ? "bg-warning-container text-warning-foreground" : "bg-knock-container text-knock"
+      }`}
+    >
+      {isReq ? "Request" : "Invitation"}
+    </span>
+  );
+}
+
 export default function TeamPage() {
   const { showToast } = useToast();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [checkedSession, setCheckedSession] = useState(false);
+
+  // Combined list filter (defaults to "all"; persisted in the URL hash).
+  const [pendingFilter, setPendingFilter] = useState<PendingFilter>("all");
+  useEffect(() => setPendingFilter(readPendingFilter()), []);
+  const changeFilter = useCallback((value: PendingFilter) => {
+    setPendingFilter(value);
+    writePendingFilter(value);
+  }, []);
 
   // ── Section 1: Join requests ──
   const [joinRows, setJoinRows] = useState<JoinRequest[] | null>(null);
@@ -269,6 +324,43 @@ export default function TeamPage() {
   // ── No-permission state (whole page) ──
   const noPermission = checkedSession && !canManage;
 
+  // ── Combined requests + invitations rows ──
+  const requestRows: PendingRow[] = (joinRows ?? []).map((r) => ({
+    kind: "request",
+    id: `req:${r.id}`,
+    email: r.email,
+    role: r.requestedRole === "staff" ? "ORGANISER" : "VOLUNTEER",
+    status: r.status,
+    createdAt: r.createdAt,
+    expiresAt: null,
+    request: r,
+  }));
+  const inviteRows: PendingRow[] = (invites ?? []).map((i) => ({
+    kind: "invitation",
+    id: `inv:${i.id}`,
+    email: i.email,
+    role: i.role,
+    status: i.status,
+    createdAt: i.createdAt,
+    expiresAt: i.expiresAt,
+    invitation: i,
+  }));
+  const pendingRows = [...requestRows, ...inviteRows].sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  );
+  const visiblePending = pendingRows.filter((r) =>
+    pendingFilter === "all" ? true : pendingFilter === "requests" ? r.kind === "request" : r.kind === "invitation",
+  );
+  const joinSettled = joinRows !== null || joinError !== "";
+  const inviteSettled = invites !== null || inviteError !== "";
+  const pendingLoading = !joinSettled || !inviteSettled;
+  const bothPendingErrored = Boolean(joinError) && Boolean(inviteError);
+  const retryPending = () => {
+    if (!tenantId) return;
+    void loadJoinRequests(tenantId);
+    void loadInvitations(tenantId);
+  };
+
   return (
     <div className="page-stack">
       <div className="flex items-center gap-2">
@@ -290,69 +382,12 @@ export default function TeamPage() {
         </SectionCard>
       ) : (
         <>
-          {/* ── 1. Join requests ────────────────────────────────────── */}
+          {/* ── 1+2. Requests & invitations (combined, filterable) ──── */}
           <SectionCard
-            title="Join requests"
-            description="People who signed up and are awaiting approval into this workspace."
+            title="Requests & invitations"
+            description="People awaiting approval and pending email invitations. The filter is saved in the page URL."
           >
-            {joinRows === null ? (
-              <Skeleton className="h-24 w-full" />
-            ) : joinError ? (
-              <EmptyState
-                title="Couldn't load requests"
-                description={joinError}
-                ctaLabel="Retry"
-                onCta={() => tenantId && void loadJoinRequests(tenantId)}
-              />
-            ) : joinRows.length === 0 ? (
-              <EmptyState title="No pending requests" description="New sign-ups awaiting approval will appear here." />
-            ) : (
-              <DataTable
-                rows={joinRows}
-                rowKey={(r) => r.id}
-                columns={[
-                  { key: "email", header: "Email", cell: (r) => r.email },
-                  {
-                    key: "requestedRole",
-                    header: "Requested",
-                    cell: (r) => (
-                      <RoleBadge role={r.requestedRole === "staff" ? "ORGANISER" : "VOLUNTEER"} />
-                    ),
-                  },
-                  { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status.toUpperCase()} /> },
-                  { key: "when", header: "Requested", cell: (r) => relativeTime(r.createdAt) },
-                  {
-                    key: "actions",
-                    header: "",
-                    cell: (r) => (
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            // Privilege-safe default: always VOLUNTEER; the organiser opts up in
-                            // the dialog. The applicant's requestedRole is only a hint.
-                            setApproveRole("VOLUNTEER");
-                            setApproving(r);
-                          }}
-                        >
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setRejecting(r)}>
-                          Reject
-                        </Button>
-                      </div>
-                    ),
-                  },
-                ]}
-              />
-            )}
-          </SectionCard>
-
-          {/* ── 2. Invitations ──────────────────────────────────────── */}
-          <SectionCard
-            title="Invitations"
-            description="Invite people by email. They'll receive a link to join this workspace."
-          >
+            {/* Invite by email */}
             <form
               className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end"
               onSubmit={(e) => {
@@ -360,7 +395,7 @@ export default function TeamPage() {
                 void doInvite();
               }}
             >
-              <Field label="Email" htmlFor="invite-email" className="flex-1">
+              <Field label="Invite by email" htmlFor="invite-email" className="flex-1">
                 <Input
                   id="invite-email"
                   type="email"
@@ -385,43 +420,139 @@ export default function TeamPage() {
               </Button>
             </form>
 
-            {invites === null ? (
+            {/* Filter (defaults to All; persisted in the URL hash) */}
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { key: "all", label: "All", count: pendingRows.length },
+                  { key: "requests", label: "Requests", count: requestRows.length },
+                  { key: "invitations", label: "Invitations", count: inviteRows.length },
+                ] as const
+              ).map((f) => (
+                <Button
+                  key={f.key}
+                  size="sm"
+                  variant={pendingFilter === f.key ? "default" : "outline"}
+                  onClick={() => changeFilter(f.key)}
+                >
+                  {f.label}
+                  <span className="ml-1.5 text-xs opacity-70">{f.count}</span>
+                </Button>
+              ))}
+            </div>
+
+            {pendingLoading ? (
               <Skeleton className="h-24 w-full" />
-            ) : inviteError ? (
+            ) : bothPendingErrored ? (
               <EmptyState
-                title="Couldn't load invitations"
-                description={inviteError}
+                title="Couldn't load this list"
+                description={joinError || inviteError}
                 ctaLabel="Retry"
-                onCta={() => tenantId && void loadInvitations(tenantId)}
-              />
-            ) : invites.length === 0 ? (
-              <EmptyState
-                title="No invitations"
-                description="People you invite by email will appear here until they accept."
+                onCta={retryPending}
               />
             ) : (
-              <DataTable
-                rows={invites}
-                rowKey={(i) => i.id}
-                columns={[
-                  { key: "email", header: "Email", cell: (i) => i.email },
-                  { key: "role", header: "Role", cell: (i) => <RoleBadge role={i.role} /> },
-                  { key: "status", header: "Status", cell: (i) => <StatusBadge status={i.status.toUpperCase()} /> },
-                  { key: "expires", header: "Expires", cell: (i) => formatDate(i.expiresAt) },
-                  {
-                    key: "actions",
-                    header: "",
-                    cell: (i) =>
-                      i.status.toLowerCase() === "pending" ? (
-                        <div className="flex justify-end">
-                          <Button size="sm" variant="outline" onClick={() => setRevoking(i)}>
-                            Revoke
-                          </Button>
-                        </div>
-                      ) : null,
-                  },
-                ]}
-              />
+              <>
+                {joinError ? (
+                  <p className="mb-3 text-sm text-error">
+                    Couldn&apos;t load join requests: {joinError}{" "}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => tenantId && void loadJoinRequests(tenantId)}
+                    >
+                      Retry
+                    </button>
+                  </p>
+                ) : null}
+                {inviteError ? (
+                  <p className="mb-3 text-sm text-error">
+                    Couldn&apos;t load invitations: {inviteError}{" "}
+                    <button
+                      type="button"
+                      className="underline"
+                      onClick={() => tenantId && void loadInvitations(tenantId)}
+                    >
+                      Retry
+                    </button>
+                  </p>
+                ) : null}
+                {visiblePending.length === 0 ? (
+                  <EmptyState
+                    title={
+                      pendingFilter === "requests"
+                        ? "No join requests"
+                        : pendingFilter === "invitations"
+                          ? "No invitations"
+                          : "Nothing pending"
+                    }
+                    description={
+                      pendingFilter === "requests"
+                        ? "New sign-ups awaiting approval will appear here."
+                        : pendingFilter === "invitations"
+                          ? "People you invite by email will appear here until they accept."
+                          : "New sign-ups and pending invitations will appear here."
+                    }
+                  />
+                ) : (
+                  <DataTable
+                    rows={visiblePending}
+                    rowKey={(r) => r.id}
+                    columns={[
+                      { key: "type", header: "Type", cell: (r) => <TypeBadge kind={r.kind} /> },
+                      { key: "email", header: "Email", cell: (r) => r.email },
+                      { key: "role", header: "Role", cell: (r) => <RoleBadge role={r.role} /> },
+                      {
+                        key: "status",
+                        header: "Status",
+                        cell: (r) => <StatusBadge status={r.status.toUpperCase()} />,
+                      },
+                      {
+                        key: "when",
+                        header: "When",
+                        cell: (r) => (
+                          <div className="leading-tight">
+                            <div>{relativeTime(r.createdAt)}</div>
+                            {r.kind === "invitation" && r.expiresAt ? (
+                              <div className="text-xs text-muted-foreground">
+                                expires {formatDate(r.expiresAt)}
+                              </div>
+                            ) : null}
+                          </div>
+                        ),
+                      },
+                      {
+                        key: "actions",
+                        header: "",
+                        cell: (r) =>
+                          r.kind === "request" ? (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  // Privilege-safe default: always VOLUNTEER; the organiser opts up in
+                                  // the dialog. The applicant's requestedRole is only a hint.
+                                  setApproveRole("VOLUNTEER");
+                                  setApproving(r.request!);
+                                }}
+                              >
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setRejecting(r.request!)}>
+                                Reject
+                              </Button>
+                            </div>
+                          ) : r.invitation!.status.toLowerCase() === "pending" ? (
+                            <div className="flex justify-end">
+                              <Button size="sm" variant="outline" onClick={() => setRevoking(r.invitation!)}>
+                                Revoke
+                              </Button>
+                            </div>
+                          ) : null,
+                      },
+                    ]}
+                  />
+                )}
+              </>
             )}
           </SectionCard>
 
