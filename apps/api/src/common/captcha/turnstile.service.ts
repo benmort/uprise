@@ -16,9 +16,21 @@ export class TurnstileService {
 
   constructor(private readonly config: ConfigService) {}
 
-  /** True when a secret is configured; when false the guard no-ops (feature inert). */
+  /**
+   * True when captcha should be enforced: a secret is configured AND we're in production.
+   * Dev/preview/local are exempt (returns false → the guard no-ops) so their auth flows
+   * aren't blocked by a token Cloudflare can't verify for those domains.
+   */
   isConfigured(): boolean {
+    if (!this.isProductionEnv()) return false;
     return Boolean(this.config.get<string>("TURNSTILE_SECRET_KEY")?.trim());
+  }
+
+  /** Production only — keyed off Vercel's VERCEL_ENV, falling back to NODE_ENV off-Vercel. */
+  private isProductionEnv(): boolean {
+    const vercelEnv = this.config.get<string>("VERCEL_ENV")?.trim().toLowerCase();
+    if (vercelEnv) return vercelEnv === "production";
+    return this.config.get<string>("NODE_ENV")?.trim().toLowerCase() === "production";
   }
 
   /**
