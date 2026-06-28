@@ -40,7 +40,10 @@ export async function configureNestApp(app: INestApplication): Promise<void> {
     // echoes the request origin (never "*"), which is valid with credentials.
     credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    // cf-turnstile-response carries the Cloudflare Turnstile token on captcha-guarded
+    // routes (@RequireCaptcha) — the api-client sends it as a custom header, so it must
+    // be allowlisted or the preflight fails and the browser blocks the request.
+    allowedHeaders: ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "cf-turnstile-response"],
     optionsSuccessStatus: 204,
     maxAge: 600,
   });
