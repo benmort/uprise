@@ -13,6 +13,7 @@ import {
   LogOut,
   Mail,
   MapPin,
+  Megaphone,
   Menu,
   MessageSquareText,
   Settings,
@@ -77,6 +78,12 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       ],
     },
     {
+      type: "group", key: "organising", label: "Organising", icon: Megaphone, match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING",
+      children: [
+        { label: "Events", href: "/prog/events", match: px("events") },
+      ],
+    },
+    {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin, match: (p) => p.startsWith("/canvass"), flag: "FEATURE_NAV_CANVASS",
       children: [
         { label: "Overview", href: "/canvass", match: (p) => p === "/canvass" },
@@ -131,7 +138,7 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
     {
       // Mirrors prog's admin information architecture (its menu-config.tsx),
       // rehoming the already-ported pages and registering every new /prog/* route.
-      type: "group", key: "prog", label: "Prog", icon: Boxes, match: (p) => p.startsWith("/prog"), flag: "FEATURE_NAV_PROG",
+      type: "group", key: "prog", label: "Prog", icon: Boxes, match: (p) => p.startsWith("/prog") && !p.startsWith("/prog/events"), flag: "FEATURE_NAV_PROG",
       children: [
         { label: "Calendar", href: "/prog/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
         {
@@ -141,12 +148,6 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
             { label: "Calls", href: "/prog/calls", match: px("calls") },
             { label: "Chats", href: "/prog/chats", match: px("chats") },
             { label: "Social Media", href: "/prog/social-media", match: px("social-media") },
-          ],
-        },
-        {
-          label: "Organising", match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING",
-          children: [
-            { label: "Events", href: "/prog/events", match: px("events") },
           ],
         },
         {
