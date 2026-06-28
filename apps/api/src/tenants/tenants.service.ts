@@ -343,6 +343,38 @@ export class TenantsService {
     return this.prisma.tenant.findMany({ where: { networkId, deletedAt: null }, orderBy: { createdAt: "asc" } });
   }
 
+  /** Super-admin search across ALL tenants (for the feature-flag override editor). */
+  async searchTenants(q?: string) {
+    const term = q?.trim();
+    return this.prisma.tenant.findMany({
+      where: {
+        deletedAt: null,
+        ...(term
+          ? {
+              OR: [
+                { name: { contains: term, mode: "insensitive" as const } },
+                { slug: { contains: term, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true, slug: true, name: true, networkId: true },
+      orderBy: { name: "asc" },
+      take: 50,
+    });
+  }
+
+  /** Super-admin search across ALL networks (for the feature-flag override editor). */
+  async searchNetworks(q?: string) {
+    const term = q?.trim();
+    return this.prisma.network.findMany({
+      where: term ? { name: { contains: term, mode: "insensitive" as const } } : {},
+      select: { id: true, name: true, planName: true },
+      orderBy: { name: "asc" },
+      take: 50,
+    });
+  }
+
   /** Write plan/status onto the Network (the billing boundary) — prog UpdateNetworkBilling. */
   async updateNetworkBilling(
     id: string,

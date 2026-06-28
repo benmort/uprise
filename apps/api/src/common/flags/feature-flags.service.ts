@@ -15,7 +15,15 @@ import { OutboxService } from "../outbox/outbox.service";
 /** Backwards-compatible alias for the resolved flag map. */
 export type SystemFeatureFlags = FeatureFlagMap;
 
-type Overrides = { tenant: Map<string, boolean>; plan: Map<string, boolean>; global: Map<string, boolean> };
+type Overrides = {
+  tenant: Map<string, boolean>;
+  network: Map<string, boolean>;
+  plan: Map<string, boolean>;
+  global: Map<string, boolean>;
+};
+
+/** A resolution target: a tenant, a network, or (both null) the platform global view. */
+export type FlagTarget = { tenantId?: string | null; networkId?: string | null };
 
 export type FlagAdminEntry = {
   key: FeatureFlagKey;
@@ -25,6 +33,7 @@ export type FlagAdminEntry = {
   default: boolean;
   env: boolean | null;
   tenantOverride: boolean | null;
+  networkOverride: boolean | null;
   planEntitlement: boolean | null;
   globalOverride: boolean | null;
   effective: boolean;
@@ -69,7 +78,7 @@ export class FeatureFlagsService {
     const cacheKey = tenantId ?? "_global";
     const hit = this.cache.get(cacheKey);
     if (hit && hit.expiry > Date.now()) return hit.map;
-    const overrides = await this.loadOverrides(tenantId);
+    const overrides = await this.loadOverrides({ tenantId });
     const map = {} as FeatureFlagMap;
     for (const key of FEATURE_FLAG_KEYS) map[key] = this.resolveOne(key, overrides).enabled;
     this.cache.set(cacheKey, { map, expiry: Date.now() + CACHE_TTL_MS });
@@ -80,8 +89,8 @@ export class FeatureFlagsService {
     return (await this.resolveAll(ctx))[key];
   }
 
-  async getAdminView(ctx: { tenantId?: string | null }): Promise<FlagAdminEntry[]> {
-    const overrides = await this.loadOverrides(ctx.tenantId ?? null);
+  async getAdminView(target: FlagTarget = {}): Promise<FlagAdminEntry[]> {
+    const overrides = await this.loadOverrides(target);
     return FEATURE_FLAG_KEYS.map((key) => {
       const meta = FLAG_META[key];
       const resolved = this.resolveOne(key, overrides);
@@ -93,6 +102,7 @@ export class FeatureFlagsService {
         default: meta.default,
         env: meta.controllableBy.includes("env") ? (this.envValue(key) ?? null) : null,
         tenantOverride: overrides.tenant.get(key) ?? null,
+        networkOverride: overrides.network.get(key) ?? null,
         planEntitlement: overrides.plan.get(key) ?? null,
         globalOverride: overrides.global.get(key) ?? null,
         effective: resolved.enabled,
@@ -101,33 +111,50 @@ export class FeatureFlagsService {
     });
   }
 
-  private async loadOverrides(tenantId: string | null): Promise<Overrides> {
-    const rows = await this.prisma.featureFlagOverride.findMany({
-      where: tenantId ? { OR: [{ tenantId }, { tenantId: null }] } : { tenantId: null },
-    });
+  // Load every override scope relevant to a target. For a tenant: its own overrides,
+  // its network's overrides + plan, and global. For a network: its overrides + plan,
+  // and global. For neither (global view): just global.
+  private async loadOverrides(target: FlagTarget): Promise<Overrides> {
+    const tenantId = target.tenantId ?? null;
+    // A tenant resolves its network from the tenant row; a network target is explicit.
+    let networkId = target.networkId ?? null;
+    if (tenantId) {
+      const t = await this.prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { networkId: true },
+      });
+      networkId = t?.networkId ?? null;
+    }
+    let planName: string | null = null;
+    if (networkId) {
+      const n = await this.prisma.network.findUnique({
+        where: { id: networkId },
+        select: { planName: true },
+      });
+      planName = n?.planName ?? null;
+    }
+    const or: Array<Record<string, unknown>> = [{ tenantId: null, networkId: null }];
+    if (tenantId) or.push({ tenantId });
+    if (networkId) or.push({ networkId });
+    const rows = await this.prisma.featureFlagOverride.findMany({ where: { OR: or } });
     const tenant = new Map<string, boolean>();
+    const network = new Map<string, boolean>();
     const global = new Map<string, boolean>();
-    for (const r of rows) (r.tenantId ? tenant : global).set(r.flagKey, r.enabled);
-    const plan = await this.loadPlanEntitlements(tenantId);
-    return { tenant, plan, global };
+    for (const r of rows) {
+      if (r.tenantId) tenant.set(r.flagKey, r.enabled);
+      else if (r.networkId) network.set(r.flagKey, r.enabled);
+      else global.set(r.flagKey, r.enabled);
+    }
+    const plan = await this.loadPlanEntitlements(planName);
+    return { tenant, network, plan, global };
   }
 
-  /** The tenant's plan entitlements: tenant → network → plan.featureFlags. */
-  private async loadPlanEntitlements(tenantId: string | null): Promise<Map<string, boolean>> {
+  /** A plan's feature-flag entitlements, by plan key (Network.planName → Plan). */
+  private async loadPlanEntitlements(planName: string | null): Promise<Map<string, boolean>> {
     const map = new Map<string, boolean>();
-    if (!tenantId) return map;
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { networkId: true },
-    });
-    if (!tenant?.networkId) return map;
-    const network = await this.prisma.network.findUnique({
-      where: { id: tenant.networkId },
-      select: { planName: true },
-    });
-    if (!network?.planName) return map;
+    if (!planName) return map;
     const plan = await this.prisma.plan.findUnique({
-      where: { key: network.planName },
+      where: { key: planName },
       select: { featureFlags: true, archivedAt: true },
     });
     if (!plan || plan.archivedAt) return map;
@@ -151,6 +178,12 @@ export class FeatureFlagsService {
       const t = o.tenant.get(key);
       if (t !== undefined) return { enabled: t, source: "tenant" };
     }
+    // Network-wide override: a coarser tenant override, applying to any tenant- or
+    // plan-controllable flag (resolves between tenant and plan).
+    if (meta.controllableBy.includes("tenant") || meta.controllableBy.includes("plan")) {
+      const n = o.network.get(key);
+      if (n !== undefined) return { enabled: n, source: "network" };
+    }
     if (meta.controllableBy.includes("plan")) {
       const p = o.plan.get(key);
       if (p !== undefined) return { enabled: p, source: "plan" };
@@ -164,9 +197,13 @@ export class FeatureFlagsService {
 
   // ── Writes: set/clear an override + emit the domain event in one transaction ──
 
-  /** enabled=null clears the override (falls back to the next layer). */
+  /**
+   * Set/clear an override for exactly one scope: tenant (tenantId), network (networkId),
+   * or global (both null). enabled=null clears it (falls back to the next layer).
+   */
   async setOverride(input: {
-    tenantId: string | null;
+    tenantId?: string | null;
+    networkId?: string | null;
     flagKey: string;
     enabled: boolean | null;
     updatedBy?: string | null;
@@ -174,32 +211,42 @@ export class FeatureFlagsService {
     if (!isFeatureFlagKey(input.flagKey)) {
       throw new BadRequestException(`Unknown feature flag: ${input.flagKey}`);
     }
-    const layer: FlagLayer = input.tenantId ? "tenant" : "global";
-    if (!FLAG_META[input.flagKey].controllableBy.includes(layer)) {
+    const tenantId = input.tenantId ?? null;
+    const networkId = input.networkId ?? null;
+    if (tenantId && networkId) {
+      throw new BadRequestException("An override is tenant- or network-scoped, not both");
+    }
+    const meta = FLAG_META[input.flagKey];
+    const layer: FlagLayer = tenantId ? "tenant" : networkId ? "network" : "global";
+    // A network override applies to any tenant- or plan-controllable flag; tenant/global
+    // must be declared in controllableBy.
+    const allowed =
+      layer === "network"
+        ? meta.controllableBy.includes("tenant") || meta.controllableBy.includes("plan")
+        : meta.controllableBy.includes(layer);
+    if (!allowed) {
       throw new BadRequestException(`Flag ${input.flagKey} is not ${layer}-controllable`);
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.featureFlagOverride.deleteMany({
-        where: { tenantId: input.tenantId, flagKey: input.flagKey },
+        where: { tenantId, networkId, flagKey: input.flagKey },
       });
       if (input.enabled !== null) {
         await tx.featureFlagOverride.create({
-          data: {
-            tenantId: input.tenantId,
-            flagKey: input.flagKey,
-            enabled: input.enabled,
-            updatedBy: input.updatedBy ?? null,
-          },
+          data: { tenantId, networkId, flagKey: input.flagKey, enabled: input.enabled, updatedBy: input.updatedBy ?? null },
         });
       }
       await this.outbox.append(tx, {
-        tenantId: input.tenantId ?? "system",
+        tenantId: tenantId ?? networkId ?? "system",
         eventType: "system.flag.changed",
         aggregateId: input.flagKey,
-        payload: { flagKey: input.flagKey, tenantId: input.tenantId, enabled: input.enabled },
+        payload: { flagKey: input.flagKey, tenantId, networkId, enabled: input.enabled },
       });
     });
-    this.invalidate(input.tenantId);
+    // A tenant change invalidates that tenant; network/global changes can affect many
+    // tenants, so clear the whole cache.
+    if (tenantId) this.invalidate(tenantId);
+    else this.cache.clear();
   }
 
   /** Drop cached resolutions. A global change can affect every tenant. */

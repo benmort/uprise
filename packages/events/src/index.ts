@@ -120,7 +120,7 @@ export interface DomainEventMap {
   "tenant.api-key.revoked": { apiKeyId: string; tenantId: string };
   "tenant.file.uploaded": { fileId: string; tenantId: string; name: string };
   "tenant.file.deleted": { fileId: string; tenantId: string };
-  "system.flag.changed": { flagKey: string; tenantId: string | null; enabled: boolean | null };
+  "system.flag.changed": { flagKey: string; tenantId: string | null; networkId?: string | null; enabled: boolean | null };
 }
 
 export interface EventMetadata {

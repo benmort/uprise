@@ -69,6 +69,16 @@ export class TenantsController {
     return this.tenants.isSlugAvailable(slug ?? "");
   }
 
+  // Super-admin search across ALL tenants (powers the feature-flag override editor).
+  // Declared before :id so "search" isn't captured as a tenant id; the explicit
+  // isSuperAdmin check is the real gate (TENANT_READ alone is held by organisers too).
+  @Get("search")
+  @RequirePermission(TENANT_READ)
+  search(@Query("q") q: string | undefined, @Req() req: Request & { user?: AuthUser }) {
+    if (!req.user?.isSuperAdmin) throw new ForbiddenException("Super-admin only");
+    return this.tenants.searchTenants(q);
+  }
+
   @Get(":id")
   @RequirePermission(TENANT_READ)
   get(@Param("id") id: string) {

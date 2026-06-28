@@ -12,11 +12,19 @@ export type FlagAdminEntry = {
   default: boolean;
   env: boolean | null;
   tenantOverride: boolean | null;
+  networkOverride: boolean | null;
   planEntitlement: boolean | null;
   globalOverride: boolean | null;
   effective: boolean;
   source: FlagLayer | "default";
 };
+
+/** A tenant/network row for the override-editor selector. */
+export type TenantLite = { id: string; slug: string; name: string; networkId: string | null };
+export type NetworkLite = { id: string; name: string; planName: string | null };
+
+/** The override-editor target: exactly one of a tenant or a network. */
+export type FlagTarget = { tenantId?: string | null; networkId?: string | null };
 
 /** A subscription plan and the feature-flag entitlements it grants. */
 export type Plan = {
@@ -76,4 +84,32 @@ export async function updatePlan(
   input: { displayName?: string; featureFlags?: Record<string, boolean>; isDefault?: boolean; archived?: boolean },
 ) {
   return request<Plan>(`/plans/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+// ── Super-admin per-tenant/network override editor ──
+
+/** Admin breakdown for an arbitrary tenant or network. */
+export async function getFlagAdminFor(target: FlagTarget) {
+  const qs = new URLSearchParams();
+  if (target.tenantId) qs.set("tenantId", target.tenantId);
+  if (target.networkId) qs.set("networkId", target.networkId);
+  return request<FlagAdminEntry[]>(`/system/feature-flags/admin/target?${qs.toString()}`);
+}
+
+/** Set (true/false) or clear (null) an override for an arbitrary tenant or network. */
+export async function setTargetFlag(target: FlagTarget, flag: FeatureFlagKey, enabled: boolean | null) {
+  return request<FlagAdminEntry[]>("/system/feature-flags/target", {
+    method: "PATCH",
+    body: JSON.stringify({ ...target, flag, enabled }),
+  });
+}
+
+/** Search all tenants (super-admin) for the override-editor selector. */
+export async function searchTenants(q: string) {
+  return request<TenantLite[]>(`/tenants/search?q=${encodeURIComponent(q)}`);
+}
+
+/** Search all networks (super-admin) for the override-editor selector. */
+export async function searchNetworks(q: string) {
+  return request<NetworkLite[]>(`/networks/search?q=${encodeURIComponent(q)}`);
 }

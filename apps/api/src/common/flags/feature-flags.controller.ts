@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Query, Req } from "@nestjs/common";
 import { IsBoolean, IsOptional, IsString } from "class-validator";
 import type { Request } from "express";
 import { FeatureFlagsService } from "./feature-flags.service";
@@ -17,6 +17,24 @@ class SetFlagDto {
   @IsOptional()
   @IsBoolean()
   enabled?: boolean | null;
+}
+
+// Super-admin override editor: target an arbitrary tenant OR network (not both).
+class SetTargetFlagDto {
+  @IsString()
+  flag!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  tenantId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  networkId?: string | null;
 }
 
 @Controller("system")
@@ -65,5 +83,26 @@ export class FeatureFlagsController {
       updatedBy: req.user?.id ?? null,
     });
     return this.flags.getAdminView(this.ctx(req));
+  }
+
+  /** Admin breakdown for an arbitrary tenant or network (super-admin override editor). */
+  @Get("feature-flags/admin/target")
+  @RequirePermission(MANAGE_GLOBAL)
+  adminTarget(@Query("tenantId") tenantId?: string, @Query("networkId") networkId?: string) {
+    return this.flags.getAdminView({ tenantId: tenantId || null, networkId: networkId || null });
+  }
+
+  /** Set or clear an override for an arbitrary tenant or network (super-admin). */
+  @Patch("feature-flags/target")
+  @RequirePermission(MANAGE_GLOBAL)
+  async setTarget(@Req() req: Request & { user?: AuthUser }, @Body() dto: SetTargetFlagDto) {
+    const target = { tenantId: dto.tenantId ?? null, networkId: dto.networkId ?? null };
+    await this.flags.setOverride({
+      ...target,
+      flagKey: dto.flag,
+      enabled: dto.enabled ?? null,
+      updatedBy: req.user?.id ?? null,
+    });
+    return this.flags.getAdminView(target);
   }
 }

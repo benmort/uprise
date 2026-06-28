@@ -14,8 +14,11 @@ import { NAV_FLAGS, type NavFlagKey } from "./nav";
 /** What the flag does for the product. */
 export type FlagKind = "release" | "ops" | "experiment" | "navigation";
 
-/** A layer that may set a flag, in precedence order (env wins, default is the floor). */
-export type FlagLayer = "env" | "tenant" | "plan" | "global";
+/** A layer that may set a flag, in precedence order (env wins, default is the floor).
+ * "network" sits between tenant and plan: a network-wide override applies to any
+ * tenant- or plan-controllable flag (it's a coarser tenant override), so it isn't
+ * declared per-flag in `controllableBy` — only used as a resolution source. */
+export type FlagLayer = "env" | "tenant" | "network" | "plan" | "global";
 
 export interface FlagDef {
   readonly key: string;

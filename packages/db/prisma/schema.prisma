@@ -315,13 +315,14 @@ model StoredFile {
   @@schema("tenant")
 }
 
-// Feature-flag override. tenantId null = a platform-wide (global) override;
-// non-null = a per-tenant override. Uniqueness (one row per scope+flag) is
-// enforced by partial unique indexes created in the migration (Prisma can't
-// express the WHERE clauses), mirroring the Contact dedup pattern.
+// Feature-flag override. Scope = exactly one of: tenant (tenantId set), network
+// (networkId set, id-only ref), or global (both null). Uniqueness (one row per
+// scope+flag) is enforced by partial unique indexes created in the migration
+// (Prisma can't express the WHERE clauses), mirroring the Contact dedup pattern.
 model FeatureFlagOverride {
   id        String   @id @default(cuid())
   tenantId  String?
+  networkId String?
   flagKey   String
   enabled   Boolean
   updatedBy String?
@@ -330,6 +331,7 @@ model FeatureFlagOverride {
   tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, flagKey])
+  @@index([networkId, flagKey])
   @@schema("tenant")
 }
 
