@@ -50,10 +50,12 @@ export class IamController {
     return {
       token: result.token,
       user: {
+        // A super-admin may sign in with zero tenant memberships, so guard the [0]
+        // access; mirror session.service's fallback (role OWNER, no active tenant).
         id: result.userId,
         email: result.email,
-        role: result.memberships[0].role,
-        tenantId: result.memberships[0].tenantId,
+        role: result.memberships[0]?.role ?? "OWNER",
+        tenantId: result.memberships[0]?.tenantId ?? null,
       },
       memberships: result.memberships,
     };
