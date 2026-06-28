@@ -56,3 +56,4 @@ ngrok.local.yml
 
 # pnpm deploy output for the Railway worker service
 /worker-deploy/
+.vercel
