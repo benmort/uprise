@@ -5,6 +5,8 @@ import { validateEnv } from "./config/env.validation";
 import { BasicAuthGuard } from "./auth/basic-auth.guard";
 import { AbilityGuard } from "./auth/ability.guard";
 import { RolesGuard } from "./auth/roles.guard";
+import { CaptchaModule } from "./common/captcha/captcha.module";
+import { TurnstileGuard } from "./common/captcha/turnstile.guard";
 import { AuthController } from "./auth/auth.controller";
 import { AuthScopeService } from "./auth/auth-scope.service";
 import { IamModule } from "./auth/iam.module";
@@ -57,6 +59,7 @@ import { QueueModule } from "./common/queue/queue.module";
     IamModule,
     LoggingModule,
     FlagsModule,
+    CaptchaModule,
     EventsModule,
     OutboxModule,
     ReactionsModule,
@@ -97,6 +100,12 @@ import { QueueModule } from "./common/queue/queue.module";
     {
       provide: APP_GUARD,
       useClass: BasicAuthGuard,
+    },
+    // Verifies a Cloudflare Turnstile token on routes decorated with @RequireCaptcha;
+    // a no-op for undecorated routes and when TURNSTILE_SECRET_KEY is unset.
+    {
+      provide: APP_GUARD,
+      useClass: TurnstileGuard,
     },
     // Runs after BasicAuthGuard (which attaches request.user). Enforces CASL on
     // routes decorated with @RequirePermission; a no-op for routes without it.

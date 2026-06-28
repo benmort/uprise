@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { Alert, Button, Field, Input } from "@uprise/ui";
+import { Alert, Button, Field, Input, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 
 export default function AccountRecoveryPage() {
@@ -12,6 +12,7 @@ export default function AccountRecoveryPage() {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
@@ -23,7 +24,8 @@ export default function AccountRecoveryPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await auth.forgotPassword(email.trim());
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.forgotPassword(email.trim(), captchaToken);
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -53,6 +55,7 @@ export default function AccountRecoveryPage() {
         </Field>
         {error ? <Alert variant="error" title={error} /> : null}
         {done ? <Alert variant="success" title="Recovery link sent" message="If that email has an account, a reset link is on its way." /> : null}
+        <TurnstileWidget ref={captchaRef} />
         <Button type="submit" className="w-full" disabled={busy || resendCountdown > 0}>
           {busy ? "Sending Recovery Link…" : "Send Recovery Link"}
         </Button>

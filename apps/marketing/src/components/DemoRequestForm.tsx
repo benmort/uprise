@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 import { marketing } from '@uprise/api-client';
-import { FormInput, FormTextarea, FormSelect, FormLabel, Alert } from '@uprise/ui';
+import { FormInput, FormTextarea, FormSelect, FormLabel, Alert, TurnstileWidget, type TurnstileHandle } from '@uprise/ui';
 
 const ROLE_OPTIONS = [
   { value: 'campaign-manager', label: 'Campaign Manager' },
@@ -119,6 +119,8 @@ export default function DemoRequestForm() {
     return true;
   };
 
+  const captchaRef = useRef<TurnstileHandle>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setHasAttemptedSubmit(true);
@@ -128,15 +130,19 @@ export default function DemoRequestForm() {
     setSubmitStatus('idle');
 
     try {
-      const res = await marketing.demoRequest({
-        name: formData.name,
-        email: formData.email,
-        company: formData.company,
-        role: formData.role,
-        useCase: formData.useCase,
-        timeline: formData.timeline,
-        additionalInfo: formData.additionalInfo,
-      });
+      const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+      const res = await marketing.demoRequest(
+        {
+          name: formData.name,
+          email: formData.email,
+          company: formData.company,
+          role: formData.role,
+          useCase: formData.useCase,
+          timeline: formData.timeline,
+          additionalInfo: formData.additionalInfo,
+        },
+        captchaToken,
+      );
 
       if (res.ok) {
         setSubmitStatus('success');
@@ -271,6 +277,7 @@ export default function DemoRequestForm() {
           />
         </div>
 
+        <TurnstileWidget ref={captchaRef} />
         <div>
           <button
             type="submit"

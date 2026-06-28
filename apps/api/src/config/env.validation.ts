@@ -93,6 +93,8 @@ export type ValidatedEnv = {
   QUIET_HOURS_START: number;
   QUIET_HOURS_END: number;
   REQUIRE_OPTOUT_LANGUAGE: boolean;
+  TURNSTILE_SECRET_KEY: string;
+  TURNSTILE_TIMEOUT_MS: number;
 };
 
 export function validateEnv(config: Env): ValidatedEnv {
@@ -286,6 +288,9 @@ export function validateEnv(config: Env): ValidatedEnv {
     QUIET_HOURS_START: numberInRange(config, "QUIET_HOURS_START", 0, 23, 21, errors),
     QUIET_HOURS_END: numberInRange(config, "QUIET_HOURS_END", 0, 23, 8, errors),
     REQUIRE_OPTOUT_LANGUAGE: boolish(config, "REQUIRE_OPTOUT_LANGUAGE", true),
+    // Cloudflare Turnstile (bot protection). Blank secret → the guard is a no-op.
+    TURNSTILE_SECRET_KEY: config.TURNSTILE_SECRET_KEY?.trim() || "",
+    TURNSTILE_TIMEOUT_MS: numberInRange(config, "TURNSTILE_TIMEOUT_MS", 1000, 30000, 5000, errors),
   };
 
   if (errors.length > 0) {

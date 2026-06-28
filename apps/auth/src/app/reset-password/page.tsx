@@ -1,10 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, PasswordInput, PasswordStrength, isPasswordStrong } from "@uprise/ui";
+import {
+  Alert,
+  Button,
+  Field,
+  PasswordInput,
+  PasswordStrength,
+  isPasswordStrong,
+  TurnstileWidget,
+  type TurnstileHandle,
+} from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 
 export default function ResetPasswordPage() {
@@ -14,6 +23,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   const passwordsMatch = confirm.length > 0 && password === confirm;
   const canSubmit = isPasswordStrong(password) && passwordsMatch;
@@ -23,7 +33,8 @@ export default function ResetPasswordPage() {
     if (!canSubmit) return;
     setBusy(true);
     setError(null);
-    const res = await auth.resetPassword(token as string, password);
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.resetPassword(token as string, password, captchaToken);
     setBusy(false);
     if (!res.ok) setError(res.error);
     else setDone(true);
@@ -68,6 +79,7 @@ export default function ResetPasswordPage() {
           >
             <PasswordInput id="confirm" autoComplete="new-password" placeholder="Re-enter new password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </Field>
+          <TurnstileWidget ref={captchaRef} />
           <Button type="submit" className="w-full" disabled={busy || !canSubmit}>{busy ? "Resetting Password…" : "Reset Password"}</Button>
         </form>
       )}

@@ -27,6 +27,7 @@ const NO_FLASH_THEME_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
       <body className={outfit.variable}>
         <script
-          dangerouslySetInnerHTML={{ __html: `window.__API_URL__=${JSON.stringify(apiUrl)};` }}
+          dangerouslySetInnerHTML={{
+            __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__TURNSTILE_SITE_KEY__=${JSON.stringify(turnstileSiteKey)};`,
+          }}
         />
         <div className="relative flex h-screen overflow-hidden bg-background">
           <div className="flex w-full flex-col overflow-y-auto lg:w-1/2">

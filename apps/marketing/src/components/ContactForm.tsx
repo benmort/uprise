@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 import { marketing } from '@uprise/api-client';
-import { FormInput, FormTextarea, FormLabel, Alert } from '@uprise/ui';
+import { FormInput, FormTextarea, FormLabel, Alert, TurnstileWidget, type TurnstileHandle } from '@uprise/ui';
 
 const contactSchema = z.object({
   name: z.string().min(1, 'Name is required'),
@@ -85,6 +85,8 @@ export default function ContactForm() {
     return true;
   };
 
+  const captchaRef = useRef<TurnstileHandle>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setHasAttemptedSubmit(true);
@@ -94,13 +96,17 @@ export default function ContactForm() {
     setSubmitStatus('idle');
 
     try {
-      const res = await marketing.contact({
-        name: formData.name,
-        email: formData.email,
-        company: formData.company,
-        subject: formData.subject,
-        message: formData.message,
-      });
+      const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+      const res = await marketing.contact(
+        {
+          name: formData.name,
+          email: formData.email,
+          company: formData.company,
+          subject: formData.subject,
+          message: formData.message,
+        },
+        captchaToken,
+      );
 
       if (res.ok) {
         setSubmitStatus('success');
@@ -193,6 +199,7 @@ export default function ContactForm() {
           />
         </div>
 
+        <TurnstileWidget ref={captchaRef} />
         <div>
           <button
             type="submit"

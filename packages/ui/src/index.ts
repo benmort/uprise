@@ -6,6 +6,7 @@ export * from "./lib/utils";
 export * from "./components/alert";
 export * from "./components/avatar";
 export * from "./components/button";
+export * from "./components/turnstile-widget";
 export * from "./components/card";
 export * from "./components/checkbox";
 export * from "./components/confirm-dialog";

@@ -5,6 +5,7 @@ import { RegistrationService } from "./registration.service";
 import { IamFlowsService } from "../auth/iam-flows.service";
 import { setSessionCookie } from "../auth/session-cookie.util";
 import { ConfirmAccessDto, RegisterDto, RequestAccessDto } from "./dto/tenants.dto";
+import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 
 /**
  * Self-service sign-up (meld doc 12). Public (pre-session, allowlisted in the guard) — it
@@ -20,6 +21,7 @@ export class RegistrationController {
     private readonly config: ConfigService,
   ) {}
 
+  @RequireCaptcha("strict")
   @Post("register")
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const grant = await this.registration.register(dto);
@@ -31,6 +33,7 @@ export class RegistrationController {
     };
   }
 
+  @RequireCaptcha("strict")
   @Post("request-access")
   requestAccess(@Body() dto: RequestAccessDto) {
     return this.flows.requestAccess(dto);

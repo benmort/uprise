@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input } from "@uprise/ui";
+import { Alert, Button, Field, Input, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 
 
@@ -16,11 +16,13 @@ export default function VerifyEmailPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function sendCode() {
     setBusy(true);
     setError(null);
-    const res = await auth.sendEmailVerification(email.trim());
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.sendEmailVerification(email.trim(), captchaToken);
     setBusy(false);
     if (!res.ok) setError(res.error);
     else setInfo("If that email has an account, a verification code is on its way.");
@@ -63,6 +65,7 @@ export default function VerifyEmailPage() {
           <Field label="Verification code" htmlFor="code" hint={info ?? undefined} error={error ?? undefined}>
             <Input id="code" inputMode="numeric" required value={code} onChange={(e) => setCode(e.target.value)} />
           </Field>
+          <TurnstileWidget ref={captchaRef} />
           <div className="flex gap-2">
             <Button type="button" variant="outline" className="flex-1" disabled={busy || !email} onClick={sendCode}>Send code</Button>
             <Button type="submit" className="flex-1" disabled={busy}>{busy ? "Verifying…" : "Verify My Account"}</Button>

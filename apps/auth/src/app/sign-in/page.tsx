@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, Mail } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input, PasswordInput } from "@uprise/ui";
+import { Alert, Button, Field, Input, PasswordInput, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth, isTwofaChallenge } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
@@ -15,12 +15,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await auth.login(email.trim(), password);
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.login(email.trim(), password, captchaToken);
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -53,6 +55,7 @@ export default function LoginPage() {
           <Link className="text-sm text-primary hover:underline" href={`/account-recovery${q}`}>Forgot your password?</Link>
         </div>
         {error ? <Alert variant="error" title={error} /> : null}
+        <TurnstileWidget ref={captchaRef} />
         <Button type="submit" className="w-full" disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </Button>

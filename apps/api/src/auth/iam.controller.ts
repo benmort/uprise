@@ -16,6 +16,7 @@ import type { Request, Response } from "express";
 import { SessionService } from "./session.service";
 import { IamFlowsService } from "./iam-flows.service";
 import { clearSessionCookie, readSessionToken, setSessionCookie } from "./session-cookie.util";
+import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 
 /**
  * Session endpoints backing the standalone auth frontend (meld doc 14). Login
@@ -31,6 +32,7 @@ export class IamController {
     private readonly config: ConfigService,
   ) {}
 
+  @RequireCaptcha("soft")
   @Post("sessions")
   async login(
     @Body() body: { email?: string; password?: string },

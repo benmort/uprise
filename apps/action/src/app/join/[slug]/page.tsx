@@ -1,9 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { CheckCircle } from "lucide-react";
-import { Alert, Button, Card, CardContent, Field, Input, OtpInput, PasswordInput } from "@uprise/ui";
+import {
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  Field,
+  Input,
+  OtpInput,
+  PasswordInput,
+  TurnstileWidget,
+  type TurnstileHandle,
+} from "@uprise/ui";
 import { auth, getAuthAppUrl } from "@uprise/api-client";
 
 type Role = "staff" | "volunteer";
@@ -23,19 +34,24 @@ export default function JoinPage() {
   const [busy, setBusy] = useState(false);
 
   const signInUrl = `${getAuthAppUrl()}/sign-in`;
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !displayName.trim() || password.length < 8) return;
     setBusy(true);
     setError(null);
-    const res = await auth.requestAccess({
-      email: email.trim(),
-      password,
-      displayName: displayName.trim(),
-      requestedRole: role,
-      tenantSlug: slug,
-    });
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.requestAccess(
+      {
+        email: email.trim(),
+        password,
+        displayName: displayName.trim(),
+        requestedRole: role,
+        tenantSlug: slug,
+      },
+      captchaToken,
+    );
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -143,6 +159,7 @@ export default function JoinPage() {
               </div>
             </Field>
             {error ? <Alert variant="error" title={error} /> : null}
+            <TurnstileWidget ref={captchaRef} />
             <Button type="submit" className="w-full" disabled={busy}>
               {busy ? "Submitting…" : "Request access"}
             </Button>

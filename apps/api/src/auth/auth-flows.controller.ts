@@ -13,6 +13,7 @@ import type { Request, Response } from "express";
 import { IamFlowsService, type SessionGrant } from "./iam-flows.service";
 import type { AuthUser } from "./auth-user";
 import { readSessionToken, setSessionCookie } from "./session-cookie.util";
+import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 import {
   AcceptInviteDto,
   ConfirmEmailDto,
@@ -45,6 +46,7 @@ export class AuthFlowsController {
     };
   }
 
+  @RequireCaptcha("soft")
   @Post("magic-link")
   requestMagicLink(@Body() dto: EmailDto) {
     return this.flows.requestMagicLink(dto.email);
@@ -55,11 +57,13 @@ export class AuthFlowsController {
     return this.grantResponse(res, await this.flows.consumeMagicLink(dto.token));
   }
 
+  @RequireCaptcha("soft")
   @Post("forgot-password")
   forgotPassword(@Body() dto: EmailDto) {
     return this.flows.forgotPassword(dto.email);
   }
 
+  @RequireCaptcha("soft")
   @Post("reset-password")
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.flows.resetPassword(dto.token, dto.password);
@@ -70,6 +74,7 @@ export class AuthFlowsController {
     return this.flows.verifyResetToken(dto.token);
   }
 
+  @RequireCaptcha("soft")
   @Post("verify-email/send")
   sendEmailVerification(@Body() dto: EmailDto) {
     return this.flows.sendEmailVerification(dto.email);
@@ -80,6 +85,7 @@ export class AuthFlowsController {
     return this.flows.confirmEmailVerification(dto.email, dto.code);
   }
 
+  @RequireCaptcha("strict")
   @Post("2fa/send")
   resend2fa(@Body() dto: TwofaSendDto) {
     return this.flows.resend2fa(dto.challengeId);

@@ -59,9 +59,9 @@ function redirectToLogin(): void {
 export async function request<T>(
   path: string,
   init?: RequestInit,
-  opts: { redirectOn401?: boolean } = {},
+  opts: { redirectOn401?: boolean; captchaToken?: string } = {},
 ): Promise<ApiResult<T>> {
-  const { redirectOn401 = true } = opts;
+  const { redirectOn401 = true, captchaToken } = opts;
   // FormData sets its own multipart Content-Type (with boundary) — don't override it.
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   try {
@@ -70,6 +70,7 @@ export async function request<T>(
       credentials: "include",
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...(captchaToken ? { "cf-turnstile-response": captchaToken } : {}),
         ...(init?.headers || {}),
       },
     });
@@ -90,31 +91,37 @@ export async function request<T>(
   }
 }
 
-function post<T>(path: string, body: unknown): Promise<ApiResult<T>> {
+function post<T>(path: string, body: unknown, captchaToken?: string): Promise<ApiResult<T>> {
   // Auth flows surface their own errors (e.g. wrong password) — never auto-redirect.
-  return request<T>(path, { method: "POST", body: JSON.stringify(body) }, { redirectOn401: false });
+  // captchaToken (when present) rides as the cf-turnstile-response header for the API guard.
+  return request<T>(path, { method: "POST", body: JSON.stringify(body) }, { redirectOn401: false, captchaToken });
 }
 
 // ── Auth flows (meld doc 14) ─────────────────────────────────────────
 export const auth = {
-  login: (email: string, password: string) =>
-    post<LoginResponse>("/iam/sessions", { email, password }),
-  register: (body: RegisterRequest) => post<SessionGrantResponse>("/auth/register", body),
+  login: (email: string, password: string, captchaToken?: string) =>
+    post<LoginResponse>("/iam/sessions", { email, password }, captchaToken),
+  register: (body: RegisterRequest, captchaToken?: string) =>
+    post<SessionGrantResponse>("/auth/register", body, captchaToken),
   logout: () => request<OkResponse>("/iam/sessions", { method: "DELETE" }, { redirectOn401: false }),
   checkSession: () => request<CheckSessionResponse>("/auth/check", undefined, { redirectOn401: false }),
 
-  requestMagicLink: (email: string) => post<OkResponse>("/iam/magic-link", { email }),
+  requestMagicLink: (email: string, captchaToken?: string) =>
+    post<OkResponse>("/iam/magic-link", { email }, captchaToken),
   consumeMagicLink: (token: string) => post<SessionGrantResponse>("/iam/magic-link/consume", { token }),
 
-  forgotPassword: (email: string) => post<OkResponse>("/iam/forgot-password", { email }),
-  resetPassword: (token: string, password: string) =>
-    post<OkResponse>("/iam/reset-password", { token, password }),
+  forgotPassword: (email: string, captchaToken?: string) =>
+    post<OkResponse>("/iam/forgot-password", { email }, captchaToken),
+  resetPassword: (token: string, password: string, captchaToken?: string) =>
+    post<OkResponse>("/iam/reset-password", { token, password }, captchaToken),
 
-  sendEmailVerification: (email: string) => post<OkResponse>("/iam/verify-email/send", { email }),
+  sendEmailVerification: (email: string, captchaToken?: string) =>
+    post<OkResponse>("/iam/verify-email/send", { email }, captchaToken),
   confirmEmailVerification: (email: string, code: string) =>
     post<OkResponse>("/iam/verify-email/confirm", { email, code }),
 
-  send2fa: (challengeId: string) => post<OkResponse>("/iam/2fa/send", { challengeId }),
+  send2fa: (challengeId: string, captchaToken?: string) =>
+    post<OkResponse>("/iam/2fa/send", { challengeId }, captchaToken),
   verify2fa: (challengeId: string, code: string) =>
     post<SessionGrantResponse>("/iam/2fa/verify", { challengeId, code }),
 
@@ -125,7 +132,8 @@ export const auth = {
   selectTenant: (tenantId: string) => post<OkResponse>("/iam/select-tenant", { tenantId }),
 
   // Self-signup → admin approval (public; issue no session).
-  requestAccess: (body: RequestAccessRequest) => post<RequestAccessResponse>("/auth/request-access", body),
+  requestAccess: (body: RequestAccessRequest, captchaToken?: string) =>
+    post<RequestAccessResponse>("/auth/request-access", body, captchaToken),
   confirmAccess: (body: ConfirmAccessRequest) => post<OkResponse>("/auth/request-access/verify", body),
 };
 
@@ -146,7 +154,8 @@ export const profile = {
 
   setMobile: (mobile: string) =>
     request<OkResponse>("/iam/profile/mobile", { method: "PUT", body: JSON.stringify({ mobile }) }),
-  sendMobileCode: () => request<{ challengeId: string }>("/iam/profile/mobile/send", { method: "POST" }),
+  sendMobileCode: (captchaToken?: string) =>
+    request<{ challengeId: string }>("/iam/profile/mobile/send", { method: "POST" }, { captchaToken }),
   verifyMobile: (code: string) =>
     request<OkResponse>("/iam/profile/mobile/verify", { method: "POST", body: JSON.stringify({ code }) }),
   enable2fa: () => request<OkResponse>("/iam/profile/2fa/enable", { method: "POST" }),
@@ -275,7 +284,10 @@ export interface DemoRequestInput {
 }
 
 export const marketing = {
-  contact: (body: ContactFormInput) => post<OkResponse>("/marketing/contact", body),
-  demoRequest: (body: DemoRequestInput) => post<OkResponse>("/marketing/demo-request", body),
-  newsletter: (email: string) => post<OkResponse>("/marketing/newsletter", { email }),
+  contact: (body: ContactFormInput, captchaToken?: string) =>
+    post<OkResponse>("/marketing/contact", body, captchaToken),
+  demoRequest: (body: DemoRequestInput, captchaToken?: string) =>
+    post<OkResponse>("/marketing/demo-request", body, captchaToken),
+  newsletter: (email: string, captchaToken?: string) =>
+    post<OkResponse>("/marketing/newsletter", { email }, captchaToken),
 };

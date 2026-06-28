@@ -1,6 +1,7 @@
 import { Body, Controller, Post } from "@nestjs/common";
 import { IsEmail, IsOptional, IsString, MaxLength } from "class-validator";
 import { MarketingService } from "./marketing.service";
+import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 
 class ContactDto {
   @IsString() @MaxLength(200) name!: string;
@@ -29,16 +30,19 @@ class NewsletterDto {
 export class MarketingController {
   constructor(private readonly marketing: MarketingService) {}
 
+  @RequireCaptcha("soft")
   @Post("contact")
   contact(@Body() dto: ContactDto) {
     return this.marketing.submitContact(dto);
   }
 
+  @RequireCaptcha("soft")
   @Post("demo-request")
   demoRequest(@Body() dto: DemoRequestDto) {
     return this.marketing.requestDemo(dto);
   }
 
+  @RequireCaptcha("soft")
   @Post("newsletter")
   newsletter(@Body() dto: NewsletterDto) {
     return this.marketing.newsletterSignup(dto);

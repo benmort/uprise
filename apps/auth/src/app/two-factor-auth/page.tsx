@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, OtpInput } from "@uprise/ui";
+import { Alert, Button, OtpInput, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
@@ -18,6 +18,7 @@ export default function TwoFactorPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(30);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
@@ -44,7 +45,8 @@ export default function TwoFactorPage() {
     setInfo(null);
     setError(null);
     setResendCountdown(30);
-    const res = await auth.send2fa(challengeId);
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.send2fa(challengeId, captchaToken);
     if (res.ok) setInfo("A new verification code has been sent.");
     else setError(res.error);
   }
@@ -80,6 +82,7 @@ export default function TwoFactorPage() {
           {busy ? "Verifying…" : "Verify My Account"}
         </Button>
       </form>
+      <TurnstileWidget ref={captchaRef} />
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Didn&apos;t get the code?{" "}
         <button

@@ -11,6 +11,8 @@ import {
   PasswordInput,
   PasswordStrength,
   isPasswordStrong,
+  TurnstileWidget,
+  type TurnstileHandle,
 } from "@uprise/ui";
 import { auth, tenants, type Membership } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
@@ -95,19 +97,25 @@ export default function SignUpPage() {
   const passwordsMatch = confirm.length > 0 && password === confirm;
   const canCreate = isPasswordStrong(password) && passwordsMatch && Boolean(email.trim());
 
+  const captchaRef = useRef<TurnstileHandle>(null);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!canCreate) return;
     setBusy(true);
     setError(null);
     const displayName = [firstName, lastName].map((s) => s.trim()).filter(Boolean).join(" ");
-    const res = await auth.register({
-      email: email.trim(),
-      password,
-      displayName: displayName || undefined,
-      orgName: orgName.trim(),
-      slug: slug.trim(),
-    });
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.register(
+      {
+        email: email.trim(),
+        password,
+        displayName: displayName || undefined,
+        orgName: orgName.trim(),
+        slug: slug.trim(),
+      },
+      captchaToken,
+    );
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -254,6 +262,7 @@ export default function SignUpPage() {
             />
           </Field>
           {error ? <Alert variant="error" title={error} /> : null}
+          <TurnstileWidget ref={captchaRef} />
           <div className="flex gap-2">
             <Button type="button" variant="outline" className="flex-1" disabled={busy} onClick={() => setStep(1)}>
               Back

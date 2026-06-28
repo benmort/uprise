@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input } from "@uprise/ui";
+import { Alert, Button, Field, Input, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
@@ -19,6 +19,7 @@ export default function MagicLinkPage() {
   const [busy, setBusy] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
   const consumed = useRef(false);
+  const captchaRef = useRef<TurnstileHandle>(null);
 
   // Consume a magic link arriving via ?token=
   useEffect(() => {
@@ -44,7 +45,8 @@ export default function MagicLinkPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await auth.requestMagicLink(email.trim());
+    const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
+    const res = await auth.requestMagicLink(email.trim(), captchaToken);
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -82,6 +84,7 @@ export default function MagicLinkPage() {
         </Field>
         {error ? <Alert variant="error" title={error} /> : null}
         {sent ? <Alert variant="success" title="Magic link sent" message="If that email has an account, a sign-in link is on its way. Check your inbox." /> : null}
+        <TurnstileWidget ref={captchaRef} />
         <Button type="submit" className="w-full" disabled={busy || resendCountdown > 0}>
           {busy ? "Sending…" : "Send Magic Link"}
         </Button>
