@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, CircleUser, DownloadCloud, Menu, PersonStanding } from "lucide-react";
 import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
-import { getCanvassAssignments, type CanvassAssignment } from "../api";
+import {
+  getCanvassAssignments,
+  getVolunteerMetrics,
+  type CanvassAssignment,
+  type VolunteerMetrics,
+} from "../api";
 import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { MapThumbnail } from "../components/map-thumbnail";
@@ -32,6 +37,7 @@ export function Assignments() {
   const router = useRouter();
   const online = useOnlineStatus();
   const [assignments, setAssignments] = useState<CanvassAssignment[]>([]);
+  const [metrics, setMetrics] = useState<VolunteerMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const name = getVolunteerName();
@@ -45,10 +51,14 @@ export function Assignments() {
     }
     let alive = true;
     void (async () => {
-      const res = await getCanvassAssignments(volunteerId);
+      const [aRes, mRes] = await Promise.all([
+        getCanvassAssignments(volunteerId),
+        getVolunteerMetrics(volunteerId),
+      ]);
       if (!alive) return;
-      if (!res.ok) setError(res.error);
-      else setAssignments(res.data);
+      if (!aRes.ok) setError(aRes.error);
+      else setAssignments(aRes.data);
+      if (mRes.ok) setMetrics(mRes.data);
       setLoading(false);
     })();
     return () => {
@@ -56,15 +66,8 @@ export function Assignments() {
     };
   }, []);
 
-  // Day tally for the header tiles. "Conversations" + "surveys" approximate from the
-  // available walk-list item state until the per-day metrics endpoint lands.
-  const tally = useMemo(() => {
-    const items = assignments.flatMap((a) => a.walkLists.flatMap((wl) => wl.items));
-    const done = items.filter((i) => i.status !== "PENDING");
-    const conversations = done.filter((i) => String(i.status).toUpperCase() === "VISITED").length;
-    const surveys = items.filter((i) => Boolean((i as { surveyId?: unknown }).surveyId)).length;
-    return { doors: done.length, conversations, surveys };
-  }, [assignments]);
+  // Today's tile values with the all-time total as the muted secondary line.
+  const allTime = (n: number) => ({ value: `${n.toLocaleString()} all-time`, direction: "flat" as const });
 
   if (loading) {
     return (
@@ -105,11 +108,23 @@ export function Assignments() {
         </Link>
       </div>
 
-      {/* Day tiles */}
+      {/* Day tiles — today's value big, all-time total beneath */}
       <div className="grid grid-cols-3 gap-2.5">
-        <KpiTile label="doors today" value={tally.doors} />
-        <KpiTile label="conversations" value={tally.conversations} />
-        <KpiTile label="surveys" value={tally.surveys} />
+        <KpiTile
+          label="doors today"
+          value={metrics?.doorsToday ?? 0}
+          delta={metrics ? allTime(metrics.doorsTotal) : undefined}
+        />
+        <KpiTile
+          label="conversations"
+          value={metrics?.conversationsToday ?? 0}
+          delta={metrics ? allTime(metrics.conversationsTotal) : undefined}
+        />
+        <KpiTile
+          label="surveys"
+          value={metrics?.surveysToday ?? 0}
+          delta={metrics ? allTime(metrics.surveysTotal) : undefined}
+        />
       </div>
 
       {assignments.length === 0 ? (

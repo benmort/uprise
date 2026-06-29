@@ -184,6 +184,12 @@ export class CanvassingController {
     return this.canvassing.listAssignments(org.id, volunteerId);
   }
 
+  @Get("volunteer-metrics")
+  async volunteerMetrics(@Query("volunteerId") volunteerId: string) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.getVolunteerMetrics(org.id, volunteerId);
+  }
+
   @Post("turfs/:id/release")
   async releaseTurf(@Param("id") id: string, @Body() dto: ReleaseTurfDto) {
     const org = await this.ensureOrganization();

@@ -34,6 +34,9 @@ function startOfToday(): Date {
   return d;
 }
 
+/** Disposition codes that count as a conversation (the canvasser spoke to someone). */
+const SPOKE_TO_CODES = ["spoke_to_target", "spoke_to_other"];
+
 export type SurveyAnswerInput = {
   questionId: string;
   optionId?: string | null;
@@ -121,6 +124,52 @@ export class CanvassingService {
       turf: { id: a.turf.id, name: a.turf.name, geometry: a.turf.geometry, campaignId: a.turf.campaignId },
       walkLists: a.turf.walkLists,
     }));
+  }
+
+  /**
+   * Volunteer tallies for the "My turf" header — doors knocked, conversations
+   * (spoke-to dispositions), and surveys completed (distinct residents surveyed at
+   * the door), both for today and all-time. "Today" is from server midnight (UTC).
+   */
+  async getVolunteerMetrics(tenantId: string, volunteerId: string) {
+    const since = startOfToday();
+    const knock = (today: boolean): Prisma.DoorKnockWhereInput => ({
+      tenantId,
+      volunteerId,
+      ...(today ? { createdAt: { gte: since } } : {}),
+    });
+    const convo = (today: boolean): Prisma.DoorKnockWhereInput => ({
+      ...knock(today),
+      dispositionCode: { in: SPOKE_TO_CODES },
+    });
+    const resp = (today: boolean): Prisma.QuestionResponseWhereInput => ({
+      tenantId,
+      channel: EngagementChannel.DOOR,
+      recordedById: volunteerId,
+      ...(today ? { createdAt: { gte: since } } : {}),
+    });
+    // Surveys = distinct residents with door responses (group by contact), not raw answers.
+    const surveyContacts = (today: boolean) =>
+      this.prisma.questionResponse.groupBy({ by: ["contactId"], where: resp(today) });
+
+    const [doorsToday, doorsTotal, conversationsToday, conversationsTotal, surveysTodayRows, surveysTotalRows] =
+      await Promise.all([
+        this.prisma.doorKnock.count({ where: knock(true) }),
+        this.prisma.doorKnock.count({ where: knock(false) }),
+        this.prisma.doorKnock.count({ where: convo(true) }),
+        this.prisma.doorKnock.count({ where: convo(false) }),
+        surveyContacts(true),
+        surveyContacts(false),
+      ]);
+
+    return {
+      doorsToday,
+      doorsTotal,
+      conversationsToday,
+      conversationsTotal,
+      surveysToday: surveysTodayRows.length,
+      surveysTotal: surveysTotalRows.length,
+    };
   }
 
   // ── Door knocks (idempotent + lock-enforced) ────────────────────

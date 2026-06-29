@@ -60,6 +60,21 @@ export async function getCanvassAssignments(volunteerId: string) {
   return request<CanvassAssignment[]>(`/canvass/assignments?${q}`);
 }
 
+export type VolunteerMetrics = {
+  doorsToday: number;
+  doorsTotal: number;
+  conversationsToday: number;
+  conversationsTotal: number;
+  surveysToday: number;
+  surveysTotal: number;
+};
+
+/** Day + all-time tallies for the "My turf" header tiles. */
+export async function getVolunteerMetrics(volunteerId: string) {
+  const q = new URLSearchParams({ volunteerId });
+  return request<VolunteerMetrics>(`/canvass/volunteer-metrics?${q}`);
+}
+
 export async function submitDoorKnock(input: DoorKnockInput) {
   return request<Record<string, unknown>>("/canvass/door-knocks", {
     method: "POST",

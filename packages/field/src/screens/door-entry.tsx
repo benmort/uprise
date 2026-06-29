@@ -87,6 +87,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
       const full = await getSurvey(match.id);
       if (!alive || !full.ok) return;
       setSurvey({
+        category: (match as { name?: string }).name ?? "Survey",
         questions: full.data.questions
           .filter((q) => q.id)
           .map((q) => ({
@@ -238,13 +239,11 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
           </p>
         </div>
       ) : (
-        <Card className="p-4">
-          <SurveyRunner
-            schema={survey!}
-            onCancel={() => setChosenCode(null)}
-            onComplete={(answers) => void record(chosenCode!, answers)}
-          />
-        </Card>
+        <SurveyRunner
+          schema={survey!}
+          onCancel={() => setChosenCode(null)}
+          onComplete={(answers) => void record(chosenCode!, answers)}
+        />
       )}
 
       <div className="space-y-2 rounded-2xl border border-border p-3">
