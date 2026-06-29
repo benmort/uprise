@@ -16,6 +16,11 @@ fi
 # Always (re)generate the client so the function build picks up the current schema.
 pnpm --filter @uprise/db run prisma:generate
 
-# Plans were seeded in the deploy that first introduced this script; the canonical
-# seeder remains available for manual runs: `pnpm --filter api exec ts-node
-# src/scripts/seed-plans-standalone.ts`. Deploys apply migrations only.
+# One-off: sync canonical plan data (prices/limits/feature rows/entitlements) onto the
+# existing plans — they were created by an older seed before the pricing columns existed,
+# so they had null prices and no multi-brand row. Removed after this deploy; deploys
+# normally apply migrations only.
+if [ "${VERCEL_ENV:-}" = "production" ]; then
+  echo "→ sync plans (one-off)"
+  pnpm --filter api exec ts-node src/scripts/sync-plans-standalone.ts
+fi
