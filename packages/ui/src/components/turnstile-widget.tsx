@@ -61,6 +61,11 @@ export const TurnstileWidget = React.forwardRef<TurnstileHandle, { className?: s
     const widgetIdRef = React.useRef<string | null>(null);
     const pendingRef = React.useRef<((token: string | null) => void) | null>(null);
     const siteKey = getSiteKey();
+    // The site key comes from a client-only global (window.__TURNSTILE_SITE_KEY__), so the
+    // server renders nothing while the client would render the widget div — a hydration
+    // mismatch. Defer the div to after mount so SSR and the first client render agree.
+    const [mounted, setMounted] = React.useState(false);
+    React.useEffect(() => setMounted(true), []);
 
     const settle = (token: string | null) => {
       const resolve = pendingRef.current;
@@ -69,7 +74,7 @@ export const TurnstileWidget = React.forwardRef<TurnstileHandle, { className?: s
     };
 
     React.useEffect(() => {
-      if (!siteKey || typeof window === "undefined") return;
+      if (!mounted || !siteKey || typeof window === "undefined") return;
       let cancelled = false;
       void loadScript()
         .then(() => {
@@ -98,7 +103,7 @@ export const TurnstileWidget = React.forwardRef<TurnstileHandle, { className?: s
         }
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [siteKey]);
+    }, [siteKey, mounted]);
 
     React.useImperativeHandle(
       ref,
@@ -124,7 +129,9 @@ export const TurnstileWidget = React.forwardRef<TurnstileHandle, { className?: s
       [siteKey],
     );
 
-    if (!siteKey) return null;
+    // Render nothing until mounted (matches SSR) — then the div appears client-side and
+    // the effect above renders the invisible widget into it.
+    if (!mounted || !siteKey) return null;
     return <div ref={containerRef} className={className} />;
   },
 );
