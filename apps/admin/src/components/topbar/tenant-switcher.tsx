@@ -78,6 +78,10 @@ export function TenantSwitcher({
     <>
       <Dropdown
         align="start"
+        // Portal out: the switcher lives in the scrolling sidebar (overflow + transform),
+        // which would clip/trap the menu — portalling lets it float over the page.
+        portal
+        className="w-full"
         contentClassName="w-80 p-0 overflow-hidden"
         trigger={({ toggle }) => (
           <button
@@ -86,7 +90,7 @@ export function TenantSwitcher({
             title={current?.tenantName ?? "Select tenant"}
             aria-label="Switch tenant"
             className={cn(
-              "flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-variant",
+              "flex w-full min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-surface-variant",
               collapsed && "lg:justify-center lg:px-1",
             )}
           >

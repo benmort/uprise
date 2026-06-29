@@ -10,8 +10,6 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronLeft,
-  ChevronsDownUp,
-  ChevronsUpDown,
   Code2,
   Crown,
   Database,
@@ -581,35 +579,6 @@ export default function MainLayout({
   const isGroupOpen = (node: Extract<NavNode, { type: "group" }>) =>
     openGroups[node.key] ?? node.match(p);
 
-  // Collapse-all / expand-all helper. Collect every collapsible key the way the
-  // renderer keys them (top-level = node.key; nested branch = `${parentKey}/${label}`)
-  // so we can force them all open/closed (a plain reset can't override default-open).
-  const allGroupKeys = useMemo(() => {
-    const keys: string[] = [];
-    const walk = (entries: NavEntry[], parentKey: string) => {
-      for (const entry of entries) {
-        if ("href" in entry) continue; // leaf link, not collapsible
-        const key = `${parentKey}/${entry.label}`;
-        keys.push(key);
-        walk(entry.children, key);
-      }
-    };
-    for (const node of nav) {
-      if (node.type !== "group") continue; // skip leaves + section headers
-      keys.push(node.key);
-      walk(node.children, node.key);
-    }
-    return keys;
-  }, [nav]);
-  const expandAll = useCallback(
-    () => setOpenGroups(Object.fromEntries(allGroupKeys.map((k) => [k, true]))),
-    [allGroupKeys],
-  );
-  const collapseAll = useCallback(
-    () => setOpenGroups(Object.fromEntries(allGroupKeys.map((k) => [k, false]))),
-    [allGroupKeys],
-  );
-  const anyGroupOpen = nav.some((node) => node.type === "group" && isGroupOpen(node));
 
   // Super-admin visibility inspector: a long hover (~1.2s) over a menu item reveals
   // who can see it (its feature-flag gating). Toggled by the topbar eye badge; both
@@ -757,7 +726,7 @@ export default function MainLayout({
               collapsed ? "lg:justify-center" : "justify-between",
             )}
           >
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               {principal ? (
                 <TenantSwitcher
                   memberships={principal.memberships}
@@ -776,22 +745,6 @@ export default function MainLayout({
               )}
             </div>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={anyGroupOpen ? collapseAll : expandAll}
-                aria-label={anyGroupOpen ? "Collapse all menus" : "Expand all menus"}
-                title={anyGroupOpen ? "Collapse all menus" : "Expand all menus"}
-                className={cn(
-                  "flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground",
-                  labelHidden,
-                )}
-              >
-                {anyGroupOpen ? (
-                  <ChevronsDownUp className="h-[18px] w-[18px]" />
-                ) : (
-                  <ChevronsUpDown className="h-[18px] w-[18px]" />
-                )}
-              </button>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
