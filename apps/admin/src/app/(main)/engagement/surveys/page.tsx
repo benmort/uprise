@@ -23,7 +23,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 

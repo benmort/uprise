@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
-import { CircleIcon } from "lucide-react";
+import { LogoMark } from "@uprise/ui";
 import { AuthBrandSidebar } from "@/components/auth-brand-sidebar";
 
 const outfit = Outfit({
@@ -46,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 {/* Mobile-only brand mark — sits just above the centred content
                     (the right brand panel takes over at ≥ lg). */}
                 <div className="mb-8 flex items-center justify-center gap-1.5 lg:hidden">
-                  <CircleIcon className="h-6 w-6 text-primary" />
+                  <LogoMark className="h-6 w-6 text-primary" />
                   <span className="text-lg font-bold text-foreground">Uprise</span>
                 </div>
                 {children}

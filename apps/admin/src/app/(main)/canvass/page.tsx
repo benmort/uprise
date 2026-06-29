@@ -22,10 +22,10 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { KpiTile } from "@/components/canvass/kpi-tile";
-import { MapThumbnail } from "@/components/canvass/map-thumbnail";
-import { ProgressBar } from "@/components/canvass/progress-bar";
-import { CampaignNavCards } from "@/components/canvass/campaign-nav-cards";
+import { KpiTile } from "@uprise/field";
+import { MapThumbnail } from "@uprise/field";
+import { ProgressBar } from "@uprise/field";
+import { CampaignNavCards } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { outerRing } from "@/lib/geometry";
 

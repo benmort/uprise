@@ -17,10 +17,10 @@ import { loadTurfUniverse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { KpiTile } from "@/components/canvass/kpi-tile";
+import { KpiTile } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 
-const TurfMap = dynamic(() => import("@/components/canvass/turf-map").then((m) => m.TurfMap), {
+const TurfMap = dynamic(() => import("@uprise/field").then((m) => m.TurfMap), {
   ssr: false,
   loading: () => <Skeleton className="h-full w-full" />,
 });

@@ -16,7 +16,8 @@ import {
   type TurfSummary,
   type WalkListSummary,
 } from "@/lib/api";
-import { optimiseRoute, type Stop } from "@/lib/canvass/route";
+import { optimiseRoute, type Stop, WalkView, type CanvassAssignment } from "@uprise/field";
+import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -24,7 +25,7 @@ import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 import { Pencil } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
@@ -53,6 +54,7 @@ export default function WalkListBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
+  const [showPreview, setShowPreview] = useState(false);
   const [editingWl, setEditingWl] = useState<WalkListSummary | null>(null);
   const [wlForm, setWlForm] = useState<{ name: string; listType: ListType }>({ name: "", listType: "STATIC" });
   const [wlBusy, setWlBusy] = useState(false);
@@ -101,6 +103,41 @@ export default function WalkListBuilderPage() {
     const byId = new Map(contacts.map((c) => [c.id, c]));
     return order.map((id) => byId.get(id)).filter((c): c is TurfContact => Boolean(c));
   }, [order, contacts]);
+
+  // Synthesise the canvasser's assignment so we can embed the SAME field WalkView
+  // (map + walking directions) here, read-only — one component, zero duplication.
+  const previewAssignment = useMemo<CanvassAssignment | null>(() => {
+    if (!activeTurf) return null;
+    return {
+      turfId: activeTurf.id,
+      lockedUntil: null,
+      turf: {
+        id: activeTurf.id,
+        name: activeTurf.name,
+        geometry: activeTurf.geometry,
+        campaignId,
+      },
+      walkLists: [
+        {
+          id: "preview",
+          name: "Preview",
+          items: orderedContacts.map((c, i) => ({
+            id: c.id,
+            orderIndex: i,
+            status: "PENDING" as const,
+            contact: {
+              id: c.id,
+              firstName: c.firstName,
+              lastName: c.lastName,
+              address: c.address,
+              lat: c.lat,
+              lng: c.lng,
+            },
+          })),
+        },
+      ],
+    };
+  }, [activeTurf, orderedContacts, campaignId]);
 
   const handleCreate = useCallback(async () => {
     if (!turfId || orderedContacts.length === 0) return;
@@ -344,6 +381,39 @@ export default function WalkListBuilderPage() {
           </div>
         </div>
       )}
+
+      {turfs.length > 0 && previewAssignment ? (
+        <SectionCard
+          title="Canvasser preview"
+          description="The exact field walk view your canvassers see — map, optimised route and walking directions. Read-only."
+          action={
+            <Button variant="outline" size="sm" onClick={() => setShowPreview((v) => !v)}>
+              {showPreview ? (
+                <>
+                  <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                  Hide preview
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-1.5 h-3.5 w-3.5" />
+                  Preview walk view
+                </>
+              )}
+            </Button>
+          }
+        >
+          {showPreview ? (
+            <div className="mx-auto max-w-[420px] rounded-2xl border border-border bg-background p-3">
+              <WalkView turfId={turfId} readOnly assignment={previewAssignment} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Show the canvasser&apos;s-eye view of <span className="font-medium text-foreground">{activeTurf?.name}</span> —
+              switch to the Map tab inside it for turn-by-turn walking directions to the next stop.
+            </p>
+          )}
+        </SectionCard>
+      ) : null}
 
       <FormDialog
         open={!!editingWl}

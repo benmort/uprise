@@ -14,9 +14,9 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapThumbnail } from "@/components/canvass/map-thumbnail";
-import { ProgressBar } from "@/components/canvass/progress-bar";
-import { CampaignNavCards } from "@/components/canvass/campaign-nav-cards";
+import { MapThumbnail } from "@uprise/field";
+import { ProgressBar } from "@uprise/field";
+import { CampaignNavCards } from "@uprise/field";
 import { outerRing } from "@/lib/geometry";
 
 type Loaded = { campaign: CampaignSummary; kpis: CampaignKpis | null; turfs: TurfSummary[] };

@@ -16,8 +16,8 @@ import {
   Textarea,
   StatusBadge,
 } from "@uprise/ui";
-import { SectionCard } from "@/components/canvass/section-card";
-import { DataTable } from "@/components/canvass/data-table";
+import { SectionCard } from "@uprise/field";
+import { DataTable } from "@uprise/field";
 import { UserAvatar } from "@/components/user-profile/user-avatar";
 import {
   tenants,

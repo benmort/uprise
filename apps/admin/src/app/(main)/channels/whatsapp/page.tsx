@@ -10,8 +10,8 @@ import {
   listWhatsappTemplates,
   type WhatsappTemplate,
 } from "@/lib/api";
-import { KpiTile } from "@/components/canvass/kpi-tile";
-import { SectionCard } from "@/components/canvass/section-card";
+import { KpiTile } from "@uprise/field";
+import { SectionCard } from "@uprise/field";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";

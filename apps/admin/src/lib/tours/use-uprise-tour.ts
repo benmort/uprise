@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { getFeatureFlags } from "@/lib/api";
-import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useLocalStorage } from "@uprise/field";
 
 import {
   getTourById,

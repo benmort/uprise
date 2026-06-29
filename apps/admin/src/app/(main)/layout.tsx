@@ -7,10 +7,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   Building2,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Code2,
   Crown,
   Database,
+  Eye,
+  EyeOff,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -22,6 +28,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Users,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -47,7 +54,7 @@ import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
 import { FlagsProvider } from "@/components/flags/flags-provider";
 import { listFlags } from "@/lib/api/flags";
-import { FLAG_DEFAULTS, type FeatureFlagKey, type FeatureFlagMap } from "@uprise/flags";
+import { FLAG_DEFAULTS, FLAG_META, type FeatureFlagKey, type FeatureFlagMap } from "@uprise/flags";
 
 
 type NavMatch = (pathname: string) => boolean;
@@ -59,6 +66,9 @@ type NavLeaf = { label: string; href: string; match: NavMatch; flag?: FeatureFla
 type NavBranch = { label: string; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
 type NavEntry = NavLeaf | NavBranch;
 type NavNode =
+  // A non-interactive zone header (Engage, Organise, …) that groups the items
+  // beneath it. Pruned away if every item under it is flag/role-gated off.
+  | { type: "section"; key: string; label: string; flag?: FeatureFlagKey }
   | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch; flag?: FeatureFlagKey }
   | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
 
@@ -73,21 +83,30 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
     { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_INBOX" },
+
+    { type: "section", key: "sec-engage", label: "Engage" },
     {
-      type: "group", key: "channels", label: "Channels", icon: MessageSquareText, match: (p) => p.startsWith("/channels"), flag: "FEATURE_NAV_CHANNELS",
+      type: "group", key: "channels", label: "Channels", icon: MessageSquareText,
+      match: (p) => p.startsWith("/channels") || px("email")(p) || px("calls")(p) || px("shared-inbox")(p),
+      flag: "FEATURE_NAV_CHANNELS",
       children: [
         { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text"), flag: "FEATURE_NAV_CHANNELS_TEXT" },
         { label: "WhatsApp", href: "/channels/whatsapp", match: (p) => p.startsWith("/channels/whatsapp"), flag: "FEATURE_WHATSAPP_ENABLED" },
+        // Campaigner Email + Calls are deferred prog stubs (not P1) — kept here but
+        // super-admin-only until they ship and get tenant-tiered (consolidation doc Part B).
+        // Shared inbox: the unified cross-channel queue (functional clone of the Email page).
+        ...(isSuperAdmin
+          ? ([
+              { label: "Shared inbox", href: "/prog/shared-inbox", match: px("shared-inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
+              { label: "Email", href: "/prog/email", match: px("email"), flag: "FEATURE_NAV_PROG_CHANNELS" },
+              { label: "Calls", href: "/prog/calls", match: px("calls"), flag: "FEATURE_NAV_PROG_CHANNELS" },
+            ] as NavEntry[])
+          : []),
       ],
     },
-    {
-      type: "group", key: "organising", label: "Organising", icon: Megaphone,
-      match: (p) => p.startsWith("/canvass/volunteers") || px("events")(p), flag: "FEATURE_NAV_PROG_ORGANISING",
-      children: [
-        { label: "Volunteers", href: "/canvass/volunteers", match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
-        { label: "Events", href: "/prog/events", match: px("events") },
-      ],
-    },
+    { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
+
+    { type: "section", key: "sec-organise", label: "Organise" },
     {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin,
       match: (p) =>
@@ -103,18 +122,30 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
         { label: "Results", href: scoped("results"), match: (p) => p.includes("/results"), flag: "FEATURE_NAV_CANVASS_RESULTS" },
       ],
     },
+    { type: "leaf", key: "volunteers", label: "Volunteers", href: "/canvass/volunteers", icon: Megaphone, match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
     {
-      type: "group", key: "engagement", label: "Engagement", icon: Sparkles,
-      match: (p) => p.startsWith("/engagement") || p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT",
+      type: "group", key: "events", label: "Events", icon: CalendarDays,
+      match: (p) => px("events")(p) || px("calendar")(p),
+      flag: "FEATURE_NAV_PROG_ORGANISING",
       children: [
-        { label: "Audience", href: "/audience", match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
+        { label: "Events", href: "/prog/events", match: px("events") },
+        { label: "Calendar", href: "/prog/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
+      ],
+    },
+    {
+      type: "group", key: "engagement", label: "Scripts", icon: Sparkles,
+      match: (p) => p.startsWith("/engagement"),
+      flag: "FEATURE_NAV_ENGAGEMENT",
+      children: [
         { label: "Surveys", href: "/engagement/surveys", match: (p) => p.startsWith("/engagement/surveys"), flag: "FEATURE_NAV_ENGAGEMENT_SURVEYS" },
         { label: "Scripts", href: "/engagement/scripts", match: (p) => p.startsWith("/engagement/scripts"), flag: "FEATURE_NAV_ENGAGEMENT_SCRIPTS" },
         { label: "Dispositions", href: "/engagement/dispositions", match: (p) => p.startsWith("/engagement/dispositions"), flag: "FEATURE_NAV_ENGAGEMENT_DISPOSITIONS" },
         { label: "Canned responses", href: "/engagement/canned-responses", match: (p) => p.startsWith("/engagement/canned-responses"), flag: "FEATURE_NAV_ENGAGEMENT_CANNED" },
       ],
     },
-    { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
+
+    { type: "section", key: "sec-data", label: "Audience & data" },
+    { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
     { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
     {
       type: "group", key: "data-files", label: "Data & files", icon: Database,
@@ -128,107 +159,100 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
         { label: "File Manager", href: "/prog/file-manager", match: (p) => p.startsWith("/prog/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
       ],
     },
+
+    { type: "section", key: "sec-settings", label: "Settings" },
     {
       type: "group", key: "settings", label: "Settings", icon: Settings,
       match: (p) =>
-        p.startsWith("/settings") &&
-        !p.startsWith("/settings/flags") &&
-        !p.startsWith("/settings/plans") &&
-        !p.startsWith("/settings/data"),
+        (p.startsWith("/settings") &&
+          !p.startsWith("/settings/flags") &&
+          !p.startsWith("/settings/plans") &&
+          !p.startsWith("/settings/data")) ||
+        px("billing")(p) || px("tenant-settings")(p) || px("activity")(p) || px("security")(p),
       children: [
         { label: "General", href: "/settings", match: (p) => p === "/settings" },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
-      ],
-    },
-    // Super Admin: platform-level controls (super-admins only). Pages also enforce.
-    ...(isSuperAdmin
-      ? [
-          {
-            type: "group" as const, key: "workspace", label: "Workspace", icon: Building2,
-            match: (p: string) =>
-              px("team")(p) || px("billing")(p) || px("tenants")(p) || px("tenant-settings")(p) ||
-              px("activity")(p) || px("plans")(p) || px("security")(p),
-            flag: "FEATURE_NAV_PROG_WORKSPACE" as const,
-            children: [
-              { label: "Team", href: "/prog/team", match: px("team") },
+        // Workspace items folded in from the prog sandbox — super-admin-only until
+        // they're tenant-tiered + role-gated (consolidation doc Parts B–D).
+        ...(isSuperAdmin
+          ? ([
               { label: "Billing", href: "/prog/billing", match: px("billing") },
-              { label: "Tenants", href: "/prog/tenants", match: px("tenants") },
-              { label: "Settings", href: "/prog/tenant-settings", match: px("tenant-settings") },
+              { label: "Branding", href: "/prog/tenant-settings", match: px("tenant-settings") },
               { label: "Activity", href: "/prog/activity", match: px("activity") },
-              { label: "Plans", href: "/prog/plans", match: px("plans") },
               { label: "Security", href: "/prog/security", match: px("security") },
+            ] as NavEntry[])
+          : []),
+      ],
+    },
+
+    // Super-admin-only zones (Business, Super Admin, Prog sandbox). These hold the
+    // ported prog stubs; they stay super-admin-gated until built out + tenant-tiered.
+    ...(isSuperAdmin
+      ? ([
+          { type: "section", key: "sec-business", label: "Business" },
+          {
+            type: "group", key: "business", label: "Business", icon: Building2,
+            match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p),
+            flag: "FEATURE_NAV_PROG_BUSINESS",
+            children: [
+              {
+                label: "Payments", match: (p) => px("transactions")(p) || px("invoices")(p),
+                children: [
+                  { label: "Transactions", href: "/prog/transactions", match: px("transactions") },
+                  { label: "Invoices", href: "/prog/invoices", match: px("invoices") },
+                ],
+              },
+              { label: "Products", href: "/prog/products", match: px("products") },
+              { label: "Checkout", href: "/prog/checkout", match: px("checkout") },
+              { label: "Support tickets", href: "/prog/support-tickets", match: px("support-tickets") },
             ],
           },
           {
-            type: "group" as const, key: "super-admin", label: "Super Admin", icon: Crown,
-            match: (p: string) => p.startsWith("/settings/flags") || p.startsWith("/settings/plans"),
+            type: "group", key: "devhub", label: "Developer Hub", icon: Code2,
+            match: (p) => px("api-keys")(p),
+            flag: "FEATURE_NAV_PROG_DEVHUB",
             children: [
-              { label: "Feature flags", href: "/settings/flags", match: (p: string) => p === "/settings/flags" },
-              { label: "Plans", href: "/settings/plans", match: (p: string) => p.startsWith("/settings/plans") },
+              { label: "API Keys", href: "/prog/api-keys", match: px("api-keys") },
             ],
           },
-        ]
+
+          { type: "section", key: "sec-superadmin", label: "Super Admin" },
+          {
+            type: "group", key: "super-admin", label: "Super Admin", icon: Crown,
+            match: (p) => p.startsWith("/settings/flags") || p.startsWith("/settings/plans") || px("tenants")(p),
+            children: [
+              { label: "Tenants", href: "/prog/tenants", match: px("tenants") },
+              { label: "Plans", href: "/settings/plans", match: (p) => p.startsWith("/settings/plans") },
+              { label: "Feature flags", href: "/settings/flags", match: (p) => p === "/settings/flags" },
+            ],
+          },
+
+          // Prog sandbox — the leftover stubs not yet graduated into a real section.
+          // Sits under the Super Admin header (no section of its own); retire entries
+          // as they get a backend + promote into the zones above.
+          {
+            type: "group", key: "prog", label: "Prog", icon: Boxes,
+            match: (p) =>
+              px("chats")(p) || px("social-media")(p) || px("tasks")(p) ||
+              px("ai-assistant")(p) || px("form-elements")(p),
+            flag: "FEATURE_NAV_PROG",
+            children: [
+              { label: "Chats", href: "/prog/chats", match: px("chats") },
+              { label: "Social Media", href: "/prog/social-media", match: px("social-media") },
+              {
+                label: "Tasks", match: px("tasks"), flag: "FEATURE_NAV_PROG_TASKS",
+                children: [
+                  { label: "List", href: "/prog/tasks/list", match: px("tasks/list") },
+                  { label: "Kanban", href: "/prog/tasks/kanban", match: px("tasks/kanban") },
+                ],
+              },
+              { label: "AI Assistant", href: "/prog/ai-assistant", match: px("ai-assistant") },
+              { label: "Form Elements", href: "/prog/form-elements", match: px("form-elements") },
+            ],
+          },
+        ] as NavNode[])
       : []),
-    {
-      // Mirrors prog's admin information architecture (its menu-config.tsx),
-      // rehoming the already-ported pages and registering every new /prog/* route.
-      type: "group", key: "prog", label: "Prog", icon: Boxes,
-      match: (p) =>
-        p.startsWith("/prog") &&
-        !p.startsWith("/prog/events") &&
-        !p.startsWith("/prog/file-manager") &&
-        !p.startsWith("/prog/team") &&
-        !p.startsWith("/prog/billing") &&
-        !p.startsWith("/prog/tenants") &&
-        !p.startsWith("/prog/tenant-settings") &&
-        !p.startsWith("/prog/activity") &&
-        !p.startsWith("/prog/plans") &&
-        !p.startsWith("/prog/security"),
-      flag: "FEATURE_NAV_PROG",
-      children: [
-        { label: "Calendar", href: "/prog/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
-        {
-          label: "Channels", match: (p) => px("email")(p) || px("calls")(p) || px("chats")(p) || px("social-media")(p), flag: "FEATURE_NAV_PROG_CHANNELS",
-          children: [
-            { label: "Email", href: "/prog/email", match: px("email") },
-            { label: "Calls", href: "/prog/calls", match: px("calls") },
-            { label: "Chats", href: "/prog/chats", match: px("chats") },
-            { label: "Social Media", href: "/prog/social-media", match: px("social-media") },
-          ],
-        },
-        {
-          label: "Tasks", match: px("tasks"), flag: "FEATURE_NAV_PROG_TASKS",
-          children: [
-            { label: "List", href: "/prog/tasks/list", match: px("tasks/list") },
-            { label: "Kanban", href: "/prog/tasks/kanban", match: px("tasks/kanban") },
-          ],
-        },
-        {
-          label: "Business", match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p), flag: "FEATURE_NAV_PROG_BUSINESS",
-          children: [
-            {
-              label: "Payments", match: (p) => px("transactions")(p) || px("invoices")(p),
-              children: [
-                { label: "Transactions", href: "/prog/transactions", match: px("transactions") },
-                { label: "Invoices", href: "/prog/invoices", match: px("invoices") },
-              ],
-            },
-            { label: "Products", href: "/prog/products", match: px("products") },
-            { label: "Support tickets", href: "/prog/support-tickets", match: px("support-tickets") },
-            { label: "Checkout", href: "/prog/checkout", match: px("checkout") },
-          ],
-        },
-        {
-          label: "Developer Hub", match: (p) => px("api-keys")(p) || px("ai-assistant")(p) || px("form-elements")(p), flag: "FEATURE_NAV_PROG_DEVHUB",
-          children: [
-            { label: "API Keys", href: "/prog/api-keys", match: px("api-keys") },
-            { label: "AI Assistant", href: "/prog/ai-assistant", match: px("ai-assistant") },
-            { label: "Form Elements", href: "/prog/form-elements", match: px("form-elements") },
-          ],
-        },
-      ],
-    },
   ];
 }
 
@@ -260,10 +284,12 @@ export default function MainLayout({
         goToLogin();
         return;
       }
-      // Volunteers don't belong in the organiser shell — bounce them to the field
-      // app (defence-in-depth; organiser mutations are also @Roles-gated server-side).
+      // Volunteers don't belong in the organiser shell — bounce them to the
+      // standalone field PWA (defence-in-depth; organiser mutations are also
+      // @Roles-gated server-side). The field app lives on its own origin now.
       if (session.role === "VOLUNTEER") {
-        router.replace("/field");
+        const fieldApp = process.env.NEXT_PUBLIC_FIELD_APP_URL || "https://field.uprise.org.au";
+        window.location.assign(fieldApp);
         return;
       }
       setPrincipal(session);
@@ -500,12 +526,14 @@ export default function MainLayout({
         .filter((e) => flagOn(e.flag))
         .map((e) => ("children" in e ? { ...e, children: filterEntries(e.children) } : e))
         .filter((e) => !("children" in e) || e.children.length > 0);
-    return buildNav(campaignId, isSuperAdmin)
-      // Prog is super-admin only (per the access matrix), like the Super Admin group.
-      .filter((n) => n.key !== "prog" || isSuperAdmin)
+    const built = buildNav(campaignId, isSuperAdmin)
       .filter((n) => flagOn(n.flag))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
       .filter((n) => n.type !== "group" || n.children.length > 0);
+    // Drop a zone header that has no surviving item before the next header / the end.
+    return built.filter(
+      (n, i) => n.type !== "section" || (built[i + 1]?.type ?? "section") !== "section",
+    );
   }, [campaignId, isSuperAdmin, flagOn]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
@@ -514,9 +542,11 @@ export default function MainLayout({
         "href" in e ? [{ label: e.label, href: e.href }] : collect(e.children),
       );
     return nav.flatMap((node) =>
-      node.type === "leaf"
-        ? [{ label: node.label, href: node.href }]
-        : collect(node.children).map((c) => ({ ...c, group: node.label })),
+      node.type === "section"
+        ? []
+        : node.type === "leaf"
+          ? [{ label: node.label, href: node.href }]
+          : collect(node.children).map((c) => ({ ...c, group: node.label })),
     );
   }, [nav]);
   const p = pathname || "";
@@ -537,6 +567,58 @@ export default function MainLayout({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const isGroupOpen = (node: Extract<NavNode, { type: "group" }>) =>
     openGroups[node.key] ?? node.match(p);
+
+  // Collapse-all / expand-all helper. Collect every collapsible key the way the
+  // renderer keys them (top-level = node.key; nested branch = `${parentKey}/${label}`)
+  // so we can force them all open/closed (a plain reset can't override default-open).
+  const allGroupKeys = useMemo(() => {
+    const keys: string[] = [];
+    const walk = (entries: NavEntry[], parentKey: string) => {
+      for (const entry of entries) {
+        if ("href" in entry) continue; // leaf link, not collapsible
+        const key = `${parentKey}/${entry.label}`;
+        keys.push(key);
+        walk(entry.children, key);
+      }
+    };
+    for (const node of nav) {
+      if (node.type !== "group") continue; // skip leaves + section headers
+      keys.push(node.key);
+      walk(node.children, node.key);
+    }
+    return keys;
+  }, [nav]);
+  const expandAll = useCallback(
+    () => setOpenGroups(Object.fromEntries(allGroupKeys.map((k) => [k, true]))),
+    [allGroupKeys],
+  );
+  const collapseAll = useCallback(
+    () => setOpenGroups(Object.fromEntries(allGroupKeys.map((k) => [k, false]))),
+    [allGroupKeys],
+  );
+  const anyGroupOpen = nav.some((node) => node.type === "group" && isGroupOpen(node));
+
+  // Super-admin visibility inspector: a long hover (~1.2s) over a menu item reveals
+  // who can see it (its feature-flag gating). Toggled by the topbar eye badge; both
+  // the badge and the popover only exist for super-admins.
+  const [inspect, setInspect] = useState(true);
+  const [hint, setHint] = useState<{ flag?: FeatureFlagKey; label: string; x: number; y: number } | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showHint = useCallback(
+    (el: HTMLElement, item: { flag?: FeatureFlagKey; label: string }) => {
+      if (!isSuperAdmin || !inspect) return;
+      if (hintTimer.current) clearTimeout(hintTimer.current);
+      hintTimer.current = setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        setHint({ flag: item.flag, label: item.label, x: r.right, y: r.top });
+      }, 1200);
+    },
+    [isSuperAdmin, inspect],
+  );
+  const clearHint = useCallback(() => {
+    if (hintTimer.current) clearTimeout(hintTimer.current);
+    setHint(null);
+  }, []);
 
   // Responsive sidebar (prog parity): collapse to an icon-rail on desktop, slide-in
   // drawer on mobile. The hamburger toggles whichever applies to the viewport.
@@ -669,18 +751,49 @@ export default function MainLayout({
                 <Logo />
               </span>
             </div>
-            <button
-              type="button"
-              onClick={() => setMobileOpen(false)}
-              aria-label="Close menu"
-              className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground lg:hidden"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={anyGroupOpen ? collapseAll : expandAll}
+                aria-label={anyGroupOpen ? "Collapse all menus" : "Expand all menus"}
+                title={anyGroupOpen ? "Collapse all menus" : "Expand all menus"}
+                className={cn(
+                  "flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground",
+                  labelHidden,
+                )}
+              >
+                {anyGroupOpen ? (
+                  <ChevronsDownUp className="h-[18px] w-[18px]" />
+                ) : (
+                  <ChevronsUpDown className="h-[18px] w-[18px]" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close menu"
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground lg:hidden"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           <nav id="tour-nav" className="space-y-1">
             {nav.map((node) => {
+              if (node.type === "section") {
+                return (
+                  <div
+                    key={node.key}
+                    className={cn(
+                      "px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70",
+                      labelHidden,
+                    )}
+                  >
+                    {node.label}
+                  </div>
+                );
+              }
               const Icon = node.icon;
               if (node.type === "leaf") {
                 const active = node.match(p);
@@ -689,6 +802,8 @@ export default function MainLayout({
                     key={node.key}
                     href={node.href}
                     onClick={() => setMobileOpen(false)}
+                    onMouseEnter={(e) => showHint(e.currentTarget, node)}
+                    onMouseLeave={clearHint}
                     title={node.label}
                     className={cn(
                       "flex min-h-11 items-center gap-2.5 rounded-[11px] px-3 py-2 text-[17.4px] font-label lg:text-[14.5px]",
@@ -723,6 +838,8 @@ export default function MainLayout({
                       }
                       setOpenGroups((o) => ({ ...o, [node.key]: !open }));
                     }}
+                    onMouseEnter={(e) => showHint(e.currentTarget, node)}
+                    onMouseLeave={clearHint}
                     aria-expanded={open}
                     title={node.label}
                     className={cn(
@@ -792,6 +909,26 @@ export default function MainLayout({
                 <Menu className="h-5 w-5" />
               </button>
               <TopbarSearch items={searchItems} />
+              {isSuperAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => setInspect((v) => !v)}
+                  title={
+                    inspect
+                      ? "Visibility inspector on — hover a menu item ~1s to see who can access it. Click to turn off."
+                      : "Visibility inspector off. Click to turn on."
+                  }
+                  className={cn(
+                    "hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors sm:flex",
+                    inspect
+                      ? "border-primary/30 bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {inspect ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  Who can see this
+                </button>
+              ) : null}
             </div>
             <div className="flex items-center gap-2.5">
               <ThemeToggle />
@@ -810,6 +947,40 @@ export default function MainLayout({
           </main>
         </div>
       </div>
+      {hint ? (
+        <div
+          className="pointer-events-none fixed z-[100] w-64 rounded-xl border border-border bg-surface p-3 text-xs shadow-theme-lg"
+          style={{ left: hint.x + 8, top: hint.y }}
+          role="status"
+        >
+          <p className="mb-1.5 flex items-center gap-1.5 font-semibold text-foreground">
+            <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+            Who can see “{hint.label}”
+          </p>
+          {(() => {
+            if (!hint.flag) {
+              return (
+                <p className="text-muted-foreground">
+                  Always shown — no feature flag, so every member with menu access sees it.
+                </p>
+              );
+            }
+            const meta = FLAG_META[hint.flag];
+            const on = navFlags[hint.flag] ?? FLAG_DEFAULTS[hint.flag];
+            const layers = meta.controllableBy.filter((l) => l !== "env");
+            return (
+              <div className="space-y-1 text-muted-foreground">
+                <p>{meta.description}</p>
+                <p className={on ? "font-medium text-primary" : "font-medium text-foreground"}>
+                  {on ? "Visible" : "Hidden"} for this tenant.
+                </p>
+                <p>Controlled by: {layers.length ? layers.join(", ") : "global"}.</p>
+                <p className="text-muted-foreground/70">Super-admins always see it.</p>
+              </div>
+            );
+          })()}
+        </div>
+      ) : null}
     </div>
     </TourRoot>
   );

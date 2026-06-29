@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { CircleIcon, ChevronDown, ChevronRight, ArrowRight } from "lucide-react";
+import { CircleIcon, ChevronDown, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import MobileMenu from "./MobileMenu";
 import { authAppUrl, adminAppUrl } from "@/lib/links";
 import { useSession } from "@/lib/session";
@@ -53,9 +53,11 @@ export default function Header() {
                 <span className={`absolute right-0 block h-0.5 w-6 rounded-full bg-slate-600 transition-all duration-200 ${isMobileMenuOpen ? 'top-[13px] opacity-0' : 'top-[3px] opacity-100'}`}></span>
                 <span className={`absolute right-0 block h-0.5 w-6 rounded-full bg-slate-600 transition-all duration-200 ${isMobileMenuOpen ? 'opacity-0' : 'top-[11px] opacity-100'}`}></span>
                 <span className={`absolute right-0 block h-0.5 w-6 rounded-full bg-slate-600 transition-all duration-200 ${isMobileMenuOpen ? 'bottom-[13px] opacity-0' : 'bottom-[3px] opacity-100'}`}></span>
-                {/* Cross/close mobile menu icon */}
-                <span className={`absolute right-0 h-0.5 w-6 rounded-full bg-slate-600 transition-all duration-200 ${isMobileMenuOpen ? 'opacity-100 rotate-45 transform' : 'rotate-0 transform opacity-0'}`} style={{ top: '10px' }}></span>
-                <span className={`absolute right-0 h-0.5 w-6 rounded-full bg-slate-600 transition-all duration-200 ${isMobileMenuOpen ? 'opacity-100 -rotate-45 transform' : 'rotate-0 transform opacity-0'}`} style={{ top: '10px' }}></span>
+                {/* "<" chevron when open — the bars fade out and this rotates/fades in. */}
+                <ChevronLeft
+                  className={`absolute inset-0 h-6 w-6 text-slate-600 transition-all duration-200 ${isMobileMenuOpen ? 'rotate-0 opacity-100' : '-rotate-90 opacity-0'}`}
+                  aria-hidden
+                />
               </span>
             </button>
           </div>

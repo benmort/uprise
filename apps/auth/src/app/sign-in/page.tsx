@@ -1,11 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Mail } from "lucide-react";
+import { ArrowRight, ChevronLeft, Mail } from "lucide-react";
 import { useQueryParams } from "@/lib/use-query";
 import { Alert, Button, Field, Input, PasswordInput, Spinner, TurnstileWidget, type TurnstileHandle } from "@uprise/ui";
-import { auth, isTwofaChallenge } from "@uprise/api-client";
+import { auth, isTwofaChallenge, type AuthPrincipal } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
 
@@ -16,6 +16,26 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const captchaRef = useRef<TurnstileHandle>(null);
+  // Detect an existing session so we can offer "Continue as …" / "Switch account"
+  // (mirrors the marketing site; marketing's "Switch account" link lands here).
+  const [checking, setChecking] = useState(true);
+  const [existing, setExisting] = useState<AuthPrincipal | null>(null);
+  const [switching, setSwitching] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    auth
+      .checkSession()
+      .then((res) => {
+        if (!active) return;
+        if (res.ok && res.data.user) setExisting(res.data.user);
+        setChecking(false);
+      })
+      .catch(() => active && setChecking(false));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +57,36 @@ export default function LoginPage() {
   }
 
   const q = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "";
+
+  // Brief check before deciding form vs "already signed in", to avoid a flash.
+  if (checking) {
+    return (
+      <div className="flex w-full justify-center py-16">
+        <Spinner className="h-6 w-6 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Already signed in — offer to continue with the current session or switch accounts.
+  if (existing && !switching) {
+    return (
+      <div className="flex w-full flex-col">
+        <div className="mb-6">
+          <h1 className="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90 sm:text-title-md">Welcome back</h1>
+          <p className="text-sm text-muted-foreground">You&apos;re already signed in.</p>
+        </div>
+        <div className="space-y-3">
+          <Button className="w-full gap-2" onClick={() => completeAuth(existing.memberships, returnTo)}>
+            Continue as {existing.email}
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" className="w-full" onClick={() => setSwitching(true)}>
+            Switch account
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col">

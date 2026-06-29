@@ -7,7 +7,7 @@ import { AlertTriangle, ArrowLeft, ShieldCheck } from "lucide-react";
 import { getQaReview } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 
 type Flag = { id: string; volunteer: string | null; reason: string; at: string };
 

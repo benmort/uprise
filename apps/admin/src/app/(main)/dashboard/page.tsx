@@ -38,7 +38,7 @@ import {
 } from "@/lib/api/campaigns";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
-import { KpiTile } from "@/components/canvass/kpi-tile";
+import { KpiTile } from "@uprise/field";
 import { Button } from "@/components/ui/button";
 import { QuickActions } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";

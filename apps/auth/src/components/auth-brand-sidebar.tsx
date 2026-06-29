@@ -2,14 +2,14 @@
 
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { CircleIcon } from "lucide-react";
+import { LogoMark } from "@uprise/ui";
 import { GridShape } from "./grid-shape";
 
-/** Uprise brand mark (light, for the dark panel). */
+/** Uprise brand mark (the capital-U block + wordmark, for the dark panel). */
 function BrandMark() {
   return (
     <div className="flex items-center justify-center gap-2">
-      <CircleIcon className="h-8 w-8 text-brand-400" />
+      <LogoMark className="h-8 w-8 text-brand-500" />
       <span className="text-2xl font-bold text-white">Uprise</span>
     </div>
   );

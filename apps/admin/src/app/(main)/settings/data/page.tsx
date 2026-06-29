@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { SectionCard } from "@/components/canvass/section-card";
-import { DataTable } from "@/components/canvass/data-table";
+import { SectionCard } from "@uprise/field";
+import { DataTable } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 
 const STATUS_MAP: Record<string, string> = {

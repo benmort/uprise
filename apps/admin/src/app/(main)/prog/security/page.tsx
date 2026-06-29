@@ -28,6 +28,7 @@ const cardClass =
 
 export default function SecurityPage() {
   const [role, setRole] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function SecurityPage() {
       const session = await getSession();
       if (!active) return;
       setRole(session?.role ?? null);
+      setIsSuperAdmin(session?.isSuperAdmin ?? false);
       setSessionLoaded(true);
     })();
     return () => {
@@ -58,7 +60,7 @@ export default function SecurityPage() {
 
           <ActiveSessionsCard />
 
-          <DeleteAccountCard role={role} sessionLoaded={sessionLoaded} />
+          <DeleteAccountCard role={role} isSuperAdmin={isSuperAdmin} sessionLoaded={sessionLoaded} />
         </div>
       </section>
     </ProtectedRoute>
@@ -339,14 +341,17 @@ function ActiveSessionsCard() {
   );
 }
 
-// ── Delete account (organisers only) ──────────────────────────────────
+// ── Delete account (owners + super admins only) ───────────────────────
 function DeleteAccountCard({
   role,
+  isSuperAdmin,
   sessionLoaded,
 }: {
   role: string | null;
+  isSuperAdmin: boolean;
   sessionLoaded: boolean;
 }) {
+  const canDelete = role === 'OWNER' || isSuperAdmin;
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
@@ -379,11 +384,11 @@ function DeleteAccountCard({
       <CardContent>
         {!sessionLoaded ? (
           <Skeleton className="h-24 w-full dark:bg-gray-700" />
-        ) : role !== 'ORGANISER' ? (
+        ) : !canDelete ? (
           <Alert
             variant="info"
             title="Account deletion is restricted"
-            message="Only an organiser can delete this account. Ask an organiser if you need this done."
+            message="Only an owner or super admin can delete this account. Ask an owner if you need this done."
           />
         ) : (
           <div className="space-y-4">

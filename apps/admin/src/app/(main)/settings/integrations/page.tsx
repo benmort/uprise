@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 
 const PROVIDER_LABEL: Record<string, string> = {
   ACTION_NETWORK: "Action Network",

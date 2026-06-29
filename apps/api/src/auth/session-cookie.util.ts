@@ -48,5 +48,10 @@ export function setSessionCookie(
 
 export function clearSessionCookie(res: Response, config: ConfigService): void {
   const domain = config.get<string>("SESSION_COOKIE_DOMAIN", "").trim();
-  res.clearCookie(SESSION_COOKIE, { path: "/", ...(domain ? { domain } : {}) });
+  // Clear the parent-domain cookie AND a host-only one. A host-only `auth_token`
+  // left over from an earlier cookie-domain config is a separate cookie entry that
+  // a domain-scoped clear can't touch — clearing both stops it shadowing future
+  // logins (see BasicAuthGuard.getSessionTokens).
+  if (domain) res.clearCookie(SESSION_COOKIE, { path: "/", domain });
+  res.clearCookie(SESSION_COOKIE, { path: "/" });
 }

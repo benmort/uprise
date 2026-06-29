@@ -13,9 +13,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { useToast } from "@/components/ui/toast";
-import { KpiTile } from "@/components/canvass/kpi-tile";
-import { SectionCard } from "@/components/canvass/section-card";
-import { DataTable } from "@/components/canvass/data-table";
+import { KpiTile } from "@uprise/field";
+import { SectionCard } from "@uprise/field";
+import { DataTable } from "@uprise/field";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 function ago(iso: string | null): string {

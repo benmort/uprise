@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, MessageSquareText, ListChecks, Tag, FileText } from "lucide-react";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 
 const TOOLS = [
   {

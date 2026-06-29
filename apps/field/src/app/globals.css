@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@import "@uprise/ui/globals.css";
+
+/* Scan the shared design system + the shared field package for class strings
+   (this app's own files are auto-detected by Tailwind v4). */
+@source "../../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../../../packages/field/src/**/*.{ts,tsx}";

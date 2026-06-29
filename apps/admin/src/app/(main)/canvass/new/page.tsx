@@ -7,7 +7,7 @@ import { ArrowLeft, Rocket } from "lucide-react";
 import { createCampaign } from "@/lib/api/campaigns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 
 export default function NewCampaignPage() {

@@ -9,13 +9,17 @@ import {
   Req,
   UnauthorizedException,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { IsEmail, IsString, MaxLength, MinLength } from "class-validator";
 import type { Request } from "express";
+import { AppUserRole } from "@uprise/db";
 import { ProfileService } from "./profile.service";
 import { IamFlowsService } from "./iam-flows.service";
+import { RolesGuard } from "./roles.guard";
+import { Roles } from "./roles.decorator";
 import type { AuthUser } from "./auth-user";
 import { AddAvatarDto, UpdateProfileDto } from "./dto/profile.dto";
 
@@ -102,7 +106,12 @@ export class ProfileController {
     return this.flows.changeEmail(this.userId(req), dto.newEmail, dto.password);
   }
 
+  // Account deletion is restricted to workspace OWNERs (and the break-glass
+  // super-admin, which clears every RolesGuard gate). ORGANISER/VOLUNTEER cannot
+  // delete their own account — they must ask an owner.
   @Post("account/delete")
+  @UseGuards(RolesGuard)
+  @Roles(AppUserRole.OWNER)
   deleteAccount(@Req() req: Request & { user?: AuthUser }, @Body() dto: DeleteAccountDto) {
     return this.flows.deleteAccount(this.userId(req), dto.password);
   }

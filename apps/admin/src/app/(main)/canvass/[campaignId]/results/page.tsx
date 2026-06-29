@@ -8,10 +8,10 @@ import { getCampaignResults, type CampaignResults } from "@/lib/api/campaigns";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SectionCard } from "@/components/canvass/section-card";
-import { ProgressBar } from "@/components/canvass/progress-bar";
-import { SupportLevelBar } from "@/components/canvass/support-level-bar";
-import type { SupportLevel } from "@/components/canvass/support-level";
+import { SectionCard } from "@uprise/field";
+import { ProgressBar } from "@uprise/field";
+import { SupportLevelBar } from "@uprise/field";
+import type { SupportLevel } from "@uprise/field";
 
 // RFC-4180 quote: wrap in double quotes and double any internal quotes, so a code
 // containing a comma/quote/newline can't break the CSV layout.

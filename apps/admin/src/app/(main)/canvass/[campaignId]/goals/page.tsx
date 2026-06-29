@@ -13,8 +13,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard } from "@/components/canvass/section-card";
-import { ProgressBar } from "@/components/canvass/progress-bar";
+import { SectionCard } from "@uprise/field";
+import { ProgressBar } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 
 export default function GoalsPage() {

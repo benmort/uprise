@@ -43,7 +43,7 @@ const nextConfig = {
   reactStrictMode: true,
   // @uprise/ui ships TS/TSX source (the shared design system); api-client/contracts
   // ship built dist but are listed so Next resolves the workspace packages (meld doc 14).
-  transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts", "@uprise/flags"],
+  transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts", "@uprise/flags", "@uprise/field"],
 };
 
 export default withPWA(nextConfig);

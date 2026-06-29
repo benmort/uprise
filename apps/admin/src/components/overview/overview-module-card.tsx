@@ -1,7 +1,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export type OverviewModuleCardProps = {

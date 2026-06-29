@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";

@@ -1,0 +1,58 @@
+{
+  "name": "@uprise/field",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./api/canvass": {
+      "types": "./src/api/canvass.ts",
+      "default": "./src/api/canvass.ts"
+    },
+    "./api/contacts": {
+      "types": "./src/api/contacts.ts",
+      "default": "./src/api/contacts.ts"
+    },
+    "./api/engagement": {
+      "types": "./src/api/engagement.ts",
+      "default": "./src/api/engagement.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mapbox/mapbox-gl-draw": "^1.5.1",
+    "@turf/turf": "^7.3.5",
+    "@uprise/api-client": "workspace:*",
+    "@uprise/ui": "workspace:*",
+    "clsx": "^2.1.1",
+    "idb": "^8.0.3",
+    "lucide-react": "^0.469.0",
+    "mapbox-gl": "^3.24.1",
+    "react-map-gl": "^8.1.1",
+    "tailwind-merge": "^2.5.5"
+  },
+  "peerDependencies": {
+    "next": "^14.2.20",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.14",
+    "@types/mapbox-gl": "^3.4.1",
+    "@types/node": "^20.17.9",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "next": "^14.2.20",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

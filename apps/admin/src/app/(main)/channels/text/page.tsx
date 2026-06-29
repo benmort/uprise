@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { getOptOuts, getRecentBlasts } from "@/lib/api";
-import { KpiTile } from "@/components/canvass/kpi-tile";
-import { SectionCard } from "@/components/canvass/section-card";
+import { KpiTile } from "@uprise/field";
+import { SectionCard } from "@uprise/field";
 import { Button } from "@/components/ui/button";
 import { ChannelCampaignsView, normaliseChannel } from "@/components/channels/channel-campaigns-view";
 

@@ -9,8 +9,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { TagChip } from "@/components/ui/tag-chip";
-import { SupportPill } from "@/components/canvass/support-pill";
-import { SectionCard } from "@/components/canvass/section-card";
+import { SupportPill } from "@uprise/field";
+import { SectionCard } from "@uprise/field";
 import { cn } from "@/lib/utils";
 
 type Filter = "all" | "doors" | "texts";

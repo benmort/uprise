@@ -1,0 +1,295 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { Check, ChevronDown, ChevronUp, DoorOpen, DownloadCloud, Loader2, Navigation } from "lucide-react";
+import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
+import { getCanvassAssignments, type CanvassAssignment } from "../api";
+import { getVolunteerId } from "../lib/volunteer";
+import { optimiseRoute, type Stop } from "../lib/route";
+import { formatDistance, formatDuration, type LatLng } from "../lib/directions";
+import { useLocalStorage } from "../hooks/use-local-storage";
+import { useGeolocation } from "../hooks/use-geolocation";
+import { useTilePreCache } from "../hooks/use-tile-pre-cache";
+import { useWalkingDirections } from "../hooks/use-walking-directions";
+import { WalkStopCard, type WalkStop } from "../components/walk-stop-card";
+import { WalkModeToggle, type WalkMode } from "../components/walk-mode-toggle";
+import { ProgressBar } from "../components/progress-bar";
+
+// Map is heavy + touches window: keep it out of the offline list-mode bundle.
+const TurfMap = dynamic(() => import("../components/turf-map").then((m) => m.TurfMap), {
+  ssr: false,
+  loading: () => <Skeleton className="h-full w-full" />,
+});
+
+type FullStop = WalkStop & { lat: number; lng: number };
+
+function num(v: unknown): number {
+  return typeof v === "number" ? v : Number.NaN;
+}
+
+/**
+ * Walk view — the working screen. List⇄Map toggle (list is the low-power default).
+ * `readOnly` renders the organiser preview embedded in apps/admin: same map + route,
+ * but no door navigation or offline-download controls.
+ */
+export function WalkView({
+  turfId,
+  readOnly = false,
+  assignment: assignmentProp,
+}: {
+  turfId: string;
+  readOnly?: boolean;
+  /** Pre-loaded assignment (organiser preview in apps/admin). When given, the
+   *  screen skips the volunteer-scoped fetch and just renders it read-only. */
+  assignment?: CanvassAssignment | null;
+}) {
+  const router = useRouter();
+  const [mode, setMode] = useLocalStorage<WalkMode>("uprise.walkMode", "list");
+  const [assignment, setAssignment] = useState<CanvassAssignment | null>(assignmentProp ?? null);
+  const [loading, setLoading] = useState(!assignmentProp);
+  const [showSteps, setShowSteps] = useState(false);
+  const { fix, capture } = useGeolocation();
+
+  useEffect(() => {
+    // Organiser preview supplies the assignment directly — keep it in sync, no fetch.
+    if (assignmentProp !== undefined) {
+      setAssignment(assignmentProp);
+      setLoading(false);
+      return;
+    }
+    const volunteerId = getVolunteerId();
+    if (!volunteerId) {
+      setLoading(false);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const res = await getCanvassAssignments(volunteerId);
+      if (!alive) return;
+      if (res.ok) setAssignment(res.data.find((a) => a.turfId === turfId) ?? null);
+      setLoading(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [turfId, assignmentProp]);
+
+  // Locate the volunteer once when the map opens (battery: not a continuous watch).
+  useEffect(() => {
+    if (mode === "map" && !readOnly) void capture();
+  }, [mode, capture, readOnly]);
+
+  const stops = useMemo<FullStop[]>(() => {
+    if (!assignment) return [];
+    const items = assignment.walkLists.flatMap((wl) => wl.items);
+    const mapped = items.map((it) => {
+      const c = it.contact as Record<string, unknown>;
+      const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || (c.fullName as string) || null;
+      return {
+        id: it.id,
+        contactId: it.contact.id as string,
+        orderIndex: it.orderIndex,
+        status: it.status,
+        name,
+        address: (c.address as string) ?? null,
+        lat: num(c.lat),
+        lng: num(c.lng),
+      } satisfies FullStop;
+    });
+    const ordered = optimiseRoute(mapped as Stop[]) as unknown as FullStop[];
+    return ordered.map((s, i) => ({ ...s, orderIndex: i }));
+  }, [assignment]);
+
+  const nextStop = stops.find((s) => s.status === "PENDING");
+  const doneCount = stops.filter((s) => s.status !== "PENDING").length;
+
+  // Walking turn-by-turn directions to the next stop. Origin is the canvasser's
+  // live GPS; in the organiser preview (no GPS) we fall back to the first stop so
+  // the same route line + steps still render. Network-only (offline → no route).
+  const finite = (p: LatLng | null): LatLng | null =>
+    p && Number.isFinite(p.lat) && Number.isFinite(p.lng) ? p : null;
+  const origin =
+    finite(fix ? { lat: fix.lat, lng: fix.lng } : null) ??
+    (readOnly && stops[0] ? finite({ lat: stops[0].lat, lng: stops[0].lng }) : null);
+  const dest = nextStop ? finite({ lat: nextStop.lat, lng: nextStop.lng }) : null;
+  const { directions, online: directionsOnline } = useWalkingDirections(origin, dest, mode === "map");
+
+  const openDoor = (id: string) => {
+    if (readOnly) return;
+    router.push(`/field/${turfId}/door/${id}`);
+  };
+
+  if (loading) return <Skeleton className="h-64 w-full" />;
+  if (!assignment) return <EmptyState title="Turf not found" description="This turf isn't assigned to you." />;
+
+  return (
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-extrabold">{assignment.turf.name}</h1>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {doneCount} of {stops.length} stops done
+          </p>
+        </div>
+        <WalkModeToggle value={mode} onChange={setMode} />
+      </div>
+
+      <ProgressBar value={doneCount} max={stops.length || 1} />
+
+      {!readOnly ? (
+        <OfflineMapsControl turfId={turfId} geometry={assignment.turf.geometry as GeoJSON.Geometry} />
+      ) : null}
+
+      {mode === "map" ? (
+        <div className="relative min-h-[60vh] flex-1 overflow-hidden rounded-xl border border-border">
+          <TurfMap
+            mode="view"
+            stops={stops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, status: s.status }))}
+            turfGeometry={assignment.turf.geometry as GeoJSON.Geometry}
+            activeStopId={nextStop?.id}
+            userPosition={fix ? { lat: fix.lat, lng: fix.lng } : null}
+            onStopTap={readOnly ? undefined : (id) => openDoor(id)}
+            routeGeometry={directions?.geometry ?? null}
+          />
+          {nextStop ? (
+            <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-3 shadow-float">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+                    Next stop
+                  </p>
+                  <p className="truncate font-semibold text-foreground">{nextStop.name || "Resident"}</p>
+                  {nextStop.address ? (
+                    <p className="truncate text-xs text-muted-foreground">{nextStop.address}</p>
+                  ) : null}
+                </div>
+                {directions ? (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold tabular-nums text-primary">
+                    <Navigation className="h-3 w-3" />
+                    {formatDistance(directions.distanceM)} · {formatDuration(directions.durationS)}
+                  </span>
+                ) : null}
+              </div>
+
+              {directions && directions.steps.length > 0 ? (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSteps((v) => !v)}
+                    className="flex w-full items-center justify-between rounded-lg bg-surface-variant px-2.5 py-1.5 text-xs font-semibold text-foreground"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Navigation className="h-3.5 w-3.5 text-primary" />
+                      Walking directions
+                    </span>
+                    {showSteps ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                  </button>
+                  {showSteps ? (
+                    <ol className="mt-1.5 max-h-32 space-y-1 overflow-auto pr-1 text-xs text-muted-foreground">
+                      {directions.steps.map((s, i) => (
+                        <li key={i} className="flex gap-2">
+                          <span className="shrink-0 tabular-nums text-foreground">{i + 1}.</span>
+                          <span className="flex-1">{s.instruction}</span>
+                          {s.distanceM > 0 ? (
+                            <span className="shrink-0 tabular-nums">{formatDistance(s.distanceM)}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
+              ) : !directionsOnline ? (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Directions need a connection — pins and the address work offline.
+                </p>
+              ) : null}
+
+              {!readOnly ? (
+                <Button className="mt-2 w-full" onClick={() => openDoor(nextStop.id)}>
+                  <DoorOpen className="mr-1.5 h-4 w-4" />
+                  Knock — next stop
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {nextStop ? (
+            !readOnly ? (
+              <Button className="h-12 w-full text-base" onClick={() => openDoor(nextStop.id)}>
+                <DoorOpen className="mr-1.5 h-4 w-4" />
+                Knock — next stop · {nextStop.name || "Resident"}
+              </Button>
+            ) : null
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-surface/60 p-4 text-center text-sm text-muted-foreground">
+              All stops done. Nice work.
+            </div>
+          )}
+          <div className="space-y-2">
+            {stops.map((s) => (
+              <div key={s.id} className={cn(s.status !== "PENDING" && "opacity-60")}>
+                <WalkStopCard stop={s} isNext={s.id === nextStop?.id} onOpen={() => openDoor(s.id)} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Download maps for offline" — pre-caches the turf's tiles so the map renders
+ *  with no signal. Hidden when no Mapbox token is configured. */
+function OfflineMapsControl({ turfId, geometry }: { turfId: string; geometry: GeoJSON.Geometry }) {
+  const { available, status, done, total, capped, start, cancel } = useTilePreCache(turfId, geometry);
+  if (!available) return null;
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  if (status === "done") {
+    return (
+      <p className="flex items-center gap-1.5 text-xs font-medium text-success">
+        <Check className="h-3.5 w-3.5" />
+        Maps saved for offline
+      </p>
+    );
+  }
+
+  if (status === "running") {
+    return (
+      <div className="space-y-1.5 rounded-xl border border-border bg-surface/60 p-3">
+        <div className="flex items-center justify-between text-xs">
+          <span className="flex items-center gap-1.5 font-medium text-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Saving maps for offline… {pct}%
+          </span>
+          <button type="button" className="underline text-muted-foreground" onClick={cancel}>
+            Cancel
+          </button>
+        </div>
+        <ProgressBar value={done} max={total || 1} />
+        <p className="tabular-nums text-[11px] text-muted-foreground">
+          {done} of {total} tiles{capped ? " (capped — large turf)" : ""}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <Button variant="outline" className="h-9 gap-1.5 text-sm" onClick={start}>
+        <DownloadCloud className="h-4 w-4" />
+        Download maps for offline
+      </Button>
+      {status === "error" ? (
+        <span className="text-xs text-error">Download failed — retry</span>
+      ) : status === "cancelled" ? (
+        <span className="text-xs text-muted-foreground">Download cancelled</span>
+      ) : null}
+    </div>
+  );
+}

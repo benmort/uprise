@@ -99,6 +99,9 @@ importers:
       '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@uprise/field':
+        specifier: workspace:*
+        version: link:../../packages/field
       '@uprise/flags':
         specifier: workspace:*
         version: link:../../packages/flags
@@ -352,6 +355,82 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  apps/field:
+    dependencies:
+      '@turf/turf':
+        specifier: ^7.3.5
+        version: 7.3.5
+      '@uprise/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@uprise/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@uprise/field':
+        specifier: workspace:*
+        version: link:../../packages/field
+      '@uprise/flags':
+        specifier: workspace:*
+        version: link:../../packages/flags
+      '@uprise/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      idb:
+        specifier: ^8.0.3
+        version: 8.0.3
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@18.3.1)
+      mapbox-gl:
+        specifier: ^3.24.1
+        version: 3.24.1
+      next:
+        specifier: ^14.2.20
+        version: 14.2.35(@babel/core@7.28.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.61.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next-pwa:
+        specifier: ^5.6.0
+        version: 5.6.0(@babel/core@7.28.6)(@types/babel__core@7.20.5)(next@14.2.35(@babel/core@7.28.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.61.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(webpack@5.97.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      react-map-gl:
+        specifier: ^8.1.1
+        version: 8.1.1(mapbox-gl@3.24.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+    devDependencies:
+      '@babel/core':
+        specifier: ^7.28.6
+        version: 7.28.6
+      '@tailwindcss/postcss':
+        specifier: ^4.3.1
+        version: 4.3.1
+      '@types/mapbox-gl':
+        specifier: ^3.4.1
+        version: 3.5.0
+      '@types/node':
+        specifier: ^20.17.9
+        version: 20.19.28
+      '@types/react':
+        specifier: ^18.3.12
+        version: 18.3.27
+      '@types/react-dom':
+        specifier: ^18.3.1
+        version: 18.3.7(@types/react@18.3.27)
+      babel-loader:
+        specifier: ^8.4.1
+        version: 8.4.1(@babel/core@7.28.6)(webpack@5.97.1)
+      postcss:
+        specifier: ^8.4.49
+        version: 8.5.15
+      tailwindcss:
+        specifier: ^4.3.1
+        version: 4.3.1
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   apps/marketing:
     dependencies:
       '@uprise/api-client':
@@ -536,6 +615,70 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+
+  packages/field:
+    dependencies:
+      '@mapbox/mapbox-gl-draw':
+        specifier: ^1.5.1
+        version: 1.5.1
+      '@turf/turf':
+        specifier: ^7.3.5
+        version: 7.3.5
+      '@uprise/api-client':
+        specifier: workspace:*
+        version: link:../api-client
+      '@uprise/ui':
+        specifier: workspace:*
+        version: link:../ui
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      idb:
+        specifier: ^8.0.3
+        version: 8.0.3
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@18.3.1)
+      mapbox-gl:
+        specifier: ^3.24.1
+        version: 3.24.1
+      react-map-gl:
+        specifier: ^8.1.1
+        version: 8.1.1(mapbox-gl@3.24.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      tailwind-merge:
+        specifier: ^2.5.5
+        version: 2.6.0
+    devDependencies:
+      '@types/geojson':
+        specifier: ^7946.0.14
+        version: 7946.0.16
+      '@types/mapbox-gl':
+        specifier: ^3.4.1
+        version: 3.5.0
+      '@types/node':
+        specifier: ^20.17.9
+        version: 20.19.28
+      '@types/react':
+        specifier: ^18.3.12
+        version: 18.3.27
+      '@types/react-dom':
+        specifier: ^18.3.1
+        version: 18.3.7(@types/react@18.3.27)
+      next:
+        specifier: ^14.2.20
+        version: 14.2.35(@babel/core@7.28.6)(@opentelemetry/api@1.9.0)(@playwright/test@1.61.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@edge-runtime/vm@3.2.0)(@types/node@20.19.28)(lightningcss@1.32.0)(terser@5.46.0)
 
   packages/flags:
     devDependencies:

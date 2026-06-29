@@ -10,9 +10,9 @@ import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard } from "@/components/canvass/section-card";
-import { DataTable } from "@/components/canvass/data-table";
-import { RoleChip } from "@/components/canvass/role-chip";
+import { SectionCard } from "@uprise/field";
+import { DataTable } from "@uprise/field";
+import { RoleChip } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 
 type Role = "VOLUNTEER" | "ORGANISER";

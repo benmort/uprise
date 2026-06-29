@@ -64,17 +64,28 @@ export class BasicAuthGuard implements CanActivate {
     );
   }
 
-  /** Session token from the auth_token cookie or a (non-cron) Bearer header. */
-  private getSessionToken(request: Request, authHeader?: string): string {
-    if (authHeader?.startsWith("Bearer ")) return authHeader.slice("Bearer ".length);
+  /**
+   * Candidate session tokens, in priority order: a (non-cron) Bearer header wins,
+   * otherwise every `auth_token` cookie value. The browser can hold more than one
+   * `auth_token` — e.g. a stale host-only cookie left over from an earlier
+   * cookie-domain config shadowing the current parent-domain one — and sends them
+   * all in the Cookie header. We must try each, not just the first, or a stale
+   * token shadows a valid session and yields a spurious 401.
+   */
+  private getSessionTokens(request: Request, authHeader?: string): string[] {
+    if (authHeader?.startsWith("Bearer ")) return [authHeader.slice("Bearer ".length)];
     const cookie = request.headers.cookie;
+    const tokens: string[] = [];
     if (cookie) {
       for (const part of cookie.split(";")) {
         const [k, ...v] = part.trim().split("=");
-        if (k === "auth_token") return decodeURIComponent(v.join("="));
+        if (k === "auth_token") {
+          const value = decodeURIComponent(v.join("="));
+          if (value) tokens.push(value);
+        }
       }
     }
-    return "";
+    return tokens;
   }
 
   private requestPathCandidates(request: Request): string[] {
@@ -190,9 +201,9 @@ export class BasicAuthGuard implements CanActivate {
 
     // Session token (cookie or non-cron Bearer) — the standard login path once
     // the auth frontend (meld doc 14) is wired. Basic auth remains as a fallback.
-    const sessionToken = this.getSessionToken(request, authHeader);
-    if (sessionToken && this.sessions) {
-      return this.authenticateSession(request, sessionToken);
+    const sessionTokens = this.getSessionTokens(request, authHeader);
+    if (sessionTokens.length > 0 && this.sessions) {
+      return this.authenticateSession(request, sessionTokens);
     }
 
     if (!authHeader?.startsWith("Basic ")) {
@@ -270,15 +281,24 @@ export class BasicAuthGuard implements CanActivate {
     return true;
   }
 
-  /** Authenticate via an opaque session token (cookie or Bearer). */
+  /**
+   * Authenticate via opaque session tokens (cookie or Bearer). Tries each
+   * candidate in order and authenticates with the first that resolves, so a stale
+   * duplicate `auth_token` cookie can't shadow a valid one (see getSessionTokens).
+   */
   private async authenticateSession(
     request: Request & { user?: AuthUser },
-    token: string,
+    tokens: string[],
   ): Promise<boolean> {
-    const resolved = await this.sessions!.resolve(token, {
+    const meta = {
       userAgent: request.headers["user-agent"] ?? null,
       ipAddress: request.ip ?? request.socket?.remoteAddress ?? null,
-    });
+    };
+    let resolved = null;
+    for (const token of tokens) {
+      resolved = await this.sessions!.resolve(token, meta);
+      if (resolved) break;
+    }
     if (!resolved) throw new UnauthorizedException("Invalid or expired session");
     const isSuper = resolved.isSuperAdmin === true;
     const baseRoles = rolesFor(resolved.role as AppUserRole);

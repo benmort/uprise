@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useLocalStorage } from "@uprise/field";
 import { Button } from "@/components/ui/button";
 import { notifyPathname, tourNav } from "@/lib/tours/uprise-tour";
 import { UpriseTourContext, useUpriseTour, useUpriseTourState } from "@/lib/tours/use-uprise-tour";

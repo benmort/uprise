@@ -1,7 +1,36 @@
 import { request as cookieRequest, getApiUrl, type ApiResult } from "@uprise/api-client";
+// Field-facing canvass API now lives in @uprise/field (shared with apps/field, no
+// duplication). Re-exported here so organiser pages keep importing from "@/lib/api".
+import {
+  getCanvassAssignments,
+  submitDoorKnock,
+  releaseTurf,
+  createDoorContact,
+  uploadDoorPhoto,
+  listDispositions,
+  getPushConfig,
+  subscribePush,
+} from "@uprise/field";
+import type {
+  DispositionDef,
+  DoorKnockInput,
+  DoorKnockSurveyAnswer,
+  CanvassAssignment,
+} from "@uprise/field";
 
 export { getApiUrl };
 export type { ApiResult };
+export {
+  getCanvassAssignments,
+  submitDoorKnock,
+  releaseTurf,
+  createDoorContact,
+  uploadDoorPhoto,
+  listDispositions,
+  getPushConfig,
+  subscribePush,
+};
+export type { DispositionDef, DoorKnockInput, DoorKnockSurveyAnswer, CanvassAssignment };
 
 export function getRuntimeConfigWarnings(): string[] {
   const warnings: string[] = [];
@@ -496,23 +525,6 @@ export type CannedSuggestion = {
   autoSend: boolean;
 };
 
-export type DispositionDef = {
-  id: string;
-  tenantId: string | null;
-  code: string;
-  label: string;
-  layer: "CONTACT_RESULT" | "TERMINAL" | "DATA_QUALITY";
-  channel: "DOOR" | "SMS" | "BOTH";
-  isTerminal: boolean;
-  isLocked: boolean;
-  orderIndex: number;
-};
-
-export async function listDispositions(channel?: "DOOR" | "SMS") {
-  const q = channel ? `?channel=${channel}` : "";
-  return request<DispositionDef[]>(`/engagement/dispositions${q}`);
-}
-
 export async function listCannedResponses(channel?: "DOOR" | "SMS", ownerId?: string) {
   const params = new URLSearchParams();
   if (channel) params.set("channel", channel);
@@ -603,39 +615,6 @@ export async function deleteCannedResponse(id: string) {
 
 // ── Canvassing ───────────────────────────────────────────────────────────
 
-export type CanvassAssignment = {
-  turfId: string;
-  lockedUntil: string | null;
-  turf: { id: string; name: string; geometry: unknown; campaignId: string | null };
-  walkLists: Array<{
-    id: string;
-    name: string;
-    items: Array<{
-      id: string;
-      orderIndex: number;
-      status: "PENDING" | "VISITED" | "SKIPPED";
-      contact: Record<string, unknown>;
-    }>;
-  }>;
-};
-
-export type DoorKnockSurveyAnswer = { questionId: string; optionId?: string; valueText?: string };
-
-export type DoorKnockInput = {
-  contactId: string;
-  volunteerId: string;
-  localId: string;
-  dispositionCode?: string;
-  lat?: number;
-  lng?: number;
-  notes?: string;
-  clientCapturedAt?: string;
-  walkListItemId?: string;
-  photoUrl?: string;
-  safetyFlag?: boolean;
-  surveyAnswers?: DoorKnockSurveyAnswer[];
-};
-
 export type TurfSummary = {
   id: string;
   name: string;
@@ -653,26 +632,6 @@ export async function listTurfs(campaignId?: string) {
   return request<TurfSummary[]>(`/canvass/turfs${q}`);
 }
 
-export async function getCanvassAssignments(volunteerId: string) {
-  const q = new URLSearchParams({ volunteerId });
-  return request<CanvassAssignment[]>(`/canvass/assignments?${q}`);
-}
-
-export async function submitDoorKnock(input: DoorKnockInput) {
-  return request<Record<string, unknown>>("/canvass/door-knocks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-}
-
-export async function releaseTurf(turfId: string, volunteerId: string) {
-  return request<{ count: number }>(`/canvass/turfs/${encodeURIComponent(turfId)}/release`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ volunteerId }),
-  });
-}
 
 export async function assignTurf(turfId: string, volunteerId: string, lockedUntil?: string) {
   return request<Record<string, unknown>>("/canvass/turfs/assign", {
@@ -852,43 +811,7 @@ export async function getOptOuts() {
 
 // ── Field extras + ops gaps (G2/G8/G10) ────────────────────────────────────
 
-export async function createDoorContact(input: {
-  volunteerId: string;
-  turfId: string;
-  firstName?: string;
-  lastName?: string;
-  address?: string;
-  phoneE164?: string;
-  lat?: number;
-  lng?: number;
-}) {
-  return request<{ id: string; firstName: string | null; lastName: string | null; address: string | null }>(
-    "/canvass/door-contacts",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    },
-  );
-}
-
 // ── Push to field (G14) ─────────────────────────────────────────────────────
-
-export async function getPushConfig() {
-  return request<{ enabled: boolean; publicKey: string | null }>("/push/config");
-}
-
-export async function subscribePush(sub: {
-  endpoint: string;
-  keys: { p256dh: string; auth: string };
-  userAgent?: string;
-}) {
-  return request<{ ok: boolean }>("/push/subscribe", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(sub),
-  });
-}
 
 export async function broadcastPush(input: { title: string; body: string; url?: string }) {
   return request<{ sent: number; pruned: number; enabled: boolean }>("/push/broadcast", {
@@ -896,26 +819,6 @@ export async function broadcastPush(input: { title: string; body: string; url?: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-}
-
-export async function uploadDoorPhoto(file: File) {
-  const apiUrl = getApiUrl();
-  const form = new FormData();
-  form.append("file", file);
-  try {
-    const res = await fetch(`${apiUrl}/canvass/door-photos`, {
-      method: "POST",
-      credentials: "include",
-      body: form,
-    });
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      return { ok: false as const, error: json?.error?.message || json?.message || `Upload failed (${res.status})` };
-    }
-    return { ok: true as const, data: (json?.data ?? json) as { url: string } };
-  } catch (e) {
-    return { ok: false as const, error: e instanceof Error ? e.message : "Upload failed" };
-  }
 }
 
 export type Shift = {
