@@ -2,7 +2,13 @@ import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DomainLogger } from "./common/logging/domain-logger.service";
 import { PrismaService } from "./prisma/prisma.service";
-import { configureNestApp, normalizeOrigin, parseAllowedOrigins } from "./bootstrap";
+import {
+  assertCookieDomainForSso,
+  configureNestApp,
+  normalizeOrigin,
+  parseAllowedOrigins,
+  sharedParentDomain,
+} from "./bootstrap";
 
 type CorsOriginHandler = (
   origin: string | undefined,
@@ -10,6 +16,14 @@ type CorsOriginHandler = (
 ) => void;
 
 describe("bootstrap CORS configuration", () => {
+  // The cookie-domain guard legitimately warns for these multi-subdomain origins
+  // (no SESSION_COOKIE_DOMAIN in the mock config); keep the test output clean.
+  let warnSpy: jest.SpyInstance;
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => warnSpy.mockRestore());
+
   function createApp(rawOrigins: string) {
     let capturedOrigin: CorsOriginHandler | null = null;
     const config = {
@@ -93,5 +107,64 @@ describe("bootstrap CORS configuration", () => {
     });
     expect(result.error).toBeNull();
     expect(result.allow).toBe(true);
+  });
+});
+
+describe("cross-subdomain SSO cookie-domain guard", () => {
+  describe("sharedParentDomain", () => {
+    it("finds the shared parent across distinct subdomains", () => {
+      expect(
+        sharedParentDomain(["https://admin.dev.uprise.org.au", "https://api.dev.uprise.org.au"]),
+      ).toBe("dev.uprise.org.au");
+    });
+
+    it("treats www vs apex as a shared parent", () => {
+      expect(sharedParentDomain(["https://uprise.org.au", "https://www.uprise.org.au"])).toBe(
+        "uprise.org.au",
+      );
+    });
+
+    it("returns null for identical hosts differing only by port (localhost dev)", () => {
+      expect(sharedParentDomain(["http://localhost:3000", "http://localhost:3002"])).toBeNull();
+    });
+
+    it("returns null for a single origin", () => {
+      expect(sharedParentDomain(["https://api.dev.uprise.org.au"])).toBeNull();
+    });
+
+    it("returns null when hosts share only a single trailing label", () => {
+      expect(sharedParentDomain(["https://foo.com", "https://bar.com"])).toBeNull();
+    });
+  });
+
+  describe("assertCookieDomainForSso", () => {
+    const ssoOrigins = new Set(["https://admin.dev.uprise.org.au", "https://api.dev.uprise.org.au"]);
+
+    it("throws in production when SSO spans subdomains but the cookie domain is empty", () => {
+      expect(() => assertCookieDomainForSso(ssoOrigins, "", true)).toThrow(/SESSION_COOKIE_DOMAIN/);
+    });
+
+    it("warns (does not throw) outside production", () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      expect(() => assertCookieDomainForSso(ssoOrigins, "", false)).not.toThrow();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(".dev.uprise.org.au"));
+      warn.mockRestore();
+    });
+
+    it("is a no-op when the cookie domain is set", () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      expect(() => assertCookieDomainForSso(ssoOrigins, ".dev.uprise.org.au", true)).not.toThrow();
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("is a no-op for single-host (localhost) setups", () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      expect(() =>
+        assertCookieDomainForSso(new Set(["http://localhost:3000", "http://localhost:3002"]), "", true),
+      ).not.toThrow();
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
   });
 });

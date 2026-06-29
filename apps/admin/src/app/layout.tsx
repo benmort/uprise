@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { ServiceWorkerCleanup } from "@/components/sw-cleanup";
 import { ToastProvider } from "@/components/ui/toast";
 import { NO_FLASH_THEME_SCRIPT, ThemeProvider } from "@/components/theme/theme-provider";
 
@@ -40,6 +41,7 @@ export default function RootLayout({
             __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};`,
           }}
         />
+        <ServiceWorkerCleanup />
         <ThemeProvider>
           <ToastProvider>
             <PWAInstallPrompt />

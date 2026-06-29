@@ -5,13 +5,21 @@ import { resolve } from "node:path";
 /**
  * Seeds demo data, logs in the seeded demo organiser to mint a real session, and
  * writes a Playwright storageState carrying the httpOnly `auth_token` cookie (meld
- * doc 14 cutover — the app no longer reads sessionStorage creds). Cookies are
- * host-scoped (port-agnostic), so one `localhost` cookie is sent to both web (:3000)
- * and api (:3001). Also resolves seeded IDs for dynamic-route specs.
+ * doc 14 cutover — the app no longer reads sessionStorage creds). Locally the cookie
+ * is host-scoped to `localhost` (port-agnostic, so one cookie reaches web :3000 and
+ * api :3001); in ngrok mode it is the parent-domain `.dev.uprise.org.au` Secure
+ * cookie shared across the subdomains (the real SSO). Also resolves seeded IDs.
+ *
+ * The E2E_TARGET defaulting is inlined (mirrors playwright.config + auth.spec) —
+ * a shared local .ts import trips Playwright's TS loader on Node 23.
  */
+const IS_NGROK = process.env.E2E_TARGET === "ngrok";
 const REPO = resolve(__dirname, "../../..");
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
-const COOKIE_HOST = process.env.E2E_COOKIE_DOMAIN || "localhost";
+const API =
+  process.env.NEXT_PUBLIC_API_URL || (IS_NGROK ? "https://api.dev.uprise.org.au/api/v1" : "http://localhost:3001/api/v1");
+const COOKIE_HOST = process.env.E2E_COOKIE_DOMAIN || (IS_NGROK ? ".dev.uprise.org.au" : "localhost");
+const COOKIE_SECURE = IS_NGROK;
+const WEB_URL = process.env.WEB_URL || (IS_NGROK ? "https://admin.dev.uprise.org.au" : "http://localhost:3000");
 const ORGANISER = { email: "demo.organiser@uprise.test", password: "demo-organiser-pw" };
 
 function readEnv(key: string): string {
@@ -95,7 +103,7 @@ export default async function globalSetup() {
             domain: COOKIE_HOST,
             path: "/",
             httpOnly: true,
-            secure: false,
+            secure: COOKIE_SECURE,
             sameSite: "Lax" as const,
             expires: Math.floor(Date.now() / 1000) + 12 * 60 * 60,
           },
@@ -104,7 +112,7 @@ export default async function globalSetup() {
     origins: ids.volunteerId
       ? [
           {
-            origin: process.env.WEB_URL || "http://localhost:3000",
+            origin: WEB_URL,
             localStorage: [{ name: "uprise.volunteerId", value: ids.volunteerId }],
           },
         ]

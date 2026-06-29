@@ -3,6 +3,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
 import { FieldShell } from "@uprise/field";
+import { ServiceWorkerCleanup } from "@/components/sw-cleanup";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};`,
           }}
         />
+        <ServiceWorkerCleanup />
         <FieldShell>{children}</FieldShell>
       </body>
     </html>

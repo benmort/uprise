@@ -38,6 +38,12 @@ export type ValidatedEnv = {
   PORT: number;
   API_BASE_URL: string;
   CORS_ALLOWED_ORIGINS: string;
+  // Parent domain the session cookie is scoped to for cross-subdomain SSO (meld
+  // doc 14), e.g. ".dev.uprise.org.au". Blank → host-only (single-app/localhost).
+  // First-class here so it isn't silently dropped through validation and so the
+  // bootstrap SSO guard reads a validated value (see bootstrap.assertCookieDomainForSso).
+  SESSION_COOKIE_DOMAIN: string;
+  AUTH_APP_URL: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
   DATABASE_URL: string;
@@ -105,6 +111,8 @@ export function validateEnv(config: Env): ValidatedEnv {
     PORT: numberInRange(config, "PORT", 1, 65535, 3001, errors),
     API_BASE_URL: required(config, "API_BASE_URL", errors),
     CORS_ALLOWED_ORIGINS: config.CORS_ALLOWED_ORIGINS?.trim() || "",
+    SESSION_COOKIE_DOMAIN: config.SESSION_COOKIE_DOMAIN?.trim() || "",
+    AUTH_APP_URL: config.AUTH_APP_URL?.trim() || "",
     RATE_LIMIT_WINDOW_MS: numberInRange(config, "RATE_LIMIT_WINDOW_MS", 1000, 3600000, 60000, errors),
     RATE_LIMIT_MAX_REQUESTS: numberInRange(config, "RATE_LIMIT_MAX_REQUESTS", 10, 10000, 300, errors),
     DATABASE_URL: required(config, "DATABASE_URL", errors),

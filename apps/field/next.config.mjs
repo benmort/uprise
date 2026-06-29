@@ -9,6 +9,13 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: pwaDisabled,
+  // Never let the SW own the app root. next-pwa's dynamicStartUrl registers a
+  // NetworkFirst "/" route whose cacheWillUpdate rewrites a cross-origin
+  // opaqueredirect (our middleware's 307 → auth app) into a cached 200, which it
+  // then replays forever ("from service worker") — an inescapable SSO loop. The
+  // root must always hit the network so the auth redirect passes through.
+  dynamicStartUrl: false,
+  cacheStartUrl: false,
   // worker/index.js (web-push handlers) is bundled automatically by next-pwa.
   // Door-knock mutations are NEVER cached here — they go through the app-level
   // sync queue in @uprise/field (lib/sync-queue).
