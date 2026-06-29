@@ -21,7 +21,10 @@ const TWOFA_CODE_TTL_MS = 10 * 60 * 1000;
 export interface Membership {
   tenantId: string;
   tenantName: string;
+  tenantSlug: string;
   role: AppUserRole;
+  /** Plan key of the owning network, flattened for the client (null when network-less). */
+  planName: string | null;
   /** Billing context from the owning network (null for network-less tenants). */
   network: { id: string; planName: string | null; subscriptionStatus: string | null } | null;
 }
@@ -85,6 +88,7 @@ export class IamFlowsService {
         tenant: {
           select: {
             name: true,
+            slug: true,
             network: { select: { id: true, planName: true, subscriptionStatus: true } },
           },
         },
@@ -93,7 +97,9 @@ export class IamFlowsService {
     return rows.map((m) => ({
       tenantId: m.tenantId,
       tenantName: m.tenant.name,
+      tenantSlug: m.tenant.slug,
       role: m.role,
+      planName: m.tenant.network?.planName ?? null,
       network: m.tenant.network
         ? {
             id: m.tenant.network.id,

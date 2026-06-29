@@ -214,11 +214,22 @@ export interface TenantInvitationSummary {
 }
 
 // ── Tenants (sign-up subdomain check) ────────────────────────────────
+/** Minimal tenant shape returned by create (enough to switch into it). */
+export interface CreatedTenant {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export const tenants = {
   checkAvailability: (slug: string) =>
     request<AvailabilityResponse>(`/tenants/availability?slug=${encodeURIComponent(slug)}`, undefined, {
       redirectOn401: false,
     }),
+
+  /** Self-serve create from the in-app switcher (owner-on-paid-plan or super-admin; API enforces). */
+  createSelfServe: (body: { name: string; slug: string }) =>
+    request<CreatedTenant>("/tenants/self-serve", { method: "POST", body: JSON.stringify(body) }),
 
   // Join-request approval queue (admin; session + permission gated).
   listJoinRequests: (tenantId: string, status?: string) =>

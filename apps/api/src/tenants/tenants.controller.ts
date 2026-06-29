@@ -11,7 +11,8 @@ import {
   Req,
 } from "@nestjs/common";
 import type { Request } from "express";
-import { TenantsService } from "./tenants.service";
+import { AppUserRole } from "@uprise/db";
+import { TenantsService, TENANT_CREATE_PLANS } from "./tenants.service";
 import { IamFlowsService } from "../auth/iam-flows.service";
 import type { AuthUser } from "../auth/auth-user";
 import { RequirePermission } from "../auth/require-permission.decorator";
@@ -19,6 +20,7 @@ import {
   AddMemberDto,
   ApproveJoinRequestDto,
   CreateInvitationDto,
+  CreateSelfServeTenantDto,
   CreateTenantDto,
   RejectJoinRequestDto,
   UpdateMemberRoleDto,
@@ -59,6 +61,40 @@ export class TenantsController {
       name: dto.name,
       networkId: dto.networkId,
       ownerUserId: req.user?.id,
+    });
+  }
+
+  /**
+   * Self-serve tenant creation from the in-app switcher. Declared before :id routes.
+   * CASL (manage tenant.tenant) limits this to owners/super-admins; on top of that a
+   * non-super-admin must own their current tenant AND sit on a paid plan. The new tenant
+   * is created under the caller's network with the caller as OWNER.
+   */
+  @Post("self-serve")
+  @RequirePermission(TENANT_MANAGE)
+  async createSelfServe(
+    @Body() dto: CreateSelfServeTenantDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    const user = req.user;
+    if (!user) throw new ForbiddenException("Not authenticated");
+
+    let networkId: string | undefined;
+    if (!user.isSuperAdmin) {
+      const memberships = await this.flows.membershipsFor(user.id);
+      const current = memberships.find((m) => m.tenantId === user.tenantId);
+      const allowed =
+        current?.role === AppUserRole.OWNER &&
+        (TENANT_CREATE_PLANS as readonly string[]).includes(current.planName ?? "");
+      if (!allowed) throw new ForbiddenException("Your plan does not allow creating tenants");
+      networkId = current?.network?.id ?? undefined;
+    }
+
+    return this.tenants.createTenant({
+      slug: dto.slug,
+      name: dto.name,
+      networkId,
+      ownerUserId: user.id,
     });
   }
 

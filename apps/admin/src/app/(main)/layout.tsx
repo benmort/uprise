@@ -744,12 +744,23 @@ export default function MainLayout({
               collapsed ? "lg:justify-center" : "justify-between",
             )}
           >
-            <div className="flex items-center gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/images/uprise-icon.svg" alt="Uprise" className="h-7 w-7 shrink-0" />
-              <span className={labelHidden}>
-                <Logo />
-              </span>
+            <div className="flex min-w-0 items-center gap-2">
+              {principal ? (
+                <TenantSwitcher
+                  memberships={principal.memberships}
+                  currentTenantId={principal.tenantId}
+                  isSuperAdmin={principal.isSuperAdmin}
+                  collapsed={collapsed}
+                />
+              ) : (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/images/uprise-icon.svg" alt="Uprise" className="h-7 w-7 shrink-0" />
+                  <span className={labelHidden}>
+                    <Logo />
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -933,12 +944,6 @@ export default function MainLayout({
             <div className="flex items-center gap-2.5">
               <ThemeToggle />
               <NotificationsDropdown unreadCount={inboxUnreadCount} />
-              {principal ? (
-                <TenantSwitcher
-                  memberships={principal.memberships}
-                  currentTenantId={principal.tenantId}
-                />
-              ) : null}
               <UserDropdown email={principal?.email ?? null} />
             </div>
           </header>

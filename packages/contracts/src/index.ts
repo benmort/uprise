@@ -17,6 +17,10 @@ export interface Membership {
   tenantId: string;
   tenantName: string;
   role: AppRole;
+  /** Tenant URL slug (subdomain). Optional — older callers may omit. */
+  tenantSlug?: string;
+  /** Plan key of the tenant's owning network ("grassroots"|"starter"|"growth"|"scale"), null when network-less. */
+  planName?: string | null;
 }
 
 export interface AuthPrincipal {

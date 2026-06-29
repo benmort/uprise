@@ -7,6 +7,12 @@ export class CreateTenantDto {
   @IsOptional() @IsString() @MaxLength(64) networkId?: string;
 }
 
+/** Self-serve tenant creation from the in-app switcher (owner-on-paid-plan or super-admin). */
+export class CreateSelfServeTenantDto {
+  @IsString() @MaxLength(200) name!: string;
+  @IsString() @MaxLength(64) slug!: string;
+}
+
 export class UpdateTenantDto {
   @IsOptional() @IsString() @MaxLength(200) name?: string;
   @IsOptional() @IsString() @MaxLength(64) slug?: string;

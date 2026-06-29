@@ -23,6 +23,13 @@ const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Slug shape (prog parity): lowercase alphanumeric + hyphens, no leading/trailing hyphen. */
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
+/**
+ * Plan keys whose owning network may self-serve additional tenants from the in-app switcher.
+ * Paid tiers only — the free "grassroots" plan and network-less tenants cannot. Super-admins
+ * bypass this. Keep in sync with TENANT_CREATE_PLANS_UI in the admin tenant-switcher.
+ */
+export const TENANT_CREATE_PLANS = ["starter", "growth", "scale"] as const;
+
 export interface CreateTenantInput {
   slug: string;
   name: string;
