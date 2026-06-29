@@ -8,6 +8,12 @@ import { Alert, Button, Field, Input, PasswordInput, Spinner, TurnstileWidget, t
 import { auth, isTwofaChallenge, type AuthPrincipal } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 
+/** Role-aware nudge for the "already signed in" interstitial. */
+function roleVerb(p: AuthPrincipal): string {
+  if (p.role === "VOLUNTEER") return "canvassing";
+  if (p.role === "ORGANISER") return "organising";
+  return "managing"; // OWNER + super-admin
+}
 
 export default function LoginPage() {
   const returnTo = useQueryParams().get("return_to");
@@ -56,6 +62,15 @@ export default function LoginPage() {
     completeAuth(res.data.memberships, returnTo);
   }
 
+  // "Switch account" must clear the session — otherwise the valid cookie keeps
+  // funnelling the user back to this "Welcome back" screen. Logging out drops the
+  // cookie so checkSession returns null and the sign-in form takes over.
+  async function switchAccount() {
+    setSwitching(true);
+    await auth.logout();
+    setExisting(null);
+  }
+
   const q = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "";
 
   // Brief check before deciding form vs "already signed in", to avoid a flash.
@@ -73,14 +88,16 @@ export default function LoginPage() {
       <div className="flex w-full flex-col">
         <div className="mb-6">
           <h1 className="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90 sm:text-title-md">Welcome back</h1>
-          <p className="text-sm text-muted-foreground">You&apos;re already signed in.</p>
+          <p className="text-sm text-muted-foreground">
+            You&apos;re already signed in. Let&apos;s get {roleVerb(existing)}.
+          </p>
         </div>
         <div className="space-y-3">
           <Button className="w-full gap-2" onClick={() => completeAuth(existing.memberships, returnTo)}>
             Continue as {existing.email}
             <ArrowRight className="h-4 w-4" />
           </Button>
-          <Button variant="outline" className="w-full" onClick={() => setSwitching(true)}>
+          <Button variant="outline" className="w-full" disabled={switching} onClick={switchAccount}>
             Switch account
           </Button>
         </div>

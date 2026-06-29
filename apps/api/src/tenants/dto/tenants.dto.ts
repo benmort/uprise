@@ -29,7 +29,10 @@ export class UpdateMemberRoleDto {
 }
 
 export class CreateInvitationDto {
-  @IsEmail() @MaxLength(200) email!: string;
+  // Exactly one of email / phone (validated in the service). Phone invites are
+  // delivered by SMS and accepted via the volunteer phone-first flow.
+  @IsOptional() @IsEmail() @MaxLength(200) email?: string;
+  @IsOptional() @IsString() @MaxLength(20) phone?: string;
   @IsEnum(AppUserRole) role!: AppUserRole;
 }
 
@@ -52,6 +55,26 @@ export class RequestAccessDto {
 
 export class ConfirmAccessDto {
   @IsEmail() @MaxLength(200) email!: string;
+  @IsString() @MaxLength(12) code!: string;
+  @IsString() @MaxLength(64) tenantSlug!: string;
+}
+
+// ── Phone-first self-signup → admin approval (volunteers) ─────────────
+export class RequestAccessByPhoneDto {
+  @IsString() @MaxLength(20) phone!: string;
+  @IsString() @MinLength(1) @MaxLength(200) displayName!: string;
+  @IsIn(["staff", "volunteer"]) requestedRole!: "staff" | "volunteer";
+  @IsString() @MaxLength(64) tenantSlug!: string;
+  // Signup attribution (optional; captured from the entry URL).
+  @IsOptional() @IsString() @MaxLength(120) signupSource?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmSource?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmMedium?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmCampaign?: string;
+  @IsOptional() @IsString() @MaxLength(120) referrerChannel?: string;
+}
+
+export class ConfirmAccessByPhoneDto {
+  @IsString() @MaxLength(20) phone!: string;
   @IsString() @MaxLength(12) code!: string;
   @IsString() @MaxLength(64) tenantSlug!: string;
 }

@@ -386,12 +386,21 @@ model User {
   passwordHash    String?
   twofaEnabled    Boolean          @default(false)
   twofaSecret     String?
-  mobile          String?
+  // Unique so a phone can be a login identifier (phone-first volunteer auth).
+  // Postgres treats NULLs as distinct, so many users without a mobile are fine.
+  mobile          String?          @unique
   mobileVerified  Boolean          @default(false)
   emailVerified   Boolean          @default(false)
   // Tenant-independent god-mode flag (cross-tenant access). Set by a DB row update only —
   // never via any API/role picker. The single source of truth for SUPER_ADMIN.
   isSuperAdmin    Boolean          @default(false)
+  // Signup attribution — where this account came from (utm/source/channel), captured
+  // at sign-up so the auth/signup interface can adapt and funnels can be analysed.
+  signupSource    String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  referrerChannel String?
   lastSignInAt    DateTime?
   deletedAt       DateTime?
   registeredAt    DateTime         @default(now())
@@ -1188,7 +1197,10 @@ model TenantMember {
 model TenantInvitation {
   id        String      @id @default(cuid())
   tenantId  String
-  email     String
+  // Exactly one of email / phone is set. Phone invites are delivered by SMS and
+  // accepted via the phone-first volunteer flow. Postgres NULLs keep both uniques safe.
+  email     String?
+  phone     String?
   role      AppUserRole
   status    String
   token     String?     @unique
@@ -1198,6 +1210,7 @@ model TenantInvitation {
   tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, email])
+  @@unique([tenantId, phone])
   @@index([tenantId, status])
   @@schema("tenant")
 }
@@ -1212,6 +1225,7 @@ model TenantJoinRequest {
   tenantId      String
   userId        String
   email         String
+  phone         String?
   requestedRole String
   status        String
   decidedBy     String?
@@ -1266,13 +1280,18 @@ model PasswordReset {
 
 model MobileVerification {
   id         String    @id @default(cuid())
-  userId     String
+  // userId is null for a pre-user phone-login challenge (no account yet, or a decoy
+  // sent to an unknown number for enumeration resistance). Set for 2FA / mobile-verify.
+  userId     String?
+  mobile     String?
   code       String
+  attempts   Int       @default(0)
   expiresAt  DateTime
   verifiedAt DateTime?
   createdAt  DateTime  @default(now())
 
   @@index([userId])
+  @@index([mobile])
   @@schema("iam")
 }
 

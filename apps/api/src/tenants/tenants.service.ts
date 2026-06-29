@@ -38,7 +38,9 @@ export interface CreateTenantInput {
 }
 
 export interface CreateInvitationInput {
-  email: string;
+  // Exactly one of email / phone. Phone invites are delivered by SMS.
+  email?: string;
+  phone?: string;
   role: AppUserRole;
   invitedBy?: string;
 }
@@ -268,18 +270,28 @@ export class TenantsService {
     input: CreateInvitationInput,
   ): Promise<{ id: string; token: string }> {
     await this.getTenant(tenantId);
-    const email = input.email.trim().toLowerCase();
-    if (!email) throw new BadRequestException("email is required");
+    const email = input.email?.trim().toLowerCase() || undefined;
+    const phone = input.phone?.trim() || undefined;
+    if ((email && phone) || (!email && !phone)) {
+      throw new BadRequestException("Provide exactly one of email or phone");
+    }
+    if (phone && !/^\+[1-9]\d{6,14}$/.test(phone)) {
+      throw new BadRequestException("phone must be in international format, e.g. +61400000000");
+    }
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
+    // One pending invite per (tenant, channel-value): re-issue resets the token/expiry.
+    const where = email
+      ? { tenantId_email: { tenantId, email } }
+      : { tenantId_phone: { tenantId, phone: phone as string } };
 
     return this.prisma.$transaction(async (tx) => {
-      // One pending invite per (tenant, email): re-issue resets the token/expiry.
       const invitation = await tx.tenantInvitation.upsert({
-        where: { tenantId_email: { tenantId, email } },
+        where,
         create: {
           tenantId,
-          email,
+          email: email ?? null,
+          phone: phone ?? null,
           role: input.role,
           status: "pending",
           token,
@@ -288,12 +300,12 @@ export class TenantsService {
         },
         update: { role: input.role, status: "pending", token, expiresAt, invitedBy: input.invitedBy ?? null },
       });
-      // Reuse the existing catalogue event; the invitation-email reaction fires off this.
+      // Reuse the existing catalogue event; the invitation reaction branches email/SMS.
       await this.outbox.append(tx, {
         tenantId,
         eventType: "tenant.invitation.sent",
         aggregateId: invitation.id,
-        payload: { invitationId: invitation.id, tenantId, email },
+        payload: { invitationId: invitation.id, tenantId, email: email ?? null, phone: phone ?? null },
       });
       return { id: invitation.id, token };
     });

@@ -13,6 +13,7 @@ export * from "./components/confirm-dialog";
 export * from "./components/dropdown";
 export * from "./components/empty-state";
 export * from "./components/field";
+export * from "./components/field-onboarding";
 export * from "./components/form-dialog";
 export * from "./components/form-input";
 export * from "./components/form-label";
@@ -35,3 +36,6 @@ export * from "./components/tag-chip";
 export * from "./components/textarea";
 export * from "./components/toast";
 export * from "./components/tooltip-hint";
+
+// ── Hooks ───────────────────────────────────────────────────────────────────
+export * from "./hooks/use-local-storage";

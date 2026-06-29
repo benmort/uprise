@@ -9,7 +9,6 @@ import { getCanvassAssignments, type CanvassAssignment } from "../api";
 import { getVolunteerId } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { MapThumbnail } from "../components/map-thumbnail";
-import { FieldOnboarding } from "../components/field-onboarding";
 import { useOnlineStatus } from "../hooks/use-online-status";
 
 /** Outer ring [lng,lat][] from a GeoJSON Polygon/MultiPolygon for the thumbnail. */
@@ -69,7 +68,6 @@ export function Assignments() {
 
   return (
     <div className="space-y-4">
-      <FieldOnboarding />
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">

@@ -2,6 +2,7 @@ import type { ConfigService } from "@nestjs/config";
 import type { EventEnvelope, Reaction } from "@uprise/events";
 import type { PrismaService } from "../../prisma/prisma.service";
 import type { EmailService } from "../../email/email.service";
+import type { TransactionalDispatcher } from "../../messaging/transactional-dispatcher";
 import type { StripeService } from "../../payment/stripe.service";
 import type { BillingService } from "../../payment/billing.service";
 import type { DomainLogger } from "../logging/domain-logger.service";
@@ -18,6 +19,7 @@ import type { DomainLogger } from "../logging/domain-logger.service";
 export interface ReactionDeps {
   prisma: PrismaService;
   email: EmailService;
+  sms: TransactionalDispatcher;
   stripe: StripeService;
   billing: BillingService;
   config: ConfigService;
@@ -91,17 +93,28 @@ function welcomeEmailReaction({ email }: ReactionDeps): Reaction {
   };
 }
 
-/** tenant.invitation.sent → invitation email (loads the token off the invitation). */
-function invitationEmailReaction({ prisma, email, config }: ReactionDeps): Reaction {
+/** tenant.invitation.sent → invitation email or SMS (loads the token off the invitation). */
+function invitationEmailReaction({ prisma, email, sms, config }: ReactionDeps): Reaction {
   return {
     trigger: "tenant.invitation.sent",
     emits: ["email.email.queued"],
     async handle(event: EventEnvelope): Promise<void> {
-      const p = event.payload as { invitationId: string; tenantId: string; email: string };
+      const p = event.payload as { invitationId: string; tenantId: string };
       const invite = await prisma.tenantInvitation.findUnique({ where: { id: p.invitationId } });
       if (!invite?.token) return;
       const tenant = await prisma.tenant.findUnique({ where: { id: p.tenantId } });
       const authAppUrl = config.get<string>("AUTH_APP_URL", "http://localhost:3002").replace(/\/+$/, "");
+      // Phone-only invite → SMS the mobile-first accept link (/v/invite/<token>).
+      if (invite.phone && !invite.email) {
+        await sms.sendSms({
+          tenantId: p.tenantId,
+          toPhone: invite.phone,
+          body: `You're invited to join ${tenant?.name ?? "Uprise"} — tap to accept: ${authAppUrl}/v/invite/${invite.token}`,
+          purpose: "invitation",
+        });
+        return;
+      }
+      if (!invite.email) return;
       await email.sendTransactional({
         tenantId: p.tenantId,
         toAddress: invite.email,

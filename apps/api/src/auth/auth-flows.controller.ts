@@ -18,6 +18,9 @@ import {
   AcceptInviteDto,
   ConfirmEmailDto,
   EmailDto,
+  PhoneResendDto,
+  PhoneStartDto,
+  PhoneVerifyDto,
   ResetPasswordDto,
   SelectTenantDto,
   TokenDto,
@@ -94,6 +97,24 @@ export class AuthFlowsController {
   @Post("2fa/verify")
   async verify2fa(@Body() dto: TwofaVerifyDto, @Res({ passthrough: true }) res: Response) {
     return this.grantResponse(res, await this.flows.verify2fa(dto.challengeId, dto.code));
+  }
+
+  // ── Phone-first passwordless login (volunteers/canvassers) ──────────────
+  @RequireCaptcha("strict")
+  @Post("phone/start")
+  startPhoneLogin(@Body() dto: PhoneStartDto) {
+    return this.flows.startPhoneLogin(dto.phone);
+  }
+
+  @RequireCaptcha("strict")
+  @Post("phone/resend")
+  resendPhoneLogin(@Body() dto: PhoneResendDto) {
+    return this.flows.resendPhoneLogin(dto.challengeId);
+  }
+
+  @Post("phone/verify")
+  async verifyPhoneLogin(@Body() dto: PhoneVerifyDto, @Res({ passthrough: true }) res: Response) {
+    return this.grantResponse(res, await this.flows.verifyPhoneLogin(dto.challengeId, dto.code));
   }
 
   @Get("invite/:token")

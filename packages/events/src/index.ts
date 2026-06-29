@@ -73,7 +73,7 @@ export interface DomainEventMap {
   "messaging.tx-sms.requested": { tenantId: string; toPhone: string; purpose: string };
   "messaging.inbound.received": { tenantId: string; contactPhone: string; channel: string };
   "iam.user.created": { userId: string; email: string; tenantId: string };
-  "tenant.invitation.sent": { invitationId: string; tenantId: string; email: string };
+  "tenant.invitation.sent": { invitationId: string; tenantId: string; email: string | null; phone?: string | null };
   "email.email.queued": { emailId: string; tenantId: string; toAddress: string };
   "email.email.sending": { emailId: string; tenantId: string; toAddress: string };
   "email.email.sent": { emailId: string; tenantId: string; toAddress: string };

@@ -98,6 +98,32 @@ export const confirmAccessSchema = z.object({
 });
 export type ConfirmAccessRequest = z.infer<typeof confirmAccessSchema>;
 
+/** Signup attribution captured from the entry URL (utm/source/channel). All optional. */
+export const signupAttributionSchema = z.object({
+  signupSource: z.string().max(120).optional(),
+  utmSource: z.string().max(120).optional(),
+  utmMedium: z.string().max(120).optional(),
+  utmCampaign: z.string().max(120).optional(),
+  referrerChannel: z.string().max(120).optional(),
+});
+export type SignupAttribution = z.infer<typeof signupAttributionSchema>;
+
+// Phone-first self-signup → admin approval (volunteers).
+export const requestAccessByPhoneSchema = signupAttributionSchema.extend({
+  phone: z.string().min(5).max(20),
+  displayName: z.string().min(1).max(200),
+  requestedRole: z.enum(["staff", "volunteer"]),
+  tenantSlug: z.string().min(1).max(64),
+});
+export type RequestAccessByPhoneRequest = z.infer<typeof requestAccessByPhoneSchema>;
+
+export const confirmAccessByPhoneSchema = z.object({
+  phone: z.string().min(5).max(20),
+  code: z.string().min(4).max(12),
+  tenantSlug: z.string().min(1).max(64),
+});
+export type ConfirmAccessByPhoneRequest = z.infer<typeof confirmAccessByPhoneSchema>;
+
 export const approveJoinRequestSchema = z.object({ role: z.enum(["ORGANISER", "VOLUNTEER"]) });
 export type ApproveJoinRequestRequest = z.infer<typeof approveJoinRequestSchema>;
 
@@ -159,6 +185,7 @@ export function isTwofaChallenge(r: LoginResponse): r is TwofaChallengeResponse 
 
 export interface InvitePreview {
   email: string;
+  phone: string | null;
   tenantName: string;
   role: AppRole;
 }

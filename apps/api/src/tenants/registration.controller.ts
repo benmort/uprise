@@ -4,7 +4,13 @@ import type { Response } from "express";
 import { RegistrationService } from "./registration.service";
 import { IamFlowsService } from "../auth/iam-flows.service";
 import { setSessionCookie } from "../auth/session-cookie.util";
-import { ConfirmAccessDto, RegisterDto, RequestAccessDto } from "./dto/tenants.dto";
+import {
+  ConfirmAccessByPhoneDto,
+  ConfirmAccessDto,
+  RegisterDto,
+  RequestAccessByPhoneDto,
+  RequestAccessDto,
+} from "./dto/tenants.dto";
 import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 
 /**
@@ -42,5 +48,17 @@ export class RegistrationController {
   @Post("request-access/verify")
   confirmAccess(@Body() dto: ConfirmAccessDto) {
     return this.flows.confirmAccess(dto.email, dto.code, dto.tenantSlug);
+  }
+
+  // ── Phone-first self-signup → admin approval (volunteers) ───────────
+  @RequireCaptcha("strict")
+  @Post("request-access/phone")
+  requestAccessByPhone(@Body() dto: RequestAccessByPhoneDto) {
+    return this.flows.requestAccessByPhone(dto);
+  }
+
+  @Post("request-access/phone/verify")
+  confirmAccessByPhone(@Body() dto: ConfirmAccessByPhoneDto) {
+    return this.flows.confirmAccessByPhone(dto.phone, dto.code, dto.tenantSlug);
   }
 }

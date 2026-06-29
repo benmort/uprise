@@ -17,11 +17,12 @@ function setup() {
     tenantJoinRequest: { findUnique: jest.fn(async () => ({ id: "jr1", userId: "u9", tenantId: "t1" })) },
   };
   const email = { sendTransactional: jest.fn(async () => ({ id: "e1" })) } as any;
+  const sms = { sendSms: jest.fn(async () => undefined), sendEmail: jest.fn(async () => undefined) } as any;
   const stripe = { isConfigured: jest.fn(() => true), createCustomer: jest.fn(async () => ({ id: "cus_1" })) } as any;
   const billing = { projectCustomer: jest.fn(async () => undefined) } as any;
   const config = { get: jest.fn((k: string, fb?: string) => (k === "AUTH_APP_URL" ? "https://auth.test" : fb ?? "")) } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const deps: ReactionDeps = { prisma, email, stripe, billing, config, logger };
+  const deps: ReactionDeps = { prisma, email, sms, stripe, billing, config, logger };
   const reactions = buildDomainReactions(deps);
   const byTrigger = (t: string) => reactions.find((r) => r.trigger === t) as Reaction;
   const ev = (payload: unknown): EventEnvelope => ({
@@ -33,7 +34,7 @@ function setup() {
     metadata: {},
     occurredAt: "2026-01-01T00:00:00.000Z",
   });
-  return { reactions, byTrigger, ev, prisma, email, stripe, billing };
+  return { reactions, byTrigger, ev, prisma, email, sms, stripe, billing };
 }
 
 describe("domain reactions", () => {
@@ -134,6 +135,16 @@ describe("domain reactions", () => {
     const call = email.sendTransactional.mock.calls[0][0];
     expect(call.templateKey).toBe("invitation");
     expect(call.vars.link).toBe("https://auth.test/invite/tok123");
+  });
+
+  it("tenant.invitation.sent → SMS for a phone-only invite (not email)", async () => {
+    const { byTrigger, ev, email, sms, prisma } = setup();
+    prisma.tenantInvitation.findUnique.mockResolvedValueOnce({ id: "inv1", email: null, phone: "+61400000000", token: "tok123" });
+    await byTrigger("tenant.invitation.sent").handle(ev({ invitationId: "inv1", tenantId: "t1", phone: "+61400000000" }));
+    expect(email.sendTransactional).not.toHaveBeenCalled();
+    const call = sms.sendSms.mock.calls[0][0];
+    expect(call.toPhone).toBe("+61400000000");
+    expect(call.body).toContain("https://auth.test/v/invite/tok123");
   });
 
   it("invitation reaction no-ops when the invite has no token", async () => {

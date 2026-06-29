@@ -47,6 +47,7 @@ function setup() {
       create: jest.fn(async () => ({ id: "mv1" })),
       findUnique: jest.fn(async () => null),
       findFirst: jest.fn(async () => null),
+      count: jest.fn(async () => 0),
       update: jest.fn(async () => ({})),
     },
     $transaction: jest.fn(async (arg: any) =>
@@ -202,12 +203,125 @@ describe("IamFlowsService", () => {
       expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
     });
 
-    it("verify rejects a wrong code", async () => {
+    it("verify rejects a wrong code and increments attempts", async () => {
       const { svc, prisma } = setup();
       prisma.mobileVerification.findUnique.mockResolvedValueOnce({
-        id: "mv1", userId: "u1", code: "123456", verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
+        id: "mv1", userId: "u1", code: "123456", attempts: 0, verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
       });
       await expect(svc.verify2fa("mv1", "999999")).rejects.toThrow();
+      expect(prisma.mobileVerification.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { attempts: { increment: 1 } } }),
+      );
+    });
+
+    it("verify rejects once the attempt cap is reached", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce({
+        id: "mv1", userId: "u1", code: "123456", attempts: 5, verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verify2fa("mv1", "123456")).rejects.toThrow();
+    });
+
+    it("start skips the SMS once over the per-user send cap", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobile: "+61400000000" });
+      prisma.mobileVerification.count.mockResolvedValueOnce(3); // at the cap
+      await svc.start2fa("u1");
+      expect(dispatcher.sendSms).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("phone-first login", () => {
+    it("start sends an SMS code to a known, active number", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobile: "+61400000000", deletedAt: null });
+      const { challengeId } = await svc.startPhoneLogin("+61400000000");
+      expect(challengeId).toBe("mv1");
+      expect(prisma.mobileVerification.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userId: "u1", mobile: "+61400000000" }) }),
+      );
+      expect(dispatcher.sendSms).toHaveBeenCalledWith(
+        expect.objectContaining({ purpose: "phone_login", toPhone: "+61400000000" }),
+      );
+    });
+
+    it("start returns a challengeId but sends NO SMS for an unknown number (enumeration-safe)", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+      const { challengeId } = await svc.startPhoneLogin("+61400000001");
+      expect(challengeId).toBe("mv1");
+      expect(prisma.mobileVerification.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ userId: null, mobile: "+61400000001" }) }),
+      );
+      expect(dispatcher.sendSms).not.toHaveBeenCalled();
+    });
+
+    it("start skips the SMS once over the per-phone send cap (SMS-bomb guard)", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobile: "+61400000000", deletedAt: null });
+      prisma.mobileVerification.count.mockResolvedValueOnce(3); // at the cap
+      await svc.startPhoneLogin("+61400000000");
+      expect(dispatcher.sendSms).not.toHaveBeenCalled();
+    });
+
+    it("start rejects a non-E.164 number", async () => {
+      const { svc } = setup();
+      await expect(svc.startPhoneLogin("0400 000 000")).rejects.toThrow();
+    });
+
+    it("verify grants a session on a correct code", async () => {
+      const { svc, prisma, sessions } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce({
+        id: "mv1", userId: "u1", mobile: "+61400000000", code: "123456", attempts: 0,
+        verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", deletedAt: null, isSuperAdmin: false });
+      const grant = await svc.verifyPhoneLogin("mv1", "123456");
+      expect(grant.token).toBe("sess-token");
+      expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
+    });
+
+    it("verify increments attempts and throws on a wrong code", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce({
+        id: "mv1", userId: "u1", mobile: "+61400000000", code: "123456", attempts: 0,
+        verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verifyPhoneLogin("mv1", "999999")).rejects.toThrow();
+      expect(prisma.mobileVerification.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { attempts: { increment: 1 } } }),
+      );
+    });
+
+    it("verify rejects once the attempt cap is reached", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce({
+        id: "mv1", userId: "u1", mobile: "+61400000000", code: "123456", attempts: 5,
+        verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verifyPhoneLogin("mv1", "123456")).rejects.toThrow();
+    });
+
+    it("verify rejects a decoy challenge (no user attached)", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce({
+        id: "mv1", userId: null, mobile: "+61400000001", code: "123456", attempts: 0,
+        verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      await expect(svc.verifyPhoneLogin("mv1", "123456")).rejects.toThrow();
+    });
+
+    it("verify refuses a session for a verified phone with no membership (awaiting approval)", async () => {
+      const { svc, prisma, sessions } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce({
+        id: "mv1", userId: "u1", mobile: "+61400000000", code: "123456", attempts: 0,
+        verifiedAt: null, expiresAt: new Date(Date.now() + 60_000),
+      });
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", deletedAt: null, isSuperAdmin: false });
+      prisma.tenantMember.findMany.mockResolvedValueOnce([]); // no membership
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", status: "pending" });
+      await expect(svc.verifyPhoneLogin("mv1", "123456")).rejects.toThrow();
+      expect(sessions.create).not.toHaveBeenCalled();
     });
   });
 
@@ -489,6 +603,49 @@ describe("IamFlowsService", () => {
       await expect(svc.rejectJoinRequest("t1", "jr1")).rejects.toThrow();
     });
 
+    it("requestAccessByPhone creates a phone user + unverified request, texts a code, no session", async () => {
+      const { svc, prisma, sessions, dispatcher } = setup();
+      prisma.user.findUnique
+        .mockResolvedValueOnce(null) // by-mobile lookup in the tx
+        .mockResolvedValue({ id: "newuser", mobile: "+61400000000" }); // sendMobileVerification → start2fa
+      const res = await svc.requestAccessByPhone({
+        phone: "+61400000000",
+        displayName: "Vol U",
+        requestedRole: "volunteer",
+        tenantSlug: "org-one",
+      });
+      expect(res).toEqual({ ok: true });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ mobile: "+61400000000", mobileVerified: false }) }),
+      );
+      const reqData = prisma.tenantJoinRequest.create.mock.calls[0][0].data;
+      expect(reqData.status).toBe("unverified");
+      expect(reqData.phone).toBe("+61400000000");
+      expect(sessions.create).not.toHaveBeenCalled();
+      expect(dispatcher.sendSms).toHaveBeenCalled();
+    });
+
+    it("requestAccessByPhone rejects a non-E.164 number", async () => {
+      const { svc } = setup();
+      await expect(
+        svc.requestAccessByPhone({ phone: "0400000000", displayName: "X", requestedRole: "volunteer", tenantSlug: "org-one" }),
+      ).rejects.toThrow();
+    });
+
+    it("confirmAccessByPhone verifies the code, promotes to pending and emits submitted", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "61400000000@phone.uprise.invalid", mobile: "+61400000000" });
+      prisma.mobileVerification.findFirst.mockResolvedValueOnce({ id: "mv1", userId: "u1" });
+      prisma.tenantJoinRequest.updateMany.mockResolvedValueOnce({ count: 1 });
+      prisma.tenantJoinRequest.findUnique.mockResolvedValue({ id: "jr1", requestedRole: "volunteer" });
+      await svc.confirmAccessByPhone("+61400000000", "123456", "org-one");
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: "u1" }, data: { mobileVerified: true } });
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ eventType: "tenant.join-request.submitted" }),
+      );
+    });
+
     it("signIn returns 'pending' for a verified user with no membership but an open request", async () => {
       const { svc, prisma } = setup();
       prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "a@b.c", passwordHash: await hashPassword("longenoughpw"), deletedAt: null });
@@ -530,6 +687,22 @@ describe("IamFlowsService", () => {
       prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
       prisma.user.findUnique.mockResolvedValue(null);
       await expect(svc.acceptInvite("tok", {})).rejects.toThrow();
+    });
+
+    it("accept on a PHONE invite creates a passwordless, mobile-verified user", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue({
+        ...validInvite,
+        email: null,
+        phone: "+61400000000",
+        role: "VOLUNTEER",
+      });
+      prisma.user.findUnique.mockResolvedValue(null); // new user by mobile
+      await svc.acceptInvite("tok", { displayName: "Vol U" });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ mobile: "+61400000000", mobileVerified: true }) }),
+      );
+      expect(prisma.tenantMember.upsert).toHaveBeenCalled();
     });
 
     it("rejects an expired or non-pending invitation", async () => {

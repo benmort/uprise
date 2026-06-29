@@ -17,6 +17,30 @@ const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
 const VERIFY_CODE_TTL_MS = 15 * 60 * 1000;
 const TWOFA_CODE_TTL_MS = 10 * 60 * 1000;
+// Phone-first passwordless login: short-lived codes, a per-phone send cap (SMS-bomb
+// guard) and a per-challenge attempt cap (brute-force guard).
+const PHONE_LOGIN_TTL_MS = 5 * 60 * 1000;
+const PHONE_SEND_WINDOW_MS = 15 * 60 * 1000;
+const PHONE_MAX_SENDS_PER_WINDOW = 3;
+const MAX_OTP_ATTEMPTS = 5;
+
+/** Throws unless `raw` is a valid E.164 number; returns the trimmed value. */
+function assertE164(raw: string): string {
+  const trimmed = raw.trim();
+  if (!/^\+[1-9]\d{6,14}$/.test(trimmed)) {
+    throw new BadRequestException("Enter a valid mobile number in international format, e.g. +61400000000");
+  }
+  return trimmed;
+}
+
+/**
+ * Synthesised, non-deliverable identifier email for a phone-only user. `User.email`
+ * is required + unique; phone users carry their real number in `mobile` and a stable
+ * placeholder here (the `.invalid` TLD is reserved + unroutable, RFC 6761).
+ */
+function phonePlaceholderEmail(mobile: string): string {
+  return `${mobile.replace(/\D/g, "")}@phone.uprise.invalid`;
+}
 
 export interface Membership {
   tenantId: string;
@@ -311,40 +335,128 @@ export class IamFlowsService {
   async start2fa(userId: string): Promise<{ challengeId: string }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.mobile) throw new BadRequestException("No mobile number on file for 2FA");
+    // Per-user send cap (SMS-bomb guard) — covers 2FA resend, mobile capture and the
+    // request-access-by-phone path, all of which funnel through here. Over the cap the
+    // challenge row is still written but no SMS goes out.
+    const recentSends = await this.prisma.mobileVerification.count({
+      where: { userId, createdAt: { gt: new Date(Date.now() - PHONE_SEND_WINDOW_MS) } },
+    });
     const code = this.newCode();
     const record = await this.prisma.mobileVerification.create({
       data: { userId, code, expiresAt: new Date(Date.now() + TWOFA_CODE_TTL_MS) },
     });
-    await this.dispatcher.sendSms({
-      tenantId: await this.resolveTenantId(userId),
-      toPhone: user.mobile,
-      body: `Your verification code is ${code}`,
-      purpose: "2fa",
-    });
+    if (recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
+      await this.dispatcher.sendSms({
+        tenantId: await this.resolveTenantId(userId),
+        toPhone: user.mobile,
+        body: `Your verification code is ${code}`,
+        purpose: "2fa",
+      });
+    }
     return { challengeId: record.id };
   }
 
   /** Resend the code for an existing 2FA challenge. */
   async resend2fa(challengeId: string): Promise<{ challengeId: string }> {
     const existing = await this.prisma.mobileVerification.findUnique({ where: { id: challengeId } });
-    if (!existing) throw new BadRequestException("Invalid challenge");
+    if (!existing?.userId) throw new BadRequestException("Invalid challenge");
     return this.start2fa(existing.userId);
   }
 
   async verify2fa(challengeId: string, code: string): Promise<SessionGrant> {
+    const invalid = () => new BadRequestException("Invalid or expired code");
     const record = await this.prisma.mobileVerification.findUnique({ where: { id: challengeId } });
-    if (!record || record.verifiedAt || record.expiresAt.getTime() <= Date.now() || record.code !== code) {
-      throw new BadRequestException("Invalid or expired code");
+    if (!record || !record.userId || record.verifiedAt || record.expiresAt.getTime() <= Date.now()) {
+      throw invalid();
+    }
+    if (record.attempts >= MAX_OTP_ATTEMPTS) throw invalid();
+    if (record.code !== code) {
+      await this.prisma.mobileVerification.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw invalid();
     }
     await this.prisma.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
     return this.grantSession(record.userId);
   }
 
+  // ── Phone-first passwordless login (volunteers/canvassers) ──────────────
+  /**
+   * Start a phone-login challenge. ALWAYS returns a challengeId — even for an
+   * unknown number — so the endpoint never reveals whether a phone is registered
+   * (a decoy row is written and no SMS is sent). The SMS only goes to a real,
+   * active account, and only under the per-phone send cap (SMS-bomb guard).
+   */
+  async startPhoneLogin(rawPhone: string): Promise<{ challengeId: string }> {
+    const mobile = assertE164(rawPhone);
+    const user = await this.prisma.user.findUnique({ where: { mobile } });
+    const recentSends = await this.prisma.mobileVerification.count({
+      where: { mobile, createdAt: { gt: new Date(Date.now() - PHONE_SEND_WINDOW_MS) } },
+    });
+    const code = this.newCode();
+    const record = await this.prisma.mobileVerification.create({
+      data: { userId: user?.id ?? null, mobile, code, expiresAt: new Date(Date.now() + PHONE_LOGIN_TTL_MS) },
+    });
+    if (user && !user.deletedAt && recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
+      await this.dispatcher.sendSms({
+        tenantId: await this.resolveTenantId(user.id),
+        toPhone: mobile,
+        body: `Your sign-in code is ${code}`,
+        purpose: "phone_login",
+      });
+    }
+    return { challengeId: record.id };
+  }
+
+  /** Resend the code for an existing phone-login challenge (re-issues by its number). */
+  async resendPhoneLogin(challengeId: string): Promise<{ challengeId: string }> {
+    const existing = await this.prisma.mobileVerification.findUnique({ where: { id: challengeId } });
+    if (!existing?.mobile) throw new BadRequestException("Invalid challenge");
+    return this.startPhoneLogin(existing.mobile);
+  }
+
+  /**
+   * Verify a phone-login code → issue a session. Generic error for every failure
+   * (enumeration + brute-force resistance), an attempt cap per challenge, and the
+   * same no-membership/pending gate as password sign-in (a verified phone with no
+   * workspace, e.g. awaiting approval, gets no session).
+   */
+  async verifyPhoneLogin(challengeId: string, code: string): Promise<SessionGrant> {
+    const invalid = () => new BadRequestException("Invalid or expired code");
+    const record = await this.prisma.mobileVerification.findUnique({ where: { id: challengeId } });
+    if (!record || !record.userId || record.verifiedAt || record.expiresAt.getTime() <= Date.now()) {
+      throw invalid();
+    }
+    if (record.attempts >= MAX_OTP_ATTEMPTS) throw invalid();
+    if (record.code !== code) {
+      await this.prisma.mobileVerification.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw invalid();
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: record.userId } });
+    if (!user || user.deletedAt) throw invalid();
+    const memberships = await this.membershipsFor(user.id);
+    if (memberships.length === 0 && !user.isSuperAdmin) {
+      const pending = await this.prisma.tenantJoinRequest.findFirst({
+        where: { userId: user.id, status: "pending" },
+      });
+      throw new BadRequestException(
+        pending
+          ? "Your request to join is awaiting an organiser's approval."
+          : "This number isn't linked to a workspace yet — ask for an invite or request to join.",
+      );
+    }
+    await this.prisma.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
+    return this.grantSession(user.id);
+  }
+
   // ── 2FA enrolment + mobile capture (WS3 — without this the 2FA login is dead) ──
   /** Set/replace the caller's mobile (resets verification). */
   async setMobile(userId: string, mobile: string): Promise<{ ok: true }> {
-    const trimmed = mobile.trim();
-    if (!/^\+[1-9]\d{6,14}$/.test(trimmed)) throw new BadRequestException("mobile must be E.164");
+    const trimmed = assertE164(mobile);
     await this.prisma.user.update({ where: { id: userId }, data: { mobile: trimmed, mobileVerified: false } });
     return { ok: true };
   }
@@ -497,10 +609,12 @@ export class IamFlowsService {
   }
 
   // ── Invitation ──────────────────────────────────────────────────────
-  async previewInvite(token: string): Promise<{ email: string; tenantName: string; role: AppUserRole }> {
+  async previewInvite(
+    token: string,
+  ): Promise<{ email: string; phone: string | null; tenantName: string; role: AppUserRole }> {
     const invite = await this.loadValidInvite(token);
     const tenant = await this.prisma.tenant.findUnique({ where: { id: invite.tenantId } });
-    return { email: invite.email, tenantName: tenant?.name ?? "", role: invite.role };
+    return { email: invite.email ?? "", phone: invite.phone ?? null, tenantName: tenant?.name ?? "", role: invite.role };
   }
 
   async acceptInvite(
@@ -508,24 +622,49 @@ export class IamFlowsService {
     input: { displayName?: string; password?: string },
   ): Promise<SessionGrant> {
     const invite = await this.loadValidInvite(token);
-    const email = invite.email.trim().toLowerCase();
+    const isPhone = Boolean(invite.phone) && !invite.email;
 
     const grant = await this.prisma.$transaction(async (tx) => {
-      let user = await tx.user.findUnique({ where: { email } });
-      const isNewUser = !user;
-      if (!user) {
-        if (!input.password || input.password.length < 8) {
-          throw new BadRequestException("Password must be at least 8 characters");
+      let user: { id: string; email: string };
+      let isNewUser: boolean;
+
+      if (isPhone) {
+        const mobile = invite.phone as string;
+        const existing = await tx.user.findUnique({ where: { mobile } });
+        isNewUser = !existing;
+        user =
+          existing ??
+          (await tx.user.create({
+            data: {
+              email: phonePlaceholderEmail(mobile),
+              displayName: input.displayName?.trim() || mobile,
+              mobile,
+              // Holding the link SMS'd to this number proves control of it.
+              mobileVerified: true,
+            },
+          }));
+      } else {
+        const email = (invite.email ?? "").trim().toLowerCase();
+        if (!email) throw new BadRequestException("This invitation is invalid.");
+        const existing = await tx.user.findUnique({ where: { email } });
+        isNewUser = !existing;
+        if (existing) {
+          user = existing;
+        } else {
+          if (!input.password || input.password.length < 8) {
+            throw new BadRequestException("Password must be at least 8 characters");
+          }
+          user = await tx.user.create({
+            data: {
+              email,
+              displayName: input.displayName?.trim() || email,
+              passwordHash: await hashPassword(input.password),
+              emailVerified: true, // an invite to this address proves control of it
+            },
+          });
         }
-        user = await tx.user.create({
-          data: {
-            email,
-            displayName: input.displayName?.trim() || email,
-            passwordHash: await hashPassword(input.password),
-            emailVerified: true, // an invite to this address proves control of it
-          },
-        });
       }
+
       await this.createMembershipTx(tx, {
         tenantId: invite.tenantId,
         userId: user.id,
@@ -692,6 +831,118 @@ export class IamFlowsService {
     await this.confirmEmailVerification(email, code); // sets emailVerified, throws on bad code
     const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (!user) throw new BadRequestException("Invalid code");
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.tenantJoinRequest.updateMany({
+        where: { tenantId: tenant.id, userId: user.id, status: "unverified" },
+        data: { status: "pending" },
+      });
+      if (updated.count === 0) return; // already pending/decided — idempotent
+      const req = await tx.tenantJoinRequest.findUnique({
+        where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+      });
+      if (req) {
+        await this.outbox.append(tx, {
+          tenantId: tenant.id,
+          eventType: "tenant.join-request.submitted",
+          aggregateId: req.id,
+          payload: { requestId: req.id, tenantId: tenant.id, email: user.email, requestedRole: req.requestedRole },
+        });
+      }
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Public (phone-first): a prospect requests access by mobile number. Mirrors
+   * requestAccess but keyed on the phone — find-or-create the user by `mobile`
+   * (synthesised placeholder email, mobileVerified:false), upsert the join request
+   * at "unverified", and send an SMS code. NO session, NO submitted event until the
+   * code is confirmed. Never leaks whether the number already has an account.
+   */
+  async requestAccessByPhone(input: {
+    phone: string;
+    displayName: string;
+    requestedRole: string;
+    tenantSlug: string;
+    signupSource?: string;
+    utmSource?: string;
+    utmMedium?: string;
+    utmCampaign?: string;
+    referrerChannel?: string;
+  }): Promise<{ ok: true; alreadyMember?: boolean }> {
+    const mobile = assertE164(input.phone);
+    const slug = input.tenantSlug.trim().toLowerCase();
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug, deletedAt: null } });
+    if (!tenant) throw new BadRequestException("Unknown organisation");
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      let user = await tx.user.findUnique({ where: { mobile } });
+      if (user) {
+        const member = await tx.tenantMember.findUnique({
+          where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+        });
+        if (member) return { alreadyMember: true, userId: user.id };
+      } else {
+        user = await tx.user.create({
+          data: {
+            email: phonePlaceholderEmail(mobile),
+            displayName: input.displayName.trim() || mobile,
+            mobile,
+            mobileVerified: false,
+            signupSource: input.signupSource ?? "volunteer_request",
+            utmSource: input.utmSource ?? null,
+            utmMedium: input.utmMedium ?? null,
+            utmCampaign: input.utmCampaign ?? null,
+            referrerChannel: input.referrerChannel ?? null,
+          },
+        });
+      }
+      const existingReq = await tx.tenantJoinRequest.findUnique({
+        where: { tenantId_userId: { tenantId: tenant.id, userId: user.id } },
+      });
+      if (!existingReq) {
+        await tx.tenantJoinRequest.create({
+          data: {
+            tenantId: tenant.id,
+            userId: user.id,
+            email: user.email,
+            phone: mobile,
+            requestedRole: input.requestedRole,
+            status: "unverified",
+          },
+        });
+      } else if (existingReq.status === "rejected") {
+        await tx.tenantJoinRequest.update({
+          where: { id: existingReq.id },
+          data: { requestedRole: input.requestedRole, status: "unverified", decidedBy: null, decidedAt: null },
+        });
+      } else {
+        await tx.tenantJoinRequest.update({
+          where: { id: existingReq.id },
+          data: { requestedRole: input.requestedRole },
+        });
+      }
+      return { alreadyMember: false, userId: user.id };
+    });
+
+    if (result.alreadyMember) return { ok: true, alreadyMember: true };
+    await this.sendMobileVerification(result.userId); // SMS the verification code
+    return { ok: true };
+  }
+
+  /**
+   * Public (phone-first): confirm the SMS code → mark the mobile verified and promote
+   * the join request to "pending" (organiser queue) + emit submitted. Mirrors
+   * confirmAccess; reuses confirmMobileVerification.
+   */
+  async confirmAccessByPhone(phone: string, code: string, tenantSlug: string): Promise<{ ok: true }> {
+    const mobile = assertE164(phone);
+    const slug = tenantSlug.trim().toLowerCase();
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug, deletedAt: null } });
+    if (!tenant) throw new BadRequestException("Unknown organisation");
+    const user = await this.prisma.user.findUnique({ where: { mobile } });
+    if (!user) throw new BadRequestException("Invalid or expired code");
+    await this.confirmMobileVerification(user.id, code); // sets mobileVerified, throws on bad code
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.tenantJoinRequest.updateMany({
         where: { tenantId: tenant.id, userId: user.id, status: "unverified" },

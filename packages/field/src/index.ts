@@ -8,7 +8,6 @@
 export * from "./components/campaign-nav-cards";
 export * from "./components/data-table";
 export * from "./components/disposition-pad";
-export * from "./components/field-onboarding";
 export * from "./components/kpi-tile";
 export * from "./components/map-thumbnail";
 export * from "./components/offline-banner";

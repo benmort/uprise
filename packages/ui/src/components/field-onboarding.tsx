@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { DoorOpen, ShieldAlert, Wifi, X } from "lucide-react";
-import { Button } from "@uprise/ui";
+import { Button } from "./button";
 import { useLocalStorage } from "../hooks/use-local-storage";
 
 const STEPS = [
@@ -11,8 +11,12 @@ const STEPS = [
   { icon: ShieldAlert, title: "Stay safe", body: "If a door feels unsafe, leave. You can flag “do not return” so nobody is sent back." },
 ];
 
-/** First-run 60-second how-to + safety primer for volunteers. Shows once per device. */
-export function FieldOnboarding() {
+/**
+ * First-run 60-second how-to + safety primer for volunteers. Shows once per device
+ * (localStorage key `uprise.fieldOnboarded`). Lives in @uprise/ui so both the field
+ * app and the volunteer auth flow render the identical carousel.
+ */
+export function FieldOnboarding({ onDone }: { onDone?: () => void } = {}) {
   const [seen, setSeen] = useLocalStorage<boolean>("uprise.fieldOnboarded", false);
   const [step, setStep] = useState(0);
 
@@ -20,6 +24,10 @@ export function FieldOnboarding() {
   const s = STEPS[step];
   const Icon = s.icon;
   const last = step === STEPS.length - 1;
+  const finish = () => {
+    setSeen(true);
+    onDone?.();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
@@ -28,7 +36,7 @@ export function FieldOnboarding() {
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20 text-primary">
             <Icon className="h-6 w-6" />
           </span>
-          <button type="button" aria-label="Skip" onClick={() => setSeen(true)} className="text-muted-foreground">
+          <button type="button" aria-label="Skip" onClick={finish} className="text-muted-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -43,7 +51,7 @@ export function FieldOnboarding() {
               />
             ))}
           </div>
-          <Button onClick={() => (last ? setSeen(true) : setStep(step + 1))}>
+          <Button onClick={() => (last ? finish() : setStep(step + 1))}>
             {last ? "Start knocking" : "Next"}
           </Button>
         </div>

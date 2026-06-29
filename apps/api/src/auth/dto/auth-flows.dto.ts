@@ -31,6 +31,19 @@ export class TwofaVerifyDto {
   @IsString() @MaxLength(12) code!: string;
 }
 
+export class PhoneStartDto {
+  @IsString() @MaxLength(20) phone!: string;
+}
+
+export class PhoneResendDto {
+  @IsString() @MaxLength(64) challengeId!: string;
+}
+
+export class PhoneVerifyDto {
+  @IsString() @MaxLength(64) challengeId!: string;
+  @IsString() @MaxLength(12) code!: string;
+}
+
 export class AcceptInviteDto {
   @IsString() @MaxLength(256) token!: string;
   @IsOptional() @IsString() @MaxLength(200) displayName?: string;
