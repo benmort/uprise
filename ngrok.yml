@@ -36,3 +36,9 @@ tunnels:
     addr: 3001
     proto: http
     domain: api.dev.uprise.org.au
+
+  # Canvasser field PWA → field.dev.uprise.org.au (under the *.dev.uprise.org.au reservation)
+  field:
+    addr: 3005
+    proto: http
+    domain: field.dev.uprise.org.au

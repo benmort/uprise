@@ -12,8 +12,9 @@ instead of bare `localhost:PORT`.
 | `auth.dev.uprise.org.au` | `localhost:3002` | auth (SSO) |
 | `admin.dev.uprise.org.au` | `localhost:3000` | admin (organiser) |
 | `api.dev.uprise.org.au` | `localhost:3001` | api (frontend calls + webhooks) |
+| `field.dev.uprise.org.au` | `localhost:3005` | field (canvasser PWA) |
 
-`admin.*` and `api.*` sit under the reserved `*.dev.uprise.org.au` wildcard. Tenancy is
+`admin.*`, `api.*` and `field.*` sit under the reserved `*.dev.uprise.org.au` wildcard. Tenancy is
 still chosen in-session (`/select-tenant`) — subdomains map apps, not tenants. (Per-tenant
 subdomain routing is a deferred item in `docs/TODO.md`.)
 
