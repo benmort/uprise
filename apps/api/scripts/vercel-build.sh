@@ -16,9 +16,6 @@ fi
 # Always (re)generate the client so the function build picks up the current schema.
 pnpm --filter @uprise/db run prisma:generate
 
-# One-off: seed the canonical plans this deploy (idempotent / non-clobbering).
-# Remove this block after the first production deploy — usually we migrate only.
-if [ "${VERCEL_ENV:-}" = "production" ]; then
-  echo "→ seed plans (one-off)"
-  pnpm --filter api exec ts-node src/scripts/seed-plans-standalone.ts
-fi
+# Plans were seeded in the deploy that first introduced this script; the canonical
+# seeder remains available for manual runs: `pnpm --filter api exec ts-node
+# src/scripts/seed-plans-standalone.ts`. Deploys apply migrations only.
