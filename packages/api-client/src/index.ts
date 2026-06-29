@@ -5,6 +5,7 @@ import type {
   ChangeEmailRequest,
   ChangePasswordRequest,
   CheckSessionResponse,
+  ConfirmAccessByPhoneRequest,
   ConfirmAccessRequest,
   DeleteAccountRequest,
   InvitePreview,
@@ -13,6 +14,7 @@ import type {
   OkResponse,
   RegisterRequest,
   RejectJoinRequestRequest,
+  RequestAccessByPhoneRequest,
   RequestAccessRequest,
   RequestAccessResponse,
   SessionGrantResponse,
@@ -125,6 +127,15 @@ export const auth = {
   verify2fa: (challengeId: string, code: string) =>
     post<SessionGrantResponse>("/iam/2fa/verify", { challengeId, code }),
 
+  // Phone-first passwordless login (volunteers/canvassers): start sends an SMS code,
+  // verify completes the session. Start/resend never reveal whether a number exists.
+  phoneStart: (phone: string, captchaToken?: string) =>
+    post<{ challengeId: string }>("/iam/phone/start", { phone }, captchaToken),
+  phoneResend: (challengeId: string, captchaToken?: string) =>
+    post<{ challengeId: string }>("/iam/phone/resend", { challengeId }, captchaToken),
+  phoneVerify: (challengeId: string, code: string) =>
+    post<SessionGrantResponse>("/iam/phone/verify", { challengeId, code }),
+
   previewInvite: (token: string) =>
     request<InvitePreview>(`/iam/invite/${encodeURIComponent(token)}`, undefined, { redirectOn401: false }),
   acceptInvite: (body: AcceptInviteRequest) => post<SessionGrantResponse>("/iam/invite/accept", body),
@@ -135,6 +146,12 @@ export const auth = {
   requestAccess: (body: RequestAccessRequest, captchaToken?: string) =>
     post<RequestAccessResponse>("/auth/request-access", body, captchaToken),
   confirmAccess: (body: ConfirmAccessRequest) => post<OkResponse>("/auth/request-access/verify", body),
+
+  // Phone-first self-signup → admin approval (volunteers).
+  requestAccessByPhone: (body: RequestAccessByPhoneRequest, captchaToken?: string) =>
+    post<RequestAccessResponse>("/auth/request-access/phone", body, captchaToken),
+  confirmAccessByPhone: (body: ConfirmAccessByPhoneRequest) =>
+    post<OkResponse>("/auth/request-access/phone/verify", body),
 };
 
 // ── Self-service profile + account (prog parity) ─────────────────────
@@ -221,6 +238,23 @@ export interface CreatedTenant {
   name: string;
 }
 
+/** A tenant row from the super-admin all-tenants search. */
+export interface TenantSearchRow {
+  id: string;
+  slug: string;
+  name: string;
+  networkId: string | null;
+}
+
+/** Full tenant record returned by GET /tenants/:id. */
+export interface TenantRecord {
+  id: string;
+  slug: string;
+  name: string;
+  networkId: string | null;
+  createdAt: string;
+}
+
 export const tenants = {
   checkAvailability: (slug: string) =>
     request<AvailabilityResponse>(`/tenants/availability?slug=${encodeURIComponent(slug)}`, undefined, {
@@ -230,6 +264,31 @@ export const tenants = {
   /** Self-serve create from the in-app switcher (owner-on-paid-plan or super-admin; API enforces). */
   createSelfServe: (body: { name: string; slug: string }) =>
     request<CreatedTenant>("/tenants/self-serve", { method: "POST", body: JSON.stringify(body) }),
+
+  /** Super-admin search across ALL tenants (API enforces isSuperAdmin). */
+  search: (q?: string) =>
+    request<TenantSearchRow[]>(`/tenants/search${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+
+  /** Load one tenant by id (read tenant.tenant). */
+  get: (tenantId: string) => request<TenantRecord>(`/tenants/${encodeURIComponent(tenantId)}`),
+
+  /** Rename / re-slug a tenant (manage tenant.tenant: owner or super-admin). */
+  update: (tenantId: string, body: { name?: string; slug?: string }) =>
+    request<TenantRecord>(`/tenants/${encodeURIComponent(tenantId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  /** Soft-delete a tenant (manage tenant.tenant; UI restricts to super-admin). */
+  remove: (tenantId: string) =>
+    request<OkResponse>(`/tenants/${encodeURIComponent(tenantId)}`, { method: "DELETE" }),
+
+  /** Add an existing user (by email) to a tenant (manage tenant.member). */
+  addMember: (tenantId: string, body: { email: string; role: AppUserRole }) =>
+    request<TenantMemberSummary>(`/tenants/${encodeURIComponent(tenantId)}/members`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   // Join-request approval queue (admin; session + permission gated).
   listJoinRequests: (tenantId: string, status?: string) =>

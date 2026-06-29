@@ -17,9 +17,19 @@ function slugify(name: string): string {
 /**
  * Create-tenant modal launched from the tenant switcher. Derives a slug from the
  * name, checks availability, then creates the tenant (API enforces the plan/role
- * gate) and switches into it. Visibility is gated by the switcher (`canCreate`).
+ * gate). Default behaviour switches into the new tenant and reloads (switcher use);
+ * pass `onCreated` to instead stay put and let the caller refresh in place (the
+ * tenants management page). Visibility is gated by the caller (`canCreate`).
  */
-export function CreateTenantDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CreateTenantDialog({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated?: (tenant: { id: string; slug: string; name: string }) => void;
+}) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +55,14 @@ export function CreateTenantDialog({ open, onClose }: { open: boolean; onClose: 
       setError(res.error);
       return;
     }
-    // Switch into the new tenant, then reload so every surface re-resolves under it.
+    // Management page: stay put and refresh the list. Switcher: switch into the
+    // new tenant + reload so every surface re-resolves under it.
+    if (onCreated) {
+      setBusy(false);
+      setName("");
+      onCreated(res.data);
+      return;
+    }
     await auth.selectTenant(res.data.id);
     window.location.reload();
   };

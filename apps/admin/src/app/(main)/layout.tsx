@@ -173,6 +173,19 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
         { label: "General", href: "/settings", match: (p) => p === "/settings" },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
+        // Customer-facing multi-brand: owners on a multi-brand (Scale) plan manage
+        // their own tenants here. Super-admins get the all-tenants view under the
+        // Super Admin group below instead, so this is non-super-admin only.
+        ...(!isSuperAdmin
+          ? ([
+              {
+                label: "Brands",
+                href: "/prog/tenants",
+                match: px("tenants"),
+                flag: "FEATURE_MULTIBRAND_ENABLED",
+              },
+            ] as NavEntry[])
+          : []),
         // Workspace items folded in from the prog sandbox — super-admin-only until
         // they're tenant-tiered + role-gated (consolidation doc Parts B–D).
         ...(isSuperAdmin
