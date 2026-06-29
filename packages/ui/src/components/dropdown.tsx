@@ -88,12 +88,21 @@ export function Dropdown({
       ref={menuRef}
       role="menu"
       style={
-        portal && coords
-          ? { position: "fixed", top: coords.top, left: coords.left, right: coords.right }
+        portal
+          ? {
+              // Always fixed when portaled — never fall back to static (which would drop
+              // the menu into body flow, off-screen/behind content). Hidden until measured.
+              position: "fixed",
+              top: coords?.top ?? 0,
+              left: coords?.left,
+              right: coords?.right,
+              visibility: coords ? "visible" : "hidden",
+            }
           : undefined
       }
       className={cn(
-        "z-50 min-w-[12rem] rounded-xl border border-border bg-surface p-1.5 shadow-theme-lg animate-pop-in",
+        // z above the sidebar (z-50) so the portaled menu can't be obscured by it.
+        "z-[60] min-w-[12rem] rounded-xl border border-border bg-surface p-1.5 shadow-theme-lg animate-pop-in",
         portal ? "" : cn("absolute mt-2", align === "end" ? "right-0" : "left-0"),
         contentClassName,
       )}
