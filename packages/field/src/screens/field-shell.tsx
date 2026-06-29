@@ -1,21 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { getSession, goToLogin } from "../lib/session";
 import { setVolunteerId } from "../lib/volunteer";
 import { OfflineBanner } from "../components/offline-banner";
-import { SyncStatusBadge } from "../components/sync-status-badge";
 
 /**
  * Mobile-first shell for the volunteer field PWA — deliberately sidebar-less
- * (the desktop 220px aside is wrong for one-handed field use). Top bar carries
- * the offline banner and live sync status. Used by apps/field's root layout.
+ * (the desktop 220px aside is wrong for one-handed field use). Carries only the
+ * offline banner; each screen owns its own header (back + title). Used by
+ * apps/field's root layout.
  */
 export function FieldShell({ children }: { children: React.ReactNode }) {
-  const { counts, online } = useSyncQueue();
+  const { counts } = useSyncQueue();
   const [ready, setReady] = useState(false);
 
   // The httpOnly session cookie is the proof of auth (meld doc 14). Resolve the
@@ -41,14 +39,7 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <OfflineBanner />
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <Link href="/field" className="flex items-center gap-2 text-sm font-medium">
-          <ArrowLeft className="h-4 w-4" />
-          Canvass
-        </Link>
-        <SyncStatusBadge counts={counts} online={online} />
-      </header>
+      <OfflineBanner pending={counts.PENDING ?? 0} />
       <main className="flex-1 overflow-auto p-4">{children}</main>
     </div>
   );

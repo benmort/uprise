@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CircleUser, DoorOpen } from "lucide-react";
-import { Button, StatusBadge, EmptyState, Skeleton } from "@uprise/ui";
+import { Check, CircleUser, DownloadCloud, Menu, PersonStanding } from "lucide-react";
+import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
 import { getCanvassAssignments, type CanvassAssignment } from "../api";
-import { getVolunteerId } from "../lib/volunteer";
+import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { MapThumbnail } from "../components/map-thumbnail";
 import { useOnlineStatus } from "../hooks/use-online-status";
@@ -21,12 +21,20 @@ function outerRing(geometry: unknown): Array<[number, number]> | undefined {
   return undefined;
 }
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 export function Assignments() {
   const router = useRouter();
   const online = useOnlineStatus();
   const [assignments, setAssignments] = useState<CanvassAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const name = getVolunteerName();
 
   useEffect(() => {
     const volunteerId = getVolunteerId();
@@ -48,46 +56,60 @@ export function Assignments() {
     };
   }, []);
 
+  // Day tally for the header tiles. "Conversations" + "surveys" approximate from the
+  // available walk-list item state until the per-day metrics endpoint lands.
   const tally = useMemo(() => {
     const items = assignments.flatMap((a) => a.walkLists.flatMap((wl) => wl.items));
-    const total = items.length;
-    const done = items.filter((i) => i.status !== "PENDING").length;
-    return { total, done, togo: total - done };
+    const done = items.filter((i) => i.status !== "PENDING");
+    const conversations = done.filter((i) => String(i.status).toUpperCase() === "VISITED").length;
+    const surveys = items.filter((i) => Boolean((i as { surveyId?: unknown }).surveyId)).length;
+    return { doors: done.length, conversations, surveys };
   }, [assignments]);
 
   if (loading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-56 w-full" />
       </div>
     );
   }
   if (error) return <EmptyState title="Can't load assignments" description={error} />;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
-            Today
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          aria-label="Menu"
+          onClick={() => router.push("/field/me")}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm text-muted-foreground">
+            {greeting()}
+            {name ? `, ${name}` : ""}
           </p>
-          <h1 className="text-2xl font-extrabold">Your turf</h1>
+          <h1 className="text-3xl font-extrabold leading-tight">My turf</h1>
         </div>
         <Link
           href="/field/me"
-          aria-label="Sync centre & profile"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-surface-variant text-foreground"
+          aria-label="Profile"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
           <CircleUser className="h-6 w-6" />
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <KpiTile label="Doors" value={tally.total} />
-        <KpiTile label="Done" value={tally.done} />
-        <KpiTile label="To go" value={tally.togo} />
+      {/* Day tiles */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <KpiTile label="doors today" value={tally.doors} />
+        <KpiTile label="conversations" value={tally.conversations} />
+        <KpiTile label="surveys" value={tally.surveys} />
       </div>
 
       {assignments.length === 0 ? (
@@ -96,29 +118,49 @@ export function Assignments() {
           description="An organiser needs to assign you a turf before you can start knocking."
         />
       ) : (
-        <div className="space-y-3">
-          {assignments.map((a) => {
+        <div className="space-y-5">
+          {assignments.map((a, i) => {
             const items = a.walkLists.flatMap((wl) => wl.items);
-            const stopCount = items.length;
+            const onList = items.length;
+            const synced = online && i === 0; // per-turf offline-cache state lands later
             return (
-              <div key={a.turfId} className="overflow-hidden rounded-2xl border border-border bg-surface">
-                <MapThumbnail polygon={outerRing(a.turf.geometry)} className="h-24 w-full" />
-                <div className="space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <h2 className="flex items-center gap-1.5 font-bold text-foreground">
-                      <DoorOpen className="h-4 w-4 text-primary" />
-                      {a.turf.name}
-                    </h2>
-                    <StatusBadge status={online ? "SYNCED" : "OFFLINE"} />
+              <div key={a.turfId} className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
+                <div className="relative">
+                  <MapThumbnail polygon={outerRing(a.turf.geometry)} className="h-40 w-full" />
+                  <span
+                    className={cn(
+                      "absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-card",
+                      synced ? "text-[hsl(var(--success))]" : "text-[hsl(var(--warning-foreground))]",
+                    )}
+                  >
+                    {synced ? <Check className="h-4 w-4" /> : <DownloadCloud className="h-4 w-4" />}
+                    {synced ? "Synced" : "Download"}
+                  </span>
+                </div>
+                <div className="space-y-4 p-5">
+                  <div>
+                    <h2 className="text-xl font-extrabold text-foreground">{a.turf.name}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground tabular-nums">
+                      {onList} doors · {onList} on your walk list
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground tabular-nums">
-                    {stopCount} doors · {a.walkLists.length} walk list
-                    {a.walkLists.length === 1 ? "" : "s"}
-                  </p>
-                  <Button className="w-full" onClick={() => router.push(`/field/${a.turfId}`)}>
-                    Start walking
-                    <ArrowRight className="ml-1.5 h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button
+                      className="h-14 flex-1 gap-2 text-base"
+                      onClick={() => router.push(`/field/${a.turfId}`)}
+                    >
+                      <PersonStanding className="h-5 w-5" />
+                      Start walking
+                    </Button>
+                    <button
+                      type="button"
+                      aria-label="Download for offline"
+                      onClick={() => router.push(`/field/${a.turfId}`)}
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
+                    >
+                      <DownloadCloud className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, ShieldAlert, UserPlus } from "lucide-react";
+import { Camera, ChevronLeft, MapPin, ShieldAlert, UserPlus } from "lucide-react";
 import { Card, Button, Skeleton, useToast } from "@uprise/ui";
 import {
   createDoorContact,
@@ -199,8 +199,16 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={() => router.push(`/field/${turfId}`)}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-extrabold">{name}</h1>
           <p className="text-sm text-muted-foreground">{(contact.address as string) ?? "No address"}</p>
         </div>
@@ -212,16 +220,23 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
       {profile ? <PriorContactStrip timeline={profile.timeline} /> : null}
 
       {!showSurvey ? (
-        <DispositionPad
-          options={dispositions}
-          disabled={saving}
-          onSelect={(code) => {
-            // "Spoke to someone" reveals the survey — but only if the campaign has
-            // one; otherwise it's a plain disposition-only knock.
-            if (SURVEY_TRIGGER_CODES.has(code) && hasSurvey) setChosenCode(code);
-            else void record(code);
-          }}
-        />
+        <div className="space-y-3">
+          <h2 className="text-lg font-bold text-foreground">What happened at the door?</h2>
+          <DispositionPad
+            options={dispositions}
+            disabled={saving}
+            onSelect={(code) => {
+              // "Spoke to someone" reveals the survey — but only if the campaign has
+              // one; otherwise it's a plain disposition-only knock.
+              if (SURVEY_TRIGGER_CODES.has(code) && hasSurvey) setChosenCode(code);
+              else void record(code);
+            }}
+          />
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5" />
+            GPS captured automatically · one tap logs &amp; advances
+          </p>
+        </div>
       ) : (
         <Card className="p-4">
           <SurveyRunner

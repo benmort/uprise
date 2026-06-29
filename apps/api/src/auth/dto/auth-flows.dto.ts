@@ -1,4 +1,12 @@
-import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { ArrayMaxSize, IsArray, IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+
+/** Canvasser roles offered at volunteer onboarding (advisory; organiser can change). */
+export const VOLUNTEER_PREFERRED_ROLES = [
+  "hander-outer",
+  "doorknocker",
+  "booth-captain",
+  "scrutineer",
+] as const;
 
 export class EmailDto {
   @IsEmail()
@@ -44,10 +52,20 @@ export class PhoneVerifyDto {
   @IsString() @MaxLength(12) code!: string;
 }
 
+export class InviteStartPhoneDto {
+  @IsString() @MaxLength(256) token!: string;
+  @IsString() @MaxLength(20) phone!: string;
+}
+
 export class AcceptInviteDto {
   @IsString() @MaxLength(256) token!: string;
   @IsOptional() @IsString() @MaxLength(200) displayName?: string;
   @IsOptional() @IsString() @MinLength(8) @MaxLength(200) password?: string;
+  // Onboarding wizard: a verified phone OTP to bind + the volunteer's prefs.
+  @IsOptional() @IsString() @MaxLength(64) challengeId?: string;
+  @IsOptional() @IsString() @MaxLength(12) code?: string;
+  @IsOptional() @IsIn(VOLUNTEER_PREFERRED_ROLES) preferredRole?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(7) @IsString({ each: true }) availabilityDays?: string[];
 }
 
 export class SelectTenantDto {

@@ -71,12 +71,32 @@ export const twofaVerifySchema = z.object({
 });
 export type TwofaVerifyRequest = z.infer<typeof twofaVerifySchema>;
 
+/** Canvasser roles offered at volunteer onboarding (advisory; organiser can change). */
+export const VOLUNTEER_PREFERRED_ROLES = [
+  "hander-outer",
+  "doorknocker",
+  "booth-captain",
+  "scrutineer",
+] as const;
+export type VolunteerPreferredRole = (typeof VOLUNTEER_PREFERRED_ROLES)[number];
+
 export const acceptInviteSchema = z.object({
   token: z.string().min(1),
   displayName: z.string().max(200).optional(),
   password: z.string().min(8).max(200).optional(),
+  // Onboarding wizard: a verified phone OTP to bind + the volunteer's prefs.
+  challengeId: z.string().max(64).optional(),
+  code: z.string().max(12).optional(),
+  preferredRole: z.enum(VOLUNTEER_PREFERRED_ROLES).optional(),
+  availabilityDays: z.array(z.string()).max(7).optional(),
 });
 export type AcceptInviteRequest = z.infer<typeof acceptInviteSchema>;
+
+export const inviteStartPhoneSchema = z.object({
+  token: z.string().min(1),
+  phone: z.string().min(5).max(20),
+});
+export type InviteStartPhoneRequest = z.infer<typeof inviteStartPhoneSchema>;
 
 export const selectTenantSchema = z.object({ tenantId: z.string().min(1) });
 export type SelectTenantRequest = z.infer<typeof selectTenantSchema>;

@@ -17,6 +17,19 @@ export function setVolunteerId(id: string): void {
   window.localStorage.setItem(KEY, id);
 }
 
+const NAME_KEY = "uprise.volunteerName";
+
+/** The volunteer's first name for the greeting (best-effort; "" until set). */
+export function getVolunteerName(): string {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(NAME_KEY) ?? "";
+}
+
+export function setVolunteerName(name: string): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(NAME_KEY, name);
+}
+
 /** Stable per-knock idempotency key (crypto.randomUUID where available). */
 export function newLocalId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();

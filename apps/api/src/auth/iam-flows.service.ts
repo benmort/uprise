@@ -96,6 +96,25 @@ export class IamFlowsService {
     return String(randomInt(0, 1_000_000)).padStart(6, "0");
   }
 
+  /**
+   * Send an OTP SMS, tolerating a missing SMS provider in DEVELOPMENT. In production
+   * a failed send rethrows (the caller must learn the code didn't go out, e.g. 2FA);
+   * in dev (no Twilio configured → TwilioService throws ServiceUnavailable) we swallow
+   * it so the challenge still completes — the code is surfaced on-screen by the dev
+   * hint (GET /iam/dev/otp) instead, keeping phone-first login / 2FA testable sans SMS.
+   */
+  private async sendOtpSms(input: Parameters<TransactionalDispatcher["sendSms"]>[0]): Promise<void> {
+    try {
+      await this.dispatcher.sendSms(input);
+    } catch (err) {
+      if (this.config.get<string>("NODE_ENV") === "production") throw err;
+      this.logger.warn("iam", "OTP SMS send skipped in development (no SMS provider)", {
+        purpose: input.purpose,
+        error: String(err),
+      });
+    }
+  }
+
   private authAppUrl(): string {
     return this.config.get<string>("AUTH_APP_URL", "http://localhost:3002").replace(/\/+$/, "");
   }
@@ -346,7 +365,7 @@ export class IamFlowsService {
       data: { userId, code, expiresAt: new Date(Date.now() + TWOFA_CODE_TTL_MS) },
     });
     if (recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
-      await this.dispatcher.sendSms({
+      await this.sendOtpSms({
         tenantId: await this.resolveTenantId(userId),
         toPhone: user.mobile,
         body: `Your verification code is ${code}`,
@@ -381,6 +400,38 @@ export class IamFlowsService {
     return this.grantSession(record.userId);
   }
 
+  /**
+   * DEV-ONLY: the plaintext OTP for an SMS challenge, so the code screens can show
+   * it on-screen when no real SMS is sent (local development). Returns null in
+   * production — and BasicAuthGuard only routes this pre-session in development — so
+   * a live code is never exposed off a dev box. Covers both 2FA and phone-login
+   * challenges (both are `MobileVerification` rows).
+   *
+   * Only surfaces a code that could actually verify: it requires a real `userId`
+   * (so the phone-login DECOY rows written for unknown numbers — which can never
+   * grant a session, see verifyPhoneLogin — are not shown), unverified and unexpired.
+   * No code shown ⇒ that number isn't a real, active account in this database.
+   */
+  async devPeekOtp(challengeId: string): Promise<{ code: string | null }> {
+    if (this.config.get<string>("NODE_ENV") === "production") return { code: null };
+    if (!challengeId) return { code: null };
+    const record = await this.prisma.mobileVerification.findUnique({
+      where: { id: challengeId },
+      select: { code: true, userId: true, mobile: true, verifiedAt: true, expiresAt: true },
+    });
+    // A real account (userId) OR an invited-phone challenge (mobile, pre-user) — both can
+    // verify; decoy rows (neither) can never grant, so they stay hidden.
+    if (
+      !record ||
+      (!record.userId && !record.mobile) ||
+      record.verifiedAt ||
+      record.expiresAt.getTime() <= Date.now()
+    ) {
+      return { code: null };
+    }
+    return { code: record.code };
+  }
+
   // ── Phone-first passwordless login (volunteers/canvassers) ──────────────
   /**
    * Start a phone-login challenge. ALWAYS returns a challengeId — even for an
@@ -399,7 +450,7 @@ export class IamFlowsService {
       data: { userId: user?.id ?? null, mobile, code, expiresAt: new Date(Date.now() + PHONE_LOGIN_TTL_MS) },
     });
     if (user && !user.deletedAt && recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
-      await this.dispatcher.sendSms({
+      await this.sendOtpSms({
         tenantId: await this.resolveTenantId(user.id),
         toPhone: mobile,
         body: `Your sign-in code is ${code}`,
@@ -617,12 +668,76 @@ export class IamFlowsService {
     return { email: invite.email ?? "", phone: invite.phone ?? null, tenantName: tenant?.name ?? "", role: invite.role };
   }
 
+  /**
+   * Issue + SMS a phone OTP for an invited number. Unlike startPhoneLogin (which only
+   * texts an existing account, decoy otherwise), holding a valid invite authorises the
+   * send — this is how a brand-new invited volunteer gets their code in the onboarding
+   * wizard. The verified challengeId is then passed to acceptInvite.
+   */
+  async inviteStartPhone(token: string, rawPhone: string): Promise<{ challengeId: string }> {
+    const invite = await this.loadValidInvite(token);
+    const mobile = assertE164(rawPhone);
+    const recentSends = await this.prisma.mobileVerification.count({
+      where: { mobile, createdAt: { gt: new Date(Date.now() - PHONE_SEND_WINDOW_MS) } },
+    });
+    const code = this.newCode();
+    const record = await this.prisma.mobileVerification.create({
+      data: { userId: null, mobile, code, expiresAt: new Date(Date.now() + PHONE_LOGIN_TTL_MS) },
+    });
+    if (recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
+      await this.sendOtpSms({
+        tenantId: invite.tenantId,
+        toPhone: mobile,
+        body: `Your sign-in code is ${code}`,
+        purpose: "phone_login",
+      });
+    }
+    return { challengeId: record.id };
+  }
+
+  /**
+   * Verify a pre-user phone challenge (no membership requirement, unlike verifyPhoneLogin)
+   * → returns the verified E.164 number. Brute-force capped per challenge. Used by the
+   * onboarding wizard to bind an OTP-verified mobile onto the invite-accepted user.
+   */
+  private async verifyPhoneChallenge(challengeId: string, code: string): Promise<string> {
+    const invalid = () => new BadRequestException("Invalid or expired code");
+    const record = await this.prisma.mobileVerification.findUnique({ where: { id: challengeId } });
+    if (!record || !record.mobile || record.verifiedAt || record.expiresAt.getTime() <= Date.now()) {
+      throw invalid();
+    }
+    if (record.attempts >= MAX_OTP_ATTEMPTS) throw invalid();
+    if (record.code !== code) {
+      await this.prisma.mobileVerification.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw invalid();
+    }
+    await this.prisma.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
+    return record.mobile;
+  }
+
   async acceptInvite(
     token: string,
-    input: { displayName?: string; password?: string },
+    input: {
+      displayName?: string;
+      password?: string;
+      // Onboarding wizard: a verified phone OTP to bind + the volunteer's prefs.
+      challengeId?: string;
+      code?: string;
+      preferredRole?: string;
+      availabilityDays?: string[];
+    },
   ): Promise<SessionGrant> {
     const invite = await this.loadValidInvite(token);
     const isPhone = Boolean(invite.phone) && !invite.email;
+    // Consume the OTP before the write tx so the per-challenge attempt cap can't be
+    // rolled back by a later transaction abort.
+    const verifiedMobile =
+      input.challengeId && input.code
+        ? await this.verifyPhoneChallenge(input.challengeId, input.code)
+        : null;
 
     const grant = await this.prisma.$transaction(async (tx) => {
       let user: { id: string; email: string };
@@ -665,11 +780,22 @@ export class IamFlowsService {
         }
       }
 
+      // Bind the OTP-verified mobile (the wizard's phone step) so phone sign-in works
+      // next time. Safe for the phone-invite path (same number) and email invites alike.
+      if (verifiedMobile) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { mobile: verifiedMobile, mobileVerified: true },
+        });
+      }
+
       await this.createMembershipTx(tx, {
         tenantId: invite.tenantId,
         userId: user.id,
         role: invite.role,
         addedBy: invite.invitedBy,
+        preferredRole: input.preferredRole,
+        availabilityDays: input.availabilityDays,
       });
       await tx.tenantInvitation.update({ where: { id: invite.id }, data: { status: "accepted" } });
       // Emit the events the invite path was previously silent on (WS3).
@@ -727,7 +853,15 @@ export class IamFlowsService {
    */
   private async createMembershipTx(
     tx: Prisma.TransactionClient,
-    args: { tenantId: string; userId: string; role: AppUserRole; addedBy?: string | null },
+    args: {
+      tenantId: string;
+      userId: string;
+      role: AppUserRole;
+      addedBy?: string | null;
+      // Volunteer onboarding prefs — set on a NEW membership only (advisory).
+      preferredRole?: string | null;
+      availabilityDays?: string[];
+    },
   ): Promise<void> {
     // Plan limit: only a genuinely new seat counts (an existing member re-runs as a
     // no-op below, so it must not trip the limit).
@@ -739,7 +873,14 @@ export class IamFlowsService {
 
     await tx.tenantMember.upsert({
       where: { tenantId_userId: { tenantId: args.tenantId, userId: args.userId } },
-      create: { tenantId: args.tenantId, userId: args.userId, role: args.role, addedBy: args.addedBy ?? null },
+      create: {
+        tenantId: args.tenantId,
+        userId: args.userId,
+        role: args.role,
+        addedBy: args.addedBy ?? null,
+        preferredRole: args.preferredRole ?? null,
+        availabilityDays: args.availabilityDays ?? [],
+      },
       update: {},
     });
     await this.outbox.append(tx, {

@@ -1,5 +1,6 @@
 import type {
   AcceptInviteRequest,
+  InviteStartPhoneRequest,
   ApproveJoinRequestRequest,
   AvailabilityResponse,
   ChangeEmailRequest,
@@ -136,8 +137,20 @@ export const auth = {
   phoneVerify: (challengeId: string, code: string) =>
     post<SessionGrantResponse>("/iam/phone/verify", { challengeId, code }),
 
+  // DEV-ONLY: read back the plaintext OTP for a challenge so the SMS-code screens
+  // can show it on-screen in local development (the API returns null in production).
+  devPeekOtp: (challengeId: string) =>
+    request<{ code: string | null }>(
+      `/iam/dev/otp?challengeId=${encodeURIComponent(challengeId)}`,
+      undefined,
+      { redirectOn401: false },
+    ),
+
   previewInvite: (token: string) =>
     request<InvitePreview>(`/iam/invite/${encodeURIComponent(token)}`, undefined, { redirectOn401: false }),
+  // Onboarding wizard: send an OTP to an invited number (token-gated).
+  inviteStartPhone: (body: InviteStartPhoneRequest, captchaToken?: string) =>
+    post<{ challengeId: string }>("/iam/invite/phone/start", body, captchaToken),
   acceptInvite: (body: AcceptInviteRequest) => post<SessionGrantResponse>("/iam/invite/accept", body),
 
   selectTenant: (tenantId: string) => post<OkResponse>("/iam/select-tenant", { tenantId }),

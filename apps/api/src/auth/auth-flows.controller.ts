@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
@@ -18,6 +19,7 @@ import {
   AcceptInviteDto,
   ConfirmEmailDto,
   EmailDto,
+  InviteStartPhoneDto,
   PhoneResendDto,
   PhoneStartDto,
   PhoneVerifyDto,
@@ -47,6 +49,13 @@ export class AuthFlowsController {
       user: { id: grant.userId, memberships: grant.memberships },
       memberships: grant.memberships,
     };
+  }
+
+  // DEV-ONLY: surface the SMS code on the OTP screens when no real SMS is sent in
+  // local development. Hard-gated to non-production in the service + BasicAuthGuard.
+  @Get("dev/otp")
+  devPeekOtp(@Query("challengeId") challengeId?: string) {
+    return this.flows.devPeekOtp(challengeId ?? "");
   }
 
   @RequireCaptcha("soft")
@@ -122,11 +131,23 @@ export class AuthFlowsController {
     return this.flows.previewInvite(token);
   }
 
+  // Send an OTP to an invited number (onboarding wizard). Token-gated; the invite
+  // authorises the SMS to a not-yet-registered number.
+  @RequireCaptcha("strict")
+  @Post("invite/phone/start")
+  inviteStartPhone(@Body() dto: InviteStartPhoneDto) {
+    return this.flows.inviteStartPhone(dto.token, dto.phone);
+  }
+
   @Post("invite/accept")
   async acceptInvite(@Body() dto: AcceptInviteDto, @Res({ passthrough: true }) res: Response) {
     const grant = await this.flows.acceptInvite(dto.token, {
       displayName: dto.displayName,
       password: dto.password,
+      challengeId: dto.challengeId,
+      code: dto.code,
+      preferredRole: dto.preferredRole,
+      availabilityDays: dto.availabilityDays,
     });
     return this.grantResponse(res, grant);
   }

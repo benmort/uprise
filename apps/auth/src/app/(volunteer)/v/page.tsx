@@ -55,7 +55,7 @@ export default function VolunteerSignInPage() {
   }
 
   return (
-    <div className="flex w-full flex-col">
+    <div className="flex flex-1 flex-col justify-center px-5 py-8">
       <FieldOnboarding />
       <div className="mb-6 text-center">
         <h1 className="mb-2 text-2xl font-extrabold text-foreground">{heading}</h1>

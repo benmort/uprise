@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronUp, DoorOpen, DownloadCloud, Loader2, Navigation } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronUp, DoorOpen, DownloadCloud, Loader2, Navigation, Spline } from "lucide-react";
 import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
 import { getCanvassAssignments, type CanvassAssignment } from "../api";
 import { getVolunteerId } from "../lib/volunteer";
@@ -126,9 +126,19 @@ export function WalkView({
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-extrabold">{assignment.turf.name}</h1>
+      <div className="flex items-center gap-3">
+        {!readOnly ? (
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={() => router.push("/field")}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-extrabold">{assignment.turf.name}</h1>
           <p className="text-xs text-muted-foreground tabular-nums">
             {doneCount} of {stops.length} stops done
           </p>
@@ -136,7 +146,7 @@ export function WalkView({
         <WalkModeToggle value={mode} onChange={setMode} />
       </div>
 
-      <ProgressBar value={doneCount} max={stops.length || 1} />
+      <ProgressBar value={doneCount} max={stops.length || 1} tone="success" />
 
       {!readOnly ? (
         <OfflineMapsControl turfId={turfId} geometry={assignment.turf.geometry as GeoJSON.Geometry} />
@@ -217,23 +227,18 @@ export function WalkView({
         </div>
       ) : (
         <div className="space-y-3">
-          {nextStop ? (
-            !readOnly ? (
-              <Button className="h-12 w-full text-base" onClick={() => openDoor(nextStop.id)}>
-                <DoorOpen className="mr-1.5 h-4 w-4" />
-                Knock — next stop · {nextStop.name || "Resident"}
-              </Button>
-            ) : null
-          ) : (
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
+            <Spline className="h-4 w-4" />
+            Route-optimised · shortest path
+          </p>
+          {!nextStop ? (
             <div className="rounded-xl border border-dashed border-border bg-surface/60 p-4 text-center text-sm text-muted-foreground">
               All stops done. Nice work.
             </div>
-          )}
-          <div className="space-y-2">
+          ) : null}
+          <div className="space-y-3">
             {stops.map((s) => (
-              <div key={s.id} className={cn(s.status !== "PENDING" && "opacity-60")}>
-                <WalkStopCard stop={s} isNext={s.id === nextStop?.id} onOpen={() => openDoor(s.id)} />
-              </div>
+              <WalkStopCard key={s.id} stop={s} isNext={s.id === nextStop?.id} onOpen={() => openDoor(s.id)} />
             ))}
           </div>
         </div>

@@ -1,25 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Field, Input, Spinner } from "@uprise/ui";
+import { Alert, Button, LogoMark, PrinciplesList, Spinner } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
-import { completeAuth } from "@/lib/session";
+import { VolunteerOnboardWizard } from "@/components/volunteer-onboard-wizard";
 
 /**
- * Volunteer invite acceptance, mobile-first. Previews the invite, then accepts with
- * just a name (phone invites are passwordless — holding the SMS'd link proves the
- * number). On success runs the shared completeAuth (→ select-tenant or return_to).
+ * Volunteer onboarding entry (the invite link). Previews the invite, shows the
+ * "you're invited" hero + canvasser principles, then hands off to the 5-step
+ * wizard (phone → OTP → name → role/days → conduct → on the team).
  */
 export default function VolunteerInvitePage() {
   const token = String(useParams().token ?? "");
   const returnTo = useQueryParams().get("return_to");
   const [tenantName, setTenantName] = useState<string | null>(null);
-  const [name, setName] = useState("");
+  const [invitedPhone, setInvitedPhone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -30,57 +31,73 @@ export default function VolunteerInvitePage() {
         return;
       }
       setTenantName(res.data.tenantName);
+      setInvitedPhone(res.data.phone ?? null);
     })();
   }, [token]);
 
-  async function accept(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    const res = await auth.acceptInvite({ token, displayName: name.trim() || undefined });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
-    }
-    completeAuth(res.data.memberships, returnTo);
-  }
-
   if (loading) {
     return (
-      <div className="py-10 text-center">
+      <div className="flex flex-1 items-center justify-center py-10">
         <Spinner />
       </div>
     );
   }
   if (error && tenantName === null) {
-    return <Alert variant="error" title={error} />;
+    return (
+      <div className="px-5 py-8">
+        <Alert variant="error" title={error} />
+      </div>
+    );
+  }
+
+  if (started) {
+    return (
+      <div className="px-5 py-6">
+        <VolunteerOnboardWizard
+          token={token}
+          invitedPhone={invitedPhone}
+          returnTo={returnTo}
+          onExit={() => setStarted(false)}
+        />
+      </div>
+    );
   }
 
   return (
-    <div className="flex w-full flex-col">
-      <div className="mb-6 text-center">
-        <h1 className="mb-2 text-2xl font-extrabold text-foreground">
-          Join{tenantName ? ` ${tenantName}` : ""}
+    <div className="flex flex-1 flex-col">
+      {/* Hero */}
+      <section className="rounded-b-[2.25rem] bg-primary px-6 pb-10 pt-14 text-white">
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
+          <LogoMark className="h-8 w-8 text-white" />
+        </span>
+        <p className="mt-7 text-sm font-bold uppercase tracking-[0.08em] text-white/80">
+          You&apos;re invited
+        </p>
+        <h1 className="mt-2 text-[2.5rem] font-extrabold leading-[1.1]">
+          Become a canvasser{tenantName ? ` for ${tenantName}` : ""}
         </h1>
-        <p className="text-sm text-muted-foreground">You&apos;ve been invited to canvass.</p>
+        <p className="mt-4 text-lg leading-relaxed text-white/85">
+          Join your neighbours knocking on doors and talking to voters. Takes two minutes to set up
+          — no app store needed.
+        </p>
+      </section>
+
+      {/* Principles */}
+      <div className="px-6 pt-8">
+        <PrinciplesList />
       </div>
-      <form onSubmit={accept} className="space-y-5">
-        <Field label="Your name" htmlFor="name">
-          <Input id="name" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} />
-        </Field>
-        {error ? <Alert variant="error" title={error} /> : null}
-        <Button type="submit" className="h-12 w-full text-base" disabled={busy || !name.trim()}>
-          {busy ? (
-            <>
-              <Spinner className="mr-2" />
-              Joining…
-            </>
-          ) : (
-            "Accept & start"
-          )}
+
+      {/* Actions */}
+      <div className="mt-auto space-y-4 px-6 pb-8 pt-8">
+        <Button className="h-14 w-full text-base" onClick={() => setStarted(true)}>
+          Get started
         </Button>
-      </form>
+        <p className="text-center text-base">
+          <Link href="/v" className="font-bold text-primary hover:underline">
+            Already a canvasser? Sign in
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

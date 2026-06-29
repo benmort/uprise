@@ -84,7 +84,7 @@ export default function VolunteerJoinPage() {
   }
 
   return (
-    <div className="flex w-full flex-col">
+    <div className="flex flex-1 flex-col justify-center px-5 py-8">
       <div className="mb-5">
         <Link href="/v" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-4 w-4" />

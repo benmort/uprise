@@ -1180,14 +1180,17 @@ model Network {
 }
 
 model TenantMember {
-  id        String      @id @default(cuid())
-  tenantId  String
-  userId    String
-  role      AppUserRole
-  addedBy   String?
-  createdAt DateTime    @default(now())
-  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String      @id @default(cuid())
+  tenantId         String
+  userId           String
+  role             AppUserRole
+  // Volunteer onboarding prefs (advisory): preferred canvasser role + usual availability.
+  preferredRole    String?
+  availabilityDays String[]    @default([])
+  addedBy          String?
+  createdAt        DateTime    @default(now())
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, userId])
   @@index([tenantId, role])
