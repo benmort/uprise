@@ -32,10 +32,10 @@ export default function Features() {
                   <Globe className="h-12 w-12" />
                 </div>
                 <h3 className="mb-4 text-xl font-semibold text-title-color md:text-2xl lg:text-xl xl:text-2xl">
-                  Custom Subdomains
+                  Multi-tenant &amp; multi-brand
                 </h3>
                 <p className="text-base !leading-normal text-text-color-secondary">
-                  Each client gets their own branded portal at yourname.uprise.org.au with custom branding, colors, and domain management.
+                  Run many campaigns and brands from one account. Each gets its own white-label portal at yourname.uprise.org.au with isolated data and its own branding. Available on the Scale plan.
                 </p>
               </div>
             </div>
@@ -91,7 +91,7 @@ export default function Features() {
                   Custom Branding
                 </h3>
                 <p className="text-base !leading-normal text-text-color-secondary">
-                  Upload your logo, set brand colors, and customize the experience to match your organisation&apos;s identity.
+                  Upload your logo, set brand colours and custom CSS per tenant to match each organisation&apos;s identity – part of multi-brand on the Scale plan.
                 </p>
               </div>
             </div>

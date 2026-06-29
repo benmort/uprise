@@ -81,6 +81,15 @@ const CORE_FLAGS = [
     envVar: "FEATURE_WHATSAPP_ENABLED",
   },
   {
+    key: "FEATURE_MULTIBRAND_ENABLED",
+    description:
+      "Multi-tenant & multi-brand: per-tenant branding / white-label portals & sub-tenants.",
+    default: false,
+    kind: "release",
+    controllableBy: PLAN_DRIVEN,
+    envVar: "FEATURE_MULTIBRAND_ENABLED",
+  },
+  {
     key: "FEATURE_BULLMQ_UPLOAD_ENABLED",
     description: "Route audience CSV imports through the BullMQ worker (vs inline).",
     default: false,

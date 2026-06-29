@@ -7,7 +7,8 @@ import {
   FormTextarea,
 } from '@/components/prog/shared/forms';
 import { OrganisationProfileFormValues } from '../types';
-import { Globe, Image, Palette, Code } from 'lucide-react';
+import { Globe, Image, Palette, Code, Lock } from 'lucide-react';
+import { useFlag } from '@/components/flags/flags-provider';
 
 export interface OrganisationProfileFormProps {
   values: Partial<OrganisationProfileFormValues>;
@@ -17,6 +18,8 @@ export interface OrganisationProfileFormProps {
 }
 
 export function OrganisationProfileForm({ values, onChange, errors = {}, disabled }: OrganisationProfileFormProps) {
+  // Per-tenant branding + white-label styling is a multi-brand entitlement (Scale plan).
+  const canMultibrand = useFlag('FEATURE_MULTIBRAND_ENABLED');
   const handleChange = (field: keyof OrganisationProfileFormValues) => (value: string) => {
     onChange({ ...values, [field]: value } as OrganisationProfileFormValues);
   };
@@ -97,6 +100,8 @@ export function OrganisationProfileForm({ values, onChange, errors = {}, disable
         />
       </FormSectionCard>
 
+      {canMultibrand ? (
+        <>
       <FormSectionCard
         title="Branding"
         description="Primary and secondary colours"
@@ -159,6 +164,19 @@ export function OrganisationProfileForm({ values, onChange, errors = {}, disable
           className="font-mono text-sm"
         />
       </FormSectionCard>
+        </>
+      ) : (
+        <FormSectionCard
+          title="Branding & white-label"
+          description="Custom colours and CSS for your portal"
+          icon={<Lock className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
+        >
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Per-tenant branding and white-label styling are part of multi-tenant &amp; multi-brand,
+            available on the Scale plan.
+          </p>
+        </FormSectionCard>
+      )}
     </>
   );
 }

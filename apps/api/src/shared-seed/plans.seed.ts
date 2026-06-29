@@ -3,9 +3,10 @@ import type { PrismaService } from "../prisma/prisma.service";
 /**
  * Canonical subscription plans. `key` matches Network.planName + the Stripe price nickname.
  * Grassroots is the hidden free tier (super-admin assignable, off the public pricing page).
- * `featureFlags` only needs to RESTRICT (nav flags default ON) — so we just turn WhatsApp off
- * for Grassroots. `limits` (null member = unlimited) drives enforcement; `features` is the
- * public pricing-table column (display only).
+ * `featureFlags` carries each plan's entitlements: nav flags default ON so we RESTRICT (e.g.
+ * WhatsApp off for Grassroots), while default-OFF entitlements are GRANTED (e.g. multi-brand on
+ * Scale only). `limits` (null member = unlimited) drives enforcement; `features` is the public
+ * pricing-table column (display only).
  */
 type FeatureRow = { label: string; value: boolean | string };
 
@@ -34,6 +35,7 @@ const featureRows = (
   surveys: boolean,
   analytics: boolean,
   api: boolean,
+  multibrand: boolean,
 ): FeatureRow[] => [
   { label: "Email campaigns", value: email },
   { label: "SMS campaigns", value: sms },
@@ -43,6 +45,7 @@ const featureRows = (
   { label: "Basic reporting", value: true },
   { label: "Advanced analytics", value: analytics },
   { label: "API access & priority support", value: api },
+  { label: "Multi-tenant & multi-brand", value: multibrand },
 ];
 
 export const PLAN_SEED: PlanSeed[] = [
@@ -58,9 +61,9 @@ export const PLAN_SEED: PlanSeed[] = [
     priceMonthlyOriginal: null,
     priceAnnually: 0,
     priceAnnuallyOriginal: null,
-    featureFlags: { FEATURE_WHATSAPP_ENABLED: false },
+    featureFlags: { FEATURE_WHATSAPP_ENABLED: false, FEATURE_MULTIBRAND_ENABLED: false },
     limits: { contacts: 1000, teamMembers: 2, segments: 2 },
-    features: featureRows(true, false, false, true, false, false, false),
+    features: featureRows(true, false, false, true, false, false, false, false),
   },
   {
     key: "starter",
@@ -74,9 +77,9 @@ export const PLAN_SEED: PlanSeed[] = [
     priceMonthlyOriginal: 59,
     priceAnnually: 499,
     priceAnnuallyOriginal: 708,
-    featureFlags: { FEATURE_WHATSAPP_ENABLED: true },
+    featureFlags: { FEATURE_WHATSAPP_ENABLED: true, FEATURE_MULTIBRAND_ENABLED: false },
     limits: { contacts: 5000, teamMembers: 3, segments: 5 },
-    features: featureRows(true, false, false, true, false, false, false),
+    features: featureRows(true, false, false, true, false, false, false, false),
   },
   {
     key: "growth",
@@ -90,9 +93,9 @@ export const PLAN_SEED: PlanSeed[] = [
     priceMonthlyOriginal: 179,
     priceAnnually: 1599,
     priceAnnuallyOriginal: 2148,
-    featureFlags: { FEATURE_WHATSAPP_ENABLED: true },
+    featureFlags: { FEATURE_WHATSAPP_ENABLED: true, FEATURE_MULTIBRAND_ENABLED: false },
     limits: { contacts: 25000, teamMembers: 10, segments: 20 },
-    features: featureRows(true, true, false, true, true, true, false),
+    features: featureRows(true, true, false, true, true, true, false, false),
   },
   {
     key: "scale",
@@ -106,9 +109,9 @@ export const PLAN_SEED: PlanSeed[] = [
     priceMonthlyOriginal: 358,
     priceAnnually: 3199,
     priceAnnuallyOriginal: 4296,
-    featureFlags: { FEATURE_WHATSAPP_ENABLED: true },
+    featureFlags: { FEATURE_WHATSAPP_ENABLED: true, FEATURE_MULTIBRAND_ENABLED: true },
     limits: { contacts: 100000, teamMembers: 25, segments: null },
-    features: featureRows(true, true, true, true, true, true, true),
+    features: featureRows(true, true, true, true, true, true, true, true),
   },
 ];
 

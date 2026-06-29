@@ -57,6 +57,11 @@ const FAQ_ITEMS: FaqItem[] = [
     answer:
       "All channels includes email, SMS, and phone calls. The Scale plan unlocks full multi-channel outreach for comprehensive campaign reach.",
   },
+  {
+    question: "What is multi-tenant & multi-brand?",
+    answer:
+      "It lets you run many campaigns, brands or partner organisations from one account, each with its own isolated data and a branded, white-label portal (logo, colours, custom CSS and subdomain). It's included on the Scale plan – see the For Campaigners page for detail.",
+  },
 ];
 
 function CheckIcon() {
