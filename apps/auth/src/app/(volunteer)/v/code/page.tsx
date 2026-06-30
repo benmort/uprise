@@ -14,11 +14,17 @@ import { completeAuth } from "@/lib/session";
  */
 export default function VolunteerCodePage() {
   const params = useQueryParams();
-  // Stateful: resend re-issues the code under a NEW challenge id, so we track it
-  // here (not just the URL param) and update it on resend — otherwise verify + the
-  // dev code hint would keep pointing at the original, now-stale challenge.
-  const [challengeId, setChallengeId] = useState(params.get("challengeId"));
   const returnTo = params.get("return_to");
+  // useQueryParams is empty until after mount, so we must DERIVE the challenge id
+  // from the URL each render (never capture it once in useState — that locks in the
+  // pre-mount null and shows "Missing code challenge"). Resend re-issues under a new
+  // id, tracked as an override so verify + the dev hint follow it.
+  const urlChallengeId = params.get("challengeId");
+  const [resendChallengeId, setResendChallengeId] = useState<string | null>(null);
+  const challengeId = resendChallengeId ?? urlChallengeId;
+  // Don't flash the "missing" error before the params have been read off the URL.
+  const [paramsReady, setParamsReady] = useState(false);
+  useEffect(() => setParamsReady(true), []);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -68,13 +74,20 @@ export default function VolunteerCodePage() {
     const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
     const res = await auth.phoneResend(challengeId, captchaToken);
     if (res.ok) {
-      setChallengeId(res.data.challengeId); // re-issued under a new id — follow it
+      setResendChallengeId(res.data.challengeId); // re-issued under a new id — follow it
       setCode("");
       setInfo("A new code is on its way.");
     } else setError(res.error);
   }
 
   const back = `/v${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`;
+  if (!paramsReady) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-10">
+        <Spinner />
+      </div>
+    );
+  }
   if (!challengeId) {
     return (
       <div className="py-8 text-center text-sm text-error">
