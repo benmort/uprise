@@ -96,10 +96,17 @@ export function SyncCentre() {
       <SectionCard
         title="Unsynced records"
         action={
-          <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing || unsynced === 0}>
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-            {syncing ? "Syncing…" : "Sync now"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {unsynced > 0 ? (
+              <span className="rounded-full bg-[hsl(var(--warning-container))] px-2.5 py-1 text-xs font-bold text-[hsl(var(--warning-foreground))]">
+                {unsynced} pending
+              </span>
+            ) : null}
+            <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing || unsynced === 0}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              {syncing ? "Syncing…" : "Sync now"}
+            </Button>
+          </div>
         }
       >
         {pending.length === 0 ? (
@@ -211,6 +218,13 @@ export function SyncCentre() {
           </ul>
         )}
       </SectionCard>
+
+      <Link
+        href="/field/wrap"
+        className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-bold text-white"
+      >
+        Done for the day
+      </Link>
 
       <ConfirmDialog
         open={releaseId !== null}
