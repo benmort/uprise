@@ -9,11 +9,26 @@ import { NextRequest, NextResponse } from "next/server";
  */
 const COOKIE = "auth_token";
 
+/**
+ * This app's PUBLIC URL for the current request. Behind a proxy/tunnel (ngrok dev,
+ * Vercel) `req.nextUrl` reflects the internal upstream (e.g. localhost:3000), so the
+ * return_to must be rebuilt from the forwarded host/proto — otherwise the user is
+ * sent back to localhost after signing in.
+ */
+function publicHref(req: NextRequest): string {
+  const fwdHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const host = (fwdHost ?? req.nextUrl.host).split(",")[0].trim();
+  const proto = (req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(/:$/, ""))
+    .split(",")[0]
+    .trim();
+  return `${proto}://${host}${req.nextUrl.pathname}${req.nextUrl.search}`;
+}
+
 export function middleware(req: NextRequest): NextResponse {
   if (req.cookies.get(COOKIE)) return NextResponse.next();
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
   const url = new URL("/sign-in", authAppUrl);
-  url.searchParams.set("return_to", req.nextUrl.href);
+  url.searchParams.set("return_to", publicHref(req));
   return NextResponse.redirect(url);
 }
 
