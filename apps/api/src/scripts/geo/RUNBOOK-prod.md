@@ -35,10 +35,17 @@ curl -L -C - -o data/geo/gnaf.zip \
 unzip -o data/geo/gnaf.zip -d data/geo/gnaf
 
 # Boundaries (ABS GDA2020 shapefiles) into the dirs load-boundaries.ts expects:
-#   data/geo/ced/CED_2025_AUST_GDA2020.shp   (AEC/ABS federal)
-#   data/geo/sed/SED_2025_AUST_GDA2020.shp   (ABS state electoral)
-#   data/geo/lga/LGA_2024_AUST_GDA2020.shp   (ABS LGA — matches LAYERS in load-boundaries.ts)
-# CED/SED already downloaded this session. Get LGA_2024 from the ABS ASGS download page.
+#   data/geo/ced/CED_2025_AUST_GDA2020.shp        (AEC/ABS federal)
+#   data/geo/sed/SED_2025_AUST_GDA2020.shp        (ABS state electoral)
+#   data/geo/meshblock/MB_2021_AUST_GDA2020.shp   (ABS ASGS Ed3 mesh blocks ≈358k)
+#   data/geo/sa1/SA1_2021_AUST_GDA2020.shp        (ABS ASGS Ed3 SA1 ≈61k)
+#   data/geo/sa2/SA2_2021_AUST_GDA2020.shp        (ABS ASGS Ed3 SA2 ≈2.5k)
+#   data/geo/sa3/SA3_2021_AUST_GDA2020.shp        (ABS ASGS Ed3 SA3 ≈358)
+#   data/geo/sa4/SA4_2021_AUST_GDA2020.shp        (ABS ASGS Ed3 SA4 ≈107)
+# CED/SED already present. ASGS Ed3 2021 GDA2020 shapefile packs come from the ABS
+# "ASGS Edition 3 → Digital boundary files" page (abs.gov.au) — download the Mesh Blocks
+# pack + the Main Structure (SA1–SA4) packs, unzip each so the .shp/.dbf land at the paths
+# above (the `shapefile` loader needs .shp + .dbf). load-boundaries.ts skips any missing layer.
 ```
 
 ## 2. Load boundaries (CED + SED + LGA) — no GDAL needed
@@ -46,8 +53,9 @@ unzip -o data/geo/gnaf.zip -d data/geo/gnaf
 ```bash
 psql "$GEO_DB_URL" -c 'select 1;'                      # wake compute
 DATABASE_URL="$GEO_DB_URL" npm --prefix apps/api run geo:load-boundaries
-# Streams each .shp via the `shapefile` pkg → ST_GeomFromGeoJSON. Expect ~150 CED, ~430 SED,
-# ~560 LGA features. Idempotent (ON CONFLICT (code) DO UPDATE).
+# Streams each .shp via the `shapefile` pkg → ST_GeomFromGeoJSON, batched inserts. Expect
+# ~151 CED, ~434 SED, ~358k meshblocks, ~61k SA1, ~2.5k SA2, ~358 SA3, ~107 SA4. Idempotent
+# (ON CONFLICT DO UPDATE) and writes real geo.dataset_meta provenance (drops the "(demo)" tag).
 ```
 
 ## 3. Load G-NAF addresses — per state `\copy`
@@ -73,13 +81,28 @@ SQL
 (National is ~15M rows — runs in minutes per state over a direct connection. Bandwidth is the
 limit; run on a host near the data, not over a home link.)
 
+> If addresses are ALREADY loaded on prod (the common case), skip step 3 and go straight to 3b.
+
+## 3b. Backfill G-NAF mesh-block codes (enables SA1–SA4 per address)
+
+`load-prod.sh`'s address insert never set `geo.gnaf_address.mb_code`, so SA1–4 won't nest onto
+addresses until it's filled. `backfill-mb.sh` joins G-NAF's own linkage
+(`ADDRESS_DETAIL_PID → MB_2021_PID → MB_2021_CODE`) per state. Re-runnable.
+
+```bash
+psql "$GEO_DB_URL" -c 'select 1;'                      # wake compute
+PGURL="${GEO_DB_URL%%\?*}" GNAF_ZIP=data/geo/gnaf.zip \
+  bash apps/api/src/scripts/geo/backfill-mb.sh
+# Verifies gnaf_address.mb_code coverage at the end (expect ≈ national G-NAF count).
+```
+
 ## 4. Build the address↔division mapping
 
 ```bash
 psql "$GEO_DB_URL" -c 'select 1;'                      # wake compute
 DATABASE_URL="$GEO_DB_URL" npm --prefix apps/api run geo:map
-# Populates geo.address_region: CED/SED/LGA via GIST ST_Contains (LGA also fills from
-# mesh-block nesting when MB is loaded — see below), then refreshes geo.dataset_meta.
+# Rebuilds geo.address_region: mb_code + SA1–4 from geo.meshblock (needs step 3b), then
+# CED/SED via GIST ST_Contains, then refreshes geo.dataset_meta counts (incl. SA1–4).
 ```
 
 ## 5. Verify
@@ -94,11 +117,10 @@ psql "$GEO_DB_URL" -c "SELECT c.name, count(*) FROM geo.address_region ar JOIN g
   division with the "Existing + cold doors" universe materialises cold-door contacts.
 
 ## Notes
-- **Mesh blocks / SA1–SA4 are optional.** CED/SED/LGA (the canvassing universe) work via
-  `ST_Contains` without them. To add the full ASGS hierarchy later: load ABS Mesh Blocks 2021
-  into `geo.meshblock` (carrying sa1–4 + lga codes) and the G-NAF `mb_code`
-  (`*_ADDRESS_MESH_BLOCK_2021_psv.psv`), then re-run `geo:map` — `address_region` SA1–4 +
-  lga_code then populate deterministically.
+- **ASGS mesh blocks + SA1–SA4 are now part of the load** (steps 1–2 + 3b): the clickable
+  MB/SA1/SA2/SA3 turf-selection layers and the Data-page counts come from `geo.meshblock`/`geo.sa*`;
+  per-address SA1–4 come from `geo.gnaf_address.mb_code` → `geo.meshblock` nesting in `geo:map`.
+  LGA stays dropped (federal + state only).
 - **Storage:** national G-NAF + geometries add several GB to the prod Neon DB — confirm the
   tier has headroom before step 3.
 - **Idempotent:** every step upserts; safe to re-run. Quarterly refresh = re-run 1→4.

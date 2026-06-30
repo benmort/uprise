@@ -8,6 +8,13 @@ tagged with mesh block, SA1–SA4, LGA, federal CED, state SED). Powers the canv
 **Run on a host with disk (~10 GB free), `psql`, and GDAL (`ogr2ogr`).** Not the web
 sandbox. Validate on one state (ACT) first, then run national.
 
+> **Canonical loaders (no GDAL needed).** `geo:load-boundaries` loads CED/SED **and** the ASGS
+> meshblock + SA1–SA4 layers from `data/geo/{ced,sed,meshblock,sa1,sa2,sa3,sa4}/*.shp` via the
+> `shapefile` pkg (batched inserts; writes real `geo.dataset_meta` provenance, no "(demo)"). Then
+> per-state G-NAF `\copy` (`load-prod.sh` / RUNBOOK §3) → `backfill-mb.sh` (fills
+> `geo.gnaf_address.mb_code` so SA1–4 nest per address) → `geo:map`. The ogr2ogr steps below are
+> historical reference; the exact ordered prod sequence is in **`RUNBOOK-prod.md`**.
+
 ## Prerequisites
 - Postgres + PostGIS (the migration runs `CREATE EXTENSION postgis`).
 - `psql` (libpq) and GDAL `ogr2ogr` (boundaries). On macOS: `brew install gdal` (if

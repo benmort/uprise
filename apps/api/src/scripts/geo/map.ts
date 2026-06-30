@@ -61,12 +61,31 @@ async function main(): Promise<void> {
        WHERE p.gnaf_pid = ar.gnaf_pid`,
     );
 
-    // Refresh dataset_meta row counts (federal + state). LGA is dropped — clear its
-    // provenance row so /settings/data doesn't show a stale "loaded" LGA entry.
+    // Refresh dataset_meta. LGA is dropped — clear its provenance row so
+    // /settings/data doesn't show a stale "loaded" LGA entry.
     await prisma.$executeRawUnsafe(`DELETE FROM geo.dataset_meta WHERE key = 'lga'`);
+
+    // G-NAF carries its full provenance here (geo:load-boundaries owns the boundary
+    // layers' provenance); this also clears the seed's stale "(demo)" label/release.
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO geo.dataset_meta (key,label,source_url,release_date,licence,row_count,status,last_ingested)
+       VALUES ('gnaf','G-NAF addresses',$1,'May 2026',$2,(SELECT count(*) FROM geo.gnaf_address),'loaded',now())
+       ON CONFLICT (key) DO UPDATE SET
+         label=EXCLUDED.label, source_url=EXCLUDED.source_url, release_date=EXCLUDED.release_date,
+         licence=EXCLUDED.licence, row_count=EXCLUDED.row_count, status='loaded',
+         last_ingested=now(), updated_at=now()`,
+      "https://data.gov.au/data/dataset/19432f89-dc3a-4ef3-b943-5326ef1dbecc",
+      "CC BY 4.0",
+    );
+
+    // Re-affirm row counts for the loaded boundary layers (labels/provenance already
+    // set by geo:load-boundaries); includes SA1–SA4 so /settings/data shows real counts.
     for (const [key, table] of [
-      ["gnaf", "geo.gnaf_address"],
       ["asgs_mb", "geo.meshblock"],
+      ["sa1", "geo.sa1"],
+      ["sa2", "geo.sa2"],
+      ["sa3", "geo.sa3"],
+      ["sa4", "geo.sa4"],
       ["ced", "geo.ced"],
       ["sed", "geo.sed"],
     ] as const) {
