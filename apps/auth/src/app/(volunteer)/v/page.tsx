@@ -11,6 +11,7 @@ import {
   FieldOnboarding,
   Input,
   Spinner,
+  TenantBrand,
   TurnstileWidget,
   type TurnstileHandle,
 } from "@uprise/ui";
@@ -57,6 +58,7 @@ export default function VolunteerSignInPage() {
   return (
     <div className="flex flex-1 flex-col justify-center px-5 py-8">
       <FieldOnboarding />
+      {org ? <TenantBrand name={org} className="mb-6" /> : null}
       <div className="mb-6 text-center">
         <h1 className="mb-2 text-2xl font-extrabold text-foreground">{heading}</h1>
         <p className="text-sm text-muted-foreground">{subhead}</p>

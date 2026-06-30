@@ -55,6 +55,7 @@ export default function VolunteerInvitePage() {
       <div className="px-5 py-6">
         <VolunteerOnboardWizard
           token={token}
+          tenantName={tenantName ?? ""}
           invitedPhone={invitedPhone}
           returnTo={returnTo}
           onExit={() => setStarted(false)}

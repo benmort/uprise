@@ -30,6 +30,25 @@ export function setVolunteerName(name: string): void {
   window.localStorage.setItem(NAME_KEY, name);
 }
 
+const TENANT_KEY = "uprise.volunteerTenant";
+
+/** The current tenant the volunteer is canvassing for ({id,name}) — for the brand badge. */
+export function getTenantBrand(): { id: string; name: string } | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(TENANT_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as { id: string; name: string };
+  } catch {
+    return null;
+  }
+}
+
+export function setTenantBrand(tenant: { id: string; name: string }): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TENANT_KEY, JSON.stringify(tenant));
+}
+
 /** Stable per-knock idempotency key (crypto.randomUUID where available). */
 export function newLocalId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();

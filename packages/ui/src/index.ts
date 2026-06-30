@@ -35,6 +35,7 @@ export * from "./components/role-select-cards";
 export * from "./components/pagination-controls";
 export * from "./components/select";
 export * from "./components/step-progress";
+export * from "./components/tenant-brand";
 export * from "./components/skeleton";
 export * from "./components/spinner";
 export * from "./components/status-badge";

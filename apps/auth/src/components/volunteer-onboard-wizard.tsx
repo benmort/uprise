@@ -24,6 +24,7 @@ import {
   RoleSelectCards,
   Spinner,
   StepProgress,
+  TenantBrand,
   TurnstileWidget,
   formatAuMobile,
   type RoleOption,
@@ -58,11 +59,13 @@ const FLOW: Step[] = ["phone", "code", "name", "role", "conduct"];
  */
 export function VolunteerOnboardWizard({
   token,
+  tenantName,
   invitedPhone,
   returnTo,
   onExit,
 }: {
   token: string;
+  tenantName?: string;
   invitedPhone: string | null;
   returnTo: string | null;
   onExit: () => void;
@@ -203,6 +206,7 @@ export function VolunteerOnboardWizard({
 
   return (
     <div className="flex min-h-[80vh] w-full flex-col">
+      {tenantName ? <TenantBrand name={tenantName} className="mb-5" /> : null}
       <div className="mb-7 flex items-center gap-3">
         <button
           type="button"

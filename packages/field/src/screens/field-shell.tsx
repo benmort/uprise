@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { getSession, goToLogin } from "../lib/session";
-import { setVolunteerId } from "../lib/volunteer";
+import { setTenantBrand, setVolunteerId } from "../lib/volunteer";
 import { OfflineBanner } from "../components/offline-banner";
 
 /**
@@ -28,6 +28,10 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
         return;
       }
       setVolunteerId(session.id);
+      // Stash the current tenant so My turf can show the campaign brand badge.
+      const current =
+        session.memberships?.find((m) => m.tenantId === session.tenantId) ?? session.memberships?.[0];
+      if (current) setTenantBrand({ id: current.tenantId, name: current.tenantName });
       setReady(true);
     })();
     return () => {

@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, CircleUser, DownloadCloud, Menu, PersonStanding } from "lucide-react";
-import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
+import { Button, EmptyState, Skeleton, TenantBrand, cn } from "@uprise/ui";
 import {
   getCanvassAssignments,
   getVolunteerMetrics,
   type CanvassAssignment,
   type VolunteerMetrics,
 } from "../api";
-import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
+import { getTenantBrand, getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { MapThumbnail } from "../components/map-thumbnail";
 import { useOnlineStatus } from "../hooks/use-online-status";
@@ -41,6 +41,7 @@ export function Assignments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const name = getVolunteerName();
+  const tenant = getTenantBrand();
 
   useEffect(() => {
     const volunteerId = getVolunteerId();
@@ -82,6 +83,9 @@ export function Assignments() {
 
   return (
     <div className="space-y-5">
+      {/* Tenant brand (top-left) — the campaign this volunteer is canvassing for */}
+      {tenant ? <TenantBrand name={tenant.name} seed={tenant.id} /> : null}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <button
