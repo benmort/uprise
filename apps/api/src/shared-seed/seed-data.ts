@@ -18,9 +18,11 @@ export const EXAMPLE_BLAST_TITLE = "Tour Example Blast";
 // stays idempotent.
 export const DEMO_TAG = "demo:uprise";
 
+// Verified demo mobiles (E.164) so phone-first login (/v) and SMS 2FA work in dev
+// without a real SMS — pair with the on-screen dev code hint on the code screen.
 export const DEMO_LOGINS = {
-  organiser: { email: "demo.organiser@uprise.test", password: "demo-organiser-pw", displayName: "Demo Organiser" },
-  volunteer: { email: "demo.volunteer@uprise.test", password: "demo-volunteer-pw", displayName: "Demo Volunteer" },
+  organiser: { email: "demo.organiser@uprise.test", password: "demo-organiser-pw", displayName: "Demo Organiser", mobile: "+61400000001" },
+  volunteer: { email: "demo.volunteer@uprise.test", password: "demo-volunteer-pw", displayName: "Demo Volunteer", mobile: "+61400000002" },
 } as const;
 
 export const DEMO_CAMPAIGN = { name: "Demo — Spring Doorknock" } as const;

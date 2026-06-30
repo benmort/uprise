@@ -187,10 +187,22 @@ export class BasicAuthGuard implements CanActivate {
     return candidates.some((candidate) => allowedPaths.has(candidate));
   }
 
+  /**
+   * DEV-ONLY: the on-screen OTP hint endpoint (GET /iam/dev/otp), reachable
+   * pre-session in development so the SMS-code screens can show the code when no
+   * real SMS is sent. Never allowlisted in production (the handler also returns null).
+   */
+  private isDevOtpPeekPath(request: Request): boolean {
+    if (this.config.get<string>("NODE_ENV") === "production") return false;
+    const candidates = this.requestPathCandidates(request);
+    return candidates.some((c) => c === "/iam/dev/otp" || c === "/api/v1/iam/dev/otp");
+  }
+
   canActivate(context: ExecutionContext): boolean | Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request & { user?: AuthUser }>();
     if (request.method?.toUpperCase() === "OPTIONS") return true;
     if (this.isPublicWebhookPath(request)) return true;
+    if (this.isDevOtpPeekPath(request)) return true; // dev-only OTP hint (non-prod)
     if (this.isAuthEndpointPath(request)) return true; // login/logout issue the session
     if (this.isAnalyticsStreamPath(request) && this.hasValidStreamToken(request)) return true;
 

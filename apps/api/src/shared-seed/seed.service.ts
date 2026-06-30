@@ -72,7 +72,7 @@ export class SeedService {
 
   private async upsertUser(
     tenantId: string,
-    login: { email: string; password: string; displayName: string },
+    login: { email: string; password: string; displayName: string; mobile?: string },
     role: AppUserRole,
   ): Promise<string> {
     // Identity (User) is global; membership (TenantMember) carries the role.
@@ -85,9 +85,19 @@ export class SeedService {
             email: login.email,
             displayName: login.displayName,
             passwordHash: await hashPassword(login.password),
+            // A pre-verified mobile so phone-first login / 2FA work in dev (no SMS).
+            mobile: login.mobile ?? null,
+            mobileVerified: Boolean(login.mobile),
           },
         })
       ).id;
+    // Backfill the demo mobile on re-seed (older seeds created these users without one).
+    if (existing && login.mobile) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { mobile: login.mobile, mobileVerified: true },
+      });
+    }
     await this.prisma.tenantMember.upsert({
       where: { tenantId_userId: { tenantId, userId } },
       create: { tenantId, userId, role },
