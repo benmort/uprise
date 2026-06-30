@@ -173,3 +173,29 @@ Remaining:
 
 Decision: operator/dashboard steps — finish alongside the signup-approval prod wiring (the
 `apps/action` CORS origin overlaps with the SendGrid item above).
+
+### Admin account page: captcha-gated "send code" buttons send no Turnstile token
+**Reported:** in the admin account page (Account → email verification), clicking to send a
+verification code returns the toast **"Couldn't send code" / "Captcha verification failed"**
+(observed where Turnstile is configured, i.e. prod).
+
+Root cause: `apps/admin/src/app/(main)/account/page.tsx:101` calls
+`auth.sendEmailVerification(email)` with **no captcha token**, but `/iam/verify-email/send` is
+`@RequireCaptcha("soft")` (`apps/api/src/auth/auth-flows.controller.ts:80-81`). When Turnstile is
+configured, `TurnstileGuard` treats the empty token as a failed challenge and throws
+`"Captcha verification failed"` (`apps/api/src/common/captcha/turnstile.guard.ts`); the client
+surfaces it as the `"Couldn't send code"` toast (`account/page.tsx:106`). The admin account page
+renders **no `<TurnstileWidget>`** and threads no token — unlike the working auth-app pattern in
+`apps/auth/src/app/(sso)/account-recovery/page.tsx` (`captchaRef.current?.execute()` → token passed
+to the api-client call). In dev the guard is a no-op (`!turnstile.isConfigured()`), which is why it
+only bites once Turnstile is wired.
+
+Fix: render `TurnstileWidget` on the admin account page and pass `captchaToken` into
+`auth.sendEmailVerification` (the api-client already accepts it —
+`packages/api-client/src/index.ts:120`), mirroring `account-recovery`. The mobile-code button
+(`account/page.tsx:269` → `profile.sendMobileCode()` → `/iam/profile/mobile/send`) is **not**
+captcha-gated server-side today, so it isn't the current cause — but thread the same token through
+it if that route is later decorated, to avoid the identical failure.
+
+Decision: small self-contained frontend fix (admin only) — safe to do any time; not blocked on an
+external dependency.
