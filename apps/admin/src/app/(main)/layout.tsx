@@ -146,7 +146,7 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
     { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
     { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
     {
-      type: "group", key: "data-files", label: "Data & files", icon: Database,
+      type: "group", key: "data-files", label: "Data & Files", icon: Database,
       match: (p) =>
         p.startsWith("/settings/data") ||
         p.startsWith("/canvass/divisions") ||

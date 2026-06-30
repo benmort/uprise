@@ -28,6 +28,11 @@ const TABS: Array<{ type: DivisionType; label: string; soon?: boolean }> = [
   { type: "lga", label: "Local (LGA)", soon: true }, // federal + state only; LGA not mapped
 ];
 
+// Deep-link aliases: /canvass/divisions#federal|#state|#local selects the tab and
+// the Data page (Settings → Data) links straight to #federal / #state.
+const HASH_TO_TYPE: Record<string, DivisionType> = { federal: "ced", state: "sed", local: "lga" };
+const TYPE_TO_HASH: Record<DivisionType, string> = { ced: "federal", sed: "state", lga: "local" };
+
 export default function DivisionsPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -55,6 +60,19 @@ export default function DivisionsPage() {
   useEffect(() => {
     void load(type);
   }, [type, load]);
+
+  // Honour a deep-link hash (#federal/#state) on mount and on hashchange.
+  useEffect(() => {
+    const apply = () => {
+      const key = window.location.hash.replace(/^#/, "").toLowerCase();
+      const next = HASH_TO_TYPE[key];
+      const tab = next && TABS.find((t) => t.type === next);
+      if (tab && !tab.soon) setType(next);
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
 
   const cutTurf = useCallback(
     async (d: Division) => {
@@ -112,7 +130,13 @@ export default function DivisionsPage() {
               type="button"
               disabled={t.soon}
               title={t.soon ? "LGA boundaries not loaded yet" : undefined}
-              onClick={() => !t.soon && setType(t.type)}
+              onClick={() => {
+                if (t.soon) return;
+                setType(t.type);
+                // replaceState (not location.hash=) so the URL stays shareable without
+                // pushing history or re-triggering the hashchange listener.
+                window.history.replaceState(null, "", `#${TYPE_TO_HASH[t.type]}`);
+              }}
               className={cn(
                 "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition",
                 t.soon

@@ -88,7 +88,22 @@ export default function DataSettingsPage() {
             rowKey={(r) => r.key}
             empty="No datasets."
             columns={[
-              { key: "label", header: "Dataset", cell: (r) => r.label },
+              {
+                key: "label",
+                header: "Dataset",
+                // Federal (CED) / State (SED) deep-link to the divisions explorer's matching tab.
+                cell: (r) =>
+                  r.key === "ced" || r.key === "sed" ? (
+                    <Link
+                      href={`/canvass/divisions#${r.key === "ced" ? "federal" : "state"}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {r.label}
+                    </Link>
+                  ) : (
+                    r.label
+                  ),
+              },
               { key: "release", header: "Release", cell: (r) => r.releaseDate ?? "—" },
               { key: "rows", header: "Rows", numeric: true, cell: (r) => r.rowCount.toLocaleString() },
               { key: "status", header: "Status", cell: (r) => <StatusBadge status={STATUS_MAP[r.status] ?? "PENDING"} /> },
