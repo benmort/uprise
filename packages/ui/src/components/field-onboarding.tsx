@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DoorOpen, ShieldAlert, Wifi, X } from "lucide-react";
 import { Button } from "./button";
 import { useLocalStorage } from "../hooks/use-local-storage";
@@ -19,8 +19,13 @@ const STEPS = [
 export function FieldOnboarding({ onDone }: { onDone?: () => void } = {}) {
   const [seen, setSeen] = useLocalStorage<boolean>("uprise.fieldOnboarded", false);
   const [step, setStep] = useState(0);
+  // `seen` comes from localStorage (client-only), so SSR and the first client render
+  // disagree — which shifts the sibling markup and breaks hydration. Render nothing
+  // until mounted, then show the carousel client-side if it hasn't been seen.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  if (seen) return null;
+  if (!mounted || seen) return null;
   const s = STEPS[step];
   const Icon = s.icon;
   const last = step === STEPS.length - 1;
