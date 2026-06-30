@@ -23,7 +23,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2f5bd6",
+  // Brand primary (= --primary / brand-500), matching the admin app's blue.
+  themeColor: "#465fff",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

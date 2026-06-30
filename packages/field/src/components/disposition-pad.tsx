@@ -58,8 +58,8 @@ export function DispositionPad({
       )}
       {terminal.length > 0 && (
         <div className="space-y-2 border-t border-border pt-3">
-          <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
-            Terminal / data quality
+          <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--warning-foreground))]">
+            Data quality
           </p>
           <div className="grid grid-cols-2 gap-2">
             {terminal.map((o) => (

@@ -99,7 +99,17 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
             scaleMax: q.scaleMax ?? undefined,
             options: q.options
               ?.filter((o) => o.id)
-              .map((o) => ({ id: String(o.id), value: o.value, label: o.label })),
+              .map((o) => ({
+                id: String(o.id),
+                value: o.value,
+                label: o.label,
+                // "Author once, use everywhere": surface the option's dual-channel
+                // mapping under each choice — the door-button label and the SMS
+                // canned reply it logs — so the canvasser sees both at the door.
+                hint: o.cannedReplyText
+                  ? `Door: "${o.label}" · SMS: "${o.cannedReplyText}"`
+                  : `Door: "${o.label}"`,
+              })),
           })),
       });
     })();
@@ -175,7 +185,14 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
       });
       return;
     }
-    showToast({ tone: "success", title: "Knock saved", description: "Will sync when online." });
+    // Match the comp's logging language: name the outcome, reassure it's saved
+    // offline-first (written to this phone before any sync).
+    const label = dispositions.find((d) => d.code === code)?.label ?? code.replaceAll("_", " ");
+    showToast(
+      answers?.length
+        ? { tone: "success", title: "Conversation + survey logged", description: "Saved offline" }
+        : { tone: "success", title: `Logged: ${label}`, description: "Saved offline" },
+    );
     router.push(`/field/${turfId}`);
   }
 

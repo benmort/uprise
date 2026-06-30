@@ -27,7 +27,7 @@ export function MapThumbnail({ polygon, className, children }: MapThumbnailProps
       <svg viewBox="0 0 128 96" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
         <defs>
           <pattern id="mt-grid" width="16" height="16" patternUnits="userSpaceOnUse">
-            <path d="M16 0H0V16" fill="none" stroke="#d4def9" strokeWidth="1" />
+            <path d="M16 0H0V16" fill="none" stroke="hsl(var(--primary) / 0.22)" strokeWidth="1" />
           </pattern>
         </defs>
         <rect width="128" height="96" fill="url(#mt-grid)" />

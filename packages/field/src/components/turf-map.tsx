@@ -11,6 +11,9 @@ export type MapStop = { id: string; lat: number; lng: number; status?: string };
 export type LngLat = { lat: number; lng: number };
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+// Brand primary (= --primary / brand-500), mirrored here because Mapbox paint
+// props need a literal hex and can't read the CSS token. Matches the admin blue.
+const PRIMARY = "#465fff";
 
 /**
  * Volunteer/organiser map. `mode="view"` renders walk stops (clustered) + the
@@ -121,9 +124,9 @@ export function TurfMap({
           <Layer
             id="turf-fill"
             type="fill"
-            paint={{ "fill-color": "#2563eb", "fill-opacity": 0.12 }}
+            paint={{ "fill-color": PRIMARY, "fill-opacity": 0.12 }}
           />
-          <Layer id="turf-line" type="line" paint={{ "line-color": "#2563eb", "line-width": 2 }} />
+          <Layer id="turf-line" type="line" paint={{ "line-color": PRIMARY, "line-width": 2 }} />
         </Source>
       )}
 
@@ -148,7 +151,7 @@ export function TurfMap({
                 "#16a34a",
                 "SKIPPED",
                 "#94a3b8",
-                "#2563eb",
+                PRIMARY,
               ],
               "circle-stroke-width": 1.5,
               "circle-stroke-color": "#ffffff",
@@ -163,7 +166,7 @@ export function TurfMap({
             id="walk-route-line"
             type="line"
             layout={{ "line-cap": "round", "line-join": "round" }}
-            paint={{ "line-color": "#2f5bd6", "line-width": 4, "line-opacity": 0.85, "line-dasharray": [1, 1.6] }}
+            paint={{ "line-color": PRIMARY, "line-width": 4, "line-opacity": 0.85, "line-dasharray": [1, 1.6] }}
           />
         </Source>
       )}

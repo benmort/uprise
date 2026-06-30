@@ -7,7 +7,7 @@
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#2f5bd6",
+  "theme_color": "#465fff",
   "icons": [
     { "src": "/uprise-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },

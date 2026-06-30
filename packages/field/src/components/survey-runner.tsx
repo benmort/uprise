@@ -76,7 +76,7 @@ export function SurveyRunner({
       </div>
 
       {/* Question card */}
-      <div className="rounded-3xl border border-border bg-surface p-6 shadow-card">
+      <div className="rounded-2xl border border-border bg-surface p-6 shadow-card">
         <p className="text-sm font-bold uppercase tracking-[0.05em] text-primary">
           {category} · Question {index + 1}
         </p>
