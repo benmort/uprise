@@ -264,6 +264,20 @@ export class TenantsService {
     return { slug: norm, available: !existing };
   }
 
+  /**
+   * Public brand lookup by slug — the tenant's id + name for the volunteer auth panel
+   * (the id seeds the same avatar gradient the admin tenant switcher uses). Returns null
+   * for an unknown/blank slug; slugs are public (subdomains), so this reveals nothing new.
+   */
+  async tenantBrandBySlug(slug: string): Promise<{ id: string; name: string } | null> {
+    const norm = this.normaliseSlug(slug);
+    if (!norm) return null;
+    return this.prisma.tenant.findFirst({
+      where: { slug: norm, deletedAt: null },
+      select: { id: true, name: true },
+    });
+  }
+
   // ── Invitations (issuing; accept/preview live in IamFlowsService) ─────
   async createInvitation(
     tenantId: string,

@@ -105,6 +105,13 @@ export class TenantsController {
     return this.tenants.isSlugAvailable(slug ?? "");
   }
 
+  // Public tenant brand (id + name) by slug for the volunteer auth panel. Declared
+  // before :id; guard-allowlisted. Slugs are public subdomains, so this leaks nothing.
+  @Get("brand")
+  brand(@Query("slug") slug: string) {
+    return this.tenants.tenantBrandBySlug(slug ?? "");
+  }
+
   // Super-admin search across ALL tenants (powers the feature-flag override editor).
   // Declared before :id so "search" isn't captured as a tenant id; the explicit
   // isSuperAdmin check is the real gate (TENANT_READ alone is held by organisers too).

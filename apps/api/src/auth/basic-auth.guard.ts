@@ -65,7 +65,9 @@ export class BasicAuthGuard implements CanActivate {
         exact.has(c) ||
         exact.has(c.replace(/^\/api\/v1/, "")) ||
         // invite preview (GET /iam/invite/:token) + accept (POST /iam/invite/accept)
-        /^(?:\/api\/v1)?\/iam\/invite\//.test(c),
+        /^(?:\/api\/v1)?\/iam\/invite\//.test(c) ||
+        // tokenless open-join (preview + phone/start + accept) — gated by the campaign flag
+        /^(?:\/api\/v1)?\/iam\/open-join\//.test(c),
     );
   }
 
@@ -176,6 +178,9 @@ export class BasicAuthGuard implements CanActivate {
       // Public slug pre-check for the sign-up UI (meld doc 12).
       "/tenants/availability",
       "/api/v1/tenants/availability",
+      // Public tenant brand by slug for the volunteer auth panel.
+      "/tenants/brand",
+      "/api/v1/tenants/brand",
       // Public pricing — visible plans for the marketing site (no auth).
       "/plans/public",
       "/api/v1/plans/public",
