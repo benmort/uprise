@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "crypto";
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole, Prisma } from "@uprise/db";
+import { AppUserRole, CanvassCampaignStatus, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { SessionService } from "./session.service";
@@ -104,11 +104,24 @@ export class IamFlowsService {
    * hint (GET /iam/dev/otp) instead, keeping phone-first login / 2FA testable sans SMS.
    */
   private async sendOtpSms(input: Parameters<TransactionalDispatcher["sendSms"]>[0]): Promise<void> {
+    const isProd = this.config.get<string>("NODE_ENV") === "production";
+    // In dev the code is shown on-screen (GET /iam/dev/otp), so we skip the real SMS by
+    // default. Set DEV_SEND_OTP_SMS=true to actually dispatch via Twilio for end-to-end
+    // testing on a real phone (requires TWILIO_* configured). Production always sends.
+    const devSend = this.config.get<boolean>("DEV_SEND_OTP_SMS") === true;
+    if (!isProd && !devSend) {
+      this.logger.warn("iam", "OTP SMS skipped in dev (set DEV_SEND_OTP_SMS=true to send); code on-screen", {
+        purpose: input.purpose,
+      });
+      return;
+    }
     try {
       await this.dispatcher.sendSms(input);
     } catch (err) {
-      if (this.config.get<string>("NODE_ENV") === "production") throw err;
-      this.logger.warn("iam", "OTP SMS send skipped in development (no SMS provider)", {
+      if (isProd) throw err;
+      // dev + DEV_SEND_OTP_SMS=true but the send failed (e.g. Twilio not configured) —
+      // surface it loudly; the on-screen dev code still works as a fallback.
+      this.logger.warn("iam", "OTP SMS send failed in dev (DEV_SEND_OTP_SMS=true) — check TWILIO_* config", {
         purpose: input.purpose,
         error: String(err),
       });
@@ -412,9 +425,12 @@ export class IamFlowsService {
    * grant a session, see verifyPhoneLogin — are not shown), unverified and unexpired.
    * No code shown ⇒ that number isn't a real, active account in this database.
    */
-  async devPeekOtp(challengeId: string): Promise<{ code: string | null }> {
-    if (this.config.get<string>("NODE_ENV") === "production") return { code: null };
-    if (!challengeId) return { code: null };
+  async devPeekOtp(challengeId: string): Promise<{ code: string | null; smsSent: boolean }> {
+    // `smsSent` lets the code screens label accurately — a real SMS also goes out when
+    // DEV_SEND_OTP_SMS is on (vs the code being on-screen only).
+    const smsSent = this.config.get<boolean>("DEV_SEND_OTP_SMS") === true;
+    if (this.config.get<string>("NODE_ENV") === "production") return { code: null, smsSent: false };
+    if (!challengeId) return { code: null, smsSent };
     const record = await this.prisma.mobileVerification.findUnique({
       where: { id: challengeId },
       select: { code: true, userId: true, mobile: true, verifiedAt: true, expiresAt: true },
@@ -427,9 +443,9 @@ export class IamFlowsService {
       record.verifiedAt ||
       record.expiresAt.getTime() <= Date.now()
     ) {
-      return { code: null };
+      return { code: null, smsSent };
     }
-    return { code: record.code };
+    return { code: record.code, smsSent };
   }
 
   // ── Phone-first passwordless login (volunteers/canvassers) ──────────────
@@ -889,6 +905,121 @@ export class IamFlowsService {
       aggregateId: args.tenantId,
       payload: { tenantId: args.tenantId, userId: args.userId, role: args.role },
     });
+  }
+
+  // ── Open campaign join (tokenless self-enrol; per-campaign master switch) ──
+  /**
+   * Load a campaign that's open for tokenless enrolment, or throw. The gate is the
+   * campaign's own `openJoinEnabled` flag (off by default) plus an ACTIVE status – this
+   * is what replaces the invite token as the authorisation to onboard + the SMS send.
+   */
+  private async loadOpenCampaign(campaignId: string) {
+    const campaign = await this.prisma.canvassCampaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true, name: true, tenantId: true, openJoinEnabled: true, status: true },
+    });
+    if (!campaign || !campaign.openJoinEnabled || campaign.status !== CanvassCampaignStatus.ACTIVE) {
+      throw new BadRequestException("This campaign isn't open for sign-ups.");
+    }
+    return campaign;
+  }
+
+  /** Public preview for the `/v/c/[campaignId]` landing – campaign + org name, gated. */
+  async openJoinPreview(
+    campaignId: string,
+  ): Promise<{ campaignId: string; campaignName: string; tenantName: string }> {
+    const campaign = await this.loadOpenCampaign(campaignId);
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: campaign.tenantId },
+      select: { name: true },
+    });
+    return { campaignId: campaign.id, campaignName: campaign.name, tenantName: tenant?.name ?? "" };
+  }
+
+  /**
+   * Issue + SMS a phone OTP for a tokenless open-join. The campaign's `openJoinEnabled`
+   * flag authorises the send to an unregistered number (mirrors inviteStartPhone, but
+   * the master switch is the campaign, not an invite token). Rate-limited per phone.
+   */
+  async openJoinStartPhone(campaignId: string, rawPhone: string): Promise<{ challengeId: string }> {
+    const campaign = await this.loadOpenCampaign(campaignId);
+    const mobile = assertE164(rawPhone);
+    const recentSends = await this.prisma.mobileVerification.count({
+      where: { mobile, createdAt: { gt: new Date(Date.now() - PHONE_SEND_WINDOW_MS) } },
+    });
+    const code = this.newCode();
+    const record = await this.prisma.mobileVerification.create({
+      data: { userId: null, mobile, code, expiresAt: new Date(Date.now() + PHONE_LOGIN_TTL_MS) },
+    });
+    if (recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
+      await this.sendOtpSms({
+        tenantId: campaign.tenantId,
+        toPhone: mobile,
+        body: `Your sign-in code is ${code}`,
+        purpose: "phone_login",
+      });
+    }
+    return { challengeId: record.id };
+  }
+
+  /**
+   * Finalise a tokenless open-join: verify the phone OTP, upsert the phone-only user,
+   * create an IMMEDIATE VOLUNTEER membership in the campaign's tenant (no approval), and
+   * grant the session. Shares acceptInvite's tail minus the invite/email branches.
+   */
+  async openJoinAccept(
+    campaignId: string,
+    input: {
+      challengeId?: string;
+      code?: string;
+      displayName?: string;
+      preferredRole?: string;
+      availabilityDays?: string[];
+    },
+  ): Promise<SessionGrant> {
+    const campaign = await this.loadOpenCampaign(campaignId);
+    if (!input.challengeId || !input.code) {
+      throw new BadRequestException("Verify your mobile number first.");
+    }
+    // Consume the OTP before the write tx (the per-challenge attempt cap can't roll back).
+    const mobile = await this.verifyPhoneChallenge(input.challengeId, input.code);
+
+    const userId = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.user.findUnique({ where: { mobile } });
+      const user =
+        existing ??
+        (await tx.user.create({
+          data: {
+            email: phonePlaceholderEmail(mobile),
+            displayName: input.displayName?.trim() || mobile,
+            mobile,
+            mobileVerified: true,
+            signupSource: "open_join",
+          },
+        }));
+      // Holding the OTP'd number proves control of it – verify a returning user too.
+      if (existing && !existing.mobileVerified) {
+        await tx.user.update({ where: { id: existing.id }, data: { mobileVerified: true } });
+      }
+      await this.createMembershipTx(tx, {
+        tenantId: campaign.tenantId,
+        userId: user.id,
+        role: AppUserRole.VOLUNTEER,
+        preferredRole: input.preferredRole,
+        availabilityDays: input.availabilityDays,
+      });
+      if (!existing) {
+        await this.outbox.append(tx, {
+          tenantId: campaign.tenantId,
+          eventType: "iam.user.created",
+          aggregateId: user.id,
+          payload: { userId: user.id, email: user.email, tenantId: campaign.tenantId },
+        });
+      }
+      return user.id;
+    });
+
+    return this.grantSession(userId);
   }
 
   // ── Join requests (self-signup → admin approval; the inverse of invite) ──

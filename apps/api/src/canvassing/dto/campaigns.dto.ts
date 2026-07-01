@@ -1,4 +1,4 @@
-import { IsEnum, IsObject, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsEnum, IsObject, IsOptional, IsString } from "class-validator";
 import { CanvassCampaignStatus } from "@uprise/db";
 
 export class CreateCampaignDto {
@@ -20,6 +20,10 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsObject()
   goals?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsBoolean()
+  openJoinEnabled?: boolean;
 }
 
 export class UpdateCampaignDto {
@@ -42,4 +46,8 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsObject()
   goals?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsBoolean()
+  openJoinEnabled?: boolean;
 }

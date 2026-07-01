@@ -33,6 +33,9 @@ function setup() {
       findUnique: jest.fn(async () => null),
       update: jest.fn(async () => ({})),
     },
+    canvassCampaign: {
+      findUnique: jest.fn(async () => null),
+    },
     magicLink: {
       create: jest.fn(async () => ({ id: "ml1" })),
       findUnique: jest.fn(async () => null),
@@ -59,7 +62,16 @@ function setup() {
     setTenant: jest.fn(),
     revokeAllForUser: jest.fn(),
   } as any;
-  const config = { get: jest.fn((k: string, fb?: string) => (k === "AUTH_APP_URL" ? "https://auth.test" : fb ?? "")) } as any;
+  const config = {
+    get: jest.fn((k: string, fb?: string) =>
+      k === "AUTH_APP_URL"
+        ? "https://auth.test"
+        : // exercise the real OTP-send path (the SMS-send assertions) under test
+          k === "DEV_SEND_OTP_SMS"
+          ? true
+          : (fb ?? ""),
+    ),
+  } as any;
   const dispatcher = { sendEmail: jest.fn(), sendSms: jest.fn() } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
   const outbox = { append: jest.fn() } as any;
@@ -709,6 +721,68 @@ describe("IamFlowsService", () => {
       const { svc, prisma } = setup();
       prisma.tenantInvitation.findUnique.mockResolvedValue({ ...validInvite, status: "accepted" });
       await expect(svc.previewInvite("tok")).rejects.toThrow();
+    });
+  });
+
+  describe("open campaign join (tokenless)", () => {
+    const openCampaign = { id: "c1", name: "Spring Doorknock", tenantId: "t1", openJoinEnabled: true, status: "ACTIVE" };
+    const challenge = {
+      id: "mv1", mobile: "+61400000001", code: "123456", attempts: 0,
+      verifiedAt: null, expiresAt: new Date(Date.now() + 600_000),
+    };
+
+    it("start sends an OTP for an open, active campaign", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      const res = await svc.openJoinStartPhone("c1", "+61400000001");
+      expect(res.challengeId).toBe("mv1");
+      expect(prisma.mobileVerification.create).toHaveBeenCalled();
+      expect(dispatcher.sendSms).toHaveBeenCalled();
+    });
+
+    it("rejects start when open-join is off", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue({ ...openCampaign, openJoinEnabled: false });
+      await expect(svc.openJoinStartPhone("c1", "0400000001")).rejects.toThrow();
+      expect(dispatcher.sendSms).not.toHaveBeenCalled();
+    });
+
+    it("rejects start when the campaign isn't ACTIVE", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue({ ...openCampaign, status: "DRAFT" });
+      await expect(svc.openJoinStartPhone("c1", "0400000001")).rejects.toThrow();
+    });
+
+    it("accept verifies the OTP, then creates a VOLUNTEER membership + session immediately (no approval)", async () => {
+      const { svc, prisma, sessions } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      prisma.mobileVerification.findUnique.mockResolvedValue(challenge);
+      prisma.user.findUnique.mockResolvedValue(null); // new user by mobile
+      const grant = await svc.openJoinAccept("c1", { challengeId: "mv1", code: "123456", displayName: "Jo Vol" });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ mobile: "+61400000001", mobileVerified: true, signupSource: "open_join" }),
+        }),
+      );
+      expect(prisma.tenantMember.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: expect.objectContaining({ tenantId: "t1", role: "VOLUNTEER" }) }),
+      );
+      expect(prisma.tenantJoinRequest.create).not.toHaveBeenCalled(); // immediate, never pending
+      expect(sessions.create).toHaveBeenCalled();
+      expect(grant.token).toBe("sess-token");
+    });
+
+    it("rejects accept when open-join is off", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue({ ...openCampaign, openJoinEnabled: false });
+      await expect(svc.openJoinAccept("c1", { challengeId: "mv1", code: "123456" })).rejects.toThrow();
+    });
+
+    it("rejects accept on a bad OTP code", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      prisma.mobileVerification.findUnique.mockResolvedValue(challenge);
+      await expect(svc.openJoinAccept("c1", { challengeId: "mv1", code: "000000" })).rejects.toThrow();
     });
   });
 

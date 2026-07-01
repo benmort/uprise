@@ -35,6 +35,8 @@ function boolish(env: Env, key: string, fallback = false): boolean {
 
 export type ValidatedEnv = {
   NODE_ENV: string;
+  // Dev only: actually send OTP/2FA SMS via Twilio (vs the on-screen code). Ignored in prod.
+  DEV_SEND_OTP_SMS: boolean;
   PORT: number;
   API_BASE_URL: string;
   CORS_ALLOWED_ORIGINS: string;
@@ -108,6 +110,7 @@ export function validateEnv(config: Env): ValidatedEnv {
   const resolvedBullmqRedisUrl = config.BULLMQ_REDIS_URL?.trim() || config.REDIS_URL?.trim() || "";
   const output: ValidatedEnv = {
     NODE_ENV: config.NODE_ENV?.trim() || "development",
+    DEV_SEND_OTP_SMS: boolish(config, "DEV_SEND_OTP_SMS", false),
     PORT: numberInRange(config, "PORT", 1, 65535, 3001, errors),
     API_BASE_URL: required(config, "API_BASE_URL", errors),
     CORS_ALLOWED_ORIGINS: config.CORS_ALLOWED_ORIGINS?.trim() || "",

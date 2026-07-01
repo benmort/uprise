@@ -1,6 +1,9 @@
 import type {
   AcceptInviteRequest,
   InviteStartPhoneRequest,
+  OpenJoinAcceptRequest,
+  OpenJoinStartPhoneRequest,
+  OpenJoinPreview,
   ApproveJoinRequestRequest,
   AvailabilityResponse,
   ChangeEmailRequest,
@@ -140,7 +143,7 @@ export const auth = {
   // DEV-ONLY: read back the plaintext OTP for a challenge so the SMS-code screens
   // can show it on-screen in local development (the API returns null in production).
   devPeekOtp: (challengeId: string) =>
-    request<{ code: string | null }>(
+    request<{ code: string | null; smsSent: boolean }>(
       `/iam/dev/otp?challengeId=${encodeURIComponent(challengeId)}`,
       undefined,
       { redirectOn401: false },
@@ -152,6 +155,13 @@ export const auth = {
   inviteStartPhone: (body: InviteStartPhoneRequest, captchaToken?: string) =>
     post<{ challengeId: string }>("/iam/invite/phone/start", body, captchaToken),
   acceptInvite: (body: AcceptInviteRequest) => post<SessionGrantResponse>("/iam/invite/accept", body),
+
+  // Tokenless open-join (per-campaign): same wizard, no token – gated by the campaign flag.
+  openJoinPreview: (campaignId: string) =>
+    request<OpenJoinPreview>(`/iam/open-join/${encodeURIComponent(campaignId)}`, undefined, { redirectOn401: false }),
+  openJoinStartPhone: (body: OpenJoinStartPhoneRequest, captchaToken?: string) =>
+    post<{ challengeId: string }>("/iam/open-join/phone/start", body, captchaToken),
+  openJoinAccept: (body: OpenJoinAcceptRequest) => post<SessionGrantResponse>("/iam/open-join/accept", body),
 
   selectTenant: (tenantId: string) => post<OkResponse>("/iam/select-tenant", { tenantId }),
 
@@ -273,6 +283,14 @@ export const tenants = {
     request<AvailabilityResponse>(`/tenants/availability?slug=${encodeURIComponent(slug)}`, undefined, {
       redirectOn401: false,
     }),
+
+  /** Public tenant brand (id + name) by slug for the volunteer auth panel (null if unknown). */
+  brandBySlug: (slug: string) =>
+    request<{ id: string; name: string } | null>(
+      `/tenants/brand?slug=${encodeURIComponent(slug)}`,
+      undefined,
+      { redirectOn401: false },
+    ),
 
   /** Self-serve create from the in-app switcher (owner-on-paid-plan or super-admin; API enforces). */
   createSelfServe: (body: { name: string; slug: string }) =>

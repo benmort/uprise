@@ -54,17 +54,20 @@ const FLOW: Step[] = ["phone", "code", "name", "role", "conduct"];
 
 /**
  * Five-step volunteer onboarding wizard (phone → OTP → name → role/days → conduct)
- * that turns an invite into a VOLUNTEER membership + session. Reuses the phone OTP
- * API (invited-phone send), the extended acceptInvite, and completeAuth.
+ * that turns an invite OR an open campaign into a VOLUNTEER membership + session.
+ * Exactly one of `token` (organiser invite) / `campaignId` (tokenless open-join) is
+ * set; the phone-send + finalise calls branch on which. Reuses completeAuth either way.
  */
 export function VolunteerOnboardWizard({
   token,
+  campaignId,
   tenantName,
   invitedPhone,
   returnTo,
   onExit,
 }: {
-  token: string;
+  token?: string;
+  campaignId?: string;
   tenantName?: string;
   invitedPhone: string | null;
   returnTo: string | null;
@@ -120,7 +123,9 @@ export function VolunteerOnboardWizard({
     setBusy(true);
     setError(null);
     const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
-    const res = await auth.inviteStartPhone({ token, phone: e164 }, captchaToken);
+    const res = token
+      ? await auth.inviteStartPhone({ token, phone: e164 }, captchaToken)
+      : await auth.openJoinStartPhone({ campaignId: campaignId!, phone: e164 }, captchaToken);
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
@@ -135,7 +140,9 @@ export function VolunteerOnboardWizard({
   async function resend() {
     if (resendIn > 0) return;
     const captchaToken = (await captchaRef.current?.execute()) ?? undefined;
-    const res = await auth.inviteStartPhone({ token, phone: e164 }, captchaToken);
+    const res = token
+      ? await auth.inviteStartPhone({ token, phone: e164 }, captchaToken)
+      : await auth.openJoinStartPhone({ campaignId: campaignId!, phone: e164 }, captchaToken);
     if (res.ok) {
       setChallengeId(res.data.challengeId);
       setResendIn(30);
@@ -149,15 +156,25 @@ export function VolunteerOnboardWizard({
     setBusy(true);
     setError(null);
     const displayName = [first.trim(), last.trim()].filter(Boolean).join(" ") || first.trim();
-    const res = await auth.acceptInvite({
-      token,
-      displayName,
-      challengeId: challengeId ?? undefined,
-      code: code || undefined,
-      preferredRole: (role as (typeof VOLUNTEER_PREFERRED_ROLES)[number]) ?? undefined,
-      availabilityDays: days,
-      ...captureAttribution(),
-    });
+    const preferredRole = (role as (typeof VOLUNTEER_PREFERRED_ROLES)[number]) ?? undefined;
+    const res = token
+      ? await auth.acceptInvite({
+          token,
+          displayName,
+          challengeId: challengeId ?? undefined,
+          code: code || undefined,
+          preferredRole,
+          availabilityDays: days,
+          ...captureAttribution(),
+        })
+      : await auth.openJoinAccept({
+          campaignId: campaignId!,
+          displayName,
+          challengeId: challengeId ?? undefined,
+          code: code || undefined,
+          preferredRole,
+          availabilityDays: days,
+        });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);

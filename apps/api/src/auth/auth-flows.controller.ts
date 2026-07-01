@@ -20,6 +20,8 @@ import {
   ConfirmEmailDto,
   EmailDto,
   InviteStartPhoneDto,
+  OpenJoinAcceptDto,
+  OpenJoinStartPhoneDto,
   PhoneResendDto,
   PhoneStartDto,
   PhoneVerifyDto,
@@ -155,6 +157,32 @@ export class AuthFlowsController {
   @Post("invite/decline")
   declineInvite(@Body() dto: TokenDto) {
     return this.flows.declineInvite(dto.token);
+  }
+
+  // ── Tokenless open-join (per-campaign master switch) ────────────────────
+  // Same onboarding wizard as the invite path, but gated by the campaign's
+  // openJoinEnabled flag instead of a token. Reachable pre-session (allowlisted).
+  @Get("open-join/:campaignId")
+  openJoinPreview(@Param("campaignId") campaignId: string) {
+    return this.flows.openJoinPreview(campaignId);
+  }
+
+  @RequireCaptcha("strict")
+  @Post("open-join/phone/start")
+  openJoinStartPhone(@Body() dto: OpenJoinStartPhoneDto) {
+    return this.flows.openJoinStartPhone(dto.campaignId, dto.phone);
+  }
+
+  @Post("open-join/accept")
+  async openJoinAccept(@Body() dto: OpenJoinAcceptDto, @Res({ passthrough: true }) res: Response) {
+    const grant = await this.flows.openJoinAccept(dto.campaignId, {
+      challengeId: dto.challengeId,
+      code: dto.code,
+      displayName: dto.displayName,
+      preferredRole: dto.preferredRole,
+      availabilityDays: dto.availabilityDays,
+    });
+    return this.grantResponse(res, grant);
   }
 
   @Post("select-tenant")

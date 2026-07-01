@@ -1002,6 +1002,7 @@ model CanvassCampaign {
   surveyId       String?               // shared-engagement Survey attached to the door script
   scriptId       String?
   goals          Json?                 // { doors, conversations, surveys, ... } pace-to-target targets
+  openJoinEnabled Boolean              @default(false) // tokenless self-enrol link active for this campaign
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)

@@ -31,6 +31,7 @@ export default function VolunteerCodePage() {
   const [busy, setBusy] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(30);
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [smsSent, setSmsSent] = useState(false);
   const captchaRef = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
@@ -45,7 +46,10 @@ export default function VolunteerCodePage() {
     if (process.env.NODE_ENV === "production" || !challengeId) return;
     let cancelled = false;
     void auth.devPeekOtp(challengeId).then((res) => {
-      if (!cancelled && res.ok) setDevCode(res.data.code);
+      if (!cancelled && res.ok) {
+        setDevCode(res.data.code);
+        setSmsSent(res.data.smsSent);
+      }
     });
     return () => {
       cancelled = true;
@@ -113,7 +117,10 @@ export default function VolunteerCodePage() {
       </div>
       {devCode ? (
         <div className="mb-6">
-          <Alert variant="success" title="Development code (no SMS sent)">
+          <Alert
+            variant="success"
+            title={smsSent ? "Development code (also texted to your phone)" : "Development code (no SMS sent)"}
+          >
             <span className="select-all font-mono text-2xl font-bold tracking-[0.4em] text-foreground">
               {devCode}
             </span>

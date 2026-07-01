@@ -1,0 +1,103 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useQueryParams } from "@/lib/use-query";
+import { Alert, Button, LogoMark, PrinciplesList, Spinner } from "@uprise/ui";
+import { auth } from "@uprise/api-client";
+import { VolunteerOnboardWizard } from "@/components/volunteer-onboard-wizard";
+
+/**
+ * Tokenless open-join entry – a per-campaign public link (`/v/c/[campaignId]`). Previews
+ * the campaign (server-gated by its `openJoinEnabled` flag), shows the join hero + the
+ * canvasser principles, then hands off to the SAME 5-step onboarding wizard, campaign-
+ * scoped instead of invite-scoped. A closed/inactive campaign renders an error.
+ */
+export default function OpenJoinPage() {
+  const campaignId = String(useParams().campaignId ?? "");
+  const returnTo = useQueryParams().get("return_to");
+  const [campaignName, setCampaignName] = useState<string | null>(null);
+  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await auth.openJoinPreview(campaignId);
+      setLoading(false);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setCampaignName(res.data.campaignName);
+      setTenantName(res.data.tenantName);
+    })();
+  }, [campaignId]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center py-10">
+        <Spinner />
+      </div>
+    );
+  }
+  if (error && campaignName === null) {
+    return (
+      <div className="px-5 py-8">
+        <Alert variant="error" title={error} />
+      </div>
+    );
+  }
+
+  if (started) {
+    return (
+      <div className="px-5 py-6">
+        <VolunteerOnboardWizard
+          campaignId={campaignId}
+          tenantName={tenantName ?? undefined}
+          invitedPhone={null}
+          returnTo={returnTo}
+          onExit={() => setStarted(false)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-1 flex-col">
+      {/* Hero */}
+      <section className="rounded-b-[2.25rem] bg-primary px-6 pb-10 pt-14 text-white">
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
+          <LogoMark className="h-8 w-8 text-white" />
+        </span>
+        <p className="mt-7 text-sm font-bold uppercase tracking-[0.08em] text-white/80">Join the team</p>
+        <h1 className="mt-2 text-[2.5rem] font-extrabold leading-[1.1]">
+          Become a canvasser{campaignName ? ` for ${campaignName}` : ""}
+        </h1>
+        <p className="mt-4 text-lg leading-relaxed text-white/85">
+          Join your neighbours knocking on doors and talking to voters. Takes two minutes to set up
+          – no app store needed.
+        </p>
+      </section>
+
+      {/* Principles */}
+      <div className="px-6 pt-8">
+        <PrinciplesList />
+      </div>
+
+      {/* Actions */}
+      <div className="mt-auto space-y-4 px-6 pb-8 pt-8">
+        <Button className="h-14 w-full text-base" onClick={() => setStarted(true)}>
+          Get started
+        </Button>
+        <p className="text-center text-base">
+          <Link href="/v" className="font-bold text-primary hover:underline">
+            Already a canvasser? Sign in
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}

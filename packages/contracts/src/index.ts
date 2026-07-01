@@ -98,6 +98,26 @@ export const inviteStartPhoneSchema = z.object({
 });
 export type InviteStartPhoneRequest = z.infer<typeof inviteStartPhoneSchema>;
 
+// Tokenless open-join (per-campaign): the same onboarding wizard with a campaignId
+// in place of an invite token. Gated server-side by the campaign's openJoinEnabled flag.
+export const openJoinStartPhoneSchema = z.object({
+  campaignId: z.string().min(1).max(64),
+  phone: z.string().min(5).max(20),
+});
+export type OpenJoinStartPhoneRequest = z.infer<typeof openJoinStartPhoneSchema>;
+
+export const openJoinAcceptSchema = z.object({
+  campaignId: z.string().min(1).max(64),
+  displayName: z.string().max(200).optional(),
+  challengeId: z.string().max(64).optional(),
+  code: z.string().max(12).optional(),
+  preferredRole: z.enum(VOLUNTEER_PREFERRED_ROLES).optional(),
+  availabilityDays: z.array(z.string()).max(7).optional(),
+});
+export type OpenJoinAcceptRequest = z.infer<typeof openJoinAcceptSchema>;
+
+export type OpenJoinPreview = { campaignId: string; campaignName: string; tenantName: string };
+
 export const selectTenantSchema = z.object({ tenantId: z.string().min(1) });
 export type SelectTenantRequest = z.infer<typeof selectTenantSchema>;
 

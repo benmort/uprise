@@ -43,7 +43,7 @@ export default function CanvassPage() {
   // Campaign create/edit dialog.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CampaignSummary | null>(null);
-  const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, doors: "", conversations: "" });
+  const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, doors: "", conversations: "", openJoin: false });
 
   // Load the campaign list once, default to the first.
   useEffect(() => {
@@ -86,7 +86,7 @@ export default function CanvassPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", status: "ACTIVE", doors: "", conversations: "" });
+    setForm({ name: "", status: "ACTIVE", doors: "", conversations: "", openJoin: false });
     setDialogOpen(true);
   };
 
@@ -100,6 +100,7 @@ export default function CanvassPage() {
       status: c.status,
       doors: goals.doors != null ? String(goals.doors) : "",
       conversations: goals.conversations != null ? String(goals.conversations) : "",
+      openJoin: c.openJoinEnabled,
     });
     setDialogOpen(true);
   };
@@ -115,8 +116,8 @@ export default function CanvassPage() {
         : undefined;
     setCreating(true);
     const res = editing
-      ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, goals })
-      : await createCampaign({ name: form.name.trim(), status: form.status, goals });
+      ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin })
+      : await createCampaign({ name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin });
     setCreating(false);
     if (!res.ok) {
       showToast({ tone: "error", title: editing ? "Couldn't update" : "Couldn't create campaign", description: res.error });
@@ -127,6 +128,11 @@ export default function CanvassPage() {
     setActiveId(res.data.id);
     showToast({ tone: "success", title: editing ? "Campaign updated" : "Campaign created", description: res.data.name });
   }, [editing, form, showToast]);
+
+  // Shareable tokenless-join link for the open-join toggle (auth app, per campaign).
+  const joinLink = editing
+    ? `${process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002"}/v/c/${editing.id}`
+    : "";
 
   if (loading) {
     return (
@@ -327,6 +333,44 @@ export default function CanvassPage() {
               <SelectItem value="DRAFT">Draft</SelectItem>
               <SelectItem value="ARCHIVED">Archived</SelectItem>
             </Select>
+          </Field>
+        ) : null}
+        {editing ? (
+          <Field label="Open join" htmlFor="camp-open-join">
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                id="camp-open-join"
+                type="checkbox"
+                checked={form.openJoin}
+                onChange={(e) => setForm((f) => ({ ...f, openJoin: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 shrink-0"
+              />
+              <span className="text-muted-foreground">
+                Let anyone with the link join this campaign as a canvasser – no invite needed. Needs an
+                <span className="font-medium text-foreground"> Active</span> campaign.
+              </span>
+            </label>
+          </Field>
+        ) : null}
+        {editing && form.openJoin ? (
+          <Field label="Shareable join link" htmlFor="camp-join-link">
+            <div className="flex gap-2">
+              <Input id="camp-join-link" readOnly value={joinLink} onFocus={(e) => e.currentTarget.select()} />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(joinLink);
+                  showToast({ tone: "success", title: "Link copied" });
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Save to activate. Anyone with this link can join as a canvasser, and each join uses a team seat –
+              share carefully.
+            </p>
           </Field>
         ) : null}
         <div className="grid grid-cols-2 gap-3">

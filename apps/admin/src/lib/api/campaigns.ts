@@ -9,6 +9,7 @@ export type CampaignSummary = {
   surveyId: string | null;
   scriptId: string | null;
   goals: Record<string, unknown> | null;
+  openJoinEnabled: boolean;
   turfCount: number;
   walkListCount: number;
   createdAt: string;
@@ -21,6 +22,7 @@ export type CampaignInput = {
   surveyId?: string | null;
   scriptId?: string | null;
   goals?: Record<string, unknown> | null;
+  openJoinEnabled?: boolean;
 };
 
 export async function listCampaigns() {

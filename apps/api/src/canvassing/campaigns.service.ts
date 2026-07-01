@@ -24,6 +24,7 @@ export type CreateCampaignInput = {
   surveyId?: string | null;
   scriptId?: string | null;
   goals?: Record<string, unknown> | null;
+  openJoinEnabled?: boolean;
 };
 
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
@@ -45,6 +46,7 @@ export class CampaignsService {
       surveyId: c.surveyId,
       scriptId: c.scriptId,
       goals: c.goals,
+      openJoinEnabled: c.openJoinEnabled,
       turfCount: c._count.turfs,
       walkListCount: c._count.walkLists,
       createdAt: c.createdAt,
@@ -67,6 +69,7 @@ export class CampaignsService {
       surveyId: campaign.surveyId,
       scriptId: campaign.scriptId,
       goals: campaign.goals,
+      openJoinEnabled: campaign.openJoinEnabled,
       turfCount: campaign._count.turfs,
       walkListCount: campaign._count.walkLists,
       createdAt: campaign.createdAt,
@@ -257,6 +260,7 @@ export class CampaignsService {
         surveyId: input.surveyId ?? null,
         scriptId: input.scriptId ?? null,
         goals: (input.goals ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        openJoinEnabled: input.openJoinEnabled ?? false,
       },
     });
   }
@@ -277,6 +281,7 @@ export class CampaignsService {
     if (input.goals !== undefined) {
       data.goals = (input.goals ?? Prisma.DbNull) as Prisma.InputJsonValue;
     }
+    if (input.openJoinEnabled !== undefined) data.openJoinEnabled = input.openJoinEnabled;
     return this.prisma.canvassCampaign.update({ where: { id }, data });
   }
 }

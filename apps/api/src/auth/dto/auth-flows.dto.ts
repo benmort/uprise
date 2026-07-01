@@ -68,6 +68,22 @@ export class AcceptInviteDto {
   @IsOptional() @IsArray() @ArrayMaxSize(7) @IsString({ each: true }) availabilityDays?: string[];
 }
 
+// Tokenless open-join (per-campaign): same wizard, no invite token – campaignId is
+// the authorisation + tenant source (gated server-side by campaign.openJoinEnabled).
+export class OpenJoinStartPhoneDto {
+  @IsString() @MaxLength(64) campaignId!: string;
+  @IsString() @MaxLength(20) phone!: string;
+}
+
+export class OpenJoinAcceptDto {
+  @IsString() @MaxLength(64) campaignId!: string;
+  @IsOptional() @IsString() @MaxLength(200) displayName?: string;
+  @IsOptional() @IsString() @MaxLength(64) challengeId?: string;
+  @IsOptional() @IsString() @MaxLength(12) code?: string;
+  @IsOptional() @IsIn(VOLUNTEER_PREFERRED_ROLES) preferredRole?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(7) @IsString({ each: true }) availabilityDays?: string[];
+}
+
 export class SelectTenantDto {
   @IsString() @MaxLength(64) tenantId!: string;
 }
