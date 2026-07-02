@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { put } from "@vercel/blob";
@@ -635,26 +636,33 @@ export class TelephonyProvisioningService {
         smsUrl: this.inboundHookUrl(),
       });
 
-      const number = await this.prisma.telephonyPhoneNumber.create({
-        data: {
-          tenantId: run.tenantId,
-          accountId: run.accountId,
-          campaignId: run.campaignId,
-          phoneNumberE164: purchased.phoneNumberE164,
-          phoneNumberSid: purchased.phoneNumberSid,
-          bundleSid,
-          addressSid,
-          status: TelephonyNumberStatus.PENDING,
-        },
-      });
+      // Number row rides the advance tx (run + number + event atomic — a crash
+      // between them can never leave a run pointing at a missing number row).
+      const numberId = randomUUID();
+      const accountId = run.accountId;
       await this.advance(runId, {
         hops: [{ to: S.NUMBER_PURCHASED, step: "number.purchase", detail: { phoneNumberE164: purchased.phoneNumberE164 } }],
-        data: { phoneNumberId: number.id },
+        data: { phoneNumberId: numberId },
+        mutate: async (tx) => {
+          await tx.telephonyPhoneNumber.create({
+            data: {
+              id: numberId,
+              tenantId: run.tenantId,
+              accountId,
+              campaignId: run.campaignId,
+              phoneNumberE164: purchased.phoneNumberE164,
+              phoneNumberSid: purchased.phoneNumberSid,
+              bundleSid,
+              addressSid,
+              status: TelephonyNumberStatus.PENDING,
+            },
+          });
+        },
         event: {
           tenantId: run.tenantId,
           eventType: "telephony.provisioning.number-purchased",
           aggregateId: runId,
-          payload: { runId, tenantId: run.tenantId, phoneNumberId: number.id, phoneNumberE164: number.phoneNumberE164 },
+          payload: { runId, tenantId: run.tenantId, phoneNumberId: numberId, phoneNumberE164: purchased.phoneNumberE164 },
         },
       });
     });
