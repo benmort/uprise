@@ -85,8 +85,10 @@ export const UPRISE_RESOURCES = [
   "compliance.suppression",
   "compliance.all",
 
-  // telephony — voice calls (meld doc 09)
+  // telephony — voice calls (meld doc 09) + per-tenant numbers
   "telephony.call",
+  "telephony.number",
+  "telephony.provisioning",
   "telephony.all",
 
   // reserved for later-ported domains (meld docs 06–08)
@@ -97,6 +99,10 @@ export const UPRISE_RESOURCES = [
   "audit.log",
   "system.feature-flags",
   "system.feature-flags-global",
+  // telephony provisioning mutations are platform-operator actions (subaccount
+  // creation, compliance submission, number purchase) — kept outside telephony.*
+  // so owners' `manage telephony.all` cannot reach them.
+  "system.telephony-provisioning",
   "all",
 ] as const;
 export type Resource = (typeof UPRISE_RESOURCES)[number] | string;

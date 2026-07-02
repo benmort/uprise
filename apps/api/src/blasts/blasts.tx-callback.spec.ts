@@ -27,6 +27,7 @@ describe("BlastsService — Twilio SMS callback (claim + txStatus + undelivered)
       new TemplateRendererService(),
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
       undefined,

@@ -29,6 +29,7 @@ const STATIC_ROUTES: Array<[string, RegExp]> = [
   ["/canvass/new", /campaign/i],
   ["/canvass/volunteers", /volunteer/i],
   ["/canvass/divisions", /division/i],
+  ["/canvass/areas", /area/i],
   ["/engagement", /engagement|survey|script|disposition/i],
   ["/engagement/dispositions", /disposition/i],
   ["/engagement/canned-responses", /canned/i],

@@ -13,6 +13,8 @@ import { BillingService } from "../../payment/billing.service";
 import { ReactionRegistry } from "./reaction-registry";
 import { REACTIONS, type ReactionList } from "./reactions.tokens";
 import { buildDomainReactions } from "./domain-reactions";
+import { TelephonyProvisioningService } from "../../telephony/telephony-provisioning.service";
+import { buildTelephonyProvisioningReactions } from "../../telephony/telephony-provisioning.reactions";
 
 /**
  * Wires the reaction registry + the ported cross-domain reactions (meld doc 12).
@@ -32,7 +34,11 @@ import { buildDomainReactions } from "./domain-reactions";
         billing: BillingService,
         config: ConfigService,
         logger: DomainLogger,
-      ): ReactionList => buildDomainReactions({ prisma, email, sms, stripe, billing, config, logger }),
+        provisioning: TelephonyProvisioningService,
+      ): ReactionList => [
+        ...buildDomainReactions({ prisma, email, sms, stripe, billing, config, logger }),
+        ...buildTelephonyProvisioningReactions({ provisioning }),
+      ],
       inject: [
         PrismaService,
         EmailService,
@@ -41,6 +47,7 @@ import { buildDomainReactions } from "./domain-reactions";
         BillingService,
         ConfigService,
         DomainLogger,
+        TelephonyProvisioningService,
       ],
     },
     ReactionRegistry,

@@ -24,6 +24,7 @@ import type {
   OrganisationContactFormValues,
   OrganisationAddressFormValues,
 } from './types';
+import { TelephonyStatusCard } from '@/components/telephony/telephony-status-card';
 import { validateCredentialsForm, type CredentialsFormErrors } from './validation/credentials-validation';
 import { validateTenantForm, type TenantFormErrors } from './validation/tenant-validation';
 import { validateContactsForm, type ContactsFormErrors } from './validation/contacts-validation';
@@ -219,6 +220,12 @@ export default function TenantSettingsPage() {
               </Button>
             </div>
           </form>
+
+          {/* Read-only telephony provisioning status (renders only when the
+              tenant has numbers/runs and the feature flag is on). */}
+          <div className="mt-6">
+            <TelephonyStatusCard />
+          </div>
         </div>
       </section>
     </AdminOrHigher>

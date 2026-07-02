@@ -69,12 +69,19 @@ export type ValidatedEnv = {
   BULLMQ_UPLOAD_QUEUE_CONCURRENCY: number;
   BULLMQ_BLAST_QUEUE_CONCURRENCY: number;
   BULLMQ_INTEGRATION_SYNC_CONCURRENCY: number;
+  SENDGRID_API_KEY: string;
+  SENDGRID_FROM_EMAIL: string;
+  SENDGRID_WEBHOOK_VERIFICATION_KEY: string;
+  SENDGRID_WEBHOOK_SECRET: string;
+  MARKETING_NOTIFY_EMAIL: string;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
   TWILIO_STATUS_CALLBACK_URL: string;
   TWILIO_SEND_RATE_PER_SECOND: number;
   TWILIO_SEND_MAX_CONCURRENT: number;
+  TWILIO_SUBACCOUNT_SEND_RATE_PER_SECOND: number;
+  TWILIO_SUBACCOUNT_SEND_MAX_CONCURRENT: number;
   TWILIO_RATE_LIMIT_COOLDOWN_MS: number;
   TWILIO_WHATSAPP_FROM: string;
   TWILIO_WHATSAPP_MESSAGING_SERVICE_SID: string;
@@ -202,12 +209,37 @@ export function validateEnv(config: Env): ValidatedEnv {
       47,
       errors,
     ),
+    // SendGrid (meld doc 07). Optional — blank ⇒ SendGridService throws 503 on
+    // send and the signed-webhook check is skipped. validateEnv returns ONLY
+    // declared keys, so every config.get() key MUST be listed here.
+    SENDGRID_API_KEY: config.SENDGRID_API_KEY?.trim() || "",
+    SENDGRID_FROM_EMAIL: config.SENDGRID_FROM_EMAIL?.trim() || "",
+    SENDGRID_WEBHOOK_VERIFICATION_KEY: config.SENDGRID_WEBHOOK_VERIFICATION_KEY?.trim() || "",
+    SENDGRID_WEBHOOK_SECRET: config.SENDGRID_WEBHOOK_SECRET?.trim() || "",
+    MARKETING_NOTIFY_EMAIL: config.MARKETING_NOTIFY_EMAIL?.trim() || "",
     TWILIO_ACCOUNT_SID: required(config, "TWILIO_ACCOUNT_SID", errors),
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),
     TWILIO_STATUS_CALLBACK_URL: config.TWILIO_STATUS_CALLBACK_URL?.trim() || "",
     TWILIO_SEND_RATE_PER_SECOND: numberInRange(config, "TWILIO_SEND_RATE_PER_SECOND", 1, 500, 475, errors),
     TWILIO_SEND_MAX_CONCURRENT: numberInRange(config, "TWILIO_SEND_MAX_CONCURRENT", 1, 50, 47, errors),
+    // Per-subaccount defaults — an AU mobile long code sustains ~1 msg/sec.
+    TWILIO_SUBACCOUNT_SEND_RATE_PER_SECOND: numberInRange(
+      config,
+      "TWILIO_SUBACCOUNT_SEND_RATE_PER_SECOND",
+      1,
+      500,
+      1,
+      errors,
+    ),
+    TWILIO_SUBACCOUNT_SEND_MAX_CONCURRENT: numberInRange(
+      config,
+      "TWILIO_SUBACCOUNT_SEND_MAX_CONCURRENT",
+      1,
+      50,
+      5,
+      errors,
+    ),
     TWILIO_RATE_LIMIT_COOLDOWN_MS: numberInRange(
       config,
       "TWILIO_RATE_LIMIT_COOLDOWN_MS",

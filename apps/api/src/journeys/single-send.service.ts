@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { BlastRecipientStatus } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { TwilioService } from "../twilio/twilio.service";
+import { TelephonySenderResolver } from "../telephony/telephony-sender.resolver";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 
@@ -19,6 +20,7 @@ export class SingleSendService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly twilio: TwilioService,
+    private readonly senderResolver: TelephonySenderResolver,
     private readonly events: RealtimeEventsService,
   ) {}
 
@@ -37,7 +39,8 @@ export class SingleSendService {
     }
 
     const to = normalizePhoneE164(contact.phoneE164);
-    const sent = await this.twilio.sendMessage(to, body);
+    const sender = await this.senderResolver.resolve({ tenantId, purpose: "marketing" });
+    const sent = await this.twilio.sendMessage(to, body, sender ? { sender } : {});
     await this.prisma.outboundMessage.create({
       data: {
         tenantId,

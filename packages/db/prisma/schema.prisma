@@ -1622,6 +1622,135 @@ model Call {
   @@schema("telephony")
 }
 
+// ── Telephony: per-tenant Twilio accounts + AU number provisioning ──────────
+// One Twilio account (auto-provisioned subaccount or BYO credentials) per
+// tenant. Auth token encrypted at rest via CredentialCryptoService (the
+// IntegrationConnection pattern). id-only tenantId ref.
+enum TelephonyAccountMode {
+  SUBACCOUNT
+  BYO
+  PLATFORM
+  @@schema("telephony")
+}
+
+enum TelephonyAccountStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  CLOSED
+  @@schema("telephony")
+}
+
+enum TelephonyNumberStatus {
+  PENDING
+  ACTIVE
+  RELEASED
+  @@schema("telephony")
+}
+
+enum TelephonyProvisioningStatus {
+  REQUESTED
+  SUBACCOUNT_CREATED
+  COMPLIANCE_DRAFT
+  COMPLIANCE_SUBMITTED
+  COMPLIANCE_APPROVED
+  COMPLIANCE_REJECTED
+  NUMBER_PURCHASED
+  WEBHOOKS_CONFIGURED
+  ACTIVE
+  FAILED
+  @@schema("telephony")
+}
+
+enum TelephonyStepStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  @@schema("telephony")
+}
+
+model TelephonyAccount {
+  id                 String                 @id @default(cuid())
+  tenantId           String
+  mode               TelephonyAccountMode
+  status             TelephonyAccountStatus @default(PROVISIONING)
+  accountSid         String                 @unique
+  encryptedAuthToken String
+  friendlyName       String
+  settings           Json?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([tenantId, status])
+  @@schema("telephony")
+}
+
+// A provisioned number maps to exactly ONE account. campaignId (id-only ref to
+// canvass.CanvassCampaign) scopes a number to a campaign; null = tenant default.
+// phoneNumberE164 is the inbound-webhook tenant-resolution key.
+model TelephonyPhoneNumber {
+  id              String                @id @default(cuid())
+  tenantId        String
+  accountId       String
+  campaignId      String?
+  phoneNumberE164 String                @unique
+  phoneNumberSid  String                @unique
+  bundleSid       String?
+  addressSid      String?
+  purpose         String                @default("marketing")
+  status          TelephonyNumberStatus @default(PENDING)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([tenantId, campaignId, status])
+  @@schema("telephony")
+}
+
+// One provisioning run walks the FSM (see telephony-provisioning-state.machine.ts).
+// resumeStatus records where a FAILED run re-enters on retry. bundleSid is the
+// bundle-status-webhook resolution key.
+model TelephonyProvisioningRun {
+  id              String                       @id @default(cuid())
+  tenantId        String
+  campaignId      String?
+  accountId       String?
+  status          TelephonyProvisioningStatus  @default(REQUESTED)
+  resumeStatus    TelephonyProvisioningStatus?
+  complianceInput Json
+  documents       Json?
+  bundleSid       String?                      @unique
+  addressSid      String?
+  endUserSid      String?
+  phoneNumberId   String?
+  lastError       String?
+  requestedById   String?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  steps           TelephonyProvisioningStep[]
+
+  @@index([tenantId, status])
+  @@schema("telephony")
+}
+
+// Append-only timeline read by the admin/owner provisioning UI. detail must
+// never contain credentials.
+model TelephonyProvisioningStep {
+  id        String                   @id @default(cuid())
+  runId     String
+  tenantId  String
+  step      String
+  status    TelephonyStepStatus
+  detail    Json?
+  error     String?
+  createdAt DateTime                 @default(now())
+  run       TelephonyProvisioningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([tenantId, createdAt])
+  @@schema("telephony")
+}
+
 // ── Org records & user profiles (meld doc 11) ────────────────────────────────
 // OrgProfile is the legal/operational record of the organisation a tenant
 // represents — distinct from Tenant (the data-isolation boundary, doc 03).

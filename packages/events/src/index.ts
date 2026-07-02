@@ -59,6 +59,17 @@ export const EVENT_TYPES = {
   FILE_UPLOADED: "tenant.file.uploaded",
   FILE_DELETED: "tenant.file.deleted",
   FLAG_CHANGED: "system.flag.changed",
+  TELEPHONY_PROVISIONING_REQUESTED: "telephony.provisioning.requested",
+  TELEPHONY_PROVISIONING_SUBACCOUNT_CREATED: "telephony.provisioning.subaccount-created",
+  TELEPHONY_PROVISIONING_COMPLIANCE_DRAFTED: "telephony.provisioning.compliance-drafted",
+  TELEPHONY_PROVISIONING_COMPLIANCE_SUBMITTED: "telephony.provisioning.compliance-submitted",
+  TELEPHONY_PROVISIONING_COMPLIANCE_APPROVED: "telephony.provisioning.compliance-approved",
+  TELEPHONY_PROVISIONING_COMPLIANCE_REJECTED: "telephony.provisioning.compliance-rejected",
+  TELEPHONY_PROVISIONING_NUMBER_PURCHASED: "telephony.provisioning.number-purchased",
+  TELEPHONY_PROVISIONING_WEBHOOKS_CONFIGURED: "telephony.provisioning.webhooks-configured",
+  TELEPHONY_PROVISIONING_ACTIVATED: "telephony.provisioning.activated",
+  TELEPHONY_PROVISIONING_FAILED: "telephony.provisioning.failed",
+  TELEPHONY_PROVISIONING_RETRY_REQUESTED: "telephony.provisioning.retry-requested",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -121,6 +132,28 @@ export interface DomainEventMap {
   "tenant.file.uploaded": { fileId: string; tenantId: string; name: string };
   "tenant.file.deleted": { fileId: string; tenantId: string };
   "system.flag.changed": { flagKey: string; tenantId: string | null; networkId?: string | null; enabled: boolean | null };
+  "telephony.provisioning.requested": { runId: string; tenantId: string; campaignId?: string | null; mode: string };
+  "telephony.provisioning.subaccount-created": { runId: string; tenantId: string; accountId: string; accountSid: string };
+  "telephony.provisioning.compliance-drafted": {
+    runId: string;
+    tenantId: string;
+    bundleSid: string;
+    addressSid: string;
+    endUserSid: string;
+  };
+  "telephony.provisioning.compliance-submitted": { runId: string; tenantId: string; bundleSid: string };
+  "telephony.provisioning.compliance-approved": { runId: string; tenantId: string; bundleSid: string };
+  "telephony.provisioning.compliance-rejected": { runId: string; tenantId: string; bundleSid: string; reason: string | null };
+  "telephony.provisioning.number-purchased": {
+    runId: string;
+    tenantId: string;
+    phoneNumberId: string;
+    phoneNumberE164: string;
+  };
+  "telephony.provisioning.webhooks-configured": { runId: string; tenantId: string; phoneNumberId: string };
+  "telephony.provisioning.activated": { runId: string; tenantId: string; phoneNumberE164: string };
+  "telephony.provisioning.failed": { runId: string; tenantId: string; step: string; error: string };
+  "telephony.provisioning.retry-requested": { runId: string; tenantId: string; resumeStatus: string };
 }
 
 export interface EventMetadata {

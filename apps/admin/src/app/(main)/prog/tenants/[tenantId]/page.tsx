@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Building2, Users, ArrowLeft, Loader2, Trash2 } from 'lucide-react';
+import { Building2, Users, ArrowLeft, Loader2, Phone, Trash2 } from 'lucide-react';
 import { tenants as tenantsApi, type AuthPrincipal, type TenantRecord } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/card';
 import { Button } from '@/components/prog/ui/button';
@@ -150,6 +150,11 @@ export default function TenantDetailPage() {
           <Button onClick={() => router.push(`/prog/tenants/${tenantId}/members`)}>
             <Users className="h-4 w-4 mr-2" /> Manage Members
           </Button>
+          {isSuperAdmin ? (
+            <Button variant="outline" onClick={() => router.push(`/prog/tenants/${tenantId}/telephony`)}>
+              <Phone className="h-4 w-4 mr-2" /> Telephony
+            </Button>
+          ) : null}
           {isSuperAdmin ? (
             <Button variant="outline" className="text-red-600 dark:text-red-400" onClick={() => void remove()} disabled={saving}>
               <Trash2 className="h-4 w-4 mr-2" /> Delete tenant

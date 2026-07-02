@@ -55,6 +55,12 @@ export class GeoController {
     return this.geo.area(layer, code);
   }
 
+  @Get("areas/:layer/:code/detail")
+  async areaDetail(@Param("layer") layer: string, @Param("code") code: string) {
+    const org = await this.ensureOrganization();
+    return this.geo.areaDetail(org.id, layer, code);
+  }
+
   @Get("areas")
   listAreas(
     @Query("layer") layer = "sa2",

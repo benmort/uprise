@@ -27,6 +27,16 @@ export type AreaProps = { code: string; name: string; level: AreaLevel };
 export type AreaFeature = GeoJSON.Feature<GeoJSON.MultiPolygon | GeoJSON.Polygon, AreaProps>;
 export type AreaCollection = GeoJSON.FeatureCollection<GeoJSON.MultiPolygon | GeoJSON.Polygon, AreaProps>;
 export type AreaHit = { level: AreaLevel; code: string; name: string };
+/** One area's boundary + org address/contact coverage — the area twin of DivisionDetail. */
+export type AreaDetail = {
+  code: string;
+  name: string;
+  level: AreaLevel;
+  geometry: unknown;
+  addressCount: number;
+  contactCount: number;
+  withoutContacts: number;
+};
 
 /** Which addresses a turf is populated with when it's cut. */
 export type TurfUniverse = "existing" | "none" | "hybrid";
@@ -76,6 +86,11 @@ export async function searchAreas(layer: AreaLevel, q: string, limit?: number) {
 /** One area's boundary — used when a search result is picked. */
 export async function getArea(layer: AreaLevel, code: string) {
   return request<AreaFeature>(`/geo/areas/${layer}/${encodeURIComponent(code)}`);
+}
+
+/** One area's boundary + address/contact KPIs — backs the area detail page. */
+export async function getAreaDetail(layer: AreaLevel, code: string) {
+  return request<AreaDetail>(`/geo/areas/${layer}/${encodeURIComponent(code)}/detail`);
 }
 
 /** Cut a turf from selected statistical areas and/or free-drawn polygons. */

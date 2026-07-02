@@ -9,6 +9,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { TwilioService } from "../twilio/twilio.service";
+import { TelephonySenderResolver } from "../telephony/telephony-sender.resolver";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { ContactsService } from "../contacts/contacts.service";
 import { ConsentService, classifyConsentKeyword } from "../messaging/consent.service";
@@ -27,6 +28,7 @@ export class InboxService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly twilio: TwilioService,
+    private readonly senderResolver: TelephonySenderResolver,
     private readonly events: RealtimeEventsService,
     private readonly contacts: ContactsService,
     private readonly repo: InboxRepository,
@@ -53,8 +55,11 @@ export class InboxService {
     channel?: MessageChannel;
     mediaUrl?: string | null;
     mediaContentType?: string | null;
+    /** Tenant resolved from the provisioned To number (per-tenant telephony);
+     *  absent for platform-number traffic ⇒ the single-tenant shortcut. */
+    tenantId?: string;
   }) {
-    const org = await this.ensureOrganization();
+    const org = payload.tenantId ? { id: payload.tenantId } : await this.ensureOrganization();
     const fromPhone = normalizePhoneE164(payload.from);
     const toPhone = normalizePhoneE164(payload.to);
     const channel = payload.channel ?? MessageChannel.SMS;
@@ -514,7 +519,23 @@ export class InboxService {
       }
     }
 
-    const sent = await this.twilio.sendMessage(to, body, { channel });
+    // Reply from the number the conversation lives on (the tenant number the
+    // contact last texted); otherwise the tenant default; otherwise platform env.
+    const lastInbound = await this.prisma.inboundMessage.findFirst({
+      where: { tenantId: org.id, fromPhone: to, channel },
+      orderBy: { receivedAt: "desc" },
+      select: { toPhone: true },
+    });
+    const sender =
+      (lastInbound?.toPhone
+        ? await this.senderResolver.resolveByNumber(org.id, lastInbound.toPhone)
+        : undefined) ??
+      (await this.senderResolver.resolve({
+        tenantId: org.id,
+        purpose: channel === MessageChannel.WHATSAPP ? "whatsapp" : "marketing",
+      }));
+
+    const sent = await this.twilio.sendMessage(to, body, { channel, ...(sender ? { sender } : {}) });
     const normalizedTo = sent.to ? normalizePhoneE164(sent.to.replace(/^whatsapp:/i, "")) : to;
     const normalizedFrom = sent.from
       ? normalizePhoneE164(sent.from.replace(/^whatsapp:/i, ""))

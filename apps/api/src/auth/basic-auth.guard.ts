@@ -151,6 +151,8 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/audiences/dispatch-imports",
       "/journeys/sweep-due",
       "/api/v1/journeys/sweep-due",
+      "/telephony/provisioning/poll",
+      "/api/v1/telephony/provisioning/poll",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
@@ -163,11 +165,13 @@ export class BasicAuthGuard implements CanActivate {
       "/voice-status-callback",
       "/email-webhook",
       "/payment-webhook",
+      "/telephony/bundle-status-callback",
       "/api/v1/inbound-text-message-hook",
       "/api/v1/twilio-status-callback",
       "/api/v1/voice-status-callback",
       "/api/v1/email-webhook",
       "/api/v1/payment-webhook",
+      "/api/v1/telephony/bundle-status-callback",
       // Public marketing-site form intake (meld doc 12).
       "/marketing/contact",
       "/marketing/demo-request",

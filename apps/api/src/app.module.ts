@@ -39,6 +39,7 @@ import { WebhookEventModule } from "./common/webhooks/webhook-event.module";
 import { EmailModule } from "./email/email.module";
 import { PaymentModule } from "./payment/payment.module";
 import { CallsModule } from "./calls/calls.module";
+import { TelephonyModule } from "./telephony/telephony.module";
 import { OrgProfileModule } from "./org-profile/org-profile.module";
 import { TenantsModule } from "./tenants/tenants.module";
 import { ApiKeysModule } from "./api-keys/api-keys.module";
@@ -67,6 +68,7 @@ import { QueueModule } from "./common/queue/queue.module";
     EmailModule,
     PaymentModule,
     CallsModule,
+    TelephonyModule,
     OrgProfileModule,
     TenantsModule,
     ApiKeysModule,

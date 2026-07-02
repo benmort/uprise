@@ -425,3 +425,108 @@ export const plans = {
   /** Publicly-visible, non-archived plans, ordered by tier (no auth). */
   listPublic: () => request<PublicPlan[]>("/plans/public", undefined, { redirectOn401: false }),
 };
+
+// ── Telephony (per-tenant Twilio numbers + provisioning) ─────────────
+export type TelephonyProvisioningStatus =
+  | "REQUESTED"
+  | "SUBACCOUNT_CREATED"
+  | "COMPLIANCE_DRAFT"
+  | "COMPLIANCE_SUBMITTED"
+  | "COMPLIANCE_APPROVED"
+  | "COMPLIANCE_REJECTED"
+  | "NUMBER_PURCHASED"
+  | "WEBHOOKS_CONFIGURED"
+  | "ACTIVE"
+  | "FAILED";
+
+export interface TelephonyComplianceInput {
+  legalName: string;
+  contactFirstName: string;
+  contactLastName: string;
+  email: string;
+  businessNumber?: string;
+  address: { street: string; city: string; region: string; postalCode: string };
+}
+
+export interface TelephonyProvisioningRun {
+  id: string;
+  tenantId: string;
+  campaignId: string | null;
+  accountId: string | null;
+  status: TelephonyProvisioningStatus;
+  resumeStatus: TelephonyProvisioningStatus | null;
+  bundleSid: string | null;
+  phoneNumberId: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TelephonyProvisioningStep {
+  id: string;
+  runId: string;
+  step: string;
+  status: "STARTED" | "SUCCEEDED" | "FAILED" | "SKIPPED";
+  detail: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface TelephonyPhoneNumber {
+  id: string;
+  tenantId: string;
+  campaignId: string | null;
+  phoneNumberE164: string;
+  purpose: string;
+  status: "PENDING" | "ACTIVE" | "RELEASED";
+  createdAt: string;
+}
+
+export const telephony = {
+  /** Super-admin: start an automated provisioning run for a tenant (or campaign). */
+  startRun: (body: {
+    tenantId: string;
+    campaignId?: string;
+    mode: "SUBACCOUNT" | "BYO";
+    byoAccountSid?: string;
+    byoAuthToken?: string;
+    friendlyName?: string;
+    complianceInput: TelephonyComplianceInput;
+  }) => request<TelephonyProvisioningRun>("/telephony/provisioning-runs", { method: "POST", body: JSON.stringify(body) }),
+
+  /** Super-admin: attach a compliance document (multipart). */
+  uploadDocument: (runId: string, file: File, type: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("type", type);
+    return request<TelephonyProvisioningRun>(`/telephony/provisioning-runs/${encodeURIComponent(runId)}/documents`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  retryRun: (runId: string) =>
+    request<TelephonyProvisioningRun>(`/telephony/provisioning-runs/${encodeURIComponent(runId)}/retry`, { method: "POST" }),
+
+  resubmitRun: (runId: string, complianceInput?: TelephonyComplianceInput) =>
+    request<TelephonyProvisioningRun>(`/telephony/provisioning-runs/${encodeURIComponent(runId)}/resubmit`, {
+      method: "POST",
+      body: JSON.stringify({ complianceInput }),
+    }),
+
+  /** Runs for a tenant (owner sees own tenant; super-admin any). */
+  listRuns: (tenantId?: string) =>
+    request<TelephonyProvisioningRun[]>(`/telephony/provisioning-runs${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`),
+
+  /** One run + its full step timeline. */
+  getRun: (runId: string) =>
+    request<TelephonyProvisioningRun & { steps: TelephonyProvisioningStep[] }>(
+      `/telephony/provisioning-runs/${encodeURIComponent(runId)}`,
+    ),
+
+  listNumbers: (tenantId?: string) =>
+    request<TelephonyPhoneNumber[]>(`/telephony/numbers${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`),
+
+  releaseNumber: (numberId: string) =>
+    request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}/release`, { method: "POST" }),
+};

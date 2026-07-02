@@ -17,7 +17,12 @@ function setup() {
   } as any;
   const logger = { error: jest.fn() } as any;
   const email = { sendTransactional: jest.fn(async () => ({ id: "em1" })) } as any;
-  const svc = new TransactionalMessagingService(prisma, twilio, outbox, config, logger, email);
+  const senderResolver = {
+    resolve: jest.fn(async () => undefined),
+    resolveByNumber: jest.fn(async () => undefined),
+    invalidate: jest.fn(),
+  } as any;
+  const svc = new TransactionalMessagingService(prisma, twilio, senderResolver, outbox, config, logger, email);
   return { svc, prisma, twilio, outbox, email };
 }
 
@@ -40,7 +45,8 @@ describe("TransactionalMessagingService", () => {
     expect(created.blastId).toBeUndefined(); // transactional rows are not blast-linked
     expect(created.fromPhone).toBe("+15550000000"); // the TRANSACTIONAL sender, not the marketing number
 
-    expect(twilio.sendTransactional).toHaveBeenCalledWith("+15551234567", "Your code is 123");
+    // Third arg = the resolved per-tenant sender; undefined ⇒ platform env sender.
+    expect(twilio.sendTransactional).toHaveBeenCalledWith("+15551234567", "Your code is 123", undefined);
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventType: "messaging.tx-sms.requested", aggregateId: "om1" }),
@@ -54,16 +60,17 @@ describe("TransactionalMessagingService", () => {
   });
 
   it("the service takes no consent/compliance dependency (constructor arity)", () => {
-    // 6 deps: prisma, twilio, outbox, config, logger, email — and notably NOT
-    // ConsentService/ComplianceService/suppression. Guards against re-introducing them.
-    expect(TransactionalMessagingService.length).toBe(6);
+    // 7 deps: prisma, twilio, senderResolver, outbox, config, logger, email — and
+    // notably NOT ConsentService/ComplianceService/suppression. Guards against
+    // re-introducing them.
+    expect(TransactionalMessagingService.length).toBe(7);
   });
 
   it("resolves + renders a template body with vars", async () => {
     const { svc, prisma, twilio } = setup();
     prisma.messageTemplate.findUnique.mockResolvedValue({ body: "Code: {{code}}", isActive: true });
     await svc.sendSms({ tenantId: "t1", toPhone: "+1555", templateKey: "verification_code", vars: { code: "999" }, purpose: "2fa" });
-    expect(twilio.sendTransactional).toHaveBeenCalledWith("+1555", "Code: 999");
+    expect(twilio.sendTransactional).toHaveBeenCalledWith("+1555", "Code: 999", undefined);
   });
 
   it("rejects an unknown/inactive template", async () => {

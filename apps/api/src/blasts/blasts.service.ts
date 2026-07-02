@@ -17,6 +17,7 @@ import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";
 import { CreateBlastDto, ProofBlastDto, ScheduleBlastDto, UpdateBlastDto } from "./dto/blast.dto";
 import { SendOptions, TwilioMessage, TwilioService } from "../twilio/twilio.service";
+import { TelephonySenderResolver } from "../telephony/telephony-sender.resolver";
 import { ConsentService } from "../messaging/consent.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
@@ -124,6 +125,7 @@ export class BlastsService {
     private readonly renderer: TemplateRendererService,
     private readonly compliance: ComplianceService,
     private readonly twilio: TwilioService,
+    private readonly senderResolver: TelephonySenderResolver,
     private readonly events: RealtimeEventsService,
     private readonly consent: ConsentService,
     flags?: FeatureFlagsService,
@@ -254,7 +256,7 @@ export class BlastsService {
     if (proofNumber && previews[0]?.rendered) {
       const to = normalizePhoneE164(proofNumber);
       const dryRunEnabled = await this.isBlastDryRunEnabled();
-      const sendOptions = this.buildSendOptions(
+      const sendOptions = await this.sendOptionsFor(
         blast,
         previews[0].recipient as Record<string, unknown>,
       );
@@ -520,6 +522,24 @@ export class BlastsService {
           }
         : {}),
     };
+  }
+
+  /** buildSendOptions + the tenant's resolved sender. The resolver caches for
+   *  60 s, so per-recipient calls inside a batch loop are map lookups. */
+  private async sendOptionsFor(
+    blast: {
+      tenantId: string;
+      channel: MessageChannel;
+      contentSid: string | null;
+      contentVariableMap: Prisma.JsonValue | null;
+    },
+    context: Record<string, unknown>,
+  ): Promise<SendOptions> {
+    const sender = await this.senderResolver.resolve({
+      tenantId: blast.tenantId,
+      purpose: blast.channel === MessageChannel.WHATSAPP ? "whatsapp" : "marketing",
+    });
+    return { ...this.buildSendOptions(blast, context), ...(sender ? { sender } : {}) };
   }
 
   private createDryRunMessage(
@@ -1131,7 +1151,7 @@ export class BlastsService {
         },
       });
       try {
-        const sendOptions = this.buildSendOptions(
+        const sendOptions = await this.sendOptionsFor(
           blast,
           this.extractRecipientContext(recipient.metadata),
         );
@@ -1329,7 +1349,7 @@ export class BlastsService {
     let retried = 0;
     for (const recipient of failedRecipients) {
       try {
-        const sendOptions = this.buildSendOptions(
+        const sendOptions = await this.sendOptionsFor(
           blast,
           this.extractRecipientContext(recipient.metadata),
         );

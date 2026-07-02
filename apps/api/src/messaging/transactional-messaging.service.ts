@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { MessageKind, TxSmsStatus } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { TwilioService } from "../twilio/twilio.service";
+import { TelephonySenderResolver } from "../telephony/telephony-sender.resolver";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { EmailService } from "../email/email.service";
@@ -25,6 +26,7 @@ export class TransactionalMessagingService implements TransactionalDispatcher {
   constructor(
     private readonly prisma: PrismaService,
     private readonly twilio: TwilioService,
+    private readonly senderResolver: TelephonySenderResolver,
     private readonly outbox: OutboxService,
     private readonly config: ConfigService,
     private readonly logger: DomainLogger,
@@ -59,7 +61,11 @@ export class TransactionalMessagingService implements TransactionalDispatcher {
 
   async sendSms(input: TransactionalSmsInput): Promise<void> {
     const body = await this.resolveBody(input);
-    const fromPhone = this.transactionalFrom();
+    const sender = await this.senderResolver.resolve({
+      tenantId: input.tenantId,
+      purpose: "transactional",
+    });
+    const fromPhone = sender?.from ?? this.transactionalFrom();
 
     // 1. Ledger row (TRANSACTIONAL, PENDING) + outbox event, atomic. No
     //    consent/compliance/suppression — this path has none by design.
@@ -88,7 +94,7 @@ export class TransactionalMessagingService implements TransactionalDispatcher {
     // 2. Send via the transactional sender; record SENT or FAILED.
     assertValidTxSmsTransition(TxSmsStatus.PENDING, TxSmsStatus.QUEUED);
     try {
-      const sent = await this.twilio.sendTransactional(input.toPhone, body);
+      const sent = await this.twilio.sendTransactional(input.toPhone, body, sender);
       assertValidTxSmsTransition(TxSmsStatus.QUEUED, TxSmsStatus.SENT);
       await this.prisma.outboundMessage.update({
         where: { id: message.id },

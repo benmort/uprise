@@ -21,6 +21,7 @@ function build(prismaMock: any) {
     new TemplateRendererService(),
     new ComplianceService(configMock),
     { sendMessage: jest.fn() } as unknown as TwilioService,
+    { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
     eventsMock,
     consentMock,
   );

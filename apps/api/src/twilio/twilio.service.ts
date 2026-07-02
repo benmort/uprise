@@ -27,6 +27,21 @@ export type MessagesPage = {
 
 export type SendChannel = "SMS" | "WHATSAPP";
 
+/**
+ * A resolved per-tenant sender (TelephonySenderResolver). When absent, sends
+ * use the platform TWILIO_* env credentials — the pre-multi-tenant behaviour.
+ * Exactly one of `from` / `messagingServiceSid` addresses the message.
+ */
+export type ResolvedSender = {
+  accountSid: string;
+  authToken: string;
+  from?: string;
+  messagingServiceSid?: string;
+  /** Per-account rate overrides (TelephonyAccount.settings). */
+  ratePerSecond?: number;
+  maxConcurrent?: number;
+};
+
 export interface SendOptions {
   /** Defaults to SMS — the existing behaviour. */
   channel?: SendChannel;
@@ -36,6 +51,8 @@ export interface SendOptions {
   contentVariables?: Record<string, string>;
   /** Optional media URLs (WhatsApp media / MMS). */
   mediaUrl?: string[];
+  /** Per-tenant sender; omit for the platform env account. */
+  sender?: ResolvedSender;
 }
 
 /** Normalise an address to a WhatsApp channel address (`whatsapp:+E164`). */
@@ -112,20 +129,36 @@ function isRetryableTwilioError(error: unknown): boolean {
   return status >= 500 || status === 408;
 }
 
+/** Token-bucket + concurrency state for ONE Twilio account. */
+type RateBucket = {
+  ratePerSecond: number;
+  maxConcurrent: number;
+  availableTokens: number;
+  tokenLastRefillAt: number;
+  inFlightSends: number;
+  cooldownUntilMs: number;
+  lastUsedAt: number;
+};
+
+/** Cap on cached per-account clients/buckets; idle entries are evicted LRU. */
+const MAX_CACHED_ACCOUNTS = 500;
+
 @Injectable()
 export class TwilioService {
+  private readonly platformAccountSid: string | null;
   private readonly client: Twilio.Twilio | null;
+  private readonly clients = new Map<string, Twilio.Twilio>();
+  private readonly buckets = new Map<string, RateBucket>();
   private readonly sendRatePerSecond: number;
   private readonly maxConcurrentSends: number;
+  private readonly subaccountRatePerSecond: number;
+  private readonly subaccountMaxConcurrent: number;
   private readonly defaultCooldownMs: number;
-  private availableTokens: number;
-  private tokenLastRefillAt = Date.now();
-  private inFlightSends = 0;
-  private cooldownUntilMs = 0;
 
   constructor(private readonly config: ConfigService) {
     const sid = this.config.get<string>("TWILIO_ACCOUNT_SID");
     const token = this.config.get<string>("TWILIO_AUTH_TOKEN");
+    this.platformAccountSid = sid || null;
     this.client = sid && token ? Twilio(sid, token) : null;
     this.sendRatePerSecond = Math.max(
       1,
@@ -135,20 +168,89 @@ export class TwilioService {
       1,
       Number(this.config.get<string>("TWILIO_SEND_MAX_CONCURRENT", "47")) || 47,
     );
+    // A single AU mobile long code sustains ~1 message/sec before carrier
+    // filtering — subaccount buckets default far below the platform account.
+    this.subaccountRatePerSecond = Math.max(
+      1,
+      Number(this.config.get<string>("TWILIO_SUBACCOUNT_SEND_RATE_PER_SECOND", "1")) || 1,
+    );
+    this.subaccountMaxConcurrent = Math.max(
+      1,
+      Number(this.config.get<string>("TWILIO_SUBACCOUNT_SEND_MAX_CONCURRENT", "5")) || 5,
+    );
     this.defaultCooldownMs = Math.max(
       0,
       Number(this.config.get<string>("TWILIO_RATE_LIMIT_COOLDOWN_MS", "114000")) || 114000,
     );
-    this.availableTokens = this.sendRatePerSecond;
   }
 
-  private getClient(): Twilio.Twilio {
+  private getClient(sender?: ResolvedSender): Twilio.Twilio {
+    if (sender && sender.accountSid !== this.platformAccountSid) {
+      const cached = this.clients.get(sender.accountSid);
+      if (cached) return cached;
+      const created = Twilio(sender.accountSid, sender.authToken);
+      this.evictIdleAccounts();
+      this.clients.set(sender.accountSid, created);
+      return created;
+    }
     if (!this.client) {
       throw new ServiceUnavailableException(
         "Twilio is not configured. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.",
       );
     }
     return this.client;
+  }
+
+  /** The rate bucket for the sending account (platform bucket when no sender). */
+  private bucketFor(sender?: ResolvedSender): RateBucket {
+    const isPlatform = !sender || sender.accountSid === this.platformAccountSid;
+    const key = isPlatform ? (this.platformAccountSid ?? "platform") : sender.accountSid;
+    const existing = this.buckets.get(key);
+    if (existing) {
+      existing.lastUsedAt = Date.now();
+      // Re-sync overrides on every hit — TelephonyAccount.settings changes must
+      // apply on the next send, not after an eventual eviction.
+      if (!isPlatform) {
+        existing.ratePerSecond = Math.max(1, sender.ratePerSecond ?? this.subaccountRatePerSecond);
+        existing.maxConcurrent = Math.max(1, sender.maxConcurrent ?? this.subaccountMaxConcurrent);
+        existing.availableTokens = Math.min(existing.availableTokens, existing.ratePerSecond);
+      }
+      return existing;
+    }
+    const ratePerSecond = isPlatform
+      ? this.sendRatePerSecond
+      : Math.max(1, sender.ratePerSecond ?? this.subaccountRatePerSecond);
+    const maxConcurrent = isPlatform
+      ? this.maxConcurrentSends
+      : Math.max(1, sender.maxConcurrent ?? this.subaccountMaxConcurrent);
+    const bucket: RateBucket = {
+      ratePerSecond,
+      maxConcurrent,
+      availableTokens: ratePerSecond,
+      tokenLastRefillAt: Date.now(),
+      inFlightSends: 0,
+      cooldownUntilMs: 0,
+      lastUsedAt: Date.now(),
+    };
+    this.evictIdleAccounts();
+    this.buckets.set(key, bucket);
+    return bucket;
+  }
+
+  /**
+   * Bound the per-account caches. Idle entries evict first; when everything is
+   * mid-send the least-recently-used entries still go (an evicted bucket only
+   * loses throttle state — releaseSendPermit holds its own reference), so the
+   * cache can never grow unbounded under sustained all-tenants load.
+   */
+  private evictIdleAccounts(): void {
+    if (this.buckets.size < MAX_CACHED_ACCOUNTS && this.clients.size < MAX_CACHED_ACCOUNTS) return;
+    const byLru = [...this.buckets.entries()].sort((a, b) => a[1].lastUsedAt - b[1].lastUsedAt);
+    const idleFirst = [...byLru.filter(([, b]) => b.inFlightSends === 0), ...byLru.filter(([, b]) => b.inFlightSends > 0)];
+    for (const [key] of idleFirst.slice(0, Math.max(1, Math.floor(MAX_CACHED_ACCOUNTS / 10)))) {
+      this.buckets.delete(key);
+      this.clients.delete(key);
+    }
   }
 
   private getStatusCallbackUrl(): string | null {
@@ -172,41 +274,42 @@ export class TwilioService {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private refillTokens(nowMs: number): void {
-    const elapsedMs = Math.max(0, nowMs - this.tokenLastRefillAt);
+  private refillTokens(bucket: RateBucket, nowMs: number): void {
+    const elapsedMs = Math.max(0, nowMs - bucket.tokenLastRefillAt);
     if (elapsedMs <= 0) return;
-    const refill = (elapsedMs / 1000) * this.sendRatePerSecond;
-    this.availableTokens = Math.min(this.sendRatePerSecond, this.availableTokens + refill);
-    this.tokenLastRefillAt = nowMs;
+    const refill = (elapsedMs / 1000) * bucket.ratePerSecond;
+    bucket.availableTokens = Math.min(bucket.ratePerSecond, bucket.availableTokens + refill);
+    bucket.tokenLastRefillAt = nowMs;
   }
 
-  private async acquireSendPermit(): Promise<void> {
+  private async acquireSendPermit(bucket: RateBucket): Promise<void> {
     while (true) {
       const now = Date.now();
-      const cooldownWait = Math.max(0, this.cooldownUntilMs - now);
+      const cooldownWait = Math.max(0, bucket.cooldownUntilMs - now);
       if (cooldownWait > 0) {
         await this.sleep(Math.min(cooldownWait, 250));
         continue;
       }
-      this.refillTokens(now);
-      if (this.inFlightSends < this.maxConcurrentSends && this.availableTokens >= 1) {
-        this.availableTokens -= 1;
-        this.inFlightSends += 1;
+      this.refillTokens(bucket, now);
+      if (bucket.inFlightSends < bucket.maxConcurrent && bucket.availableTokens >= 1) {
+        bucket.availableTokens -= 1;
+        bucket.inFlightSends += 1;
+        bucket.lastUsedAt = now;
         return;
       }
       const tokenWaitMs =
-        this.availableTokens >= 1 ? 0 : Math.ceil(((1 - this.availableTokens) / this.sendRatePerSecond) * 1000);
+        bucket.availableTokens >= 1 ? 0 : Math.ceil(((1 - bucket.availableTokens) / bucket.ratePerSecond) * 1000);
       await this.sleep(Math.max(20, tokenWaitMs));
     }
   }
 
-  private releaseSendPermit(): void {
-    this.inFlightSends = Math.max(0, this.inFlightSends - 1);
+  private releaseSendPermit(bucket: RateBucket): void {
+    bucket.inFlightSends = Math.max(0, bucket.inFlightSends - 1);
   }
 
-  private triggerRateLimitCooldown(error: unknown): void {
+  private triggerRateLimitCooldown(bucket: RateBucket, error: unknown): void {
     const retryAfterMs = parseRetryAfterMs(error) ?? this.defaultCooldownMs;
-    this.cooldownUntilMs = Math.max(this.cooldownUntilMs, Date.now() + retryAfterMs);
+    bucket.cooldownUntilMs = Math.max(bucket.cooldownUntilMs, Date.now() + retryAfterMs);
   }
 
   async getMessagesPage(opts: { pageSize: number; pageToken?: string | null }): Promise<MessagesPage> {
@@ -299,10 +402,11 @@ export class TwilioService {
     };
 
     if (channel === "WHATSAPP") {
-      const messagingServiceSid = this.config
-        .get<string>("TWILIO_WHATSAPP_MESSAGING_SERVICE_SID", "")
-        .trim();
-      const from = this.config.get<string>("TWILIO_WHATSAPP_FROM", "").trim();
+      const messagingServiceSid =
+        opts.sender?.messagingServiceSid?.trim() ||
+        this.config.get<string>("TWILIO_WHATSAPP_MESSAGING_SERVICE_SID", "").trim();
+      const from =
+        opts.sender?.from?.trim() || this.config.get<string>("TWILIO_WHATSAPP_FROM", "").trim();
       if (!messagingServiceSid && !from) {
         throw new ServiceUnavailableException(
           "WhatsApp sender is not configured. Set TWILIO_WHATSAPP_FROM or TWILIO_WHATSAPP_MESSAGING_SERVICE_SID.",
@@ -325,7 +429,11 @@ export class TwilioService {
       };
     }
 
-    const from = this.config.get<string>("TWILIO_PHONE_NUMBER");
+    const messagingServiceSid = opts.sender?.messagingServiceSid?.trim();
+    if (messagingServiceSid) {
+      return { ...base, messagingServiceSid, to: to.trim(), body: body.trim() };
+    }
+    const from = opts.sender?.from?.trim() || this.config.get<string>("TWILIO_PHONE_NUMBER");
     if (!from?.trim()) {
       throw new ServiceUnavailableException("TWILIO_PHONE_NUMBER is not set.");
     }
@@ -378,9 +486,10 @@ export class TwilioService {
   }
 
   async sendMessage(to: string, body: string, opts: SendOptions = {}): Promise<TwilioMessage> {
-    const client = this.getClient();
+    const client = this.getClient(opts.sender);
+    const bucket = this.bucketFor(opts.sender);
     const params = this.buildCreateParams(to, body, opts);
-    await this.acquireSendPermit();
+    await this.acquireSendPermit(bucket);
     try {
       const created = await withRetry(
         async () => {
@@ -388,7 +497,7 @@ export class TwilioService {
             return await client.messages.create(params as any);
           } catch (error) {
             if (isTwilioRateLimitError(error)) {
-              this.triggerRateLimitCooldown(error);
+              this.triggerRateLimitCooldown(bucket, error);
             }
             throw error;
           }
@@ -402,20 +511,23 @@ export class TwilioService {
       );
       return toMessage(created);
     } finally {
-      this.releaseSendPermit();
+      this.releaseSendPermit(bucket);
     }
   }
 
   /** Params for a transactional SMS — a distinct sender from marketing so
    *  carriers classify it correctly and reputation is isolated. */
-  private buildTransactionalParams(to: string, body: string): Record<string, unknown> {
+  private buildTransactionalParams(to: string, body: string, sender?: ResolvedSender): Record<string, unknown> {
     const statusCallback = this.getStatusCallbackUrl();
-    const messagingServiceSid = this.config
-      .get<string>("TWILIO_TRANSACTIONAL_MESSAGING_SERVICE_SID", "")
-      .trim();
+    const messagingServiceSid =
+      sender?.messagingServiceSid?.trim() ||
+      (sender ? "" : this.config.get<string>("TWILIO_TRANSACTIONAL_MESSAGING_SERVICE_SID", "").trim());
     const from =
-      this.config.get<string>("TWILIO_TRANSACTIONAL_FROM", "").trim() ||
-      this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
+      sender?.from?.trim() ||
+      (sender
+        ? ""
+        : this.config.get<string>("TWILIO_TRANSACTIONAL_FROM", "").trim() ||
+          this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim());
     if (!messagingServiceSid && !from) {
       throw new ServiceUnavailableException(
         "Transactional sender is not configured. Set TWILIO_TRANSACTIONAL_FROM, TWILIO_TRANSACTIONAL_MESSAGING_SERVICE_SID, or TWILIO_PHONE_NUMBER.",
@@ -434,10 +546,11 @@ export class TwilioService {
    * limiter + retry, but a SEPARATE sender from marketing. Never gated by
    * consent/compliance — that's the caller's contract (TransactionalMessagingService).
    */
-  async sendTransactional(to: string, body: string): Promise<TwilioMessage> {
-    const client = this.getClient();
-    const params = this.buildTransactionalParams(to, body);
-    await this.acquireSendPermit();
+  async sendTransactional(to: string, body: string, sender?: ResolvedSender): Promise<TwilioMessage> {
+    const client = this.getClient(sender);
+    const bucket = this.bucketFor(sender);
+    const params = this.buildTransactionalParams(to, body, sender);
+    await this.acquireSendPermit(bucket);
     try {
       const created = await withRetry(
         async () => {
@@ -445,7 +558,7 @@ export class TwilioService {
             return await client.messages.create(params as any);
           } catch (error) {
             if (isTwilioRateLimitError(error)) {
-              this.triggerRateLimitCooldown(error);
+              this.triggerRateLimitCooldown(bucket, error);
             }
             throw error;
           }
@@ -459,7 +572,7 @@ export class TwilioService {
       );
       return toMessage(created);
     } finally {
-      this.releaseSendPermit();
+      this.releaseSendPermit(bucket);
     }
   }
 
@@ -508,7 +621,8 @@ export class TwilioService {
         : {}),
     };
 
-    await this.acquireSendPermit();
+    const bucket = this.bucketFor();
+    await this.acquireSendPermit(bucket);
     try {
       const created = await withRetry(
         async () => {
@@ -516,7 +630,7 @@ export class TwilioService {
             return await client.calls.create(params as any);
           } catch (error) {
             if (isTwilioRateLimitError(error)) {
-              this.triggerRateLimitCooldown(error);
+              this.triggerRateLimitCooldown(bucket, error);
             }
             throw error;
           }
@@ -530,7 +644,7 @@ export class TwilioService {
       );
       return { sid: String((created as any).sid), status: String((created as any).status ?? "queued") };
     } finally {
-      this.releaseSendPermit();
+      this.releaseSendPermit(bucket);
     }
   }
 }

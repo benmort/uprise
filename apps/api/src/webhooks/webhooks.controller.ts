@@ -16,6 +16,9 @@ import { EmailService, type SendGridEvent } from "../email/email.service";
 import { PaymentService, type StripeEvent } from "../payment/payment.service";
 import { StripeService } from "../payment/stripe.service";
 import { CallsService } from "../calls/calls.service";
+import { TelephonyWebhookAuthService } from "../telephony/telephony-webhook-auth.service";
+import { TelephonyProvisioningService } from "../telephony/telephony-provisioning.service";
+import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { parseChannelAddress } from "../messaging/message-channel.util";
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
@@ -30,6 +33,9 @@ export class WebhooksController {
     private readonly payment: PaymentService,
     private readonly stripe: StripeService,
     private readonly calls: CallsService,
+    private readonly telephonyAuth: TelephonyWebhookAuthService,
+    private readonly telephonyProvisioning: TelephonyProvisioningService,
+    private readonly webhookEvents: WebhookEventService,
   ) {}
 
   /**
@@ -81,9 +87,15 @@ export class WebhooksController {
     return { ok: true };
   }
 
-  private validateTwilioSignature(req: Request, body: Record<string, unknown>) {
-    const authToken = this.config.get<string>("TWILIO_AUTH_TOKEN");
-    if (!authToken) {
+  /**
+   * Validate X-Twilio-Signature with the token of the account that SENT the
+   * webhook — per-tenant subaccounts sign with their own tokens, so callers
+   * resolve the token first (by To number / AccountSid / BundleSid) and the
+   * platform env token is only the fallback.
+   */
+  private validateTwilioSignature(req: Request, body: Record<string, unknown>, authToken?: string) {
+    const token = authToken ?? this.config.get<string>("TWILIO_AUTH_TOKEN");
+    if (!token) {
       throw new UnauthorizedException("TWILIO_AUTH_TOKEN not configured");
     }
     const signature =
@@ -97,7 +109,7 @@ export class WebhooksController {
     const host =
       (req.headers["x-forwarded-host"] as string) || req.get("host") || "";
     const url = `${protocol}://${host}${req.originalUrl}`;
-    const isValid = (twilio as any).validateRequest(authToken, signature, url, body || {});
+    const isValid = (twilio as any).validateRequest(token, signature, url, body || {});
     if (!isValid) {
       throw new UnauthorizedException("Invalid Twilio signature");
     }
@@ -118,11 +130,15 @@ export class WebhooksController {
     },
     @Req() req: Request,
   ): Promise<string> {
-    this.validateTwilioSignature(req, body as Record<string, unknown>);
-
     // WhatsApp and SMS share this hook; the channel is encoded in the address prefix.
+    // The To number picks the signing token AND routes the message to its tenant —
+    // choosing the token from a body field is safe because validation still
+    // requires the matching account's secret.
     const fromParsed = parseChannelAddress(String(body?.From || ""));
     const toParsed = parseChannelAddress(String(body?.To || ""));
+    const resolution = await this.telephonyAuth.resolveInbound(toParsed.phoneE164);
+    this.validateTwilioSignature(req, body as Record<string, unknown>, resolution.authToken);
+
     const text = String(body?.Body || "");
     const messageSid = String(body?.MessageSid || "");
     const hasMedia = Number(body?.NumMedia || "0") > 0;
@@ -135,6 +151,7 @@ export class WebhooksController {
       channel: fromParsed.channel,
       mediaUrl: hasMedia ? body?.MediaUrl0 || null : null,
       mediaContentType: hasMedia ? body?.MediaContentType0 || null : null,
+      tenantId: resolution.tenantId ?? undefined,
     });
     return TWIML_EMPTY;
   }
@@ -148,10 +165,12 @@ export class WebhooksController {
       MessageStatus?: string;
       ErrorCode?: string;
       ErrorMessage?: string;
+      AccountSid?: string;
     },
     @Req() req: Request,
   ): Promise<string> {
-    this.validateTwilioSignature(req, body as Record<string, unknown>);
+    const token = await this.telephonyAuth.tokenForAccountSid(body?.AccountSid);
+    this.validateTwilioSignature(req, body as Record<string, unknown>, token);
     await this.blasts.handleTwilioStatusCallback({
       messageSid: String(body?.MessageSid || ""),
       messageStatus: String(body?.MessageStatus || ""),
@@ -159,6 +178,34 @@ export class WebhooksController {
       errorMessage: body?.ErrorMessage ? String(body.ErrorMessage) : null,
     });
     return TWIML_EMPTY;
+  }
+
+  /**
+   * Twilio Regulatory Compliance bundle status callback — approval/rejection of
+   * a tenant's AU-mobile bundle drives the provisioning FSM out of
+   * COMPLIANCE_SUBMITTED. Signature is validated with the token of the
+   * subaccount that owns the bundle; claim-before-act keyed on BundleSid:Status
+   * so Twilio's retries are idempotent (release on throw lets a retry reprocess).
+   */
+  @Post("telephony/bundle-status-callback")
+  async bundleStatusCallback(
+    @Body() body: { BundleSid?: string; Status?: string; FailureReason?: string },
+    @Req() req: Request,
+  ): Promise<{ ok: true }> {
+    const bundleSid = String(body?.BundleSid || "");
+    const status = String(body?.Status || "");
+    const token = await this.telephonyAuth.tokenForBundleSid(bundleSid);
+    this.validateTwilioSignature(req, body as Record<string, unknown>, token);
+
+    const eventId = `${bundleSid}:${status}`;
+    if (!(await this.webhookEvents.claim("twilio-bundle", eventId))) return { ok: true };
+    try {
+      await this.telephonyProvisioning.applyBundleStatus(bundleSid, status, body?.FailureReason ?? null);
+    } catch (err) {
+      await this.webhookEvents.release("twilio-bundle", eventId);
+      throw err;
+    }
+    return { ok: true };
   }
 
   /**
@@ -177,10 +224,12 @@ export class WebhooksController {
       RecordingUrl?: string;
       Price?: string;
       PriceUnit?: string;
+      AccountSid?: string;
     },
     @Req() req: Request,
   ): Promise<string> {
-    this.validateTwilioSignature(req, body as Record<string, unknown>);
+    const token = await this.telephonyAuth.tokenForAccountSid(body?.AccountSid);
+    this.validateTwilioSignature(req, body as Record<string, unknown>, token);
     const status = String(body?.CallStatus || "");
     const durationRaw = body?.CallDuration ? Number(body.CallDuration) : undefined;
     const priceRaw = body?.Price ? Number(body.Price) : undefined;

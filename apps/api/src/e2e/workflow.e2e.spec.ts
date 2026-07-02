@@ -68,6 +68,7 @@ describe("workflow e2e-style", () => {
       renderer,
       compliance,
       twilio,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       events,
       consent,
     );

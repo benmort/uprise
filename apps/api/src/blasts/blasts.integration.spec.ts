@@ -45,6 +45,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -154,6 +155,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       twilioMock,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -239,6 +241,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       twilioMock,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -314,6 +317,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -394,6 +398,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -470,6 +475,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       twilioMock,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -547,6 +553,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       twilioMock,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -618,6 +625,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       twilioMock,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -686,6 +694,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
     );
@@ -779,6 +788,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(dryRunConfigMock),
       twilioMock,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
       { isEnabled: async () => true } as any,
@@ -845,6 +855,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(dryRunConfigMock),
       twilioMock,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
       { isEnabled: async () => true } as any,
@@ -890,6 +901,7 @@ describe("BlastsService integration-like flow", () => {
       new TemplateRendererService(),
       new ComplianceService(configMock),
       { sendMessage: jest.fn() } as unknown as TwilioService,
+      { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       eventsMock,
       consentMock,
       flags,

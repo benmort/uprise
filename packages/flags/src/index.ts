@@ -81,6 +81,15 @@ const CORE_FLAGS = [
     envVar: "FEATURE_WHATSAPP_ENABLED",
   },
   {
+    key: "FEATURE_TENANT_TELEPHONY_ENABLED",
+    description:
+      "Per-tenant Twilio numbers: subaccount provisioning, AU regulatory compliance and tenant-scoped senders. Off ⇒ every send uses the platform TWILIO_* env credentials.",
+    default: false,
+    kind: "release",
+    controllableBy: PLAN_DRIVEN,
+    envVar: "FEATURE_TENANT_TELEPHONY_ENABLED",
+  },
+  {
     key: "FEATURE_MULTIBRAND_ENABLED",
     description:
       "Multi-tenant & multi-brand: per-tenant branding / white-label portals & sub-tenants.",
