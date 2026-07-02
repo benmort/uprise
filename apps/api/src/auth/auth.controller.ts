@@ -22,6 +22,14 @@ export class AuthController {
       this.flows.membershipsFor(req.user.id),
       this.flows.userFlags(req.user.id),
     ]);
+    // When the active tenant isn't one of the user's memberships, surface its name/slug
+    // so the switcher + shell can label it. This is the super-admin "acting as" case
+    // (they have no membership in the tenant they've pinned); null for ordinary users.
+    const activeTenantId = req.user.tenantId;
+    const activeTenant =
+      activeTenantId && !memberships.some((m) => m.tenantId === activeTenantId)
+        ? await this.flows.tenantSummary(activeTenantId)
+        : null;
     return {
       ok: true,
       user: {
@@ -31,6 +39,7 @@ export class AuthController {
         email: req.user.email ?? null,
         isSuperAdmin: req.user.isSuperAdmin,
         memberships,
+        activeTenant,
         ...flags,
       },
     };

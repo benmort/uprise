@@ -15,6 +15,7 @@ import {
   Database,
   Eye,
   EyeOff,
+  Inbox,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -24,8 +25,8 @@ import {
   Menu,
   MessageSquareText,
   Settings,
-  ShieldCheck,
   Sparkles,
+  Ticket,
   Users,
   Workflow,
   type LucideIcon,
@@ -81,7 +82,13 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
     { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_INBOX" },
+    // Shared inbox (unified cross-channel queue) sits right under Inbox — super-admin-only for now.
+    ...(isSuperAdmin
+      ? ([{ type: "leaf", key: "shared-inbox", label: "Shared inbox", href: "/prog/shared-inbox", icon: Inbox, match: px("shared-inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" }] as NavNode[])
+      : []),
+    { type: "leaf", key: "calendar", label: "Calendar", href: "/prog/calendar", icon: CalendarDays, match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
 
+    // ── Engage: the campaigning work — reach out, canvass, organise, target ──
     { type: "section", key: "sec-engage", label: "Engage" },
     {
       type: "group", key: "channels", label: "Channels", icon: MessageSquareText,
@@ -92,10 +99,9 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
         { label: "WhatsApp", href: "/channels/whatsapp", match: (p) => p.startsWith("/channels/whatsapp"), flag: "FEATURE_WHATSAPP_ENABLED" },
         // Campaigner Email + Calls are deferred prog stubs (not P1) — kept here but
         // super-admin-only until they ship and get tenant-tiered (consolidation doc Part B).
-        // Shared inbox: the unified cross-channel queue (functional clone of the Email page).
+        // (Shared inbox lives at the top level, right under Inbox.)
         ...(isSuperAdmin
           ? ([
-              { label: "Shared inbox", href: "/prog/shared-inbox", match: px("shared-inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
               { label: "Email", href: "/prog/email", match: px("email"), flag: "FEATURE_NAV_PROG_CHANNELS" },
               { label: "Calls", href: "/prog/calls", match: px("calls"), flag: "FEATURE_NAV_PROG_CHANNELS" },
             ] as NavEntry[])
@@ -103,14 +109,13 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       ],
     },
     { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
-
-    { type: "section", key: "sec-organise", label: "Organise" },
     {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin,
       match: (p) =>
         p.startsWith("/canvass") &&
         !p.startsWith("/canvass/volunteers") &&
-        !p.startsWith("/canvass/divisions"),
+        !p.startsWith("/canvass/divisions") &&
+        !p.startsWith("/canvass/areas"),
       flag: "FEATURE_NAV_CANVASS",
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
@@ -121,15 +126,7 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       ],
     },
     { type: "leaf", key: "volunteers", label: "Volunteers", href: "/canvass/volunteers", icon: Megaphone, match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
-    {
-      type: "group", key: "events", label: "Events", icon: CalendarDays,
-      match: (p) => px("events")(p) || px("calendar")(p),
-      flag: "FEATURE_NAV_PROG_ORGANISING",
-      children: [
-        { label: "Events", href: "/prog/events", match: px("events") },
-        { label: "Calendar", href: "/prog/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
-      ],
-    },
+    { type: "leaf", key: "events", label: "Events", href: "/prog/events", icon: Ticket, match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING" },
     {
       type: "group", key: "engagement", label: "Scripts", icon: Sparkles,
       match: (p) => p.startsWith("/engagement"),
@@ -142,23 +139,27 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       ],
     },
 
-    { type: "section", key: "sec-data", label: "Audience & data" },
     { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
-    { type: "leaf", key: "compliance", label: "Compliance", href: "/compliance", icon: ShieldCheck, match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
+
+    // ── Manage: workspace admin — data & files (incl. compliance), settings, business, dev ──
+    { type: "section", key: "sec-manage", label: "Manage" },
     {
       type: "group", key: "data-files", label: "Data & Files", icon: Database,
       match: (p) =>
         p.startsWith("/settings/data") ||
         p.startsWith("/canvass/divisions") ||
-        p.startsWith("/prog/file-manager"),
+        p.startsWith("/canvass/areas") ||
+        p.startsWith("/prog/file-manager") ||
+        p.startsWith("/compliance"),
       children: [
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
         { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
+        { label: "Areas", href: "/canvass/areas", match: (p) => p.startsWith("/canvass/areas"), flag: "FEATURE_NAV_CANVASS_AREAS" },
         { label: "File Manager", href: "/prog/file-manager", match: (p) => p.startsWith("/prog/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
+        { label: "Compliance", href: "/compliance", match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
       ],
     },
 
-    { type: "section", key: "sec-settings", label: "Settings" },
     {
       type: "group", key: "settings", label: "Settings", icon: Settings,
       match: (p) =>
@@ -197,11 +198,11 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       ],
     },
 
-    // Super-admin-only zones (Business, Super Admin, Prog sandbox). These hold the
-    // ported prog stubs; they stay super-admin-gated until built out + tenant-tiered.
+    // Super-admin-only. Business + Developer Hub are management tools, so they fold into
+    // the Manage section above; the Super Admin section (platform admin + the prog
+    // sandbox) then closes out the nav.
     ...(isSuperAdmin
       ? ([
-          { type: "section", key: "sec-business", label: "Business" },
           {
             type: "group", key: "business", label: "Business", icon: Building2,
             match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p),
@@ -732,6 +733,7 @@ export default function MainLayout({
                   memberships={principal.memberships}
                   currentTenantId={principal.tenantId}
                   isSuperAdmin={principal.isSuperAdmin}
+                  activeTenant={principal.activeTenant}
                   collapsed={collapsed}
                 />
               ) : (
@@ -907,6 +909,17 @@ export default function MainLayout({
                 </button>
               ) : null}
             </div>
+            {/* Super-admin "acting as" — only when impersonating a tenant they're not a
+                member of (activeTenant is set by /auth/check exactly in that case). */}
+            {isSuperAdmin && principal?.activeTenant ? (
+              <div className="hidden items-center gap-2 rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 md:flex">
+                <Crown className="h-3.5 w-3.5 shrink-0" />
+                <span className="max-w-[220px] truncate">Active as {principal.activeTenant.name}</span>
+                <Link href="/prog/tenants" className="underline underline-offset-2 hover:no-underline">
+                  Switch
+                </Link>
+              </div>
+            ) : null}
             <div className="flex items-center gap-2.5">
               <ThemeToggle />
               <NotificationsDropdown unreadCount={inboxUnreadCount} />

@@ -46,6 +46,7 @@ import { OverviewModuleCard } from "@/components/overview/overview-module-card";
 import { ActivityFeed } from "@/components/overview/activity-feed";
 import { buildActivityItems } from "@/lib/activity/recent-activity";
 import { MiniBar } from "@/components/overview/mini-bar";
+import { NewConversationMenu } from "@/components/inbox/new-conversation-menu";
 
 type Slice<T> = { data?: T; error?: string } | null; // null === loading
 
@@ -69,6 +70,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { showToast } = useToast();
   const [creating, setCreating] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const [perf, setPerf] = useState<Slice<PerfData>>(null);
@@ -193,11 +195,11 @@ export default function DashboardPage() {
         <QuickActions
           actions={[
             {
-              key: "new-sms",
-              label: "New text blast",
+              key: "new-conversation",
+              label: "New conversation",
               icon: <PlusCircle className="h-4 w-4" />,
               disabled: creating,
-              onClick: () => void newBlast("SMS"),
+              onClick: () => setComposeOpen(true),
             },
             ...(whatsappEnabled
               ? [
@@ -216,6 +218,14 @@ export default function DashboardPage() {
           ]}
         />
       </div>
+
+      <NewConversationMenu
+        open={composeOpen}
+        onClose={() => setComposeOpen(false)}
+        onPick={(ch) => {
+          if (ch === "sms") void newBlast("SMS");
+        }}
+      />
 
       {/* Top KPI row */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

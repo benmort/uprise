@@ -31,6 +31,12 @@ export interface AuthPrincipal {
   memberships: Membership[];
   /** Env break-glass super-admin (tenant-independent; not a role). Surfaced by GET /auth/check. */
   isSuperAdmin?: boolean;
+  /**
+   * The active tenant when it is NOT one of the user's memberships — i.e. a super-admin
+   * "acting as" a tenant they don't belong to. Null for ordinary users (their active
+   * tenant is in `memberships`). Lets the switcher/shell label the impersonated tenant.
+   */
+  activeTenant?: { id: string; name: string; slug: string } | null;
   // Account flags surfaced by GET /auth/check (optional — older callers may omit).
   emailVerified?: boolean;
   mobileVerified?: boolean;
@@ -80,6 +86,13 @@ export const VOLUNTEER_PREFERRED_ROLES = [
 ] as const;
 export type VolunteerPreferredRole = (typeof VOLUNTEER_PREFERRED_ROLES)[number];
 
+/** Doorknocker onboarding: how much walking suits them + preferred session length
+ *  (advisory; helps organisers match turf). Stored on TenantMember.canvassPrefs. */
+export const WALKING_CAPABILITIES = ["short", "moderate", "long", "minimal"] as const;
+export type WalkingCapability = (typeof WALKING_CAPABILITIES)[number];
+export const SESSION_LENGTHS = ["short", "standard", "long", "flexible"] as const;
+export type SessionLength = (typeof SESSION_LENGTHS)[number];
+
 export const acceptInviteSchema = z.object({
   token: z.string().min(1),
   displayName: z.string().max(200).optional(),
@@ -89,6 +102,9 @@ export const acceptInviteSchema = z.object({
   code: z.string().max(12).optional(),
   preferredRole: z.enum(VOLUNTEER_PREFERRED_ROLES).optional(),
   availabilityDays: z.array(z.string()).max(7).optional(),
+  // Doorknocker-only prefs (advisory) — assembled server-side into canvassPrefs.
+  walkingCapability: z.enum(WALKING_CAPABILITIES).optional(),
+  sessionLength: z.enum(SESSION_LENGTHS).optional(),
 });
 export type AcceptInviteRequest = z.infer<typeof acceptInviteSchema>;
 
@@ -113,6 +129,9 @@ export const openJoinAcceptSchema = z.object({
   code: z.string().max(12).optional(),
   preferredRole: z.enum(VOLUNTEER_PREFERRED_ROLES).optional(),
   availabilityDays: z.array(z.string()).max(7).optional(),
+  // Doorknocker-only prefs (advisory) — assembled server-side into canvassPrefs.
+  walkingCapability: z.enum(WALKING_CAPABILITIES).optional(),
+  sessionLength: z.enum(SESSION_LENGTHS).optional(),
 });
 export type OpenJoinAcceptRequest = z.infer<typeof openJoinAcceptSchema>;
 

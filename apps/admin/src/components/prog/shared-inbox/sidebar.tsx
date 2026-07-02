@@ -1,44 +1,47 @@
 'use client';
 
-// Functional clone of the Channels → Email sidebar (components/prog/email/sidebar.tsx),
-// rehomed for the new unified Shared Inbox. Same interaction model; the folder/label
-// set is the starting point for the cross-channel queue (Text/WhatsApp/Email/Calls).
-import { useState } from 'react';
+// Shared Inbox sidebar. The selected folder is the URL path segment
+// (/prog/shared-inbox/<folder>), so each mailbox folder is a <Link> and the active
+// state derives from useParams() — no local state. Filters/labels are decorative
+// placeholders until the backend models them.
+import Link from 'next/link';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/prog/ui/button';
-import {
-  Mail,
-  Send,
-  Inbox,
-  Trash2,
-  Star,
-  AlertCircle,
-  Archive as ArchiveIcon
-} from 'lucide-react';
+import { Mail, Send, Inbox, Trash2, Star, AlertCircle, Archive as ArchiveIcon } from 'lucide-react';
 
 interface SharedInboxSidebarProps {
-  activeFolder?: string;
-  onFolderChange?: (folder: string) => void;
+  /** Opens the "Start a new conversation" channel picker. */
+  onCompose?: () => void;
 }
+
+const MAILBOX: { key: string; label: string; icon: typeof Inbox; count?: number }[] = [
+  { key: 'inbox', label: 'Unified inbox', icon: Inbox, count: 24 },
+  { key: 'mine', label: 'Assigned to me', icon: Star, count: 6 },
+  { key: 'unassigned', label: 'Unassigned', icon: AlertCircle, count: 5 },
+  { key: 'sent', label: 'Sent', icon: Send },
+  { key: 'drafts', label: 'Drafts', icon: Mail },
+  { key: 'resolved', label: 'Resolved', icon: ArchiveIcon },
+  { key: 'trash', label: 'Trash', icon: Trash2 },
+];
 
 const labels = [
   { name: 'Volunteers', color: '#12B76A' },
   { name: 'Donors', color: '#FD853A' },
   { name: 'Media', color: '#F04438' },
   { name: 'Casework', color: '#36BFFA' },
-  { name: 'VIP', color: '#6172F3' }
+  { name: 'VIP', color: '#6172F3' },
 ];
 
-export default function SharedInboxSidebar({ activeFolder = 'inbox', onFolderChange }: SharedInboxSidebarProps) {
-  const [localActiveFolder, setLocalActiveFolder] = useState(activeFolder);
+export default function SharedInboxSidebar({ onCompose }: SharedInboxSidebarProps) {
+  const params = useParams();
+  const search = useSearchParams();
+  const activeFolder = String(params.folder ?? 'inbox');
+  const query = search.toString();
 
-  const handleFolderClick = (folder: string) => {
-    setLocalActiveFolder(folder);
-    onFolderChange?.(folder);
-  };
-
-  const folderClass = (folder: string) =>
+  const folderHref = (key: string) => `/prog/shared-inbox/${key}${query ? `?${query}` : ''}`;
+  const folderClass = (key: string) =>
     `group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium ${
-      localActiveFolder === folder
+      activeFolder === key
         ? 'text-brand-500 bg-brand-50 dark:text-brand-400 dark:bg-brand-500/[0.12] hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/[0.12] dark:hover:text-brand-400'
         : 'text-gray-500 dark:text-gray-400 hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/[0.12] dark:hover:text-brand-400'
     }`;
@@ -47,7 +50,11 @@ export default function SharedInboxSidebar({ activeFolder = 'inbox', onFolderCha
     <div className="xl:col-span-3 col-span-full">
       <div className="flex flex-col rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
         <div className="pb-5">
-          <Button className="flex items-center justify-center w-full gap-2 p-3 text-sm font-medium text-white rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600">
+          <Button
+            type="button"
+            onClick={onCompose}
+            className="flex items-center justify-center w-full gap-2 p-3 text-sm font-medium text-white rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600"
+          >
             <Send className="w-5 h-5" />
             Compose
           </Button>
@@ -59,92 +66,50 @@ export default function SharedInboxSidebar({ activeFolder = 'inbox', onFolderCha
             <div>
               <h3 className="mb-3 text-xs font-medium uppercase leading-[18px] text-gray-700 dark:text-gray-400">MAILBOX</h3>
               <ul className="flex flex-col gap-1">
-                <li>
-                  <button className={folderClass('inbox')} onClick={() => handleFolderClick('inbox')}>
-                    <span className="flex items-center gap-3">
-                      <Inbox className="w-5 h-5" />
-                      Unified inbox
-                    </span>
-                    <span>24</span>
-                  </button>
-                </li>
-                <li>
-                  <button className={folderClass('mine')} onClick={() => handleFolderClick('mine')}>
-                    <span className="flex items-center gap-3">
-                      <Star className="w-5 h-5" />
-                      Assigned to me
-                    </span>
-                    <span>6</span>
-                  </button>
-                </li>
-                <li>
-                  <button className={folderClass('unassigned')} onClick={() => handleFolderClick('unassigned')}>
-                    <span className="flex items-center gap-3">
-                      <AlertCircle className="w-5 h-5" />
-                      Unassigned
-                    </span>
-                    <span>5</span>
-                  </button>
-                </li>
-                <li>
-                  <button className={folderClass('sent')} onClick={() => handleFolderClick('sent')}>
-                    <span className="flex items-center gap-3">
-                      <Send className="w-5 h-5" />
-                      Sent
-                    </span>
-                  </button>
-                </li>
-                <li>
-                  <button className={folderClass('drafts')} onClick={() => handleFolderClick('drafts')}>
-                    <span className="flex items-center gap-3">
-                      <Mail className="w-5 h-5" />
-                      Drafts
-                    </span>
-                  </button>
-                </li>
-                <li>
-                  <button className={folderClass('resolved')} onClick={() => handleFolderClick('resolved')}>
-                    <span className="flex items-center gap-3">
-                      <ArchiveIcon className="w-5 h-5" />
-                      Resolved
-                    </span>
-                  </button>
-                </li>
-                <li>
-                  <button className={folderClass('trash')} onClick={() => handleFolderClick('trash')}>
-                    <span className="flex items-center gap-3">
-                      <Trash2 className="w-5 h-5" />
-                      Trash
-                    </span>
-                  </button>
-                </li>
+                {MAILBOX.map(({ key, label, icon: Icon, count }) => (
+                  <li key={key}>
+                    <Link href={folderHref(key)} className={folderClass(key)}>
+                      <span className="flex items-center gap-3">
+                        <Icon className="w-5 h-5" />
+                        {label}
+                      </span>
+                      {count != null ? <span>{count}</span> : null}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             </div>
 
-            {/* Filter Section */}
+            {/* Filter Section (decorative until backend support) */}
             <div>
               <h3 className="mb-3 text-xs font-medium uppercase leading-[18px] text-gray-700 dark:text-gray-400">FILTER</h3>
               <ul className="flex flex-col gap-1">
                 <li>
-                  <button className="group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/[0.12] dark:hover:text-brand-400">
+                  <Link
+                    href={`/prog/shared-inbox/${activeFolder}?filter=priority`}
+                    className="group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/[0.12] dark:hover:text-brand-400"
+                  >
                     <span className="flex items-center gap-3">
                       <Star className="w-5 h-5" />
                       Starred
                     </span>
-                  </button>
+                  </Link>
                 </li>
                 <li>
-                  <button className="group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/[0.12] dark:hover:text-brand-400">
+                  <Link
+                    href={`/prog/shared-inbox/${activeFolder}?filter=priority`}
+                    className="group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-brand-50 hover:text-brand-500 dark:hover:bg-brand-500/[0.12] dark:hover:text-brand-400"
+                  >
                     <span className="flex items-center gap-3">
                       <AlertCircle className="w-5 h-5" />
                       Priority
                     </span>
-                  </button>
+                  </Link>
                 </li>
               </ul>
             </div>
 
-            {/* Label Section */}
+            {/* Label Section (decorative) */}
             <div>
               <h3 className="mb-3 text-xs font-medium uppercase leading-[18px] text-gray-700 dark:text-gray-400">LABEL</h3>
               <ul className="flex flex-col gap-1">

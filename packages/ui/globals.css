@@ -298,6 +298,29 @@
   }
 }
 
+/* Modal entrance: a soft backdrop fade + a panel that lifts and settles.
+   `dialogPop` is applied to an INNER wrapper (never the centred Radix content,
+   whose own -translate keeps it positioned) so the transform can't fight centring. */
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* prog logo carousel */
 @keyframes scroll {
   0% {
@@ -311,7 +334,9 @@
 @media (prefers-reduced-motion: reduce) {
   .page-stack,
   .animate-fade-up,
-  .animate-pop-in {
+  .animate-pop-in,
+  .animate-overlay-in,
+  .animate-dialog-pop {
     animation: none !important;
   }
 }
@@ -328,6 +353,13 @@
   }
   .animate-pop-in {
     animation: popIn 0.2s ease both;
+  }
+  .animate-overlay-in {
+    animation: overlayIn 0.2s ease both;
+  }
+  .animate-dialog-pop {
+    /* ease-out with a gentle settle, no bounce (design-system motion) */
+    animation: dialogPop 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   .animate-scroll {
     animation: scroll 40s linear infinite;
