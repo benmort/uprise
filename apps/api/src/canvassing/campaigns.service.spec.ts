@@ -18,7 +18,8 @@ describe("CampaignsService", () => {
       walkListItem: { count: jest.fn() },
       turfAssignment: { findMany: jest.fn() },
     };
-    service = new CampaignsService(prisma);
+    const geo = { unionSources: jest.fn(async () => null) } as any;
+    service = new CampaignsService(prisma, geo);
   });
 
   it("lists campaigns with turf + walk-list counts", async () => {

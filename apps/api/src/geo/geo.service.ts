@@ -15,6 +15,20 @@ const AREA_TABLE: Record<AreaLevel, { table: string; codeCol: string; nameExpr: 
   sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa3: { table: "geo.sa3", codeCol: "code", nameExpr: "COALESCE(name, code)" },
 };
+// geo.address_region column that maps an address to each ASGS level — the join key for
+// area address counts (mirrors REGION_COL for divisions).
+const AREA_REGION_COL: Record<AreaLevel, string> = {
+  mb: "mb_code",
+  sa1: "sa1_code",
+  sa2: "sa2_code",
+  sa3: "sa3_code",
+};
+
+/** A part of a campaign boundary or a turf cut: a whole division, an ASGS area, or a drawn polygon. */
+export type BoundarySource =
+  | { kind: "division"; type: DivisionType; code: string }
+  | { kind: "area"; layer: AreaLevel; code: string }
+  | { kind: "polygon"; geometry: unknown };
 
 @Injectable()
 export class GeoService {
@@ -106,37 +120,107 @@ export class GeoService {
   }
 
   /**
-   * Union the boundaries of the given statistical areas (+ any free-drawn
-   * polygons) into a single MultiPolygon — the geometry for a turf cut from a
-   * mixed selection. Returns null GeoJSON only if nothing resolved.
+   * One statistical area: boundary GeoJSON + total/contact/without-contact counts
+   * for an org — the area equivalent of {@link divisionDetail}. Column refs are
+   * qualified to the area table (`a`) because the address_region join shares the
+   * `*_code` column names and Contact may share `name`.
    */
-  async unionAreas(
-    areas: Array<{ layer: string; code: string }>,
-    polygons: unknown[] = [],
-  ): Promise<unknown | null> {
-    // Codes + polygons are passed as JSON-array scalars (not text[]/array binds,
-    // which $queryRawUnsafe doesn't serialise reliably) and expanded in SQL.
-    const codes = (level: AreaLevel) =>
-      JSON.stringify(areas.filter((a) => a.layer === level).map((a) => a.code));
+  async areaDetail(tenantId: string, layer: string, code: string) {
+    const { table, codeCol } = this.areaTable(layer);
+    const regionCol = AREA_REGION_COL[layer as AreaLevel];
+    // Meshblocks have no name column — fall back to the code as the label.
+    const nameSel = layer === "mb" ? `a.${codeCol}` : "COALESCE(a.name, a.code)";
+    const rows = (await this.prisma.$queryRawUnsafe(
+      // COUNT(DISTINCT …): the Contact join fans out address rows whenever an
+      // address has one (or more) contacts, so a plain COUNT over-counts.
+      `SELECT a.${codeCol} AS code, ${nameSel} AS name, ST_AsGeoJSON(a.geom) AS geojson,
+              COUNT(DISTINCT ar.gnaf_pid)::int AS "addressCount",
+              COUNT(DISTINCT c."gnafPid")::int AS "contactCount",
+              (COUNT(DISTINCT ar.gnaf_pid) - COUNT(DISTINCT c."gnafPid"))::int AS "withoutContacts"
+       FROM ${table} a
+       LEFT JOIN geo.address_region ar ON ar.${regionCol} = a.${codeCol}
+       LEFT JOIN "Contact" c ON c."gnafPid" = ar.gnaf_pid AND c."tenantId" = $1
+       WHERE a.${codeCol} = $2
+       GROUP BY a.${codeCol}, a.geom`,
+      tenantId,
+      code,
+    )) as Array<Record<string, unknown>>;
+    if (rows.length === 0) throw new ApiHttpException("AREA_NOT_FOUND", "Area not found");
+    const r = rows[0];
+    return {
+      code: r.code,
+      name: r.name ?? r.code,
+      level: layer,
+      geometry: r.geojson ? JSON.parse(String(r.geojson)) : null,
+      addressCount: r.addressCount,
+      contactCount: r.contactCount,
+      withoutContacts: r.withoutContacts,
+    };
+  }
+
+  /**
+   * Union a mix of geographic sources — ASGS areas (mb/sa1-3), whole divisions
+   * (ced/sed/lga), and free-drawn polygons — into one MultiPolygon. This one query
+   * builds BOTH a campaign boundary and a turf cut. Drawn polygons are ST_MakeValid'd;
+   * ST_CollectionExtract(…, 3) keeps polygons only. Returns null if nothing resolved.
+   */
+  async unionSources(sources: BoundarySource[]): Promise<unknown | null> {
+    const areaCodes = (layer: AreaLevel) =>
+      JSON.stringify(
+        sources
+          .filter((s): s is Extract<BoundarySource, { kind: "area" }> => s.kind === "area" && s.layer === layer)
+          .map((s) => s.code),
+      );
+    const divCodes = (type: DivisionType) =>
+      JSON.stringify(
+        sources
+          .filter((s): s is Extract<BoundarySource, { kind: "division" }> => s.kind === "division" && s.type === type)
+          .map((s) => s.code),
+      );
+    const polygons = JSON.stringify(
+      sources
+        .filter((s): s is Extract<BoundarySource, { kind: "polygon" }> => s.kind === "polygon")
+        .map((s) => s.geometry),
+    );
     const rows = (await this.prisma.$queryRawUnsafe(
       `WITH parts AS (
          SELECT geom FROM geo.meshblock WHERE mb_code IN (SELECT jsonb_array_elements_text($1::jsonb))
          UNION ALL SELECT geom FROM geo.sa1 WHERE code IN (SELECT jsonb_array_elements_text($2::jsonb))
          UNION ALL SELECT geom FROM geo.sa2 WHERE code IN (SELECT jsonb_array_elements_text($3::jsonb))
          UNION ALL SELECT geom FROM geo.sa3 WHERE code IN (SELECT jsonb_array_elements_text($4::jsonb))
+         UNION ALL SELECT geom FROM geo.ced WHERE code IN (SELECT jsonb_array_elements_text($5::jsonb))
+         UNION ALL SELECT geom FROM geo.sed WHERE code IN (SELECT jsonb_array_elements_text($6::jsonb))
+         UNION ALL SELECT geom FROM geo.lga WHERE code IN (SELECT jsonb_array_elements_text($7::jsonb))
          UNION ALL
-           SELECT ST_SetSRID(ST_GeomFromGeoJSON(je.value::text), 4326)
-           FROM jsonb_array_elements($5::jsonb) AS je(value)
+           SELECT ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(je.value::text), 4326))
+           FROM jsonb_array_elements($8::jsonb) AS je(value)
        )
-       SELECT ST_AsGeoJSON(ST_Multi(ST_Union(geom))) AS geojson FROM parts`,
-      codes("mb"),
-      codes("sa1"),
-      codes("sa2"),
-      codes("sa3"),
-      JSON.stringify(polygons ?? []),
+       SELECT ST_AsGeoJSON(ST_Multi(ST_CollectionExtract(ST_Union(geom), 3))) AS geojson FROM parts`,
+      areaCodes("mb"),
+      areaCodes("sa1"),
+      areaCodes("sa2"),
+      areaCodes("sa3"),
+      divCodes("ced"),
+      divCodes("sed"),
+      divCodes("lga"),
+      polygons,
     )) as Array<{ geojson: string | null }>;
     const geojson = rows[0]?.geojson;
     return geojson ? JSON.parse(geojson) : null;
+  }
+
+  /**
+   * Union statistical areas + free-drawn polygons into a MultiPolygon (turf cut from a
+   * mixed selection). Thin back-compat wrapper over {@link unionSources}.
+   */
+  async unionAreas(
+    areas: Array<{ layer: string; code: string }>,
+    polygons: unknown[] = [],
+  ): Promise<unknown | null> {
+    return this.unionSources([
+      ...areas.map((a) => ({ kind: "area" as const, layer: a.layer as AreaLevel, code: a.code })),
+      ...(polygons ?? []).map((geometry) => ({ kind: "polygon" as const, geometry })),
+    ]);
   }
 
   /** Dataset provenance + row counts for /settings/data. */

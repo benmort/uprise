@@ -10,6 +10,9 @@ export type CampaignSummary = {
   scriptId: string | null;
   goals: Record<string, unknown> | null;
   openJoinEnabled: boolean;
+  volunteerCanSelfClaimTurf?: boolean;
+  selfClaimModes?: string[] | null;
+  hasBoundary?: boolean;
   turfCount: number;
   walkListCount: number;
   createdAt: string;
@@ -23,7 +26,27 @@ export type CampaignInput = {
   scriptId?: string | null;
   goals?: Record<string, unknown> | null;
   openJoinEnabled?: boolean;
+  volunteerCanSelfClaimTurf?: boolean;
+  selfClaimModes?: string[] | null;
 };
+
+export type BoundarySource =
+  | { kind: "division"; type: "ced" | "sed" | "lga"; code: string }
+  | { kind: "area"; layer: "mb" | "sa1" | "sa2" | "sa3"; code: string }
+  | { kind: "polygon"; geometry: unknown };
+
+export async function getCampaignBoundary(id: string) {
+  return request<{ boundary: unknown | null; sources: BoundarySource[] | null }>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/boundary`,
+  );
+}
+
+export async function setCampaignBoundary(id: string, sources: BoundarySource[]) {
+  return request<{ boundary: unknown | null; sources: BoundarySource[] }>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/boundary`,
+    { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sources }) },
+  );
+}
 
 export async function listCampaigns() {
   return request<CampaignSummary[]>("/canvass/campaigns");

@@ -150,6 +150,8 @@ export class AuthFlowsController {
       code: dto.code,
       preferredRole: dto.preferredRole,
       availabilityDays: dto.availabilityDays,
+      walkingCapability: dto.walkingCapability,
+      sessionLength: dto.sessionLength,
     });
     return this.grantResponse(res, grant);
   }
@@ -181,6 +183,8 @@ export class AuthFlowsController {
       displayName: dto.displayName,
       preferredRole: dto.preferredRole,
       availabilityDays: dto.availabilityDays,
+      walkingCapability: dto.walkingCapability,
+      sessionLength: dto.sessionLength,
     });
     return this.grantResponse(res, grant);
   }

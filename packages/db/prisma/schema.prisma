@@ -1003,6 +1003,15 @@ model CanvassCampaign {
   scriptId       String?
   goals          Json?                 // { doors, conversations, surveys, ... } pace-to-target targets
   openJoinEnabled Boolean              @default(false) // tokenless self-enrol link active for this campaign
+  // Campaign geographic boundary: a cached GeoJSON MultiPolygon built from a union of
+  // divisions (sed/ced/lga) + drawn polygons + SAs/meshblocks. `boundarySources` is the
+  // re-editable list of parts. Turf-cutting for this campaign is clipped to `boundary`.
+  boundary       Json?
+  boundarySources Json?
+  // Volunteer self-serve turf: master switch + allowed modes (subset of "area"|"draw"|
+  // "existing"; null ⇒ all modes when the switch is on).
+  volunteerCanSelfClaimTurf Boolean    @default(false)
+  selfClaimModes Json?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1019,7 +1028,10 @@ model Turf {
   tenantId String
   campaignId     String?
   name           String
-  geometry       Json         // GeoJSON Polygon / MultiPolygon
+  geometry       Json         // GeoJSON Polygon / MultiPolygon (source of truth)
+  // PostGIS mirror of `geometry`, kept in sync on every create/update, for server-side
+  // spatial ops (boundary clip, non-overlap subtract). GIST-indexed in the migration.
+  geom           Unsupported("geometry(MultiPolygon, 4326)")?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -1188,6 +1200,9 @@ model TenantMember {
   // Volunteer onboarding prefs (advisory): preferred canvasser role + usual availability.
   preferredRole    String?
   availabilityDays String[]    @default([])
+  // Activity-specific onboarding answers (advisory), e.g. doorknocker walking capability
+  // + session length. A JSON bag so new per-activity questions don't need a migration.
+  canvassPrefs     Json?
   addedBy          String?
   createdAt        DateTime    @default(now())
   tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)

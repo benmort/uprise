@@ -500,9 +500,16 @@ export class CanvassingService {
     if (rows.length === 0 || !rows[0].geojson) {
       throw new ApiHttpException("DIVISION_NOT_FOUND", "Division boundary not found");
     }
+    const clipped = await this.clipToCampaign(tenantId, input.campaignId, JSON.parse(rows[0].geojson));
+    if (!clipped) {
+      throw new ApiHttpException(
+        "OUTSIDE_BOUNDARY",
+        "The division is outside the campaign boundary or overlaps already-claimed turf",
+      );
+    }
     const turf = await this.createTurf(tenantId, {
       name: input.name || rows[0].name,
-      geometry: JSON.parse(rows[0].geojson),
+      geometry: clipped,
       campaignId: input.campaignId ?? null,
     });
     if (input.universe && input.universe !== "existing") {
@@ -525,17 +532,30 @@ export class CanvassingService {
       campaignId?: string | null;
       areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3"; code: string }>;
       polygons?: Record<string, unknown>[];
+      universe?: TurfUniverse;
     },
   ) {
-    const geometry = await this.geo.unionAreas(input.areas ?? [], input.polygons ?? []);
-    if (!geometry) {
+    const raw = await this.geo.unionAreas(input.areas ?? [], input.polygons ?? []);
+    if (!raw) {
       throw new ApiHttpException("EMPTY_SELECTION", "Select at least one area or draw a polygon");
     }
-    return this.createTurf(tenantId, {
+    // Bound to the campaign: clip to the boundary + subtract already-claimed turf.
+    const geometry = await this.clipToCampaign(tenantId, input.campaignId, raw);
+    if (!geometry) {
+      throw new ApiHttpException(
+        "OUTSIDE_BOUNDARY",
+        "The selection is outside the campaign boundary or overlaps already-claimed turf",
+      );
+    }
+    const turf = await this.createTurf(tenantId, {
       name: input.name,
       geometry,
       campaignId: input.campaignId ?? null,
     });
+    if (input.universe && input.universe !== "existing") {
+      await this.loadUniverseIntoTurf(tenantId, turf.id, { universe: input.universe });
+    }
+    return turf;
   }
 
   /**
@@ -596,7 +616,7 @@ export class CanvassingService {
   }
 
   async createTurf(tenantId: string, input: { name: string; geometry: unknown; campaignId?: string | null }) {
-    return this.prisma.turf.create({
+    const turf = await this.prisma.turf.create({
       data: {
         tenantId,
         name: input.name,
@@ -604,6 +624,191 @@ export class CanvassingService {
         campaignId: input.campaignId ?? null,
       },
     });
+    await this.syncTurfGeom(turf.id, input.geometry);
+    return turf;
+  }
+
+  /**
+   * Keep the PostGIS `geom` mirror in sync with the GeoJSON `geometry` (source of truth)
+   * so server-side spatial ops (boundary clip, non-overlap subtract) can use the GIST
+   * index. `geom` is a derived column — never fail a turf write on a bad mirror.
+   */
+  async syncTurfGeom(id: string, geometry: unknown): Promise<void> {
+    if (!geometry) return;
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE "canvass"."Turf"
+           SET "geom" = ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326)), 3))
+         WHERE "id" = $2`,
+        JSON.stringify(geometry),
+        id,
+      );
+    } catch {
+      /* geom is derived; ignore a bad mirror */
+    }
+  }
+
+  /**
+   * Bound a proposed turf geometry to a campaign: clip to the campaign boundary (if one is
+   * set) and subtract the union of already-CLAIMED (assigned) turf in the campaign, so cuts
+   * stay in-bounds and never overlap claimed turf. Returns the resulting GeoJSON, or null if
+   * nothing is left (fully outside / fully overlapping). No campaign ⇒ unchanged.
+   */
+  async clipToCampaign(
+    tenantId: string,
+    campaignId: string | null | undefined,
+    geometry: unknown,
+    subtractAssigned = true,
+    db: PrismaService | Prisma.TransactionClient = this.prisma,
+  ): Promise<unknown | null> {
+    if (!campaignId) return geometry;
+    const rows = (await db.$queryRawUnsafe(
+      `WITH cut AS (
+         SELECT ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326)) AS g
+       ),
+       camp AS (
+         SELECT CASE WHEN "boundary" IS NULL THEN NULL
+                ELSE ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON("boundary"::text), 4326)) END AS g
+         FROM "canvass"."CanvassCampaign" WHERE "id" = $2 AND "tenantId" = $3
+       ),
+       assigned AS (
+         SELECT ST_Union(t."geom") AS g
+         FROM "canvass"."Turf" t
+         JOIN "canvass"."TurfAssignment" a ON a."turfId" = t."id" AND a."status" = 'ASSIGNED'
+         WHERE t."campaignId" = $2 AND t."geom" IS NOT NULL
+       ),
+       clipped AS (
+         SELECT CASE WHEN (SELECT g FROM camp) IS NULL THEN (SELECT g FROM cut)
+                ELSE ST_Intersection((SELECT g FROM cut), (SELECT g FROM camp)) END AS g
+       ),
+       final AS (
+         SELECT CASE WHEN $4::boolean AND (SELECT g FROM assigned) IS NOT NULL
+                THEN ST_Difference((SELECT g FROM clipped), (SELECT g FROM assigned))
+                ELSE (SELECT g FROM clipped) END AS g
+       )
+       SELECT ST_AsGeoJSON(ST_Multi(ST_CollectionExtract(g, 3))) AS geojson, ST_IsEmpty(g) AS empty FROM final`,
+      JSON.stringify(geometry),
+      campaignId,
+      tenantId,
+      subtractAssigned,
+    )) as Array<{ geojson: string | null; empty: boolean }>;
+    const r = rows[0];
+    if (!r || r.empty || !r.geojson) return null;
+    return JSON.parse(r.geojson);
+  }
+
+  // ── Volunteer self-serve turf (gated by CanvassCampaign.volunteerCanSelfClaimTurf) ──
+
+  private async assertSelfClaim(tenantId: string, campaignId: string, mode?: string) {
+    const c = await this.prisma.canvassCampaign.findFirst({
+      where: { id: campaignId, tenantId },
+      select: { id: true, boundary: true, volunteerCanSelfClaimTurf: true, selfClaimModes: true },
+    });
+    if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found");
+    if (!c.volunteerCanSelfClaimTurf) {
+      throw new ApiHttpException("SELF_CLAIM_DISABLED", "Volunteer self-serve turf is off for this campaign");
+    }
+    const modes = Array.isArray(c.selfClaimModes) ? (c.selfClaimModes as string[]) : null;
+    if (mode && modes && modes.length > 0 && !modes.includes(mode)) {
+      throw new ApiHttpException("SELF_CLAIM_DISABLED", `Self-serve "${mode}" is off for this campaign`);
+    }
+    return c;
+  }
+
+  /** What a volunteer can self-claim in a campaign: the boundary (for the map), the allowed
+   *  modes, and the ready-made unassigned turfs (mode C). */
+  async selfServeAvailable(tenantId: string, campaignId: string) {
+    const c = await this.assertSelfClaim(tenantId, campaignId);
+    const turfs = await this.prisma.turf.findMany({
+      where: { tenantId, campaignId, assignments: { none: { status: TurfAssignmentStatus.ASSIGNED } } },
+      select: { id: true, name: true, geometry: true, _count: { select: { contacts: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    const modes =
+      Array.isArray(c.selfClaimModes) && (c.selfClaimModes as string[]).length
+        ? (c.selfClaimModes as string[])
+        : ["area", "draw", "existing"];
+    return {
+      boundary: c.boundary,
+      modes,
+      readyTurfs: turfs.map((t) => ({
+        id: t.id,
+        name: t.name,
+        geometry: t.geometry,
+        contactCount: t._count.contacts,
+      })),
+    };
+  }
+
+  /** Mode A: claim unclaimed ASGS areas within the campaign boundary. */
+  async claimAreaSelfServe(
+    tenantId: string,
+    campaignId: string,
+    volunteerId: string,
+    areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3"; code: string }>,
+  ) {
+    await this.assertSelfClaim(tenantId, campaignId, "area");
+    const raw = await this.geo.unionAreas(areas ?? [], []);
+    if (!raw) throw new ApiHttpException("EMPTY_SELECTION", "Pick at least one area");
+    return this.claimTurfInCampaign(tenantId, campaignId, volunteerId, raw);
+  }
+
+  /** Mode B: claim a self-drawn polygon within the campaign boundary. */
+  async claimDrawSelfServe(tenantId: string, campaignId: string, volunteerId: string, polygon: unknown) {
+    await this.assertSelfClaim(tenantId, campaignId, "draw");
+    const raw = await this.geo.unionSources([{ kind: "polygon", geometry: polygon }]);
+    if (!raw) throw new ApiHttpException("INVALID_POLYGON", "Draw a valid area");
+    return this.claimTurfInCampaign(tenantId, campaignId, volunteerId, raw);
+  }
+
+  /** Mode C: claim a ready-made unassigned organiser turf. */
+  async claimExistingTurfSelfServe(tenantId: string, campaignId: string, volunteerId: string, turfId: string) {
+    await this.assertSelfClaim(tenantId, campaignId, "existing");
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId, campaignId } });
+    if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found in this campaign");
+    return this.assignTurf(tenantId, turfId, volunteerId);
+  }
+
+  /**
+   * Create + claim a turf inside a campaign atomically: a per-campaign advisory lock
+   * serialises concurrent claims (so two volunteers can't carve overlapping turf); inside
+   * it we clip to the boundary + subtract already-claimed turf, create, and assign. Cold
+   * doors are loaded after the (short) lock txn.
+   */
+  private async claimTurfInCampaign(
+    tenantId: string,
+    campaignId: string,
+    volunteerId: string,
+    rawGeometry: unknown,
+  ) {
+    const turf = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, campaignId);
+      const clipped = await this.clipToCampaign(tenantId, campaignId, rawGeometry, true, tx);
+      if (!clipped) {
+        throw new ApiHttpException(
+          "AREA_ALREADY_CLAIMED",
+          "That area is outside the campaign boundary or already claimed",
+        );
+      }
+      const name = `My turf · ${new Date().toLocaleDateString("en-AU")}`;
+      const created = await tx.turf.create({
+        data: { tenantId, name, geometry: clipped as Prisma.InputJsonValue, campaignId },
+      });
+      await tx.$executeRawUnsafe(
+        `UPDATE "canvass"."Turf"
+           SET "geom" = ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON($1), 4326)), 3))
+         WHERE "id" = $2`,
+        JSON.stringify(clipped),
+        created.id,
+      );
+      await tx.turfAssignment.create({
+        data: { turfId: created.id, volunteerId, status: TurfAssignmentStatus.ASSIGNED },
+      });
+      return created;
+    });
+    await this.loadUniverseIntoTurf(tenantId, turf.id, { universe: "hybrid" }).catch(() => undefined);
+    return turf;
   }
 
   async createWalkList(

@@ -111,6 +111,38 @@ export async function createDoorContact(input: {
   );
 }
 
+// ── Volunteer self-serve turf (gated per-campaign) ───────────────────
+export type SelfServeAvailable = {
+  boundary: unknown | null;
+  modes: string[];
+  readyTurfs: Array<{ id: string; name: string; geometry: unknown; contactCount: number }>;
+};
+
+export async function getSelfServeAvailable(campaignId: string) {
+  return request<SelfServeAvailable>(`/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/available`);
+}
+
+export async function claimArea(campaignId: string, areas: Array<{ layer: string; code: string }>) {
+  return request<{ id: string; name: string }>(
+    `/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/claim-area`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ areas }) },
+  );
+}
+
+export async function claimDraw(campaignId: string, polygon: unknown) {
+  return request<{ id: string; name: string }>(
+    `/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/claim-draw`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ polygon }) },
+  );
+}
+
+export async function claimExistingTurf(campaignId: string, turfId: string) {
+  return request<{ id: string }>(
+    `/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/claim-turf`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ turfId }) },
+  );
+}
+
 export async function getPushConfig() {
   return request<{ enabled: boolean; publicKey: string | null }>("/push/config");
 }

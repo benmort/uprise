@@ -8,6 +8,7 @@ import {
 } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
+import { GeoService, type BoundarySource } from "../geo/geo.service";
 
 // Disposition codes where the volunteer reached a human (see engagement-defaults).
 const CONTACT_CODES = ["spoke_to_target", "spoke_to_other"];
@@ -25,13 +26,18 @@ export type CreateCampaignInput = {
   scriptId?: string | null;
   goals?: Record<string, unknown> | null;
   openJoinEnabled?: boolean;
+  volunteerCanSelfClaimTurf?: boolean;
+  selfClaimModes?: string[] | null;
 };
 
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
 
 @Injectable()
 export class CampaignsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly geo: GeoService,
+  ) {}
 
   async list(tenantId: string) {
     const campaigns = await this.prisma.canvassCampaign.findMany({
@@ -47,6 +53,9 @@ export class CampaignsService {
       scriptId: c.scriptId,
       goals: c.goals,
       openJoinEnabled: c.openJoinEnabled,
+      volunteerCanSelfClaimTurf: c.volunteerCanSelfClaimTurf,
+      selfClaimModes: c.selfClaimModes,
+      hasBoundary: c.boundary != null,
       turfCount: c._count.turfs,
       walkListCount: c._count.walkLists,
       createdAt: c.createdAt,
@@ -70,6 +79,9 @@ export class CampaignsService {
       scriptId: campaign.scriptId,
       goals: campaign.goals,
       openJoinEnabled: campaign.openJoinEnabled,
+      volunteerCanSelfClaimTurf: campaign.volunteerCanSelfClaimTurf,
+      selfClaimModes: campaign.selfClaimModes,
+      hasBoundary: campaign.boundary != null,
       turfCount: campaign._count.turfs,
       walkListCount: campaign._count.walkLists,
       createdAt: campaign.createdAt,
@@ -261,6 +273,8 @@ export class CampaignsService {
         scriptId: input.scriptId ?? null,
         goals: (input.goals ?? Prisma.DbNull) as Prisma.InputJsonValue,
         openJoinEnabled: input.openJoinEnabled ?? false,
+        volunteerCanSelfClaimTurf: input.volunteerCanSelfClaimTurf ?? false,
+        selfClaimModes: (input.selfClaimModes ?? Prisma.DbNull) as Prisma.InputJsonValue,
       },
     });
   }
@@ -282,6 +296,37 @@ export class CampaignsService {
       data.goals = (input.goals ?? Prisma.DbNull) as Prisma.InputJsonValue;
     }
     if (input.openJoinEnabled !== undefined) data.openJoinEnabled = input.openJoinEnabled;
+    if (input.volunteerCanSelfClaimTurf !== undefined) {
+      data.volunteerCanSelfClaimTurf = input.volunteerCanSelfClaimTurf;
+    }
+    if (input.selfClaimModes !== undefined) {
+      data.selfClaimModes = (input.selfClaimModes ?? Prisma.DbNull) as Prisma.InputJsonValue;
+    }
     return this.prisma.canvassCampaign.update({ where: { id }, data });
+  }
+
+  /** Campaign boundary (cached GeoJSON) + its re-editable source list. */
+  async getBoundary(tenantId: string, id: string) {
+    const c = await this.prisma.canvassCampaign.findFirst({
+      where: { id, tenantId },
+      select: { boundary: true, boundarySources: true },
+    });
+    if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
+    return { boundary: c.boundary, sources: c.boundarySources };
+  }
+
+  /** Rebuild the campaign boundary from a union of sources (divisions/areas/polygons) + cache it. */
+  async setBoundary(tenantId: string, id: string, sources: BoundarySource[]) {
+    const c = await this.prisma.canvassCampaign.findFirst({ where: { id, tenantId }, select: { id: true } });
+    if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
+    const boundary = sources.length ? await this.geo.unionSources(sources) : null;
+    await this.prisma.canvassCampaign.update({
+      where: { id },
+      data: {
+        boundary: (boundary ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        boundarySources: (sources.length ? (sources as unknown) : Prisma.DbNull) as Prisma.InputJsonValue,
+      },
+    });
+    return { boundary, sources };
   }
 }

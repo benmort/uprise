@@ -14,6 +14,7 @@ import {
 import { getTenantBrand, getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { MapThumbnail } from "../components/map-thumbnail";
+import { estimateWalk, formatMinutes } from "../lib/walk-estimate";
 import { useOnlineStatus } from "../hooks/use-online-status";
 
 /** Outer ring [lng,lat][] from a GeoJSON Polygon/MultiPolygon for the thumbnail. */
@@ -141,6 +142,12 @@ export function Assignments() {
           {assignments.map((a, i) => {
             const items = a.walkLists.flatMap((wl) => wl.items);
             const onList = items.length;
+            const walkMin = estimateWalk(
+              items.map((it) => {
+                const c = it.contact as Record<string, unknown>;
+                return { id: it.id, lat: Number(c.lat), lng: Number(c.lng) };
+              }),
+            ).minutes;
             const synced = online && i === 0; // per-turf offline-cache state lands later
             return (
               <div key={a.turfId} className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
@@ -160,7 +167,7 @@ export function Assignments() {
                   <div>
                     <h2 className="text-xl font-extrabold text-foreground">{a.turf.name}</h2>
                     <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-                      {onList} doors · {onList} on your walk list
+                      {onList} doors · ~{formatMinutes(walkMin)} walk
                     </p>
                   </div>
                   <div className="flex gap-3">
@@ -184,6 +191,13 @@ export function Assignments() {
               </div>
             );
           })}
+          {assignments[0]?.turf.campaignId ? (
+            <Link href={`/field/get-turf?campaignId=${assignments[0].turf.campaignId}`} className="block">
+              <Button variant="outline" className="h-12 w-full text-base">
+                Get more turf
+              </Button>
+            </Link>
+          ) : null}
         </div>
       )}
     </div>

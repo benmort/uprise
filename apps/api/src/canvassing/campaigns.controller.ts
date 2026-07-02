@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AppUserRole } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { CampaignsService } from "./campaigns.service";
-import { CreateCampaignDto, UpdateCampaignDto } from "./dto/campaigns.dto";
+import { CreateCampaignDto, SetBoundaryDto, UpdateCampaignDto } from "./dto/campaigns.dto";
 
 @Controller("canvass/campaigns")
 @UseGuards(RolesGuard)
@@ -72,5 +72,19 @@ export class CampaignsController {
   async update(@Param("id") id: string, @Body() dto: UpdateCampaignDto) {
     const org = await this.ensureOrganization();
     return this.campaigns.update(org.id, id, dto);
+  }
+
+  @Get(":id/boundary")
+  @Roles(AppUserRole.ORGANISER)
+  async getBoundary(@Param("id") id: string) {
+    const org = await this.ensureOrganization();
+    return this.campaigns.getBoundary(org.id, id);
+  }
+
+  @Put(":id/boundary")
+  @Roles(AppUserRole.ORGANISER)
+  async setBoundary(@Param("id") id: string, @Body() dto: SetBoundaryDto) {
+    const org = await this.ensureOrganization();
+    return this.campaigns.setBoundary(org.id, id, dto.sources);
   }
 }

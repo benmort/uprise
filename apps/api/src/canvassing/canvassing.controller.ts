@@ -7,19 +7,26 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UnauthorizedException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ConfigService } from "@nestjs/config";
+import type { Request } from "express";
 import { AppUserRole, WalkListItemListType } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import type { AuthUser } from "../auth/auth-user";
 import { CanvassingService } from "./canvassing.service";
 import {
   AssignTurfDto,
+  ClaimAreaDto,
+  ClaimDrawDto,
+  ClaimTurfDto,
   CreateVolunteerDto,
   CreateDoorContactDto,
   CreateShiftDto,
@@ -212,6 +219,49 @@ export class CanvassingController {
   @UseInterceptors(FileInterceptor("file"))
   async uploadDoorPhoto(@UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string }) {
     return this.canvassing.uploadDoorPhoto(file);
+  }
+
+  // ── Volunteer self-serve turf (gated per-campaign; volunteer id from the session) ──
+  @Get("campaigns/:campaignId/self-serve/available")
+  async selfServeAvailable(@Param("campaignId") campaignId: string) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.selfServeAvailable(org.id, campaignId);
+  }
+
+  @Post("campaigns/:campaignId/self-serve/claim-area")
+  async selfServeClaimArea(
+    @Param("campaignId") campaignId: string,
+    @Body() dto: ClaimAreaDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.claimAreaSelfServe(org.id, campaignId, this.requireUserId(req), dto.areas);
+  }
+
+  @Post("campaigns/:campaignId/self-serve/claim-draw")
+  async selfServeClaimDraw(
+    @Param("campaignId") campaignId: string,
+    @Body() dto: ClaimDrawDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.claimDrawSelfServe(org.id, campaignId, this.requireUserId(req), dto.polygon);
+  }
+
+  @Post("campaigns/:campaignId/self-serve/claim-turf")
+  async selfServeClaimTurf(
+    @Param("campaignId") campaignId: string,
+    @Body() dto: ClaimTurfDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.claimExistingTurfSelfServe(org.id, campaignId, this.requireUserId(req), dto.turfId);
+  }
+
+  private requireUserId(req: { user?: AuthUser }): string {
+    const id = req.user?.id;
+    if (!id) throw new UnauthorizedException("Sign in to claim turf");
+    return id;
   }
 
   // ── Shifts (organiser) ───────────────────────────────────────

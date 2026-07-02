@@ -4,9 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronLeft,
   Flag,
+  Footprints,
   Home,
   MessageSquare,
   Megaphone,
+  Mountain,
+  Route,
+  Accessibility,
   Search,
   Shield,
   CheckCircle2,
@@ -30,7 +34,7 @@ import {
   type RoleOption,
   type TurnstileHandle,
 } from "@uprise/ui";
-import { auth, VOLUNTEER_PREFERRED_ROLES } from "@uprise/api-client";
+import { auth, VOLUNTEER_PREFERRED_ROLES, type WalkingCapability, type SessionLength } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 import { captureAttribution } from "@/lib/attribution";
 
@@ -41,6 +45,22 @@ const ROLE_OPTIONS: RoleOption[] = [
   { value: "scrutineer", title: "Scrutineer", subtitle: "Observe the count", icon: Search },
 ];
 const ROLE_TITLE = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.title]));
+
+// Doorknocker-only follow-up: how much walking suits them + preferred session length.
+// Values match WALKING_CAPABILITIES / SESSION_LENGTHS in @uprise/contracts.
+const WALKING_OPTIONS: RoleOption[] = [
+  { value: "short", title: "Short & flat", subtitle: "A few nearby streets", icon: Footprints },
+  { value: "moderate", title: "A good walk", subtitle: "A suburb's worth is fine", icon: Route },
+  { value: "long", title: "Long routes", subtitle: "Hills and distance are no problem", icon: Mountain },
+  { value: "minimal", title: "Minimal walking", subtitle: "I use mobility aids, or prefer to drive between stops", icon: Accessibility },
+];
+const SESSION_OPTIONS: { value: SessionLength; label: string }[] = [
+  { value: "short", label: "Up to an hour" },
+  { value: "standard", label: "1–2 hours" },
+  { value: "long", label: "2–4 hours" },
+  { value: "flexible", label: "However long's needed" },
+];
+
 const isDev = process.env.NODE_ENV !== "production";
 
 /** National AU digits → E.164 (drop a leading 0, prefix +61). */
@@ -49,14 +69,14 @@ function toE164(national: string): string {
   return "+61" + (d.startsWith("0") ? d.slice(1) : d);
 }
 
-type Step = "phone" | "code" | "name" | "role" | "conduct" | "done";
-const FLOW: Step[] = ["phone", "code", "name", "role", "conduct"];
+type Step = "phone" | "code" | "name" | "role" | "doorknock" | "conduct" | "done";
 
 /**
- * Five-step volunteer onboarding wizard (phone → OTP → name → role/days → conduct)
+ * Volunteer onboarding wizard (phone → OTP → name → role/days → [doorknock] → conduct)
  * that turns an invite OR an open campaign into a VOLUNTEER membership + session.
- * Exactly one of `token` (organiser invite) / `campaignId` (tokenless open-join) is
- * set; the phone-send + finalise calls branch on which. Reuses completeAuth either way.
+ * Doorknockers get an extra step capturing walking capability + session length (stored
+ * as advisory canvassPrefs). Exactly one of `token` (organiser invite) / `campaignId`
+ * (tokenless open-join) is set; the phone-send + finalise calls branch on which.
  */
 export function VolunteerOnboardWizard({
   token,
@@ -81,13 +101,20 @@ export function VolunteerOnboardWizard({
   const [last, setLast] = useState("");
   const [role, setRole] = useState<string | null>(null);
   const [days, setDays] = useState<string[]>([]);
+  const [walking, setWalking] = useState<WalkingCapability | null>(null);
+  const [sessionLen, setSessionLen] = useState<SessionLength | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
   const captchaRef = useRef<TurnstileHandle>(null);
 
-  const stepIndex = FLOW.indexOf(step);
+  // Doorknockers get an extra step (walking capability + session length) after "role".
+  const flow = useMemo<Step[]>(
+    () => ["phone", "code", "name", "role", ...(role === "doorknocker" ? (["doorknock"] as Step[]) : []), "conduct"],
+    [role],
+  );
+  const stepIndex = flow.indexOf(step);
   const e164 = useMemo(() => toE164(phone), [phone]);
 
   const back = () => {
@@ -96,7 +123,7 @@ export function VolunteerOnboardWizard({
       onExit();
       return;
     }
-    setStep(FLOW[stepIndex - 1]);
+    setStep(flow[stepIndex - 1]);
   };
 
   // Resend countdown tick.
@@ -157,6 +184,11 @@ export function VolunteerOnboardWizard({
     setError(null);
     const displayName = [first.trim(), last.trim()].filter(Boolean).join(" ") || first.trim();
     const preferredRole = (role as (typeof VOLUNTEER_PREFERRED_ROLES)[number]) ?? undefined;
+    // Doorknocker-only prefs — omitted for other roles even if partly filled.
+    const doorknockPrefs =
+      role === "doorknocker"
+        ? { walkingCapability: walking ?? undefined, sessionLength: sessionLen ?? undefined }
+        : {};
     const res = token
       ? await auth.acceptInvite({
           token,
@@ -165,6 +197,7 @@ export function VolunteerOnboardWizard({
           code: code || undefined,
           preferredRole,
           availabilityDays: days,
+          ...doorknockPrefs,
           ...captureAttribution(),
         })
       : await auth.openJoinAccept({
@@ -174,6 +207,7 @@ export function VolunteerOnboardWizard({
           code: code || undefined,
           preferredRole,
           availabilityDays: days,
+          ...doorknockPrefs,
         });
     setBusy(false);
     if (!res.ok) {
@@ -233,7 +267,7 @@ export function VolunteerOnboardWizard({
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <StepProgress current={stepIndex + 1} total={FLOW.length} className="flex-1" />
+        <StepProgress current={stepIndex + 1} total={flow.length} className="flex-1" />
       </div>
 
       {/* Step 1 — phone */}
@@ -338,7 +372,60 @@ export function VolunteerOnboardWizard({
           </p>
           <DayChips className="mt-3" value={days} onChange={setDays} />
           <div className="flex-1" />
-          <Button className="mt-6 h-14 w-full text-base" disabled={!role} onClick={() => setStep("conduct")}>
+          <Button
+            className="mt-6 h-14 w-full text-base"
+            disabled={!role}
+            onClick={() => setStep(role === "doorknocker" ? "doorknock" : "conduct")}
+          >
+            Continue
+          </Button>
+        </div>
+      ) : null}
+
+      {/* Step 4b — doorknocker details (walking capability + session length) */}
+      {step === "doorknock" ? (
+        <div className="flex flex-1 flex-col">
+          <h1 className="text-3xl font-extrabold text-foreground">A bit about your knocking</h1>
+          <p className="mt-2 text-muted-foreground">
+            This helps your organiser match you to turf that suits you.
+          </p>
+          <p className="mt-7 text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
+            How much walking suits you?
+          </p>
+          <RoleSelectCards
+            className="mt-3"
+            options={WALKING_OPTIONS}
+            value={walking}
+            onChange={(v) => setWalking(v as WalkingCapability)}
+          />
+          <p className="mt-7 text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
+            How long do you like to knock for?
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2.5">
+            {SESSION_OPTIONS.map((o) => {
+              const selected = sessionLen === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setSessionLen(o.value)}
+                  className={`rounded-2xl border px-4 py-3 text-left text-sm font-bold transition-colors ${
+                    selected
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-border text-foreground hover:border-primary/40"
+                  }`}
+                >
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex-1" />
+          <Button
+            className="mt-6 h-14 w-full text-base"
+            disabled={!walking || !sessionLen}
+            onClick={() => setStep("conduct")}
+          >
             Continue
           </Button>
         </div>

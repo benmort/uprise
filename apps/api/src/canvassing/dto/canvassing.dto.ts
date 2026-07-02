@@ -225,6 +225,28 @@ export class CreateTurfFromAreasDto {
   @IsArray()
   @IsObject({ each: true })
   polygons?: Record<string, unknown>[];
+
+  @IsOptional()
+  @IsIn(["existing", "none", "hybrid"])
+  universe?: "existing" | "none" | "hybrid";
+}
+
+// ── Volunteer self-serve turf ────────────────────────────────────────
+export class ClaimAreaDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TurfAreaDto)
+  areas!: TurfAreaDto[];
+}
+
+export class ClaimDrawDto {
+  @IsObject()
+  polygon!: Record<string, unknown>;
+}
+
+export class ClaimTurfDto {
+  @IsString()
+  turfId!: string;
 }
 
 export class LoadUniverseDto {

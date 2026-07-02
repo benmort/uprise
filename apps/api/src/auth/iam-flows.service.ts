@@ -42,6 +42,17 @@ function phonePlaceholderEmail(mobile: string): string {
   return `${mobile.replace(/\D/g, "")}@phone.uprise.invalid`;
 }
 
+/** Assemble advisory doorknocker onboarding prefs into a JSON bag (undefined if none set). */
+function buildCanvassPrefs(input: {
+  walkingCapability?: string;
+  sessionLength?: string;
+}): Prisma.InputJsonValue | undefined {
+  const prefs: Record<string, string> = {};
+  if (input.walkingCapability) prefs.walkingCapability = input.walkingCapability;
+  if (input.sessionLength) prefs.sessionLength = input.sessionLength;
+  return Object.keys(prefs).length ? prefs : undefined;
+}
+
 export interface Membership {
   tenantId: string;
   tenantName: string;
@@ -164,6 +175,16 @@ export class IamFlowsService {
           }
         : null,
     }));
+  }
+
+  /** Minimal {id,name,slug} for a live tenant — used to label a super-admin's active
+   *  "acting as" tenant on /auth/check when it isn't one of their memberships. */
+  async tenantSummary(tenantId: string): Promise<{ id: string; name: string; slug: string } | null> {
+    const t = await this.prisma.tenant.findFirst({
+      where: { id: tenantId, deletedAt: null },
+      select: { id: true, name: true, slug: true },
+    });
+    return t ?? null;
   }
 
   /**
@@ -744,6 +765,8 @@ export class IamFlowsService {
       code?: string;
       preferredRole?: string;
       availabilityDays?: string[];
+      walkingCapability?: string;
+      sessionLength?: string;
     },
   ): Promise<SessionGrant> {
     const invite = await this.loadValidInvite(token);
@@ -812,6 +835,7 @@ export class IamFlowsService {
         addedBy: invite.invitedBy,
         preferredRole: input.preferredRole,
         availabilityDays: input.availabilityDays,
+        canvassPrefs: buildCanvassPrefs(input),
       });
       await tx.tenantInvitation.update({ where: { id: invite.id }, data: { status: "accepted" } });
       // Emit the events the invite path was previously silent on (WS3).
@@ -877,6 +901,7 @@ export class IamFlowsService {
       // Volunteer onboarding prefs — set on a NEW membership only (advisory).
       preferredRole?: string | null;
       availabilityDays?: string[];
+      canvassPrefs?: Prisma.InputJsonValue;
     },
   ): Promise<void> {
     // Plan limit: only a genuinely new seat counts (an existing member re-runs as a
@@ -896,6 +921,7 @@ export class IamFlowsService {
         addedBy: args.addedBy ?? null,
         preferredRole: args.preferredRole ?? null,
         availabilityDays: args.availabilityDays ?? [],
+        ...(args.canvassPrefs !== undefined ? { canvassPrefs: args.canvassPrefs } : {}),
       },
       update: {},
     });
@@ -975,6 +1001,8 @@ export class IamFlowsService {
       displayName?: string;
       preferredRole?: string;
       availabilityDays?: string[];
+      walkingCapability?: string;
+      sessionLength?: string;
     },
   ): Promise<SessionGrant> {
     const campaign = await this.loadOpenCampaign(campaignId);
@@ -1007,6 +1035,7 @@ export class IamFlowsService {
         role: AppUserRole.VOLUNTEER,
         preferredRole: input.preferredRole,
         availabilityDays: input.availabilityDays,
+        canvassPrefs: buildCanvassPrefs(input),
       });
       if (!existing) {
         await this.outbox.append(tx, {

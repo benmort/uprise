@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronLeft, ChevronUp, DoorOpen, DownloadCloud, Loader2, Navigation, Spline } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DoorOpen, DownloadCloud, Loader2, Navigation, Spline } from "lucide-react";
 import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
 import { getCanvassAssignments, type CanvassAssignment } from "../api";
 import { getVolunteerId } from "../lib/volunteer";
 import { optimiseRoute, type Stop } from "../lib/route";
+import { estimateWalk, trimToBudget, formatMinutes } from "../lib/walk-estimate";
 import { formatDistance, formatDuration, type LatLng } from "../lib/directions";
 import { useLocalStorage } from "../hooks/use-local-storage";
 import { useGeolocation } from "../hooks/use-geolocation";
@@ -105,6 +106,17 @@ export function WalkView({
   const nextStop = stops.find((s) => s.status === "PENDING");
   const doneCount = stops.filter((s) => s.status !== "PENDING").length;
 
+  // Walk-time estimate for the turf + an optional "how long can you walk" budget that
+  // trims the pending stops to those that fit (client-side view trim, offline).
+  const walk = useMemo(() => estimateWalk(stops as Stop[]), [stops]);
+  const pending = useMemo(() => stops.filter((s) => s.status === "PENDING"), [stops]);
+  const [budgetMin, setBudgetMin] = useState<number | "">("");
+  const fitIds = useMemo(() => {
+    if (typeof budgetMin !== "number" || budgetMin <= 0) return null;
+    const { fit } = trimToBudget(pending as Stop[], budgetMin, fix ? { start: { lat: fix.lat, lng: fix.lng } } : {});
+    return new Set(fit.map((s) => s.id));
+  }, [budgetMin, pending, fix]);
+
   // Walking turn-by-turn directions to the next stop. Origin is the canvasser's
   // live GPS; in the organiser preview (no GPS) we fall back to the first stop so
   // the same route line + steps still render. Network-only (offline → no route).
@@ -140,7 +152,7 @@ export function WalkView({
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-extrabold">{assignment.turf.name}</h1>
           <p className="text-xs text-muted-foreground tabular-nums">
-            {doneCount} of {stops.length} stops done
+            {doneCount} of {stops.length} stops done · ~{formatMinutes(walk.minutes)}
           </p>
         </div>
         <WalkModeToggle value={mode} onChange={setMode} />
@@ -231,15 +243,46 @@ export function WalkView({
             <Spline className="h-4 w-4" />
             Route-optimised · shortest path
           </p>
+          {!readOnly ? (
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-surface/60 p-2.5 text-sm">
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="text-muted-foreground">I can walk for</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={5}
+                step={5}
+                value={budgetMin}
+                onChange={(e) => setBudgetMin(e.target.value ? Number(e.target.value) : "")}
+                placeholder={String(walk.minutes)}
+                className="w-16 rounded-md border border-border bg-transparent px-2 py-1 tabular-nums text-foreground"
+              />
+              <span className="text-muted-foreground">min</span>
+              {fitIds ? (
+                <button
+                  type="button"
+                  onClick={() => setBudgetMin("")}
+                  className="ml-auto text-xs font-semibold text-primary"
+                >
+                  {fitIds.size} of {pending.length} fit — clear
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {!nextStop ? (
             <div className="rounded-xl border border-dashed border-border bg-surface/60 p-4 text-center text-sm text-muted-foreground">
               All stops done. Nice work.
             </div>
           ) : null}
           <div className="space-y-3">
-            {stops.map((s) => (
-              <WalkStopCard key={s.id} stop={s} isNext={s.id === nextStop?.id} onOpen={() => openDoor(s.id)} />
-            ))}
+            {stops.map((s) => {
+              const beyond = fitIds !== null && s.status === "PENDING" && !fitIds.has(s.id);
+              return (
+                <div key={s.id} className={cn(beyond && "opacity-40")}>
+                  <WalkStopCard stop={s} isNext={s.id === nextStop?.id} onOpen={() => openDoor(s.id)} />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

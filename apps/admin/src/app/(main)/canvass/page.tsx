@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, Pencil, Plus, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, MapPinned, Pencil, Plus, Target, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
@@ -43,7 +43,7 @@ export default function CanvassPage() {
   // Campaign create/edit dialog.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CampaignSummary | null>(null);
-  const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, doors: "", conversations: "", openJoin: false });
+  const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, doors: "", conversations: "", openJoin: false, selfClaim: false });
 
   // Load the campaign list once, default to the first.
   useEffect(() => {
@@ -86,7 +86,7 @@ export default function CanvassPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", status: "ACTIVE", doors: "", conversations: "", openJoin: false });
+    setForm({ name: "", status: "ACTIVE", doors: "", conversations: "", openJoin: false, selfClaim: false });
     setDialogOpen(true);
   };
 
@@ -101,6 +101,7 @@ export default function CanvassPage() {
       doors: goals.doors != null ? String(goals.doors) : "",
       conversations: goals.conversations != null ? String(goals.conversations) : "",
       openJoin: c.openJoinEnabled,
+      selfClaim: c.volunteerCanSelfClaimTurf ?? false,
     });
     setDialogOpen(true);
   };
@@ -116,8 +117,8 @@ export default function CanvassPage() {
         : undefined;
     setCreating(true);
     const res = editing
-      ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin })
-      : await createCampaign({ name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin });
+      ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim })
+      : await createCampaign({ name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim });
     setCreating(false);
     if (!res.ok) {
       showToast({ tone: "error", title: editing ? "Couldn't update" : "Couldn't create campaign", description: res.error });
@@ -371,6 +372,35 @@ export default function CanvassPage() {
               Save to activate. Anyone with this link can join as a canvasser, and each join uses a team seat –
               share carefully.
             </p>
+          </Field>
+        ) : null}
+        {editing ? (
+          <Field label="Volunteer self-serve turf" htmlFor="camp-self-claim">
+            <label className="flex items-start gap-2.5 text-sm">
+              <input
+                id="camp-self-claim"
+                type="checkbox"
+                checked={form.selfClaim}
+                onChange={(e) => setForm((f) => ({ ...f, selfClaim: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 shrink-0"
+              />
+              <span className="text-muted-foreground">
+                Let volunteers claim or cut their own turf – within the campaign
+                <span className="font-medium text-foreground"> boundary</span> – without waiting for an
+                organiser. Set a boundary first.
+              </span>
+            </label>
+          </Field>
+        ) : null}
+        {editing ? (
+          <Field label="Campaign boundary" htmlFor="camp-boundary">
+            <Link
+              href={`/canvass/${editing.id}/boundary`}
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-variant"
+            >
+              <MapPinned className="h-4 w-4" />
+              {editing.hasBoundary ? "Edit boundary" : "Set boundary"}
+            </Link>
           </Field>
         ) : null}
         <div className="grid grid-cols-2 gap-3">

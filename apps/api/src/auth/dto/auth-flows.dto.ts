@@ -8,6 +8,10 @@ export const VOLUNTEER_PREFERRED_ROLES = [
   "scrutineer",
 ] as const;
 
+/** Doorknocker onboarding prefs (advisory), assembled into TenantMember.canvassPrefs. */
+export const WALKING_CAPABILITIES = ["short", "moderate", "long", "minimal"] as const;
+export const SESSION_LENGTHS = ["short", "standard", "long", "flexible"] as const;
+
 export class EmailDto {
   @IsEmail()
   @MaxLength(200)
@@ -66,6 +70,9 @@ export class AcceptInviteDto {
   @IsOptional() @IsString() @MaxLength(12) code?: string;
   @IsOptional() @IsIn(VOLUNTEER_PREFERRED_ROLES) preferredRole?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(7) @IsString({ each: true }) availabilityDays?: string[];
+  // Doorknocker-only prefs (advisory) — assembled into TenantMember.canvassPrefs.
+  @IsOptional() @IsIn(WALKING_CAPABILITIES) walkingCapability?: string;
+  @IsOptional() @IsIn(SESSION_LENGTHS) sessionLength?: string;
 }
 
 // Tokenless open-join (per-campaign): same wizard, no invite token – campaignId is
@@ -82,6 +89,9 @@ export class OpenJoinAcceptDto {
   @IsOptional() @IsString() @MaxLength(12) code?: string;
   @IsOptional() @IsIn(VOLUNTEER_PREFERRED_ROLES) preferredRole?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(7) @IsString({ each: true }) availabilityDays?: string[];
+  // Doorknocker-only prefs (advisory) — assembled into TenantMember.canvassPrefs.
+  @IsOptional() @IsIn(WALKING_CAPABILITIES) walkingCapability?: string;
+  @IsOptional() @IsIn(SESSION_LENGTHS) sessionLength?: string;
 }
 
 export class SelectTenantDto {
