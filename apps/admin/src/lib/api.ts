@@ -132,6 +132,7 @@ export type FeatureFlagsResponse = {
   FEATURE_BULLMQ_BLAST_ENABLED: boolean;
   FEATURE_WHATSAPP_ENABLED: boolean;
   FEATURE_TENANT_TELEPHONY_ENABLED: boolean;
+  FEATURE_TENANT_EMAIL_ENABLED: boolean;
   BLAST_DRY_RUN: boolean;
 };
 

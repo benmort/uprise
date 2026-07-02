@@ -25,6 +25,7 @@ import type {
   OrganisationAddressFormValues,
 } from './types';
 import { TelephonyStatusCard } from '@/components/telephony/telephony-status-card';
+import { EmailIdentityCard } from '@/components/email/email-identity-card';
 import { validateCredentialsForm, type CredentialsFormErrors } from './validation/credentials-validation';
 import { validateTenantForm, type TenantFormErrors } from './validation/tenant-validation';
 import { validateContactsForm, type ContactsFormErrors } from './validation/contacts-validation';
@@ -221,10 +222,11 @@ export default function TenantSettingsPage() {
             </div>
           </form>
 
-          {/* Read-only telephony provisioning status (renders only when the
-              tenant has numbers/runs and the feature flag is on). */}
-          <div className="mt-6">
+          {/* Read-only channel provisioning status (each renders only when the
+              tenant has history and its feature flag is on). */}
+          <div className="mt-6 space-y-6">
             <TelephonyStatusCard />
+            <EmailIdentityCard />
           </div>
         </div>
       </section>

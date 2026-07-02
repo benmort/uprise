@@ -1373,6 +1373,12 @@ model Email {
   clickedAt         DateTime?   // first-write-wins, NOT a status
   bounceReason      String?
   errorMessage      String?
+  // Sender provenance (per-tenant identities): stamped at send time so webhook
+  // signature-key resolution is by the account that ACTUALLY sent this email,
+  // never the tenant's current account. Null = platform env sender.
+  emailAccountId    String?
+  senderIdentityId  String?
+  fromEmail         String?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -1392,6 +1398,144 @@ model EmailTemplate {
   updatedAt DateTime @updatedAt
 
   @@unique([tenantId, key])
+  @@schema("email")
+}
+
+// ── Email: per-tenant sender identities (SendGrid subusers + domain auth) ───
+// Mirrors the telephony models: EmailAccount ↔ TelephonyAccount,
+// EmailSenderIdentity ↔ TelephonyPhoneNumber, run/step ↔ provisioning timeline.
+enum EmailAccountMode {
+  SUBUSER
+  BYO
+  PLATFORM
+  @@schema("email")
+}
+
+enum EmailAccountStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+  CLOSED
+  @@schema("email")
+}
+
+enum EmailIdentityKind {
+  UPRISE_SUBDOMAIN
+  CUSTOM_DOMAIN
+  SINGLE_ADDRESS
+  @@schema("email")
+}
+
+enum EmailIdentityStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  @@schema("email")
+}
+
+enum EmailProvisioningStatus {
+  REQUESTED
+  SUBUSER_CREATED
+  DOMAIN_AUTH_CREATED
+  DNS_CONFIGURED
+  VALIDATION_FAILED
+  DOMAIN_VERIFIED
+  WEBHOOKS_CONFIGURED
+  ACTIVE
+  FAILED
+  @@schema("email")
+}
+
+enum EmailStepStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  SKIPPED
+  @@schema("email")
+}
+
+// One SendGrid account (subuser under the platform master, or BYO) per tenant.
+// API key encrypted via CredentialCryptoService; webhookPublicKey is the
+// subuser's signed-event-webhook key used to verify its callbacks.
+model EmailAccount {
+  id               String             @id @default(cuid())
+  tenantId         String
+  mode             EmailAccountMode
+  status           EmailAccountStatus @default(PROVISIONING)
+  subuserUsername  String?            @unique
+  encryptedApiKey  String
+  webhookPublicKey String?
+  friendlyName     String
+  settings         Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([tenantId, status])
+  @@schema("email")
+}
+
+// A from-identity: authenticated uprise subdomain, tenant-owned domain, or a
+// single verified address. campaignId (id-only ref) scopes to a campaign;
+// null = tenant default. dnsRecords holds the CNAMEs shown on the timeline —
+// never credentials.
+model EmailSenderIdentity {
+  id               String              @id @default(cuid())
+  tenantId         String
+  accountId        String
+  campaignId       String?
+  kind             EmailIdentityKind
+  domain           String
+  fromEmail        String
+  fromName         String
+  sendgridDomainId String?
+  dnsRecords       Json?
+  purpose          String              @default("marketing")
+  status           EmailIdentityStatus @default(PENDING)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([tenantId, campaignId, status])
+  @@schema("email")
+}
+
+// One provisioning run walks the FSM (see email-provisioning-state.machine.ts).
+// resumeStatus records where a FAILED run re-enters on retry.
+model EmailProvisioningRun {
+  id                String                   @id @default(cuid())
+  tenantId          String
+  campaignId        String?
+  accountId         String?
+  identityId        String?
+  status            EmailProvisioningStatus  @default(REQUESTED)
+  resumeStatus      EmailProvisioningStatus?
+  input             Json
+  sendgridDomainId  String?
+  dnsimpleRecordIds Json?
+  lastError         String?
+  requestedById     String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  steps             EmailProvisioningStep[]
+
+  @@index([tenantId, status])
+  @@schema("email")
+}
+
+// Append-only timeline the admin/owner UI reads. detail must never contain
+// credentials.
+model EmailProvisioningStep {
+  id        String               @id @default(cuid())
+  runId     String
+  tenantId  String
+  step      String
+  status    EmailStepStatus
+  detail    Json?
+  error     String?
+  createdAt DateTime             @default(now())
+  run       EmailProvisioningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([tenantId, createdAt])
   @@schema("email")
 }
 

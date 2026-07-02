@@ -17,6 +17,14 @@
     {
       "path": "/api/v1/journeys/sweep-due",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/v1/telephony/provisioning/poll",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/v1/email-provisioning/poll",
+      "schedule": "*/10 * * * *"
     }
   ],
   "routes": [

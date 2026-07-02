@@ -70,6 +70,16 @@ export const EVENT_TYPES = {
   TELEPHONY_PROVISIONING_ACTIVATED: "telephony.provisioning.activated",
   TELEPHONY_PROVISIONING_FAILED: "telephony.provisioning.failed",
   TELEPHONY_PROVISIONING_RETRY_REQUESTED: "telephony.provisioning.retry-requested",
+  EMAIL_PROVISIONING_REQUESTED: "email.provisioning.requested",
+  EMAIL_PROVISIONING_SUBUSER_CREATED: "email.provisioning.subuser-created",
+  EMAIL_PROVISIONING_DOMAIN_AUTH_CREATED: "email.provisioning.domain-auth-created",
+  EMAIL_PROVISIONING_DNS_CONFIGURED: "email.provisioning.dns-configured",
+  EMAIL_PROVISIONING_VALIDATION_FAILED: "email.provisioning.validation-failed",
+  EMAIL_PROVISIONING_DOMAIN_VERIFIED: "email.provisioning.domain-verified",
+  EMAIL_PROVISIONING_WEBHOOKS_CONFIGURED: "email.provisioning.webhooks-configured",
+  EMAIL_PROVISIONING_ACTIVATED: "email.provisioning.activated",
+  EMAIL_PROVISIONING_FAILED: "email.provisioning.failed",
+  EMAIL_PROVISIONING_RETRY_REQUESTED: "email.provisioning.retry-requested",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -154,6 +164,27 @@ export interface DomainEventMap {
   "telephony.provisioning.activated": { runId: string; tenantId: string; phoneNumberE164: string };
   "telephony.provisioning.failed": { runId: string; tenantId: string; step: string; error: string };
   "telephony.provisioning.retry-requested": { runId: string; tenantId: string; resumeStatus: string };
+  "email.provisioning.requested": { runId: string; tenantId: string; campaignId?: string | null; mode: string; kind: string };
+  "email.provisioning.subuser-created": {
+    runId: string;
+    tenantId: string;
+    accountId: string;
+    subuserUsername: string | null;
+  };
+  "email.provisioning.domain-auth-created": {
+    runId: string;
+    tenantId: string;
+    identityId: string;
+    sendgridDomainId: string;
+    domain: string;
+  };
+  "email.provisioning.dns-configured": { runId: string; tenantId: string; identityId: string; kind: string };
+  "email.provisioning.validation-failed": { runId: string; tenantId: string; identityId: string; reason: string | null };
+  "email.provisioning.domain-verified": { runId: string; tenantId: string; identityId: string };
+  "email.provisioning.webhooks-configured": { runId: string; tenantId: string; accountId: string };
+  "email.provisioning.activated": { runId: string; tenantId: string; identityId: string; fromEmail: string };
+  "email.provisioning.failed": { runId: string; tenantId: string; step: string; error: string };
+  "email.provisioning.retry-requested": { runId: string; tenantId: string; resumeStatus: string };
 }
 
 export interface EventMetadata {

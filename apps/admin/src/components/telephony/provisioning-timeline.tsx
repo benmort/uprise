@@ -1,15 +1,21 @@
 "use client";
 
 import { Check, CircleDashed, Loader2, SkipForward, X } from "lucide-react";
-import type {
-  TelephonyProvisioningRun,
-  TelephonyProvisioningStatus,
-  TelephonyProvisioningStep,
-} from "@uprise/api-client";
 import { cn } from "@uprise/ui";
 
-/** Canonical step order for the provisioning journey (append-only rows fold onto these). */
-const STEPS: Array<{ key: string; label: string; hint?: string }> = [
+export type TimelineStepDef = { key: string; label: string; hint?: string };
+
+/** Structural run/step shapes so any provisioning domain can feed the timeline. */
+export type TimelineRun = { status: string; lastError: string | null };
+export type TimelineStep = {
+  step: string;
+  status: "STARTED" | "SUCCEEDED" | "FAILED" | "SKIPPED";
+  error?: string | null;
+  createdAt: string;
+};
+
+/** Telephony defaults (append-only rows fold onto these). */
+const TELEPHONY_STEPS: TimelineStepDef[] = [
   { key: "run.requested", label: "Requested" },
   { key: "subaccount.create", label: "Twilio subaccount" },
   { key: "compliance.draft", label: "Compliance details" },
@@ -20,8 +26,8 @@ const STEPS: Array<{ key: string; label: string; hint?: string }> = [
   { key: "activate", label: "Live" },
 ];
 
-/** Which canonical step is "in progress" for each run status. */
-const CURRENT_STEP: Record<TelephonyProvisioningStatus, string | null> = {
+/** Which canonical step is "in progress" for each telephony run status. */
+const TELEPHONY_CURRENT_STEP: Record<string, string | null> = {
   REQUESTED: "subaccount.create",
   SUBACCOUNT_CREATED: "compliance.draft",
   COMPLIANCE_DRAFT: "compliance.submit",
@@ -34,14 +40,38 @@ const CURRENT_STEP: Record<TelephonyProvisioningStatus, string | null> = {
   FAILED: null,
 };
 
+/** Email-identity provisioning step defs + status map (SendGrid journey). */
+export const EMAIL_TIMELINE_STEPS: TimelineStepDef[] = [
+  { key: "run.requested", label: "Requested" },
+  { key: "subuser.create", label: "SendGrid subuser" },
+  { key: "domain-auth.create", label: "Domain authentication" },
+  { key: "dns.configure", label: "DNS records" },
+  { key: "domain.validate", label: "Domain verified", hint: "DNS can take a little while to propagate" },
+  { key: "webhooks.configure", label: "Webhooks configured" },
+  { key: "activate", label: "Live" },
+];
+
+export const EMAIL_TIMELINE_CURRENT_STEP: Record<string, string | null> = {
+  REQUESTED: "subuser.create",
+  SUBUSER_CREATED: "domain-auth.create",
+  DOMAIN_AUTH_CREATED: "dns.configure",
+  DNS_CONFIGURED: "domain.validate",
+  VALIDATION_FAILED: "domain.validate",
+  DOMAIN_VERIFIED: "webhooks.configure",
+  WEBHOOKS_CONFIGURED: "activate",
+  ACTIVE: null,
+  FAILED: null,
+};
+
 type RowState = "done" | "skipped" | "failed" | "current" | "pending";
 
 function rowState(
   stepKey: string,
-  latest: TelephonyProvisioningStep | undefined,
-  run: Pick<TelephonyProvisioningRun, "status" | "lastError">,
+  latest: TimelineStep | undefined,
+  run: TimelineRun,
+  currentByStatus: Record<string, string | null>,
 ): RowState {
-  const current = CURRENT_STEP[run.status];
+  const current = currentByStatus[run.status] ?? null;
   if (latest?.status === "SUCCEEDED") return "done";
   if (latest?.status === "SKIPPED") return "skipped";
   if (latest?.status === "FAILED") return "failed";
@@ -50,26 +80,32 @@ function rowState(
 }
 
 /**
- * Read-only provisioning timeline, shared by the super-admin tenant page and
- * the owner's tenant-settings card. Folds the append-only step rows onto the
- * canonical journey; the run status drives the in-progress marker.
+ * Read-only provisioning timeline shared across provisioning domains
+ * (telephony numbers, email identities) and both audiences (super-admin pages,
+ * owner tenant-settings cards). Folds the append-only step rows onto the
+ * canonical journey; the run status drives the in-progress marker. Defaults to
+ * the telephony journey; pass stepDefs/currentStepByStatus for others.
  */
 export function ProvisioningTimeline({
   run,
   steps,
+  stepDefs = TELEPHONY_STEPS,
+  currentStepByStatus = TELEPHONY_CURRENT_STEP,
 }: {
-  run: Pick<TelephonyProvisioningRun, "status" | "lastError">;
-  steps: TelephonyProvisioningStep[];
+  run: TimelineRun;
+  steps: TimelineStep[];
+  stepDefs?: TimelineStepDef[];
+  currentStepByStatus?: Record<string, string | null>;
 }) {
-  const latestByStep = new Map<string, TelephonyProvisioningStep>();
+  const latestByStep = new Map<string, TimelineStep>();
   for (const step of steps) latestByStep.set(step.step, step); // rows arrive oldest → newest
 
   return (
     <ol className="space-y-0">
-      {STEPS.map((def, i) => {
+      {stepDefs.map((def, i) => {
         const latest = latestByStep.get(def.key);
-        const state = rowState(def.key, latest, run);
-        const isLast = i === STEPS.length - 1;
+        const state = rowState(def.key, latest, run, currentStepByStatus);
+        const isLast = i === stepDefs.length - 1;
         return (
           <li key={def.key} className="relative flex gap-3 pb-4 last:pb-0">
             {!isLast ? <span className="absolute left-[11px] top-6 h-full w-px bg-border" aria-hidden /> : null}

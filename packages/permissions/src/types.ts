@@ -93,6 +93,9 @@ export const UPRISE_RESOURCES = [
 
   // reserved for later-ported domains (meld docs 06–08)
   "payment.all",
+  // email — sender identities (per-tenant SendGrid)
+  "email.provisioning",
+  "email.identity",
   "email.all",
 
   // cross-cutting
@@ -103,6 +106,7 @@ export const UPRISE_RESOURCES = [
   // creation, compliance submission, number purchase) — kept outside telephony.*
   // so owners' `manage telephony.all` cannot reach them.
   "system.telephony-provisioning",
+  "system.email-provisioning",
   "all",
 ] as const;
 export type Resource = (typeof UPRISE_RESOURCES)[number] | string;

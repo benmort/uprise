@@ -5,6 +5,7 @@ import { OutboxService } from "../common/outbox/outbox.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { SendGridService } from "./sendgrid.service";
+import { EmailSenderResolver, type EmailSendPurpose } from "./email-sender.resolver";
 import { DEFAULT_EMAIL_TEMPLATES } from "./email-templates";
 import { assertValidEmailTransition, canTransitionEmail } from "./email-state.machine";
 
@@ -15,6 +16,10 @@ export interface SendTransactionalEmailInput {
   vars?: Record<string, string>;
   purpose: string;
   contactId?: string;
+  /** Campaign-scoped sender identity resolution (per-tenant email identities). */
+  campaignId?: string | null;
+  /** Sender-resolution purpose; defaults to "transactional" (platform sender). */
+  sendPurpose?: EmailSendPurpose;
 }
 
 export interface SendGridEvent {
@@ -38,6 +43,7 @@ export class EmailService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sendgrid: SendGridService,
+    private readonly senderResolver: EmailSenderResolver,
     private readonly outbox: OutboxService,
     private readonly webhookEvents: WebhookEventService,
     private readonly logger: DomainLogger,
@@ -68,8 +74,11 @@ export class EmailService {
         contactId: input.contactId,
         purpose: input.purpose,
         templateKey: input.templateKey,
+        campaignId: input.campaignId,
+        sendPurpose: input.sendPurpose,
       },
-      (emailId) => this.sendgrid.send({ to: input.toAddress, subject, body, customArgs: { emailId } }),
+      (emailId, sender) =>
+        this.sendgrid.send({ to: input.toAddress, subject, body, customArgs: { emailId } }, sender),
     );
   }
 
@@ -82,6 +91,8 @@ export class EmailService {
     html?: string;
     purpose: string;
     contactId?: string;
+    campaignId?: string | null;
+    sendPurpose?: EmailSendPurpose;
   }): Promise<{ id: string }> {
     if (!input.body && !input.html) {
       throw new BadRequestException("sendRaw requires a body or html");
@@ -93,15 +104,20 @@ export class EmailService {
         subject: input.subject,
         contactId: input.contactId,
         purpose: input.purpose,
+        campaignId: input.campaignId,
+        sendPurpose: input.sendPurpose,
       },
-      (emailId) =>
-        this.sendgrid.send({
-          to: input.toAddress,
-          subject: input.subject,
-          body: input.body,
-          html: input.html,
-          customArgs: { emailId },
-        }),
+      (emailId, sender) =>
+        this.sendgrid.send(
+          {
+            to: input.toAddress,
+            subject: input.subject,
+            body: input.body,
+            html: input.html,
+            customArgs: { emailId },
+          },
+          sender,
+        ),
     );
   }
 
@@ -113,6 +129,8 @@ export class EmailService {
     html: string;
     purpose: string;
     contactId?: string;
+    campaignId?: string | null;
+    sendPurpose?: EmailSendPurpose;
   }): Promise<{ id: string }> {
     return this.sendRaw(input);
   }
@@ -129,10 +147,23 @@ export class EmailService {
       contactId?: string | null;
       purpose: string;
       templateKey?: string | null;
+      campaignId?: string | null;
+      sendPurpose?: EmailSendPurpose;
     },
-    send: (emailId: string) => Promise<{ providerMessageId: string }>,
+    send: (
+      emailId: string,
+      sender: Awaited<ReturnType<EmailSenderResolver["resolve"]>>,
+    ) => Promise<{ providerMessageId: string }>,
   ): Promise<{ id: string }> {
     const { tenantId, toAddress } = meta;
+    // Per-tenant sender identity (undefined ⇒ platform env sender). Provenance
+    // is stamped on the row so webhook key resolution matches the account that
+    // ACTUALLY sent this email.
+    const sender = await this.senderResolver.resolve({
+      tenantId,
+      campaignId: meta.campaignId ?? null,
+      purpose: meta.sendPurpose ?? "transactional",
+    });
     const email = await this.prisma.$transaction(async (tx) => {
       const created = await tx.email.create({
         data: {
@@ -143,6 +174,9 @@ export class EmailService {
           status: EmailStatus.QUEUED,
           templateKey: meta.templateKey ?? null,
           purpose: meta.purpose,
+          emailAccountId: sender?.accountId ?? null,
+          senderIdentityId: sender?.identityId ?? null,
+          fromEmail: sender?.fromEmail ?? null,
         },
       });
       await this.outbox.append(tx, {
@@ -165,7 +199,7 @@ export class EmailService {
       });
     });
     try {
-      const { providerMessageId } = await send(email.id);
+      const { providerMessageId } = await send(email.id, sender);
       assertValidEmailTransition(EmailStatus.SENDING, EmailStatus.SENT);
       await this.prisma.$transaction(async (tx) => {
         await tx.email.update({

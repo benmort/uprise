@@ -2,6 +2,7 @@ import { createPublicKey, createVerify } from "crypto";
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { withRetry } from "../common/utils/retry.utils";
+import type { ResolvedEmailSender } from "./email-sender.resolver";
 
 export interface SendGridSendInput {
   to: string;
@@ -47,6 +48,16 @@ export class SendGridService {
    */
   verifyEventWebhookSignature(rawPayload: string, signature: string, timestamp: string): boolean {
     const publicKeyB64 = this.config.get<string>("SENDGRID_WEBHOOK_VERIFICATION_KEY", "").trim();
+    return this.verifyEventWebhookSignatureWithKey(publicKeyB64, rawPayload, signature, timestamp);
+  }
+
+  /** Verify with an explicit public key — per-subuser webhooks each sign with their own. */
+  verifyEventWebhookSignatureWithKey(
+    publicKeyB64: string,
+    rawPayload: string,
+    signature: string,
+    timestamp: string,
+  ): boolean {
     if (!publicKeyB64 || !signature || !timestamp) return false;
     try {
       const publicKey = createPublicKey({
@@ -63,9 +74,11 @@ export class SendGridService {
     }
   }
 
-  async send(input: SendGridSendInput): Promise<SendGridSendResult> {
-    const apiKey = this.config.get<string>("SENDGRID_API_KEY", "").trim();
-    const from = this.config.get<string>("SENDGRID_FROM_EMAIL", "").trim();
+  async send(input: SendGridSendInput, sender?: ResolvedEmailSender): Promise<SendGridSendResult> {
+    // Per-tenant sender (subuser/BYO key + identity from-address) beats the
+    // platform env pair; absent sender = the pre-multi-tenant behaviour.
+    const apiKey = sender?.apiKey ?? this.config.get<string>("SENDGRID_API_KEY", "").trim();
+    const from = sender?.fromEmail ?? this.config.get<string>("SENDGRID_FROM_EMAIL", "").trim();
     if (!apiKey || !from) {
       throw new ServiceUnavailableException(
         "SendGrid is not configured. Set SENDGRID_API_KEY and SENDGRID_FROM_EMAIL.",
@@ -91,7 +104,7 @@ export class SendGridService {
           ...(input.customArgs ? { custom_args: input.customArgs } : {}),
         },
       ],
-      from: { email: from },
+      from: { email: from, ...(sender?.fromName ? { name: sender.fromName } : {}) },
       ...(input.subject ? { subject: input.subject } : {}),
       ...(content.length > 0 ? { content } : {}),
       ...(input.templateId ? { template_id: input.templateId } : {}),

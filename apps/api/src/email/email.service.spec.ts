@@ -12,11 +12,15 @@ function setup() {
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const sendgrid = { send: jest.fn(async () => ({ providerMessageId: "sg1" })) } as any;
+  const senderResolver = {
+    resolve: jest.fn(async () => undefined),
+    invalidate: jest.fn(),
+  } as any;
   const outbox = { append: jest.fn() } as any;
   const webhookEvents = { claim: jest.fn(async () => true) } as any;
   const logger = { error: jest.fn() } as any;
-  const svc = new EmailService(prisma, sendgrid, outbox, webhookEvents, logger);
-  return { svc, prisma, sendgrid, outbox, webhookEvents };
+  const svc = new EmailService(prisma, sendgrid, senderResolver, outbox, webhookEvents, logger);
+  return { svc, prisma, sendgrid, senderResolver, outbox, webhookEvents };
 }
 
 describe("EmailService", () => {
@@ -37,6 +41,7 @@ describe("EmailService", () => {
       expect.anything(),
       expect.objectContaining({ eventType: "email.email.queued", aggregateId: "em1" }),
     );
+    // Second arg = the resolved per-tenant sender; undefined ⇒ platform env sender.
     expect(sendgrid.send).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "a@b.c",
@@ -44,6 +49,7 @@ describe("EmailService", () => {
         body: "Your verification code is 123.",
         customArgs: { emailId: "em1" },
       }),
+      undefined,
     );
     // SENDING then SENT
     expect(prisma.email.update).toHaveBeenCalledWith(
@@ -90,6 +96,7 @@ describe("EmailService", () => {
     });
     expect(sendgrid.send).toHaveBeenCalledWith(
       expect.objectContaining({ to: "a@b.c", subject: "Hello", html: "<p>Hi</p>" }),
+      undefined,
     );
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),

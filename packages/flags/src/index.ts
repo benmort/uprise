@@ -81,6 +81,15 @@ const CORE_FLAGS = [
     envVar: "FEATURE_WHATSAPP_ENABLED",
   },
   {
+    key: "FEATURE_TENANT_EMAIL_ENABLED",
+    description:
+      "Per-tenant email sender identities: SendGrid subusers, authenticated uprise subdomains / tenant domains and tenant-scoped from-addresses. Off ⇒ every send uses the platform SENDGRID_* env sender.",
+    default: false,
+    kind: "release",
+    controllableBy: PLAN_DRIVEN,
+    envVar: "FEATURE_TENANT_EMAIL_ENABLED",
+  },
+  {
     key: "FEATURE_TENANT_TELEPHONY_ENABLED",
     description:
       "Per-tenant Twilio numbers: subaccount provisioning, AU regulatory compliance and tenant-scoped senders. Off ⇒ every send uses the platform TWILIO_* env credentials.",

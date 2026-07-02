@@ -13,6 +13,8 @@ import { RawBodyRequest } from "@nestjs/common";
 import { InboxService } from "../inbox/inbox.service";
 import { BlastsService } from "../blasts/blasts.service";
 import { EmailService, type SendGridEvent } from "../email/email.service";
+import { SendGridService } from "../email/sendgrid.service";
+import { EmailWebhookAuthService } from "../email/email-webhook-auth.service";
 import { PaymentService, type StripeEvent } from "../payment/payment.service";
 import { StripeService } from "../payment/stripe.service";
 import { CallsService } from "../calls/calls.service";
@@ -36,6 +38,8 @@ export class WebhooksController {
     private readonly telephonyAuth: TelephonyWebhookAuthService,
     private readonly telephonyProvisioning: TelephonyProvisioningService,
     private readonly webhookEvents: WebhookEventService,
+    private readonly sendgridService: SendGridService,
+    private readonly emailWebhookAuth: EmailWebhookAuthService,
   ) {}
 
   /**
@@ -66,23 +70,38 @@ export class WebhooksController {
   @Post("email-webhook")
   async emailWebhook(@Req() req: RawBodyRequest<Request>): Promise<{ ok: true }> {
     const raw = req.rawBody?.toString("utf8") ?? "";
+    // Attacker bytes: cap the size and treat unparseable payloads exactly like
+    // bad signatures (401, not 500) — SendGrid never sends either.
+    if (raw.length > 2_000_000) throw new UnauthorizedException("SendGrid payload too large");
+    // Parsed BEFORE verification only to pick the signing key (per-subuser
+    // webhooks each sign with their own) — nothing is trusted until the
+    // signature verifies with the resolved key.
+    let events: SendGridEvent[];
+    try {
+      const parsed = raw ? (JSON.parse(raw) as SendGridEvent[] | SendGridEvent) : [];
+      events = Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      throw new UnauthorizedException("Invalid SendGrid payload");
+    }
     if (this.email.isWebhookVerificationConfigured()) {
-      // Preferred: ECDSA signed event webhook over the RAW body (doc 07).
+      // Preferred: ECDSA signed event webhook over the RAW body (doc 07). The
+      // key is the sending account's (Email.emailAccountId provenance), falling
+      // back to the platform env key — deterministic, never try-both.
       const sig = (req.headers["x-twilio-email-event-webhook-signature"] as string) ?? "";
       const ts = (req.headers["x-twilio-email-event-webhook-timestamp"] as string) ?? "";
-      if (!this.email.verifyEventWebhookSignature(raw, sig, ts)) {
+      const key = await this.emailWebhookAuth.resolveKey(events);
+      if (!this.sendgridService.verifyEventWebhookSignatureWithKey(key, raw, sig, ts)) {
         throw new UnauthorizedException("Invalid SendGrid signature");
       }
     } else {
-      // Fallback: optional shared secret (legacy).
+      // Fallback: shared secret (legacy). With per-account signed keys in play,
+      // an entirely unverified webhook would be an open door — fail closed when
+      // NEITHER verification mechanism is configured.
       const secret = this.config.get<string>("SENDGRID_WEBHOOK_SECRET", "").trim();
-      if (secret) {
-        const provided = (req.headers["x-webhook-secret"] as string) ?? "";
-        if (provided !== secret) throw new UnauthorizedException("Invalid SendGrid webhook secret");
-      }
+      if (!secret) throw new UnauthorizedException("SendGrid webhook verification is not configured");
+      const provided = (req.headers["x-webhook-secret"] as string) ?? "";
+      if (provided !== secret) throw new UnauthorizedException("Invalid SendGrid webhook secret");
     }
-    const parsed = raw ? (JSON.parse(raw) as SendGridEvent[] | SendGridEvent) : [];
-    const events = Array.isArray(parsed) ? parsed : [parsed];
     await this.email.processSendGridEvents(events);
     return { ok: true };
   }

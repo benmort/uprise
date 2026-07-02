@@ -530,3 +530,97 @@ export const telephony = {
   releaseNumber: (numberId: string) =>
     request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}/release`, { method: "POST" }),
 };
+
+// ── Email identities (per-tenant SendGrid subusers + domain auth) ────
+export type EmailProvisioningStatus =
+  | "REQUESTED"
+  | "SUBUSER_CREATED"
+  | "DOMAIN_AUTH_CREATED"
+  | "DNS_CONFIGURED"
+  | "VALIDATION_FAILED"
+  | "DOMAIN_VERIFIED"
+  | "WEBHOOKS_CONFIGURED"
+  | "ACTIVE"
+  | "FAILED";
+
+export interface EmailDnsRecord {
+  record: string;
+  host: string;
+  type: string;
+  data: string;
+  valid: boolean;
+}
+
+export interface EmailSenderIdentity {
+  id: string;
+  tenantId: string;
+  campaignId: string | null;
+  kind: "UPRISE_SUBDOMAIN" | "CUSTOM_DOMAIN" | "SINGLE_ADDRESS";
+  domain: string;
+  fromEmail: string;
+  fromName: string;
+  dnsRecords: EmailDnsRecord[] | null;
+  purpose: string;
+  status: "PENDING" | "ACTIVE" | "REVOKED";
+  createdAt: string;
+}
+
+export interface EmailProvisioningRun {
+  id: string;
+  tenantId: string;
+  campaignId: string | null;
+  identityId: string | null;
+  status: EmailProvisioningStatus;
+  resumeStatus: EmailProvisioningStatus | null;
+  input: { kind?: string; mode?: string; slug?: string; domain?: string } & Record<string, unknown>;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmailProvisioningStep {
+  id: string;
+  runId: string;
+  step: string;
+  status: "STARTED" | "SUCCEEDED" | "FAILED" | "SKIPPED";
+  detail: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export const emailProvisioning = {
+  /** Super-admin: start an automated identity-provisioning run for a tenant (or campaign). */
+  startRun: (body: {
+    tenantId: string;
+    campaignId?: string;
+    mode: "SUBUSER" | "BYO";
+    kind: "UPRISE_SUBDOMAIN" | "CUSTOM_DOMAIN" | "SINGLE_ADDRESS";
+    slug?: string;
+    domain?: string;
+    fromLocalPart: string;
+    fromName: string;
+    purpose?: string;
+    byoApiKey?: string;
+  }) => request<EmailProvisioningRun>("/email-provisioning/runs", { method: "POST", body: JSON.stringify(body) }),
+
+  retryRun: (runId: string) =>
+    request<EmailProvisioningRun>(`/email-provisioning/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" }),
+
+  /** Re-check DNS validation now (custom domains after the tenant adds records). */
+  validateRun: (runId: string) =>
+    request<EmailProvisioningRun>(`/email-provisioning/runs/${encodeURIComponent(runId)}/validate`, { method: "POST" }),
+
+  listRuns: (tenantId?: string) =>
+    request<EmailProvisioningRun[]>(`/email-provisioning/runs${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`),
+
+  getRun: (runId: string) =>
+    request<EmailProvisioningRun & { steps: EmailProvisioningStep[] }>(
+      `/email-provisioning/runs/${encodeURIComponent(runId)}`,
+    ),
+
+  listIdentities: (tenantId?: string) =>
+    request<EmailSenderIdentity[]>(`/email-provisioning/identities${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ""}`),
+
+  revokeIdentity: (identityId: string) =>
+    request<EmailSenderIdentity>(`/email-provisioning/identities/${encodeURIComponent(identityId)}/revoke`, { method: "POST" }),
+};

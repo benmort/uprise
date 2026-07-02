@@ -74,6 +74,10 @@ export type ValidatedEnv = {
   SENDGRID_WEBHOOK_VERIFICATION_KEY: string;
   SENDGRID_WEBHOOK_SECRET: string;
   MARKETING_NOTIFY_EMAIL: string;
+  DNSIMPLE_API_TOKEN: string;
+  DNSIMPLE_ACCOUNT_ID: string;
+  DNSIMPLE_ZONE: string;
+  EMAIL_IDENTITY_ROOT_DOMAIN: string;
   TWILIO_ACCOUNT_SID: string;
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
@@ -217,6 +221,12 @@ export function validateEnv(config: Env): ValidatedEnv {
     SENDGRID_WEBHOOK_VERIFICATION_KEY: config.SENDGRID_WEBHOOK_VERIFICATION_KEY?.trim() || "",
     SENDGRID_WEBHOOK_SECRET: config.SENDGRID_WEBHOOK_SECRET?.trim() || "",
     MARKETING_NOTIFY_EMAIL: config.MARKETING_NOTIFY_EMAIL?.trim() || "",
+    // DNSimple (per-tenant email identities). Blank ⇒ the DNS client throws 503
+    // and only CUSTOM_DOMAIN/SINGLE_ADDRESS provisioning works.
+    DNSIMPLE_API_TOKEN: config.DNSIMPLE_API_TOKEN?.trim() || "",
+    DNSIMPLE_ACCOUNT_ID: config.DNSIMPLE_ACCOUNT_ID?.trim() || "",
+    DNSIMPLE_ZONE: config.DNSIMPLE_ZONE?.trim() || "uprise.org.au",
+    EMAIL_IDENTITY_ROOT_DOMAIN: config.EMAIL_IDENTITY_ROOT_DOMAIN?.trim() || "mail.uprise.org.au",
     TWILIO_ACCOUNT_SID: required(config, "TWILIO_ACCOUNT_SID", errors),
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),
