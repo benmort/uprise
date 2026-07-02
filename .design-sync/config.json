@@ -1,0 +1,22 @@
+{
+  "shape": "storybook",
+  "projectId": "aa9974ce-5e6b-4297-9179-c42a27f363ca",
+  "pkg": "@uprise/ui",
+  "globalName": "UpriseUI",
+  "entry": "packages/ui/src/index.ts",
+  "storybookConfigDir": "packages/ui/.storybook",
+  "storybookStatic": ".design-sync/sb-reference",
+  "cssEntry": ".ds-styles.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "provider": { "component": "ToastProvider" },
+  "titleMap": { "TurnstileWidget": null, "ToastProvider": null },
+  "overrides": {
+    "Dropdown": { "cardMode": "single" },
+    "ConfirmDialog": { "cardMode": "single" },
+    "FormDialog": { "cardMode": "single" },
+    "FieldOnboarding": { "cardMode": "single" },
+    "Alert": { "cardMode": "column" },
+    "Card": { "cardMode": "column" },
+    "Spinner": { "cardMode": "column" }
+  }
+}

@@ -1,0 +1,6 @@
+/* Mirror how the apps load the design system so Storybook renders on-brand:
+   Tailwind v4 base + the @uprise/ui CSS-first tokens, scanning the component
+   source for class strings (Tailwind v4 content detection). */
+@import "tailwindcss";
+@import "@uprise/ui/globals.css";
+@source "../src/**/*.{ts,tsx}";

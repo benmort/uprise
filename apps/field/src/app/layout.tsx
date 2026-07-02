@@ -3,6 +3,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
 import { FieldShell } from "@uprise/field";
+import { ToastProvider } from "@uprise/ui";
 import { ServiceWorkerCleanup } from "@/components/sw-cleanup";
 
 const outfit = Outfit({
@@ -45,7 +46,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           }}
         />
         <ServiceWorkerCleanup />
-        <FieldShell>{children}</FieldShell>
+        <ToastProvider>
+          <FieldShell>{children}</FieldShell>
+        </ToastProvider>
       </body>
     </html>
   );
