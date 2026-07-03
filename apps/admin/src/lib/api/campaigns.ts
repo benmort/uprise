@@ -32,7 +32,7 @@ export type CampaignInput = {
 
 export type BoundarySource =
   | { kind: "division"; type: "ced" | "sed" | "lga"; code: string }
-  | { kind: "area"; layer: "mb" | "sa1" | "sa2" | "sa3"; code: string }
+  | { kind: "area"; layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }
   | { kind: "polygon"; geometry: unknown };
 
 export async function getCampaignBoundary(id: string) {

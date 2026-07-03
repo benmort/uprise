@@ -10,6 +10,7 @@ import {
   WalkListItemStatus,
 } from "@uprise/db";
 import { put } from "@vercel/blob";
+import { namespacedBlobKey } from "../common/utils/blob";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
@@ -194,7 +195,7 @@ export class CanvassingService {
       throw new ApiHttpException("PHOTO_STORAGE_NOT_CONFIGURED", "Photo storage is not configured");
     }
     const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const key = `door-knocks/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`;
+    const key = namespacedBlobKey(`door-knocks/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`);
     const { url } = await put(key, file.buffer, {
       access: "public",
       contentType: file.mimetype,
@@ -530,7 +531,7 @@ export class CanvassingService {
     input: {
       name: string;
       campaignId?: string | null;
-      areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3"; code: string }>;
+      areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }>;
       polygons?: Record<string, unknown>[];
       universe?: TurfUniverse;
     },
@@ -746,7 +747,7 @@ export class CanvassingService {
     tenantId: string,
     campaignId: string,
     volunteerId: string,
-    areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3"; code: string }>,
+    areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }>,
   ) {
     await this.assertSelfClaim(tenantId, campaignId, "area");
     const raw = await this.geo.unionAreas(areas ?? [], []);

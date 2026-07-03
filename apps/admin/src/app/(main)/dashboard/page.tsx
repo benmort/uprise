@@ -213,7 +213,7 @@ export default function DashboardPage() {
                   },
                 ]
               : []),
-            { key: "inbox", label: "Open inbox", variant: "outline", onClick: () => router.push("/inbox") },
+            { key: "inbox", label: "Open inbox", variant: "outline", onClick: () => router.push("/future/sms-inbox") },
             { key: "audience", label: "New audience", variant: "outline", onClick: () => router.push("/audience") },
           ]}
         />
@@ -281,7 +281,7 @@ export default function DashboardPage() {
         <OverviewModuleCard
           title="Inbox"
           description="Two-way conversations"
-          href="/inbox"
+          href="/future/sms-inbox"
           icon={<InboxIcon className="h-4 w-4" />}
           loading={convos === null}
           error={convos?.error}
@@ -332,7 +332,7 @@ export default function DashboardPage() {
         <OverviewModuleCard
           title="Journeys"
           description="Automated follow-ups"
-          href="/journeys"
+          href="/future/journeys"
           icon={<Workflow className="h-4 w-4" />}
           loading={journeys === null}
           error={journeys?.error}

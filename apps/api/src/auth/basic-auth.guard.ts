@@ -14,6 +14,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { AuthUser } from "./auth-user";
 import { SessionService } from "./session.service";
 import { verifyPassword } from "./password.util";
+import { requestMeta } from "./request-meta";
 import { resolveStreamTokenSecret } from "./stream-token-secret";
 import { verifyStreamTokenDetailed } from "./stream-token";
 
@@ -318,10 +319,9 @@ export class BasicAuthGuard implements CanActivate {
     request: Request & { user?: AuthUser },
     tokens: string[],
   ): Promise<boolean> {
-    const meta = {
-      userAgent: request.headers["user-agent"] ?? null,
-      ipAddress: request.ip ?? request.socket?.remoteAddress ?? null,
-    };
+    // Real client IP behind ngrok/Vercel (x-forwarded-for) — request.ip is just
+    // the proxy loopback without `trust proxy`.
+    const meta = requestMeta(request);
     let resolved = null;
     for (const token of tokens) {
       resolved = await this.sessions!.resolve(token, meta);

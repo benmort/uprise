@@ -12,8 +12,10 @@ import {
 import { ConfigService } from "@nestjs/config";
 import type { Request, Response } from "express";
 import { IamFlowsService, type SessionGrant } from "./iam-flows.service";
+import { SessionService } from "./session.service";
 import type { AuthUser } from "./auth-user";
 import { readSessionToken, setSessionCookie } from "./session-cookie.util";
+import { requestMeta } from "./request-meta";
 import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 import {
   AcceptInviteDto,
@@ -41,10 +43,14 @@ import {
 export class AuthFlowsController {
   constructor(
     private readonly flows: IamFlowsService,
+    private readonly sessions: SessionService,
     private readonly config: ConfigService,
   ) {}
 
-  private grantResponse(res: Response, grant: SessionGrant) {
+  private async grantResponse(req: Request, res: Response, grant: SessionGrant) {
+    // Log the login device (IP + user agent) on the freshly-issued session —
+    // surfaced under Active sessions on the security page.
+    await this.sessions.stampLoginMeta(grant.token, requestMeta(req));
     setSessionCookie(res, this.config, grant.token, grant.expiresAt);
     return {
       token: grant.token,
@@ -67,8 +73,8 @@ export class AuthFlowsController {
   }
 
   @Post("magic-link/consume")
-  async consumeMagicLink(@Body() dto: TokenDto, @Res({ passthrough: true }) res: Response) {
-    return this.grantResponse(res, await this.flows.consumeMagicLink(dto.token));
+  async consumeMagicLink(@Body() dto: TokenDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.grantResponse(req, res, await this.flows.consumeMagicLink(dto.token));
   }
 
   @RequireCaptcha("soft")
@@ -106,8 +112,8 @@ export class AuthFlowsController {
   }
 
   @Post("2fa/verify")
-  async verify2fa(@Body() dto: TwofaVerifyDto, @Res({ passthrough: true }) res: Response) {
-    return this.grantResponse(res, await this.flows.verify2fa(dto.challengeId, dto.code));
+  async verify2fa(@Body() dto: TwofaVerifyDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.grantResponse(req, res, await this.flows.verify2fa(dto.challengeId, dto.code));
   }
 
   // ── Phone-first passwordless login (volunteers/canvassers) ──────────────
@@ -124,8 +130,8 @@ export class AuthFlowsController {
   }
 
   @Post("phone/verify")
-  async verifyPhoneLogin(@Body() dto: PhoneVerifyDto, @Res({ passthrough: true }) res: Response) {
-    return this.grantResponse(res, await this.flows.verifyPhoneLogin(dto.challengeId, dto.code));
+  async verifyPhoneLogin(@Body() dto: PhoneVerifyDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.grantResponse(req, res, await this.flows.verifyPhoneLogin(dto.challengeId, dto.code));
   }
 
   @Get("invite/:token")
@@ -142,7 +148,7 @@ export class AuthFlowsController {
   }
 
   @Post("invite/accept")
-  async acceptInvite(@Body() dto: AcceptInviteDto, @Res({ passthrough: true }) res: Response) {
+  async acceptInvite(@Body() dto: AcceptInviteDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const grant = await this.flows.acceptInvite(dto.token, {
       displayName: dto.displayName,
       password: dto.password,
@@ -153,7 +159,7 @@ export class AuthFlowsController {
       walkingCapability: dto.walkingCapability,
       sessionLength: dto.sessionLength,
     });
-    return this.grantResponse(res, grant);
+    return this.grantResponse(req, res, grant);
   }
 
   @Post("invite/decline")
@@ -176,7 +182,7 @@ export class AuthFlowsController {
   }
 
   @Post("open-join/accept")
-  async openJoinAccept(@Body() dto: OpenJoinAcceptDto, @Res({ passthrough: true }) res: Response) {
+  async openJoinAccept(@Body() dto: OpenJoinAcceptDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const grant = await this.flows.openJoinAccept(dto.campaignId, {
       challengeId: dto.challengeId,
       code: dto.code,
@@ -186,7 +192,7 @@ export class AuthFlowsController {
       walkingCapability: dto.walkingCapability,
       sessionLength: dto.sessionLength,
     });
-    return this.grantResponse(res, grant);
+    return this.grantResponse(req, res, grant);
   }
 
   @Post("select-tenant")

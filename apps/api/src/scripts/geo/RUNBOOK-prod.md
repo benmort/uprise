@@ -118,9 +118,11 @@ psql "$GEO_DB_URL" -c "SELECT c.name, count(*) FROM geo.address_region ar JOIN g
 
 ## Notes
 - **ASGS mesh blocks + SA1–SA4 are now part of the load** (steps 1–2 + 3b): the clickable
-  MB/SA1/SA2/SA3 turf-selection layers and the Data-page counts come from `geo.meshblock`/`geo.sa*`;
+  MB/SA1/SA2/SA3/SA4 turf-selection layers and the Data-page counts come from `geo.meshblock`/`geo.sa*`;
   per-address SA1–4 come from `geo.gnaf_address.mb_code` → `geo.meshblock` nesting in `geo:map`.
-  LGA stays dropped (federal + state only).
+- **LGA is mapped** (federal CED + state SED + local LGA): `geo:map` / `load-prod.sh` spatially
+  join every address to its LGA (`ST_Contains`), so the Divisions page's Local tab lists all LGAs
+  with real address counts. First prod run after this change backfills `address_region.lga_code`.
 - **Storage:** national G-NAF + geometries add several GB to the prod Neon DB — confirm the
   tier has headroom before step 3.
 - **Idempotent:** every step upserts; safe to re-run. Quarterly refresh = re-run 1→4.

@@ -51,6 +51,16 @@ const nextConfig = {
   // @uprise/ui ships TS/TSX source (the shared design system); api-client/contracts
   // ship built dist but are listed so Next resolves the workspace packages (meld doc 14).
   transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts", "@uprise/flags", "@uprise/field"],
+  // The prog sandbox became /future/* (with /inbox and /journeys parked under it).
+  // Keep old bookmarks/deep links working.
+  async redirects() {
+    return [
+      { source: "/prog/:path*", destination: "/future/:path*", permanent: false },
+      { source: "/inbox", destination: "/future/sms-inbox", permanent: false },
+      { source: "/journeys", destination: "/future/journeys", permanent: false },
+      { source: "/journeys/:path*", destination: "/future/journeys/:path*", permanent: false },
+    ];
+  },
 };
 
 export default withPWA(nextConfig);

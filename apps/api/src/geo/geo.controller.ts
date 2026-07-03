@@ -70,6 +70,21 @@ export class GeoController {
     return this.geo.areas({ layer, bbox, limit: limit ? Number(limit) : undefined });
   }
 
+  /** Nearest real doors to a point (the Addresses page's geocoded search pin). */
+  @Get("addresses/near")
+  async addressesNear(
+    @Query("lat") lat?: string,
+    @Query("lng") lng?: string,
+    @Query("limit") limit?: string,
+  ) {
+    const org = await this.ensureOrganization();
+    return this.geo.nearbyAddresses(org.id, {
+      lat: Number(lat),
+      lng: Number(lng),
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
   @Get("addresses")
   async addresses(
     @Query("turfId") turfId?: string,

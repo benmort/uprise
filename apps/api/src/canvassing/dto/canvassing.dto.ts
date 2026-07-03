@@ -200,8 +200,8 @@ export class CreateTurfFromDivisionDto {
 }
 
 export class TurfAreaDto {
-  @IsIn(["mb", "sa1", "sa2", "sa3"])
-  layer!: "mb" | "sa1" | "sa2" | "sa3";
+  @IsIn(["mb", "sa1", "sa2", "sa3", "sa4"])
+  layer!: "mb" | "sa1" | "sa2" | "sa3" | "sa4";
 
   @IsString()
   code!: string;

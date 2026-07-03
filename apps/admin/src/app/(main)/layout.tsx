@@ -6,29 +6,22 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
-  Building2,
-  CalendarDays,
   ChevronDown,
   ChevronLeft,
-  Code2,
-  Crown,
   Database,
-  Eye,
-  EyeOff,
   Inbox,
   LayoutDashboard,
   Loader2,
+  Lock,
   LogOut,
-  Mail,
   MapPin,
   Megaphone,
   Menu,
   MessageSquareText,
   Settings,
+  ShieldCheck,
   Sparkles,
-  Ticket,
   Users,
-  Workflow,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -63,7 +56,10 @@ type NavMatch = (pathname: string) => boolean;
 // unless the flag resolves on for the tenant (super-admins always see it).
 type NavLeaf = { label: string; href: string; match: NavMatch; flag?: FeatureFlagKey };
 type NavBranch = { label: string; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
-type NavEntry = NavLeaf | NavBranch;
+// A non-clickable zone header inside a group's child list (e.g. Future → Engage/Manage),
+// mirroring the top-level `section` nodes. Identified by the `subheading` key.
+type NavSubheading = { subheading: string; flag?: FeatureFlagKey };
+type NavEntry = NavLeaf | NavBranch | NavSubheading;
 type NavNode =
   // A non-interactive zone header (Engage, Organise, …) that groups the items
   // beneath it. Pruned away if every item under it is flag/role-gated off.
@@ -77,45 +73,36 @@ type NavNode =
 function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
   const scoped = (suffix: string) =>
     campaignId ? `/canvass/${campaignId}/${suffix}` : "/canvass";
-  // Prefix matcher for the ported prog routes (all under /prog/*).
-  const px = (s: string): NavMatch => (p) => p.startsWith(`/prog/${s}`);
+  // Prefix matcher for the parked future routes (all under /future/*).
+  const px = (s: string): NavMatch => (p) => p.startsWith(`/future/${s}`);
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
-    { type: "leaf", key: "inbox", label: "Inbox", href: "/inbox", icon: Mail, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_INBOX" },
-    // Shared inbox (unified cross-channel queue) sits right under Inbox — super-admin-only for now.
+    // Shared inbox (unified cross-channel queue) — super-admin-only for now.
+    // (The SMS-only inbox is parked in the Future group as "SMS inbox".)
     ...(isSuperAdmin
-      ? ([{ type: "leaf", key: "shared-inbox", label: "Shared inbox", href: "/prog/shared-inbox", icon: Inbox, match: px("shared-inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" }] as NavNode[])
+      ? ([{ type: "leaf", key: "shared-inbox", label: "Shared inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" }] as NavNode[])
       : []),
-    { type: "leaf", key: "calendar", label: "Calendar", href: "/prog/calendar", icon: CalendarDays, match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
 
     // ── Engage: the campaigning work — reach out, canvass, organise, target ──
     { type: "section", key: "sec-engage", label: "Engage" },
     {
       type: "group", key: "channels", label: "Channels", icon: MessageSquareText,
-      match: (p) => p.startsWith("/channels") || px("email")(p) || px("calls")(p) || px("shared-inbox")(p),
+      // Text + WhatsApp only. Email, Calls and Social Media are parked under Future → Channels.
+      match: (p) => p.startsWith("/channels/text") || p.startsWith("/channels/whatsapp"),
       flag: "FEATURE_NAV_CHANNELS",
       children: [
         { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text"), flag: "FEATURE_NAV_CHANNELS_TEXT" },
         { label: "WhatsApp", href: "/channels/whatsapp", match: (p) => p.startsWith("/channels/whatsapp"), flag: "FEATURE_WHATSAPP_ENABLED" },
-        // Campaigner Email + Calls are deferred prog stubs (not P1) — kept here but
-        // super-admin-only until they ship and get tenant-tiered (consolidation doc Part B).
-        // (Shared inbox lives at the top level, right under Inbox.)
-        ...(isSuperAdmin
-          ? ([
-              { label: "Email", href: "/prog/email", match: px("email"), flag: "FEATURE_NAV_PROG_CHANNELS" },
-              { label: "Calls", href: "/prog/calls", match: px("calls"), flag: "FEATURE_NAV_PROG_CHANNELS" },
-            ] as NavEntry[])
-          : []),
       ],
     },
-    { type: "leaf", key: "journeys", label: "Journeys", href: "/journeys", icon: Workflow, match: (p) => p.startsWith("/journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
     {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin,
       match: (p) =>
         p.startsWith("/canvass") &&
         !p.startsWith("/canvass/volunteers") &&
         !p.startsWith("/canvass/divisions") &&
-        !p.startsWith("/canvass/areas"),
+        !p.startsWith("/canvass/areas") &&
+        !p.startsWith("/canvass/addresses"),
       flag: "FEATURE_NAV_CANVASS",
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
@@ -126,7 +113,6 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       ],
     },
     { type: "leaf", key: "volunteers", label: "Volunteers", href: "/canvass/volunteers", icon: Megaphone, match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
-    { type: "leaf", key: "events", label: "Events", href: "/prog/events", icon: Ticket, match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING" },
     {
       type: "group", key: "engagement", label: "Scripts", icon: Sparkles,
       match: (p) => p.startsWith("/engagement"),
@@ -149,13 +135,15 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
         p.startsWith("/settings/data") ||
         p.startsWith("/canvass/divisions") ||
         p.startsWith("/canvass/areas") ||
-        p.startsWith("/prog/file-manager") ||
+        p.startsWith("/canvass/addresses") ||
+        p.startsWith("/future/file-manager") ||
         p.startsWith("/compliance"),
       children: [
         { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
         { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
         { label: "Areas", href: "/canvass/areas", match: (p) => p.startsWith("/canvass/areas"), flag: "FEATURE_NAV_CANVASS_AREAS" },
-        { label: "File Manager", href: "/prog/file-manager", match: (p) => p.startsWith("/prog/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
+        { label: "Addresses", href: "/canvass/addresses", match: (p) => p.startsWith("/canvass/addresses"), flag: "FEATURE_NAV_CANVASS_ADDRESSES" },
+        { label: "File Manager", href: "/future/file-manager", match: (p) => p.startsWith("/future/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
         { label: "Compliance", href: "/compliance", match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
       ],
     },
@@ -179,7 +167,7 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
           ? ([
               {
                 label: "Brands",
-                href: "/prog/tenants",
+                href: "/future/tenants",
                 match: px("tenants"),
                 flag: "FEATURE_MULTIBRAND_ENABLED",
               },
@@ -189,78 +177,89 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
         // they're tenant-tiered + role-gated (consolidation doc Parts B–D).
         ...(isSuperAdmin
           ? ([
-              { label: "Billing", href: "/prog/billing", match: px("billing") },
-              { label: "Branding", href: "/prog/tenant-settings", match: px("tenant-settings") },
-              { label: "Activity", href: "/prog/activity", match: px("activity") },
-              { label: "Security", href: "/prog/security", match: px("security") },
+              { label: "Billing", href: "/future/billing", match: px("billing") },
+              { label: "Branding", href: "/future/tenant-settings", match: px("tenant-settings") },
+              { label: "Activity", href: "/future/activity", match: px("activity") },
+              { label: "Security", href: "/future/security", match: px("security") },
             ] as NavEntry[])
           : []),
       ],
     },
 
-    // Super-admin-only. Business + Developer Hub are management tools, so they fold into
-    // the Manage section above; the Super Admin section (platform admin + the prog
-    // sandbox) then closes out the nav.
+    // Super-admin-only: the Super Admin section (platform admin) plus the Future
+    // group — everything parked for later releases (SMS inbox, journeys, events,
+    // business, developer hub and the remaining sandbox stubs). Promote entries
+    // out of Future as they ship.
     ...(isSuperAdmin
       ? ([
-          {
-            type: "group", key: "business", label: "Business", icon: Building2,
-            match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p),
-            flag: "FEATURE_NAV_PROG_BUSINESS",
-            children: [
-              {
-                label: "Payments", match: (p) => px("transactions")(p) || px("invoices")(p),
-                children: [
-                  { label: "Transactions", href: "/prog/transactions", match: px("transactions") },
-                  { label: "Invoices", href: "/prog/invoices", match: px("invoices") },
-                ],
-              },
-              { label: "Products", href: "/prog/products", match: px("products") },
-              { label: "Checkout", href: "/prog/checkout", match: px("checkout") },
-              { label: "Support tickets", href: "/prog/support-tickets", match: px("support-tickets") },
-            ],
-          },
-          {
-            type: "group", key: "devhub", label: "Developer Hub", icon: Code2,
-            match: (p) => px("api-keys")(p),
-            flag: "FEATURE_NAV_PROG_DEVHUB",
-            children: [
-              { label: "API Keys", href: "/prog/api-keys", match: px("api-keys") },
-            ],
-          },
-
           { type: "section", key: "sec-superadmin", label: "Super Admin" },
           {
-            type: "group", key: "super-admin", label: "Super Admin", icon: Crown,
+            type: "group", key: "super-admin", label: "Super Admin", icon: ShieldCheck,
             match: (p) => p.startsWith("/settings/flags") || p.startsWith("/settings/plans") || px("tenants")(p),
             children: [
-              { label: "Tenants", href: "/prog/tenants", match: px("tenants") },
+              { label: "Tenants", href: "/future/tenants", match: px("tenants") },
               { label: "Plans", href: "/settings/plans", match: (p) => p.startsWith("/settings/plans") },
               { label: "Feature flags", href: "/settings/flags", match: (p) => p === "/settings/flags" },
             ],
           },
-
-          // Prog sandbox — the leftover stubs not yet graduated into a real section.
-          // Sits under the Super Admin header (no section of its own); retire entries
-          // as they get a backend + promote into the zones above.
           {
-            type: "group", key: "prog", label: "Prog", icon: Boxes,
+            type: "group", key: "future", label: "Future", icon: Boxes,
             match: (p) =>
-              px("chats")(p) || px("social-media")(p) || px("tasks")(p) ||
-              px("ai-assistant")(p) || px("form-elements")(p),
+              px("calendar")(p) || px("sms-inbox")(p) || px("journeys")(p) || px("segmentation")(p) || px("events")(p) ||
+              px("transactions")(p) || px("invoices")(p) || px("products")(p) ||
+              px("support-tickets")(p) || px("checkout")(p) || px("api-keys")(p) ||
+              px("chats")(p) || px("tasks")(p) ||
+              px("ai-assistant")(p) || px("form-elements")(p) ||
+              px("calls")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
             flag: "FEATURE_NAV_PROG",
             children: [
-              { label: "Chats", href: "/prog/chats", match: px("chats") },
-              { label: "Social Media", href: "/prog/social-media", match: px("social-media") },
+              { label: "Calendar", href: "/future/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
+              // Engage: the parked outreach/campaigning stubs (mirrors the top-level Engage zone).
+              { subheading: "Engage" },
+              // Deferred channel stubs, parked here until they ship (consolidation doc Part B).
+              {
+                label: "Channels", flag: "FEATURE_NAV_PROG_CHANNELS",
+                match: (p) => p.startsWith("/channels/email") || p.startsWith("/channels/social") || px("calls")(p),
+                children: [
+                  { label: "Email", href: "/channels/email", match: (p) => p.startsWith("/channels/email") },
+                  { label: "Calls", href: "/future/calls", match: px("calls") },
+                  { label: "Social Media", href: "/channels/social", match: (p) => p.startsWith("/channels/social") },
+                ],
+              },
+              { label: "SMS inbox", href: "/future/sms-inbox", match: px("sms-inbox"), flag: "FEATURE_NAV_INBOX" },
+              { label: "Journeys", href: "/future/journeys", match: px("journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
+              { label: "Segmentation", href: "/future/segmentation", match: px("segmentation") },
+              { label: "Events", href: "/future/events", match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING" },
+              { label: "Chats", href: "/future/chats", match: px("chats") },
+              // Manage: the parked back-office/admin stubs (mirrors the top-level Manage zone).
+              { subheading: "Manage" },
+              {
+                label: "Business", flag: "FEATURE_NAV_PROG_BUSINESS",
+                match: (p) => px("transactions")(p) || px("invoices")(p) || px("products")(p) || px("support-tickets")(p) || px("checkout")(p),
+                children: [
+                  { label: "Transactions", href: "/future/transactions", match: px("transactions") },
+                  { label: "Invoices", href: "/future/invoices", match: px("invoices") },
+                  { label: "Products", href: "/future/products", match: px("products") },
+                  { label: "Checkout", href: "/future/checkout", match: px("checkout") },
+                  { label: "Support tickets", href: "/future/support-tickets", match: px("support-tickets") },
+                ],
+              },
+              {
+                label: "Developer Hub", flag: "FEATURE_NAV_PROG_DEVHUB",
+                match: (p) => px("api-keys")(p),
+                children: [
+                  { label: "API Keys", href: "/future/api-keys", match: px("api-keys") },
+                ],
+              },
               {
                 label: "Tasks", match: px("tasks"), flag: "FEATURE_NAV_PROG_TASKS",
                 children: [
-                  { label: "List", href: "/prog/tasks/list", match: px("tasks/list") },
-                  { label: "Kanban", href: "/prog/tasks/kanban", match: px("tasks/kanban") },
+                  { label: "List", href: "/future/tasks/list", match: px("tasks/list") },
+                  { label: "Kanban", href: "/future/tasks/kanban", match: px("tasks/kanban") },
                 ],
               },
-              { label: "AI Assistant", href: "/prog/ai-assistant", match: px("ai-assistant") },
-              { label: "Form Elements", href: "/prog/form-elements", match: px("form-elements") },
+              { label: "AI Assistant", href: "/future/ai-assistant", match: px("ai-assistant") },
+              { label: "Form Elements", href: "/future/form-elements", match: px("form-elements") },
             ],
           },
         ] as NavNode[])
@@ -437,7 +436,7 @@ export default function MainLayout({
           eventType = "";
         }
         if (eventType !== "inbox.inbound") return;
-        if (String(pathname || "").startsWith("/inbox")) return;
+        if (String(pathname || "").startsWith("/future/sms-inbox")) return;
 
         const fromPhone = String(payload.contactPhone || "");
         const messageBody = String(payload.body || "").trim();
@@ -454,7 +453,7 @@ export default function MainLayout({
           action: {
             label: "Open Inbox",
             onClick: () => {
-              const target = fromPhone ? `/inbox?contact=${encodeURIComponent(fromPhone)}` : "/inbox";
+              const target = fromPhone ? `/future/sms-inbox?contact=${encodeURIComponent(fromPhone)}` : "/future/sms-inbox";
               router.push(target);
             },
           },
@@ -514,6 +513,9 @@ export default function MainLayout({
   }, [ready]);
 
   const isSuperAdmin = principal?.isSuperAdmin === true;
+  // Whose plan the greyed sidebar items refer to — the "Acting as" tenant when a
+  // super-admin is impersonating one, else "your current".
+  const planContext = principal?.activeTenant?.name ? `${principal.activeTenant.name}’s` : "your current";
   // Load the tenant's resolved flags for nav gating (super-admins bypass anyway).
   useEffect(() => {
     if (!ready) return;
@@ -530,14 +532,32 @@ export default function MainLayout({
     (flag?: FeatureFlagKey) => !flag || isSuperAdmin || navFlags[flag] !== false,
     [isSuperAdmin, navFlags],
   );
+  // A nav item the current tenant's PLAN doesn't include: a plan-driven flag that
+  // resolves off for this tenant. Non-super-admins have these filtered out
+  // entirely; super-admins keep them in the sidebar rendered greyed + still
+  // navigable, so — especially when "Acting as" a tenant — it's obvious which
+  // items that org's plan can't access.
+  const isPlanLocked = useCallback(
+    (flag?: FeatureFlagKey) =>
+      isSuperAdmin &&
+      !!flag &&
+      navFlags[flag] === false &&
+      (FLAG_META[flag]?.controllableBy.includes("plan") ?? false),
+    [isSuperAdmin, navFlags],
+  );
   // Build the nav, then drop any node whose plan-driven flag is off (1st + 2nd level);
   // empty groups/branches are pruned. Super-admins keep the full nav.
   const nav = useMemo(() => {
-    const filterEntries = (entries: NavEntry[]): NavEntry[] =>
-      entries
+    const filterEntries = (entries: NavEntry[]): NavEntry[] => {
+      const kept = entries
         .filter((e) => flagOn(e.flag))
         .map((e) => ("children" in e ? { ...e, children: filterEntries(e.children) } : e))
         .filter((e) => !("children" in e) || e.children.length > 0);
+      // Drop a subheading with no surviving item before the next subheading / the end.
+      return kept.filter(
+        (e, i) => !("subheading" in e) || (i + 1 < kept.length && !("subheading" in kept[i + 1])),
+      );
+    };
     const built = buildNav(campaignId, isSuperAdmin)
       .filter((n) => flagOn(n.flag))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
@@ -551,7 +571,7 @@ export default function MainLayout({
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
       entries.flatMap((e) =>
-        "href" in e ? [{ label: e.label, href: e.href }] : collect(e.children),
+        "href" in e ? [{ label: e.label, href: e.href }] : "children" in e ? collect(e.children) : [],
       );
     return nav.flatMap((node) =>
       node.type === "section"
@@ -581,28 +601,6 @@ export default function MainLayout({
     openGroups[node.key] ?? node.match(p);
 
 
-  // Super-admin visibility inspector: a long hover (~1.2s) over a menu item reveals
-  // who can see it (its feature-flag gating). Toggled by the topbar eye badge; both
-  // the badge and the popover only exist for super-admins.
-  const [inspect, setInspect] = useState(true);
-  const [hint, setHint] = useState<{ flag?: FeatureFlagKey; label: string; x: number; y: number } | null>(null);
-  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showHint = useCallback(
-    (el: HTMLElement, item: { flag?: FeatureFlagKey; label: string }) => {
-      if (!isSuperAdmin || !inspect) return;
-      if (hintTimer.current) clearTimeout(hintTimer.current);
-      hintTimer.current = setTimeout(() => {
-        const r = el.getBoundingClientRect();
-        setHint({ flag: item.flag, label: item.label, x: r.right, y: r.top });
-      }, 1200);
-    },
-    [isSuperAdmin, inspect],
-  );
-  const clearHint = useCallback(() => {
-    if (hintTimer.current) clearTimeout(hintTimer.current);
-    setHint(null);
-  }, []);
-
   // Responsive sidebar (prog parity): collapse to an icon-rail on desktop, slide-in
   // drawer on mobile. The hamburger toggles whichever applies to the viewport.
   const [collapsed, setCollapsed] = useState(false);
@@ -617,23 +615,131 @@ export default function MainLayout({
   }, [pathname]);
   const labelHidden = collapsed ? "lg:hidden" : "";
 
+  // Collapsed-rail flyout: when the sidebar is an icon rail, a 500ms hover over an
+  // icon opens a popout to its right with the item's label — and, for groups, its
+  // child links so they stay reachable without expanding the whole rail. A short
+  // close grace lets the pointer travel from the icon across the gap to the popout.
+  const [flyout, setFlyout] = useState<{ node: NavNode; x: number; y: number } | null>(null);
+  const flyoutOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flyoutCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showFlyout = useCallback(
+    (el: HTMLElement, node: NavNode) => {
+      // Icon rail only, and only on desktop (mobile uses the slide-in drawer).
+      if (!collapsed || typeof window === "undefined" || window.innerWidth < 1024) return;
+      if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
+      if (flyoutOpenTimer.current) clearTimeout(flyoutOpenTimer.current);
+      flyoutOpenTimer.current = setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        setFlyout({ node, x: r.right, y: r.top });
+      }, 500);
+    },
+    [collapsed],
+  );
+  const scheduleCloseFlyout = useCallback(() => {
+    if (flyoutOpenTimer.current) clearTimeout(flyoutOpenTimer.current);
+    if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
+    flyoutCloseTimer.current = setTimeout(() => setFlyout(null), 140);
+  }, []);
+  const cancelCloseFlyout = useCallback(() => {
+    if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
+  }, []);
+  // The flyout belongs to the icon rail only — drop it when the rail expands or on nav.
+  useEffect(() => {
+    if (!collapsed) setFlyout(null);
+  }, [collapsed]);
+  useEffect(() => {
+    setFlyout(null);
+  }, [pathname]);
+  // Clear any pending open/close timers if the shell unmounts mid-hover.
+  useEffect(
+    () => () => {
+      if (flyoutOpenTimer.current) clearTimeout(flyoutOpenTimer.current);
+      if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
+    },
+    [],
+  );
+  // Compact child list for a group's flyout: leaf children become links; nested
+  // branches render their label as a heading above their own children.
+  const renderFlyoutChildren = (entries: NavEntry[]) =>
+    entries.map((entry) => {
+      if ("subheading" in entry) {
+        return (
+          <div
+            key={`sub-${entry.subheading}`}
+            className="px-2.5 pb-0.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70"
+          >
+            {entry.subheading}
+          </div>
+        );
+      }
+      if ("href" in entry) {
+        const childActive = entry.match(p);
+        const childPlanLocked = isPlanLocked(entry.flag);
+        return (
+          <Link
+            key={entry.href + entry.label}
+            href={entry.href}
+            title={childPlanLocked ? `${entry.label} — not in ${planContext} plan` : undefined}
+            onClick={() => {
+              setFlyout(null);
+              setMobileOpen(false);
+            }}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13.5px]",
+              childActive
+                ? "bg-primary/10 font-semibold text-primary dark:bg-primary/20"
+                : "font-medium text-muted-foreground hover:bg-surface-variant hover:text-foreground",
+              childPlanLocked && "opacity-50",
+            )}
+          >
+            <span>{entry.label}</span>
+            {childPlanLocked ? <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" /> : null}
+          </Link>
+        );
+      }
+      return (
+        <div key={entry.label} className="pt-1">
+          <div className="px-2.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+            {entry.label}
+          </div>
+          {renderFlyoutChildren(entry.children)}
+        </div>
+      );
+    });
+
   // Recursive renderer for a group's children: leaf links + nested collapsible
   // branches (prog's IA nests up to 3 deep). Branch open-state is keyed by path.
   const renderEntries = (entries: NavEntry[], parentKey: string) => (
     <div className={cn("ml-[19px] mb-1.5 mt-px space-y-0.5 border-l-[1.5px] border-border pl-[11px]", labelHidden)}>
       {entries.map((entry) => {
+        if ("subheading" in entry) {
+          return (
+            <div
+              key={`sub-${entry.subheading}`}
+              className={cn(
+                "px-2.5 pb-0.5 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70",
+                labelHidden,
+              )}
+            >
+              {entry.subheading}
+            </div>
+          );
+        }
         if ("href" in entry) {
           const childActive = entry.match(p);
+          const childPlanLocked = isPlanLocked(entry.flag);
           return (
             <Link
               key={entry.href + entry.label}
               href={entry.href}
               onClick={() => setMobileOpen(false)}
+              title={childPlanLocked ? `${entry.label} — not in ${planContext} plan` : undefined}
               className={cn(
                 "flex min-h-9 items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-[16.8px] lg:text-[14px]",
                 childActive
                   ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                   : "font-medium text-muted-foreground hover:text-foreground",
+                childPlanLocked && "opacity-50",
               )}
             >
               <span
@@ -643,6 +749,7 @@ export default function MainLayout({
                 )}
               />
               <span>{entry.label}</span>
+              {childPlanLocked ? <Lock className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" /> : null}
               {entry.href === "/settings/team" && pendingJoinCount > 0 ? (
                 <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
                   {pendingJoinCount}
@@ -654,15 +761,18 @@ export default function MainLayout({
         const key = `${parentKey}/${entry.label}`;
         const branchActive = entry.match(p);
         const branchOpen = openGroups[key] ?? branchActive;
+        const branchPlanLocked = isPlanLocked(entry.flag);
         return (
           <div key={key}>
             <button
               type="button"
               onClick={() => setOpenGroups((o) => ({ ...o, [key]: !branchOpen }))}
               aria-expanded={branchOpen}
+              title={branchPlanLocked ? `${entry.label} — not in ${planContext} plan` : undefined}
               className={cn(
                 "flex min-h-9 w-full items-center gap-2.5 rounded-[9px] px-2.5 py-1.5 text-[16.8px] lg:text-[14px]",
                 branchActive ? "font-bold text-primary" : "font-medium text-muted-foreground hover:text-foreground",
+                branchPlanLocked && "opacity-50",
               )}
             >
               <span
@@ -672,6 +782,7 @@ export default function MainLayout({
                 )}
               />
               <span>{entry.label}</span>
+              {branchPlanLocked ? <Lock className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" /> : null}
               <ChevronDown
                 className={cn("ml-auto h-3.5 w-3.5 transition-transform", branchOpen ? "rotate-0" : "-rotate-90")}
               />
@@ -776,25 +887,30 @@ export default function MainLayout({
               const Icon = node.icon;
               if (node.type === "leaf") {
                 const active = node.match(p);
+                const planLocked = isPlanLocked(node.flag);
                 return (
                   <Link
                     key={node.key}
                     href={node.href}
                     onClick={() => setMobileOpen(false)}
-                    onMouseEnter={(e) => showHint(e.currentTarget, node)}
-                    onMouseLeave={clearHint}
-                    title={node.label}
+                    onMouseEnter={(e) => showFlyout(e.currentTarget, node)}
+                    onMouseLeave={scheduleCloseFlyout}
+                    title={planLocked ? `${node.label} — not in ${planContext} plan` : node.label}
                     className={cn(
                       "flex min-h-11 items-center gap-2.5 rounded-[11px] px-3 py-2 text-[17.4px] font-label lg:text-[14.5px]",
                       collapsed && "lg:justify-center lg:px-2",
                       active
                         ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                         : "font-semibold text-foreground hover:bg-surface-variant",
+                      planLocked && "opacity-50",
                     )}
                   >
                     <Icon className="h-[18px] w-[18px] shrink-0" />
                     <span className={labelHidden}>{node.label}</span>
-                    {node.href === "/inbox" && inboxUnreadCount > 0 ? (
+                    {planLocked ? (
+                      <Lock className={cn("ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/70", labelHidden)} />
+                    ) : null}
+                    {node.href === "/future/sms-inbox" && inboxUnreadCount > 0 ? (
                       <span className={cn("ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground", labelHidden)}>
                         {inboxUnreadCount}
                       </span>
@@ -804,6 +920,7 @@ export default function MainLayout({
               }
               const groupActive = node.match(p);
               const open = isGroupOpen(node);
+              const planLocked = isPlanLocked(node.flag);
               return (
                 <div key={node.key}>
                   <button
@@ -817,20 +934,24 @@ export default function MainLayout({
                       }
                       setOpenGroups((o) => ({ ...o, [node.key]: !open }));
                     }}
-                    onMouseEnter={(e) => showHint(e.currentTarget, node)}
-                    onMouseLeave={clearHint}
+                    onMouseEnter={(e) => showFlyout(e.currentTarget, node)}
+                    onMouseLeave={scheduleCloseFlyout}
                     aria-expanded={open}
-                    title={node.label}
+                    title={planLocked ? `${node.label} — not in ${planContext} plan` : node.label}
                     className={cn(
                       "flex min-h-11 w-full items-center gap-2.5 rounded-[11px] px-3 py-2 text-[17.4px] font-label lg:text-[14.5px]",
                       collapsed && "lg:justify-center lg:px-2",
                       groupActive
                         ? "bg-primary/10 font-bold text-primary dark:bg-primary/20"
                         : "font-semibold text-foreground hover:bg-surface-variant",
+                      planLocked && "opacity-50",
                     )}
                   >
                     <Icon className="h-[18px] w-[18px] shrink-0" />
                     <span className={labelHidden}>{node.label}</span>
+                    {planLocked ? (
+                      <Lock className={cn("ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/70", labelHidden)} />
+                    ) : null}
                     {node.key === "settings" && pendingJoinCount > 0 ? (
                       <span className={cn("ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground", labelHidden)}>
                         {pendingJoinCount}
@@ -888,34 +1009,14 @@ export default function MainLayout({
                 <Menu className="h-5 w-5" />
               </button>
               <TopbarSearch items={searchItems} />
-              {isSuperAdmin ? (
-                <button
-                  type="button"
-                  onClick={() => setInspect((v) => !v)}
-                  title={
-                    inspect
-                      ? "Visibility inspector on — hover a menu item ~1s to see who can access it. Click to turn off."
-                      : "Visibility inspector off. Click to turn on."
-                  }
-                  className={cn(
-                    "hidden shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors sm:flex",
-                    inspect
-                      ? "border-primary/30 bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {inspect ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                  Who can see this
-                </button>
-              ) : null}
             </div>
             {/* Super-admin "acting as" — only when impersonating a tenant they're not a
                 member of (activeTenant is set by /auth/check exactly in that case). */}
             {isSuperAdmin && principal?.activeTenant ? (
               <div className="hidden items-center gap-2 rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 md:flex">
-                <Crown className="h-3.5 w-3.5 shrink-0" />
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
                 <span className="max-w-[220px] truncate">Active as {principal.activeTenant.name}</span>
-                <Link href="/prog/tenants" className="underline underline-offset-2 hover:no-underline">
+                <Link href="/future/tenants" className="underline underline-offset-2 hover:no-underline">
                   Switch
                 </Link>
               </div>
@@ -931,38 +1032,20 @@ export default function MainLayout({
           </main>
         </div>
       </div>
-      {hint ? (
+      {flyout ? (
         <div
-          className="pointer-events-none fixed z-[100] w-64 rounded-xl border border-border bg-surface p-3 text-xs shadow-theme-lg"
-          style={{ left: hint.x + 8, top: hint.y }}
-          role="status"
+          className="fixed z-[95] flex max-h-[70vh] min-w-[184px] max-w-[264px] flex-col overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-theme-lg"
+          style={{ left: flyout.x + 8, top: flyout.y }}
+          onMouseEnter={cancelCloseFlyout}
+          onMouseLeave={scheduleCloseFlyout}
+          role="menu"
         >
-          <p className="mb-1.5 flex items-center gap-1.5 font-semibold text-foreground">
-            <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-            Who can see “{hint.label}”
-          </p>
-          {(() => {
-            if (!hint.flag) {
-              return (
-                <p className="text-muted-foreground">
-                  Always shown — no feature flag, so every member with menu access sees it.
-                </p>
-              );
-            }
-            const meta = FLAG_META[hint.flag];
-            const on = navFlags[hint.flag] ?? FLAG_DEFAULTS[hint.flag];
-            const layers = meta.controllableBy.filter((l) => l !== "env");
-            return (
-              <div className="space-y-1 text-muted-foreground">
-                <p>{meta.description}</p>
-                <p className={on ? "font-medium text-primary" : "font-medium text-foreground"}>
-                  {on ? "Visible" : "Hidden"} for this tenant.
-                </p>
-                <p>Controlled by: {layers.length ? layers.join(", ") : "global"}.</p>
-                <p className="text-muted-foreground/70">Super-admins always see it.</p>
-              </div>
-            );
-          })()}
+          <div className="px-2.5 py-1.5 text-[13px] font-semibold text-foreground">{flyout.node.label}</div>
+          {flyout.node.type === "group" && flyout.node.children.length ? (
+            <div className="mt-0.5 space-y-0.5 border-t border-border pt-1">
+              {renderFlyoutChildren(flyout.node.children)}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

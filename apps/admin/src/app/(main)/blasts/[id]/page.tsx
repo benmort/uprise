@@ -199,7 +199,7 @@ export default function BlastDetailsPage() {
           <StatusBadge status={blastStatus} />
           <StatusBadge status={streamStatus === "live" ? "ACTIVE" : "SENDING"} className="capitalize" />
           <Button asChild variant="outline">
-            <Link href={`/inbox?blastId=${encodeURIComponent(blastId)}`}>Blast Inbox</Link>
+            <Link href={`/future/sms-inbox?blastId=${encodeURIComponent(blastId)}`}>Blast Inbox</Link>
           </Button>
           <Button asChild>
             <Link href={`/blasts/${encodeURIComponent(blastId)}/composer`}>Open Composer</Link>
@@ -363,7 +363,7 @@ export default function BlastDetailsPage() {
                     ) : (
                       <Button asChild variant="ghost" size="sm">
                         <Link
-                          href={`/inbox?contact=${encodeURIComponent(String(row.phoneE164 || ""))}&blastId=${encodeURIComponent(blastId)}`}
+                          href={`/future/sms-inbox?contact=${encodeURIComponent(String(row.phoneE164 || ""))}&blastId=${encodeURIComponent(blastId)}`}
                         >
                           View Chat
                         </Link>

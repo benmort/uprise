@@ -1,5 +1,6 @@
 "use client";
 import React, { useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   isOpen: boolean;
@@ -36,25 +37,33 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen, onClose]);
 
+  // Lock scroll while open. The shell's scroll container is <main> (the content
+  // area, right of the sidebar), NOT <body> — so lock both and restore the prior
+  // values on close. Locking body alone left the content area scrollable behind
+  // the modal.
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
-
+    if (!isOpen) return;
+    const scroller = document.querySelector("main");
+    const prevBody = document.body.style.overflow;
+    const prevScroller = scroller?.style.overflow ?? "";
+    document.body.style.overflow = "hidden";
+    if (scroller) scroller.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = prevBody;
+      if (scroller) scroller.style.overflow = prevScroller;
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === "undefined") return null;
 
   const contentClasses = isFullscreen
     ? "w-full h-full"
     : "relative w-full rounded-3xl bg-white dark:bg-gray-900";
 
-  return (
+  // Portal to <body> so the fixed overlay is positioned against the VIEWPORT
+  // (centred in the before-the-fold space), immune to any transformed ancestor in
+  // the page/content tree, and lifted clear of the scrollable content area.
+  return createPortal(
     <div className="fixed inset-0 flex items-center justify-center overflow-y-auto modal z-99999">
       {!isFullscreen && (
         <div
@@ -90,6 +99,7 @@ export const Modal: React.FC<ModalProps> = ({
         )}
         <div>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

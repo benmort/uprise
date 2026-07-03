@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { del, put } from "@vercel/blob";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
+import { namespacedBlobKey } from "../common/utils/blob";
 
 type UploadedFile = {
   buffer?: Buffer;
@@ -41,7 +42,7 @@ export class FilesService {
 
     const org = await this.ensureOrganization();
     const safeName = (file.originalname || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
-    const key = `files/${org.id}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`;
+    const key = namespacedBlobKey(`files/${org.id}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`);
     const { url } = await put(key, file.buffer, {
       access: "public",
       contentType: file.mimetype || "application/octet-stream",

@@ -6,14 +6,16 @@ export type DivisionType = "ced" | "sed" | "lga";
 const DIVISION_TABLE: Record<DivisionType, string> = { ced: "geo.ced", sed: "geo.sed", lga: "geo.lga" };
 const REGION_COL: Record<DivisionType, string> = { ced: "ced_code", sed: "sed_code", lga: "lga_code" };
 
-/** ASGS statistical-area levels selectable on the turf-cut map. */
-export type AreaLevel = "mb" | "sa1" | "sa2" | "sa3";
+/** ASGS statistical-area levels selectable on the turf-cut map — the full
+ *  hierarchy Mesh Block → SA1 → SA2 → SA3 → SA4. */
+export type AreaLevel = "mb" | "sa1" | "sa2" | "sa3" | "sa4";
 const AREA_TABLE: Record<AreaLevel, { table: string; codeCol: string; nameExpr: string }> = {
   // Meshblocks have no name — fall back to the code as the label.
   mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "mb_code" },
   sa1: { table: "geo.sa1", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa3: { table: "geo.sa3", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  sa4: { table: "geo.sa4", codeCol: "code", nameExpr: "COALESCE(name, code)" },
 };
 // geo.address_region column that maps an address to each ASGS level — the join key for
 // area address counts (mirrors REGION_COL for divisions).
@@ -22,6 +24,7 @@ const AREA_REGION_COL: Record<AreaLevel, string> = {
   sa1: "sa1_code",
   sa2: "sa2_code",
   sa3: "sa3_code",
+  sa4: "sa4_code",
 };
 
 /** A part of a campaign boundary or a turf cut: a whole division, an ASGS area, or a drawn polygon. */
@@ -42,8 +45,8 @@ export class GeoService {
   }
 
   private areaTable(layer: string) {
-    if (layer !== "mb" && layer !== "sa1" && layer !== "sa2" && layer !== "sa3") {
-      throw new ApiHttpException("BAD_AREA_LEVEL", "layer must be mb, sa1, sa2 or sa3");
+    if (layer !== "mb" && layer !== "sa1" && layer !== "sa2" && layer !== "sa3" && layer !== "sa4") {
+      throw new ApiHttpException("BAD_AREA_LEVEL", "layer must be mb, sa1, sa2, sa3 or sa4");
     }
     return AREA_TABLE[layer];
   }
@@ -159,7 +162,7 @@ export class GeoService {
   }
 
   /**
-   * Union a mix of geographic sources — ASGS areas (mb/sa1-3), whole divisions
+   * Union a mix of geographic sources — ASGS areas (mb/sa1-4), whole divisions
    * (ced/sed/lga), and free-drawn polygons — into one MultiPolygon. This one query
    * builds BOTH a campaign boundary and a turf cut. Drawn polygons are ST_MakeValid'd;
    * ST_CollectionExtract(…, 3) keeps polygons only. Returns null if nothing resolved.
@@ -188,18 +191,20 @@ export class GeoService {
          UNION ALL SELECT geom FROM geo.sa1 WHERE code IN (SELECT jsonb_array_elements_text($2::jsonb))
          UNION ALL SELECT geom FROM geo.sa2 WHERE code IN (SELECT jsonb_array_elements_text($3::jsonb))
          UNION ALL SELECT geom FROM geo.sa3 WHERE code IN (SELECT jsonb_array_elements_text($4::jsonb))
-         UNION ALL SELECT geom FROM geo.ced WHERE code IN (SELECT jsonb_array_elements_text($5::jsonb))
-         UNION ALL SELECT geom FROM geo.sed WHERE code IN (SELECT jsonb_array_elements_text($6::jsonb))
-         UNION ALL SELECT geom FROM geo.lga WHERE code IN (SELECT jsonb_array_elements_text($7::jsonb))
+         UNION ALL SELECT geom FROM geo.sa4 WHERE code IN (SELECT jsonb_array_elements_text($5::jsonb))
+         UNION ALL SELECT geom FROM geo.ced WHERE code IN (SELECT jsonb_array_elements_text($6::jsonb))
+         UNION ALL SELECT geom FROM geo.sed WHERE code IN (SELECT jsonb_array_elements_text($7::jsonb))
+         UNION ALL SELECT geom FROM geo.lga WHERE code IN (SELECT jsonb_array_elements_text($8::jsonb))
          UNION ALL
            SELECT ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(je.value::text), 4326))
-           FROM jsonb_array_elements($8::jsonb) AS je(value)
+           FROM jsonb_array_elements($9::jsonb) AS je(value)
        )
        SELECT ST_AsGeoJSON(ST_Multi(ST_CollectionExtract(ST_Union(geom), 3))) AS geojson FROM parts`,
       areaCodes("mb"),
       areaCodes("sa1"),
       areaCodes("sa2"),
       areaCodes("sa3"),
+      areaCodes("sa4"),
       divCodes("ced"),
       divCodes("sed"),
       divCodes("lga"),
@@ -328,6 +333,47 @@ export class GeoService {
        LIMIT ${limit}`,
       tenantId,
       opts.divisionCode,
+    );
+  }
+
+  /**
+   * The nearest G-NAF addresses to a point (KNN on the gnaf_geom_gix GIST
+   * index — fast at 16.9M rows), with each address's electorates + ASGS codes
+   * and whether it already maps to a contact. Backs the Addresses page: a
+   * geocoded search pin fans out to the real doors around it.
+   */
+  async nearbyAddresses(
+    tenantId: string,
+    opts: { lat: number; lng: number; limit?: number },
+  ) {
+    if (!Number.isFinite(opts.lat) || !Number.isFinite(opts.lng)) {
+      throw new ApiHttpException("INVALID_POINT", "lat and lng are required numbers");
+    }
+    const limit = Math.min(Math.max(1, opts.limit ?? 25), 200);
+    return this.prisma.$queryRawUnsafe(
+      `SELECT a.gnaf_pid AS "gnafPid",
+              a.address_label AS address,
+              a.state,
+              a.lat,
+              a.lng,
+              ROUND((a.geom::geography <-> ST_SetSRID(ST_MakePoint($3, $2), 4326)::geography)::numeric) AS "distanceM",
+              ar.ced_code AS "cedCode",
+              ced.name    AS "cedName",
+              ar.sed_code AS "sedCode",
+              sed.name    AS "sedName",
+              ar.sa1_code AS "sa1Code",
+              ar.sa2_code AS "sa2Code",
+              (c."gnafPid" IS NOT NULL) AS "hasContact"
+       FROM geo.gnaf_address a
+       LEFT JOIN geo.address_region ar ON ar.gnaf_pid = a.gnaf_pid
+       LEFT JOIN geo.ced ced ON ced.code = ar.ced_code
+       LEFT JOIN geo.sed sed ON sed.code = ar.sed_code
+       LEFT JOIN "Contact" c ON c."gnafPid" = a.gnaf_pid AND c."tenantId" = $1
+       ORDER BY a.geom <-> ST_SetSRID(ST_MakePoint($3, $2), 4326)
+       LIMIT ${limit}`,
+      tenantId,
+      opts.lat,
+      opts.lng,
     );
   }
 }

@@ -19,6 +19,26 @@ const STATUS_MAP: Record<string, string> = {
   error: "FAILED",
 };
 
+// Where each dataset row title deep-links to. Federal/State/Local → the divisions
+// explorer's matching tab (#federal/#state/#local); ASGS statistical areas (the
+// full mb → sa4 hierarchy) → the areas explorer at that level via ?layer=;
+// G-NAF → the addresses explorer. Anything unmapped stays plain text.
+const AREA_LEVEL_LAYER: Record<string, string> = {
+  asgs_mb: "mb",
+  sa1: "sa1",
+  sa2: "sa2",
+  sa3: "sa3",
+  sa4: "sa4",
+};
+function datasetHref(key: string): string | null {
+  if (key === "ced") return "/canvass/divisions#federal";
+  if (key === "sed") return "/canvass/divisions#state";
+  if (key === "lga") return "/canvass/divisions#local";
+  if (AREA_LEVEL_LAYER[key]) return `/canvass/areas?layer=${AREA_LEVEL_LAYER[key]}`;
+  if (key === "gnaf") return "/canvass/addresses";
+  return null;
+}
+
 export default function DataSettingsPage() {
   const { showToast } = useToast();
   const [rows, setRows] = useState<GeoDataset[]>([]);
@@ -91,18 +111,17 @@ export default function DataSettingsPage() {
               {
                 key: "label",
                 header: "Dataset",
-                // Federal (CED) / State (SED) deep-link to the divisions explorer's matching tab.
-                cell: (r) =>
-                  r.key === "ced" || r.key === "sed" ? (
-                    <Link
-                      href={`/canvass/divisions#${r.key === "ced" ? "federal" : "state"}`}
-                      className="font-medium text-primary hover:underline"
-                    >
+                // Row titles deep-link to where you explore that dataset (see datasetHref).
+                cell: (r) => {
+                  const href = datasetHref(r.key);
+                  return href ? (
+                    <Link href={href} className="font-medium text-primary hover:underline">
                       {r.label}
                     </Link>
                   ) : (
                     r.label
-                  ),
+                  );
+                },
               },
               { key: "release", header: "Release", cell: (r) => r.releaseDate ?? "—" },
               { key: "rows", header: "Rows", numeric: true, cell: (r) => r.rowCount.toLocaleString() },

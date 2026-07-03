@@ -48,6 +48,27 @@ export class SessionService {
   }
 
   /**
+   * Stamp the login device (IP + user agent) onto a just-issued session — the
+   * controllers call this right after the grant so the flows layer stays
+   * request-agnostic. Best-effort: a failed stamp must never fail a login.
+   */
+  async stampLoginMeta(
+    token: string,
+    meta: { userAgent?: string | null; ipAddress?: string | null },
+  ): Promise<void> {
+    await this.prisma.session
+      .update({
+        where: { token },
+        data: {
+          userAgent: meta.userAgent ?? null,
+          ipAddress: meta.ipAddress ?? null,
+          lastSeenAt: new Date(),
+        },
+      })
+      .catch(() => undefined);
+  }
+
+  /**
    * Resolve a session token to its actor. The active tenant is the session's
    * pinned tenant (set via select-tenant) if it's still a valid membership,
    * else the user's earliest membership.
@@ -61,14 +82,16 @@ export class SessionService {
     if (!session || session.expiresAt.getTime() <= Date.now()) return null;
     const user = await this.prisma.user.findUnique({ where: { id: session.userId } });
     if (!user || user.deletedAt) return null;
-    // Lazily stamp device info (first authenticated request) + last-seen, best-effort.
+    // Stamp device info + last-seen on activity, best-effort. The user agent is
+    // first-write (it identifies the device the session was minted on); the IP
+    // is latest-wins so the active-sessions list shows the last-known address.
     void this.prisma.session
       .update({
         where: { id: session.id },
         data: {
           lastSeenAt: new Date(),
           userAgent: session.userAgent ?? meta?.userAgent ?? null,
-          ipAddress: session.ipAddress ?? meta?.ipAddress ?? null,
+          ipAddress: meta?.ipAddress ?? session.ipAddress ?? null,
         },
       })
       .catch(() => undefined);

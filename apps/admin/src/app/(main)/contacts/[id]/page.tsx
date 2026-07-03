@@ -160,7 +160,7 @@ export default function ContactProfilePage() {
         <div className="flex gap-2">
           {c.phoneE164 ? (
             <Button asChild>
-              <Link href="/inbox">
+              <Link href="/future/sms-inbox">
                 <Send className="mr-1.5 h-4 w-4" />
                 Send text
               </Link>

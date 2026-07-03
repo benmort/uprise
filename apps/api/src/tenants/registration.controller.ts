@@ -1,9 +1,11 @@
-import { Body, Controller, Post, Res } from "@nestjs/common";
+import { Body, Controller, Post, Req, Res } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { RegistrationService } from "./registration.service";
 import { IamFlowsService } from "../auth/iam-flows.service";
+import { SessionService } from "../auth/session.service";
 import { setSessionCookie } from "../auth/session-cookie.util";
+import { requestMeta } from "../auth/request-meta";
 import {
   ConfirmAccessByPhoneDto,
   ConfirmAccessDto,
@@ -24,13 +26,16 @@ export class RegistrationController {
   constructor(
     private readonly registration: RegistrationService,
     private readonly flows: IamFlowsService,
+    private readonly sessions: SessionService,
     private readonly config: ConfigService,
   ) {}
 
   @RequireCaptcha("strict")
   @Post("register")
-  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+  async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const grant = await this.registration.register(dto);
+    // Log the sign-up device (IP + user agent) — surfaced under Active sessions.
+    await this.sessions.stampLoginMeta(grant.token, requestMeta(req));
     setSessionCookie(res, this.config, grant.token, grant.expiresAt);
     return {
       token: grant.token,

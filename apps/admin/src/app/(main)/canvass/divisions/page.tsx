@@ -25,7 +25,7 @@ import { Spinner } from "@uprise/ui";
 const TABS: Array<{ type: DivisionType; label: string; soon?: boolean }> = [
   { type: "ced", label: "Federal" },
   { type: "sed", label: "State" },
-  { type: "lga", label: "Local (LGA)", soon: true }, // federal + state only; LGA not mapped
+  { type: "lga", label: "Local (LGA)" }, // all three levels live (LGA addresses mapped via geo:map)
 ];
 
 // Deep-link aliases: /canvass/divisions#federal|#state|#local selects the tab and

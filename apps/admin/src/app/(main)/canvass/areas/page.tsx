@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, MapPin, Save, Scissors, Search, Trash2 } from "lucide-react";
 import {
   createTurfFromAreas,
@@ -30,12 +30,16 @@ const TurfDrawMap = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-full w-full" /> },
 );
 
+// Full ASGS hierarchy, coarsest → finest (SA4 is region-scale — browsable, but
+// too coarse to cut turf from; the cut buttons still work per the API).
 const TABS: Array<{ level: AreaLevel; label: string }> = [
+  { level: "sa4", label: "SA4" },
   { level: "sa3", label: "SA3" },
   { level: "sa2", label: "SA2" },
   { level: "sa1", label: "SA1" },
   { level: "mb", label: "Meshblock" },
 ];
+const TAB_LEVELS = new Set<AreaLevel>(TABS.map((t) => t.level));
 
 const UNIVERSE_OPTIONS: Array<{ id: TurfUniverse; label: string; desc: string }> = [
   { id: "existing", label: "Existing contacts only", desc: "Bucket only people already in your data." },
@@ -45,9 +49,14 @@ const UNIVERSE_OPTIONS: Array<{ id: TurfUniverse; label: string; desc: string }>
 
 export default function AreasPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const [mode, setMode] = useLocalStorage<WalkMode>("uprise.areasView", "list");
-  const [level, setLevel] = useState<AreaLevel>("sa2");
+  // Deep-link the initial tab via ?layer= (Settings → Data dataset rows).
+  const initialLayer = searchParams.get("layer") as AreaLevel | null;
+  const [level, setLevel] = useState<AreaLevel>(
+    initialLayer && TAB_LEVELS.has(initialLayer) ? initialLayer : "sa2",
+  );
   const [universe, setUniverse] = useState<TurfUniverse>("hybrid");
 
   // ── List mode: search-driven (areas can't be enumerated) ──────────────────
@@ -93,6 +102,22 @@ export default function AreasPage() {
       clearTimeout(t);
     };
   }, [trimmed, level, mode]);
+
+  // Honour a deep-link hash (#mb/#sa1/#sa2/#sa3) on mount + hashchange — the
+  // Settings → Data page links straight to a level here (mirrors the divisions page).
+  useEffect(() => {
+    const apply = () => {
+      const key = window.location.hash.replace(/^#/, "").toLowerCase();
+      if (key === "mb" || key === "sa1" || key === "sa2" || key === "sa3") {
+        setLevel(key as AreaLevel);
+        setQuery("");
+        setHits([]);
+      }
+    };
+    apply();
+    window.addEventListener("hashchange", apply);
+    return () => window.removeEventListener("hashchange", apply);
+  }, []);
 
   // Cut a turf from a single area (list row) — same flow as the divisions page.
   const cutTurf = useCallback(
@@ -192,6 +217,8 @@ export default function AreasPage() {
                     setLevel(t.level);
                     setQuery("");
                     setHits([]);
+                    // Keep the URL shareable/deep-linkable, matching the divisions page.
+                    window.history.replaceState(null, "", `#${t.level}`);
                   }}
                   className={cn(
                     "rounded-lg px-3 py-1.5 text-sm font-semibold transition",

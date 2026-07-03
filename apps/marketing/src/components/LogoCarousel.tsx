@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { LOGOS } from './logos';
 
 /**
  * LogoCarousel Component
@@ -16,27 +17,6 @@ import Image from 'next/image';
  * Usage:
  * <LogoCarousel />
  */
-
-interface Logo {
-  alt: string;
-  src: string;
-  width: number;
-  height: number;
-}
-
-const LOGOS: Logo[] = [
-  { alt: 'Progressive Action Network', src: '/images/logos/progressive-action-network.svg', width: 200, height: 38 },
-  { alt: 'Community First Australia', src: '/images/logos/community-first-australia.svg', width: 190, height: 38 },
-  { alt: 'Future Forward Foundation', src: '/images/logos/future-forward-foundation.svg', width: 200, height: 38 },
-  { alt: 'Equality Now Australia', src: '/images/logos/equality-now-australia.svg', width: 180, height: 38 },
-  { alt: 'Climate Action Collective', src: '/images/logos/climate-action-collective.svg', width: 200, height: 38 },
-  { alt: 'Social Justice Alliance', src: '/images/logos/social-justice-alliance.svg', width: 170, height: 38 },
-  { alt: 'Rights First Australia', src: '/images/logos/rights-first-australia.svg', width: 170, height: 38 },
-  { alt: 'Progressive Change Institute', src: '/images/logos/progressive-change-institute.svg', width: 220, height: 38 },
-  { alt: 'Community Impact Network', src: '/images/logos/community-impact-network.svg', width: 200, height: 38 },
-  { alt: 'Future Generations Fund', src: '/images/logos/future-generations-fund.svg', width: 190, height: 38 },
-  { alt: 'Social Progress Australia', src: '/images/logos/social-progress-australia.svg', width: 200, height: 38 },
-];
 
 export default function LogoCarousel() {
   return (

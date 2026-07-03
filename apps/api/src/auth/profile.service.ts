@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { put } from "@vercel/blob";
 import { UserAvatar, UserProfile } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
+import { namespacedBlobKey } from "../common/utils/blob";
 
 export interface UserProfileInput {
   displayName?: string | null;
@@ -85,7 +86,7 @@ export class ProfileService {
     const token = process.env.BLOB_READ_WRITE_TOKEN;
     if (!token && !process.env.BLOB_STORE_ID) throw new BadRequestException("Image storage is not configured");
     const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const key = `avatars/${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`;
+    const key = namespacedBlobKey(`avatars/${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`);
     const { url } = await put(key, file.buffer, {
       access: "public",
       contentType: file.mimetype || "image/jpeg",

@@ -12,6 +12,8 @@
     "dev:action": "pnpm --filter action run dev",
     "dev:worker": "pnpm --filter worker run dev",
     "dev:tunnel": "ngrok start --config ngrok.local.yml --config ngrok.yml --all",
+    "dev:fresh": "bash scripts/dev.sh",
+    "kill:ports": "bash scripts/kill-ports.sh",
     "load:queue-dispatch": "node scripts/load/queue-dispatch-load.mjs",
     "shadow:compare-queues": "node scripts/shadow/compare-queue-outcomes.mjs",
     "lint": "pnpm -r run lint",

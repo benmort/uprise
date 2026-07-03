@@ -25,7 +25,7 @@ const TurfMap = dynamic(() => import("@uprise/field").then((m) => m.TurfMap), {
   loading: () => <Skeleton className="h-full w-full" />,
 });
 
-const LEVEL_LABEL: Record<AreaLevel, string> = { mb: "Meshblock", sa1: "SA1", sa2: "SA2", sa3: "SA3" };
+const LEVEL_LABEL: Record<AreaLevel, string> = { mb: "Meshblock", sa1: "SA1", sa2: "SA2", sa3: "SA3", sa4: "SA4" };
 
 export default function AreaDetailPage() {
   const params = useParams<{ layer: string; code: string }>();

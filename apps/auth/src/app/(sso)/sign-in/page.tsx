@@ -72,6 +72,7 @@ export default function LoginPage() {
   }
 
   const q = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "";
+  const homepageUrl = process.env.NEXT_PUBLIC_MARKETING_URL || "http://localhost:3003";
 
   // Brief check before deciding form vs "already signed in", to avoid a flash.
   if (checking) {
@@ -107,6 +108,12 @@ export default function LoginPage() {
 
   return (
     <div className="flex w-full flex-col">
+      <div className="mb-5">
+        <a href={homepageUrl} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+          <ChevronLeft className="h-4 w-4" />
+          Back to homepage
+        </a>
+      </div>
       <div className="mb-6">
         <h1 className="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90 sm:text-title-md">Sign In</h1>
         <p className="text-sm text-muted-foreground">Enter your email and password to sign in!</p>

@@ -186,6 +186,10 @@ export default function SignUpPage() {
             hint="Lowercase letters, numbers and hyphens"
             error={slugState === "unavailable" ? "That URL is taken." : undefined}
           >
+            <p className="text-xs text-muted-foreground">
+              Your team&apos;s web address for signing in — e.g.{" "}
+              <span className="font-medium text-foreground">your-org.uprise.org.au</span>
+            </p>
             <div className="relative">
               <Input
                 id="slug"

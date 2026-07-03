@@ -361,7 +361,7 @@ export const upriseTourSteps: TourStep[] = [
     content: "Every reply lands here as a live conversation.",
     detail: "This is where responders triage and reply to supporters who message back.",
     selector: "#tour-inbox-list",
-    route: "/inbox",
+    route: "/future/sms-inbox",
   },
   {
     icon: Filter,
@@ -369,7 +369,7 @@ export const upriseTourSteps: TourStep[] = [
     content: "Slice conversations by state, or search by name or number.",
     detail: "Unresolved, awaiting-response, responded and priority filters keep a busy inbox manageable.",
     selector: "#tour-inbox-filters",
-    route: "/inbox",
+    route: "/future/sms-inbox",
   },
   {
     icon: MessageSquareText,
@@ -377,7 +377,7 @@ export const upriseTourSteps: TourStep[] = [
     content: "Read the thread and respond right here.",
     detail: "Suggested replies appear under the box; Cmd/Ctrl+Enter sends. Claim, snooze or resolve from the header.",
     selector: "#tour-inbox-reply",
-    route: "/inbox",
+    route: "/future/sms-inbox",
   },
   // ── Settings — the boring one ─────────────────────────────────────────────────
   {
@@ -492,7 +492,7 @@ export const whatsappTourSteps: TourStep[] = [
     detail:
       "A contact who texts and WhatsApps shows as two separate threads — they have different opt-in state and delivery rules.",
     selector: "#tour-inbox-list",
-    route: "/inbox",
+    route: "/future/sms-inbox",
   },
   {
     icon: MessageSquareText,
@@ -501,7 +501,7 @@ export const whatsappTourSteps: TourStep[] = [
     detail:
       "When that window closes, the reply box locks and prompts you to re-open the conversation with an approved template.",
     selector: "#tour-inbox-reply",
-    route: "/inbox",
+    route: "/future/sms-inbox",
   },
   {
     icon: BarChart3,
@@ -699,21 +699,21 @@ export const journeysTourSteps: TourStep[] = [
     detail:
       "e.g. “Not home ×2 → wait 2 days → text; if they reply interested → create a door task for the nearest volunteer.”",
     selector: "#tour-nav",
-    route: "/journeys",
+    route: "/future/journeys",
   },
   {
     icon: GitBranch,
     title: "The visual builder",
     content: "Select a journey to edit its flow as a vertical stack of nodes.",
     detail: "A green Trigger node up top, then the rungs you add from the palette below.",
-    route: "/journeys",
+    route: "/future/journeys",
   },
   {
     icon: PlusCircle,
     title: "Add steps from the palette",
     content: "Drop in Wait, Condition and Action nodes and configure each inline.",
     detail: "Wait minutes, a condition expression, or an action (queue a text, create a door task, hand to inbox).",
-    route: "/journeys",
+    route: "/future/journeys",
   },
   {
     icon: Send,
@@ -721,7 +721,7 @@ export const journeysTourSteps: TourStep[] = [
     content: "Preview the path with Dry run, then Activate to go live.",
     detail: "Enrolled count and conversion % show on the selected journey. Re-run this tour from the help menu.",
     selector: "#tour-help-button",
-    route: "/journeys",
+    route: "/future/journeys",
   },
 ];
 

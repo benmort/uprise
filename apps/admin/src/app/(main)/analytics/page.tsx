@@ -458,7 +458,7 @@ export default function AnalyticsPage() {
                       </Button>
                     ) : (
                       <Button asChild variant="ghost" size="sm">
-                        <Link href={`/inbox?contact=${encodeURIComponent(String(row.phoneE164 || ""))}`}>
+                        <Link href={`/future/sms-inbox?contact=${encodeURIComponent(String(row.phoneE164 || ""))}`}>
                           View Chat
                         </Link>
                       </Button>

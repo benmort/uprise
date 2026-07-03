@@ -65,7 +65,7 @@ export function buildActivityItems(
       label: String((c as any).contactName || phone || "Conversation"),
       sublabel: "New reply in inbox",
       at,
-      href: `/inbox?contact=${encodeURIComponent(phone)}`,
+      href: `/future/sms-inbox?contact=${encodeURIComponent(phone)}`,
     });
   }
 

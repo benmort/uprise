@@ -61,9 +61,13 @@ async function main(): Promise<void> {
        WHERE p.gnaf_pid = ar.gnaf_pid`,
     );
 
-    // Refresh dataset_meta. LGA is dropped — clear its provenance row so
-    // /settings/data doesn't show a stale "loaded" LGA entry.
-    await prisma.$executeRawUnsafe(`DELETE FROM geo.dataset_meta WHERE key = 'lga'`);
+    log("Spatial join → local LGA…");
+    await spatialJoin(
+      "LGA",
+      `UPDATE geo.address_region ar SET lga_code = p.code
+       FROM (SELECT a.gnaf_pid, d.code FROM geo.lga d JOIN geo.gnaf_address a ON ST_Contains(d.geom, a.geom)) p
+       WHERE p.gnaf_pid = ar.gnaf_pid`,
+    );
 
     // G-NAF carries its full provenance here (geo:load-boundaries owns the boundary
     // layers' provenance); this also clears the seed's stale "(demo)" label/release.
@@ -88,6 +92,7 @@ async function main(): Promise<void> {
       ["sa4", "geo.sa4"],
       ["ced", "geo.ced"],
       ["sed", "geo.sed"],
+      ["lga", "geo.lga"],
     ] as const) {
       await prisma.$executeRawUnsafe(
         `UPDATE geo.dataset_meta SET row_count = (SELECT count(*) FROM ${table}),

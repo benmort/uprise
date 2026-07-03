@@ -16,6 +16,7 @@ import type { Request, Response } from "express";
 import { SessionService } from "./session.service";
 import { IamFlowsService } from "./iam-flows.service";
 import { clearSessionCookie, readSessionToken, setSessionCookie } from "./session-cookie.util";
+import { requestMeta } from "./request-meta";
 import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 
 /**
@@ -36,6 +37,7 @@ export class IamController {
   @Post("sessions")
   async login(
     @Body() body: { email?: string; password?: string },
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.flows.signIn(body.email, body.password);
@@ -46,6 +48,8 @@ export class IamController {
     if (result.kind === "no-membership") throw new UnauthorizedException("User has no tenant membership");
     if (result.kind === "twofa") return { twofaRequired: true, challengeId: result.challengeId };
 
+    // Log the login device (IP + user agent) — surfaced under Active sessions.
+    await this.sessions.stampLoginMeta(result.token, requestMeta(req));
     setSessionCookie(res, this.config, result.token, result.expiresAt);
     return {
       token: result.token,

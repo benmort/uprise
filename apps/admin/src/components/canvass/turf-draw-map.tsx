@@ -27,6 +27,7 @@ export type SelectedArea = { level: AreaLevel; code: string; name: string; geome
 type MapEvents = { on: (e: string, cb: () => void) => void; off: (e: string, cb: () => void) => void };
 
 const LEVELS: Array<{ id: AreaLevel; label: string; minZoom: number }> = [
+  { id: "sa4", label: "SA4", minZoom: 5 },
   { id: "sa3", label: "SA3", minZoom: 7 },
   { id: "sa2", label: "SA2", minZoom: 9 },
   { id: "sa1", label: "SA1", minZoom: 11 },

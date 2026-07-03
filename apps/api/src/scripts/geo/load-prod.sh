@@ -55,7 +55,7 @@ SQL
   rm -f "$GEO" "$DET"
 done
 
-# ── Build address_region (federal + state; LGA dropped) ──
+# ── Build address_region (federal CED + state SED + local LGA) ──
 echo "=== Building address_region $(date +%H:%M:%S) ==="
 psql "$PGURL" -v ON_ERROR_STOP=1 <<'SQL'
 \timing on
@@ -80,16 +80,23 @@ FROM (SELECT a.gnaf_pid, d.code FROM geo.sed d JOIN geo.gnaf_address a ON ST_Con
 WHERE p.gnaf_pid = ar.gnaf_pid;
 COMMIT;
 
-DELETE FROM geo.dataset_meta WHERE key = 'lga';
+BEGIN;
+SET LOCAL work_mem = '512MB';
+UPDATE geo.address_region ar SET lga_code = p.code
+FROM (SELECT a.gnaf_pid, d.code FROM geo.lga d JOIN geo.gnaf_address a ON ST_Contains(d.geom, a.geom)) p
+WHERE p.gnaf_pid = ar.gnaf_pid;
+COMMIT;
+
 UPDATE geo.dataset_meta SET row_count=(SELECT count(*) FROM geo.gnaf_address), status='loaded', last_ingested=now(), updated_at=now() WHERE key='gnaf';
 UPDATE geo.dataset_meta SET row_count=(SELECT count(*) FROM geo.ced), status='loaded', last_ingested=now(), updated_at=now() WHERE key='ced';
 UPDATE geo.dataset_meta SET row_count=(SELECT count(*) FROM geo.sed), status='loaded', last_ingested=now(), updated_at=now() WHERE key='sed';
+UPDATE geo.dataset_meta SET row_count=(SELECT count(*) FROM geo.lga), status='loaded', last_ingested=now(), updated_at=now() WHERE key='lga';
 SQL
 
 # ── Verify ──
 echo "=== Result $(date +%H:%M:%S) ==="
 psql "$PGURL" -tAc "SELECT 'gnaf=' || to_char(count(*),'FM999,999,999') FROM geo.gnaf_address;"
-psql "$PGURL" -tAc "SELECT 'mapped total=' || to_char(count(*),'FM999,999,999') || '  ced=' || to_char(count(ced_code),'FM999,999,999') || '  sed=' || to_char(count(sed_code),'FM999,999,999') FROM geo.address_region;"
+psql "$PGURL" -tAc "SELECT 'mapped total=' || to_char(count(*),'FM999,999,999') || '  ced=' || to_char(count(ced_code),'FM999,999,999') || '  sed=' || to_char(count(sed_code),'FM999,999,999') || '  lga=' || to_char(count(lga_code),'FM999,999,999') FROM geo.address_region;"
 echo "ACT federal divisions (sanity — expect Canberra ~107k / Bean ~90k / Fenner ~85k):"
 psql "$PGURL" -tAc "SELECT c.name || ' ' || to_char(count(*),'FM999,999,999') FROM geo.address_region ar JOIN geo.ced c ON c.code=ar.ced_code JOIN geo.gnaf_address a ON a.gnaf_pid=ar.gnaf_pid WHERE a.state='ACT' GROUP BY c.name ORDER BY count(*) DESC;"
 echo "=== DONE $(date +%H:%M:%S) ==="

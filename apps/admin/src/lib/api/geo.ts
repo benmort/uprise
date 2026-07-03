@@ -22,7 +22,7 @@ export type DivisionDetail = Division & {
 export type UniverseAddress = { gnafPid: string; address: string | null; lat: number | null; lng: number | null };
 
 /** ASGS statistical-area levels selectable on the turf-cut map. */
-export type AreaLevel = "mb" | "sa1" | "sa2" | "sa3";
+export type AreaLevel = "mb" | "sa1" | "sa2" | "sa3" | "sa4";
 export type AreaProps = { code: string; name: string; level: AreaLevel };
 export type AreaFeature = GeoJSON.Feature<GeoJSON.MultiPolygon | GeoJSON.Polygon, AreaProps>;
 export type AreaCollection = GeoJSON.FeatureCollection<GeoJSON.MultiPolygon | GeoJSON.Polygon, AreaProps>;
@@ -123,4 +123,28 @@ export async function createTurfFromDivision(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+}
+
+// ── Addresses page (live geocode search → nearest real doors) ───────────────
+/** A G-NAF door near a searched point, with its electorates + contact linkage. */
+export type NearbyAddress = {
+  gnafPid: string;
+  address: string;
+  state: string | null;
+  lat: number;
+  lng: number;
+  distanceM: number;
+  cedCode: string | null;
+  cedName: string | null;
+  sedCode: string | null;
+  sedName: string | null;
+  sa1Code: string | null;
+  sa2Code: string | null;
+  hasContact: boolean;
+};
+
+/** The nearest G-NAF addresses to a point (KNN over the national set). */
+export async function nearbyAddresses(lat: number, lng: number, limit = 25) {
+  const qs = new URLSearchParams({ lat: String(lat), lng: String(lng), limit: String(limit) });
+  return request<NearbyAddress[]>(`/geo/addresses/near?${qs}`);
 }
