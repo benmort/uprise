@@ -41,13 +41,49 @@ export class GeoController {
     return this.geo.divisionDetail(org.id, type, code);
   }
 
+  @Get("states")
+  listStates() {
+    return this.geo.listStates();
+  }
+
+  @Get("states/:code")
+  async stateDetail(@Param("code") code: string) {
+    const org = await this.ensureOrganization();
+    return this.geo.stateDetail(org.id, code);
+  }
+
+  /** One region's place in the containment tree: what contains it + what it
+   *  contains (state ↔ SA4 ↔ … ↔ meshblock ↔ address, plus CED/SED/LGA). */
+  @Get("hierarchy")
+  regionHierarchy(@Query("kind") kind = "", @Query("code") code = "") {
+    return this.geo.regionHierarchy(kind, code);
+  }
+
   @Get("areas/search")
   searchAreas(
     @Query("layer") layer = "sa2",
     @Query("q") q = "",
     @Query("limit") limit?: string,
+    @Query("state") state?: string,
   ) {
-    return this.geo.searchAreas(layer, q, limit ? Number(limit) : undefined);
+    return this.geo.searchAreas(layer, q, limit ? Number(limit) : undefined, state);
+  }
+
+  /** Paged national browse for the areas list view (declared before areas/:layer/:code). */
+  @Get("areas/browse")
+  browseAreas(
+    @Query("layer") layer = "sa2",
+    @Query("q") q = "",
+    @Query("state") state?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    return this.geo.browseAreas(layer, {
+      q,
+      state,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
   }
 
   @Get("areas/:layer/:code")

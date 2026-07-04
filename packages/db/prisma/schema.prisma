@@ -1903,6 +1903,22 @@ model OrgProfile {
   id        String   @id @default(cuid())
   tenantId  String
   name      String
+  // Public profile + brand. Rendered on the tenant's auth/marketing surfaces
+  // (see Tenant.brandBySlug). Logos come in two shapes: block (≈square) and
+  // landscape; favicon + hero are single images. Colours are hex strings.
+  bio              String?
+  websiteUrl       String?
+  facebookUrl      String?
+  twitterUrl       String?
+  linkedinUrl      String?
+  instagramUrl     String?
+  logoBlockUrl     String?
+  logoLandscapeUrl String?
+  faviconUrl       String?
+  heroImageUrl     String?
+  primaryColour    String?
+  secondaryColour  String?
+  customCss        String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   contacts   OrgContact[]

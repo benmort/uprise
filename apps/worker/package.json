@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "start": "node dist/worker/src/main.js",
-    "dev": "TS_NODE_PROJECT=tsconfig.dev.json node --watch -r ts-node/register src/main.ts",
+    "dev": "node ../../scripts/dev-supervisor.mjs --label worker -- TS_NODE_PROJECT=tsconfig.dev.json node --watch -r ts-node/register src/main.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "pnpm run typecheck",
     "build": "tsc -p tsconfig.json",

@@ -124,6 +124,23 @@ export async function getQueueStats() {
   return request<QueueStatsResponse>("/system/queue-stats");
 }
 
+/** Per-tenant async-work health (domain-table aggregation) — the tenant-scoped
+ *  counterpart to the global queue/Redis stats. Super-admin only. */
+export type TenantActivityResponse = {
+  at: string;
+  tenantId: string;
+  domains: Array<{
+    key: string;
+    label: string;
+    total: number;
+    byStatus: Record<string, number>;
+  }>;
+};
+
+export async function getTenantActivity() {
+  return request<TenantActivityResponse>("/system/tenant-activity");
+}
+
 export type FeatureFlagsResponse = {
   FEATURE_REALTIME_ENABLED: boolean;
   FEATURE_AI_ASSIST_ENABLED: boolean;
@@ -807,8 +824,12 @@ export type OptOutLedger = {
   entries: Array<{ id: string; phoneE164: string; channel: string; source: string | null; updatedAt: string }>;
 };
 
-export async function getOptOuts() {
-  return request<OptOutLedger>("/compliance/opt-outs");
+export async function getOptOuts(opts: { take?: number; skip?: number } = {}) {
+  const q = new URLSearchParams();
+  if (opts.take !== undefined) q.set("take", String(opts.take));
+  if (opts.skip !== undefined) q.set("skip", String(opts.skip));
+  const qs = q.toString();
+  return request<OptOutLedger>(`/compliance/opt-outs${qs ? `?${qs}` : ""}`);
 }
 
 // ── Field extras + ops gaps (G2/G8/G10) ────────────────────────────────────

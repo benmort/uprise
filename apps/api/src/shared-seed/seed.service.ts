@@ -442,7 +442,8 @@ export class SeedService {
         await this.prisma.$executeRawUnsafe(
           `INSERT INTO geo.dataset_meta (key,label,source_url,release_date,licence,row_count,status,last_ingested)
            VALUES ($1,$2,'(demo seed)','demo','demo',$3,'loaded',now())
-           ON CONFLICT (key) DO UPDATE SET row_count=EXCLUDED.row_count, status='loaded', last_ingested=now()`,
+           ON CONFLICT (key) DO UPDATE SET row_count=EXCLUDED.row_count, status='loaded', last_ingested=now()
+           WHERE geo.dataset_meta.source_url='(demo seed)'`,
           key,
           label,
           count,

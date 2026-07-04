@@ -478,7 +478,12 @@ export class ActionNetworkConnector implements IntegrationConnector {
     const mapped: RemoteAudienceList[] = lists.map((row) => ({
       id: listIdFromRow(row),
       name: String(row.title || row.name || "Unnamed list"),
-      count: typeof row.total_donations === "number" ? row.total_donations : undefined,
+      // Action Network reports a list's membership as `total_records` on the list
+      // resource; keep a couple of aliases as a fallback (`total_donations` is a
+      // fundraising field and never a list count).
+      count: [row.total_records, row.total_items, row.total, row.count].find(
+        (v): v is number => typeof v === "number",
+      ),
       source: "ACTION_NETWORK" as const,
     }));
     return mapped;

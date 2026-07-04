@@ -87,6 +87,26 @@ FROM (SELECT a.gnaf_pid, d.code FROM geo.lga d JOIN geo.gnaf_address a ON ST_Con
 WHERE p.gnaf_pid = ar.gnaf_pid;
 COMMIT;
 
+-- Precomputed national counts per region — the summary the API serves instead of
+-- aggregating 16.9M rows per request. Refresh with every geo run.
+TRUNCATE geo.region_address_count;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'ced', ced_code, COUNT(*), now() FROM geo.address_region WHERE ced_code IS NOT NULL GROUP BY ced_code;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'sed', sed_code, COUNT(*), now() FROM geo.address_region WHERE sed_code IS NOT NULL GROUP BY sed_code;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'lga', lga_code, COUNT(*), now() FROM geo.address_region WHERE lga_code IS NOT NULL GROUP BY lga_code;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'mb', mb_code, COUNT(*), now() FROM geo.address_region WHERE mb_code IS NOT NULL GROUP BY mb_code;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'sa1', sa1_code, COUNT(*), now() FROM geo.address_region WHERE sa1_code IS NOT NULL GROUP BY sa1_code;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'sa2', sa2_code, COUNT(*), now() FROM geo.address_region WHERE sa2_code IS NOT NULL GROUP BY sa2_code;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'sa3', sa3_code, COUNT(*), now() FROM geo.address_region WHERE sa3_code IS NOT NULL GROUP BY sa3_code;
+INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+  SELECT 'sa4', sa4_code, COUNT(*), now() FROM geo.address_region WHERE sa4_code IS NOT NULL GROUP BY sa4_code;
+
 UPDATE geo.dataset_meta SET row_count=(SELECT count(*) FROM geo.gnaf_address), status='loaded', last_ingested=now(), updated_at=now() WHERE key='gnaf';
 UPDATE geo.dataset_meta SET row_count=(SELECT count(*) FROM geo.ced), status='loaded', last_ingested=now(), updated_at=now() WHERE key='ced';
 UPDATE geo.dataset_meta SET row_count=(SELECT count(*) FROM geo.sed), status='loaded', last_ingested=now(), updated_at=now() WHERE key='sed';

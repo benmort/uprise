@@ -11,8 +11,9 @@ function read(relative: string): string {
 describe("major route files", () => {
   it("contains dashboard page scaffold", () => {
     const source = read("dashboard/page.tsx");
-    expect(source).toContain("Command centre");
-    expect(source).toContain("Recent activity");
+    expect(source).toContain("Dashboard");
+    expect(source).toContain('title="Canvassing"');
+    expect(source).toContain('title="Messaging"');
   });
 
   it("contains audience page scaffold", () => {
@@ -46,9 +47,12 @@ describe("major route files", () => {
   });
 
   it("contains inbox page scaffold", () => {
+    // /inbox renders the default folder via the shared list view; the shell
+    // (breadcrumb, sidebar, compose) lives in inbox/layout.tsx.
     const source = read("inbox/page.tsx");
-    expect(source).toContain("Active Conversations");
-    expect(source).toContain("Type your response");
+    expect(source).toContain("InboxFolderView");
+    const layout = read("inbox/layout.tsx");
+    expect(layout).toContain("Inbox");
   });
 
   it("renders the prog-style topbar (search + notifications + user menu)", () => {

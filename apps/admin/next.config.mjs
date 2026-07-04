@@ -47,6 +47,9 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Validation builds set NEXT_DIST_DIR (e.g. .next-validate) so `next build`
+  // never clobbers the `.next` a running `next dev` is serving from.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   // @uprise/ui ships TS/TSX source (the shared design system); api-client/contracts
   // ship built dist but are listed so Next resolves the workspace packages (meld doc 14).
@@ -56,9 +59,17 @@ const nextConfig = {
   async redirects() {
     return [
       { source: "/prog/:path*", destination: "/future/:path*", permanent: false },
-      { source: "/inbox", destination: "/future/sms-inbox", permanent: false },
       { source: "/journeys", destination: "/future/journeys", permanent: false },
       { source: "/journeys/:path*", destination: "/future/journeys/:path*", permanent: false },
+      // The geo explorers + datasets + file manager moved under /data.
+      { source: "/canvass/divisions", destination: "/data/divisions", permanent: false },
+      { source: "/canvass/divisions/:path*", destination: "/data/divisions/:path*", permanent: false },
+      { source: "/canvass/states", destination: "/data/states", permanent: false },
+      { source: "/canvass/areas", destination: "/data/areas", permanent: false },
+      { source: "/canvass/areas/:path*", destination: "/data/areas/:path*", permanent: false },
+      { source: "/canvass/addresses", destination: "/data/addresses", permanent: false },
+      { source: "/settings/data", destination: "/data/datasets", permanent: false },
+      { source: "/future/file-manager", destination: "/data/file-manager", permanent: false },
     ];
   },
 };

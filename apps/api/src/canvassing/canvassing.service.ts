@@ -16,7 +16,7 @@ import { ApiHttpException } from "../common/http/api-response";
 import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
 import { hashPassword } from "../auth/password.util";
 import { EngagementService } from "../shared-engagement/engagement.service";
-import { GeoService } from "../geo/geo.service";
+import { GeoService, type BoundarySource } from "../geo/geo.service";
 
 /** Which addresses a turf should be populated with when it's cut. */
 export type TurfUniverse = "existing" | "none" | "hybrid";
@@ -541,6 +541,55 @@ export class CanvassingService {
       throw new ApiHttpException("EMPTY_SELECTION", "Select at least one area or draw a polygon");
     }
     // Bound to the campaign: clip to the boundary + subtract already-claimed turf.
+    const geometry = await this.clipToCampaign(tenantId, input.campaignId, raw);
+    if (!geometry) {
+      throw new ApiHttpException(
+        "OUTSIDE_BOUNDARY",
+        "The selection is outside the campaign boundary or overlaps already-claimed turf",
+      );
+    }
+    const turf = await this.createTurf(tenantId, {
+      name: input.name,
+      geometry,
+      campaignId: input.campaignId ?? null,
+    });
+    if (input.universe && input.universe !== "existing") {
+      await this.loadUniverseIntoTurf(tenantId, turf.id, { universe: input.universe });
+    }
+    return turf;
+  }
+
+  /**
+   * Cut ONE turf from a stacked "my turf" basket — any mix of whole divisions,
+   * ASGS areas, drawn polygons and individually-picked G-NAF doors. The boundary
+   * is the PostGIS union of every part (doors buffered ~55 m); clip + cold-door
+   * loading match the areas/division paths.
+   */
+  async createTurfFromSources(
+    tenantId: string,
+    input: {
+      name: string;
+      campaignId?: string | null;
+      divisions?: Array<{ type: "ced" | "sed" | "lga" | "ste"; code: string }>;
+      areas?: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }>;
+      polygons?: Record<string, unknown>[];
+      gnafPids?: string[];
+      universe?: TurfUniverse;
+    },
+  ) {
+    const sources: BoundarySource[] = [
+      ...(input.divisions ?? []).map((d) => ({ kind: "division" as const, type: d.type, code: d.code })),
+      ...(input.areas ?? []).map((a) => ({ kind: "area" as const, layer: a.layer, code: a.code })),
+      ...(input.polygons ?? []).map((geometry) => ({ kind: "polygon" as const, geometry })),
+    ];
+    const gnafPids = (input.gnafPids ?? []).filter(Boolean);
+    if (sources.length === 0 && gnafPids.length === 0) {
+      throw new ApiHttpException("EMPTY_SELECTION", "Add at least one division, area, polygon or address");
+    }
+    const raw = await this.geo.unionSources(sources, gnafPids);
+    if (!raw) {
+      throw new ApiHttpException("EMPTY_SELECTION", "Nothing resolved from the selection");
+    }
     const geometry = await this.clipToCampaign(tenantId, input.campaignId, raw);
     if (!geometry) {
       throw new ApiHttpException(

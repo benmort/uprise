@@ -1,10 +1,17 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Type } from "class-transformer";
+import { IsInt, IsOptional } from "class-validator";
 import { AppUserRole } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { ComplianceService } from "./compliance.service";
+
+class OptOutsQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() take?: number;
+  @IsOptional() @Type(() => Number) @IsInt() skip?: number;
+}
 
 @Controller("compliance")
 @UseGuards(RolesGuard)
@@ -26,8 +33,8 @@ export class ComplianceController {
   }
 
   @Get("opt-outs")
-  async optOuts() {
+  async optOuts(@Query() query: OptOutsQueryDto) {
     const org = await this.ensureOrganization();
-    return this.compliance.optOutLedger(org.id);
+    return this.compliance.optOutLedger(org.id, query);
   }
 }

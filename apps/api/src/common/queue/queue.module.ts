@@ -6,6 +6,7 @@ import { QueueConfigService } from "./queue-config.service";
 import { DISPATCH_QUEUE_TOKEN } from "./queue.tokens";
 import { QueueStatsController } from "./queue-stats.controller";
 import { QueueStatsService } from "./queue-stats.service";
+import { TenantActivityService } from "./tenant-activity.service";
 
 @Module({
   imports: [LoggingModule],
@@ -13,6 +14,7 @@ import { QueueStatsService } from "./queue-stats.service";
   providers: [
     QueueConfigService,
     QueueStatsService,
+    TenantActivityService,
     {
       provide: DISPATCH_QUEUE_TOKEN,
       useClass: BullmqDispatchQueue,

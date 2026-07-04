@@ -1,6 +1,9 @@
 import { request } from "@/lib/api";
 
 export type DivisionType = "ced" | "sed" | "lga";
+/** Division sources that can be stacked into a turf — the electoral/LGA types
+ *  plus "ste" (a whole state/territory from the derived geo.state layer). */
+export type TurfDivisionType = DivisionType | "ste";
 
 export type GeoDataset = {
   key: string;
@@ -41,8 +44,24 @@ export type AreaDetail = {
 /** Which addresses a turf is populated with when it's cut. */
 export type TurfUniverse = "existing" | "none" | "hybrid";
 
-export async function getGeoStatus() {
-  return request<GeoDataset[]>("/geo/status");
+// ── Containment hierarchy (state → SA4 → … → meshblock → address, + divisions) ──
+export type RegionKind = "state" | "ced" | "sed" | "lga" | "sa4" | "sa3" | "sa2" | "sa1" | "mb" | "address";
+export type RegionRef = { kind: RegionKind; code: string; name: string; addressCount?: number };
+export type RegionHierarchy = {
+  region: RegionRef;
+  parents: RegionRef[];
+  childGroups: Array<{ kind: RegionKind; label: string; total: number; rows: RegionRef[] }>;
+};
+
+/** One region's place in the containment tree — parents (breadcrumb up) +
+ *  contained regions (lists down). Backs the <RegionHierarchy> panel. */
+export async function getRegionHierarchy(kind: RegionKind, code: string) {
+  const qs = new URLSearchParams({ kind, code });
+  return request<RegionHierarchy>(`/geo/hierarchy?${qs}`);
+}
+
+export async function getGeoStatus(opts?: { signal?: AbortSignal }) {
+  return request<GeoDataset[]>("/geo/status", opts?.signal ? { signal: opts.signal } : undefined);
 }
 
 export async function listDivisions(type: DivisionType) {
@@ -51,6 +70,16 @@ export async function listDivisions(type: DivisionType) {
 
 export async function getDivision(type: DivisionType, code: string) {
   return request<DivisionDetail>(`/geo/divisions/${type}/${encodeURIComponent(code)}`);
+}
+
+/** The states + territories (derived geo.state layer) — the divisions twin for
+ *  the explorer's States kind. Same row shape as Division. */
+export async function listStates() {
+  return request<Division[]>("/geo/states");
+}
+
+export async function getState(code: string) {
+  return request<DivisionDetail>(`/geo/states/${encodeURIComponent(code)}`);
 }
 
 export async function listUniverseAddresses(params: {
@@ -76,11 +105,33 @@ export async function listAreas(params: { layer: AreaLevel; bbox: [number, numbe
   return request<AreaCollection>(`/geo/areas?${q}`);
 }
 
-/** Type-ahead over a level's name/code for the area search box. */
-export async function searchAreas(layer: AreaLevel, q: string, limit?: number) {
+/** Type-ahead over a level's name/code for the area search box. `state` is the
+ *  ASGS state digit (1–9) to restrict results to one state. */
+export async function searchAreas(layer: AreaLevel, q: string, limit?: number, state?: string) {
   const qs = new URLSearchParams({ layer, q });
   if (limit) qs.set("limit", String(limit));
+  if (state) qs.set("state", state);
   return request<AreaHit[]>(`/geo/areas/search?${qs}`);
+}
+
+export type AreaRow = AreaHit & { addressCount: number };
+
+/** Paged national browse for the areas list view — the divisions-table
+ *  equivalent. `state` is the ASGS state digit (1–9); `q` optionally filters
+ *  name/code. Returns one page + the total match count. */
+export async function browseAreas(params: {
+  layer: AreaLevel;
+  q?: string;
+  state?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const qs = new URLSearchParams({ layer: params.layer });
+  if (params.q) qs.set("q", params.q);
+  if (params.state) qs.set("state", params.state);
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.offset) qs.set("offset", String(params.offset));
+  return request<{ rows: AreaRow[]; total: number }>(`/geo/areas/browse?${qs}`);
 }
 
 /** One area's boundary — used when a search result is picked. */
@@ -101,6 +152,24 @@ export async function createTurfFromAreas(input: {
   polygons?: GeoJSON.Polygon[];
 }) {
   return request<{ id: string }>("/canvass/turfs/from-areas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+/** Cut one turf from a stacked "my turf" basket — any mix of divisions, areas,
+ *  drawn polygons and individually-picked G-NAF doors. */
+export async function createTurfFromSources(input: {
+  name: string;
+  campaignId?: string;
+  universe?: TurfUniverse;
+  divisions?: Array<{ type: TurfDivisionType; code: string }>;
+  areas?: Array<{ layer: AreaLevel; code: string }>;
+  polygons?: GeoJSON.Polygon[];
+  gnafPids?: string[];
+}) {
+  return request<{ id: string }>("/canvass/turfs/from-sources", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -140,6 +209,9 @@ export type NearbyAddress = {
   sedName: string | null;
   sa1Code: string | null;
   sa2Code: string | null;
+  sa3Code: string | null;
+  sa4Code: string | null;
+  lgaCode: string | null;
   hasContact: boolean;
 };
 

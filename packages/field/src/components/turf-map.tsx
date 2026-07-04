@@ -11,6 +11,8 @@ export type MapStop = { id: string; lat: number; lng: number; status?: string };
 export type LngLat = { lat: number; lng: number };
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+/** National bounding box – the geo explorers' default viewport before a pick. */
+export const AU_BOUNDS: [number, number, number, number] = [112.92, -43.74, 153.64, -9.14];
 // Brand primary (= --primary / brand-500), mirrored here because Mapbox paint
 // props need a literal hex and can't read the CSS token. Matches the admin blue.
 const PRIMARY = "#465fff";
@@ -29,6 +31,7 @@ export function TurfMap({
   userPosition,
   onStopTap,
   routeGeometry,
+  defaultBounds,
 }: {
   mode: "view" | "edit";
   stops?: MapStop[];
@@ -38,6 +41,8 @@ export function TurfMap({
   onStopTap?: (id: string) => void;
   /** Walking route line (user → next stop) from the Mapbox Directions API. */
   routeGeometry?: GeoJSON.LineString | null;
+  /** Viewport when there's no geometry/stops/position to focus (e.g. AU_BOUNDS). */
+  defaultBounds?: [number, number, number, number];
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
@@ -59,12 +64,18 @@ export function TurfMap({
       return { bounds: [[bounds[0], bounds[1]], [bounds[2], bounds[3]]], fitBoundsOptions: { padding: 32 } };
     }
     const focus = userPosition ?? stops[0];
+    if (!focus && defaultBounds) {
+      return {
+        bounds: [[defaultBounds[0], defaultBounds[1]], [defaultBounds[2], defaultBounds[3]]],
+        fitBoundsOptions: { padding: 32 },
+      };
+    }
     return {
       latitude: focus?.lat ?? -33.8688,
       longitude: focus?.lng ?? 151.2093,
       zoom: 14,
     };
-  }, [bounds, stops, userPosition]);
+  }, [bounds, stops, userPosition, defaultBounds]);
 
   // initialViewState only applies on mount; refit when the division changes
   // without a remount (e.g. navigating between division detail pages).

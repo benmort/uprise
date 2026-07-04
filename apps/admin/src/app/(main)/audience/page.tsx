@@ -536,7 +536,11 @@ export default function AudiencePage() {
                     onClick={() => setSelectedListId((prev) => (prev === listId ? "" : listId))}
                   >
                     <span>{String(list.name || "Unnamed list")}</span>
-                    <span className="text-xs text-muted-foreground">{String(list.count || "—")}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {typeof list.count === "number"
+                        ? `${list.count.toLocaleString()} contacts`
+                        : "—"}
+                    </span>
                   </button>
                 );
               })}

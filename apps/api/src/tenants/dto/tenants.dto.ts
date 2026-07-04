@@ -1,5 +1,5 @@
 import { AppUserRole } from "@uprise/db";
-import { IsEmail, IsEnum, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsEmail, IsEnum, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class CreateTenantDto {
   @IsString() @MaxLength(64) slug!: string;
@@ -16,6 +16,8 @@ export class CreateSelfServeTenantDto {
 export class UpdateTenantDto {
   @IsOptional() @IsString() @MaxLength(200) name?: string;
   @IsOptional() @IsString() @MaxLength(64) slug?: string;
+  // Free-form tenant settings blob (e.g. access-control policy under settings.accessControl).
+  @IsOptional() @IsObject() settings?: Record<string, unknown>;
 }
 
 export class AddMemberDto {

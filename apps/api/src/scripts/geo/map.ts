@@ -69,6 +69,49 @@ async function main(): Promise<void> {
        WHERE p.gnaf_pid = ar.gnaf_pid`,
     );
 
+    // Precompute national address counts per region (geo.region_address_count) —
+    // the summary the API reads instead of aggregating 16.9M address_region rows
+    // per request. One index-only GROUP BY per kind; counts are as fresh as this
+    // ETL run (dataset_meta.last_ingested).
+    log("Refreshing region address counts…");
+    await prisma.$executeRawUnsafe(`TRUNCATE geo.region_address_count`);
+    for (const [kind, col] of [
+      ["ced", "ced_code"],
+      ["sed", "sed_code"],
+      ["lga", "lga_code"],
+      ["mb", "mb_code"],
+      ["sa1", "sa1_code"],
+      ["sa2", "sa2_code"],
+      ["sa3", "sa3_code"],
+      ["sa4", "sa4_code"],
+      // State/Territory = leading digit of the SA4 code (col is an expression).
+      ["state", "left(sa4_code, 1)"],
+    ] as const) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
+         SELECT '${kind}', ${col}, COUNT(*), now() FROM geo.address_region
+         WHERE ${col} IS NOT NULL GROUP BY ${col}`,
+      );
+    }
+    log("  ✓ region_address_count");
+
+    // Rebuild the derived State/Territory boundary layer (union of SA4 per
+    // leading digit) — the explorer's States kind reads this.
+    await prisma.$executeRawUnsafe(`DELETE FROM geo.state`);
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO geo.state (code, name, geom)
+       SELECT s.d,
+         CASE s.d
+           WHEN '1' THEN 'New South Wales' WHEN '2' THEN 'Victoria' WHEN '3' THEN 'Queensland'
+           WHEN '4' THEN 'South Australia' WHEN '5' THEN 'Western Australia' WHEN '6' THEN 'Tasmania'
+           WHEN '7' THEN 'Northern Territory' WHEN '8' THEN 'Australian Capital Territory'
+           ELSE 'Other Territories'
+         END,
+         ST_Multi(ST_Union(s.geom))
+       FROM (SELECT left(code, 1) AS d, geom FROM geo.sa4) s GROUP BY s.d`,
+    );
+    log("  ✓ geo.state");
+
     // G-NAF carries its full provenance here (geo:load-boundaries owns the boundary
     // layers' provenance); this also clears the seed's stale "(demo)" label/release.
     await prisma.$executeRawUnsafe(

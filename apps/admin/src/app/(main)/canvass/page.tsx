@@ -45,7 +45,10 @@ export default function CanvassPage() {
   const [editing, setEditing] = useState<CampaignSummary | null>(null);
   const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, doors: "", conversations: "", openJoin: false, selfClaim: false });
 
-  // Load the campaign list once, default to the first.
+  // Load the campaign list once; the active campaign comes from ?campaign= when
+  // it names a real campaign (shareable/deep-linkable), else the first campaign.
+  // window.location instead of useSearchParams: this page prerenders statically,
+  // and useSearchParams would force a Suspense boundary for one mount-time read.
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -57,13 +60,24 @@ export default function CanvassPage() {
         return;
       }
       setCampaigns(res.data);
-      setActiveId((cur) => cur || res.data[0]?.id || "");
+      const urlId = new URLSearchParams(window.location.search).get("campaign");
+      const fromUrl = urlId && res.data.some((c) => c.id === urlId) ? urlId : "";
+      setActiveId((cur) => cur || fromUrl || res.data[0]?.id || "");
       setLoading(false);
     })();
     return () => {
       alive = false;
     };
   }, []);
+
+  // Reflect the selection in the URL so reloads and shared links keep it.
+  useEffect(() => {
+    if (!activeId) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("campaign") === activeId) return;
+    url.searchParams.set("campaign", activeId);
+    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+  }, [activeId, router]);
 
   // Load KPIs + turf for the active campaign.
   useEffect(() => {

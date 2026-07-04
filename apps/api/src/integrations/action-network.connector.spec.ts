@@ -17,7 +17,7 @@ describe("ActionNetworkConnector", () => {
       status: 200,
       json: async () => ({
         _embedded: {
-          "osdi:lists": [{ id: "list_1", title: "Main List", total_donations: 100 }],
+          "osdi:lists": [{ id: "list_1", title: "Main List", total_records: 100 }],
         },
       }),
     } as Response);
@@ -25,6 +25,7 @@ describe("ActionNetworkConnector", () => {
     const lists = await connector.searchLists("key", { query: "main" });
     expect(lists[0].id).toBe("list_1");
     expect(lists[0].name).toBe("Main List");
+    expect(lists[0].count).toBe(100);
   });
 
   it("syncs list people across paginated pages", async () => {

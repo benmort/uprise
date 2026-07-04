@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Inbox as InboxIcon,
@@ -10,7 +9,6 @@ import {
   PlusCircle,
   SendHorizontal,
   ShieldCheck,
-  Sparkles,
   Users,
   Workflow,
 } from "lucide-react";
@@ -38,15 +36,15 @@ import {
 } from "@/lib/api/campaigns";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
-import { KpiTile } from "@uprise/field";
-import { Button } from "@/components/ui/button";
 import { QuickActions } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 import { OverviewModuleCard } from "@/components/overview/overview-module-card";
-import { ActivityFeed } from "@/components/overview/activity-feed";
-import { buildActivityItems } from "@/lib/activity/recent-activity";
 import { MiniBar } from "@/components/overview/mini-bar";
 import { NewConversationMenu } from "@/components/inbox/new-conversation-menu";
+import { getSession } from "@/lib/session";
+import { useFlags } from "@/components/flags/flags-provider";
+import { planVisible, planLocked } from "@/lib/flags/plan-gating";
+import { type FeatureFlagKey } from "@uprise/flags";
 
 type Slice<T> = { data?: T; error?: string } | null; // null === loading
 
@@ -144,6 +142,17 @@ export default function DashboardPage() {
 
   const whatsappEnabled = Boolean(flags?.FEATURE_WHATSAPP_ENABLED);
 
+  // Plan-capability gating (mirrors the sidebar): resolved tenant flags + whether the
+  // viewer is a super-admin. A card for a feature the plan lacks is hidden for members
+  // and greyed-but-navigable ("fake disabled") for super-admins.
+  const capFlags = useFlags();
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  useEffect(() => {
+    void getSession().then((s) => setIsSuperAdmin(s?.isSuperAdmin === true));
+  }, []);
+  const hideCard = (flag: FeatureFlagKey) => !planVisible(capFlags, isSuperAdmin, flag);
+  const lockCard = (flag: FeatureFlagKey) => planLocked(capFlags, isSuperAdmin, flag);
+
   const unreadInbox = useMemo(() => {
     const rows = convos?.data;
     if (!rows) return null;
@@ -162,13 +171,6 @@ export default function DashboardPage() {
     return { sms, wa };
   }, [blasts]);
 
-  const activity = useMemo(
-    () => buildActivityItems(blasts?.data, convos?.data, campaign?.data),
-    [blasts, convos, campaign],
-  );
-
-  const activityLoading = blasts === null && convos === null && campaign === null;
-
   const newBlast = async (channel: "SMS" | "WHATSAPP") => {
     if (creating) return;
     setCreating(true);
@@ -179,14 +181,12 @@ export default function DashboardPage() {
     }
   };
 
-  const kpi = (s: Slice<unknown>, value: () => string) => (s?.data !== undefined ? value() : "—");
-
   return (
     <div className="page-stack">
       {/* Header + quick actions */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">Command centre</h1>
+          <h1 className="text-3xl font-semibold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             Everything across Uprise — messaging, conversations, audiences, automation and the field.
             {lastUpdatedAt ? ` Updated ${lastUpdatedAt.toLocaleTimeString()}.` : ""}
@@ -227,20 +227,94 @@ export default function DashboardPage() {
         }}
       />
 
-      {/* Top KPI row */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiTile label="Messages sent" value={kpi(perf, () => perf!.data!.totalSent.toLocaleString())} />
-        <KpiTile label="Response rate" value={kpi(perf, () => `${Math.round(perf!.data!.responseRate)}%`)} />
-        <KpiTile label="Replies" value={kpi(perf, () => perf!.data!.totalResponded.toLocaleString())} />
-        <KpiTile label="Unread inbox" value={unreadInbox === null ? "—" : unreadInbox.toLocaleString()} />
-      </div>
-
       {/* Domain module grid */}
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <OverviewModuleCard
+          title="Inbox"
+          description="Two-way conversations"
+          href="/future/sms-inbox"
+          hidden={hideCard("FEATURE_NAV_INBOX")}
+          locked={lockCard("FEATURE_NAV_INBOX")}
+          icon={<InboxIcon className="h-4 w-4" />}
+          loading={convos === null}
+          error={convos?.error}
+          isEmpty={Boolean(convos?.data && convos.data.length === 0)}
+          empty="No conversations yet."
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {unreadInbox === null ? "—" : unreadInbox.toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">unread across open threads</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {(convos?.data?.length ?? 0).toLocaleString()} active conversation
+              {(convos?.data?.length ?? 0) === 1 ? "" : "s"}
+            </p>
+          </div>
+        </OverviewModuleCard>
+
+        <OverviewModuleCard
+          title="Audiences"
+          description="Who you reach"
+          href="/audience"
+          hidden={hideCard("FEATURE_NAV_ENGAGEMENT_AUDIENCE")}
+          locked={lockCard("FEATURE_NAV_ENGAGEMENT_AUDIENCE")}
+          icon={<Users className="h-4 w-4" />}
+          loading={audiences === null}
+          error={audiences?.error}
+          isEmpty={Boolean(audiences?.data && audiences.data.total === 0)}
+          empty="No audiences yet."
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(audiences?.data?.total ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">audiences</span>
+            </p>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {(audiences?.data?.rows ?? []).slice(0, 4).map((a) => (
+                <li key={String((a as any).id)} className="truncate">
+                  {String((a as any).name || "Untitled")}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </OverviewModuleCard>
+
+        <OverviewModuleCard
+          title="Compliance"
+          description="Opt-outs & consent"
+          href="/compliance"
+          icon={<ShieldCheck className="h-4 w-4" />}
+          loading={optOuts === null}
+          error={optOuts?.error}
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(optOuts?.data?.total ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">opted out</span>
+            </p>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {(optOuts?.data?.byChannel ?? []).map((c) => (
+                <li key={c.channel}>
+                  {c.channel}: {c.count.toLocaleString()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </OverviewModuleCard>
+
         <OverviewModuleCard
           title="Messaging"
           description="SMS & WhatsApp campaigns"
           href="/channels/text"
+          hidden={hideCard("FEATURE_NAV_CHANNELS")}
+          locked={lockCard("FEATURE_NAV_CHANNELS")}
           icon={<SendHorizontal className="h-4 w-4" />}
           loading={perf === null || blasts === null}
           error={perf?.error ?? blasts?.error}
@@ -279,84 +353,11 @@ export default function DashboardPage() {
         </OverviewModuleCard>
 
         <OverviewModuleCard
-          title="Inbox"
-          description="Two-way conversations"
-          href="/future/sms-inbox"
-          icon={<InboxIcon className="h-4 w-4" />}
-          loading={convos === null}
-          error={convos?.error}
-          isEmpty={Boolean(convos?.data && convos.data.length === 0)}
-          empty="No conversations yet."
-        >
-          <div className="space-y-2 text-sm">
-            <p>
-              <span className="text-2xl font-extrabold tabular-nums">
-                {unreadInbox === null ? "—" : unreadInbox.toLocaleString()}
-              </span>{" "}
-              <span className="text-muted-foreground">unread across open threads</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {(convos?.data?.length ?? 0).toLocaleString()} active conversation
-              {(convos?.data?.length ?? 0) === 1 ? "" : "s"}
-            </p>
-          </div>
-        </OverviewModuleCard>
-
-        <OverviewModuleCard
-          title="Audiences"
-          description="Who you reach"
-          href="/audience"
-          icon={<Users className="h-4 w-4" />}
-          loading={audiences === null}
-          error={audiences?.error}
-          isEmpty={Boolean(audiences?.data && audiences.data.total === 0)}
-          empty="No audiences yet."
-        >
-          <div className="space-y-2 text-sm">
-            <p>
-              <span className="text-2xl font-extrabold tabular-nums">
-                {(audiences?.data?.total ?? 0).toLocaleString()}
-              </span>{" "}
-              <span className="text-muted-foreground">audiences</span>
-            </p>
-            <ul className="space-y-1 text-xs text-muted-foreground">
-              {(audiences?.data?.rows ?? []).slice(0, 4).map((a) => (
-                <li key={String((a as any).id)} className="truncate">
-                  {String((a as any).name || "Untitled")}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </OverviewModuleCard>
-
-        <OverviewModuleCard
-          title="Journeys"
-          description="Automated follow-ups"
-          href="/future/journeys"
-          icon={<Workflow className="h-4 w-4" />}
-          loading={journeys === null}
-          error={journeys?.error}
-          isEmpty={Boolean(journeys?.data && journeys.data.list.length === 0)}
-          empty="No journeys yet."
-        >
-          <div className="space-y-2 text-sm">
-            <p>
-              <span className="text-2xl font-extrabold tabular-nums">
-                {(journeys?.data?.activeCount ?? 0).toLocaleString()}
-              </span>{" "}
-              <span className="text-muted-foreground">active</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {(journeys?.data?.agg.active ?? 0).toLocaleString()} enrolled now ·{" "}
-              {(journeys?.data?.agg.completed ?? 0).toLocaleString()} completed
-            </p>
-          </div>
-        </OverviewModuleCard>
-
-        <OverviewModuleCard
           title="Canvassing"
           description="Field & door-knocking"
           href="/canvass"
+          hidden={hideCard("FEATURE_NAV_CANVASS")}
+          locked={lockCard("FEATURE_NAV_CANVASS")}
           icon={<MapPin className="h-4 w-4" />}
           loading={campaign === null}
           error={campaign?.error}
@@ -397,66 +398,30 @@ export default function DashboardPage() {
         </OverviewModuleCard>
 
         <OverviewModuleCard
-          title="Compliance"
-          description="Opt-outs & consent"
-          href="/compliance"
-          icon={<ShieldCheck className="h-4 w-4" />}
-          loading={optOuts === null}
-          error={optOuts?.error}
+          title="Journeys"
+          description="Automated follow-ups"
+          href="/future/journeys"
+          hidden={hideCard("FEATURE_JOURNEYS_ENABLED")}
+          locked={lockCard("FEATURE_JOURNEYS_ENABLED")}
+          icon={<Workflow className="h-4 w-4" />}
+          loading={journeys === null}
+          error={journeys?.error}
+          isEmpty={Boolean(journeys?.data && journeys.data.list.length === 0)}
+          empty="No journeys yet."
         >
           <div className="space-y-2 text-sm">
             <p>
               <span className="text-2xl font-extrabold tabular-nums">
-                {(optOuts?.data?.total ?? 0).toLocaleString()}
+                {(journeys?.data?.activeCount ?? 0).toLocaleString()}
               </span>{" "}
-              <span className="text-muted-foreground">opted out</span>
+              <span className="text-muted-foreground">active</span>
             </p>
-            <ul className="space-y-1 text-xs text-muted-foreground">
-              {(optOuts?.data?.byChannel ?? []).map((c) => (
-                <li key={c.channel}>
-                  {c.channel}: {c.count.toLocaleString()}
-                </li>
-              ))}
-            </ul>
+            <p className="text-xs text-muted-foreground">
+              {(journeys?.data?.agg.active ?? 0).toLocaleString()} enrolled now ·{" "}
+              {(journeys?.data?.agg.completed ?? 0).toLocaleString()} completed
+            </p>
           </div>
         </OverviewModuleCard>
-      </div>
-
-      {/* Engagement quick links + Activity feed */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <OverviewModuleCard
-          title="Engagement"
-          description="Scripts, surveys & dispositions"
-          href="/engagement/surveys"
-          icon={<Sparkles className="h-4 w-4" />}
-        >
-          <div className="flex flex-wrap gap-2 text-sm">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/engagement/surveys">Surveys</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/engagement/scripts">Scripts</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/engagement/dispositions">Dispositions</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/engagement/canned-responses">Canned replies</Link>
-            </Button>
-          </div>
-        </OverviewModuleCard>
-
-        <div className="lg:col-span-2">
-          <OverviewModuleCard
-            title="Recent activity"
-            description="Across messaging, inbox and the field"
-            href="/analytics"
-            linkLabel="Analytics"
-            loading={activityLoading}
-          >
-            <ActivityFeed items={activity} />
-          </OverviewModuleCard>
-        </div>
       </div>
 
       {/* System-health footer */}

@@ -8,6 +8,7 @@ node_modules/
 
 # Build outputs
 .next/
+.next-validate/
 dist/
 build/
 coverage/

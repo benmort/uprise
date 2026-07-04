@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Bell, BellRing, CloudOff, DoorOpen, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, BellRing, CloudOff, DoorOpen, LogOut, RefreshCw } from "lucide-react";
 import { Button, Skeleton, ConfirmDialog, useToast } from "@uprise/ui";
 import { useFieldPush } from "../hooks/use-field-push";
 import { getCanvassAssignments, releaseTurf, type CanvassAssignment } from "../api";
 import { getVolunteerId } from "../lib/volunteer";
+import { logout } from "../lib/session";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { KpiTile } from "../components/kpi-tile";
 import { SectionCard } from "../components/section-card";
@@ -225,6 +226,18 @@ export function SyncCentre() {
       >
         Done for the day
       </Link>
+
+      <div className="flex justify-center">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 text-muted-foreground"
+          onClick={() => void logout()}
+        >
+          <LogOut className="h-4 w-4" />
+          Log out
+        </Button>
+      </div>
 
       <ConfirmDialog
         open={releaseId !== null}

@@ -115,15 +115,18 @@ export class TenantsService {
     });
   }
 
-  async getTenant(id: string): Promise<Tenant> {
-    const tenant = await this.prisma.tenant.findFirst({ where: { id, deletedAt: null } });
+  async getTenant(id: string) {
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id, deletedAt: null },
+      include: { network: { select: { id: true, name: true, planName: true } } },
+    });
     if (!tenant) throw new NotFoundException("Tenant not found");
     return tenant;
   }
 
   async updateTenant(
     id: string,
-    input: { name?: string; slug?: string; settings?: Prisma.InputJsonValue },
+    input: { name?: string; slug?: string; settings?: Record<string, unknown> },
   ): Promise<Tenant> {
     const current = await this.getTenant(id);
     const data: Prisma.TenantUpdateInput = {};
@@ -143,7 +146,7 @@ export class TenantsService {
         data.slug = slug;
       }
     }
-    if (input.settings !== undefined) data.settings = input.settings;
+    if (input.settings !== undefined) data.settings = input.settings as Prisma.InputJsonValue;
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.tenant.update({ where: { id }, data });
       if (renamedTo) {

@@ -67,6 +67,10 @@ type NavNode =
   | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch; flag?: FeatureFlagKey }
   | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
 
+// The campaign-scoped subpages under /canvass/[campaignId]/… — used to recognise
+// a campaign id in the pathname (vs /canvass/volunteers, /canvass/divisions etc).
+const CAMPAIGN_SUBPAGES = new Set(["turf", "boundary", "walklists", "live", "results", "goals", "qa", "shifts"]);
+
 // Cascade sidebar model (matches the design prototype): leaf items + expandable
 // groups whose children appear on an indented rail. Campaign-scoped children use
 // the current campaign id when one exists, else fall back to the canvass overview.
@@ -80,29 +84,24 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
     // Shared inbox (unified cross-channel queue) — super-admin-only for now.
     // (The SMS-only inbox is parked in the Future group as "SMS inbox".)
     ...(isSuperAdmin
-      ? ([{ type: "leaf", key: "shared-inbox", label: "Shared inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" }] as NavNode[])
+      ? ([{ type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" }] as NavNode[])
       : []),
 
     // ── Engage: the campaigning work — reach out, canvass, organise, target ──
     { type: "section", key: "sec-engage", label: "Engage" },
     {
       type: "group", key: "channels", label: "Channels", icon: MessageSquareText,
-      // Text + WhatsApp only. Email, Calls and Social Media are parked under Future → Channels.
-      match: (p) => p.startsWith("/channels/text") || p.startsWith("/channels/whatsapp"),
+      // Text only. WhatsApp, Email, Calls and Social Media are parked under Future → Channels.
+      match: (p) => p.startsWith("/channels/text"),
       flag: "FEATURE_NAV_CHANNELS",
       children: [
         { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text"), flag: "FEATURE_NAV_CHANNELS_TEXT" },
-        { label: "WhatsApp", href: "/channels/whatsapp", match: (p) => p.startsWith("/channels/whatsapp"), flag: "FEATURE_WHATSAPP_ENABLED" },
       ],
     },
     {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin,
-      match: (p) =>
-        p.startsWith("/canvass") &&
-        !p.startsWith("/canvass/volunteers") &&
-        !p.startsWith("/canvass/divisions") &&
-        !p.startsWith("/canvass/areas") &&
-        !p.startsWith("/canvass/addresses"),
+      // The geo explorers moved to /data/*; only volunteers still shares /canvass.
+      match: (p) => p.startsWith("/canvass") && !p.startsWith("/canvass/volunteers"),
       flag: "FEATURE_NAV_CANVASS",
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
@@ -127,24 +126,18 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
 
     { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
 
-    // ── Manage: workspace admin — data & files (incl. compliance), settings, business, dev ──
+    // ── Manage: workspace admin — data, settings (incl. compliance), business, dev ──
     { type: "section", key: "sec-manage", label: "Manage" },
     {
-      type: "group", key: "data-files", label: "Data & Files", icon: Database,
-      match: (p) =>
-        p.startsWith("/settings/data") ||
-        p.startsWith("/canvass/divisions") ||
-        p.startsWith("/canvass/areas") ||
-        p.startsWith("/canvass/addresses") ||
-        p.startsWith("/future/file-manager") ||
-        p.startsWith("/compliance"),
+      type: "group", key: "data-files", label: "Data", icon: Database,
+      match: (p) => p.startsWith("/data"),
       children: [
-        { label: "Data", href: "/settings/data", match: (p) => p.startsWith("/settings/data") },
-        { label: "Divisions", href: "/canvass/divisions", match: (p) => p.startsWith("/canvass/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
-        { label: "Areas", href: "/canvass/areas", match: (p) => p.startsWith("/canvass/areas"), flag: "FEATURE_NAV_CANVASS_AREAS" },
-        { label: "Addresses", href: "/canvass/addresses", match: (p) => p.startsWith("/canvass/addresses"), flag: "FEATURE_NAV_CANVASS_ADDRESSES" },
-        { label: "File Manager", href: "/future/file-manager", match: (p) => p.startsWith("/future/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
-        { label: "Compliance", href: "/compliance", match: (p) => p.startsWith("/compliance"), flag: "FEATURE_NAV_COMPLIANCE" },
+        { label: "Datasets", href: "/data/datasets", match: (p) => p.startsWith("/data/datasets") },
+        { label: "Divisions", href: "/data/divisions", match: (p) => p.startsWith("/data/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
+        { label: "States", href: "/data/states", match: (p) => p.startsWith("/data/states") },
+        { label: "Areas", href: "/data/areas", match: (p) => p.startsWith("/data/areas"), flag: "FEATURE_NAV_CANVASS_AREAS" },
+        { label: "Addresses", href: "/data/addresses", match: (p) => p.startsWith("/data/addresses"), flag: "FEATURE_NAV_CANVASS_ADDRESSES" },
+        { label: "File Manager", href: "/data/file-manager", match: (p) => p.startsWith("/data/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
       ],
     },
 
@@ -153,11 +146,11 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       match: (p) =>
         (p.startsWith("/settings") &&
           !p.startsWith("/settings/flags") &&
-          !p.startsWith("/settings/plans") &&
-          !p.startsWith("/settings/data")) ||
-        px("billing")(p) || px("tenant-settings")(p) || px("activity")(p) || px("security")(p),
+          !p.startsWith("/settings/plans")) ||
+        p.startsWith("/compliance") ||
+        px("tenant-settings")(p) || px("security")(p),
       children: [
-        { label: "General", href: "/settings", match: (p) => p === "/settings" },
+        { label: "General", href: "/settings", match: (p) => p === "/settings" || p.startsWith("/future/tenant-settings") },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
         // Customer-facing multi-brand: owners on a multi-brand (Scale) plan manage
@@ -175,14 +168,9 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
           : []),
         // Workspace items folded in from the prog sandbox — super-admin-only until
         // they're tenant-tiered + role-gated (consolidation doc Parts B–D).
-        ...(isSuperAdmin
-          ? ([
-              { label: "Billing", href: "/future/billing", match: px("billing") },
-              { label: "Branding", href: "/future/tenant-settings", match: px("tenant-settings") },
-              { label: "Activity", href: "/future/activity", match: px("activity") },
-              { label: "Security", href: "/future/security", match: px("security") },
-            ] as NavEntry[])
-          : []),
+        // General (above) is the workspace-settings hub — the tabbed /future/tenant-settings
+        // page. Branding, Security and Compliance now live there as tabs rather than as
+        // separate sidebar entries (their standalone routes still resolve if linked directly).
       ],
     },
 
@@ -195,22 +183,30 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
           { type: "section", key: "sec-superadmin", label: "Super Admin" },
           {
             type: "group", key: "super-admin", label: "Super Admin", icon: ShieldCheck,
-            match: (p) => p.startsWith("/settings/flags") || p.startsWith("/settings/plans") || px("tenants")(p),
+            match: (p) =>
+              p.startsWith("/settings/flags") ||
+              p.startsWith("/settings/plans") ||
+              p.startsWith("/settings/queues") ||
+              px("tenants")(p),
             children: [
               { label: "Tenants", href: "/future/tenants", match: px("tenants") },
               { label: "Plans", href: "/settings/plans", match: (p) => p.startsWith("/settings/plans") },
               { label: "Feature flags", href: "/settings/flags", match: (p) => p === "/settings/flags" },
+              // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version
+              // lives on /settings ("Tenant Queue & Redis Stats").
+              { label: "Queue & Redis Stats", href: "/settings/queues", match: (p) => p.startsWith("/settings/queues") },
             ],
           },
           {
             type: "group", key: "future", label: "Future", icon: Boxes,
             match: (p) =>
               px("calendar")(p) || px("sms-inbox")(p) || px("journeys")(p) || px("segmentation")(p) || px("events")(p) ||
+              px("settings")(p) ||
               px("transactions")(p) || px("invoices")(p) || px("products")(p) ||
               px("support-tickets")(p) || px("checkout")(p) || px("api-keys")(p) ||
               px("chats")(p) || px("tasks")(p) ||
               px("ai-assistant")(p) || px("form-elements")(p) ||
-              px("calls")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
+              px("calls")(p) || px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
             flag: "FEATURE_NAV_PROG",
             children: [
               { label: "Calendar", href: "/future/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
@@ -219,8 +215,9 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
               // Deferred channel stubs, parked here until they ship (consolidation doc Part B).
               {
                 label: "Channels", flag: "FEATURE_NAV_PROG_CHANNELS",
-                match: (p) => p.startsWith("/channels/email") || p.startsWith("/channels/social") || px("calls")(p),
+                match: (p) => px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social") || px("calls")(p),
                 children: [
+                  { label: "WhatsApp", href: "/future/whatsapp", match: px("whatsapp"), flag: "FEATURE_WHATSAPP_ENABLED" },
                   { label: "Email", href: "/channels/email", match: (p) => p.startsWith("/channels/email") },
                   { label: "Calls", href: "/future/calls", match: px("calls") },
                   { label: "Social Media", href: "/channels/social", match: (p) => p.startsWith("/channels/social") },
@@ -249,6 +246,14 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
                 match: (p) => px("api-keys")(p),
                 children: [
                   { label: "API Keys", href: "/future/api-keys", match: px("api-keys") },
+                ],
+              },
+              {
+                label: "Settings",
+                match: (p) => px("settings")(p),
+                children: [
+                  { label: "Billing", href: "/future/settings/billing", match: px("settings/billing") },
+                  { label: "Activity", href: "/future/settings/activity", match: px("settings/activity") },
                 ],
               },
               {
@@ -283,6 +288,15 @@ export default function MainLayout({
   const [navFlags, setNavFlags] = useState<FeatureFlagMap>(FLAG_DEFAULTS);
   const inboxUnreadRef = useRef(0);
   const { showToast } = useToast();
+  // Refs for values the long-lived effects (SSE + polls) read but must NOT
+  // re-establish on: a pathname change used to tear down the EventSource and
+  // re-fetch a stream token on EVERY navigation, and refire both poll loops.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const routerRef = useRef(router);
+  routerRef.current = router;
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
 
   useEffect(() => {
     let alive = true;
@@ -329,13 +343,20 @@ export default function MainLayout({
 
     void syncInboxUnread();
     const id = window.setInterval(() => {
+      // Pause background polling in hidden tabs; visibilitychange resyncs below.
+      if (document.hidden) return;
       void syncInboxUnread();
     }, 10000);
+    const onVisible = () => {
+      if (!document.hidden) void syncInboxUnread();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [ready, pathname]);
+  }, [ready]);
 
   // Pending join-request count for the Settings/Team nav badge (organisers only).
   useEffect(() => {
@@ -347,12 +368,20 @@ export default function MainLayout({
       if (!cancelled && res.ok) setPendingJoinCount(res.data.length);
     };
     void sync();
-    const id = window.setInterval(() => void sync(), 30000);
+    const id = window.setInterval(() => {
+      if (document.hidden) return;
+      void sync();
+    }, 30000);
+    const onVisible = () => {
+      if (!document.hidden) void sync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [ready, principal, pathname]);
+  }, [ready, principal]);
 
   useEffect(() => {
     if (!ready) return;
@@ -436,7 +465,7 @@ export default function MainLayout({
           eventType = "";
         }
         if (eventType !== "inbox.inbound") return;
-        if (String(pathname || "").startsWith("/future/sms-inbox")) return;
+        if (String(pathnameRef.current || "").startsWith("/future/sms-inbox")) return;
 
         const fromPhone = String(payload.contactPhone || "");
         const messageBody = String(payload.body || "").trim();
@@ -444,7 +473,7 @@ export default function MainLayout({
         if (settings.outsideInboxSound) {
           playResponderAlertSound(settings.defaultProfile, settings);
         }
-        showToast({
+        showToastRef.current({
           tone: "info",
           title: "New inbound message",
           description: fromPhone
@@ -454,7 +483,7 @@ export default function MainLayout({
             label: "Open Inbox",
             onClick: () => {
               const target = fromPhone ? `/future/sms-inbox?contact=${encodeURIComponent(fromPhone)}` : "/future/sms-inbox";
-              router.push(target);
+              routerRef.current.push(target);
             },
           },
           durationMs: 5000,
@@ -463,12 +492,14 @@ export default function MainLayout({
     };
 
     void connect();
+    // One SSE connection for the whole session — pathname/router/toast are read
+    // via refs so navigation no longer tears down the stream and re-fetches a token.
     return () => {
       cancelled = true;
       clearTimers();
       closeSource();
     };
-  }, [ready, pathname, router, showToast]);
+  }, [ready]);
 
   const handleCreateBlast = useCallback(
     async (channel?: MessageChannel) => {
@@ -498,14 +529,21 @@ export default function MainLayout({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [router, handleCreateBlast]);
 
-  // Current campaign for the campaign-scoped Canvass children in the cascade nav.
-  const [campaignId, setCampaignId] = useState("");
+  // Current campaign for the campaign-scoped Canvass children in the cascade nav:
+  // the id in the pathname wins (the campaign you're actually looking at); the
+  // fetched first campaign is only the fallback for un-scoped routes.
+  const [firstCampaignId, setFirstCampaignId] = useState("");
+  const urlCampaignId = useMemo(() => {
+    const m = (pathname || "").match(/^\/canvass\/([^/]+)\/([^/?#]+)/);
+    return m && CAMPAIGN_SUBPAGES.has(m[2]) ? m[1] : "";
+  }, [pathname]);
+  const campaignId = urlCampaignId || firstCampaignId;
   useEffect(() => {
     if (!ready) return;
     let alive = true;
     void (async () => {
       const res = await listCampaigns();
-      if (alive && res.ok && res.data[0]) setCampaignId(res.data[0].id);
+      if (alive && res.ok && res.data[0]) setFirstCampaignId(res.data[0].id);
     })();
     return () => {
       alive = false;
@@ -1027,7 +1065,7 @@ export default function MainLayout({
               <UserDropdown email={principal?.email ?? null} />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 overflow-y-auto p-4">
             <FlagsProvider>{children}</FlagsProvider>
           </main>
         </div>

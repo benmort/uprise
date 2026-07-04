@@ -3,6 +3,7 @@
   "private": true,
   "packageManager": "pnpm@10.15.0",
   "scripts": {
+    "clean:next": "rm -rf apps/*/.next apps/*/.next-validate",
     "dev:all": "concurrently -n apps,worker,tunnel -c blue,cyan,magenta \"pnpm dev:apps\" \"pnpm dev:worker\" \"pnpm dev:tunnel\"",
     "dev:apps": "pnpm -r --parallel --filter=!worker run dev",
     "dev:api": "pnpm --filter api run dev",

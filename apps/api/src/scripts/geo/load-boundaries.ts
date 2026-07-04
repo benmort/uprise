@@ -65,6 +65,17 @@ const LAYERS: LayerSpec[] = [
     meta: { key: "sed", label: "State electorates", releaseDate: "2025", sourceUrl: ABS, licence: CCBY },
   },
   {
+    table: "geo.lga",
+    shp: "data/geo/lga/LGA_2024_AUST_GDA2020.shp",
+    pk: "code",
+    cols: [
+      { col: "code", from: [/LGA_CODE/i, /_CODE/i] },
+      { col: "name", from: [/LGA_NAME/i, /_NAME/i] },
+      { col: "state", from: [/STE_NAME/i, /STATE/i] },
+    ],
+    meta: { key: "lga", label: "Local government areas", releaseDate: "LGA 2024", sourceUrl: ABS, licence: CCBY },
+  },
+  {
     table: "geo.meshblock",
     shp: "data/geo/meshblock/MB_2021_AUST_GDA2020.shp",
     pk: "mb_code",

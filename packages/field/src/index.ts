@@ -25,7 +25,7 @@ export type { SurveySchema, SurveyAnswer } from "./components/survey-runner";
 export * from "./components/sync-status-badge";
 // turf-map: export the map + its stop shape, but not its `LngLat` (the canonical
 // LngLat is the GeoJSON tuple from ./lib/geo).
-export { TurfMap } from "./components/turf-map";
+export { TurfMap, AU_BOUNDS } from "./components/turf-map";
 export type { MapStop } from "./components/turf-map";
 export * from "./components/walk-mode-toggle";
 export * from "./components/walk-stop-card";

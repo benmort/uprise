@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Map, { Layer, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Loader2, MapPin, Search, X } from "lucide-react";
+import { AU_BOUNDS } from "@uprise/field";
 import { getArea, listAreas, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
 import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -96,6 +98,14 @@ export function TurfDrawMap({
   onToggleArea,
   onPolygonsChange,
   clearToken,
+  controlsContainer,
+  level: levelProp,
+  onLevelChange,
+  searchMode: searchModeProp,
+  onSearchModeChange,
+  query: queryProp,
+  onQueryChange,
+  onViewportAreasChange,
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
@@ -103,16 +113,55 @@ export function TurfDrawMap({
   onToggleArea?: (area: SelectedArea) => void;
   onPolygonsChange: (polygons: GeoJSON.Polygon[]) => void;
   clearToken?: number;
+  /**
+   * Where the level pills + search render. Omit → the classic on-map overlay
+   * (campaign turf/boundary pages). Pass an element → they portal into it as a
+   * horizontal toolbar (the areas explorer's row under the page chrome); pass
+   * null while the container ref is still mounting and they render nowhere.
+   */
+  controlsContainer?: HTMLElement | null;
+  /**
+   * Optional controlled state. When a value is supplied the component reads it
+   * (and calls the matching callback on change) instead of its own useState, so
+   * the areas explorer can drive level/mode/search from the URL. All optional —
+   * omit every one and the map behaves exactly as before (campaign pages).
+   */
+  level?: AreaLevel;
+  onLevelChange?: (level: AreaLevel) => void;
+  searchMode?: "place" | "area";
+  onSearchModeChange?: (mode: "place" | "area") => void;
+  query?: string;
+  onQueryChange?: (q: string) => void;
+  /** Emits the areas currently loaded in the viewport (+ zoomed-out flag) for a sidebar list. */
+  onViewportAreasChange?: (areas: AreaHit[], tooZoomedOut: boolean) => void;
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [level, setLevel] = useState<AreaLevel>("sa2");
+  // Controlled-or-internal: read the prop when supplied, else own state; the
+  // setter delegates to the callback when controlled. Keeps the two uncontrolled
+  // consumers (campaign turf + boundary pages) working unchanged.
+  const [levelInternal, setLevelInternal] = useState<AreaLevel>("sa2");
+  const level = levelProp ?? levelInternal;
+  const setLevel = useCallback(
+    (l: AreaLevel) => (onLevelChange ? onLevelChange(l) : setLevelInternal(l)),
+    [onLevelChange],
+  );
   const [areas, setAreas] = useState<GeoJSON.FeatureCollection | null>(null);
   const [tooZoomedOut, setTooZoomedOut] = useState(false);
-  const [searchMode, setSearchMode] = useState<"place" | "area">("area");
-  const [query, setQuery] = useState("");
+  const [searchModeInternal, setSearchModeInternal] = useState<"place" | "area">("area");
+  const searchMode = searchModeProp ?? searchModeInternal;
+  const setSearchMode = useCallback(
+    (m: "place" | "area") => (onSearchModeChange ? onSearchModeChange(m) : setSearchModeInternal(m)),
+    [onSearchModeChange],
+  );
+  const [queryInternal, setQueryInternal] = useState("");
+  const query = queryProp ?? queryInternal;
+  const setQuery = useCallback(
+    (v: string) => (onQueryChange ? onQueryChange(v) : setQueryInternal(v)),
+    [onQueryChange],
+  );
   const [hits, setHits] = useState<Array<{ label: string; code?: string; lat: number; lng: number; bbox?: [number, number, number, number] }>>([]);
   const [searching, setSearching] = useState(false);
   const [areaOpen, setAreaOpen] = useState(false);
@@ -120,7 +169,14 @@ export function TurfDrawMap({
   const minZoom = useMemo(() => LEVELS.find((l) => l.id === level)?.minZoom ?? 9, [level]);
 
   const initialViewState = useMemo<MapProps["initialViewState"]>(
-    () => ({ latitude: center?.lat ?? -33.8688, longitude: center?.lng ?? 151.2093, zoom: 11 }),
+    () =>
+      center
+        ? { latitude: center.lat, longitude: center.lng, zoom: 11 }
+        : {
+            // No focus yet → open on the whole country, not a hardcoded city.
+            bounds: [[AU_BOUNDS[0], AU_BOUNDS[1]], [AU_BOUNDS[2], AU_BOUNDS[3]]],
+            fitBoundsOptions: { padding: 32 },
+          },
     [center],
   );
 
@@ -155,6 +211,12 @@ export function TurfDrawMap({
     },
     [refreshAreas],
   );
+
+  // Refresh when the (possibly external/URL-driven) level changes. On mount the
+  // map isn't ready so refreshAreas bails — onLoad does the first load.
+  useEffect(() => {
+    void refreshAreas(level);
+  }, [level, refreshAreas]);
 
   const selectedFc = useMemo<GeoJSON.FeatureCollection>(
     () => ({
@@ -243,6 +305,34 @@ export function TurfDrawMap({
   const areaListTruncated = query.trim().length < 2 && viewportAreas.length > AREA_LIST_CAP;
   const displayList = searchMode === "area" ? (areaOpen ? areaOptions.slice(0, AREA_LIST_CAP) : []) : hits;
 
+  // Surface the in-view areas (+ zoomed-out flag) so a consumer can render a
+  // divisions-style sidebar list. onViewportAreasChange must be stable (parent
+  // useCallback) or this re-fires each render.
+  const viewportAreaHits = useMemo<AreaHit[]>(() => {
+    const feats = (areas?.features ?? []) as Array<GeoJSON.Feature>;
+    const seen = new Set<string>();
+    const out: AreaHit[] = [];
+    for (const f of feats) {
+      const p = f.properties as { code?: string; name?: string } | null;
+      if (!p?.code || seen.has(p.code)) continue;
+      seen.add(p.code);
+      out.push({ level, code: p.code, name: p.name ?? p.code });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    return out;
+  }, [areas, level]);
+
+  useEffect(() => {
+    onViewportAreasChange?.(viewportAreaHits, tooZoomedOut);
+  }, [viewportAreaHits, tooZoomedOut, onViewportAreasChange]);
+
+  const selectLevel = (id: AreaLevel) => {
+    // Keep the search term across a level switch (it maps to the shared ?q= when
+    // controlled); the refresh runs via the [level] effect below.
+    setLevel(id);
+    setHits([]);
+  };
+
   if (!TOKEN) {
     return (
       <div className="flex h-full items-center justify-center rounded-xl bg-surface-variant p-6 text-center text-sm text-muted-foreground">
@@ -297,100 +387,191 @@ export function TurfDrawMap({
         </Source>
       </Map>
 
-      {/* Level toggle + search panel. */}
-      <div className="absolute right-2 top-2 z-10 w-64 space-y-2">
-        <div className="flex overflow-hidden rounded-lg border border-border bg-surface shadow-card">
-          {LEVELS.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              onClick={() => {
-                setLevel(l.id);
-                setQuery("");
-                setHits([]);
-                void refreshAreas(l.id);
-              }}
-              className={`flex-1 px-2 py-1.5 text-xs font-semibold transition ${
-                level === l.id ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant"
-              }`}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
+      {/* Level toggle + search panel: portaled toolbar or on-map overlay. */}
+      {controlsContainer !== undefined ? (
+        controlsContainer &&
+        createPortal(
+          <>
+            <div className="flex rounded-xl border border-border p-0.5">
+              {LEVELS.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => selectLevel(l.id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                    level === l.id ? "bg-primary text-white" : "text-foreground"
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
 
-        <div className="rounded-lg border border-border bg-surface shadow-card">
-          <div className="flex border-b border-border text-[11px] font-bold uppercase tracking-[0.05em]">
-            {(["area", "place"] as const).map((m) => (
+            <div className="relative">
+              <div className="flex h-9 items-center overflow-hidden rounded-lg border border-border bg-surface">
+                {(["area", "place"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setSearchMode(m);
+                      setHits([]);
+                    }}
+                    className={`self-stretch px-2.5 text-[11px] font-bold uppercase tracking-[0.05em] transition ${
+                      searchMode === m ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "area" ? "Areas" : "Places"}
+                  </button>
+                ))}
+                <span className="h-5 w-px bg-border" />
+                <div className="flex items-center gap-1.5 px-2">
+                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onFocus={() => setAreaOpen(true)}
+                    onBlur={() => setTimeout(() => setAreaOpen(false), 150)}
+                    onKeyDown={(e) => e.key === "Enter" && void runSearch()}
+                    placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
+                    className="w-52 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                  />
+                  {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+                  {query ? (
+                    <button type="button" aria-label="Clear" onClick={() => { setQuery(""); setHits([]); }}>
+                      <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {displayList.length > 0 ? (
+                <ul className="absolute left-0 top-full z-20 mt-1 max-h-64 w-72 overflow-auto rounded-lg border border-border bg-surface shadow-card">
+                  {displayList.map((h, i) => (
+                    <li key={`${h.code ?? h.label}-${i}`}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => void pickHit(h)}
+                        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-surface-variant"
+                      >
+                        <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{h.label}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {areaListTruncated ? (
+                    <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                      Showing first {AREA_LIST_CAP} — type to search the full {level.toUpperCase()} list.
+                    </li>
+                  ) : null}
+                </ul>
+              ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
+                <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-surface px-2 py-1.5 text-[11px] text-muted-foreground shadow-card">
+                  {tooZoomedOut
+                    ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
+                    : `No ${level.toUpperCase()} areas in view — type to search.`}
+                </div>
+              ) : null}
+            </div>
+
+            {tooZoomedOut ? (
+              <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground">
+                Zoom in to load {level.toUpperCase()} boundaries.
+              </p>
+            ) : null}
+          </>,
+          controlsContainer,
+        )
+      ) : (
+        <div className="absolute right-2 top-2 z-10 w-64 space-y-2">
+          <div className="flex overflow-hidden rounded-lg border border-border bg-surface shadow-card">
+            {LEVELS.map((l) => (
               <button
-                key={m}
+                key={l.id}
                 type="button"
-                onClick={() => {
-                  setSearchMode(m);
-                  setHits([]);
-                }}
-                className={`flex-1 px-2 py-1.5 transition ${
-                  searchMode === m ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                onClick={() => selectLevel(l.id)}
+                className={`flex-1 px-2 py-1.5 text-xs font-semibold transition ${
+                  level === l.id ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant"
                 }`}
               >
-                {m === "area" ? "Areas" : "Places"}
+                {l.label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1.5 px-2 py-1.5">
-            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onFocus={() => setAreaOpen(true)}
-              onBlur={() => setTimeout(() => setAreaOpen(false), 150)}
-              onKeyDown={(e) => e.key === "Enter" && void runSearch()}
-              placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
-              className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-            {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
-            {query ? (
-              <button type="button" aria-label="Clear" onClick={() => { setQuery(""); setHits([]); }}>
-                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-              </button>
+
+          <div className="rounded-lg border border-border bg-surface shadow-card">
+            <div className="flex border-b border-border text-[11px] font-bold uppercase tracking-[0.05em]">
+              {(["area", "place"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setSearchMode(m);
+                    setHits([]);
+                  }}
+                  className={`flex-1 px-2 py-1.5 transition ${
+                    searchMode === m ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m === "area" ? "Areas" : "Places"}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setAreaOpen(true)}
+                onBlur={() => setTimeout(() => setAreaOpen(false), 150)}
+                onKeyDown={(e) => e.key === "Enter" && void runSearch()}
+                placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
+                className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+              {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+              {query ? (
+                <button type="button" aria-label="Clear" onClick={() => { setQuery(""); setHits([]); }}>
+                  <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                </button>
+              ) : null}
+            </div>
+            {displayList.length > 0 ? (
+              <ul className="max-h-64 overflow-auto border-t border-border">
+                {displayList.map((h, i) => (
+                  <li key={`${h.code ?? h.label}-${i}`}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => void pickHit(h)}
+                      className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-surface-variant"
+                    >
+                      <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{h.label}</span>
+                    </button>
+                  </li>
+                ))}
+                {areaListTruncated ? (
+                  <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                    Showing first {AREA_LIST_CAP} — type to search the full {level.toUpperCase()} list.
+                  </li>
+                ) : null}
+              </ul>
+            ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
+              <div className="border-t border-border px-2 py-1.5 text-[11px] text-muted-foreground">
+                {tooZoomedOut
+                  ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
+                  : `No ${level.toUpperCase()} areas in view — type to search.`}
+              </div>
             ) : null}
           </div>
-          {displayList.length > 0 ? (
-            <ul className="max-h-64 overflow-auto border-t border-border">
-              {displayList.map((h, i) => (
-                <li key={`${h.code ?? h.label}-${i}`}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => void pickHit(h)}
-                    className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-surface-variant"
-                  >
-                    <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{h.label}</span>
-                  </button>
-                </li>
-              ))}
-              {areaListTruncated ? (
-                <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                  Showing first {AREA_LIST_CAP} — type to search the full {level.toUpperCase()} list.
-                </li>
-              ) : null}
-            </ul>
-          ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
-            <div className="border-t border-border px-2 py-1.5 text-[11px] text-muted-foreground">
-              {tooZoomedOut
-                ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
-                : `No ${level.toUpperCase()} areas in view — type to search.`}
-            </div>
+
+          {tooZoomedOut ? (
+            <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground shadow-card">
+              Zoom in to load {level.toUpperCase()} boundaries.
+            </p>
           ) : null}
         </div>
-
-        {tooZoomedOut ? (
-          <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground shadow-card">
-            Zoom in to load {level.toUpperCase()} boundaries.
-          </p>
-        ) : null}
-      </div>
+      )}
     </div>
   );
 }

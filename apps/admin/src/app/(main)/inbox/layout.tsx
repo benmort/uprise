@@ -23,7 +23,7 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
     <div className="page-stack">
       <div>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Shared inbox</h2>
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Inbox</h2>
           <nav>
             <ol className="flex items-center gap-1.5">
               <li>
@@ -32,16 +32,24 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
                   <BreadcrumbChevron />
                 </a>
               </li>
-              <li>
-                <Link
-                  className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"
-                  href="/inbox"
-                >
-                  Shared inbox
-                  <BreadcrumbChevron />
-                </Link>
-              </li>
-              <li className="text-sm text-gray-800 dark:text-white/90">{folderLabel(folder)}</li>
+              {folder === 'inbox' ? (
+                // Default /inbox — Inbox is the current page: Dashboard > Inbox.
+                <li className="text-sm text-gray-800 dark:text-white/90">Inbox</li>
+              ) : (
+                // A sub-folder — Inbox links back, the folder is current: Dashboard > Inbox > {Folder}.
+                <>
+                  <li>
+                    <Link
+                      className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"
+                      href="/inbox"
+                    >
+                      Inbox
+                      <BreadcrumbChevron />
+                    </Link>
+                  </li>
+                  <li className="text-sm text-gray-800 dark:text-white/90">{folderLabel(folder)}</li>
+                </>
+              )}
             </ol>
           </nav>
         </div>

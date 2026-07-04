@@ -33,6 +33,7 @@ import {
   CreateTurfDto,
   CreateTurfFromAreasDto,
   CreateTurfFromDivisionDto,
+  CreateTurfFromSourcesDto,
   CreateWalkListDto,
   LoadUniverseDto,
   RecordDoorKnockDto,
@@ -129,6 +130,13 @@ export class CanvassingController {
   async createTurfFromAreas(@Body() dto: CreateTurfFromAreasDto) {
     const org = await this.ensureOrganization();
     return this.canvassing.createTurfFromAreas(org.id, dto);
+  }
+
+  @Post("turfs/from-sources")
+  @Roles(AppUserRole.ORGANISER)
+  async createTurfFromSources(@Body() dto: CreateTurfFromSourcesDto) {
+    const org = await this.ensureOrganization();
+    return this.canvassing.createTurfFromSources(org.id, dto);
   }
 
   @Post("turfs/:id/rebucket")

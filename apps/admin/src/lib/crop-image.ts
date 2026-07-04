@@ -1,7 +1,16 @@
-/** Crop an image to the given pixel rect and return a JPEG blob (ported from prog). */
+/** Crop an image to the given pixel rect and return a blob (ported from prog). */
 export type CropArea = { x: number; y: number; width: number; height: number };
 
-export async function getCroppedImg(imageSrc: string, pixelCrop: CropArea): Promise<Blob> {
+/**
+ * Crop `pixelCrop` out of `imageSrc`. Defaults to JPEG (avatars/photos); pass
+ * "image/png" for logos so transparency is preserved rather than flattened onto
+ * an opaque background. Aspect-agnostic — honours whatever rect the cropper reports.
+ */
+export async function getCroppedImg(
+  imageSrc: string,
+  pixelCrop: CropArea,
+  mimeType: "image/jpeg" | "image/png" = "image/jpeg",
+): Promise<Blob> {
   const image = await createImageBitmap(await (await fetch(imageSrc)).blob());
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(pixelCrop.width));
@@ -22,8 +31,8 @@ export async function getCroppedImg(imageSrc: string, pixelCrop: CropArea): Prom
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error("Crop failed"))),
-      "image/jpeg",
-      0.92,
+      mimeType,
+      mimeType === "image/jpeg" ? 0.92 : undefined,
     );
   });
 }

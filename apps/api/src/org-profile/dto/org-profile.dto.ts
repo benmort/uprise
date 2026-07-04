@@ -1,10 +1,21 @@
 import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class UpdateOrgProfileDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  name?: string;
+  @IsOptional() @IsString() @MaxLength(200) name?: string;
+  // Public profile + brand. Nullable so a client can clear a field.
+  @IsOptional() @IsString() @MaxLength(2000) bio?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) websiteUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) facebookUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) twitterUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) linkedinUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) instagramUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) logoBlockUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) logoLandscapeUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) faviconUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(2048) heroImageUrl?: string | null;
+  @IsOptional() @IsString() @MaxLength(20) primaryColour?: string | null;
+  @IsOptional() @IsString() @MaxLength(20) secondaryColour?: string | null;
+  @IsOptional() @IsString() @MaxLength(20000) customCss?: string | null;
 }
 
 export class OrgContactDto {

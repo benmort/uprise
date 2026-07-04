@@ -6,7 +6,7 @@
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",
-    "dev": "nest start --watch",
+    "dev": "node ../../scripts/dev-supervisor.mjs --label api -- nest start --watch",
     "vercel-build": "bash scripts/vercel-build.sh",
     "lint": "tsc --noEmit --pretty false",
     "typecheck": "tsc --noEmit --pretty false",

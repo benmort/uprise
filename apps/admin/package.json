@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node ../../scripts/dev-supervisor.mjs --label admin --heal-next -- next dev",
     "build": "next build",
     "start": "next start",
     "lint": "node scripts/check-colours.mjs && tsc --noEmit --pretty false",

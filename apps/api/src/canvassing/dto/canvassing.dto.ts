@@ -231,6 +231,54 @@ export class CreateTurfFromAreasDto {
   universe?: "existing" | "none" | "hybrid";
 }
 
+export class TurfDivisionDto {
+  // "ste" = a whole state/territory (derived geo.state layer).
+  @IsIn(["ced", "sed", "lga", "ste"])
+  type!: "ced" | "sed" | "lga" | "ste";
+
+  @IsString()
+  code!: string;
+}
+
+/** Cut one turf from a stacked "my turf" basket: any mix of divisions, areas,
+ *  drawn polygons and individually-picked G-NAF doors. */
+export class CreateTurfFromSourcesDto {
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TurfDivisionDto)
+  divisions?: TurfDivisionDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TurfAreaDto)
+  areas?: TurfAreaDto[];
+
+  // Free-drawn polygons unioned in alongside the areas/divisions.
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  polygons?: Record<string, unknown>[];
+
+  // Individually-picked door PIDs — buffered into the boundary server-side.
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  gnafPids?: string[];
+
+  @IsOptional()
+  @IsIn(["existing", "none", "hybrid"])
+  universe?: "existing" | "none" | "hybrid";
+}
+
 // ── Volunteer self-serve turf ────────────────────────────────────────
 export class ClaimAreaDto {
   @IsArray()

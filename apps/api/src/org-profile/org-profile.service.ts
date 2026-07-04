@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { OrgCredential, Prisma } from "@uprise/db";
+import { OrgCredential, OrgProfile, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";
@@ -47,6 +47,38 @@ export interface OrgCredentialInput {
   financialYearEnd?: string | null;
 }
 
+/** Public profile + brand fields, all optional; a `null` clears, `undefined` leaves. */
+export interface OrgBrandingInput {
+  bio?: string | null;
+  websiteUrl?: string | null;
+  facebookUrl?: string | null;
+  twitterUrl?: string | null;
+  linkedinUrl?: string | null;
+  instagramUrl?: string | null;
+  logoBlockUrl?: string | null;
+  logoLandscapeUrl?: string | null;
+  faviconUrl?: string | null;
+  heroImageUrl?: string | null;
+  primaryColour?: string | null;
+  secondaryColour?: string | null;
+  customCss?: string | null;
+}
+const BRAND_KEYS = [
+  "bio",
+  "websiteUrl",
+  "facebookUrl",
+  "twitterUrl",
+  "linkedinUrl",
+  "instagramUrl",
+  "logoBlockUrl",
+  "logoLandscapeUrl",
+  "faviconUrl",
+  "heroImageUrl",
+  "primaryColour",
+  "secondaryColour",
+  "customCss",
+] as const satisfies ReadonlyArray<keyof OrgBrandingInput>;
+
 /** OrgCredential with the encrypted TFN replaced by a presence flag — the only
  *  shape ever returned over the API (TFN is never decrypted to a client). */
 type SafeCredential = Omit<OrgCredential, "taxFileNumber"> & { hasTaxFileNumber: boolean };
@@ -70,7 +102,7 @@ export class OrgProfileService {
   }
 
   /** The single OrgProfile for the tenant, created lazily from the tenant name. */
-  private async ensureProfile(): Promise<{ id: string; tenantId: string; name: string }> {
+  private async ensureProfile(): Promise<OrgProfile> {
     const org = await this.ensureOrganization();
     const existing = await this.prisma.orgProfile.findFirst({ where: { tenantId: org.id } });
     if (existing) return existing;
@@ -94,16 +126,34 @@ export class OrgProfileService {
       id: profile.id,
       tenantId: profile.tenantId,
       name: profile.name,
+      bio: profile.bio,
+      websiteUrl: profile.websiteUrl,
+      facebookUrl: profile.facebookUrl,
+      twitterUrl: profile.twitterUrl,
+      linkedinUrl: profile.linkedinUrl,
+      instagramUrl: profile.instagramUrl,
+      logoBlockUrl: profile.logoBlockUrl,
+      logoLandscapeUrl: profile.logoLandscapeUrl,
+      faviconUrl: profile.faviconUrl,
+      heroImageUrl: profile.heroImageUrl,
+      primaryColour: profile.primaryColour,
+      secondaryColour: profile.secondaryColour,
+      customCss: profile.customCss,
       contacts,
       addresses,
       credential: this.maskCredential(credential),
     };
   }
 
-  async updateProfile(input: { name?: string }) {
+  async updateProfile(input: { name?: string } & OrgBrandingInput) {
     const profile = await this.ensureProfile();
-    if (input.name !== undefined && input.name.trim()) {
-      await this.prisma.orgProfile.update({ where: { id: profile.id }, data: { name: input.name.trim() } });
+    const data: Prisma.OrgProfileUpdateInput = {};
+    if (input.name !== undefined && input.name.trim()) data.name = input.name.trim();
+    for (const key of BRAND_KEYS) {
+      if (input[key] !== undefined) (data as Record<string, unknown>)[key] = input[key];
+    }
+    if (Object.keys(data).length > 0) {
+      await this.prisma.orgProfile.update({ where: { id: profile.id }, data });
     }
     return this.getProfile();
   }

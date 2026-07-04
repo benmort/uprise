@@ -30,7 +30,9 @@ import type {
 
 export * from "@uprise/contracts";
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
+/** `status` is set for HTTP-level failures (e.g. 403 → render a no-permission
+ *  state instead of a generic error); absent on network/parse failures. */
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 
 /** API base URL — runtime window override wins, else NEXT_PUBLIC_API_URL. */
 export function getApiUrl(): string {
@@ -88,7 +90,7 @@ export async function request<T>(
       const err = json?.error;
       const message =
         (typeof err === "object" ? err?.message : err) || json?.message || `Request failed (${res.status})`;
-      return { ok: false, error: String(message) };
+      return { ok: false, error: String(message), status: res.status };
     }
     const data = (json && typeof json === "object" && "data" in json ? json.data : json) as T;
     return { ok: true, data };
@@ -214,6 +216,121 @@ export const profile = {
 };
 
 // ── Active-sessions management ───────────────────────────────────────
+// ── Org profile + branding (tenant.OrgProfile) ──────────────────────────────
+export interface OrgContactRecord {
+  id: string;
+  orgProfileId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  mobilePhone: string | null;
+  title: string | null;
+  role: string | null;
+  contactType: string | null;
+  isPrimaryContact: boolean;
+  isAuthorisedSignatory: boolean;
+}
+export interface OrgAddressRecord {
+  id: string;
+  orgProfileId: string;
+  addressType: string | null;
+  line1: string | null;
+  line2: string | null;
+  suburb: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  postcode: string | null;
+}
+export interface OrgCredentialRecord {
+  legalTradingName: string | null;
+  australianBusinessNumber: string | null;
+  australianCompanyNumber: string | null;
+  industry: string | null;
+  entityType: string | null;
+  registrationNumber: string | null;
+  isRegisteredEntity: boolean;
+  acncRegistrationNumber: string | null;
+  acncStatus: string | null;
+  charitySubtype: string | null;
+  deductibleGiftRecipient: boolean;
+  dgrStatus: string | null;
+  financialYearEnd: string | null;
+  /** TFN is never returned; only whether one is stored. */
+  hasTaxFileNumber: boolean;
+}
+export interface OrgProfileRecord {
+  id: string;
+  tenantId: string;
+  name: string;
+  bio: string | null;
+  websiteUrl: string | null;
+  facebookUrl: string | null;
+  twitterUrl: string | null;
+  linkedinUrl: string | null;
+  instagramUrl: string | null;
+  logoBlockUrl: string | null;
+  logoLandscapeUrl: string | null;
+  faviconUrl: string | null;
+  heroImageUrl: string | null;
+  primaryColour: string | null;
+  secondaryColour: string | null;
+  customCss: string | null;
+  contacts: OrgContactRecord[];
+  addresses: OrgAddressRecord[];
+  credential: OrgCredentialRecord | null;
+}
+/** Name + brand fields; a `null` clears a field, omission leaves it. */
+export type OrgProfileUpdate = Partial<{
+  name: string;
+  bio: string | null;
+  websiteUrl: string | null;
+  facebookUrl: string | null;
+  twitterUrl: string | null;
+  linkedinUrl: string | null;
+  instagramUrl: string | null;
+  logoBlockUrl: string | null;
+  logoLandscapeUrl: string | null;
+  faviconUrl: string | null;
+  heroImageUrl: string | null;
+  primaryColour: string | null;
+  secondaryColour: string | null;
+  customCss: string | null;
+}>;
+export type OrgContactInput = Partial<Omit<OrgContactRecord, "id" | "orgProfileId">>;
+export type OrgAddressInput = Partial<Omit<OrgAddressRecord, "id" | "orgProfileId">>;
+/** Credential edit; `taxFileNumber` "" clears, undefined leaves, value encrypts server-side. */
+export type OrgCredentialInput = Partial<Omit<OrgCredentialRecord, "hasTaxFileNumber">> & {
+  taxFileNumber?: string | null;
+};
+
+export const orgProfile = {
+  get: () => request<OrgProfileRecord>("/org-profile"),
+  update: (body: OrgProfileUpdate) =>
+    request<OrgProfileRecord>("/org-profile", { method: "PATCH", body: JSON.stringify(body) }),
+  setCredential: (body: OrgCredentialInput) =>
+    request<OrgCredentialRecord>("/org-profile/credential", { method: "PUT", body: JSON.stringify(body) }),
+  addContact: (body: OrgContactInput) =>
+    request<OrgContactRecord>("/org-profile/contacts", { method: "POST", body: JSON.stringify(body) }),
+  updateContact: (id: string, body: OrgContactInput) =>
+    request<OrgContactRecord>(`/org-profile/contacts/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteContact: (id: string) =>
+    request<OkResponse>(`/org-profile/contacts/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  addAddress: (body: OrgAddressInput) =>
+    request<OrgAddressRecord>("/org-profile/addresses", { method: "POST", body: JSON.stringify(body) }),
+  updateAddress: (id: string, body: OrgAddressInput) =>
+    request<OrgAddressRecord>(`/org-profile/addresses/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteAddress: (id: string) =>
+    request<OkResponse>(`/org-profile/addresses/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};
+
 export const sessions = {
   list: () => request<SessionSummaryResponse[]>("/iam/my-sessions"),
   revoke: (id: string) =>
@@ -276,6 +393,10 @@ export interface TenantRecord {
   name: string;
   networkId: string | null;
   createdAt: string;
+  /** Free-form settings blob (e.g. access-control policy under `accessControl`). */
+  settings: Record<string, unknown> | null;
+  /** Parent network + its plan (read-only), when the tenant belongs to one. */
+  network: { id: string; name: string; planName: string | null } | null;
 }
 
 export const tenants = {
@@ -303,8 +424,8 @@ export const tenants = {
   /** Load one tenant by id (read tenant.tenant). */
   get: (tenantId: string) => request<TenantRecord>(`/tenants/${encodeURIComponent(tenantId)}`),
 
-  /** Rename / re-slug a tenant (manage tenant.tenant: owner or super-admin). */
-  update: (tenantId: string, body: { name?: string; slug?: string }) =>
+  /** Rename / re-slug / re-configure a tenant (manage tenant.tenant: owner or super-admin). */
+  update: (tenantId: string, body: { name?: string; slug?: string; settings?: Record<string, unknown> }) =>
     request<TenantRecord>(`/tenants/${encodeURIComponent(tenantId)}`, {
       method: "PATCH",
       body: JSON.stringify(body),

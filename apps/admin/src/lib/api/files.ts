@@ -13,9 +13,26 @@ export type StoredFile = {
   updatedAt: string;
 };
 
-export async function listFiles(folder?: string) {
-  const qs = folder ? `?folder=${encodeURIComponent(folder)}` : "";
-  return request<StoredFile[]>(`/files${qs}`);
+export type FileCategoryKey = "image" | "video" | "audio" | "document" | "other";
+
+export type FilesSummary = {
+  totalCount: number;
+  totalBytes: number;
+  categories: Array<{ key: FileCategoryKey; count: number; bytes: number }>;
+  folders: Array<{ folder: string; count: number; bytes: number }>;
+};
+
+export async function getFilesSummary() {
+  return request<FilesSummary>("/files/summary");
+}
+
+export async function listFiles(opts: { folder?: string; take?: number; skip?: number } = {}) {
+  const params = new URLSearchParams();
+  if (opts.folder) params.set("folder", opts.folder);
+  if (opts.take !== undefined) params.set("take", String(opts.take));
+  if (opts.skip !== undefined) params.set("skip", String(opts.skip));
+  const qs = params.toString();
+  return request<{ rows: StoredFile[]; total: number }>(`/files${qs ? `?${qs}` : ""}`);
 }
 
 export async function uploadFile(file: File, folder?: string) {

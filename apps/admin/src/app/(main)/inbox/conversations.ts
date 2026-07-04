@@ -38,7 +38,7 @@ export const DEFAULT_FOLDER: FolderKey = 'inbox';
 export const SHARED_INBOX_ROUTE_KEY = 'uprise.sharedInbox.routeState';
 export const SHARED_INBOX_STARS_KEY = 'uprise.sharedInbox.stars';
 export function folderLabel(key: string): string {
-  return FOLDERS.find((f) => f.key === key)?.label ?? 'Shared inbox';
+  return FOLDERS.find((f) => f.key === key)?.label ?? 'Inbox';
 }
 
 export type ConversationStatus = 'inbox' | 'trash' | 'archived';

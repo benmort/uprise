@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3003",
+    "dev": "node ../../scripts/dev-supervisor.mjs --label marketing --heal-next -- next dev -p 3003",
     "build": "next build",
     "start": "next start -p 3003",
     "lint": "tsc --noEmit --pretty false",
