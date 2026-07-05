@@ -139,6 +139,31 @@ export class IamFlowsService {
     }
   }
 
+  /**
+   * Send a transactional auth email WITHOUT leaking account existence or 500-ing
+   * the request. A provider failure (SendGrid unconfigured / unverified sender /
+   * transient outage) is logged server-side — and EmailService has already marked
+   * the Email row FAILED with the reason — but the endpoint still returns ok, so
+   * the response is byte-identical whether or not the account exists. (Previously
+   * a send throw only occurred for REAL accounts, which both broke the UX and
+   * leaked existence via the 500.)
+   */
+  private async dispatchAuthEmail(
+    input: Parameters<TransactionalDispatcher["sendEmail"]>[0],
+  ): Promise<void> {
+    try {
+      await this.dispatcher.sendEmail(input);
+      this.logger.log("iam", "Auth email dispatched", { purpose: input.purpose, to: input.toAddress });
+    } catch (err) {
+      this.logger.error(
+        "iam",
+        "Auth email send FAILED — check SENDGRID_API_KEY/SENDGRID_FROM_EMAIL, sender verification, and the Email row",
+        undefined,
+        { purpose: input.purpose, to: input.toAddress, error: String(err) },
+      );
+    }
+  }
+
   private authAppUrl(): string {
     return this.config.get<string>("AUTH_APP_URL", "http://localhost:3002").replace(/\/+$/, "");
   }
@@ -266,18 +291,25 @@ export class IamFlowsService {
   // ── Magic link ──────────────────────────────────────────────────────
   /** Request a magic-link email. Always succeeds (never leaks account existence). */
   async requestMagicLink(email: string): Promise<{ ok: true }> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const normalised = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email: normalised } });
     if (user) {
       const token = this.newToken();
       await this.prisma.magicLink.create({
         data: { userId: user.id, token, expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS) },
       });
-      await this.dispatcher.sendEmail({
+      await this.dispatchAuthEmail({
         tenantId: await this.resolveTenantId(user.id),
         toAddress: user.email,
         templateKey: "magic_link",
         vars: { link: this.link("sign-in/magic-link", token) },
         purpose: "magic_link",
+      });
+    } else {
+      // Server-side breadcrumb only (never surfaced to the client, preserving
+      // anti-enumeration) so ops can tell "no account" from "send failed".
+      this.logger.log("iam", "Magic-link requested for an email with no account — nothing sent", {
+        email: normalised,
       });
     }
     return { ok: true };
@@ -294,18 +326,23 @@ export class IamFlowsService {
 
   // ── Password reset ──────────────────────────────────────────────────
   async forgotPassword(email: string): Promise<{ ok: true }> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const normalised = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({ where: { email: normalised } });
     if (user) {
       const token = this.newToken();
       await this.prisma.passwordReset.create({
         data: { userId: user.id, token, expiresAt: new Date(Date.now() + RESET_TTL_MS) },
       });
-      await this.dispatcher.sendEmail({
+      await this.dispatchAuthEmail({
         tenantId: await this.resolveTenantId(user.id),
         toAddress: user.email,
         templateKey: "recovery",
         vars: { link: this.link("reset-password", token) },
         purpose: "password_reset",
+      });
+    } else {
+      this.logger.log("iam", "Password reset requested for an email with no account — nothing sent", {
+        email: normalised,
       });
     }
     return { ok: true };
@@ -350,7 +387,7 @@ export class IamFlowsService {
       await this.prisma.mobileVerification.create({
         data: { userId: user.id, code, expiresAt: new Date(Date.now() + VERIFY_CODE_TTL_MS) },
       });
-      await this.dispatcher.sendEmail({
+      await this.dispatchAuthEmail({
         tenantId: await this.resolveTenantId(user.id),
         toAddress: user.email,
         templateKey: "verification",

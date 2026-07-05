@@ -105,6 +105,16 @@ describe("IamFlowsService", () => {
       expect(dispatcher.sendEmail).not.toHaveBeenCalled();
     });
 
+    it("still returns ok (no 500, no existence leak) when the email send fails", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "a@b.c" });
+      dispatcher.sendEmail.mockRejectedValueOnce(new Error("SendGrid is not configured"));
+      // Must resolve to {ok:true} exactly like the no-account path — a send failure
+      // that only 500s for real accounts would both break UX and leak existence.
+      await expect(svc.requestMagicLink("a@b.c")).resolves.toEqual({ ok: true });
+      expect(dispatcher.sendEmail).toHaveBeenCalled();
+    });
+
     it("consume marks single-use and grants a session", async () => {
       const { svc, prisma, sessions } = setup();
       prisma.magicLink.findUnique.mockResolvedValueOnce({

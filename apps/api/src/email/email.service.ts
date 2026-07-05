@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, type OnModuleInit } from "@nestjs/common";
 import { EmailStatus, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
@@ -39,7 +39,7 @@ export interface SendGridEvent {
  * separate future domain (the email analogue of blasts).
  */
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sendgrid: SendGridService,
@@ -48,6 +48,27 @@ export class EmailService {
     private readonly webhookEvents: WebhookEventService,
     private readonly logger: DomainLogger,
   ) {}
+
+  /** Scream at boot if a deploy is missing transactional-email config, so a prod
+   *  where magic links / resets / verification silently fail is visible in the
+   *  startup logs rather than only when a user reports "no email". */
+  onModuleInit(): void {
+    const h = this.emailHealth();
+    if (!h.ready) {
+      this.logger.warn(
+        "email",
+        "Transactional email is NOT fully configured — magic links, password resets and verification emails will fail to send (via the platform sender). Set SENDGRID_API_KEY + SENDGRID_FROM_EMAIL (and verify the sender in SendGrid).",
+        { apiKeyConfigured: h.apiKeyConfigured, fromEmail: h.fromEmail },
+      );
+    }
+  }
+
+  /** Transactional-email health for ops (GET /email/health): is the platform
+   *  SendGrid sender usable end-to-end? Never returns the API key. */
+  emailHealth(): { ready: boolean; apiKeyConfigured: boolean; fromEmail: string | null } {
+    const c = this.sendgrid.platformConfig();
+    return { ready: c.apiKeyConfigured && Boolean(c.fromEmail), apiKeyConfigured: c.apiKeyConfigured, fromEmail: c.fromEmail || null };
+  }
 
   private render(template: string, vars?: Record<string, string>): string {
     return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => vars?.[key] ?? "");

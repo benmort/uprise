@@ -29,7 +29,13 @@ export class EmailController {
     return org.id;
   }
 
-  // Declared before :id so "templates" isn't captured as an email id.
+  // Declared before :id so "health"/"templates" aren't captured as an email id.
+  @Get("health")
+  @RequirePermission(READ)
+  emailHealth() {
+    return this.email.emailHealth();
+  }
+
   @Get("templates")
   @RequirePermission(READ)
   async listTemplates() {

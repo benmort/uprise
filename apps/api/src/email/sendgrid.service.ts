@@ -35,6 +35,18 @@ export class SendGridService {
     return Boolean(this.config.get<string>("SENDGRID_API_KEY", "").trim());
   }
 
+  /**
+   * Platform (env) sender health for ops — whether the API key AND a from-address
+   * are set, so transactional email can actually leave the building. Never exposes
+   * the key itself. (Per-tenant senders can still override at send time.)
+   */
+  platformConfig(): { apiKeyConfigured: boolean; fromEmail: string } {
+    return {
+      apiKeyConfigured: Boolean(this.config.get<string>("SENDGRID_API_KEY", "").trim()),
+      fromEmail: this.config.get<string>("SENDGRID_FROM_EMAIL", "").trim(),
+    };
+  }
+
   /** Whether the signed-event-webhook verification key is configured. */
   isWebhookVerificationConfigured(): boolean {
     return Boolean(this.config.get<string>("SENDGRID_WEBHOOK_VERIFICATION_KEY", "").trim());
