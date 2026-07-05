@@ -20,6 +20,7 @@ Binding – follow on every task.
 12. **Create docs only when asked** – first-write documentation on explicit request, not by default.
 13. **Claim only what you've verified** – say "done"/"green" only with the command output to back it; flag anything unrun or untested as such; when you can't confirm a fact, say so plainly rather than guess.
 14. **Commit messages keep the `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>` line** (this repo's harness convention); commit/push only when asked.
+15. **New code ships tested – `pnpm coverage:check` gates it.** If your change adds or edits source under an instrumented scope (`apps/api/src`, `apps/admin/src/lib`, `packages/field/src/lib`), the tests land in the **same commit**. The gate enforces two things: the new/changed lines are **≥ 80 % covered** (patch floor), and the package's total line % **does not drop** below `coverage-baseline.json` (a ratchet – it only moves up, via `pnpm coverage:check --update-baseline`). View code (`src/app`, `src/components`) is out of scope – it's Playwright e2e's job. See `dev/ai/how-to/definition-of-done.md`.
 
 ---
 

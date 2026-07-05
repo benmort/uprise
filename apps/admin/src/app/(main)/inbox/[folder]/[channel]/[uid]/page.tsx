@@ -1,12 +1,10 @@
 'use client';
 
 // Shared Inbox — conversation detail (main content pane; shell/sidebar in the /inbox
-// layout). HYBRID: mock rows (Email/Call/Live-chat/Social + seeded Text/WhatsApp) render
-// the channel-adaptive static view; real Text(SMS)/WhatsApp rows load the live thread via
-// /inbox/conversations and get a working composer + resolve. Realtime polling lands in
-// Phase 3. Addressed by /inbox/<folder>/<prefix>/<uid> (e.g. /inbox/inbox/e/priya,
-// /inbox/inbox/t/61438221004).
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+// layout). Real Text(SMS)/WhatsApp rows load the live thread via /inbox/conversations and
+// get a working composer + resolve/claim, kept live by polling + SSE. Addressed by
+// /inbox/<folder>/<prefix>/<uid> (e.g. /inbox/inbox/t/61438221004).
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import {
@@ -20,19 +18,9 @@ import {
 import { getSession } from '@/lib/session';
 import {
   ArrowLeft,
-  Trash,
-  Archive,
-  Info,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Reply,
-  ReplyAll,
-  Forward,
-  Paperclip,
-  Phone,
-  MessageSquare,
-  Play,
   Send,
   Loader2,
   UserPlus,
@@ -68,12 +56,6 @@ type ThreadMessage = {
   to: string;
   channel?: RealChannel;
 };
-
-function formatDuration(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
 
 export default function SharedInboxDetailPage() {
   const params = useParams();
@@ -141,6 +123,7 @@ export default function SharedInboxDetailPage() {
   const [markedResolved, setMarkedResolved] = useState<boolean | null>(null);
   const resolved = markedResolved ?? realCurrent?.resolved ?? false;
   const [owner, setOwner] = useState<{ id: string; name: string } | null>(null);
+  const [noPermission, setNoPermission] = useState(false);
 
   const loadThread = useCallback(
     async (withLoading = true) => {
@@ -152,6 +135,11 @@ export default function SharedInboxDetailPage() {
         setThread((data.messages as ThreadMessage[]) || []);
         setSessionOpen(data.sessionOpen !== false);
         setOwner((data.owner as { id: string; name: string } | null) ?? null);
+        setNoPermission(false);
+      } else if (withLoading) {
+        // Only a foreground load flips to no-permission; a transient background-poll 403/500
+        // must not discard the already-loaded thread.
+        setNoPermission(res.status === 403);
       }
       if (withLoading) setLoadingThread(false);
     },
@@ -233,12 +221,31 @@ export default function SharedInboxDetailPage() {
     );
   }
 
+  if (isReal && noPermission) {
+    return (
+      <div className="xl:col-span-9 w-full">
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center dark:border-gray-800 dark:bg-white/[0.03]">
+          <p className="mb-1 text-sm font-semibold text-gray-800 dark:text-white/90">
+            You don&rsquo;t have access to this conversation
+          </p>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            Ask an organisation owner if you need this permission.
+          </p>
+          <button
+            onClick={() => router.push(backHref)}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to shared inbox
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const channel = mock ? mock.channel : realChannel === 'WHATSAPP' ? 'WhatsApp' : 'Text';
   const senderName = mock ? mock.sender : realCurrent?.sender ?? uid;
   const identity = mock ? mock.identity : realCurrent?.identity ?? uid;
   const subject = mock ? mock.subject : realCurrent?.subject || 'Conversation';
-  const isEmail = channel === 'Email';
-  const isCall = channel === 'Call';
 
   return (
     <div className="xl:col-span-9 w-full">
@@ -282,19 +289,7 @@ export default function SharedInboxDetailPage() {
                     {owner ? (owner.id === currentUserId ? 'Release' : owner.name) : 'Claim'}
                   </button>
                 </div>
-              ) : (
-                <div className="flex">
-                  <button title="Move to trash" className="flex h-10 w-10 items-center justify-center text-gray-500 ring-1 ring-inset ring-gray-200 first:rounded-l-lg last:rounded-r-lg hover:bg-gray-100 transition hover:text-error-500 dark:bg-white/[0.03] dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-error-500">
-                    <Trash className="w-5 h-5" />
-                  </button>
-                  <button title="Details" className="-ml-px flex h-10 w-10 items-center justify-center text-gray-500 ring-1 ring-inset ring-gray-200 hover:bg-gray-100 transition hover:text-gray-700 dark:bg-white/[0.03] dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.05] dark:hover:text-white">
-                    <Info className="w-5 h-5" />
-                  </button>
-                  <button title="Archive" className="-ml-px flex h-10 w-10 items-center justify-center rounded-r-lg text-gray-500 ring-1 ring-inset ring-gray-200 hover:bg-gray-100 hover:text-gray-700 dark:bg-white/[0.03] dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.05] transition dark:hover:text-white">
-                    <Archive className="w-5 h-5" />
-                  </button>
-                </div>
-              )}
+              ) : null}
               <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${CHANNELS[channel].labelColor}`}>{channel}</span>
             </div>
           </div>
@@ -349,9 +344,7 @@ export default function SharedInboxDetailPage() {
             onDraft={setDraft}
             onSend={sendReply}
           />
-        ) : (
-          <MockBody conversation={mock!} isCall={isCall} isEmail={isEmail} />
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -442,108 +435,5 @@ function RealThread({
         </div>
       </div>
     </>
-  );
-}
-
-/** Mock channel-adaptive static render (Email/Call/Live-chat/Social + seeded rows). */
-function MockBody({
-  conversation,
-  isCall,
-  isEmail,
-}: {
-  conversation: NonNullable<ReturnType<typeof findConversation>>;
-  isCall: boolean;
-  isEmail: boolean;
-}) {
-  return (
-    <>
-      <div className="max-h-[440px] 2xl:max-h-[640px] overflow-y-auto">
-        <div className="p-5 xl:p-6">
-          {isCall && (
-            <div className="mb-6 flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-900">
-              <button className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-white hover:bg-brand-600">
-                <Play className="h-4 w-4" />
-              </button>
-              <div className="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
-                <div className="h-full w-1/3 rounded-full bg-brand-500" />
-              </div>
-              <span className="text-xs text-gray-500 dark:text-gray-400">{formatDuration(conversation.durationSec ?? 0)}</span>
-            </div>
-          )}
-
-          <div className="text-sm text-gray-500 mb-7 dark:text-gray-400 whitespace-pre-line">
-            {isCall ? (
-              <>
-                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-400">Transcript</span>
-                {conversation.content}
-              </>
-            ) : (
-              conversation.content
-            )}
-          </div>
-
-          {conversation.attachments && conversation.attachments.length > 0 && (
-            <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-900 sm:p-4">
-              <div className="flex items-center gap-2 mb-5">
-                <Paperclip className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                <span className="text-sm text-gray-700 dark:text-gray-400">{conversation.attachments.length} Attachments</span>
-              </div>
-              <div className="flex flex-col items-center gap-3 sm:flex-row">
-                {conversation.attachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="relative hover:border-gray-300 dark:hover:border-white/[0.05] flex w-full cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white py-2.5 pl-3 pr-5 dark:border-gray-800 dark:bg-white/5 sm:w-auto"
-                  >
-                    <div className="w-full h-10 max-w-10 bg-gray-100 dark:bg-gray-700 rounded flex items-center justify-center">
-                      <span className="text-xs font-medium text-gray-600 dark:text-gray-300">{attachment.type}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800 dark:text-white/90">{attachment.name}</p>
-                      <span className="flex items-center gap-1.5">
-                        <span className="text-gray-500 text-xs dark:text-gray-400">{attachment.size}</span>
-                        <span className="inline-block w-1 h-1 bg-gray-400 rounded-full"></span>
-                        <span className="text-gray-500 text-xs dark:text-gray-400">Download</span>
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="sticky bottom-0 border-t border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-[#171f2f]">
-        <div className="flex flex-wrap sm:flex-row flex-col gap-3">
-          {isCall ? (
-            <>
-              <FooterAction primary icon={<Phone className="w-5 h-5" />} label="Call back" />
-              <FooterAction icon={<MessageSquare className="w-5 h-5" />} label="Send SMS" />
-            </>
-          ) : (
-            <>
-              <FooterAction icon={<Reply className="w-5 h-5" />} label="Reply" />
-              {isEmail && <FooterAction icon={<ReplyAll className="w-5 h-5" />} label="Reply all" />}
-              <FooterAction icon={<Forward className="w-5 h-5" />} label="Forward" />
-            </>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function FooterAction({ icon, label, primary }: { icon: ReactNode; label: string; primary?: boolean }) {
-  return (
-    <button
-      className={
-        primary
-          ? 'items-center inline-flex justify-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600'
-          : 'items-center inline-flex justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-500 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200'
-      }
-    >
-      {icon}
-      {label}
-    </button>
   );
 }

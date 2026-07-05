@@ -25,6 +25,7 @@ import {
   EXAMPLE_BLAST_TITLE,
   buildDemoContacts,
 } from "./seed-data";
+import { PRIMARY_TENANT } from "./tenants.seed";
 
 export type SeedResult = {
   tenantId: string;
@@ -61,10 +62,11 @@ export class SeedService {
   ) {}
 
   private async org(): Promise<string> {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
+    // Seed target: the primary tenant (Uprise Labs). All demo/tour/seed data is
+    // written here. Idempotent upsert by slug — safe to re-run.
     const org = await this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
+      where: { slug: PRIMARY_TENANT.slug },
+      create: { slug: PRIMARY_TENANT.slug, name: PRIMARY_TENANT.name },
       update: {},
     });
     return org.id;

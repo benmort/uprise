@@ -15,6 +15,7 @@ The single answer to "am I done?" – before declaring work done, verify and **s
 
 1. **Typecheck** – `pnpm -r typecheck` green (or `--filter` to every package you touched). Paste the command.
 2. **Tests + boot smoke** – `pnpm --filter api test` green, including `app.module.boot.spec.ts` (the DI gate – typecheck/build do NOT catch provider-resolution bugs). New behaviour has a test; state the count or justify the exception.
+2b. **Coverage gate** – if you added/changed source under an instrumented scope (`apps/api/src`, `apps/admin/src/lib`, `packages/field/src/lib`), `pnpm coverage:check` is green. It fails unless the **new/changed lines are ≥ 80 % covered** (patch floor) **and** the package's total line % holds at or above `coverage-baseline.json` (no regression). Tests land in the **same commit** as the code. If total coverage genuinely rose, ratchet the baseline: `pnpm coverage:check --update-baseline`, and commit the bump. View code (`src/app`, `src/components`) is out of scope. Paste the gate's PASS line. It's a no-op (and instant) when your change touches no instrumented source.
 3. **Build** – any app/package you changed builds (`pnpm --filter <name> build`). The Next apps' build is the real gate for Tailwind/config changes.
 4. **Security** – new/changed endpoints carry `@RequirePermission` (or a justified public-allowlist entry). Authentication is enforced globally, but permission-gating is opt-in: `AbilityGuard` lets any undecorated route through, and nothing scans for the missing decorator – an undecorated endpoint is silently reachable by any authenticated user. Also: provider webhooks `claim`-guard before acting; DTOs are class-validator-validated; no secret/PII in logs.
 5. **Events & transactions** – a state write that has a domain event emits it via `OutboxService.append(tx, …)` in the **same** `prisma.$transaction`; FSM transitions go through the state machine's guard.
@@ -33,6 +34,7 @@ The single answer to "am I done?" – before declaring work done, verify and **s
 
 - [ ] `pnpm -r typecheck` run + pasted.
 - [ ] `pnpm --filter api test` green incl. the boot smoke; new tests written + counted (or exception justified).
+- [ ] `pnpm coverage:check` green (patch ≥ 80 %, no total regression) if instrumented source changed; baseline ratcheted + committed if coverage rose.
 - [ ] Changed apps/packages built.
 - [ ] Security line verified for every new/changed entry point.
 - [ ] State+event writes atomic; FSM guards used.

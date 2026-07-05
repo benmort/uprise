@@ -150,17 +150,18 @@ export class BlastsService {
     };
   }
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
+  // Internal/job loader — no tenant scope. Only for execution paths (sendNow, retryFailed,
+  // scheduled dispatch) that run on an already-authorised blast id.
   private async getBlastOrThrow(id: string) {
     const blast = await this.prisma.blast.findUnique({ where: { id } });
+    if (!blast) throw new NotFoundException("Blast not found");
+    return blast;
+  }
+
+  // Tenant-scoped loader — every HTTP entry point (update/delete/proof/schedule/send/retry)
+  // must load through this so a caller can't act on another tenant's blast by id.
+  private async getBlastForTenant(tenantId: string, id: string) {
+    const blast = await this.prisma.blast.findFirst({ where: { id, tenantId } });
     if (!blast) throw new NotFoundException("Blast not found");
     return blast;
   }
@@ -174,12 +175,11 @@ export class BlastsService {
     return /^\+\d{7,15}$/.test(contact.phoneE164);
   }
 
-  async createDraft(dto: CreateBlastDto) {
-    const org = await this.ensureOrganization();
+  async createDraft(tenantId: string, dto: CreateBlastDto) {
     return this.prisma.$transaction(async (tx) => {
       const blast = await tx.blast.create({
         data: {
-          tenantId: org.id,
+          tenantId,
           title: dto.title,
           audienceId: dto.audienceId || null,
           bodyTemplate: dto.bodyTemplate,
@@ -198,17 +198,17 @@ export class BlastsService {
       });
       // Durable lifecycle event (doc 05) committed with the draft.
       await this.outbox.append(tx, {
-        tenantId: org.id,
+        tenantId,
         eventType: "messaging.blast.created",
         aggregateId: blast.id,
-        payload: { blastId: blast.id, tenantId: org.id, title: blast.title },
+        payload: { blastId: blast.id, tenantId, title: blast.title },
       });
       return blast;
     });
   }
 
-  async updateDraft(id: string, dto: UpdateBlastDto) {
-    const blast = await this.getBlastOrThrow(id);
+  async updateDraft(tenantId: string, id: string, dto: UpdateBlastDto) {
+    const blast = await this.getBlastForTenant(tenantId, id);
     if (dto.bodyTemplate && dto.bodyTemplate !== blast.bodyTemplate) {
       const version = await this.prisma.blastTemplate.count({ where: { blastId: id } });
       await this.prisma.blastTemplate.create({
@@ -236,13 +236,13 @@ export class BlastsService {
     });
   }
 
-  async deleteBlast(id: string) {
-    await this.getBlastOrThrow(id);
+  async deleteBlast(tenantId: string, id: string) {
+    await this.getBlastForTenant(tenantId, id);
     return this.prisma.blast.delete({ where: { id } });
   }
 
-  async previewProof(id: string, dto: ProofBlastDto) {
-    const blast = await this.getBlastOrThrow(id);
+  async previewProof(tenantId: string, id: string, dto: ProofBlastDto) {
+    const blast = await this.getBlastForTenant(tenantId, id);
     const sampleRecipients =
       dto.sampleRecipients && dto.sampleRecipients.length > 0
         ? dto.sampleRecipients
@@ -277,8 +277,8 @@ export class BlastsService {
     return { blastId: blast.id, previews, proofDispatch };
   }
 
-  async markProofed(id: string) {
-    const blast = await this.getBlastOrThrow(id);
+  async markProofed(tenantId: string, id: string) {
+    const blast = await this.getBlastForTenant(tenantId, id);
     if (blast.status === BlastStatus.PROOFED) {
       return blast;
     }
@@ -295,8 +295,8 @@ export class BlastsService {
     });
   }
 
-  async schedule(id: string, dto: ScheduleBlastDto) {
-    const blast = await this.getBlastOrThrow(id);
+  async schedule(tenantId: string, id: string, dto: ScheduleBlastDto) {
+    const blast = await this.getBlastForTenant(tenantId, id);
     assertValidBlastTransition(
       blast.status as unknown as FlowBlastStatus,
       FlowBlastStatus.SCHEDULED,
@@ -324,7 +324,9 @@ export class BlastsService {
     return updated;
   }
 
-  async requestSendNow(id: string) {
+  async requestSendNow(tenantId: string, id: string) {
+    // Verify tenant ownership before enqueuing/executing — the job path then trusts the id.
+    await this.getBlastForTenant(tenantId, id);
     if (!(await this.isBullmqBlastEnabled())) {
       return this.sendNow(id);
     }
@@ -337,7 +339,8 @@ export class BlastsService {
     };
   }
 
-  async requestRetryFailed(id: string) {
+  async requestRetryFailed(tenantId: string, id: string) {
+    await this.getBlastForTenant(tenantId, id);
     if (!(await this.isBullmqBlastEnabled())) {
       return this.retryFailed(id);
     }
@@ -798,6 +801,7 @@ export class BlastsService {
     }
 
     return {
+      tenantId: blast.tenantId,
       status,
       remaining,
       internalFailures,
@@ -1029,12 +1033,12 @@ export class BlastsService {
       internalFailures: number;
     }> = [];
     for (const blastId of affectedBlastIds) {
-      const statusUpdate = await this.recalculateBlastStatus(blastId);
+      const { tenantId, ...statusUpdate } = await this.recalculateBlastStatus(blastId);
       blastStatusUpdates.push({
         blastId,
         ...statusUpdate,
       });
-      this.events.emit("blast.updated", {
+      this.events.emit("blast.updated", tenantId, {
         blastId,
         status: statusUpdate.status,
         remaining: statusUpdate.remaining,
@@ -1247,7 +1251,7 @@ export class BlastsService {
 
     await this.writeSnapshot(blast.tenantId, blast.id, "sent", sent);
     await this.writeSnapshot(blast.tenantId, blast.id, "failed", failed);
-    this.events.emit("blast.updated", {
+    this.events.emit("blast.updated", blast.tenantId, {
       blastId: blast.id,
       status: statusUpdate.status,
       sent,
@@ -1406,13 +1410,13 @@ export class BlastsService {
       }
     }
     const statusUpdate = await this.recalculateBlastStatus(blast.id);
-    this.events.emit("blast.retry", {
+    this.events.emit("blast.retry", blast.tenantId, {
       blastId: blast.id,
       retried,
       status: statusUpdate.status,
       internalFailures: statusUpdate.internalFailures,
     });
-    this.events.emit("blast.updated", {
+    this.events.emit("blast.updated", blast.tenantId, {
       blastId: blast.id,
       status: statusUpdate.status,
       remaining: statusUpdate.remaining,
@@ -1422,11 +1426,10 @@ export class BlastsService {
     return { blastId: blast.id, retried };
   }
 
-  async listBlasts(where?: Prisma.BlastWhereInput) {
-    const org = await this.ensureOrganization();
+  async listBlasts(tenantId: string, where?: Prisma.BlastWhereInput) {
     return this.prisma.blast.findMany({
       where: {
-        tenantId: org.id,
+        tenantId,
         ...(where || {}),
       },
       include: {

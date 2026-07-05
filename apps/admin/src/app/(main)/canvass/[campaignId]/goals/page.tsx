@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { ArrowLeft, Save, Target } from "lucide-react";
 import {
   getCampaign,
+  getCampaignResults,
   getCampaignSummary,
   updateCampaign,
   type CampaignKpis,
@@ -15,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@uprise/field";
 import { ProgressBar } from "@uprise/field";
+import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 
 export default function GoalsPage() {
@@ -23,17 +25,34 @@ export default function GoalsPage() {
   const [doorsGoal, setDoorsGoal] = useState("");
   const [convGoal, setConvGoal] = useState("");
   const [kpis, setKpis] = useState<CampaignKpis | null>(null);
+  const [contacted, setContacted] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [noPermission, setNoPermission] = useState(false);
 
   const load = useCallback(async () => {
-    const [c, s] = await Promise.all([getCampaign(campaignId), getCampaignSummary(campaignId)]);
-    if (c.ok) {
-      const goals = (c.data.goals ?? {}) as Record<string, number>;
-      setDoorsGoal(goals.doors ? String(goals.doors) : "");
-      setConvGoal(goals.conversations ? String(goals.conversations) : "");
+    setLoading(true);
+    setError(null);
+    setNoPermission(false);
+    // getCampaign carries the goals JSON, so its failure drives the page state;
+    // the summary + results feed the pace bars and degrade to zero on error.
+    const [c, s, r] = await Promise.all([
+      getCampaign(campaignId),
+      getCampaignSummary(campaignId),
+      getCampaignResults(campaignId),
+    ]);
+    if (!c.ok) {
+      setNoPermission(c.status === 403);
+      setError(c.error);
+      setLoading(false);
+      return;
     }
+    const goals = (c.data.goals ?? {}) as Record<string, number>;
+    setDoorsGoal(goals.doors ? String(goals.doors) : "");
+    setConvGoal(goals.conversations ? String(goals.conversations) : "");
     if (s.ok) setKpis(s.data);
+    if (r.ok) setContacted(r.data.funnel.contacted);
     setLoading(false);
   }, [campaignId]);
 
@@ -59,6 +78,7 @@ export default function GoalsPage() {
 
   const doorsKnocked = kpis?.knockedStops ?? 0;
   const doorsTarget = Number(doorsGoal) || 0;
+  const convTarget = Number(convGoal) || 0;
 
   return (
     <div className="page-stack max-w-xl">
@@ -72,39 +92,64 @@ export default function GoalsPage() {
         <h1 className="text-2xl font-extrabold">Goals &amp; pace</h1>
       </div>
 
-      <SectionCard title="Targets">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Doors target</label>
-            <Input value={doorsGoal} onChange={(e) => setDoorsGoal(e.target.value)} type="number" />
+      <StateRegion error={error} noPermission={noPermission} onRetry={() => void load()}>
+        <SectionCard title="Targets">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Doors target</label>
+              <Input value={doorsGoal} onChange={(e) => setDoorsGoal(e.target.value)} type="number" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Conversations target</label>
+              <Input value={convGoal} onChange={(e) => setConvGoal(e.target.value)} type="number" />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Conversations target</label>
-            <Input value={convGoal} onChange={(e) => setConvGoal(e.target.value)} type="number" />
-          </div>
-        </div>
-        <Button className="mt-3" onClick={save} disabled={busy}>
-          <Save className="mr-1.5 h-4 w-4" />
-          Save goals
-        </Button>
-      </SectionCard>
-
-      {doorsTarget > 0 ? (
-        <SectionCard title={<span className="flex items-center gap-1.5"><Target className="h-3.5 w-3.5" />Pace to target</span>}>
-          <ProgressBar
-            value={doorsKnocked}
-            max={doorsTarget}
-            label={
-              <>
-                <span>Doors knocked</span>
-                <span>
-                  {doorsKnocked}/{doorsTarget} ({Math.round((doorsKnocked / doorsTarget) * 100)}%)
-                </span>
-              </>
-            }
-          />
+          <Button className="mt-3" onClick={save} disabled={busy}>
+            <Save className="mr-1.5 h-4 w-4" />
+            Save goals
+          </Button>
         </SectionCard>
-      ) : null}
+
+        {doorsTarget > 0 || convTarget > 0 || contacted > 0 ? (
+          <SectionCard title={<span className="flex items-center gap-1.5"><Target className="h-3.5 w-3.5" />Pace to target</span>}>
+            <div className="space-y-4">
+              {doorsTarget > 0 ? (
+                <ProgressBar
+                  value={doorsKnocked}
+                  max={doorsTarget}
+                  label={
+                    <>
+                      <span>Doors knocked</span>
+                      <span>
+                        {doorsKnocked}/{doorsTarget} ({Math.round((doorsKnocked / doorsTarget) * 100)}%)
+                      </span>
+                    </>
+                  }
+                />
+              ) : null}
+              {convTarget > 0 ? (
+                <ProgressBar
+                  value={contacted}
+                  max={convTarget}
+                  tone="primary"
+                  label={
+                    <>
+                      <span>Conversations</span>
+                      <span>
+                        {contacted}/{convTarget} ({Math.round((contacted / convTarget) * 100)}%)
+                      </span>
+                    </>
+                  }
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {contacted} conversation{contacted === 1 ? "" : "s"} so far – set a conversations target to track pace.
+                </p>
+              )}
+            </div>
+          </SectionCard>
+        ) : null}
+      </StateRegion>
     </div>
   );
 }

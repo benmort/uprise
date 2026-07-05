@@ -1,5 +1,5 @@
 import { AppUserRole } from "@uprise/db";
-import { IsEmail, IsEnum, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { IsBoolean, IsEmail, IsEnum, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class CreateTenantDto {
   @IsString() @MaxLength(64) slug!: string;
@@ -18,6 +18,14 @@ export class UpdateTenantDto {
   @IsOptional() @IsString() @MaxLength(64) slug?: string;
   // Free-form tenant settings blob (e.g. access-control policy under settings.accessControl).
   @IsOptional() @IsObject() settings?: Record<string, unknown>;
+}
+
+/** Patch body for PATCH /tenants/:id/onboarding. `steps` is a partial map of onboarding
+ *  step keys → true; the service sanitises it (unknown keys ignored, only true honoured,
+ *  steps merge monotonically). Mirrors TenantOnboardingPatch in @uprise/contracts. */
+export class UpdateOnboardingDto {
+  @IsOptional() @IsBoolean() dismissed?: boolean;
+  @IsOptional() @IsObject() steps?: Record<string, boolean>;
 }
 
 export class AddMemberDto {

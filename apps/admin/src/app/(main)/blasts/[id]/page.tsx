@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { StateRegion } from "@/components/shell/state-region";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +40,7 @@ export default function BlastDetailsPage() {
   const [trendWindow, setTrendWindow] = useState<TrendWindow>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [noPermission, setNoPermission] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [statusDistribution, setStatusDistribution] = useState<Array<Record<string, unknown>>>([]);
   const [streamStatus, setStreamStatus] = useState("idle");
@@ -46,12 +48,19 @@ export default function BlastDetailsPage() {
 
   const loadForBlast = async (id: string, page = activityPage) => {
     setError("");
+    // noPermission is sticky (set only on 403 below) — resetting it each poll would flash
+    // the empty layout every 8s; the polling/SSE effects tear down once it's true.
     const [kpiRes, trendRes, activityRes, statusRes] = await Promise.all([
       getBlastKpis(id),
       getBlastTrend(id, trendRange),
       getBlastActivity(id, activityPageSize, page * activityPageSize),
       getBlastStatusDistribution(id),
     ]);
+    if (!kpiRes.ok && kpiRes.status === 403) {
+      setNoPermission(true);
+      setLoading(false);
+      return;
+    }
     if (kpiRes.ok) setKpis(kpiRes.data as Record<string, number>);
     if (trendRes.ok) setTrend(trendRes.data);
     if (activityRes.ok) {
@@ -83,15 +92,15 @@ export default function BlastDetailsPage() {
   }, [blastId]);
 
   useEffect(() => {
-    if (!blastId) return;
+    if (!blastId || noPermission) return;
     setLoading(true);
     void loadForBlast(blastId, activityPage);
     const id = setInterval(() => void loadForBlast(blastId, activityPage), 8000);
     return () => clearInterval(id);
-  }, [blastId, activityPage, trendWindow, activityPageSize]);
+  }, [blastId, activityPage, trendWindow, activityPageSize, noPermission]);
 
   useEffect(() => {
-    if (!blastId) return;
+    if (!blastId || noPermission) return;
     let source: EventSource | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -173,7 +182,7 @@ export default function BlastDetailsPage() {
       clearTimers();
       closeSource();
     };
-  }, [blastId, activityPage, trendWindow, activityPageSize]);
+  }, [blastId, activityPage, trendWindow, activityPageSize, noPermission]);
 
   const maxTrend = useMemo(() => {
     return Math.max(
@@ -181,6 +190,20 @@ export default function BlastDetailsPage() {
       ...trend.map((row) => Math.max(Number(row.sent || 0), Number(row.responses || 0))),
     );
   }, [trend]);
+
+  if (noPermission) {
+    return (
+      <div className="page-stack">
+        <Breadcrumbs
+          items={[
+            { label: "Analytics", href: "/analytics" },
+            { label: blastTitle || "Blast Details" },
+          ]}
+        />
+        <StateRegion noPermission>{null}</StateRegion>
+      </div>
+    );
+  }
 
   return (
     <div className="page-stack">
@@ -199,7 +222,7 @@ export default function BlastDetailsPage() {
           <StatusBadge status={blastStatus} />
           <StatusBadge status={streamStatus === "live" ? "ACTIVE" : "SENDING"} className="capitalize" />
           <Button asChild variant="outline">
-            <Link href={`/future/sms-inbox?blastId=${encodeURIComponent(blastId)}`}>Blast Inbox</Link>
+            <Link href="/inbox">Blast Inbox</Link>
           </Button>
           <Button asChild>
             <Link href={`/blasts/${encodeURIComponent(blastId)}/composer`}>Open Composer</Link>
@@ -362,9 +385,7 @@ export default function BlastDetailsPage() {
                       </Button>
                     ) : (
                       <Button asChild variant="ghost" size="sm">
-                        <Link
-                          href={`/future/sms-inbox?contact=${encodeURIComponent(String(row.phoneE164 || ""))}&blastId=${encodeURIComponent(blastId)}`}
-                        >
+                        <Link href="/inbox">
                           View Chat
                         </Link>
                       </Button>

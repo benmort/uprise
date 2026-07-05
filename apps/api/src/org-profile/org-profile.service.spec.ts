@@ -39,14 +39,14 @@ function setup(credentialRow?: any) {
   } as unknown as ConfigService;
   const outbox = { append: jest.fn() } as any;
   const crypto = new CredentialCryptoService(config);
-  const svc = new OrgProfileService(prisma, config, outbox, crypto);
+  const svc = new OrgProfileService(prisma, outbox, crypto);
   return { svc, prisma, outbox, crypto };
 }
 
 describe("OrgProfileService", () => {
   it("encrypts the TFN at rest (never stores plaintext) and emits an outbox event", async () => {
     const { svc, prisma, outbox, crypto } = setup();
-    await svc.setCredential({ taxFileNumber: "123456789", australianBusinessNumber: "51824753556" });
+    await svc.setCredential("t1", { taxFileNumber: "123456789", australianBusinessNumber: "51824753556" });
 
     const stored = prisma.orgCredential.upsert.mock.calls[0][0].create;
     expect(stored.taxFileNumber).not.toBe("123456789"); // encrypted blob, not plaintext
@@ -64,7 +64,7 @@ describe("OrgProfileService", () => {
     const encrypted = crypto.encrypt("987654321");
     const { svc } = setup({ id: "cred1", orgProfileId: "op1", taxFileNumber: encrypted, isRegisteredEntity: true });
 
-    const profile = await svc.getProfile();
+    const profile = await svc.getProfile("t1");
     expect(profile.credential).not.toBeNull();
     expect(profile.credential!).not.toHaveProperty("taxFileNumber");
     expect(profile.credential!.hasTaxFileNumber).toBe(true);
@@ -72,7 +72,7 @@ describe("OrgProfileService", () => {
 
   it("hasTaxFileNumber is false when no TFN is set", async () => {
     const { svc } = setup({ id: "cred1", orgProfileId: "op1", taxFileNumber: null });
-    const profile = await svc.getProfile();
+    const profile = await svc.getProfile("t1");
     expect(profile.credential!.hasTaxFileNumber).toBe(false);
   });
 
@@ -80,31 +80,31 @@ describe("OrgProfileService", () => {
     const { crypto } = setup();
     const encrypted = crypto.encrypt("555000111");
     const { svc } = setup({ id: "cred1", orgProfileId: "op1", taxFileNumber: encrypted });
-    expect(await svc.decryptTaxFileNumber()).toBe("555000111");
+    expect(await svc.decryptTaxFileNumber("t1")).toBe("555000111");
   });
 
   it("clears the TFN when an empty string is supplied", async () => {
     const { svc, prisma } = setup();
-    await svc.setCredential({ taxFileNumber: "" });
+    await svc.setCredential("t1", { taxFileNumber: "" });
     expect(prisma.orgCredential.upsert.mock.calls[0][0].create.taxFileNumber).toBeNull();
   });
 
   it("leaves the TFN untouched when omitted", async () => {
     const { svc, prisma } = setup();
-    await svc.setCredential({ industry: "Nonprofit" });
+    await svc.setCredential("t1", { industry: "Nonprofit" });
     expect(prisma.orgCredential.upsert.mock.calls[0][0].create).not.toHaveProperty("taxFileNumber");
   });
 
   it("rejects updating a contact that does not belong to the org", async () => {
     const { svc, prisma } = setup();
     prisma.orgContact.findFirst.mockResolvedValueOnce(null);
-    await expect(svc.updateContact("c_other", { email: "x@y.z" })).rejects.toThrow();
+    await expect(svc.updateContact("t1", "c_other", { email: "x@y.z" })).rejects.toThrow();
     expect(prisma.orgContact.update).not.toHaveBeenCalled();
   });
 
   it("adds a contact under the resolved org profile", async () => {
     const { svc, prisma } = setup();
-    await svc.addContact({ firstName: "Ada", isPrimaryContact: true });
+    await svc.addContact("t1", { firstName: "Ada", isPrimaryContact: true });
     expect(prisma.orgContact.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ orgProfileId: "op1", firstName: "Ada", isPrimaryContact: true }) }),
     );

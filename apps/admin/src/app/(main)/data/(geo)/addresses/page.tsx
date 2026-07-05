@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Check, LocateFixed, MapPin, Plus, Search, UserCheck } from "lucide-react";
 import { nearbyAddresses, type NearbyAddress } from "@/lib/api/geo";
@@ -79,42 +79,9 @@ export default function AddressesPage() {
 
   const trimmed = q.trim();
 
-  // Type-ahead over the shared ?q – no debounce here (the layout owns the ONE
-  // debounce point; stacking a second would just add latency).
-  useEffect(() => {
-    if (view !== "list") return;
-    if (trimmed.length < 3) {
-      setHits([]);
-      setError("");
-      return;
-    }
-    if (!MAPBOX_TOKEN) {
-      setError("Set NEXT_PUBLIC_MAPBOX_TOKEN to enable address search.");
-      return;
-    }
-    let alive = true;
-    setSearching(true);
-    void (async () => {
-      try {
-        const results = await geocode(trimmed);
-        if (!alive) return;
-        setHits(results);
-        setError("");
-      } catch (err) {
-        if (!alive) return;
-        setHits([]);
-        setError(String(err instanceof Error ? err.message : err));
-      }
-      if (alive) setSearching(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [trimmed, view]);
-
   // Picking a hit plots it + fans out to the nearest G-NAF doors. The flip to
-  // map view goes through the URL (persist:false – a programmatic flip must
-  // not overwrite the user's saved default view).
+  // map view goes through the URL (persist:false – a programmatic flip must not
+  // overwrite the user's saved default view; in map view it's already a no-op).
   const pick = useCallback(
     async (hit: GeocodeHit) => {
       setPicked(hit);
@@ -136,6 +103,48 @@ export default function AddressesPage() {
     [setView],
   );
 
+  // Live geocode over the shared ?q (the layout owns the ONE 250ms debounce).
+  // Runs in BOTH views: list shows the hits to pick from; map has no result list,
+  // so it auto-plots the top hit — which is what makes a typed query in the
+  // default (map) view, or a shared ?view=map&q=… link, resolve to doors without
+  // a manual pick. autoPlottedQ stops the same term re-plotting on every rerun.
+  const autoPlottedQ = useRef("");
+  useEffect(() => {
+    if (trimmed.length < 3) {
+      setHits([]);
+      setError("");
+      autoPlottedQ.current = "";
+      return;
+    }
+    if (!MAPBOX_TOKEN) {
+      setHits([]);
+      setError("Set NEXT_PUBLIC_MAPBOX_TOKEN to enable address search.");
+      return;
+    }
+    let alive = true;
+    setSearching(true);
+    void (async () => {
+      try {
+        const results = await geocode(trimmed);
+        if (!alive) return;
+        setHits(results);
+        setError("");
+        if (view === "map" && results.length > 0 && autoPlottedQ.current !== trimmed) {
+          autoPlottedQ.current = trimmed;
+          void pick(results[0]);
+        }
+      } catch (err) {
+        if (!alive) return;
+        setHits([]);
+        setError(String(err instanceof Error ? err.message : err));
+      }
+      if (alive) setSearching(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [trimmed, view, pick]);
+
   const stops = useMemo(
     () =>
       doors.map((d) => ({
@@ -152,6 +161,11 @@ export default function AddressesPage() {
   if (view === "map") {
     return (
       <div className="section-stack">
+        {error ? (
+          <p className="rounded-lg bg-warning-container px-3 py-2 text-sm font-medium text-warning-foreground">
+            {error}
+          </p>
+        ) : null}
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="relative h-[65vh] overflow-hidden rounded-2xl border border-border">
             <TurfMap

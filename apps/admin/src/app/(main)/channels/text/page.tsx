@@ -13,25 +13,25 @@ type ChannelKpis = { blasts: number; recipients: number; awaiting: number; optOu
 
 export default function TextChannelPage() {
   const [kpis, setKpis] = useState<ChannelKpis | null>(null);
+  const [kpisError, setKpisError] = useState(false);
+
+  const loadKpis = async () => {
+    setKpisError(false);
+    const [blastsRes, optOutRes] = await Promise.all([getRecentBlasts(), getOptOuts()]);
+    if (!blastsRes.ok || !optOutRes.ok) {
+      setKpisError(true);
+      return;
+    }
+    const blasts = blastsRes.data.filter((b) => normaliseChannel(b.channel) === "SMS");
+    const recipients = blasts.reduce((t, b) => t + Number((b as any)._count?.recipients || 0), 0);
+    const awaiting = blasts.reduce((t, b) => t + Number((b as any).awaitingResponseCount || 0), 0);
+    const optOuts = optOutRes.data.byChannel.find((c) => c.channel === "SMS")?.count ?? 0;
+    setKpis({ blasts: blasts.length, recipients, awaiting, optOuts });
+  };
 
   useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const [blastsRes, optOutRes] = await Promise.all([getRecentBlasts(), getOptOuts()]);
-      if (!alive) return;
-      const blasts = blastsRes.ok
-        ? blastsRes.data.filter((b) => normaliseChannel(b.channel) === "SMS")
-        : [];
-      const recipients = blasts.reduce((t, b) => t + Number((b as any)._count?.recipients || 0), 0);
-      const awaiting = blasts.reduce((t, b) => t + Number((b as any).awaitingResponseCount || 0), 0);
-      const optOuts = optOutRes.ok
-        ? optOutRes.data.byChannel.find((c) => c.channel === "SMS")?.count ?? 0
-        : 0;
-      setKpis({ blasts: blasts.length, recipients, awaiting, optOuts });
-    })();
-    return () => {
-      alive = false;
-    };
+    void loadKpis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const v = (n?: number) => (kpis ? (n ?? 0).toLocaleString() : "—");
@@ -46,6 +46,15 @@ export default function TextChannelPage() {
           </p>
         </div>
       </div>
+
+      {kpisError ? (
+        <div className="flex items-center justify-between gap-3 rounded border border-error/40 bg-error-container px-3 py-2 text-sm text-error">
+          <span>Couldn't load stats.</span>
+          <Button variant="outline" size="sm" onClick={() => void loadKpis()}>
+            Retry
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile label="Text blasts" value={v(kpis?.blasts)} />

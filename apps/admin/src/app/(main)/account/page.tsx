@@ -17,6 +17,7 @@ import {
   Spinner,
 } from "@uprise/ui";
 import { auth, profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { getSession, logout } from "@/lib/session";
 
@@ -32,15 +33,21 @@ type Flags = {
 export default function AccountPage() {
   const { showToast } = useToast();
   const [flags, setFlags] = useState<Flags | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   const load = async () => {
+    setLoadError(false);
     const session = await getSession();
+    if (!session) {
+      setLoadError(true);
+      return;
+    }
     setFlags({
-      email: session?.email ?? null,
-      role: session?.role ?? "",
-      emailVerified: Boolean(session?.emailVerified),
-      mobileVerified: Boolean(session?.mobileVerified),
-      twofaEnabled: Boolean(session?.twofaEnabled),
+      email: session.email ?? null,
+      role: session.role ?? "",
+      emailVerified: Boolean(session.emailVerified),
+      mobileVerified: Boolean(session.mobileVerified),
+      twofaEnabled: Boolean(session.twofaEnabled),
     });
   };
 
@@ -48,6 +55,19 @@ export default function AccountPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (loadError && !flags) {
+    return (
+      <div className="page-stack">
+        <EmptyState
+          title="Couldn't load your account"
+          description="We couldn't reach your account details. Check your connection and try again."
+          ctaLabel="Retry"
+          onCta={() => void load()}
+        />
+      </div>
+    );
+  }
 
   if (!flags) {
     return (

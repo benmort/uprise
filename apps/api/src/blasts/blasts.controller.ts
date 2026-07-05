@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { BlastsService } from "./blasts.service";
+import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 import {
   CreateBlastDto,
   ListBlastsDto,
@@ -8,45 +10,59 @@ import {
   UpdateBlastDto,
 } from "./dto/blast.dto";
 
+// Blasts are an organiser/owner domain (member: read). Every id-scoped mutation also loads
+// the blast through the tenant-scoped path in the service, so a caller can't touch another
+// tenant's blast by id. `dispatch-due` is the platform cron (Bearer token, no session).
+const READ = { action: "read", resource: "messaging.blast" } as const;
+const MANAGE = { action: "manage", resource: "messaging.blast" } as const;
+
 @Controller("blasts")
 export class BlastsController {
   constructor(private readonly blasts: BlastsService) {}
 
   @Post()
-  create(@Body() dto: CreateBlastDto) {
-    return this.blasts.createDraft(dto);
+  @RequirePermission(MANAGE)
+  create(@TenantId() tenantId: string, @Body() dto: CreateBlastDto) {
+    return this.blasts.createDraft(tenantId, dto);
   }
 
   @Patch(":id")
-  update(@Param("id") id: string, @Body() dto: UpdateBlastDto) {
-    return this.blasts.updateDraft(id, dto);
+  @RequirePermission(MANAGE)
+  update(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: UpdateBlastDto) {
+    return this.blasts.updateDraft(tenantId, id, dto);
   }
 
   @Delete(":id")
-  remove(@Param("id") id: string) {
-    return this.blasts.deleteBlast(id);
+  @RequirePermission(MANAGE)
+  remove(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.blasts.deleteBlast(tenantId, id);
   }
 
   @Post(":id/proof-preview")
-  proofPreview(@Param("id") id: string, @Body() dto: ProofBlastDto) {
-    return this.blasts.previewProof(id, dto);
+  @RequirePermission(MANAGE)
+  proofPreview(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: ProofBlastDto) {
+    return this.blasts.previewProof(tenantId, id, dto);
   }
 
   @Post(":id/proofed")
-  markProofed(@Param("id") id: string) {
-    return this.blasts.markProofed(id);
+  @RequirePermission(MANAGE)
+  markProofed(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.blasts.markProofed(tenantId, id);
   }
 
   @Post(":id/schedule")
-  schedule(@Param("id") id: string, @Body() dto: ScheduleBlastDto) {
-    return this.blasts.schedule(id, dto);
+  @RequirePermission(MANAGE)
+  schedule(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: ScheduleBlastDto) {
+    return this.blasts.schedule(tenantId, id, dto);
   }
 
   @Post(":id/send")
-  sendNow(@Param("id") id: string) {
-    return this.blasts.requestSendNow(id);
+  @RequirePermission(MANAGE)
+  sendNow(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.blasts.requestSendNow(tenantId, id);
   }
 
+  // Platform cron (Bearer-token, no session) — dispatches due scheduled blasts across tenants.
   @Get("dispatch-due")
   @Post("dispatch-due")
   dispatchDue(@Query("limit") limit?: string) {
@@ -55,12 +71,14 @@ export class BlastsController {
   }
 
   @Post(":id/retry-failed")
-  retryFailed(@Param("id") id: string) {
-    return this.blasts.requestRetryFailed(id);
+  @RequirePermission(MANAGE)
+  retryFailed(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.blasts.requestRetryFailed(tenantId, id);
   }
 
   @Get()
-  list(@Query() _dto: ListBlastsDto) {
-    return this.blasts.listBlasts();
+  @RequirePermission(READ)
+  list(@TenantId() tenantId: string, @Query() _dto: ListBlastsDto) {
+    return this.blasts.listBlasts(tenantId);
   }
 }

@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { DoorOpen, MapPin, MessageSquare, Phone, Send, Workflow } from "lucide-react";
-import { getContactProfile, type ContactProfile, type TimelineEntry } from "@/lib/api/contacts";
+import { DoorOpen, MapPin, MessageSquare, Pencil, Phone, Send, Workflow } from "lucide-react";
+import { getContactProfile, updateContact, type ContactProfile, type TimelineEntry } from "@/lib/api/contacts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { TagChip } from "@/components/ui/tag-chip";
+import { Field, FormDialog, Input } from "@uprise/ui";
+import { useToast } from "@/components/ui/toast";
 import { SupportPill } from "@uprise/field";
 import { SectionCard } from "@uprise/field";
 import { cn } from "@/lib/utils";
@@ -72,26 +74,63 @@ function TimelineCard({ e }: { e: TimelineEntry }) {
   );
 }
 
+type EditForm = { firstName: string; lastName: string; email: string; phoneE164: string; address: string };
+
 export default function ContactProfilePage() {
   const { id } = useParams<{ id: string }>();
+  const { showToast } = useToast();
   const [profile, setProfile] = useState<ContactProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [editOpen, setEditOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<EditForm>({ firstName: "", lastName: "", email: "", phoneE164: "", address: "" });
+
+  const load = useCallback(async () => {
+    const res = await getContactProfile(id);
+    if (!res.ok) setError(res.error);
+    else {
+      setProfile(res.data);
+      setError("");
+    }
+    setLoading(false);
+  }, [id]);
 
   useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const res = await getContactProfile(id);
-      if (!alive) return;
-      if (!res.ok) setError(res.error);
-      else setProfile(res.data);
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [id]);
+    void load();
+  }, [load]);
+
+  const openEdit = () => {
+    const c = profile?.contact;
+    setForm({
+      firstName: c?.firstName ?? "",
+      lastName: c?.lastName ?? "",
+      email: c?.email ?? "",
+      phoneE164: c?.phoneE164 ?? "",
+      address: c?.address ?? "",
+    });
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    const res = await updateContact(id, {
+      firstName: form.firstName.trim() || null,
+      lastName: form.lastName.trim() || null,
+      email: form.email.trim() || null,
+      phoneE164: form.phoneE164.trim() || null,
+      address: form.address.trim() || null,
+    });
+    setSaving(false);
+    if (res.ok) {
+      showToast({ tone: "info", title: "Contact updated" });
+      setEditOpen(false);
+      await load();
+    } else {
+      showToast({ tone: "error", title: "Couldn't save", description: res.error });
+    }
+  };
 
   const timeline = useMemo(() => {
     if (!profile) return [];
@@ -158,9 +197,13 @@ export default function ContactProfilePage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={openEdit}>
+            <Pencil className="mr-1.5 h-4 w-4" />
+            Edit
+          </Button>
           {c.phoneE164 ? (
             <Button asChild>
-              <Link href="/future/sms-inbox">
+              <Link href="/inbox">
                 <Send className="mr-1.5 h-4 w-4" />
                 Send text
               </Link>
@@ -252,6 +295,33 @@ export default function ContactProfilePage() {
           </SectionCard>
         </div>
       </div>
+
+      <FormDialog
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit contact"
+        onSubmit={saveEdit}
+        submitLabel="Save"
+        busy={saving}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="First name">
+            <Input value={form.firstName} onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))} />
+          </Field>
+          <Field label="Last name">
+            <Input value={form.lastName} onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))} />
+          </Field>
+        </div>
+        <Field label="Email">
+          <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
+        </Field>
+        <Field label="Phone">
+          <Input value={form.phoneE164} onChange={(e) => setForm((f) => ({ ...f, phoneE164: e.target.value }))} />
+        </Field>
+        <Field label="Address">
+          <Input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+        </Field>
+      </FormDialog>
     </div>
   );
 }

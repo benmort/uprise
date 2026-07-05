@@ -244,6 +244,10 @@ model Tenant {
   name              String
   networkId         String?
   settings          Json?
+  // Per-tenant organiser onboarding progress (advisory). Dedicated column rather than a
+  // settings.* sub-key: the settings PATCH clobbers the whole blob and is OWNER-only, whereas
+  // onboarding is OWNER+ORGANISER and merged monotonically. Shape lives in @uprise/contracts.
+  onboarding        Json?
   deletedAt         DateTime?
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @updatedAt
@@ -1143,6 +1147,27 @@ model Shift {
 
   @@index([tenantId, campaignId, startsAt])
   @@index([tenantId, volunteerId])
+  @@schema("canvass")
+}
+
+// QA-review flag resolution. Flags themselves are computed on the fly from DoorKnock
+// heuristics (no-GPS / too-fast cadence), so there's no flag entity; this records an
+// organiser having actioned a flag. Keyed by (doorKnockId, kind) since one knock can
+// raise both kinds. Presence of a row = actioned; `state` distinguishes resolve vs dismiss.
+model QaFlagResolution {
+  id           String   @id @default(cuid())
+  tenantId     String
+  campaignId   String
+  doorKnockId  String
+  kind         String   // "NO_GPS" | "FAST_CADENCE"
+  state        String   @default("RESOLVED") // "RESOLVED" | "DISMISSED"
+  note         String?
+  resolvedById String?
+  resolvedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@unique([doorKnockId, kind])
+  @@index([tenantId, campaignId])
   @@schema("canvass")
 }
 

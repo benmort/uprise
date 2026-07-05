@@ -125,20 +125,10 @@ export class IntegrationsService {
     return { apiKey, baseUrl };
   }
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
-  private async resolveConnection(type: IntegrationConnectionType) {
-    const org = await this.ensureOrganization();
+  private async resolveConnection(tenantId: string, type: IntegrationConnectionType) {
     const existing = await this.prisma.integrationConnection.findFirst({
       where: {
-        tenantId: org.id,
+        tenantId,
         type: type as IntegrationType,
         status: IntegrationConnectionStatus.ACTIVE,
       },
@@ -151,11 +141,11 @@ export class IntegrationsService {
     };
   }
 
-  private async ensureConnection(type: IntegrationConnectionType) {
-    const existing = await this.resolveConnection(type);
+  private async ensureConnection(tenantId: string, type: IntegrationConnectionType) {
+    const existing = await this.resolveConnection(tenantId, type);
     if (!existing) {
       const defaults = this.resolveCredentials(type, {});
-      const created = await this.upsertConnection({
+      const created = await this.upsertConnection(tenantId, {
         type,
         name: this.defaultConnectionName(type),
         apiKey: defaults.apiKey,
@@ -175,7 +165,7 @@ export class IntegrationsService {
     });
 
     if (existing.apiKey !== credentials.apiKey || existingBaseUrl !== credentials.baseUrl) {
-      await this.upsertConnection({
+      await this.upsertConnection(tenantId, {
         type,
         name: existing.name,
         apiKey: credentials.apiKey,
@@ -190,8 +180,7 @@ export class IntegrationsService {
     };
   }
 
-  async upsertConnection(dto: UpsertIntegrationConnectionDto) {
-    const org = await this.ensureOrganization();
+  async upsertConnection(tenantId: string, dto: UpsertIntegrationConnectionDto) {
     const credentials = this.resolveCredentials(dto.type, {
       apiKey: dto.apiKey,
       baseUrl: dto.baseUrl,
@@ -202,7 +191,7 @@ export class IntegrationsService {
         id: (
           await this.prisma.integrationConnection.findFirst({
             where: {
-              tenantId: org.id,
+              tenantId,
               type: dto.type as IntegrationType,
             },
             select: { id: true },
@@ -210,7 +199,7 @@ export class IntegrationsService {
         )?.id || "missing",
       },
       create: {
-        tenantId: org.id,
+        tenantId,
         type: dto.type as IntegrationType,
         name: dto.name,
         encryptedCredential: encrypted,
@@ -243,8 +232,8 @@ export class IntegrationsService {
     return { ...result, type: dto.type };
   }
 
-  async searchLists(dto: SearchIntegrationListsDto) {
-    const connection = await this.ensureConnection(dto.type);
+  async searchLists(tenantId: string, dto: SearchIntegrationListsDto) {
+    const connection = await this.ensureConnection(tenantId, dto.type);
     const lists = await this.connector(dto.type).searchLists(
       connection.apiKey,
       { query: dto.query, limit: 25 },
@@ -253,8 +242,8 @@ export class IntegrationsService {
     return { lists };
   }
 
-  async sampleList(dto: SampleIntegrationListDto) {
-    const connection = await this.ensureConnection(dto.type);
+  async sampleList(tenantId: string, dto: SampleIntegrationListDto) {
+    const connection = await this.ensureConnection(tenantId, dto.type);
     const sample = await this.connector(dto.type).sampleListContacts(
       connection.apiKey,
       dto.listId,
@@ -463,13 +452,12 @@ export class IntegrationsService {
     });
   }
 
-  async syncList(dto: SyncIntegrationListDto) {
-    return this.requestSyncList(dto);
+  async syncList(tenantId: string, dto: SyncIntegrationListDto) {
+    return this.requestSyncList(tenantId, dto);
   }
 
-  async requestSyncList(dto: SyncIntegrationListDto) {
-    const org = await this.ensureOrganization();
-    const connection = await this.ensureConnection(dto.type);
+  async requestSyncList(tenantId: string, dto: SyncIntegrationListDto) {
+    const connection = await this.ensureConnection(tenantId, dto.type);
     const audienceName = this.buildAudienceName({
       type: dto.type,
       listId: dto.listId,
@@ -490,7 +478,7 @@ export class IntegrationsService {
 
     const syncJob = await this.prisma.integrationSyncJob.create({
       data: {
-        tenantId: org.id,
+        tenantId,
         integrationConnectionId: connection.id,
         status: IntegrationJobStatus.QUEUED,
         query: dto.query,
@@ -822,20 +810,35 @@ export class IntegrationsService {
     }
   }
 
-  async getSyncJobs(limit = 20) {
-    const org = await this.ensureOrganization();
+  async getSyncJobs(tenantId: string, limit = 20) {
     return this.prisma.integrationSyncJob.findMany({
-      where: { tenantId: org.id },
+      where: { tenantId },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
     });
   }
 
+  /** Flip a connection ACTIVE↔INACTIVE (disconnect / reconnect). Scoped to the org. */
+  async setConnectionStatus(tenantId: string, id: string, status: IntegrationConnectionStatus) {
+    const res = await this.prisma.integrationConnection.updateMany({
+      where: { id, tenantId },
+      data: { status },
+    });
+    if (res.count === 0) throw new NotFoundException("Integration connection not found");
+    return { id, status };
+  }
+
+  /** Remove a connection entirely (sync jobs cascade). Scoped to the org. */
+  async deleteConnection(tenantId: string, id: string) {
+    const res = await this.prisma.integrationConnection.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new NotFoundException("Integration connection not found");
+    return { deleted: true };
+  }
+
   /** Configured connections for the settings/integrations surface. Never returns the credential. */
-  async listConnections() {
-    const org = await this.ensureOrganization();
+  async listConnections(tenantId: string) {
     return this.prisma.integrationConnection.findMany({
-      where: { tenantId: org.id },
+      where: { tenantId },
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,

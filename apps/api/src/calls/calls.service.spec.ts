@@ -26,7 +26,7 @@ describe("CallsService", () => {
   describe("initiate", () => {
     it("writes INITIATED + outbox atomically, dispatches, and binds the provider CallSid", async () => {
       const { svc, prisma, outbox, twilio } = setup();
-      await svc.initiate({ toNumber: "+61400000001", url: "https://x/twiml" });
+      await svc.initiate("t1", { toNumber: "+61400000001", url: "https://x/twiml" });
 
       expect(prisma.call.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ status: CallStatus.INITIATED, toNumber: "+61400000001" }) }),
@@ -43,13 +43,13 @@ describe("CallsService", () => {
 
     it("rejects a non-E.164 toNumber", async () => {
       const { svc } = setup();
-      await expect(svc.initiate({ toNumber: "0400 000 001" })).rejects.toThrow();
+      await expect(svc.initiate("t1", { toNumber: "0400 000 001" })).rejects.toThrow();
     });
 
     it("marks the call FAILED and rethrows when dispatch fails", async () => {
       const { svc, prisma, twilio } = setup();
       twilio.placeCall.mockRejectedValueOnce(new Error("twilio down"));
-      await expect(svc.initiate({ toNumber: "+61400000001", url: "https://x/twiml" })).rejects.toThrow("twilio down");
+      await expect(svc.initiate("t1", { toNumber: "+61400000001", url: "https://x/twiml" })).rejects.toThrow("twilio down");
       expect(prisma.call.update).toHaveBeenCalledWith({ where: { id: "call1" }, data: { status: CallStatus.FAILED } });
     });
   });

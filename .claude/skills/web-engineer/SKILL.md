@@ -41,7 +41,7 @@ Read `dev/ai/guide-map.md` first, then read every guide whose row fits the surfa
 4. **Build from primitives.** Reuse `@uprise/ui`; if a primitive is missing, extend the package, don't fork it into `apps/admin`. Tokens only, no hex.
 5. **Wire the data.** Fetch via `@uprise/api-client` / a `lib/api` helper, type with `@uprise/contracts`, branch on `ApiResult.ok`, render all four feedback states.
 6. **Gate it.** Derive the gate from the session principal / `@uprise/permissions` ability; hide for permission, disable for transient. Confirm the matching API route is `@RequirePermission`-gated – UI gating is not the boundary.
-7. **Close on the gate.** Walk `dev/ai/how-to/definition-of-done.md`. The Next build (`pnpm --filter admin build`) is the real check for any Tailwind/`@source`/config change; `pnpm -r typecheck` covers the contract/client touch.
+7. **Close on the gate.** Walk `dev/ai/how-to/definition-of-done.md`. The Next build (`pnpm --filter admin build`) is the real check for any Tailwind/`@source`/config change; `pnpm -r typecheck` covers the contract/client touch. If you added/changed logic under `src/lib` (admin) or `packages/field/src/lib`, `pnpm coverage:check` must be green – new/changed lines ≥ 80 % covered, no total regression, tests in the **same commit**. View code (`src/app`, `src/components`) is out of scope here – it's Playwright e2e's job (`pnpm --filter admin e2e`), so a new `lib` helper needs a unit test, a new page does not.
 
 ## Anti-patterns
 
@@ -51,6 +51,7 @@ Read `dev/ai/guide-map.md` first, then read every guide whose row fits the surfa
 - A bare `fetch("http://localhost:3001/...")` that bypasses cookie auth, the 401 bounce and the envelope unwrap; hardcoding the API origin instead of `getApiUrl()`.
 - A login form or stored credential in `apps/admin`, a secret in `NEXT_PUBLIC_*`, or reading `auth_token` from JS – all defeat the httpOnly cookie SSO.
 - Marking a whole page `"use client"` just to fetch – push the client island down.
+- Adding a `src/lib` helper with no unit test and deferring it – the coverage gate (`pnpm coverage:check`, 80 % patch floor) fails, and the test ships in the same commit as the code.
 
 ## Checklist
 
@@ -58,5 +59,6 @@ Read `dev/ai/guide-map.md` first, then read every guide whose row fits the surfa
 - [ ] `@uprise/ui` primitives reused (or the package extended); colours from tokens, zero new raw hex.
 - [ ] All four feedback states rendered; `ApiResult.ok` checked before reading `data`.
 - [ ] UI gated by the session principal / `@uprise/permissions` ability – hide for permission, disable for transient; matching API route `@RequirePermission`-gated.
+- [ ] `pnpm coverage:check` green if `src/lib` logic changed (patch ≥ 80 %, no regression); tests in the same commit.
 - [ ] API traffic via `@uprise/api-client` / `lib/api`; types from `@uprise/contracts`; no secret in a client component or `NEXT_PUBLIC_*`; new protected routes in the middleware matcher.
 - [ ] Gate: walk `dev/ai/how-to/definition-of-done.md` – `pnpm -r typecheck` green; the Next build run for any Tailwind/config change.

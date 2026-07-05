@@ -18,6 +18,7 @@ import {
   Megaphone,
   Menu,
   MessageSquareText,
+  Rocket,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -81,11 +82,11 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
   const px = (s: string): NavMatch => (p) => p.startsWith(`/future/${s}`);
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
-    // Shared inbox (unified cross-channel queue) — super-admin-only for now.
-    // (The SMS-only inbox is parked in the Future group as "SMS inbox".)
-    ...(isSuperAdmin
-      ? ([{ type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" }] as NavNode[])
-      : []),
+    // First-run organiser checklist — sits under Dashboard, flag-gated (default on).
+    { type: "leaf", key: "getting-started", label: "Getting started", href: "/getting-started", icon: Rocket, match: (p) => p.startsWith("/getting-started"), flag: "FEATURE_NAV_GETTING_STARTED" },
+    // Shared inbox (unified cross-channel queue). Open to organisers, flag-gated
+    // (FEATURE_NAV_PROG_CHANNELS). The SMS-only inbox is parked in Future as "SMS inbox".
+    { type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
 
     // ── Engage: the campaigning work — reach out, canvass, organise, target ──
     { type: "section", key: "sec-engage", label: "Engage" },
@@ -465,7 +466,7 @@ export default function MainLayout({
           eventType = "";
         }
         if (eventType !== "inbox.inbound") return;
-        if (String(pathnameRef.current || "").startsWith("/future/sms-inbox")) return;
+        if (String(pathnameRef.current || "").startsWith("/inbox")) return;
 
         const fromPhone = String(payload.contactPhone || "");
         const messageBody = String(payload.body || "").trim();
@@ -482,8 +483,7 @@ export default function MainLayout({
           action: {
             label: "Open Inbox",
             onClick: () => {
-              const target = fromPhone ? `/future/sms-inbox?contact=${encodeURIComponent(fromPhone)}` : "/future/sms-inbox";
-              routerRef.current.push(target);
+              routerRef.current.push("/inbox");
             },
           },
           durationMs: 5000,
@@ -948,7 +948,7 @@ export default function MainLayout({
                     {planLocked ? (
                       <Lock className={cn("ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/70", labelHidden)} />
                     ) : null}
-                    {node.href === "/future/sms-inbox" && inboxUnreadCount > 0 ? (
+                    {node.href === "/inbox" && inboxUnreadCount > 0 ? (
                       <span className={cn("ml-auto rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground", labelHidden)}>
                         {inboxUnreadCount}
                       </span>
@@ -1065,7 +1065,7 @@ export default function MainLayout({
               <UserDropdown email={principal?.email ?? null} />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-4">
+          <main className="flex-1 overflow-y-auto p-8">
             <FlagsProvider>{children}</FlagsProvider>
           </main>
         </div>

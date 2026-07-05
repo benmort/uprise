@@ -41,6 +41,7 @@ describe("EngagementService", () => {
       expect(prisma.disposition.create).not.toHaveBeenCalled();
       expect(events.emit).toHaveBeenCalledWith(
         "engagement.answer",
+        "org_1",
         expect.objectContaining({ contactId: "c1", questionId: "q1" }),
       );
     });
@@ -84,7 +85,7 @@ describe("EngagementService", () => {
       });
 
       expect(result.layer).toBe(DispositionLayer.TERMINAL);
-      expect(events.emit).toHaveBeenCalledWith("engagement.disposition", expect.any(Object));
+      expect(events.emit).toHaveBeenCalledWith("engagement.disposition", "org_1", expect.any(Object));
     });
 
     it("falls back to CONTACT_RESULT when the code is unknown", async () => {

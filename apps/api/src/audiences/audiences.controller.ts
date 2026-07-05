@@ -16,6 +16,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import { AudiencesService } from "./audiences.service";
 import { AudienceContactsDto, CreateAudienceDto, ListAudiencesDto } from "./dto/audience.dto";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 
 // Audiences are an organiser/owner domain (volunteers have no access). The cron
 // dispatch route is deliberately left ungated — it runs with a Bearer token and
@@ -45,14 +46,14 @@ export class AudiencesController {
 
   @Post()
   @RequirePermission(MANAGE)
-  create(@Body() dto: CreateAudienceDto) {
-    return this.audiences.createAudience(dto);
+  create(@TenantId() tenantId: string, @Body() dto: CreateAudienceDto) {
+    return this.audiences.createAudience(tenantId, dto);
   }
 
   @Get()
   @RequirePermission(READ)
-  list(@Query() dto: ListAudiencesDto) {
-    return this.audiences.listAudiences(dto);
+  list(@TenantId() tenantId: string, @Query() dto: ListAudiencesDto) {
+    return this.audiences.listAudiences(tenantId, dto);
   }
 
   @Get("dispatch-imports")
@@ -65,85 +66,87 @@ export class AudiencesController {
   /** Create (or return) the dynamic "all WhatsApp opt-ins" smart audience. */
   @Post("whatsapp-opt-ins")
   @RequirePermission(MANAGE)
-  whatsappOptIns() {
-    return this.audiences.ensureWhatsappOptInAudience();
+  whatsappOptIns(@TenantId() tenantId: string) {
+    return this.audiences.ensureWhatsappOptInAudience(tenantId);
   }
 
   @Get(":id")
   @RequirePermission(READ)
-  getOne(@Param("id") id: string) {
-    return this.audiences.getAudience(id);
+  getOne(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.audiences.getAudience(tenantId, id);
   }
 
   @Patch(":id/archive")
   @RequirePermission(MANAGE)
-  archive(@Param("id") id: string) {
-    return this.audiences.archiveAudience(id);
+  archive(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.audiences.archiveAudience(tenantId, id);
   }
 
   @Patch(":id/restore")
   @RequirePermission(MANAGE)
-  restore(@Param("id") id: string) {
-    return this.audiences.restoreAudience(id);
+  restore(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.audiences.restoreAudience(tenantId, id);
   }
 
   @Delete(":id")
   @RequirePermission(MANAGE)
-  remove(@Param("id") id: string) {
-    return this.audiences.deleteAudience(id);
+  remove(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.audiences.deleteAudience(tenantId, id);
   }
 
   @Post(":id/import-csv")
   @RequirePermission(MANAGE)
   @UseInterceptors(FileInterceptor("file"))
   importCsv(
+    @TenantId() tenantId: string,
     @Param("id") id: string,
     @UploadedFile() file: any,
   ) {
     this.validateCsvUpload(file);
-    return this.audiences.startCsvImport(id, file.originalname || "contacts.csv", file.buffer.toString("utf8"));
+    return this.audiences.startCsvImport(tenantId, id, file.originalname || "contacts.csv", file.buffer.toString("utf8"));
   }
 
   @Get(":id/imports/:importId")
   @RequirePermission(READ)
   importStatus(
+    @TenantId() tenantId: string,
     @Param("id") id: string,
     @Param("importId") importId: string,
   ) {
-    return this.audiences.getImportStatus(id, importId);
+    return this.audiences.getImportStatus(tenantId, id, importId);
   }
 
   @Get(":id/contacts")
   @RequirePermission(READ)
-  contacts(@Param("id") id: string, @Query() dto: AudienceContactsDto) {
+  contacts(@TenantId() tenantId: string, @Param("id") id: string, @Query() dto: AudienceContactsDto) {
     if (dto.query && dto.query.trim()) {
-      return this.audiences.searchContacts(id, dto.query, dto.limit, dto.offset);
+      return this.audiences.searchContacts(tenantId, id, dto.query, dto.limit, dto.offset);
     }
-    return this.audiences.listContacts(id, dto.limit, dto.offset);
+    return this.audiences.listContacts(tenantId, id, dto.limit, dto.offset);
   }
 
   @Get(":id/export-csv")
   @RequirePermission(READ)
   @Header("Content-Type", "text/csv")
-  async exportCsv(@Param("id") id: string): Promise<string> {
-    return this.audiences.exportContactsCsv(id);
+  async exportCsv(@TenantId() tenantId: string, @Param("id") id: string): Promise<string> {
+    return this.audiences.exportContactsCsv(tenantId, id);
   }
 
   @Get(":id/whatsapp-reach")
   @RequirePermission(READ)
-  whatsappReach(@Param("id") id: string) {
-    return this.audiences.whatsappReach(id);
+  whatsappReach(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.audiences.whatsappReach(tenantId, id);
   }
 
   @Get(":id/growth")
   @RequirePermission(READ)
-  growth(@Param("id") id: string) {
-    return this.audiences.growthMetrics(id);
+  growth(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.audiences.growthMetrics(tenantId, id);
   }
 
   @Get(":id/segment-summary")
   @RequirePermission(READ)
-  summary(@Param("id") id: string) {
-    return this.audiences.segmentationSummary(id);
+  summary(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.audiences.segmentationSummary(tenantId, id);
   }
 }

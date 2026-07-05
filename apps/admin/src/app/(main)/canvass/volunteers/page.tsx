@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Pencil, UserPlus } from "lucide-react";
 import { createVolunteer, listVolunteers, updateVolunteer } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -20,8 +22,12 @@ type Volunteer = { id: string; displayName: string; email: string | null; role: 
 
 export default function VolunteersPage() {
   const { showToast } = useToast();
-  const [rows, setRows] = useState<Volunteer[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, noPermission, refetch } = useApi(
+    "/canvass/volunteers",
+    () => listVolunteers(),
+    { ttlMs: 30_000 },
+  );
+  const rows: Volunteer[] = data ?? [];
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,16 +41,6 @@ export default function VolunteersPage() {
     password: "",
   });
   const [editBusy, setEditBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    const res = await listVolunteers();
-    if (res.ok) setRows(res.data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const handleInvite = useCallback(async () => {
     if (!name.trim() || !email.trim() || password.length < 8) {
@@ -61,9 +57,9 @@ export default function VolunteersPage() {
     setName("");
     setEmail("");
     setPassword("");
-    await load();
+    void refetch();
     showToast({ tone: "success", title: "Field login created", description: res.data.email ?? "" });
-  }, [name, email, password, role, load, showToast]);
+  }, [name, email, password, role, refetch, showToast]);
 
   const openEdit = (c: Volunteer) => {
     setEditing(c);
@@ -88,9 +84,9 @@ export default function VolunteersPage() {
       return;
     }
     setEditing(null);
-    await load();
+    void refetch();
     showToast({ tone: "success", title: "Volunteer updated" });
-  }, [editing, editForm, load, showToast]);
+  }, [editing, editForm, refetch, showToast]);
 
   return (
     <div className="page-stack">
@@ -128,9 +124,15 @@ export default function VolunteersPage() {
         </Button>
       </SectionCard>
 
-      {loading ? (
-        <Skeleton className="h-40 w-full" />
-      ) : (
+      <StateRegion
+        loading={loading}
+        error={error}
+        noPermission={noPermission}
+        onRetry={() => void refetch()}
+        empty={rows.length === 0}
+        emptyTitle="No volunteers yet"
+        skeleton={<Skeleton className="h-40 w-full" />}
+      >
         <DataTable
           rows={rows}
           rowKey={(r) => r.id}
@@ -155,7 +157,7 @@ export default function VolunteersPage() {
             },
           ]}
         />
-      )}
+      </StateRegion>
 
       <FormDialog
         open={!!editing}

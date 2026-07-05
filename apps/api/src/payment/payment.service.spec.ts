@@ -16,7 +16,10 @@ function setup(paymentRow?: any) {
       updateMany: jest.fn(async () => ({})),
       deleteMany: jest.fn(async () => ({})),
     },
-    tenant: { upsert: jest.fn(async () => ({ id: "t1", name: "Acme" })) },
+    tenant: {
+      upsert: jest.fn(async () => ({ id: "t1", name: "Acme" })),
+      findUnique: jest.fn(async () => ({ id: "t1", name: "Acme" })),
+    },
     $queryRaw: jest.fn(async () => [{ id: "p1" }]),
     $transaction: jest.fn(async (arg: any) =>
       Array.isArray(arg) ? Promise.all(arg) : arg(prisma),
@@ -31,7 +34,6 @@ function setup(paymentRow?: any) {
     projectPaymentMethod: jest.fn(),
   } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const config = { get: jest.fn((_k: string, fb?: string) => fb ?? "") } as any;
   const stripe = {
     isConfigured: jest.fn(() => false),
     createCustomer: jest.fn(async () => ({ id: "cus_x" })),
@@ -39,7 +41,7 @@ function setup(paymentRow?: any) {
     detachPaymentMethod: jest.fn(async () => ({ id: "pm_x" })),
     setDefaultPaymentMethod: jest.fn(async () => undefined),
   } as any;
-  const svc = new PaymentService(prisma, outbox, webhookEvents, billing, logger, config, stripe);
+  const svc = new PaymentService(prisma, outbox, webhookEvents, billing, logger, stripe);
   return { svc, prisma, outbox, webhookEvents, billing, stripe };
 }
 
@@ -175,7 +177,7 @@ describe("PaymentService", () => {
   it("ensureCustomer creates + projects a Stripe customer when none exists", async () => {
     const { svc, stripe, billing } = setup();
     stripe.isConfigured.mockReturnValue(true);
-    const id = await svc.ensureCustomer();
+    const id = await svc.ensureCustomer("t1");
     expect(id).toBe("cus_x");
     expect(stripe.createCustomer).toHaveBeenCalled();
     expect(billing.projectCustomer).toHaveBeenCalledWith({ providerCustomerId: "cus_x", tenantId: "t1" });
@@ -185,14 +187,14 @@ describe("PaymentService", () => {
     const { svc, prisma, stripe } = setup();
     stripe.isConfigured.mockReturnValue(true);
     prisma.customer.findFirst.mockResolvedValue({ providerCustomerId: "cus_existing" });
-    expect(await svc.ensureCustomer()).toBe("cus_existing");
+    expect(await svc.ensureCustomer("t1")).toBe("cus_existing");
     expect(stripe.createCustomer).not.toHaveBeenCalled();
   });
 
   it("ensureCustomer returns undefined when Stripe is unconfigured", async () => {
     const { svc, stripe } = setup();
     stripe.isConfigured.mockReturnValue(false);
-    expect(await svc.ensureCustomer()).toBeUndefined();
+    expect(await svc.ensureCustomer("t1")).toBeUndefined();
     expect(stripe.createCustomer).not.toHaveBeenCalled();
   });
 
@@ -200,7 +202,7 @@ describe("PaymentService", () => {
     const { svc, prisma, stripe } = setup();
     prisma.paymentMethod.findUnique.mockResolvedValue({ providerMethodId: "pm_1", customerId: "c1" });
     prisma.customer.findFirst.mockResolvedValue({ id: "c1", providerCustomerId: "cus_x" });
-    await svc.setDefaultPaymentMethod("pm_1");
+    await svc.setDefaultPaymentMethod("t1", "pm_1");
     expect(stripe.setDefaultPaymentMethod).toHaveBeenCalledWith({ customerId: "cus_x", paymentMethodId: "pm_1" });
     expect(prisma.paymentMethod.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { customerId: "c1", isDefault: true }, data: { isDefault: false } }),
@@ -213,7 +215,7 @@ describe("PaymentService", () => {
   it("attachPaymentMethod attaches via Stripe + projects the method", async () => {
     const { svc, prisma, stripe, billing } = setup();
     prisma.customer.findFirst.mockResolvedValue({ id: "c1", providerCustomerId: "cus_x" });
-    await svc.attachPaymentMethod("pm_new");
+    await svc.attachPaymentMethod("t1", "pm_new");
     expect(stripe.attachPaymentMethod).toHaveBeenCalledWith({ paymentMethodId: "pm_new", customerId: "cus_x" });
     expect(billing.projectPaymentMethod).toHaveBeenCalledWith(
       expect.objectContaining({ customerId: "c1", providerMethodId: "pm_x", brand: "visa", last4: "4242" }),

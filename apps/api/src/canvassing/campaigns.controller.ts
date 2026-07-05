@@ -1,90 +1,67 @@
 import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { AppUserRole } from "@uprise/db";
-import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { TenantId } from "../auth/tenant-id.decorator";
 import { CampaignsService } from "./campaigns.service";
 import { CreateCampaignDto, SetBoundaryDto, UpdateCampaignDto } from "./dto/campaigns.dto";
 
 @Controller("canvass/campaigns")
 @UseGuards(RolesGuard)
 export class CampaignsController {
-  constructor(
-    private readonly config: ConfigService,
-    private readonly prisma: PrismaService,
-    private readonly campaigns: CampaignsService,
-  ) {}
-
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
+  constructor(private readonly campaigns: CampaignsService) {}
 
   @Get()
   @Roles(AppUserRole.ORGANISER)
-  async list() {
-    const org = await this.ensureOrganization();
-    return this.campaigns.list(org.id);
+  async list(@TenantId() tenantId: string) {
+    return this.campaigns.list(tenantId);
   }
 
   @Post()
   @Roles(AppUserRole.ORGANISER)
-  async create(@Body() dto: CreateCampaignDto) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.create(org.id, dto);
+  async create(@Body() dto: CreateCampaignDto, @TenantId() tenantId: string) {
+    return this.campaigns.create(tenantId, dto);
   }
 
   @Get(":id")
   @Roles(AppUserRole.ORGANISER)
-  async get(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.get(org.id, id);
+  async get(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.campaigns.get(tenantId, id);
   }
 
   @Get(":id/summary")
   @Roles(AppUserRole.ORGANISER)
-  async summary(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.getSummary(org.id, id);
+  async summary(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.campaigns.getSummary(tenantId, id);
   }
 
   @Get(":id/results")
   @Roles(AppUserRole.ORGANISER)
-  async results(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.getResults(org.id, id);
+  async results(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.campaigns.getResults(tenantId, id);
   }
 
   @Get(":id/live")
   @Roles(AppUserRole.ORGANISER)
-  async live(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.getLive(org.id, id);
+  async live(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.campaigns.getLive(tenantId, id);
   }
 
   @Patch(":id")
   @Roles(AppUserRole.ORGANISER)
-  async update(@Param("id") id: string, @Body() dto: UpdateCampaignDto) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.update(org.id, id, dto);
+  async update(@Param("id") id: string, @Body() dto: UpdateCampaignDto, @TenantId() tenantId: string) {
+    return this.campaigns.update(tenantId, id, dto);
   }
 
   @Get(":id/boundary")
   @Roles(AppUserRole.ORGANISER)
-  async getBoundary(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.getBoundary(org.id, id);
+  async getBoundary(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.campaigns.getBoundary(tenantId, id);
   }
 
   @Put(":id/boundary")
   @Roles(AppUserRole.ORGANISER)
-  async setBoundary(@Param("id") id: string, @Body() dto: SetBoundaryDto) {
-    const org = await this.ensureOrganization();
-    return this.campaigns.setBoundary(org.id, id, dto.sources);
+  async setBoundary(@Param("id") id: string, @Body() dto: SetBoundaryDto, @TenantId() tenantId: string) {
+    return this.campaigns.setBoundary(tenantId, id, dto.sources);
   }
 }

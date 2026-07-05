@@ -18,6 +18,7 @@ These hold on every backend change, regardless of the task. They are the same li
 - **Idempotent jobs + claim-guarded webhooks.** BullMQ producers enqueue with a deterministic id from a `getXJobId` helper so retries collapse to one job; consumers validate `job.data` with the matching `isXJobPayload` guard. A provider webhook verifies the signature over `req.rawBody`, then `claim(provider, eventId)` BEFORE acting and `release` on throw so the retry reprocesses. Delivery is at-least-once; reactions must tolerate replay. See `apps/api/dev/ai/how-to/bullmq-jobs.md` and `apps/api/dev/ai/how-to/webhooks.md`.
 - **Additive migrations via `migrate deploy`.** Schema changes are hand-written, additive SQL (`ADD COLUMN` nullable/default, `ADD VALUE IF NOT EXISTS`, `CREATE INDEX`) in a new timestamped dir, mirrored in `schema.prisma`, applied with `prisma migrate deploy` – never `migrate dev` (it drops the hand-maintained partial-unique indexes). Regenerate the client and rebuild `@uprise/db` after. See `apps/api/dev/ai/how-to/migrations.md` and `packages/dev/ai/how-to/db-and-prisma.md`.
 - **The boot smoke is the gate.** `apps/api/src/app.module.boot.spec.ts` `.compile()`s the whole DI graph – the ONLY check that catches provider-resolution bugs. Typecheck, `nest build`, and unit tests (which `new` services with mocks) all pass while a missing `@Global()` or unprovided token crashes startup. `pnpm --filter api test` (incl. the boot smoke) is part of "done". See `apps/api/dev/ai/how-to/module-wiring.md`.
+- **New code ships tested – the coverage gate blocks otherwise.** Any change that adds or edits `apps/api/src/**` lands its tests in the **same commit**: `pnpm coverage:check` fails unless the new/changed lines are ≥ 80 % covered (patch floor) and total line % holds at/above `coverage-baseline.json` (no regression). A new service/controller with no spec, or a service whose new branch is untested, will fail it. Ratchet the baseline up (`pnpm coverage:check --update-baseline`) and commit the bump when coverage genuinely rises. See `apps/api/dev/ai/how-to/testing-unit.md`.
 
 ## Guide index
 
@@ -50,7 +51,7 @@ Route the task to the guide(s) and read them before writing code. Most non-trivi
 3. **Model first** for a new domain or aggregate: schema namespace, id-only boundaries, enum + state machine, events, reactions (`dev/ai/how-to/domain-modelling.md`).
 4. **Build the slice** per the guides: migration (additive), DTO (class-validator), service (transaction + outbox + FSM guard), thin controller (`@RequirePermission`), reaction if cross-domain, BullMQ job if async.
 5. **Test** the new behaviour, including the FSM-guard and idempotency cases, not just the happy path (`apps/api/dev/ai/how-to/testing-unit.md`).
-6. **Gate.** Walk `dev/ai/how-to/definition-of-done.md` and state evidence: `pnpm -r typecheck`, `pnpm --filter api test` (incl. the boot smoke), build of any changed app/package, and the rebuild of any edited `@uprise/*` package.
+6. **Gate.** Walk `dev/ai/how-to/definition-of-done.md` and state evidence: `pnpm -r typecheck`, `pnpm --filter api test` (incl. the boot smoke), `pnpm coverage:check` (patch ≥ 80 %, no total regression), build of any changed app/package, and the rebuild of any edited `@uprise/*` package.
 
 ## Anti-patterns
 
@@ -58,6 +59,7 @@ Route the task to the guide(s) and read them before writing code. Most non-trivi
 - A new endpoint with no `@RequirePermission` (the `AbilityGuard` does NOT gate undecorated routes, so it silently stays reachable by any authenticated user – the footgun), or a resource string not in `UPRISE_RESOURCES`.
 - `outbox.append` outside the `$transaction` that wrote the row; using `this.prisma` instead of `tx` inside the callback; awaiting a provider SDK call inside the transaction.
 - Mutating `status` with a raw `update` and no guard; throwing `assertValid…` on a webhook/callback path where a replay is legitimate.
+- Adding a service/controller/branch with no test and leaving the coverage gate to a follow-up commit – the tests ship in the SAME commit as the code, or `pnpm coverage:check` fails.
 - A random/uuid `jobId`; trusting `job.data` without its type guard; an in-API `setInterval` for scheduled work instead of a CRON_SECRET dispatch endpoint.
 - Claiming a webhook and not releasing on error; verifying the signature over the parsed `@Body()` instead of `req.rawBody`.
 - `prisma migrate dev`; editing a `@uprise/*` `src` without rebuilding its `dist`.

@@ -15,13 +15,15 @@
     "dev:tunnel": "ngrok start --config ngrok.local.yml --config ngrok.yml --all",
     "dev:fresh": "bash scripts/dev.sh",
     "kill:ports": "bash scripts/kill-ports.sh",
+    "reset:tenants": "pnpm --filter api run reset:tenants",
     "load:queue-dispatch": "node scripts/load/queue-dispatch-load.mjs",
     "shadow:compare-queues": "node scripts/shadow/compare-queue-outcomes.mjs",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "build": "pnpm -r run build",
-    "check:ai-guides": "node scripts/check-ai-guides.mjs"
+    "check:ai-guides": "node scripts/check-ai-guides.mjs",
+    "coverage:check": "node scripts/coverage-check.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"

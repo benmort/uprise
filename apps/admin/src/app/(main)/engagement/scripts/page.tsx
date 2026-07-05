@@ -10,7 +10,6 @@ import {
   listScripts,
   updateScript,
   type Script,
-  type ScriptListItem,
   type ScriptStep,
 } from "@/lib/api/engagement";
 import { Button } from "@/components/ui/button";
@@ -21,17 +20,22 @@ import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@uprise/field";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 export default function ScriptsPage() {
   const { showToast } = useToast();
-  const [list, setList] = useState<ScriptListItem[]>([]);
+  const { data, loading, error, noPermission, refetch } = useApi(
+    "/scripts",
+    () => listScripts(),
+    { ttlMs: 30_000 },
+  );
+  const list = data ?? [];
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<Script | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -39,18 +43,10 @@ export default function ScriptsPage() {
   const [creating, setCreating] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const loadList = useCallback(async () => {
-    const res = await listScripts();
-    if (res.ok) {
-      setList(res.data);
-      setSelectedId((cur) => cur || res.data[0]?.id || "");
-    }
-    setLoading(false);
-  }, []);
-
+  // Auto-select the first script once the list arrives.
   useEffect(() => {
-    void loadList();
-  }, [loadList]);
+    setSelectedId((cur) => cur || data?.[0]?.id || "");
+  }, [data]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -80,9 +76,9 @@ export default function ScriptsPage() {
       return;
     }
     setCreateOpen(false);
-    await loadList();
+    void refetch();
     setSelectedId(res.data.id);
-  }, [newName, newChannel, loadList, showToast]);
+  }, [newName, newChannel, refetch, showToast]);
 
   const patchStep = (i: number, patch: Partial<ScriptStep>) => {
     if (!draft) return;
@@ -115,9 +111,9 @@ export default function ScriptsPage() {
       return;
     }
     setDraft(res.data);
-    await loadList();
+    void refetch();
     showToast({ tone: "success", title: "Script saved" });
-  }, [draft, loadList, showToast]);
+  }, [draft, refetch, showToast]);
 
   const handleDelete = useCallback(async () => {
     if (!draft) return;
@@ -127,14 +123,12 @@ export default function ScriptsPage() {
     setDeleteOpen(false);
     if (res.ok) {
       setSelectedId("");
-      await loadList();
+      void refetch();
       showToast({ tone: "success", title: "Script deleted" });
     } else {
       showToast({ tone: "error", title: "Couldn't delete", description: res.error });
     }
-  }, [draft, loadList, showToast]);
-
-  if (loading) return <div className="page-stack"><Skeleton className="h-64 w-full" /></div>;
+  }, [draft, refetch, showToast]);
 
   return (
     <div className="page-stack">
@@ -152,14 +146,16 @@ export default function ScriptsPage() {
         </Button>
       </div>
 
-      {list.length === 0 ? (
-        <EmptyState
-          title="No scripts yet"
-          description="An opening line plus outcome-keyed branches for the conversation."
-          ctaLabel="New script"
-          onCta={openCreate}
-        />
-      ) : (
+      <StateRegion
+        loading={loading}
+        error={error}
+        noPermission={noPermission}
+        onRetry={() => void refetch()}
+        empty={list.length === 0}
+        emptyTitle="No scripts yet"
+        emptyDescription="An opening line plus outcome-keyed branches for the conversation."
+        skeleton={<Skeleton className="h-64 w-full" />}
+      >
         <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
           <div className="space-y-2">
             {list.map((s) => (
@@ -254,7 +250,7 @@ export default function ScriptsPage() {
             </SectionCard>
           ) : null}
         </div>
-      )}
+      </StateRegion>
 
       <FormDialog
         open={createOpen}

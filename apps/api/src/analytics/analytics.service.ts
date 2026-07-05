@@ -1,24 +1,11 @@
-import { Injectable } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { BlastRecipientStatus, MessageChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
 
 @Injectable()
 export class AnalyticsService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {}
-
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   /** A spreadable `{ channel }` fragment when a valid channel is given, else `{}`. */
   private channelFilter(channel?: string | null): { channel?: MessageChannel } {
@@ -28,7 +15,16 @@ export class AnalyticsService {
     return {};
   }
 
-  async kpiSummary(blastId: string, channel?: string | null) {
+  /** Tenant-scope a blast-analytics read: confirm the blast belongs to the caller's tenant
+   *  before returning its recipient/snapshot data (the rows themselves are keyed by blastId,
+   *  so without this a caller could read another tenant's blast analytics by id). */
+  private async assertBlast(tenantId: string, blastId: string): Promise<void> {
+    const blast = await this.prisma.blast.findFirst({ where: { id: blastId, tenantId }, select: { id: true } });
+    if (!blast) throw new NotFoundException("Blast not found");
+  }
+
+  async kpiSummary(tenantId: string, blastId: string, channel?: string | null) {
+    await this.assertBlast(tenantId, blastId);
     const ch = this.channelFilter(channel);
     const [totalContacted, sent, delivered, responded, failed] = await Promise.all([
       this.prisma.blastRecipient.count({
@@ -57,7 +53,8 @@ export class AnalyticsService {
     return { totalContacted, sent, delivered, responded, failed };
   }
 
-  async engagementTrend(blastId: string, minutes?: number | null) {
+  async engagementTrend(tenantId: string, blastId: string, minutes?: number | null) {
+    await this.assertBlast(tenantId, blastId);
     const useTimeWindow = typeof minutes === "number" && Number.isFinite(minutes) && minutes > 0;
     const since = useTimeWindow ? new Date(Date.now() - minutes * 60 * 1000) : null;
     const snapshots = await this.prisma.analyticsSnapshot.findMany({
@@ -81,7 +78,8 @@ export class AnalyticsService {
     }));
   }
 
-  async recipientActivity(blastId: string, limit = 50, offset = 0, channel?: string | null) {
+  async recipientActivity(tenantId: string, blastId: string, limit = 50, offset = 0, channel?: string | null) {
+    await this.assertBlast(tenantId, blastId);
     const ch = this.channelFilter(channel);
     const [rows, total] = await Promise.all([
       this.prisma.blastRecipient.findMany({
@@ -95,7 +93,8 @@ export class AnalyticsService {
     return { rows, total };
   }
 
-  async statusDistribution(blastId: string, channel?: string | null) {
+  async statusDistribution(tenantId: string, blastId: string, channel?: string | null) {
+    await this.assertBlast(tenantId, blastId);
     return this.prisma.blastRecipient.groupBy({
       by: ["status"],
       where: { blastId, ...this.channelFilter(channel) },
@@ -103,13 +102,12 @@ export class AnalyticsService {
     });
   }
 
-  async dashboardPerformance(channel?: string | null) {
-    const org = await this.ensureOrganization();
+  async dashboardPerformance(tenantId: string, channel?: string | null) {
     const ch = this.channelFilter(channel);
     const [totalContacted, totalSent, totalResponded, activeDrafts] = await Promise.all([
       this.prisma.blastRecipient.count({
         where: {
-          blast: { tenantId: org.id },
+          blast: { tenantId },
           ...ch,
           status: {
             in: [
@@ -122,14 +120,14 @@ export class AnalyticsService {
         },
       }),
       this.prisma.blastRecipient.count({
-        where: { blast: { tenantId: org.id }, ...ch, status: BlastRecipientStatus.SENT },
+        where: { blast: { tenantId }, ...ch, status: BlastRecipientStatus.SENT },
       }),
       this.prisma.blastRecipient.count({
-        where: { blast: { tenantId: org.id }, ...ch, status: BlastRecipientStatus.RESPONDED },
+        where: { blast: { tenantId }, ...ch, status: BlastRecipientStatus.RESPONDED },
       }),
       this.prisma.blast.count({
         where: {
-          tenantId: org.id,
+          tenantId,
           ...ch,
           status: { in: ["DRAFTED", "PROOFED", "SCHEDULED"] },
         },
@@ -146,10 +144,9 @@ export class AnalyticsService {
     };
   }
 
-  async recentBlasts(limit = 20, channel?: string | null) {
-    const org = await this.ensureOrganization();
+  async recentBlasts(tenantId: string, limit = 20, channel?: string | null) {
     const blasts = await this.prisma.blast.findMany({
-      where: { tenantId: org.id, ...this.channelFilter(channel) },
+      where: { tenantId, ...this.channelFilter(channel) },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
       include: {

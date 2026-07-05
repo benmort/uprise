@@ -324,6 +324,33 @@ export async function upsertIntegrationConnection(input: {
   });
 }
 
+export async function testIntegrationConnection(input: {
+  type: "ACTION_NETWORK" | "INTERNAL";
+  apiKey?: string;
+  baseUrl?: string;
+}) {
+  return request<{ ok: boolean; detail?: string }>("/integrations/connections/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+/** Disconnect (INACTIVE) or reconnect (ACTIVE) a connection. */
+export async function setIntegrationConnectionStatus(id: string, status: "ACTIVE" | "INACTIVE") {
+  return request<{ id: string; status: string }>(`/integrations/connections/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function deleteIntegrationConnection(id: string) {
+  return request<{ deleted: true }>(`/integrations/connections/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export type MessageChannel = "SMS" | "WHATSAPP";
 
 export async function createBlast(input: {
@@ -704,6 +731,28 @@ export async function updateTurf(
   });
 }
 
+export async function deleteTurf(turfId: string) {
+  return request<{ deleted: true }>(`/canvass/turfs/${encodeURIComponent(turfId)}`, {
+    method: "DELETE",
+  });
+}
+
+/** Organiser-side release of a turf's active assignment (no volunteerId needed). */
+export async function unassignTurf(turfId: string) {
+  return request<{ released: number }>(`/canvass/turfs/${encodeURIComponent(turfId)}/unassign`, {
+    method: "POST",
+  });
+}
+
+/** Move a turf's assignment to another volunteer (release current + assign new). */
+export async function reassignTurf(turfId: string, volunteerId: string) {
+  return request<Record<string, unknown>>(`/canvass/turfs/${encodeURIComponent(turfId)}/reassign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ volunteerId }),
+  });
+}
+
 export async function rebucketTurf(turfId: string) {
   return request<{ added: number; removed: number; total: number }>(
     `/canvass/turfs/${encodeURIComponent(turfId)}/rebucket`,
@@ -887,9 +936,32 @@ export async function deleteShift(id: string) {
   return request<{ deleted: boolean }>(`/canvass/shifts/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+export type QaFlagKind = "NO_GPS" | "FAST_CADENCE";
+export type QaFlag = {
+  id: string;
+  doorKnockId: string;
+  kind: QaFlagKind;
+  volunteer: string | null;
+  reason: string;
+  at: string;
+  resolved: boolean;
+  state: string | null;
+};
+
 export async function getQaReview(campaignId: string) {
-  return request<{ flags: Array<{ id: string; volunteer: string | null; reason: string; at: string }> }>(
+  return request<{ flags: QaFlag[] }>(
     `/canvass/campaigns/${encodeURIComponent(campaignId)}/qa`,
+  );
+}
+
+/** Record or clear an organiser's action on a computed QA flag. */
+export async function resolveQaFlag(
+  campaignId: string,
+  input: { doorKnockId: string; kind: QaFlagKind; resolved?: boolean; state?: "RESOLVED" | "DISMISSED"; note?: string },
+) {
+  return request<{ resolved: boolean; state?: string }>(
+    `/canvass/campaigns/${encodeURIComponent(campaignId)}/qa/resolve`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) },
   );
 }
 

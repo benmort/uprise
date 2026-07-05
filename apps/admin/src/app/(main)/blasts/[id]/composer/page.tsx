@@ -28,6 +28,8 @@ import { Button } from "@/components/ui/button";
 import { TagChip } from "@/components/ui/tag-chip";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StateRegion } from "@/components/shell/state-region";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Field } from "@/components/ui/field";
@@ -140,6 +142,8 @@ export default function BlastComposerPage() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [loadingBlast, setLoadingBlast] = useState(Boolean(blastIdFromRoute));
+  const [noPermission, setNoPermission] = useState(false);
 
   useEffect(() => {
     getFeatureFlags().then((res) => {
@@ -185,9 +189,13 @@ export default function BlastComposerPage() {
 
   useEffect(() => {
     if (!blastIdFromRoute) return;
+    setLoadingBlast(true);
+    setNoPermission(false);
     listBlasts().then((res) => {
       if (!res.ok) {
-        setActionMessage(res.error);
+        if (res.status === 403) setNoPermission(true);
+        else setActionMessage(res.error);
+        setLoadingBlast(false);
         return;
       }
       const blast = res.data.find((row) => String((row as any).id) === blastIdFromRoute) as
@@ -195,6 +203,7 @@ export default function BlastComposerPage() {
         | undefined;
       if (!blast) {
         setActionMessage(`Blast not found: ${blastIdFromRoute}`);
+        setLoadingBlast(false);
         return;
       }
       setBlastId(String(blast.id));
@@ -209,6 +218,7 @@ export default function BlastComposerPage() {
           ? (blast.contentVariableMap as Record<string, string>)
           : {},
       );
+      setLoadingBlast(false);
     });
   }, [blastIdFromRoute]);
 
@@ -507,6 +517,43 @@ export default function BlastComposerPage() {
       textarea.selectionEnd = cursor;
     }, 0);
   };
+
+  if (noPermission) {
+    return (
+      <div className="page-stack">
+        <Breadcrumbs
+          items={[
+            { label: "Analytics", href: "/analytics" },
+            { label: "Composer" },
+          ]}
+        />
+        <StateRegion noPermission>{null}</StateRegion>
+      </div>
+    );
+  }
+
+  if (loadingBlast) {
+    return (
+      <div className="page-stack">
+        <Breadcrumbs
+          items={[
+            { label: "Analytics", href: "/analytics" },
+            { label: "Composer" },
+          ]}
+        />
+        <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
+          <div className="space-y-4">
+            <Skeleton className="h-9 w-80" />
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-64 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-stack">

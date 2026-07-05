@@ -132,7 +132,10 @@ export class JourneysService implements JourneyTriggerPort {
       },
     });
     await this.enqueueRung(enrolment.id, 0);
-    this.events.emit("journey.enrolment.updated", { enrolmentId: enrolment.id, state: enrolment.state });
+    this.events.emit("journey.enrolment.updated", journey.tenantId, {
+      enrolmentId: enrolment.id,
+      state: enrolment.state,
+    });
   }
 
   private async enqueueRung(enrolmentId: string, rungIndex: number, runAt?: Date): Promise<void> {
@@ -165,12 +168,12 @@ export class JourneysService implements JourneyTriggerPort {
 
     if (enrolment.rungExecCount >= RUNG_EXEC_CEILING) {
       this.logger.warn(`Journey enrolment ${enrolment.id} hit rung-exec ceiling; failing`);
-      return this.finish(enrolment.id, JourneyEnrolmentState.FAILED);
+      return this.finish(enrolment.tenantId, enrolment.id, JourneyEnrolmentState.FAILED);
     }
 
     const rung = enrolment.journey.rungs.find((r) => r.rungIndex === payload.rungIndex);
     if (!rung) {
-      return this.finish(enrolment.id, JourneyEnrolmentState.COMPLETED);
+      return this.finish(enrolment.tenantId, enrolment.id, JourneyEnrolmentState.COMPLETED);
     }
 
     await this.prisma.journeyEnrolment.update({
@@ -186,7 +189,7 @@ export class JourneysService implements JourneyTriggerPort {
       await this.advance(enrolment.id, payload.rungIndex);
       const nextIndex = payload.rungIndex + 1;
       if (!this.hasRung(enrolment.journey.rungs, nextIndex)) {
-        return this.finish(enrolment.id, JourneyEnrolmentState.COMPLETED);
+        return this.finish(enrolment.tenantId, enrolment.id, JourneyEnrolmentState.COMPLETED);
       }
       if (minutes <= MAX_INLINE_WAIT_MINUTES) {
         await this.prisma.journeyEnrolment.update({
@@ -207,14 +210,24 @@ export class JourneysService implements JourneyTriggerPort {
     if (rung.type === "condition") {
       const pass = await this.evaluateCondition(enrolment.tenantId, enrolment.contactId, cfg);
       if (!pass) {
-        return this.finish(enrolment.id, JourneyEnrolmentState.EXITED);
+        return this.finish(enrolment.tenantId, enrolment.id, JourneyEnrolmentState.EXITED);
       }
-      return this.advanceOrComplete(enrolment.id, payload.rungIndex, enrolment.journey.rungs);
+      return this.advanceOrComplete(
+        enrolment.tenantId,
+        enrolment.id,
+        payload.rungIndex,
+        enrolment.journey.rungs,
+      );
     }
 
     // action
     await this.executeAction(enrolment.tenantId, enrolment.contactId, cfg);
-    return this.advanceOrComplete(enrolment.id, payload.rungIndex, enrolment.journey.rungs);
+    return this.advanceOrComplete(
+      enrolment.tenantId,
+      enrolment.id,
+      payload.rungIndex,
+      enrolment.journey.rungs,
+    );
   }
 
   private async evaluateCondition(
@@ -258,16 +271,16 @@ export class JourneysService implements JourneyTriggerPort {
           where: { tenantId, contactId },
           data: { resolved: false },
         });
-        this.events.emit("inbox.inbound", { contactId, source: "journey" });
+        this.events.emit("inbox.inbound", tenantId, { contactId, source: "journey" });
         return;
       case "tag":
         // Tag storage lands with the contact-tags model; emit the trigger now so
         // tag-driven journeys still fire once tags are persisted.
-        this.events.emit("journey.tag", { contactId, tag: String(cfg.tag ?? "") });
+        this.events.emit("journey.tag", tenantId, { contactId, tag: String(cfg.tag ?? "") });
         return;
       case "door_task":
         // Door-task creation is wired with the canvassing domain (Phase 3).
-        this.events.emit("journey.door_task", { contactId });
+        this.events.emit("journey.door_task", tenantId, { contactId });
         return;
       default:
         this.logger.warn(`Unknown journey action kind: ${String(cfg.kind)}`);
@@ -302,6 +315,7 @@ export class JourneysService implements JourneyTriggerPort {
   }
 
   private async advanceOrComplete(
+    tenantId: string,
     enrolmentId: string,
     fromIndex: number,
     rungs: { rungIndex: number }[],
@@ -309,13 +323,14 @@ export class JourneysService implements JourneyTriggerPort {
     const nextIndex = fromIndex + 1;
     await this.advance(enrolmentId, fromIndex);
     if (!this.hasRung(rungs, nextIndex)) {
-      return this.finish(enrolmentId, JourneyEnrolmentState.COMPLETED);
+      return this.finish(tenantId, enrolmentId, JourneyEnrolmentState.COMPLETED);
     }
     await this.enqueueRung(enrolmentId, nextIndex);
     return { state: JourneyEnrolmentState.ACTIVE };
   }
 
   private async finish(
+    tenantId: string,
     enrolmentId: string,
     state: JourneyEnrolmentState,
   ): Promise<{ state: JourneyEnrolmentState }> {
@@ -323,7 +338,7 @@ export class JourneysService implements JourneyTriggerPort {
       where: { id: enrolmentId },
       data: { state, completedAt: new Date() },
     });
-    this.events.emit("journey.enrolment.updated", { enrolmentId, state });
+    this.events.emit("journey.enrolment.updated", tenantId, { enrolmentId, state });
     return { state };
   }
 }

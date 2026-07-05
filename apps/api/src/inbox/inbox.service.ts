@@ -1,5 +1,4 @@
 import { BadRequestException, Inject, Injectable, Optional } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import {
   BlastRecipientStatus,
   ConsentState,
@@ -26,7 +25,6 @@ import { AiSuggestionsService } from "./ai-suggestions.service";
 export class InboxService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly twilio: TwilioService,
     private readonly senderResolver: TelephonySenderResolver,
     private readonly events: RealtimeEventsService,
@@ -37,15 +35,6 @@ export class InboxService {
     private readonly sessionWindow: SessionWindowService,
     @Optional() @Inject(JOURNEY_TRIGGER_PORT) private readonly journeys?: JourneyTriggerPort,
   ) {}
-
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
 
   async recordInbound(payload: {
     from: string;
@@ -59,14 +48,15 @@ export class InboxService {
      *  absent for platform-number traffic ⇒ the single-tenant shortcut. */
     tenantId?: string;
   }) {
-    const org = payload.tenantId ? { id: payload.tenantId } : await this.ensureOrganization();
+    if (!payload.tenantId) throw new BadRequestException("No tenant for inbound");
+    const tenantId = payload.tenantId;
     const fromPhone = normalizePhoneE164(payload.from);
     const toPhone = normalizePhoneE164(payload.to);
     const channel = payload.channel ?? MessageChannel.SMS;
-    const contact = await this.contacts.getOrCreateByPhone(org.id, fromPhone);
+    const contact = await this.contacts.getOrCreateByPhone(tenantId, fromPhone);
     const attributedOutbound = await this.prisma.outboundMessage.findFirst({
       where: {
-        tenantId: org.id,
+        tenantId: tenantId,
         toPhone: fromPhone,
         channel,
         OR: [{ blastId: { not: null } }, { recipientId: { not: null } }],
@@ -76,7 +66,7 @@ export class InboxService {
 
     const inbound = await this.prisma.inboundMessage.create({
       data: {
-        tenantId: org.id,
+        tenantId: tenantId,
         blastId: attributedOutbound?.blastId || null,
         contactId: contact.id,
         channel,
@@ -96,7 +86,7 @@ export class InboxService {
     if (keyword === ConsentState.OPTED_OUT) {
       for (const ch of [MessageChannel.SMS, MessageChannel.WHATSAPP]) {
         await this.consent.setState({
-          tenantId: org.id,
+          tenantId: tenantId,
           phoneE164: fromPhone,
           channel: ch,
           state: ConsentState.OPTED_OUT,
@@ -106,7 +96,7 @@ export class InboxService {
       }
     } else {
       await this.consent.setState({
-        tenantId: org.id,
+        tenantId: tenantId,
         phoneE164: fromPhone,
         channel,
         state: ConsentState.OPTED_IN,
@@ -118,7 +108,7 @@ export class InboxService {
     await this.prisma.conversationState.upsert({
       where: {
         tenantId_contactPhone_channel: {
-          tenantId: org.id,
+          tenantId: tenantId,
           contactPhone: fromPhone,
           channel,
         },
@@ -130,7 +120,7 @@ export class InboxService {
         lastMessageAt: inbound.receivedAt,
       },
       create: {
-        tenantId: org.id,
+        tenantId: tenantId,
         contactId: contact.id,
         contactPhone: fromPhone,
         channel,
@@ -167,7 +157,7 @@ export class InboxService {
       if (updated.count > 0) {
         await this.prisma.analyticsSnapshot.create({
           data: {
-            tenantId: org.id,
+            tenantId: tenantId,
             blastId: attributedOutbound?.blastId || null,
             metricName: "responded",
             metricValue: 1,
@@ -187,7 +177,7 @@ export class InboxService {
       }
     }
 
-    this.events.emit("inbox.inbound", {
+    this.events.emit("inbox.inbound", tenantId, {
       contactPhone: fromPhone,
       blastId: attributedOutbound?.blastId || null,
       body: payload.body || "",
@@ -197,13 +187,13 @@ export class InboxService {
     if (this.journeys) {
       try {
         await this.journeys.handleTrigger(JourneyTriggerType.message_received, {
-          tenantId: org.id,
+          tenantId: tenantId,
           contactId: contact.id,
           blastId: attributedOutbound?.blastId || null,
         });
       } catch (error) {
         // Journey failures must never break inbound recording.
-        this.events.emit("journey.trigger_error", {
+        this.events.emit("journey.trigger_error", tenantId, {
           type: JourneyTriggerType.message_received,
           error: String(error),
         });
@@ -213,21 +203,23 @@ export class InboxService {
     return inbound;
   }
 
-  async listConversations(input?: {
-    query?: string;
-    blastId?: string;
-    audienceId?: string;
-  }) {
-    const org = await this.ensureOrganization();
+  async listConversations(
+    tenantId: string,
+    input?: {
+      query?: string;
+      blastId?: string;
+      audienceId?: string;
+    },
+  ) {
     const [rows, contactsFromMessages, twilioContacts, blastPhones, audiencePhones] = await Promise.all([
-      this.repo.listConversations(org.id),
-      this.repo.listRecentMessageContacts(org.id),
+      this.repo.listConversations(tenantId),
+      this.repo.listRecentMessageContacts(tenantId),
       this.twilio.getLatestByContact(500).catch(
         () => ({} as Record<string, { direction: string; date: string; body: string; status: string }>),
       ),
-      input?.blastId ? this.repo.listContactPhonesForBlast(org.id, input.blastId) : Promise.resolve([]),
+      input?.blastId ? this.repo.listContactPhonesForBlast(tenantId, input.blastId) : Promise.resolve([]),
       input?.audienceId
-        ? this.repo.listContactPhonesForAudience(org.id, input.audienceId)
+        ? this.repo.listContactPhonesForAudience(tenantId, input.audienceId)
         : Promise.resolve([]),
     ]);
 
@@ -322,7 +314,7 @@ export class InboxService {
     }
 
     const contactNames = await this.repo.listContactNamesByPhones(
-      org.id,
+      tenantId,
       sortedRows.map((row) => row.contactPhone),
     );
     const contactNameByPhone = new Map<string, string>();
@@ -335,7 +327,7 @@ export class InboxService {
     }
 
     const ownerById = await this.resolveOwners(
-      org.id,
+      tenantId,
       sortedRows.map((row) => row.ownerId),
     );
     const withNames = sortedRows.map((row) => ({
@@ -367,13 +359,12 @@ export class InboxService {
     return map;
   }
 
-  async getThread(contactPhone: string, channelInput?: MessageChannel | string) {
-    const org = await this.ensureOrganization();
+  async getThread(tenantId: string, contactPhone: string, channelInput?: MessageChannel | string) {
     const phone = normalizePhoneE164(contactPhone);
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     // Twilio's live message API only covers SMS; skip it for WhatsApp threads.
     const [[inboundRows, outboundRows], twilioMessages] = await Promise.all([
-      this.repo.getThread(org.id, phone, channel),
+      this.repo.getThread(tenantId, phone, channel),
       channel === MessageChannel.SMS
         ? this.twilio
             .getMessagesForPhoneNumber(phone, 200)
@@ -381,7 +372,7 @@ export class InboxService {
             .catch(() => [])
         : Promise.resolve([]),
     ]);
-    const sessionOpen = await this.sessionWindow.isOpen(org.id, phone, channel);
+    const sessionOpen = await this.sessionWindow.isOpen(tenantId, phone, channel);
 
     const messages = [
       ...inboundRows.map((row) => ({
@@ -457,7 +448,7 @@ export class InboxService {
             },
           })
         : Promise.resolve([]),
-      this.repo.listContactNamesByPhones(org.id, [phone]),
+      this.repo.listContactNamesByPhones(tenantId, [phone]),
     ]);
     const blastById = new Map(blasts.map((blast) => [blast.id, blast]));
     const blastHistory = blastIds
@@ -481,12 +472,12 @@ export class InboxService {
 
     const convo = await this.prisma.conversationState.findUnique({
       where: {
-        tenantId_contactPhone_channel: { tenantId: org.id, contactPhone: phone, channel },
+        tenantId_contactPhone_channel: { tenantId: tenantId, contactPhone: phone, channel },
       },
       select: { ownerId: true },
     });
     const owner = convo?.ownerId
-      ? (await this.resolveOwners(org.id, [convo.ownerId])).get(convo.ownerId) ?? null
+      ? (await this.resolveOwners(tenantId, [convo.ownerId])).get(convo.ownerId) ?? null
       : null;
 
     return {
@@ -501,15 +492,14 @@ export class InboxService {
     };
   }
 
-  async reply(contactPhone: string, body: string, channelInput?: MessageChannel | string) {
-    const org = await this.ensureOrganization();
+  async reply(tenantId: string, contactPhone: string, body: string, channelInput?: MessageChannel | string) {
     const to = normalizePhoneE164(contactPhone);
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
-    const contact = await this.contacts.getOrCreateByPhone(org.id, to);
+    const contact = await this.contacts.getOrCreateByPhone(tenantId, to);
 
     // A free-text WhatsApp reply is only valid inside the 24h session window.
     if (channel === MessageChannel.WHATSAPP) {
-      const open = await this.sessionWindow.isOpen(org.id, to, channel);
+      const open = await this.sessionWindow.isOpen(tenantId, to, channel);
       if (!open) {
         throw new BadRequestException({
           code: "SESSION_WINDOW_CLOSED",
@@ -522,16 +512,16 @@ export class InboxService {
     // Reply from the number the conversation lives on (the tenant number the
     // contact last texted); otherwise the tenant default; otherwise platform env.
     const lastInbound = await this.prisma.inboundMessage.findFirst({
-      where: { tenantId: org.id, fromPhone: to, channel },
+      where: { tenantId: tenantId, fromPhone: to, channel },
       orderBy: { receivedAt: "desc" },
       select: { toPhone: true },
     });
     const sender =
       (lastInbound?.toPhone
-        ? await this.senderResolver.resolveByNumber(org.id, lastInbound.toPhone)
+        ? await this.senderResolver.resolveByNumber(tenantId, lastInbound.toPhone)
         : undefined) ??
       (await this.senderResolver.resolve({
-        tenantId: org.id,
+        tenantId: tenantId,
         purpose: channel === MessageChannel.WHATSAPP ? "whatsapp" : "marketing",
       }));
 
@@ -542,7 +532,7 @@ export class InboxService {
       : sent.from;
     const row = await this.prisma.outboundMessage.create({
       data: {
-        tenantId: org.id,
+        tenantId: tenantId,
         contactId: contact.id,
         channel,
         toPhone: normalizedTo,
@@ -556,7 +546,7 @@ export class InboxService {
     await this.prisma.conversationState.upsert({
       where: {
         tenantId_contactPhone_channel: {
-          tenantId: org.id,
+          tenantId: tenantId,
           contactPhone: to,
           channel,
         },
@@ -567,7 +557,7 @@ export class InboxService {
         lastMessageAt: row.sentAt,
       },
       create: {
-        tenantId: org.id,
+        tenantId: tenantId,
         contactId: contact.id,
         contactPhone: to,
         channel,
@@ -576,22 +566,22 @@ export class InboxService {
         lastMessageAt: row.sentAt,
       },
     });
-    this.events.emit("inbox.reply", { contactPhone: to, channel });
+    this.events.emit("inbox.reply", tenantId, { contactPhone: to, channel });
     return row;
   }
 
   async markConversation(
+    tenantId: string,
     contactPhone: string,
     resolved: boolean,
     channelInput?: MessageChannel | string,
   ) {
-    const org = await this.ensureOrganization();
     const phone = normalizePhoneE164(contactPhone);
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     return this.prisma.conversationState.upsert({
       where: {
         tenantId_contactPhone_channel: {
-          tenantId: org.id,
+          tenantId: tenantId,
           contactPhone: phone,
           channel,
         },
@@ -601,7 +591,7 @@ export class InboxService {
         resolved,
       },
       create: {
-        tenantId: org.id,
+        tenantId: tenantId,
         contactPhone: phone,
         channel,
         unreadCount: 0,
@@ -612,39 +602,37 @@ export class InboxService {
 
   /** Claim a conversation for the given user (server-owned ownership). */
   async claimConversation(
+    tenantId: string,
     contactPhone: string,
     ownerId: string,
     channelInput?: MessageChannel | string,
   ) {
-    const org = await this.ensureOrganization();
     const phone = normalizePhoneE164(contactPhone);
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     await this.prisma.conversationState.upsert({
       where: {
-        tenantId_contactPhone_channel: { tenantId: org.id, contactPhone: phone, channel },
+        tenantId_contactPhone_channel: { tenantId: tenantId, contactPhone: phone, channel },
       },
       update: { ownerId, claimedAt: new Date() },
-      create: { tenantId: org.id, contactPhone: phone, channel, ownerId, claimedAt: new Date() },
+      create: { tenantId: tenantId, contactPhone: phone, channel, ownerId, claimedAt: new Date() },
     });
-    const owner = (await this.resolveOwners(org.id, [ownerId])).get(ownerId) ?? null;
+    const owner = (await this.resolveOwners(tenantId, [ownerId])).get(ownerId) ?? null;
     return { contactPhone: phone, channel, owner };
   }
 
   /** Release a conversation (clear its owner). */
-  async releaseConversation(contactPhone: string, channelInput?: MessageChannel | string) {
-    const org = await this.ensureOrganization();
+  async releaseConversation(tenantId: string, contactPhone: string, channelInput?: MessageChannel | string) {
     const phone = normalizePhoneE164(contactPhone);
     const channel = coerceChannel(channelInput ?? MessageChannel.SMS);
     await this.prisma.conversationState.updateMany({
-      where: { tenantId: org.id, contactPhone: phone, channel },
+      where: { tenantId: tenantId, contactPhone: phone, channel },
       data: { ownerId: null, claimedAt: null },
     });
     return { contactPhone: phone, channel, owner: null };
   }
 
-  async suggest(message: string) {
-    const org = await this.ensureOrganization();
-    const suggestions = await this.ai.suggestReplies({ tenantId: org.id, message });
+  async suggest(tenantId: string, message: string) {
+    const suggestions = await this.ai.suggestReplies({ tenantId, message });
     return { suggestions };
   }
 }

@@ -76,20 +76,10 @@ export class AudiencesService {
     };
   }
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
-  async createAudience(dto: CreateAudienceDto) {
-    const org = await this.ensureOrganization();
+  async createAudience(tenantId: string, dto: CreateAudienceDto) {
     return this.prisma.audience.create({
       data: {
-        tenantId: org.id,
+        tenantId,
         name: dto.name,
         source: (dto.source || "MANUAL") as AudienceSource,
         channel: (dto.channel || "ALL") as AudienceChannel,
@@ -104,15 +94,14 @@ export class AudiencesService {
    * idempotent. Its members resolve at send time from ContactConsent (see
    * blasts.service getBlastRecipients).
    */
-  async ensureWhatsappOptInAudience() {
-    const org = await this.ensureOrganization();
+  async ensureWhatsappOptInAudience(tenantId: string) {
     const existing = await this.prisma.audience.findFirst({
-      where: { tenantId: org.id, kind: AudienceKind.WHATSAPP_OPTED_IN, status: AudienceStatus.ACTIVE },
+      where: { tenantId, kind: AudienceKind.WHATSAPP_OPTED_IN, status: AudienceStatus.ACTIVE },
     });
     if (existing) return existing;
     return this.prisma.audience.create({
       data: {
-        tenantId: org.id,
+        tenantId,
         name: "WhatsApp opt-ins (all)",
         source: AudienceSource.INTERNAL,
         channel: AudienceChannel.WHATSAPP,
@@ -123,15 +112,14 @@ export class AudiencesService {
   }
 
   /** How many of an audience's members are actually WhatsApp-reachable (opted in). */
-  async whatsappReach(audienceId: string): Promise<{ total: number; reachable: number }> {
-    const org = await this.ensureOrganization();
+  async whatsappReach(tenantId: string, audienceId: string): Promise<{ total: number; reachable: number }> {
     const audience = await this.prisma.audience.findFirst({
-      where: { id: audienceId, tenantId: org.id },
+      where: { id: audienceId, tenantId },
     });
     if (!audience) throw new NotFoundException("Audience not found");
 
     const optedIn = await this.prisma.contactConsent.findMany({
-      where: { tenantId: org.id, channel: MessageChannel.WHATSAPP, state: ConsentState.OPTED_IN },
+      where: { tenantId, channel: MessageChannel.WHATSAPP, state: ConsentState.OPTED_IN },
       select: { phoneE164: true },
     });
     const optInSet = new Set(optedIn.map((c) => c.phoneE164));
@@ -149,8 +137,7 @@ export class AudiencesService {
     };
   }
 
-  async listAudiences(dto: ListAudiencesDto) {
-    const org = await this.ensureOrganization();
+  async listAudiences(tenantId: string, dto: ListAudiencesDto) {
     const channelFilter: Prisma.AudienceWhereInput =
       dto.channel === "WHATSAPP"
         ? { channel: { in: [AudienceChannel.WHATSAPP, AudienceChannel.ALL] } }
@@ -160,7 +147,7 @@ export class AudiencesService {
             ? { channel: AudienceChannel.ALL }
             : {};
     const where: Prisma.AudienceWhereInput = {
-      tenantId: org.id,
+      tenantId,
       ...(dto.status ? { status: dto.status as AudienceStatus } : {}),
       ...(dto.source ? { source: dto.source as AudienceSource } : {}),
       ...channelFilter,
@@ -180,13 +167,12 @@ export class AudiencesService {
     return { rows, total };
   }
 
-  async getAudience(id: string) {
-    const org = await this.ensureOrganization();
+  async getAudience(tenantId: string, id: string) {
     const [audience, latestSync] = await Promise.all([
       this.prisma.audience.findFirst({
         where: {
           id,
-          tenantId: org.id,
+          tenantId,
         },
         include: {
           _count: { select: { contacts: true } },
@@ -194,7 +180,7 @@ export class AudiencesService {
       }),
       this.prisma.integrationSyncJob.findFirst({
         where: {
-          tenantId: org.id,
+          tenantId,
           audienceId: id,
         },
         orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
@@ -220,26 +206,35 @@ export class AudiencesService {
     };
   }
 
-  async archiveAudience(id: string) {
+  async archiveAudience(tenantId: string, id: string) {
+    const audience = await this.prisma.audience.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+    if (!audience) throw new NotFoundException("Audience not found");
     return this.prisma.audience.update({
-      where: { id },
+      where: { id: audience.id },
       data: { status: AudienceStatus.ARCHIVED, archivedAt: new Date() },
     });
   }
 
-  async restoreAudience(id: string) {
+  async restoreAudience(tenantId: string, id: string) {
+    const audience = await this.prisma.audience.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+    if (!audience) throw new NotFoundException("Audience not found");
     return this.prisma.audience.update({
-      where: { id },
+      where: { id: audience.id },
       data: { status: AudienceStatus.ACTIVE, archivedAt: null },
     });
   }
 
-  async deleteAudience(id: string) {
-    const org = await this.ensureOrganization();
+  async deleteAudience(tenantId: string, id: string) {
     const audience = await this.prisma.audience.findFirst({
       where: {
         id,
-        tenantId: org.id,
+        tenantId,
       },
       select: { id: true },
     });
@@ -347,10 +342,9 @@ export class AudiencesService {
     };
   }
 
-  async startCsvImport(audienceId: string, fileName: string, csvRaw: string) {
-    const org = await this.ensureOrganization();
+  async startCsvImport(tenantId: string, audienceId: string, fileName: string, csvRaw: string) {
     const audience = await this.prisma.audience.findFirst({
-      where: { id: audienceId, tenantId: org.id },
+      where: { id: audienceId, tenantId },
     });
     if (!audience) throw new NotFoundException("Audience not found");
 
@@ -358,7 +352,7 @@ export class AudiencesService {
 
     const created = await this.prisma.audienceImport.create({
       data: {
-        tenantId: org.id,
+        tenantId,
         audienceId,
         fileName,
         totalRows: rows.length,
@@ -379,19 +373,18 @@ export class AudiencesService {
 
     if (await this.isBullmqUploadEnabled()) {
       await this.enqueueImportBatch({ importId: created.id });
-      return this.getImportStatus(audienceId, created.id);
+      return this.getImportStatus(tenantId, audienceId, created.id);
     }
 
     return this.processImportBatch(created.id);
   }
 
-  async getImportStatus(audienceId: string, importId: string) {
-    const org = await this.ensureOrganization();
+  async getImportStatus(tenantId: string, audienceId: string, importId: string) {
     const job = await this.prisma.audienceImport.findFirst({
       where: {
         id: importId,
         audienceId,
-        tenantId: org.id,
+        tenantId,
       },
       select: {
         id: true,
@@ -413,14 +406,13 @@ export class AudiencesService {
   }
 
   async processImportBatch(importId: string, requestedBatchSize?: number) {
-    const org = await this.ensureOrganization();
     const job = await this.prisma.audienceImport.findFirst({
       where: {
         id: importId,
-        tenantId: org.id,
       },
       select: {
         id: true,
+        tenantId: true,
         audienceId: true,
         fileName: true,
         status: true,
@@ -442,7 +434,7 @@ export class AudiencesService {
     }
 
     const audience = await this.prisma.audience.findFirst({
-      where: { id: job.audienceId, tenantId: org.id },
+      where: { id: job.audienceId, tenantId: job.tenantId },
       select: { id: true },
     });
     if (!audience) {
@@ -492,7 +484,7 @@ export class AudiencesService {
         const fullName = row.name || row.full_name || row.first_name || null;
         const metadata = withDefaultContactable(sanitizeMetadata(row));
         const contact = this.contacts
-          ? await this.contacts.getOrCreateByPhone(org.id, phone, { fullName })
+          ? await this.contacts.getOrCreateByPhone(job.tenantId, phone, { fullName })
           : null;
         await this.prisma.audienceContact.upsert({
           where: {
@@ -508,7 +500,7 @@ export class AudiencesService {
             source: AudienceSource.CSV,
           },
           create: {
-            tenantId: org.id,
+            tenantId: job.tenantId,
             audienceId: job.audienceId,
             contactId: contact?.id,
             phoneE164: phone,
@@ -597,13 +589,11 @@ export class AudiencesService {
   }
 
   async dispatchPendingImports(limit?: number) {
-    const org = await this.ensureOrganization();
     const effectiveLimit = limit ?? this.getImportDispatchLimit();
     const boundedLimit = Math.min(Math.max(1, Math.trunc(effectiveLimit || 1)), 100);
     const batchSize = this.getImportDispatchBatchSize();
     const due = await this.prisma.audienceImport.findMany({
       where: {
-        tenantId: org.id,
         status: { in: [AudienceImportStatus.QUEUED, AudienceImportStatus.RUNNING] },
       },
       orderBy: [{ createdAt: "asc" }, { updatedAt: "asc" }],
@@ -658,7 +648,9 @@ export class AudiencesService {
     };
   }
 
-  async listContacts(audienceId: string, limit: number, offset: number) {
+  async listContacts(tenantId: string, audienceId: string, limit: number, offset: number) {
+    const a = await this.prisma.audience.findFirst({ where: { id: audienceId, tenantId } });
+    if (!a) throw new NotFoundException("Audience not found");
     const rows = await this.prisma.audienceContact.findMany({
       where: { audienceId },
       orderBy: { createdAt: "desc" },
@@ -669,7 +661,9 @@ export class AudiencesService {
     return { rows, total };
   }
 
-  async searchContacts(audienceId: string, query: string, limit: number, offset: number) {
+  async searchContacts(tenantId: string, audienceId: string, query: string, limit: number, offset: number) {
+    const a = await this.prisma.audience.findFirst({ where: { id: audienceId, tenantId } });
+    if (!a) throw new NotFoundException("Audience not found");
     const q = query.trim();
     const where: Prisma.AudienceContactWhereInput = {
       audienceId,
@@ -688,7 +682,9 @@ export class AudiencesService {
     return { rows, total };
   }
 
-  async exportContactsCsv(audienceId: string): Promise<string> {
+  async exportContactsCsv(tenantId: string, audienceId: string): Promise<string> {
+    const a = await this.prisma.audience.findFirst({ where: { id: audienceId, tenantId } });
+    if (!a) throw new NotFoundException("Audience not found");
     const contacts = await this.prisma.audienceContact.findMany({
       where: { audienceId },
       orderBy: { createdAt: "asc" },
@@ -703,7 +699,9 @@ export class AudiencesService {
     return header + lines.join("\n");
   }
 
-  async growthMetrics(audienceId: string) {
+  async growthMetrics(tenantId: string, audienceId: string) {
+    const a = await this.prisma.audience.findFirst({ where: { id: audienceId, tenantId } });
+    if (!a) throw new NotFoundException("Audience not found");
     const [total, last7] = await Promise.all([
       this.prisma.audienceContact.count({ where: { audienceId } }),
       this.prisma.audienceContact.count({
@@ -721,7 +719,9 @@ export class AudiencesService {
     };
   }
 
-  async segmentationSummary(audienceId: string) {
+  async segmentationSummary(tenantId: string, audienceId: string) {
+    const a = await this.prisma.audience.findFirst({ where: { id: audienceId, tenantId } });
+    if (!a) throw new NotFoundException("Audience not found");
     const grouped = await this.prisma.audienceContact.groupBy({
       by: ["source"],
       where: { audienceId },

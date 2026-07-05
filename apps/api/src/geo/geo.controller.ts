@@ -1,29 +1,15 @@
 import { Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { AppUserRole } from "@uprise/db";
-import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { TenantId } from "../auth/tenant-id.decorator";
 import { GeoService } from "./geo.service";
 
 @Controller("geo")
 @UseGuards(RolesGuard)
 @Roles(AppUserRole.ORGANISER)
 export class GeoController {
-  constructor(
-    private readonly config: ConfigService,
-    private readonly prisma: PrismaService,
-    private readonly geo: GeoService,
-  ) {}
-
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
+  constructor(private readonly geo: GeoService) {}
 
   @Get("status")
   status() {
@@ -36,9 +22,12 @@ export class GeoController {
   }
 
   @Get("divisions/:type/:code")
-  async divisionDetail(@Param("type") type: string, @Param("code") code: string) {
-    const org = await this.ensureOrganization();
-    return this.geo.divisionDetail(org.id, type, code);
+  async divisionDetail(
+    @TenantId() tenantId: string,
+    @Param("type") type: string,
+    @Param("code") code: string,
+  ) {
+    return this.geo.divisionDetail(tenantId, type, code);
   }
 
   @Get("states")
@@ -47,9 +36,8 @@ export class GeoController {
   }
 
   @Get("states/:code")
-  async stateDetail(@Param("code") code: string) {
-    const org = await this.ensureOrganization();
-    return this.geo.stateDetail(org.id, code);
+  async stateDetail(@TenantId() tenantId: string, @Param("code") code: string) {
+    return this.geo.stateDetail(tenantId, code);
   }
 
   /** One region's place in the containment tree: what contains it + what it
@@ -92,9 +80,12 @@ export class GeoController {
   }
 
   @Get("areas/:layer/:code/detail")
-  async areaDetail(@Param("layer") layer: string, @Param("code") code: string) {
-    const org = await this.ensureOrganization();
-    return this.geo.areaDetail(org.id, layer, code);
+  async areaDetail(
+    @TenantId() tenantId: string,
+    @Param("layer") layer: string,
+    @Param("code") code: string,
+  ) {
+    return this.geo.areaDetail(tenantId, layer, code);
   }
 
   @Get("areas")
@@ -109,12 +100,12 @@ export class GeoController {
   /** Nearest real doors to a point (the Addresses page's geocoded search pin). */
   @Get("addresses/near")
   async addressesNear(
+    @TenantId() tenantId: string,
     @Query("lat") lat?: string,
     @Query("lng") lng?: string,
     @Query("limit") limit?: string,
   ) {
-    const org = await this.ensureOrganization();
-    return this.geo.nearbyAddresses(org.id, {
+    return this.geo.nearbyAddresses(tenantId, {
       lat: Number(lat),
       lng: Number(lng),
       limit: limit ? Number(limit) : undefined,
@@ -123,14 +114,14 @@ export class GeoController {
 
   @Get("addresses")
   async addresses(
+    @TenantId() tenantId: string,
     @Query("turfId") turfId?: string,
     @Query("divisionType") divisionType?: string,
     @Query("divisionCode") divisionCode?: string,
     @Query("withoutContacts") withoutContacts?: string,
     @Query("limit") limit?: string,
   ) {
-    const org = await this.ensureOrganization();
-    return this.geo.addresses(org.id, {
+    return this.geo.addresses(tenantId, {
       turfId,
       divisionType,
       divisionCode,
@@ -142,8 +133,7 @@ export class GeoController {
   /** Trigger/queue a (re-)ingest. The heavy ETL runs via the geo CLI scripts; this
    *  marks intent + is the hook the worker/runbook reads. */
   @Post("ingest")
-  async ingest() {
-    await this.ensureOrganization();
+  async ingest(@TenantId() _tenantId: string) {
     return {
       queued: true,
       note: "Run the geo ETL on a host with disk + psql: `npm --prefix apps/api run geo:fetch && geo:load && geo:map`.",

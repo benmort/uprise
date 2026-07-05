@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { StateRegion } from "@/components/shell/state-region";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,6 +43,7 @@ export default function AnalyticsPage() {
   const [trendWindow, setTrendWindow] = useState<TrendWindow>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [noPermission, setNoPermission] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [statusDistribution, setStatusDistribution] = useState<Array<Record<string, unknown>>>([]);
   const [streamStatus, setStreamStatus] = useState("idle");
@@ -77,7 +79,8 @@ export default function AnalyticsPage() {
     getFeatureFlags().then((r) => r.ok && setWhatsappEnabled(Boolean(r.data.FEATURE_WHATSAPP_ENABLED)));
     listBlasts().then((res) => {
       if (!res.ok) {
-        setError(res.error);
+        if (res.status === 403) setNoPermission(true);
+        else setError(res.error);
         setLoading(false);
         return;
       }
@@ -229,6 +232,20 @@ export default function AnalyticsPage() {
       ...trend.map((row) => Math.max(Number(row.sent || 0), Number(row.responses || 0))),
     );
   }, [trend]);
+
+  if (noPermission) {
+    return (
+      <div className="page-stack">
+        <div>
+          <h1 className="text-3xl font-semibold">Review Blast Performance</h1>
+          <p className="text-sm text-muted-foreground">
+            Track delivery and response outcomes in near real time.
+          </p>
+        </div>
+        <StateRegion noPermission>{null}</StateRegion>
+      </div>
+    );
+  }
 
   return (
     <div className="page-stack">
@@ -458,7 +475,7 @@ export default function AnalyticsPage() {
                       </Button>
                     ) : (
                       <Button asChild variant="ghost" size="sm">
-                        <Link href={`/future/sms-inbox?contact=${encodeURIComponent(String(row.phoneE164 || ""))}`}>
+                        <Link href="/inbox">
                           View Chat
                         </Link>
                       </Button>

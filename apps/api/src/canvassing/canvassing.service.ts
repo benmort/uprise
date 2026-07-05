@@ -914,6 +914,46 @@ export class CanvassingService {
     return this.prisma.turf.update({ where: { id: turfId }, data });
   }
 
+  /** Delete a turf: release its contacts (turfId → null) and drop assignments, then delete.
+   *  Walk lists SetNull their turfId via the schema relation. */
+  async deleteTurf(tenantId: string, turfId: string) {
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
+    if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
+    return this.prisma.$transaction(async (tx) => {
+      await tx.contact.updateMany({ where: { tenantId, turfId }, data: { turfId: null } });
+      await tx.turfAssignment.deleteMany({ where: { turfId } });
+      await tx.turf.delete({ where: { id: turfId } });
+      return { deleted: true };
+    });
+  }
+
+  /** Organiser-side unassign: release the active lock on a turf (no volunteerId needed). */
+  async unassignTurf(tenantId: string, turfId: string) {
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
+    if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
+    const res = await this.prisma.turfAssignment.updateMany({
+      where: { turfId, status: TurfAssignmentStatus.ASSIGNED },
+      data: { status: TurfAssignmentStatus.RELEASED, releasedAt: new Date() },
+    });
+    return { released: res.count };
+  }
+
+  /** Move a turf's assignment to another volunteer: release the current lock, then assign.
+   *  Releasing first keeps the one-active-per-turf partial unique index satisfied. */
+  async reassignTurf(tenantId: string, turfId: string, volunteerId: string) {
+    const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId } });
+    if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
+    return this.prisma.$transaction(async (tx) => {
+      await tx.turfAssignment.updateMany({
+        where: { turfId, status: TurfAssignmentStatus.ASSIGNED },
+        data: { status: TurfAssignmentStatus.RELEASED, releasedAt: new Date() },
+      });
+      return tx.turfAssignment.create({
+        data: { turfId, volunteerId, status: TurfAssignmentStatus.ASSIGNED },
+      });
+    });
+  }
+
   /**
    * Re-bucket contacts against a turf's current boundary: claim every
    * geocoded org contact that now falls inside, and release contacts
@@ -1016,26 +1056,98 @@ export class CanvassingService {
       include: { volunteer: { select: { displayName: true } } },
     });
 
-    const flags: Array<{ id: string; volunteer: string | null; reason: string; at: Date }> = [];
+    const flags: Array<{
+      id: string;
+      doorKnockId: string;
+      kind: "NO_GPS" | "FAST_CADENCE";
+      volunteer: string | null;
+      reason: string;
+      at: Date;
+      resolved: boolean;
+      state: string | null;
+    }> = [];
     let prev: { volunteerId: string | null; at: Date } | null = null;
     for (const k of knocks) {
       if (k.lat == null || k.lng == null) {
-        flags.push({ id: k.id, volunteer: k.volunteer?.displayName ?? null, reason: "No GPS captured", at: k.createdAt });
+        flags.push({
+          id: `${k.id}:NO_GPS`,
+          doorKnockId: k.id,
+          kind: "NO_GPS",
+          volunteer: k.volunteer?.displayName ?? null,
+          reason: "No GPS captured",
+          at: k.createdAt,
+          resolved: false,
+          state: null,
+        });
       }
       if (prev && prev.volunteerId === k.volunteerId) {
         const gapSec = (k.createdAt.getTime() - prev.at.getTime()) / 1000;
         if (gapSec >= 0 && gapSec < 20) {
           flags.push({
-            id: k.id,
+            id: `${k.id}:FAST_CADENCE`,
+            doorKnockId: k.id,
+            kind: "FAST_CADENCE",
             volunteer: k.volunteer?.displayName ?? null,
             reason: `Knocked ${Math.round(gapSec)}s after previous`,
             at: k.createdAt,
+            resolved: false,
+            state: null,
           });
         }
       }
       prev = { volunteerId: k.volunteerId, at: k.createdAt };
     }
+
+    // Annotate with any organiser resolutions (keyed by doorKnockId:kind).
+    const resolutions = await this.prisma.qaFlagResolution.findMany({
+      where: { tenantId, campaignId },
+      select: { doorKnockId: true, kind: true, state: true },
+    });
+    const resByKey = new Map(resolutions.map((r) => [`${r.doorKnockId}:${r.kind}`, r.state]));
+    for (const f of flags) {
+      const state = resByKey.get(f.id);
+      if (state) {
+        f.resolved = true;
+        f.state = state;
+      }
+    }
     return { flags };
+  }
+
+  /** Record (or clear) an organiser's action on a computed QA flag. */
+  async setQaFlagResolution(
+    tenantId: string,
+    campaignId: string,
+    input: {
+      doorKnockId: string;
+      kind: "NO_GPS" | "FAST_CADENCE";
+      resolved?: boolean;
+      state?: "RESOLVED" | "DISMISSED";
+      note?: string;
+      resolvedById?: string;
+    },
+  ) {
+    if (input.resolved === false) {
+      await this.prisma.qaFlagResolution.deleteMany({
+        where: { tenantId, campaignId, doorKnockId: input.doorKnockId, kind: input.kind },
+      });
+      return { resolved: false };
+    }
+    const state = input.state ?? "RESOLVED";
+    await this.prisma.qaFlagResolution.upsert({
+      where: { doorKnockId_kind: { doorKnockId: input.doorKnockId, kind: input.kind } },
+      create: {
+        tenantId,
+        campaignId,
+        doorKnockId: input.doorKnockId,
+        kind: input.kind,
+        state,
+        note: input.note ?? null,
+        resolvedById: input.resolvedById ?? null,
+      },
+      update: { state, note: input.note ?? null, resolvedById: input.resolvedById ?? null, resolvedAt: new Date() },
+    });
+    return { resolved: true, state };
   }
 
   /** Walk lists for an org, optionally filtered to one turf, with item stats + lock. */

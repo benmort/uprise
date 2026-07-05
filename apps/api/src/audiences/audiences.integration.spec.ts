@@ -56,6 +56,7 @@ describe("AudiencesService integration-like flow", () => {
 
     const service = new AudiencesService(prismaMock, configMock);
     const started = await service.startCsvImport(
+      "org_1",
       "aud_1",
       "contacts.csv",
       csvRaw,
@@ -181,6 +182,7 @@ describe("AudiencesService integration-like flow", () => {
 
     const service = new AudiencesService(prismaMock, configMock, flags, queue as any);
     const started = await service.startCsvImport(
+      "org_1",
       "aud_1",
       "contacts.csv",
       "name,phone\nAlice,+15551234567",

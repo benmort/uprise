@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import {
@@ -11,7 +11,6 @@ import {
   updateCannedResponse,
   type CannedResponseItem,
   type CannedVisibility,
-  type DispositionDef,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +21,8 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@uprise/field";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -42,9 +43,6 @@ const EMPTY = { title: "", body: "", visibility: "ORG" as CannedVisibility, chan
 
 export default function CannedResponsesPage() {
   const { showToast } = useToast();
-  const [items, setItems] = useState<CannedResponseItem[]>([]);
-  const [dispositions, setDispositions] = useState<DispositionDef[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CannedResponseItem | null>(null);
@@ -55,16 +53,20 @@ export default function CannedResponsesPage() {
   // Filtering by SMS or DOOR each also surfaces BOTH-channel responses.
   const [channelFilter, setChannelFilter] = useState<"SMS" | "DOOR">("SMS");
 
-  const load = useCallback(async () => {
-    const [res, disp] = await Promise.all([listCannedResponses(channelFilter), listDispositions()]);
-    if (res.ok) setItems(res.data as unknown as CannedResponseItem[]);
-    if (disp.ok) setDispositions(disp.data.filter((d) => d.layer === "CONTACT_RESULT"));
-    setLoading(false);
-  }, [channelFilter]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Two lists back this page – the channel-scoped responses, plus the
+  // contact-result dispositions that populate the "logs" select. Combine their
+  // feedback states so one 403/500 surfaces for the whole surface.
+  const cr = useApi(
+    `/canned-responses?channel=${channelFilter}`,
+    () => listCannedResponses(channelFilter),
+    { ttlMs: 30_000 },
+  );
+  const disp = useApi("/dispositions", () => listDispositions(), { ttlMs: 30_000 });
+  const loading = cr.loading || disp.loading;
+  const error = cr.error ?? disp.error;
+  const noPermission = cr.noPermission || disp.noPermission;
+  const items = (cr.data ?? []) as unknown as CannedResponseItem[];
+  const dispositions = (disp.data ?? []).filter((d) => d.layer === "CONTACT_RESULT");
 
   const openCreate = () => {
     setEditing(null);
@@ -103,9 +105,9 @@ export default function CannedResponsesPage() {
       return;
     }
     setDialogOpen(false);
-    await load();
+    void cr.refetch();
     showToast({ tone: "success", title: editing ? "Canned response updated" : "Canned response added" });
-  }, [editing, form, load, showToast]);
+  }, [editing, form, cr.refetch, showToast]);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -117,9 +119,9 @@ export default function CannedResponsesPage() {
       return;
     }
     setDeleteTarget(null);
-    await load();
+    void cr.refetch();
     showToast({ tone: "success", title: "Deleted" });
-  }, [deleteTarget, load, showToast]);
+  }, [deleteTarget, cr.refetch, showToast]);
 
   return (
     <div className="page-stack">
@@ -146,9 +148,19 @@ export default function CannedResponsesPage() {
         </Button>
       </div>
 
-      {loading ? (
-        <Skeleton className="h-48 w-full" />
-      ) : (
+      <StateRegion
+        loading={loading}
+        error={error}
+        noPermission={noPermission}
+        onRetry={() => {
+          void cr.refetch();
+          void disp.refetch();
+        }}
+        empty={items.length === 0}
+        emptyTitle="No canned responses yet"
+        emptyDescription="Reusable replies for SMS and door conversations appear here."
+        skeleton={<Skeleton className="h-48 w-full" />}
+      >
         <div className="grid gap-4 md:grid-cols-3">
           {COLUMNS.map((col) => {
             const colItems = items.filter((i) => i.visibility === col.key);
@@ -205,7 +217,7 @@ export default function CannedResponsesPage() {
             );
           })}
         </div>
-      )}
+      </StateRegion>
 
       <FormDialog
         open={dialogOpen}

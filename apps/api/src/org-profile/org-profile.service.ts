@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { OrgCredential, OrgProfile, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
@@ -87,26 +86,16 @@ type SafeCredential = Omit<OrgCredential, "taxFileNumber"> & { hasTaxFileNumber:
 export class OrgProfileService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly outbox: OutboxService,
     private readonly crypto: CredentialCryptoService,
   ) {}
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
   /** The single OrgProfile for the tenant, created lazily from the tenant name. */
-  private async ensureProfile(): Promise<OrgProfile> {
-    const org = await this.ensureOrganization();
-    const existing = await this.prisma.orgProfile.findFirst({ where: { tenantId: org.id } });
+  private async ensureProfile(tenantId: string): Promise<OrgProfile> {
+    const existing = await this.prisma.orgProfile.findFirst({ where: { tenantId } });
     if (existing) return existing;
-    return this.prisma.orgProfile.create({ data: { tenantId: org.id, name: org.name } });
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    return this.prisma.orgProfile.create({ data: { tenantId, name: tenant.name } });
   }
 
   private maskCredential(c: OrgCredential | null): SafeCredential | null {
@@ -115,8 +104,8 @@ export class OrgProfileService {
     return { ...rest, hasTaxFileNumber: !!taxFileNumber };
   }
 
-  async getProfile() {
-    const profile = await this.ensureProfile();
+  async getProfile(tenantId: string) {
+    const profile = await this.ensureProfile(tenantId);
     const [contacts, addresses, credential] = await Promise.all([
       this.prisma.orgContact.findMany({ where: { orgProfileId: profile.id } }),
       this.prisma.orgAddress.findMany({ where: { orgProfileId: profile.id } }),
@@ -145,8 +134,8 @@ export class OrgProfileService {
     };
   }
 
-  async updateProfile(input: { name?: string } & OrgBrandingInput) {
-    const profile = await this.ensureProfile();
+  async updateProfile(tenantId: string, input: { name?: string } & OrgBrandingInput) {
+    const profile = await this.ensureProfile(tenantId);
     const data: Prisma.OrgProfileUpdateInput = {};
     if (input.name !== undefined && input.name.trim()) data.name = input.name.trim();
     for (const key of BRAND_KEYS) {
@@ -155,12 +144,12 @@ export class OrgProfileService {
     if (Object.keys(data).length > 0) {
       await this.prisma.orgProfile.update({ where: { id: profile.id }, data });
     }
-    return this.getProfile();
+    return this.getProfile(tenantId);
   }
 
   // ── Credential (TFN encrypted; emits an outbox event for payment sync) ──
-  async setCredential(input: OrgCredentialInput): Promise<SafeCredential> {
-    const profile = await this.ensureProfile();
+  async setCredential(tenantId: string, input: OrgCredentialInput): Promise<SafeCredential> {
+    const profile = await this.ensureProfile(tenantId);
 
     const data: Prisma.OrgCredentialUncheckedCreateInput = { orgProfileId: profile.id };
     const assign = <K extends keyof OrgCredentialInput>(key: K) => {
@@ -210,28 +199,28 @@ export class OrgProfileService {
 
   /** Backend-only: the decrypted TFN (e.g. for a regulator filing). NEVER exposed
    *  via a controller — there is no API route that returns this. */
-  async decryptTaxFileNumber(): Promise<string | null> {
-    const profile = await this.ensureProfile();
+  async decryptTaxFileNumber(tenantId: string): Promise<string | null> {
+    const profile = await this.ensureProfile(tenantId);
     const credential = await this.prisma.orgCredential.findUnique({ where: { orgProfileId: profile.id } });
     if (!credential?.taxFileNumber) return null;
     return this.crypto.decrypt(credential.taxFileNumber);
   }
 
   // ── Contacts ────────────────────────────────────────────────────────
-  async addContact(input: OrgContactInput) {
-    const profile = await this.ensureProfile();
+  async addContact(tenantId: string, input: OrgContactInput) {
+    const profile = await this.ensureProfile(tenantId);
     return this.prisma.orgContact.create({ data: { orgProfileId: profile.id, ...this.contactData(input) } });
   }
 
-  async updateContact(id: string, input: OrgContactInput) {
-    const profile = await this.ensureProfile();
+  async updateContact(tenantId: string, id: string, input: OrgContactInput) {
+    const profile = await this.ensureProfile(tenantId);
     const existing = await this.prisma.orgContact.findFirst({ where: { id, orgProfileId: profile.id } });
     if (!existing) throw new NotFoundException("Org contact not found");
     return this.prisma.orgContact.update({ where: { id }, data: this.contactData(input) });
   }
 
-  async deleteContact(id: string): Promise<{ ok: true }> {
-    const profile = await this.ensureProfile();
+  async deleteContact(tenantId: string, id: string): Promise<{ ok: true }> {
+    const profile = await this.ensureProfile(tenantId);
     const existing = await this.prisma.orgContact.findFirst({ where: { id, orgProfileId: profile.id } });
     if (!existing) throw new NotFoundException("Org contact not found");
     await this.prisma.orgContact.delete({ where: { id } });
@@ -239,20 +228,20 @@ export class OrgProfileService {
   }
 
   // ── Addresses ───────────────────────────────────────────────────────
-  async addAddress(input: OrgAddressInput) {
-    const profile = await this.ensureProfile();
+  async addAddress(tenantId: string, input: OrgAddressInput) {
+    const profile = await this.ensureProfile(tenantId);
     return this.prisma.orgAddress.create({ data: { orgProfileId: profile.id, ...input } });
   }
 
-  async updateAddress(id: string, input: OrgAddressInput) {
-    const profile = await this.ensureProfile();
+  async updateAddress(tenantId: string, id: string, input: OrgAddressInput) {
+    const profile = await this.ensureProfile(tenantId);
     const existing = await this.prisma.orgAddress.findFirst({ where: { id, orgProfileId: profile.id } });
     if (!existing) throw new NotFoundException("Org address not found");
     return this.prisma.orgAddress.update({ where: { id }, data: input });
   }
 
-  async deleteAddress(id: string): Promise<{ ok: true }> {
-    const profile = await this.ensureProfile();
+  async deleteAddress(tenantId: string, id: string): Promise<{ ok: true }> {
+    const profile = await this.ensureProfile(tenantId);
     const existing = await this.prisma.orgAddress.findFirst({ where: { id, orgProfileId: profile.id } });
     if (!existing) throw new NotFoundException("Org address not found");
     await this.prisma.orgAddress.delete({ where: { id } });

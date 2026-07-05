@@ -120,7 +120,8 @@ export class BasicAuthGuard implements CanActivate {
         : "";
   }
 
-  private hasValidStreamToken(request: Request): boolean {
+  /** Returns the token's tenantId when valid (so the SSE stream can be tenant-filtered), else null. */
+  private validateStreamToken(request: Request): string | null {
     const { secret, source } = resolveStreamTokenSecret(this.config);
     const queryToken = this.getStreamTokenFromQuery(request);
     const result = verifyStreamTokenDetailed(queryToken, secret);
@@ -133,7 +134,7 @@ export class BasicAuthGuard implements CanActivate {
         this.logger.warn(`Denied analytics stream token: ${reason}`);
         this.loggedStreamFailures.add(reason);
       }
-      return false;
+      return null;
     }
     if (source !== "STREAM_TOKEN_SECRET" && !this.warnedFallbackSecret) {
       this.logger.warn(
@@ -141,7 +142,7 @@ export class BasicAuthGuard implements CanActivate {
       );
       this.warnedFallbackSecret = true;
     }
-    return true;
+    return result.tenantId;
   }
 
   private isCronDispatchPath(request: Request): boolean {
@@ -216,7 +217,17 @@ export class BasicAuthGuard implements CanActivate {
     if (this.isPublicWebhookPath(request)) return true;
     if (this.isDevOtpPeekPath(request)) return true; // dev-only OTP hint (non-prod)
     if (this.isAuthEndpointPath(request)) return true; // login/logout issue the session
-    if (this.isAnalyticsStreamPath(request) && this.hasValidStreamToken(request)) return true;
+    if (this.isAnalyticsStreamPath(request)) {
+      const streamTenantId = this.validateStreamToken(request);
+      if (streamTenantId) {
+        // The stream is authenticated by the signed token, not a session. Surface the token's
+        // tenant so the SSE controller can filter events to it (no cross-tenant delivery).
+        (request as Request & { streamTenantId?: string }).streamTenantId = streamTenantId;
+        return true;
+      }
+      // Invalid/absent token → fall through to normal auth (throws Unauthorized), preserving
+      // the prior behaviour rather than short-circuiting to a 403.
+    }
 
     const authHeader = request.headers.authorization;
     if (this.isCronDispatchPath(request) && authHeader?.startsWith("Bearer ")) {

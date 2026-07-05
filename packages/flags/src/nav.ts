@@ -13,6 +13,7 @@
  */
 export const NAV_FLAGS = [
   // ── First level ──────────────────────────────────────────────────────
+  { key: "FEATURE_NAV_GETTING_STARTED", label: "Getting started", section: "Getting started", level: 1 },
   { key: "FEATURE_NAV_INBOX", label: "Inbox", section: "Inbox", level: 1 },
   { key: "FEATURE_NAV_CHANNELS", label: "Channels", section: "Channels", level: 1 },
   { key: "FEATURE_NAV_CANVASS", label: "Canvass", section: "Canvass", level: 1 },

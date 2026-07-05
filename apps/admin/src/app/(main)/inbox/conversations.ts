@@ -70,84 +70,10 @@ export interface Conversation {
   attachments?: Attachment[];
 }
 
-export const conversations: Conversation[] = [
-  {
-    id: '1', uid: 'priya', channel: 'Email', sender: 'Priya Nandakumar', identity: 'priya.n@gmail.com',
-    subject: 'Re: Volunteer induction this Saturday',
-    preview: "Thanks for the details — I'll be there at 9. Quick question about parking…",
-    content: `Hi team,
-
-I just signed up for the induction this Saturday — so excited to get involved again after doorknocking with you in the Bennelong drive.
-
-Thanks for the details — I'll be there at 9. Quick question about parking: is the Macarthur St entrance open on weekends, or should I use the station car park?
-
-Cheers,
-Priya`,
-    time: '8:02 am', isStarred: true, isRead: false, status: 'inbox',
-    attachments: [
-      { id: '1', name: 'Induction-pack-2024.pdf', type: 'PDF', size: '2.4 MB' },
-      { id: '2', name: 'Town-hall-site-map.png', type: 'PNG', size: '480 KB' },
-    ],
-  },
-  {
-    id: '2', uid: 'marcus', channel: 'WhatsApp', sender: 'Marcus Webb', identity: '+61 412 908 331',
-    subject: 'Phone bank shift swap',
-    preview: 'Can I swap to the Tuesday phone bank instead? Something came up Saturday 🙏',
-    content: `Hey! Something came up this Saturday 🙏
-
-Any chance I can swap onto the Tuesday phone bank instead? Happy to do a double shift if you're short on the night.`,
-    time: '7:48 am', isStarred: false, isRead: false, status: 'inbox',
-  },
-  {
-    id: '3', uid: 'deb', channel: 'Text', sender: 'Deb Castellano', identity: '+61 438 221 004',
-    subject: 'Saturday Climate Rally',
-    preview: 'YES count me in for the rally on Saturday 🙌 Can I bring my two kids?',
-    content: `YES count me in for the rally on Saturday 🙌
-
-Can I bring my two kids? They're 8 and 11 and keen as.`,
-    time: '7:31 am', isStarred: false, isRead: true, status: 'inbox',
-  },
-  {
-    id: '4', uid: 'coal-vm', channel: 'Call', sender: '+61 401 556 098', identity: '+61 401 556 098',
-    subject: 'Voicemail · 0:42', durationSec: 42,
-    preview: '“…really concerned about the new coal approval that went through this week…”',
-    content: `Hi, ah, yeah — I'm calling about the new coal approval that went through this week. I'm really concerned about it and I wanted to know what the campaign is doing about it. If someone could give me a call back that'd be great. Thanks.`,
-    time: '7:05 am', isStarred: false, isRead: true, status: 'inbox',
-  },
-  {
-    id: '5', uid: 'jordan', channel: 'Live chat', sender: 'Jordan (website)', identity: 'via website chat',
-    subject: 'Update monthly donation',
-    preview: "How do I update my monthly donation amount? I'd like to bump it from $25 to $40.",
-    content: `How do I update my monthly donation amount? I'd like to bump it from $25 to $40. Thanks!`,
-    time: 'Yesterday', isStarred: false, isRead: false, status: 'inbox',
-  },
-  {
-    id: '6', uid: 'frontline-friends', channel: 'Social', sender: '@frontline_friends', identity: '@frontline_friends',
-    subject: 'Petition link?',
-    preview: 'Loved the reel! Where do we sign the petition? 🌏',
-    content: `Loved the reel! 🌏 Where do we sign the petition? Drop the link and we'll share it around the group.`,
-    time: 'Yesterday', isStarred: false, isRead: true, status: 'inbox',
-  },
-  {
-    id: '7', uid: 'helen', channel: 'Email', sender: 'Helen Zhao', identity: 'helen.zhao@outlook.com',
-    subject: 'Receipt request for June donation',
-    preview: 'Could you please re-send the tax receipt for my June monthly donation?',
-    content: `Hi,
-
-Could you please re-send the tax receipt for my June monthly donation? I can't find the original email anywhere.
-
-Many thanks,
-Helen`,
-    time: 'Tue', isStarred: true, isRead: true, status: 'inbox',
-  },
-  {
-    id: '8', uid: 'sam', channel: 'Text', sender: 'Sam Patel', identity: '+61 470 118 552',
-    subject: 'Opted out',
-    preview: 'STOP',
-    content: `STOP`,
-    time: 'Mon', isStarred: false, isRead: true, status: 'inbox',
-  },
-];
+// Mock cross-channel seed removed — the shared inbox now renders only real SMS/WhatsApp
+// conversations from listConversations(). Email/Call/Live-chat/Social land here when their
+// backends ship (parked). Kept as an empty export so callers/merge plumbing stay inert.
+export const conversations: Conversation[] = [];
 
 /** The list-view URL for a folder. The default folder lives at the bare /inbox; the
  *  others nest under it. Conversations always keep the folder segment (see

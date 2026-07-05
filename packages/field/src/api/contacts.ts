@@ -79,3 +79,21 @@ export async function searchContacts(query: string) {
   const q = new URLSearchParams({ query });
   return request<ContactSearchResult[]>(`/contacts?${q}`);
 }
+
+export type UpdateContactInput = {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phoneE164?: string | null;
+  address?: string | null;
+  tags?: string[];
+};
+
+/** Organiser edit of a contact's profile fields (manage contacts.contact). */
+export async function updateContact(id: string, input: UpdateContactInput) {
+  return request<ContactProfile["contact"]>(`/contacts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}

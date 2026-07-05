@@ -30,6 +30,25 @@ const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
  */
 export const TENANT_CREATE_PLANS = ["starter", "growth", "scale"] as const;
 
+// Organiser getting-started steps. Kept in sync with ONBOARDING_STEP_KEYS in
+// @uprise/contracts (the admin UI + api-client hold the canonical wire shape). Stored on
+// Tenant.onboarding as an advisory JSON bag; steps merge monotonically (a completed step
+// never regresses even if the underlying data is later removed).
+const ONBOARDING_STEP_KEYS = [
+  "verifyEmail",
+  "orgProfile",
+  "inviteTeammate",
+  "connectAudience",
+  "firstCampaign",
+] as const;
+type OnboardingStep = (typeof ONBOARDING_STEP_KEYS)[number];
+export interface TenantOnboardingState {
+  version: number;
+  dismissed: boolean;
+  steps: Record<OnboardingStep, boolean>;
+  updatedAt: string | null;
+}
+
 export interface CreateTenantInput {
   slug: string;
   name: string;
@@ -159,6 +178,58 @@ export class TenantsService {
       }
       return updated;
     });
+  }
+
+  // ── Onboarding (organiser getting-started) ─────────────────────────────
+  async getOnboarding(id: string): Promise<TenantOnboardingState> {
+    const tenant = await this.getTenant(id);
+    return this.normaliseOnboarding(tenant.onboarding);
+  }
+
+  /**
+   * Merge an onboarding patch. Steps are OR-merged (monotonic — only ever flip to true);
+   * `dismissed` replaces. No outbox event: this is low-stakes advisory UI state with no
+   * cross-domain reaction, so a domain event would be ceremony (a deliberate divergence
+   * from the outbox-atomic invariant).
+   */
+  async updateOnboarding(
+    id: string,
+    patch: { dismissed?: boolean; steps?: Partial<Record<OnboardingStep, boolean>> },
+  ): Promise<TenantOnboardingState> {
+    const tenant = await this.getTenant(id);
+    const current = this.normaliseOnboarding(tenant.onboarding);
+    const steps = { ...current.steps };
+    if (patch.steps) {
+      for (const key of ONBOARDING_STEP_KEYS) {
+        if (patch.steps[key] === true) steps[key] = true;
+      }
+    }
+    const next: TenantOnboardingState = {
+      version: current.version,
+      dismissed: patch.dismissed ?? current.dismissed,
+      steps,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.prisma.tenant.update({
+      where: { id },
+      data: { onboarding: next as unknown as Prisma.InputJsonValue },
+    });
+    return next;
+  }
+
+  /** Coerce the free-form JSON column into the canonical shape (null → all-false). */
+  private normaliseOnboarding(raw: unknown): TenantOnboardingState {
+    const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    const rawSteps =
+      obj.steps && typeof obj.steps === "object" ? (obj.steps as Record<string, unknown>) : {};
+    const steps = {} as Record<OnboardingStep, boolean>;
+    for (const key of ONBOARDING_STEP_KEYS) steps[key] = rawSteps[key] === true;
+    return {
+      version: typeof obj.version === "number" ? obj.version : 1,
+      dismissed: obj.dismissed === true,
+      steps,
+      updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : null,
+    };
   }
 
   // ── Members ──────────────────────────────────────────────────────────

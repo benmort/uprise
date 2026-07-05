@@ -256,35 +256,33 @@ export class IamFlowsService {
     };
   }
 
-  /** Tenant to attribute a transactional send to: the user's first membership, else the default org. */
-  private async resolveTenantId(userId: string): Promise<string> {
+  /** Tenant to attribute a transactional send / audit event to: the user's first membership,
+   *  or null if they belong to no tenant (membership-less accounts are not attributed to a
+   *  default org — callers fail safe: skip the send / skip the tenant-scoped event). */
+  private async resolveTenantId(userId: string): Promise<string | null> {
     const membership = await this.prisma.tenantMember.findFirst({
       where: { userId },
       orderBy: { createdAt: "asc" },
     });
-    if (membership) return membership.tenantId;
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    const org = await this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-    return org.id;
+    return membership?.tenantId ?? null;
   }
 
   private async grantSession(userId: string): Promise<SessionGrant> {
     const memberships = await this.membershipsFor(userId);
-    const tenantId = memberships[0]?.tenantId ?? (await this.resolveTenantId(userId));
+    const tenantId = memberships[0]?.tenantId ?? null;
     const { token, expiresAt } = await this.sessions.create(userId, { tenantId });
-    // Sign-in audit event — every session-issuing path funnels through here (WS3).
-    await this.prisma.$transaction((tx) =>
-      this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.signed-in",
-        aggregateId: userId,
-        payload: { userId, tenantId },
-      }),
-    );
+    // Sign-in audit event — every session-issuing path funnels through here (WS3). Skipped
+    // for a membership-less sign-in (no tenant to attribute it to; they hit select-tenant).
+    if (tenantId) {
+      await this.prisma.$transaction((tx) =>
+        this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.signed-in",
+          aggregateId: userId,
+          payload: { userId, tenantId },
+        }),
+      );
+    }
     return { userId, token, expiresAt, memberships };
   }
 
@@ -293,13 +291,14 @@ export class IamFlowsService {
   async requestMagicLink(email: string): Promise<{ ok: true }> {
     const normalised = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email: normalised } });
-    if (user) {
+    const tenantId = user ? await this.resolveTenantId(user.id) : null;
+    if (user && tenantId) {
       const token = this.newToken();
       await this.prisma.magicLink.create({
         data: { userId: user.id, token, expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS) },
       });
       await this.dispatchAuthEmail({
-        tenantId: await this.resolveTenantId(user.id),
+        tenantId,
         toAddress: user.email,
         templateKey: "magic_link",
         vars: { link: this.link("sign-in/magic-link", token) },
@@ -328,13 +327,14 @@ export class IamFlowsService {
   async forgotPassword(email: string): Promise<{ ok: true }> {
     const normalised = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email: normalised } });
-    if (user) {
+    const tenantId = user ? await this.resolveTenantId(user.id) : null;
+    if (user && tenantId) {
       const token = this.newToken();
       await this.prisma.passwordReset.create({
         data: { userId: user.id, token, expiresAt: new Date(Date.now() + RESET_TTL_MS) },
       });
       await this.dispatchAuthEmail({
-        tenantId: await this.resolveTenantId(user.id),
+        tenantId,
         toAddress: user.email,
         templateKey: "recovery",
         vars: { link: this.link("reset-password", token) },
@@ -367,12 +367,16 @@ export class IamFlowsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: reset.userId }, data: { passwordHash } });
       await tx.passwordReset.update({ where: { id: reset.id }, data: { consumedAt: new Date() } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.password-reset",
-        aggregateId: reset.userId,
-        payload: { userId: reset.userId, tenantId },
-      });
+      // The reset itself is user-level; the audit event is tenant-scoped, so skip it for a
+      // membership-less user rather than attributing to a default org.
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.password-reset",
+          aggregateId: reset.userId,
+          payload: { userId: reset.userId, tenantId },
+        });
+      }
     });
     // A reset invalidates every existing session for that user.
     await this.sessions.revokeAllForUser(reset.userId);
@@ -382,13 +386,14 @@ export class IamFlowsService {
   // ── Email verification (code) ───────────────────────────────────────
   async sendEmailVerification(email: string): Promise<{ ok: true }> {
     const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-    if (user && !user.emailVerified) {
+    const tenantId = user ? await this.resolveTenantId(user.id) : null;
+    if (user && !user.emailVerified && tenantId) {
       const code = this.newCode();
       await this.prisma.mobileVerification.create({
         data: { userId: user.id, code, expiresAt: new Date(Date.now() + VERIFY_CODE_TTL_MS) },
       });
       await this.dispatchAuthEmail({
-        tenantId: await this.resolveTenantId(user.id),
+        tenantId,
         toAddress: user.email,
         templateKey: "verification",
         vars: { code },
@@ -410,12 +415,14 @@ export class IamFlowsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
       await tx.user.update({ where: { id: user.id }, data: { emailVerified: true } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.email-verified",
-        aggregateId: user.id,
-        payload: { userId: user.id, tenantId },
-      });
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.email-verified",
+          aggregateId: user.id,
+          payload: { userId: user.id, tenantId },
+        });
+      }
     });
     return { ok: true };
   }
@@ -435,9 +442,10 @@ export class IamFlowsService {
     const record = await this.prisma.mobileVerification.create({
       data: { userId, code, expiresAt: new Date(Date.now() + TWOFA_CODE_TTL_MS) },
     });
-    if (recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
+    const tenantId = await this.resolveTenantId(userId);
+    if (tenantId && recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
       await this.sendOtpSms({
-        tenantId: await this.resolveTenantId(userId),
+        tenantId,
         toPhone: user.mobile,
         body: `Your verification code is ${code}`,
         purpose: "2fa",
@@ -523,9 +531,10 @@ export class IamFlowsService {
     const record = await this.prisma.mobileVerification.create({
       data: { userId: user?.id ?? null, mobile, code, expiresAt: new Date(Date.now() + PHONE_LOGIN_TTL_MS) },
     });
-    if (user && !user.deletedAt && recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
+    const tenantId = user ? await this.resolveTenantId(user.id) : null;
+    if (user && tenantId && !user.deletedAt && recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
       await this.sendOtpSms({
-        tenantId: await this.resolveTenantId(user.id),
+        tenantId,
         toPhone: mobile,
         body: `Your sign-in code is ${code}`,
         purpose: "phone_login",
@@ -602,12 +611,14 @@ export class IamFlowsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
       await tx.user.update({ where: { id: userId }, data: { mobileVerified: true } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.mobile-verified",
-        aggregateId: userId,
-        payload: { userId, tenantId },
-      });
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.mobile-verified",
+          aggregateId: userId,
+          payload: { userId, tenantId },
+        });
+      }
     });
     return { ok: true };
   }
@@ -619,12 +630,14 @@ export class IamFlowsService {
     const tenantId = await this.resolveTenantId(userId);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { twofaEnabled: true } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.2fa-enabled",
-        aggregateId: userId,
-        payload: { userId, tenantId },
-      });
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.2fa-enabled",
+          aggregateId: userId,
+          payload: { userId, tenantId },
+        });
+      }
     });
     return { ok: true };
   }
@@ -633,12 +646,14 @@ export class IamFlowsService {
     const tenantId = await this.resolveTenantId(userId);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { twofaEnabled: false } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.2fa-disabled",
-        aggregateId: userId,
-        payload: { userId, tenantId },
-      });
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.2fa-disabled",
+          aggregateId: userId,
+          payload: { userId, tenantId },
+        });
+      }
     });
     return { ok: true };
   }
@@ -657,12 +672,14 @@ export class IamFlowsService {
     const tenantId = await this.resolveTenantId(userId);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { passwordHash } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.password-reset",
-        aggregateId: userId,
-        payload: { userId, tenantId },
-      });
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.password-reset",
+          aggregateId: userId,
+          payload: { userId, tenantId },
+        });
+      }
     });
     // Changing the password invalidates other sessions; the caller keeps theirs.
     await this.sessions.revokeAllForUser(userId);
@@ -682,12 +699,14 @@ export class IamFlowsService {
     const tenantId = await this.resolveTenantId(userId);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { email, emailVerified: false } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.email-changed",
-        aggregateId: userId,
-        payload: { userId, tenantId, newEmail: email },
-      });
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.email-changed",
+          aggregateId: userId,
+          payload: { userId, tenantId, newEmail: email },
+        });
+      }
     });
     // Send a fresh verification code to the new address.
     await this.sendEmailVerification(email);
@@ -722,12 +741,14 @@ export class IamFlowsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { deletedAt: new Date() } });
       await tx.tenantMember.deleteMany({ where: { userId } });
-      await this.outbox.append(tx, {
-        tenantId,
-        eventType: "iam.user.deleted",
-        aggregateId: userId,
-        payload: { userId, tenantId },
-      });
+      if (tenantId) {
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "iam.user.deleted",
+          aggregateId: userId,
+          payload: { userId, tenantId },
+        });
+      }
     });
     await this.sessions.revokeAllForUser(userId);
     return { ok: true };

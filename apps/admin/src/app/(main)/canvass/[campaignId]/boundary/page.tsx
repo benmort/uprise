@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StateRegion } from "@/components/shell/state-region";
 import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { listDivisions, type AreaLevel, type Division, type DivisionType } from "@/lib/api/geo";
@@ -44,6 +45,9 @@ export default function CampaignBoundaryPage() {
   const [boundary, setBoundary] = useState<GeoJSON.Geometry | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [noPermission, setNoPermission] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   // Division picker
   const [divType, setDivType] = useState<DivisionType>("sed");
@@ -53,6 +57,9 @@ export default function CampaignBoundaryPage() {
   // Load the existing boundary + its sources.
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setLoadError("");
+    setNoPermission(false);
     void getCampaignBoundary(campaignId).then((res) => {
       if (!alive) return;
       if (res.ok) {
@@ -67,13 +74,17 @@ export default function CampaignBoundaryPage() {
         setDivisions(
           src.filter((s): s is Extract<BoundarySource, { kind: "division" }> => s.kind === "division").map((s) => ({ type: s.type, code: s.code, name: s.code })),
         );
+      } else if (res.status === 403) {
+        setNoPermission(true);
+      } else {
+        setLoadError(res.error);
       }
       setLoading(false);
     });
     return () => {
       alive = false;
     };
-  }, [campaignId]);
+  }, [campaignId, reloadToken]);
 
   // Divisions of the chosen type for the picker (filtered client-side).
   useEffect(() => {
@@ -132,6 +143,30 @@ export default function CampaignBoundaryPage() {
   const existing: ExistingTurf[] = boundary
     ? [{ id: "boundary", name: "Campaign boundary", geometry: boundary, color: "#465fff" }]
     : [];
+
+  if (noPermission || loadError) {
+    return (
+      <div className="page-stack">
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/canvass">
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Canvass
+            </Link>
+          </Button>
+          <h1 className="text-2xl font-extrabold">Campaign boundary</h1>
+        </div>
+        <StateRegion
+          error={loadError}
+          noPermission={noPermission}
+          onRetry={() => setReloadToken((t) => t + 1)}
+          errorTitle="Can't load boundary"
+        >
+          {null}
+        </StateRegion>
+      </div>
+    );
+  }
 
   return (
     <div className="page-stack">

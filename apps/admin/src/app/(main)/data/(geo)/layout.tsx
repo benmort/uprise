@@ -96,8 +96,15 @@ function GeoExplorerChrome() {
     return () => clearTimeout(t);
   }, [input]);
 
-  // Kind switches carry the search term (?q) but drop the per-kind ?view/?tab.
-  const kindHref = (base: string) => (input.trim() ? `${base}?q=${encodeURIComponent(input.trim())}` : base);
+  // Kind switches carry the search term (?q) AND the current view (?view) so the
+  // List/Map selection stays put across Divisions/States/Areas/Addresses (a valid
+  // ?view= wins over the target kind's saved default). The per-kind ?tab still drops.
+  const kindHref = (base: string) => {
+    const params = new URLSearchParams();
+    if (input.trim()) params.set("q", input.trim());
+    params.set("view", view);
+    return `${base}?${params.toString()}`;
+  };
 
   // The view toggle writes ?view= (Next 14.2 syncs history.replaceState into
   // useSearchParams – no router call needed) and signals the page hook to

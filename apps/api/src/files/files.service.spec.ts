@@ -21,8 +21,7 @@ function setup() {
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const outbox = { append: jest.fn() } as any;
-  const config = { get: jest.fn((_key: string, fallback?: unknown) => fallback) } as any;
-  const svc = new FilesService(prisma, outbox, config);
+  const svc = new FilesService(prisma, outbox);
   return { svc, prisma, outbox };
 }
 
@@ -45,7 +44,7 @@ describe("FilesService", () => {
       prisma.storedFile.findMany.mockResolvedValue(rows);
       prisma.storedFile.count.mockResolvedValue(7);
 
-      const result = await svc.list();
+      const result = await svc.list("t1");
 
       expect(result).toEqual({ rows, total: 7 });
       expect(prisma.storedFile.findMany).toHaveBeenCalledWith({
@@ -60,20 +59,20 @@ describe("FilesService", () => {
     it("clamps take to 1–100 and skip to ≥0", async () => {
       const { svc, prisma } = setup();
 
-      await svc.list({ take: 500, skip: -3 });
+      await svc.list("t1", { take: 500, skip: -3 });
       expect(prisma.storedFile.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 100, skip: 0 }));
 
-      await svc.list({ take: 0, skip: 25 });
+      await svc.list("t1", { take: 0, skip: 25 });
       expect(prisma.storedFile.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1, skip: 25 }));
 
-      await svc.list({ take: Number.NaN, skip: Number.NaN });
+      await svc.list("t1", { take: Number.NaN, skip: Number.NaN });
       expect(prisma.storedFile.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 50, skip: 0 }));
     });
 
     it("filters rows AND total by folder when one is given", async () => {
       const { svc, prisma } = setup();
 
-      await svc.list({ folder: "logos" });
+      await svc.list("t1", { folder: "logos" });
 
       const where = { tenantId: "t1", folder: "logos" };
       expect(prisma.storedFile.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
@@ -83,7 +82,7 @@ describe("FilesService", () => {
     it("maps the __none__ sentinel to folder IS NULL (unfoldered files)", async () => {
       const { svc, prisma } = setup();
 
-      await svc.list({ folder: "__none__" });
+      await svc.list("t1", { folder: "__none__" });
 
       const where = { tenantId: "t1", folder: null };
       expect(prisma.storedFile.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
@@ -111,7 +110,7 @@ describe("FilesService", () => {
           { folder: null, _count: { _all: 8 }, _sum: { sizeBytes: 6000 } },
         ]);
 
-      const result = await svc.summary();
+      const result = await svc.summary("t1");
 
       expect(result.totalCount).toBe(12);
       expect(result.totalBytes).toBe(6350);
@@ -135,7 +134,7 @@ describe("FilesService", () => {
     it("returns all five zeroed category buckets for an empty tenant", async () => {
       const { svc } = setup();
 
-      const result = await svc.summary();
+      const result = await svc.summary("t1");
 
       expect(result).toEqual({
         totalCount: 0,
@@ -172,7 +171,7 @@ describe("FilesService", () => {
     it("stores a trimmed folder on the row and emits the uploaded event in the transaction", async () => {
       const { svc, prisma, outbox } = setup();
 
-      const row = await svc.upload(pngUpload, "  Campaign Assets ");
+      const row = await svc.upload("t1", pngUpload, "  Campaign Assets ");
 
       expect(prisma.storedFile.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ tenantId: "t1", folder: "Campaign Assets" }) }),
@@ -187,8 +186,8 @@ describe("FilesService", () => {
     it("stores null when the folder is absent or blank", async () => {
       const { svc, prisma } = setup();
 
-      await svc.upload(pngUpload);
-      await svc.upload(pngUpload, "   ");
+      await svc.upload("t1", pngUpload);
+      await svc.upload("t1", pngUpload, "   ");
 
       for (const call of prisma.storedFile.create.mock.calls) {
         expect(call[0].data.folder).toBeNull();
@@ -198,7 +197,7 @@ describe("FilesService", () => {
     it("rejects a folder longer than 64 characters without touching blob storage", async () => {
       const { svc, prisma } = setup();
 
-      await expect(svc.upload(pngUpload, "a".repeat(65))).rejects.toThrow(BadRequestException);
+      await expect(svc.upload("t1", pngUpload, "a".repeat(65))).rejects.toThrow(BadRequestException);
       expect(put).not.toHaveBeenCalled();
       expect(prisma.storedFile.create).not.toHaveBeenCalled();
     });
@@ -206,17 +205,17 @@ describe("FilesService", () => {
     it("rejects folder names with disallowed characters", async () => {
       const { svc } = setup();
 
-      await expect(svc.upload(pngUpload, "bad/section")).rejects.toThrow(BadRequestException);
-      await expect(svc.upload(pngUpload, "emoji 🎉")).rejects.toThrow(BadRequestException);
-      await expect(svc.upload(pngUpload, "dots.are.out")).rejects.toThrow(BadRequestException);
+      await expect(svc.upload("t1", pngUpload, "bad/section")).rejects.toThrow(BadRequestException);
+      await expect(svc.upload("t1", pngUpload, "emoji 🎉")).rejects.toThrow(BadRequestException);
+      await expect(svc.upload("t1", pngUpload, "dots.are.out")).rejects.toThrow(BadRequestException);
       expect(put).not.toHaveBeenCalled();
     });
 
     it("accepts letters, numbers, spaces, dashes and underscores up to 64 chars", async () => {
       const { svc, prisma } = setup();
 
-      await svc.upload(pngUpload, "My_Folder-2 v3");
-      await svc.upload(pngUpload, "b".repeat(64));
+      await svc.upload("t1", pngUpload, "My_Folder-2 v3");
+      await svc.upload("t1", pngUpload, "b".repeat(64));
 
       expect(prisma.storedFile.create.mock.calls[0][0].data.folder).toBe("My_Folder-2 v3");
       expect(prisma.storedFile.create.mock.calls[1][0].data.folder).toBe("b".repeat(64));

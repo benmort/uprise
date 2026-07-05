@@ -1,7 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { PrismaService } from "../prisma/prisma.service";
-import { EmailService } from "../email/email.service";
+import { SendGridService } from "../email/sendgrid.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 
 export interface ContactInput {
@@ -25,53 +24,32 @@ export interface NewsletterInput {
 }
 
 /**
- * Marketing site form intake (meld doc 12 / prog marketing-client). Public, pre-tenant:
- * each submission notifies the marketing inbox via the existing transactional email
- * templates (contact_form / demo_request / newsletter), attributed to the default org.
- * No consent gating — this is inbound service mail, not outbound marketing.
+ * Marketing site form intake. Public and pre-tenant: submissions have no owning tenant,
+ * so nothing is persisted — each form emails the platform contact address instead
+ * (PLATFORM_CONTACT_EMAIL, default contact@upriselabs.org). Sent via the platform SendGrid
+ * sender (no per-tenant sender, no Email row). No consent gating — inbound service mail.
  */
 @Injectable()
 export class MarketingService {
   constructor(
-    private readonly prisma: PrismaService,
     private readonly config: ConfigService,
-    private readonly email: EmailService,
+    private readonly sendgrid: SendGridService,
     private readonly logger: DomainLogger,
   ) {}
 
-  private async defaultTenantId(): Promise<string> {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    const org = await this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-    return org.id;
-  }
-
   private notifyAddress(): string {
-    return this.config.get<string>("MARKETING_NOTIFY_EMAIL", "").trim() || "hello@example.org";
+    return this.config.get<string>("PLATFORM_CONTACT_EMAIL", "").trim() || "contact@upriselabs.org";
   }
 
-  private async notify(templateKey: string, purpose: string, message: string): Promise<{ ok: true }> {
-    const tenantId = await this.defaultTenantId();
+  private async notify(purpose: string, subject: string, message: string): Promise<{ ok: true }> {
     try {
-      await this.email.sendTransactional({
-        tenantId,
-        toAddress: this.notifyAddress(),
-        templateKey,
-        vars: { message, subject: purpose, body: message },
-        purpose,
-      });
+      await this.sendgrid.send({ to: this.notifyAddress(), subject, body: message });
     } catch (err) {
-      // Public marketing forms must not surface infra errors to the visitor. Email
-      // delivery (e.g. SendGrid) may be unconfigured; the Email row already records
-      // the submission, so log and degrade to success rather than 500 the form.
-      this.logger.warn(
-        "marketing",
-        `Notify email failed for ${purpose}; submission recorded but not delivered`,
-        { templateKey, error: err instanceof Error ? err.message : String(err) },
-      );
+      // Public marketing forms must not surface infra errors to the visitor. SendGrid may
+      // be unconfigured; log and degrade to success rather than 500 the form.
+      this.logger.warn("marketing", `Notify email failed for ${purpose}`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
     return { ok: true };
   }
@@ -87,7 +65,7 @@ export class MarketingService {
     ]
       .filter((l) => l !== null)
       .join("\n");
-    return this.notify("contact_form", "contact_form", message);
+    return this.notify("contact_form", `Contact form: ${input.subject || input.name}`, message);
   }
 
   requestDemo(input: DemoRequestInput): Promise<{ ok: true }> {
@@ -102,10 +80,10 @@ export class MarketingService {
     ]
       .filter((l) => l !== null)
       .join("\n");
-    return this.notify("demo_request", "demo_request", message);
+    return this.notify("demo_request", `Demo request: ${input.name}`, message);
   }
 
   newsletterSignup(input: NewsletterInput): Promise<{ ok: true }> {
-    return this.notify("newsletter", "newsletter_signup", `Newsletter signup: ${input.email}`);
+    return this.notify("newsletter_signup", "Newsletter signup", `Newsletter signup: ${input.email}`);
   }
 }

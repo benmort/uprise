@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Header,
+  Logger,
   Post,
   Req,
   UnauthorizedException,
@@ -27,6 +28,8 @@ const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>
 
 @Controller()
 export class WebhooksController {
+  private readonly logger = new Logger(WebhooksController.name);
+
   constructor(
     private readonly config: ConfigService,
     private readonly inbox: InboxService,
@@ -158,6 +161,16 @@ export class WebhooksController {
     const resolution = await this.telephonyAuth.resolveInbound(toParsed.phoneE164);
     this.validateTwilioSignature(req, body as Record<string, unknown>, resolution.authToken);
 
+    // Fail closed: an inbound to a number not provisioned to any tenant has no owner to
+    // attribute it to. Drop it (ack 200 so the provider doesn't retry) rather than land
+    // it on a shared default org — that would leak cross-tenant.
+    if (!resolution.tenantId) {
+      this.logger.warn(
+        `Dropping inbound message to unprovisioned number ${toParsed.phoneE164} (from ${fromParsed.phoneE164}) — no tenant`,
+      );
+      return TWIML_EMPTY;
+    }
+
     const text = String(body?.Body || "");
     const messageSid = String(body?.MessageSid || "");
     const hasMedia = Number(body?.NumMedia || "0") > 0;
@@ -170,7 +183,7 @@ export class WebhooksController {
       channel: fromParsed.channel,
       mediaUrl: hasMedia ? body?.MediaUrl0 || null : null,
       mediaContentType: hasMedia ? body?.MediaContentType0 || null : null,
-      tenantId: resolution.tenantId ?? undefined,
+      tenantId: resolution.tenantId,
     });
     return TWIML_EMPTY;
   }

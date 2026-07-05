@@ -4,6 +4,7 @@ import { Type } from "class-transformer";
 import { IsInt, IsOptional, IsString } from "class-validator";
 import { FilesService } from "./files.service";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 
 // Tenant file manager — owner/admin surface (granted via `manage tenant.all`).
 const MANAGE = { action: "manage", resource: "tenant.files" } as const;
@@ -21,14 +22,14 @@ export class FilesController {
 
   @Get()
   @RequirePermission(READ)
-  list(@Query() query: ListFilesQueryDto) {
-    return this.files.list(query);
+  list(@TenantId() tenantId: string, @Query() query: ListFilesQueryDto) {
+    return this.files.list(tenantId, query);
   }
 
   @Get("summary")
   @RequirePermission(READ)
-  summary() {
-    return this.files.summary();
+  summary(@TenantId() tenantId: string) {
+    return this.files.summary(tenantId);
   }
 
   @Post()
@@ -37,15 +38,16 @@ export class FilesController {
   // bodies are rejected by multer instead of OOMing the process.
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: 50 * 1024 * 1024 } }))
   upload(
+    @TenantId() tenantId: string,
     @UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string; size?: number },
     @Body("folder") folder?: string,
   ) {
-    return this.files.upload(file, folder);
+    return this.files.upload(tenantId, file, folder);
   }
 
   @Delete(":id")
   @RequirePermission(MANAGE)
-  remove(@Param("id") id: string) {
-    return this.files.remove(id);
+  remove(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.files.remove(tenantId, id);
   }
 }

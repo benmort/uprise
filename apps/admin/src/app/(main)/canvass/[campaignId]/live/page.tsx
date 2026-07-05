@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { AlertTriangle, ArrowLeft, Bell, DoorOpen, Radio, Users } from "lucide-react";
-import { getCampaignLive, type CampaignLive } from "@/lib/api/campaigns";
+import { getCampaignLive } from "@/lib/api/campaigns";
 import { broadcastPush } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/ui/field";
@@ -27,9 +28,13 @@ function ago(iso: string | null): string {
 export default function LiveWarRoomPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const { showToast } = useToast();
-  const [live, setLive] = useState<CampaignLive | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  // Poll the live snapshot every 10s (paused when the tab is hidden). useApi keeps prior
+  // data on a failed refresh but still surfaces error/no-permission distinctly.
+  const { data: live, loading, error, noPermission, refetch } = useApi(
+    `/canvass/${campaignId}/live`,
+    () => getCampaignLive(campaignId),
+    { refetchInterval: 10_000 },
+  );
   const [broadcastOpen, setBroadcastOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -52,32 +57,31 @@ export default function LiveWarRoomPage() {
     );
   }
 
-  // Poll the live snapshot (the codebase refreshes lists by polling).
-  useEffect(() => {
-    let alive = true;
-    const tick = async () => {
-      const res = await getCampaignLive(campaignId);
-      if (!alive) return;
-      if (!res.ok) setError(res.error);
-      else {
-        setLive(res.data);
-        setError("");
-      }
-      setLoading(false);
-    };
-    void tick();
-    const timer = window.setInterval(tick, 10_000);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, [campaignId]);
-
-  if (loading) return <div className="page-stack"><Skeleton className="h-64 w-full" /></div>;
-  if (error && !live) {
-    return <div className="page-stack"><EmptyState title="Can't load live view" description={error} /></div>;
+  if (!live) {
+    return (
+      <div className="page-stack">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/canvass">
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Canvass
+            </Link>
+          </Button>
+          <h1 className="text-2xl font-extrabold">Live</h1>
+        </div>
+        <StateRegion
+          loading={loading}
+          error={error}
+          noPermission={noPermission}
+          onRetry={() => void refetch()}
+          errorTitle="Can't load live view"
+          skeleton={<Skeleton className="h-64 w-full" />}
+        >
+          {null}
+        </StateRegion>
+      </div>
+    );
   }
-  if (!live) return null;
 
   const out = live.volunteers.length;
   const idle = live.volunteers.filter((c) => c.idle);

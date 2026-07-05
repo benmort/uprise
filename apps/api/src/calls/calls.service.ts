@@ -43,21 +43,12 @@ export class CallsService {
     private readonly logger: DomainLogger,
   ) {}
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
   /**
    * Place an outbound call: write the INITIATED row + outbox event atomically,
    * then dispatch via Twilio and bind the provider CallSid. A dispatch failure
    * marks the row FAILED (INITIATED→FAILED is legal) and rethrows.
    */
-  async initiate(input: InitiateCallInput): Promise<Call> {
+  async initiate(tenantId: string, input: InitiateCallInput): Promise<Call> {
     const toNumber = input.toNumber.trim();
     if (!E164_RE.test(toNumber)) throw new BadRequestException("toNumber must be E.164");
     const fromNumber =
@@ -67,12 +58,11 @@ export class CallsService {
     if (fromNumber && !E164_RE.test(fromNumber)) {
       throw new BadRequestException("fromNumber must be E.164");
     }
-    const org = await this.ensureOrganization();
 
     const call = await this.prisma.$transaction(async (tx) => {
       const created = await tx.call.create({
         data: {
-          tenantId: org.id,
+          tenantId,
           contactId: input.contactId ?? null,
           toNumber,
           fromNumber: fromNumber || "",
@@ -80,10 +70,10 @@ export class CallsService {
         },
       });
       await this.outbox.append(tx, {
-        tenantId: org.id,
+        tenantId,
         eventType: "telephony.call.initiated",
         aggregateId: created.id,
-        payload: { callId: created.id, tenantId: org.id, toNumber },
+        payload: { callId: created.id, tenantId, toNumber },
       });
       return created;
     });
@@ -164,18 +154,16 @@ export class CallsService {
     }
   }
 
-  async listCalls(limit = 50): Promise<Call[]> {
-    const org = await this.ensureOrganization();
+  async listCalls(tenantId: string, limit = 50): Promise<Call[]> {
     return this.prisma.call.findMany({
-      where: { tenantId: org.id },
+      where: { tenantId },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 200),
     });
   }
 
-  async getCall(id: string): Promise<Call> {
-    const org = await this.ensureOrganization();
-    const call = await this.prisma.call.findFirst({ where: { id, tenantId: org.id } });
+  async getCall(tenantId: string, id: string): Promise<Call> {
+    const call = await this.prisma.call.findFirst({ where: { id, tenantId } });
     if (!call) throw new NotFoundException("Call not found");
     return call;
   }

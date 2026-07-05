@@ -16,6 +16,7 @@ import { TenantsService, TENANT_CREATE_PLANS } from "./tenants.service";
 import { IamFlowsService } from "../auth/iam-flows.service";
 import type { AuthUser } from "../auth/auth-user";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { SuperAdmin } from "../auth/super-admin.decorator";
 import {
   AddMemberDto,
   ApproveJoinRequestDto,
@@ -24,6 +25,7 @@ import {
   CreateTenantDto,
   RejectJoinRequestDto,
   UpdateMemberRoleDto,
+  UpdateOnboardingDto,
   UpdateTenantDto,
 } from "./dto/tenants.dto";
 
@@ -35,6 +37,10 @@ const TENANT_MANAGE = { action: "manage", resource: "tenant.tenant" } as const;
 const TENANT_READ = { action: "read", resource: "tenant.tenant" } as const;
 const MEMBER_MANAGE = { action: "manage", resource: "tenant.member" } as const;
 const INVITE_MANAGE = { action: "manage", resource: "tenant.invitation" } as const;
+// Onboarding rides the org-profile permission: read is held by every tenant member; manage
+// by OWNER (via tenant.all) + ORGANISER — the exact gate for the getting-started surface.
+const ORG_PROFILE_READ = { action: "read", resource: "tenant.org-profile" } as const;
+const ORG_PROFILE_MANAGE = { action: "manage", resource: "tenant.org-profile" } as const;
 
 @Controller("tenants")
 export class TenantsController {
@@ -113,12 +119,11 @@ export class TenantsController {
   }
 
   // Super-admin search across ALL tenants (powers the feature-flag override editor).
-  // Declared before :id so "search" isn't captured as a tenant id; the explicit
-  // isSuperAdmin check is the real gate (TENANT_READ alone is held by organisers too).
+  // Declared before :id so "search" isn't captured as a tenant id. @SuperAdmin is the gate
+  // (TENANT_READ alone is held by organisers too).
   @Get("search")
-  @RequirePermission(TENANT_READ)
-  search(@Query("q") q: string | undefined, @Req() req: Request & { user?: AuthUser }) {
-    if (!req.user?.isSuperAdmin) throw new ForbiddenException("Super-admin only");
+  @SuperAdmin()
+  search(@Query("q") q: string | undefined) {
     return this.tenants.searchTenants(q);
   }
 
@@ -138,6 +143,26 @@ export class TenantsController {
   @RequirePermission(TENANT_MANAGE)
   remove(@Param("id") id: string) {
     return this.tenants.deleteTenant(id);
+  }
+
+  // Organiser getting-started progress. assertOwnTenant stops an organiser of tenant A
+  // reading/patching tenant B via the URL (CASL checks the action, not the instance).
+  @Get(":id/onboarding")
+  @RequirePermission(ORG_PROFILE_READ)
+  getOnboarding(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    this.assertOwnTenant(req, id);
+    return this.tenants.getOnboarding(id);
+  }
+
+  @Patch(":id/onboarding")
+  @RequirePermission(ORG_PROFILE_MANAGE)
+  updateOnboarding(
+    @Param("id") id: string,
+    @Body() dto: UpdateOnboardingDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    this.assertOwnTenant(req, id);
+    return this.tenants.updateOnboarding(id, dto);
   }
 
   @Get(":id/members")

@@ -223,6 +223,9 @@ export default function AudienceShowPage() {
         <CardContent className="space-y-4">
           {loading && !audience ? null : (
             <>
+              {loading && audience ? (
+                <p className="text-xs text-muted-foreground">Loading…</p>
+              ) : null}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] border-collapse text-sm">
                   <thead>

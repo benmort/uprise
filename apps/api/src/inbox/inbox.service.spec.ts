@@ -1,4 +1,3 @@
-import { ConfigService } from "@nestjs/config";
 import { BlastRecipientStatus } from "@uprise/db";
 import { InboxService } from "./inbox.service";
 
@@ -13,12 +12,6 @@ describe("InboxService", () => {
     conversationState: { upsert: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
     user: { findMany: jest.fn() },
   } as any;
-  const config = {
-    get: jest.fn((key: string, fallback?: string) => {
-      if (key === "DEFAULT_ORGANIZATION_SLUG") return "default";
-      return fallback;
-    }),
-  } as unknown as ConfigService;
   const twilio = {
     getLatestByContact: jest.fn(),
     getMessagesForPhoneNumber: jest.fn(),
@@ -70,7 +63,6 @@ describe("InboxService", () => {
     sessionWindow.isOpen.mockResolvedValue(true);
     service = new InboxService(
       prisma,
-      config,
       twilio,
       { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
       events,
@@ -98,6 +90,7 @@ describe("InboxService", () => {
     prisma.blastRecipient.updateMany.mockResolvedValue({ count: 1 });
 
     await service.recordInbound({
+      tenantId: "org_1",
       from: "+1 (555) 000-0001",
       to: "+1 (555) 000-0000",
       body: "Yes, I am interested",
@@ -143,7 +136,7 @@ describe("InboxService", () => {
         }),
       }),
     );
-    expect(events.emit).toHaveBeenCalledWith("inbox.inbound", {
+    expect(events.emit).toHaveBeenCalledWith("inbox.inbound", "org_1", {
       contactPhone: "+15550000001",
       blastId: "blast_1",
       body: "Yes, I am interested",
@@ -162,6 +155,7 @@ describe("InboxService", () => {
     prisma.blastRecipient.updateMany.mockResolvedValue({ count: 0 });
 
     await service.recordInbound({
+      tenantId: "org_1",
       from: "+15550000001",
       to: "+15550000000",
       body: "Checking in",
@@ -176,6 +170,7 @@ describe("InboxService", () => {
     prisma.outboundMessage.findFirst.mockResolvedValue(null);
 
     await service.recordInbound({
+      tenantId: "org_1",
       from: "+15550000009",
       to: "+15550000000",
       body: "Hello",
@@ -192,7 +187,7 @@ describe("InboxService", () => {
     );
     expect(prisma.blastRecipient.updateMany).not.toHaveBeenCalled();
     expect(prisma.analyticsSnapshot.create).not.toHaveBeenCalled();
-    expect(events.emit).toHaveBeenCalledWith("inbox.inbound", {
+    expect(events.emit).toHaveBeenCalledWith("inbox.inbound", "org_1", {
       contactPhone: "+15550000009",
       blastId: null,
       body: "Hello",
@@ -232,7 +227,7 @@ describe("InboxService", () => {
       },
     });
 
-    const rows = await service.listConversations();
+    const rows = await service.listConversations("org_1");
     expect(rows).toHaveLength(3);
     expect(rows.map((row) => row.contactPhone)).toEqual([
       "+15550000002",
@@ -290,7 +285,7 @@ describe("InboxService", () => {
       ],
     });
 
-    const thread = await service.getThread("+15550000001");
+    const thread = await service.getThread("org_1", "+15550000001");
     expect(thread.messages).toHaveLength(3);
     const sidMessages = thread.messages.filter(
       (row: any) => row.id === "SM_DUP" || row.sid === "SM_DUP",
@@ -312,7 +307,7 @@ describe("InboxService", () => {
     });
     prisma.conversationState.upsert.mockResolvedValue({});
 
-    await service.reply("+15550000001", "Thanks");
+    await service.reply("org_1", "+15550000001", "Thanks");
 
     expect(prisma.conversationState.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -326,7 +321,7 @@ describe("InboxService", () => {
   describe("ownership (E2)", () => {
     it("claims a conversation for a user and resolves the owner name", async () => {
       prisma.user.findMany.mockResolvedValue([{ id: "u1", displayName: "Ada", email: "a@b.c" }]);
-      const res = await service.claimConversation("+15550000001", "u1", "SMS");
+      const res = await service.claimConversation("org_1", "+15550000001", "u1", "SMS");
       expect(prisma.conversationState.upsert).toHaveBeenCalledWith(
         expect.objectContaining({ update: expect.objectContaining({ ownerId: "u1" }) }),
       );
@@ -334,7 +329,7 @@ describe("InboxService", () => {
     });
 
     it("releases a conversation (clears the owner)", async () => {
-      const res = await service.releaseConversation("+15550000001", "SMS");
+      const res = await service.releaseConversation("org_1", "+15550000001", "SMS");
       expect(prisma.conversationState.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: { ownerId: null, claimedAt: null } }),
       );

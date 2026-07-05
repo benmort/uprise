@@ -168,7 +168,7 @@ export class EngagementService {
         recordedById: input.recordedById ?? null,
       },
     });
-    this.events.emit("engagement.disposition", {
+    this.events.emit("engagement.disposition", tenantId, {
       contactId: input.contactId,
       code: input.code,
       channel: input.channel,
@@ -227,7 +227,7 @@ export class EngagementService {
       return created;
     });
 
-    this.events.emit("engagement.answer", {
+    this.events.emit("engagement.answer", tenantId, {
       contactId: input.contactId,
       questionId: input.questionId,
       channel: input.channel,
@@ -284,7 +284,7 @@ export class EngagementService {
       await this.journeys.handleTrigger(type, payload);
     } catch (error) {
       // A journey failure must never break the engagement write that triggered it.
-      this.events.emit("journey.trigger_error", { type, error: String(error) });
+      this.events.emit("journey.trigger_error", payload.tenantId, { type, error: String(error) });
     }
   }
 }

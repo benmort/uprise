@@ -83,6 +83,33 @@ export class ReleaseTurfDto {
   volunteerId!: string;
 }
 
+/** Organiser reassigns a turf to a different volunteer (release current + assign new). */
+export class ReassignTurfDto {
+  @IsString()
+  volunteerId!: string;
+}
+
+/** Organiser actions a computed QA flag. `resolved: false` clears a prior resolution. */
+export class ResolveQaFlagDto {
+  @IsString()
+  doorKnockId!: string;
+
+  @IsIn(["NO_GPS", "FAST_CADENCE"])
+  kind!: "NO_GPS" | "FAST_CADENCE";
+
+  @IsOptional()
+  @IsBoolean()
+  resolved?: boolean;
+
+  @IsOptional()
+  @IsIn(["RESOLVED", "DISMISSED"])
+  state?: "RESOLVED" | "DISMISSED";
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
 export class CreateVolunteerDto {
   @IsString()
   displayName!: string;

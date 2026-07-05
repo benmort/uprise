@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
 import { MessageTemplateService } from "./message-template.service";
 import { CreateMessageTemplateDto, UpdateMessageTemplateDto } from "./dto/message-template.dto";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 
 // Transactional template management (meld doc 09/12). Gated on messaging.template;
 // organiser/owner hold `manage messaging.all`.
@@ -15,25 +16,25 @@ export class MessageTemplateController {
 
   @Post()
   @RequirePermission(CREATE)
-  create(@Body() dto: CreateMessageTemplateDto) {
-    return this.templates.create(dto);
+  create(@TenantId() tenantId: string, @Body() dto: CreateMessageTemplateDto) {
+    return this.templates.create(tenantId, dto);
   }
 
   @Get()
   @RequirePermission(READ)
-  list() {
-    return this.templates.list();
+  list(@TenantId() tenantId: string) {
+    return this.templates.list(tenantId);
   }
 
   @Get(":id")
   @RequirePermission(READ)
-  get(@Param("id") id: string) {
-    return this.templates.get(id);
+  get(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.templates.get(tenantId, id);
   }
 
   @Patch(":id")
   @RequirePermission(UPDATE)
-  update(@Param("id") id: string, @Body() dto: UpdateMessageTemplateDto) {
-    return this.templates.update(id, dto);
+  update(@TenantId() tenantId: string, @Param("id") id: string, @Body() dto: UpdateMessageTemplateDto) {
+    return this.templates.update(tenantId, id, dto);
   }
 }

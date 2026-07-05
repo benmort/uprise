@@ -11,7 +11,6 @@ import {
   updateSurvey,
   type QuestionType,
   type Survey,
-  type SurveyListItem,
   type SurveyQuestion,
 } from "@/lib/api/engagement";
 import { listDispositions, type DispositionDef } from "@/lib/api";
@@ -22,8 +21,9 @@ import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@uprise/field";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -64,10 +64,14 @@ function validateSurvey(questions: SurveyQuestion[]): string | null {
 
 export default function SurveysPage() {
   const { showToast } = useToast();
-  const [list, setList] = useState<SurveyListItem[]>([]);
+  const { data, loading, error, noPermission, refetch } = useApi(
+    "/surveys",
+    () => listSurveys(),
+    { ttlMs: 30_000 },
+  );
+  const list = data ?? [];
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<Survey | null>(null);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dispositions, setDispositions] = useState<DispositionDef[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -75,19 +79,16 @@ export default function SurveysPage() {
   const [creating, setCreating] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const loadList = useCallback(async () => {
-    const res = await listSurveys();
-    if (res.ok) {
-      setList(res.data);
-      setSelectedId((cur) => cur || res.data[0]?.id || "");
-    }
-    setLoading(false);
-  }, []);
-
+  // Auto-select the first survey once the list arrives.
   useEffect(() => {
-    void loadList();
+    setSelectedId((cur) => cur || data?.[0]?.id || "");
+  }, [data]);
+
+  // Dispositions populate the per-option select – a secondary lookup, not a
+  // page-blocking state.
+  useEffect(() => {
     void listDispositions().then((r) => r.ok && setDispositions(r.data.filter((d) => d.layer === "CONTACT_RESULT")));
-  }, [loadList]);
+  }, []);
 
   useEffect(() => {
     if (!selectedId) {
@@ -112,9 +113,9 @@ export default function SurveysPage() {
       return;
     }
     setCreateOpen(false);
-    await loadList();
+    void refetch();
     setSelectedId(res.data.id);
-  }, [newName, loadList, showToast]);
+  }, [newName, refetch, showToast]);
 
   const patchQuestion = (qi: number, patch: Partial<SurveyQuestion>) => {
     if (!draft) return;
@@ -143,9 +144,9 @@ export default function SurveysPage() {
       return;
     }
     setDraft(res.data);
-    await loadList();
+    void refetch();
     showToast({ tone: "success", title: "Survey saved" });
-  }, [draft, loadList, showToast]);
+  }, [draft, refetch, showToast]);
 
   const handleDelete = useCallback(async () => {
     if (!draft) return;
@@ -155,14 +156,12 @@ export default function SurveysPage() {
     setDeleteOpen(false);
     if (res.ok) {
       setSelectedId("");
-      await loadList();
+      void refetch();
       showToast({ tone: "success", title: "Survey deleted" });
     } else {
       showToast({ tone: "error", title: "Couldn't delete", description: res.error });
     }
-  }, [draft, loadList, showToast]);
-
-  if (loading) return <div className="page-stack"><Skeleton className="h-64 w-full" /></div>;
+  }, [draft, refetch, showToast]);
 
   return (
     <div className="page-stack">
@@ -180,14 +179,16 @@ export default function SurveysPage() {
         </Button>
       </div>
 
-      {list.length === 0 ? (
-        <EmptyState
-          title="No surveys yet"
-          description="Author once — each option becomes a door button and a text reply."
-          ctaLabel="New survey"
-          onCta={openCreate}
-        />
-      ) : (
+      <StateRegion
+        loading={loading}
+        error={error}
+        noPermission={noPermission}
+        onRetry={() => void refetch()}
+        empty={list.length === 0}
+        emptyTitle="No surveys yet"
+        emptyDescription="Author once – each option becomes a door button and a text reply."
+        skeleton={<Skeleton className="h-64 w-full" />}
+      >
         <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
           <div className="space-y-2">
             {list.map((s) => (
@@ -358,7 +359,7 @@ export default function SurveysPage() {
             </div>
           ) : null}
         </div>
-      )}
+      </StateRegion>
 
       <FormDialog
         open={createOpen}

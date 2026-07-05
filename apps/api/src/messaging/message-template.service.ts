@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreateMessageTemplateDto, UpdateMessageTemplateDto } from "./dto/message-template.dto";
@@ -9,19 +8,7 @@ const TEMPLATE_VAR_RE = /\{\{\s*(\w+)\s*\}\}/g;
 /** CRUD for transactional message templates (meld doc 09/12). */
 @Injectable()
 export class MessageTemplateService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {}
-
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   private extractBodyVars(body: string): string[] {
     const used = new Set<string>();
@@ -49,12 +36,11 @@ export class MessageTemplateService {
     }
   }
 
-  async create(dto: CreateMessageTemplateDto) {
-    const org = await this.ensureOrganization();
+  async create(tenantId: string, dto: CreateMessageTemplateDto) {
     this.assertVariablesDeclared(dto.body, dto.variables);
     return this.prisma.messageTemplate.create({
       data: {
-        tenantId: org.id,
+        tenantId,
         key: dto.key,
         body: dto.body,
         ...(dto.channel ? { channel: dto.channel } : {}),
@@ -68,25 +54,23 @@ export class MessageTemplateService {
     });
   }
 
-  async list() {
-    const org = await this.ensureOrganization();
+  async list(tenantId: string) {
     return this.prisma.messageTemplate.findMany({
-      where: { tenantId: org.id },
+      where: { tenantId },
       orderBy: { updatedAt: "desc" },
     });
   }
 
-  async get(id: string) {
-    const org = await this.ensureOrganization();
+  async get(tenantId: string, id: string) {
     const template = await this.prisma.messageTemplate.findFirst({
-      where: { id, tenantId: org.id },
+      where: { id, tenantId },
     });
     if (!template) throw new NotFoundException("Message template not found");
     return template;
   }
 
-  async update(id: string, dto: UpdateMessageTemplateDto) {
-    const existing = await this.get(id);
+  async update(tenantId: string, id: string, dto: UpdateMessageTemplateDto) {
+    const existing = await this.get(tenantId, id);
     const body = dto.body ?? existing.body;
     const variables =
       dto.variables ?? this.asStringArray(existing.variables);

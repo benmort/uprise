@@ -4,6 +4,7 @@ import { Type } from "class-transformer";
 import { PaymentService } from "./payment.service";
 import { StripeService } from "./stripe.service";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 
 class LineItemDto {
   @IsString() @MaxLength(120) price!: string;
@@ -43,10 +44,10 @@ export class PaymentController {
 
   @Post("checkout-session")
   @RequirePermission(MANAGE)
-  async checkout(@Body() dto: CheckoutSessionDto) {
+  async checkout(@TenantId() tenantId: string, @Body() dto: CheckoutSessionDto) {
     // EnsureCustomer (doc 08): resolve/create the tenant's Stripe customer when the
     // caller didn't pin one, so checkout always binds to a customer.
-    const customer = dto.customer ?? (await this.payment.ensureCustomer());
+    const customer = dto.customer ?? (await this.payment.ensureCustomer(tenantId));
     return this.stripe.createCheckoutSession({ ...dto, customer });
   }
 
@@ -58,58 +59,64 @@ export class PaymentController {
 
   @Get("payments")
   @RequirePermission(READ)
-  payments() {
-    return this.payment.listPayments();
+  payments(@TenantId() tenantId: string) {
+    return this.payment.listPayments(tenantId);
   }
 
   @Get("payments/:id")
   @RequirePermission(READ)
-  getPayment(@Param("id") id: string) {
-    return this.payment.getPayment(id);
+  getPayment(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.payment.getPayment(tenantId, id);
   }
 
   @Get("payments/:id/refunds")
   @RequirePermission(READ)
-  refunds(@Param("id") id: string) {
-    return this.payment.listRefunds(id);
+  refunds(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.payment.listRefunds(tenantId, id);
   }
 
   @Get("invoices")
   @RequirePermission(READ)
-  invoices() {
-    return this.payment.listInvoices();
+  invoices(@TenantId() tenantId: string) {
+    return this.payment.listInvoices(tenantId);
   }
 
   @Get("subscriptions")
   @RequirePermission(READ)
-  subscriptions() {
-    return this.payment.listSubscriptions();
+  subscriptions(@TenantId() tenantId: string) {
+    return this.payment.listSubscriptions(tenantId);
   }
 
   @Get("payment-methods")
   @RequirePermission(READ)
-  paymentMethods() {
-    return this.payment.listPaymentMethods();
+  paymentMethods(@TenantId() tenantId: string) {
+    return this.payment.listPaymentMethods(tenantId);
   }
 
   @Post("payment-methods")
   @RequirePermission(MANAGE)
-  async attachPaymentMethod(@Body() dto: AttachPaymentMethodDto) {
-    await this.payment.attachPaymentMethod(dto.providerMethodId);
+  async attachPaymentMethod(@TenantId() tenantId: string, @Body() dto: AttachPaymentMethodDto) {
+    await this.payment.attachPaymentMethod(tenantId, dto.providerMethodId);
     return { ok: true };
   }
 
   @Delete("payment-methods/:providerMethodId")
   @RequirePermission(MANAGE)
-  async detachPaymentMethod(@Param("providerMethodId") providerMethodId: string) {
-    await this.payment.detachPaymentMethod(providerMethodId);
+  async detachPaymentMethod(
+    @TenantId() tenantId: string,
+    @Param("providerMethodId") providerMethodId: string,
+  ) {
+    await this.payment.detachPaymentMethod(tenantId, providerMethodId);
     return { ok: true };
   }
 
   @Post("payment-methods/:providerMethodId/default")
   @RequirePermission(MANAGE)
-  async setDefaultPaymentMethod(@Param("providerMethodId") providerMethodId: string) {
-    await this.payment.setDefaultPaymentMethod(providerMethodId);
+  async setDefaultPaymentMethod(
+    @TenantId() tenantId: string,
+    @Param("providerMethodId") providerMethodId: string,
+  ) {
+    await this.payment.setDefaultPaymentMethod(tenantId, providerMethodId);
     return { ok: true };
   }
 }

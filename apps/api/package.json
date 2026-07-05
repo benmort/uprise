@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit --pretty false",
     "typecheck": "tsc --noEmit --pretty false",
     "test": "jest",
+    "test:cov": "jest --coverage",
     "test:watch": "jest --watch",
     "test:e2e": "jest --config jest-e2e.config.ts --runInBand",
     "prisma:generate": "pnpm --filter @uprise/db run prisma:generate",
@@ -21,6 +22,7 @@
     "seed:clear": "ts-node src/scripts/seed-demo.ts --clear",
     "seed:plans": "ts-node src/scripts/seed-plans.ts",
     "seed:admin": "ts-node src/scripts/seed-admin-user.ts",
+    "reset:tenants": "ts-node src/scripts/reset-to-tenants.ts",
     "geo:map": "ts-node src/scripts/geo/map.ts",
     "geo:load-boundaries": "ts-node src/scripts/geo/load-boundaries.ts"
   },

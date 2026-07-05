@@ -1,6 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { HttpStatus, Injectable } from "@nestjs/common";
 import { Contact, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
+import { ApiHttpException } from "../common/http/api-response";
 import { normalizeAddress } from "../common/utils/address.utils";
 
 export type ContactSeed = {
@@ -523,6 +524,59 @@ export class ContactsService {
     if (contact.lng == null && seed.lng != null) data.lng = seed.lng;
     if (Object.keys(data).length === 0) return contact;
     return this.prisma.contact.update({ where: { id: contact.id }, data });
+  }
+
+  /**
+   * Organiser edit of a contact's profile fields. Destructive (unlike enrich): a provided
+   * field overwrites, `null` clears. Tags live under `metadata.tags`. Recomputes addressNorm.
+   * A phone/email that collides with the org's dedup indexes surfaces as a 409.
+   * Plain write (no outbox) — consistent with the rest of this service; add an event here
+   * if a downstream reaction ever needs contact edits.
+   */
+  async updateContact(
+    tenantId: string,
+    contactId: string,
+    input: {
+      firstName?: string | null;
+      lastName?: string | null;
+      email?: string | null;
+      phoneE164?: string | null;
+      address?: string | null;
+      tags?: string[];
+    },
+  ): Promise<Contact> {
+    const existing = await this.prisma.contact.findFirst({ where: { id: contactId, tenantId } });
+    if (!existing) throw new ApiHttpException("CONTACT_NOT_FOUND", "Contact not found", HttpStatus.NOT_FOUND);
+
+    const data: Prisma.ContactUpdateInput = {};
+    if (input.firstName !== undefined) data.firstName = input.firstName;
+    if (input.lastName !== undefined) data.lastName = input.lastName;
+    if (input.email !== undefined) data.email = input.email;
+    if (input.phoneE164 !== undefined) data.phoneE164 = input.phoneE164;
+    if (input.address !== undefined) {
+      data.address = input.address;
+      data.addressNorm = input.address ? normalizeAddress(input.address) : null;
+    }
+    if (input.tags !== undefined) {
+      const meta =
+        existing.metadata && typeof existing.metadata === "object" && !Array.isArray(existing.metadata)
+          ? (existing.metadata as Record<string, unknown>)
+          : {};
+      data.metadata = { ...meta, tags: input.tags } as Prisma.InputJsonValue;
+    }
+
+    try {
+      return await this.prisma.contact.update({ where: { id: contactId }, data });
+    } catch (error) {
+      if (this.isUniqueConflict(error)) {
+        throw new ApiHttpException(
+          "CONTACT_CONFLICT",
+          "Another contact already uses that phone or email",
+          HttpStatus.CONFLICT,
+        );
+      }
+      throw error;
+    }
   }
 
   private resolveName(seed: ContactSeed): { firstName: string | null; lastName: string | null } {

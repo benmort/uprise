@@ -18,6 +18,12 @@ export class UpsertIntegrationConnectionDto {
   baseUrl?: string;
 }
 
+/** Disconnect / reconnect a connection by flipping its status. */
+export class UpdateConnectionStatusDto {
+  @IsIn(["ACTIVE", "INACTIVE"])
+  status!: "ACTIVE" | "INACTIVE";
+}
+
 export class TestIntegrationConnectionDto {
   @IsIn(["ACTION_NETWORK", "INTERNAL"])
   type!: "ACTION_NETWORK" | "INTERNAL";

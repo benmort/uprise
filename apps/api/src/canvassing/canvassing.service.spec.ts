@@ -38,6 +38,11 @@ describe("CanvassingService", () => {
         findFirst: jest.fn(),
         update: jest.fn(async ({ data }: any) => ({ id: "s1", ...data })),
       },
+      qaFlagResolution: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        upsert: jest.fn(async ({ create }: any) => ({ id: "qfr1", ...create })),
+      },
       contact: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -265,6 +270,29 @@ describe("CanvassingService", () => {
       prisma.turf.findMany.mockResolvedValue([]);
       const { flags } = await service.qaReview("org1", "c1");
       expect(flags).toEqual([]);
+    });
+
+    it("annotates flags that have a resolution", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      const base = new Date("2026-06-17T10:00:00Z").getTime();
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k1", volunteerId: "u1", lat: null, lng: null, createdAt: new Date(base), volunteer: { displayName: "Ada" } },
+      ]);
+      prisma.qaFlagResolution.findMany.mockResolvedValue([
+        { doorKnockId: "k1", kind: "NO_GPS", state: "RESOLVED" },
+      ]);
+      const { flags } = await service.qaReview("org1", "c1");
+      const gps = flags.find((f) => f.kind === "NO_GPS");
+      expect(gps?.resolved).toBe(true);
+      expect(gps?.state).toBe("RESOLVED");
+    });
+
+    it("records and clears a flag resolution", async () => {
+      await service.setQaFlagResolution("org1", "c1", { doorKnockId: "k1", kind: "NO_GPS", state: "DISMISSED" });
+      expect(prisma.qaFlagResolution.upsert).toHaveBeenCalled();
+      const cleared = await service.setQaFlagResolution("org1", "c1", { doorKnockId: "k1", kind: "NO_GPS", resolved: false });
+      expect(prisma.qaFlagResolution.deleteMany).toHaveBeenCalled();
+      expect(cleared).toEqual({ resolved: false });
     });
   });
 

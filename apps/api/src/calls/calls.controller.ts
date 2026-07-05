@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
 import { CallsService } from "./calls.service";
 import { InitiateCallDto } from "./dto/call.dto";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 
 // Voice calling is an organiser/owner domain (meld doc 09). Gated on telephony.call;
 // `manage telephony.all` (organiser/owner) and `read telephony.all` (member) cover it.
@@ -14,19 +15,19 @@ export class CallsController {
 
   @Post()
   @RequirePermission(OPERATE)
-  initiate(@Body() dto: InitiateCallDto) {
-    return this.calls.initiate(dto);
+  initiate(@TenantId() tenantId: string, @Body() dto: InitiateCallDto) {
+    return this.calls.initiate(tenantId, dto);
   }
 
   @Get()
   @RequirePermission(READ)
-  list(@Query("limit") limit?: string) {
-    return this.calls.listCalls(limit ? Number(limit) : undefined);
+  list(@TenantId() tenantId: string, @Query("limit") limit?: string) {
+    return this.calls.listCalls(tenantId, limit ? Number(limit) : undefined);
   }
 
   @Get(":id")
   @RequirePermission(READ)
-  get(@Param("id") id: string) {
-    return this.calls.getCall(id);
+  get(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.calls.getCall(tenantId, id);
   }
 }

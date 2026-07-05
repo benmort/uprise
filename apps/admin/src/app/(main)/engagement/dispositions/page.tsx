@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import {
@@ -17,6 +17,8 @@ import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { SectionCard } from "@uprise/field";
 import { SupportPill } from "@uprise/field";
 import { SUPPORT_ORDER } from "@uprise/field";
@@ -30,8 +32,12 @@ function slugify(label: string): string {
 
 export default function DispositionsPage() {
   const { showToast } = useToast();
-  const [defs, setDefs] = useState<DispositionDef[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, noPermission, refetch } = useApi(
+    "/dispositions",
+    () => listDispositions(),
+    { ttlMs: 30_000 },
+  );
+  const defs = data ?? [];
 
   // Create/edit dialog state.
   const [editing, setEditing] = useState<DispositionDef | null>(null);
@@ -42,16 +48,6 @@ export default function DispositionsPage() {
   const [channel, setChannel] = useState<Channel>("BOTH");
   const [busy, setBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DispositionDef | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await listDispositions();
-    if (res.ok) setDefs(res.data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const contact = defs.filter((d) => d.layer === "CONTACT_RESULT");
   const terminal = defs.filter((d) => d.layer !== "CONTACT_RESULT");
@@ -91,9 +87,9 @@ export default function DispositionsPage() {
       return;
     }
     setDialogOpen(false);
-    await load();
+    void refetch();
     showToast({ tone: "success", title: editing ? "Disposition updated" : "Disposition added", description: label.trim() });
-  }, [editing, label, code, channel, load, showToast]);
+  }, [editing, label, code, channel, refetch, showToast]);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -105,9 +101,9 @@ export default function DispositionsPage() {
       return;
     }
     setDeleteTarget(null);
-    await load();
+    void refetch();
     showToast({ tone: "success", title: "Deleted" });
-  }, [deleteTarget, load, showToast]);
+  }, [deleteTarget, refetch, showToast]);
 
   const editable = (d: DispositionDef) => !d.isLocked && d.tenantId !== null;
 
@@ -123,9 +119,16 @@ export default function DispositionsPage() {
         <h1 className="text-2xl font-extrabold">Dispositions</h1>
       </div>
 
-      {loading ? (
-        <Skeleton className="h-64 w-full" />
-      ) : (
+      <StateRegion
+        loading={loading}
+        error={error}
+        noPermission={noPermission}
+        onRetry={() => void refetch()}
+        empty={defs.length === 0}
+        emptyTitle="No dispositions yet"
+        emptyDescription="Contact-result codes and locked system defaults appear here."
+        skeleton={<Skeleton className="h-64 w-full" />}
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <SectionCard
             title="Contact results"
@@ -188,7 +191,7 @@ export default function DispositionsPage() {
             </ul>
           </SectionCard>
         </div>
-      )}
+      </StateRegion>
 
       <SectionCard title="Support-level scale" description="The campaign-defined support dimension.">
         <div className="flex flex-wrap gap-2">

@@ -35,6 +35,11 @@ describe("BlastsService integration-like flow", () => {
           status: BlastStatus.PROOFED,
           proofedAt: alreadyProofedAt,
         }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: "blast_proofed",
+          status: BlastStatus.PROOFED,
+          proofedAt: alreadyProofedAt,
+        }),
         update: jest.fn(),
       },
     };
@@ -50,7 +55,7 @@ describe("BlastsService integration-like flow", () => {
       consentMock,
     );
 
-    const result = await service.markProofed("blast_proofed");
+    const result = await service.markProofed("org_1", "blast_proofed");
     expect(result.status).toBe(BlastStatus.PROOFED);
     expect(result.proofedAt).toEqual(alreadyProofedAt);
     expect(prismaMock.blast.update).not.toHaveBeenCalled();
@@ -160,7 +165,7 @@ describe("BlastsService integration-like flow", () => {
       consentMock,
     );
 
-    const created = await service.createDraft({
+    const created = await service.createDraft("org_1", {
       title: "Campaign",
       audienceId: "aud_1",
       bodyTemplate: "Hi {{first_name}}",
@@ -888,6 +893,14 @@ describe("BlastsService integration-like flow", () => {
           tenantId: "org_1",
           startedAt: null,
         }),
+        findFirst: jest.fn().mockResolvedValue({
+          id: "blast_1",
+          status: BlastStatus.PROOFED,
+          audienceId: "aud_1",
+          bodyTemplate: "Hi there",
+          tenantId: "org_1",
+          startedAt: null,
+        }),
         findMany: jest.fn().mockResolvedValue([{ id: "blast_1", scheduledFor: new Date() }]),
       },
     };
@@ -908,7 +921,7 @@ describe("BlastsService integration-like flow", () => {
       queue as any,
     );
 
-    const sendResult = await service.requestSendNow("blast_1");
+    const sendResult = await service.requestSendNow("org_1", "blast_1");
     expect(sendResult).toEqual(
       expect.objectContaining({
         queued: true,
@@ -916,7 +929,7 @@ describe("BlastsService integration-like flow", () => {
       }),
     );
 
-    const retryResult = await service.requestRetryFailed("blast_1");
+    const retryResult = await service.requestRetryFailed("org_1", "blast_1");
     expect(retryResult).toEqual(
       expect.objectContaining({
         blastId: "blast_1",

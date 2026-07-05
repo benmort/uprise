@@ -1,46 +1,49 @@
 import { MarketingService } from "./marketing.service";
 
 function setup() {
-  const prisma: any = { tenant: { upsert: jest.fn(async () => ({ id: "t1", slug: "default" })) } };
   const config = {
-    get: jest.fn((k: string, fb?: string) =>
-      k === "MARKETING_NOTIFY_EMAIL" ? "hello@getup.org.au" : fb ?? "",
-    ),
+    get: jest.fn((_k: string, fb?: string) => fb ?? ""),
   } as any;
-  const email = { sendTransactional: jest.fn(async () => ({ id: "e1" })) } as any;
+  const sendgrid = { send: jest.fn(async () => undefined) } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const svc = new MarketingService(prisma, config, email, logger);
-  return { svc, email };
+  const svc = new MarketingService(config, sendgrid, logger);
+  return { svc, sendgrid };
 }
 
+// The marketing forms are pre-tenant: nothing is persisted. Each form emails the
+// platform contact address (PLATFORM_CONTACT_EMAIL, default contact@upriselabs.org)
+// via the platform SendGrid sender, so the specs assert on sendgrid.send, not a DB write.
 describe("MarketingService", () => {
-  it("submitContact emails the marketing inbox via the contact_form template", async () => {
-    const { svc, email } = setup();
+  it("submitContact emails the platform contact address with the submission body", async () => {
+    const { svc, sendgrid } = setup();
     await svc.submitContact({ name: "Ada", email: "ada@x.y", company: "Acme", message: "hi" });
-    const call = email.sendTransactional.mock.calls[0][0];
-    expect(call.toAddress).toBe("hello@getup.org.au");
-    expect(call.templateKey).toBe("contact_form");
-    expect(call.vars.message).toContain("Ada");
-    expect(call.vars.message).toContain("hi");
+    const call = sendgrid.send.mock.calls[0][0];
+    expect(call.to).toBe("contact@upriselabs.org");
+    expect(call.subject).toContain("Contact form");
+    expect(call.body).toContain("Ada");
+    expect(call.body).toContain("hi");
   });
 
-  it("requestDemo uses the demo_request template", async () => {
-    const { svc, email } = setup();
+  it("requestDemo emails a demo-request subject", async () => {
+    const { svc, sendgrid } = setup();
     await svc.requestDemo({ name: "Ada", email: "ada@x.y", useCase: "Texting" });
-    expect(email.sendTransactional.mock.calls[0][0].templateKey).toBe("demo_request");
+    const call = sendgrid.send.mock.calls[0][0];
+    expect(call.to).toBe("contact@upriselabs.org");
+    expect(call.subject).toContain("Demo request");
+    expect(call.body).toContain("Texting");
   });
 
-  it("newsletterSignup uses the newsletter template", async () => {
-    const { svc, email } = setup();
+  it("newsletterSignup emails a newsletter-signup notice", async () => {
+    const { svc, sendgrid } = setup();
     await svc.newsletterSignup({ email: "ada@x.y" });
-    const call = email.sendTransactional.mock.calls[0][0];
-    expect(call.templateKey).toBe("newsletter");
-    expect(call.vars.message).toContain("ada@x.y");
+    const call = sendgrid.send.mock.calls[0][0];
+    expect(call.subject).toContain("Newsletter signup");
+    expect(call.body).toContain("ada@x.y");
   });
 
   it("degrades to success (no throw) when notify email delivery fails", async () => {
-    const { svc, email } = setup();
-    email.sendTransactional.mockRejectedValueOnce(new Error("SendGrid is not configured"));
+    const { svc, sendgrid } = setup();
+    sendgrid.send.mockRejectedValueOnce(new Error("SendGrid is not configured"));
     await expect(svc.newsletterSignup({ email: "ada@x.y" })).resolves.toEqual({ ok: true });
   });
 });

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, ListOrdered, Lock, RefreshCw, UserPlus } from "lucide-react";
+import { ArrowLeft, ListOrdered, Lock, RefreshCw, UserMinus, UserPlus } from "lucide-react";
 import {
   assignTurf,
   createWalkList,
@@ -11,12 +11,15 @@ import {
   listTurfContacts,
   listTurfs,
   listWalkLists,
+  reassignTurf,
+  unassignTurf,
   updateWalkList,
   type TurfContact,
   type TurfSummary,
   type WalkListSummary,
 } from "@/lib/api";
 import { optimiseRoute, type Stop, WalkView, type CanvassAssignment } from "@uprise/field";
+import { FormSelect } from "@uprise/ui";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +29,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionCard } from "@uprise/field";
+import { StateRegion } from "@/components/shell/state-region";
 import { Pencil } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
@@ -53,6 +57,8 @@ export default function WalkListBuilderPage() {
   const [selectedVolunteer, setSelectedVolunteer] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [noPermission, setNoPermission] = useState(false);
 
   const [showPreview, setShowPreview] = useState(false);
   const [editingWl, setEditingWl] = useState<WalkListSummary | null>(null);
@@ -61,23 +67,28 @@ export default function WalkListBuilderPage() {
 
   const activeTurf = turfs.find((t) => t.id === turfId) ?? null;
 
-  // Bootstrap: turfs + volunteers.
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const [t, c] = await Promise.all([listTurfs(campaignId), listVolunteers()]);
-      if (!alive) return;
-      if (t.ok) {
-        setTurfs(t.data);
-        setTurfId((cur) => cur || t.data[0]?.id || "");
-      }
-      if (c.ok) setVolunteers(c.data);
+  // Bootstrap: turfs + volunteers. Surfaces load failures instead of swallowing
+  // them – turfs is the primary resource, so its error drives the page state.
+  const bootstrap = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setNoPermission(false);
+    const [t, c] = await Promise.all([listTurfs(campaignId), listVolunteers()]);
+    if (!t.ok) {
+      setNoPermission(t.status === 403);
+      setError(t.error);
       setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
+      return;
+    }
+    setTurfs(t.data);
+    setTurfId((cur) => cur || t.data[0]?.id || "");
+    if (c.ok) setVolunteers(c.data);
+    setLoading(false);
   }, [campaignId]);
+
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
 
   const optimise = useCallback((cs: TurfContact[]) => {
     const stops: Stop[] = cs.map((c) => ({ id: c.id, lat: c.lat ?? NaN, lng: c.lng ?? NaN }));
@@ -193,6 +204,35 @@ export default function WalkListBuilderPage() {
     showToast({ tone: "success", title: "Turf assigned" });
   }, [turfId, selectedVolunteer, campaignId, loadTurf, showToast]);
 
+  const handleUnassign = useCallback(async () => {
+    if (!turfId) return;
+    setBusy(true);
+    const res = await unassignTurf(turfId);
+    setBusy(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't unassign turf", description: res.error });
+      return;
+    }
+    const [t] = await Promise.all([listTurfs(campaignId), loadTurf()]);
+    if (t.ok) setTurfs(t.data);
+    showToast({ tone: "success", title: "Turf unassigned" });
+  }, [turfId, campaignId, loadTurf, showToast]);
+
+  const handleReassign = useCallback(async () => {
+    if (!turfId || !selectedVolunteer) return;
+    setBusy(true);
+    const res = await reassignTurf(turfId, selectedVolunteer);
+    setBusy(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't reassign turf", description: res.error });
+      return;
+    }
+    setSelectedVolunteer("");
+    const [t] = await Promise.all([listTurfs(campaignId), loadTurf()]);
+    if (t.ok) setTurfs(t.data);
+    showToast({ tone: "success", title: "Turf reassigned" });
+  }, [turfId, selectedVolunteer, campaignId, loadTurf, showToast]);
+
   if (loading) {
     return (
       <div className="page-stack">
@@ -226,6 +266,7 @@ export default function WalkListBuilderPage() {
         </Select>
       </div>
 
+      <StateRegion error={error} noPermission={noPermission} onRetry={() => void bootstrap()}>
       {turfs.length === 0 ? (
         <SectionCard title="No turf yet">
           <p className="text-sm text-muted-foreground">
@@ -319,14 +360,44 @@ export default function WalkListBuilderPage() {
 
             <SectionCard title="Assignment">
               {activeTurf?.assignedTo ? (
-                <div className="rounded-xl border border-border bg-surface/60 p-3">
-                  <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                    <Lock className="h-3.5 w-3.5 text-primary" />
-                    Locked to {activeTurf.assignedTo.name}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Server-held lock prevents double-assignment. Release from the field app to reassign.
-                  </p>
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-border bg-surface/60 p-3">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                      <Lock className="h-3.5 w-3.5 text-primary" />
+                      Locked to {activeTurf.assignedTo.name}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Server-held lock prevents double-assignment.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleUnassign}
+                    disabled={busy}
+                  >
+                    <UserMinus className="mr-1.5 h-4 w-4" />
+                    Unassign turf
+                  </Button>
+                  <div>
+                    <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+                      Reassign to
+                    </span>
+                    <FormSelect
+                      value={selectedVolunteer}
+                      onChange={(e) => setSelectedVolunteer(e.target.value)}
+                      placeholder="Select a volunteer…"
+                      options={volunteers.map((v) => ({ value: v.id, label: v.displayName }))}
+                    />
+                    <Button
+                      className="mt-2 w-full"
+                      onClick={handleReassign}
+                      disabled={busy || !selectedVolunteer}
+                    >
+                      <UserPlus className="mr-1.5 h-4 w-4" />
+                      Reassign turf
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -414,6 +485,7 @@ export default function WalkListBuilderPage() {
           )}
         </SectionCard>
       ) : null}
+      </StateRegion>
 
       <FormDialog
         open={!!editingWl}

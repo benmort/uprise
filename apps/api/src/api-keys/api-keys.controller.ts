@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
 import { ApiKeysService } from "./api-keys.service";
 import { CreateApiKeyDto } from "./dto/api-keys.dto";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 
 // API keys are an owner/admin surface (granted via `manage tenant.all`).
 const MANAGE = { action: "manage", resource: "tenant.api-keys" } as const;
@@ -13,19 +14,19 @@ export class ApiKeysController {
 
   @Get()
   @RequirePermission(READ)
-  list() {
-    return this.apiKeys.list();
+  list(@TenantId() tenantId: string) {
+    return this.apiKeys.list(tenantId);
   }
 
   @Post()
   @RequirePermission(MANAGE)
-  issue(@Body() dto: CreateApiKeyDto) {
-    return this.apiKeys.issue(dto);
+  issue(@TenantId() tenantId: string, @Body() dto: CreateApiKeyDto) {
+    return this.apiKeys.issue(tenantId, dto);
   }
 
   @Delete(":id")
   @RequirePermission(MANAGE)
-  revoke(@Param("id") id: string) {
-    return this.apiKeys.revoke(id);
+  revoke(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.apiKeys.revoke(tenantId, id);
   }
 }

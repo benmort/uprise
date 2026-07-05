@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, MapPin, Save } from "lucide-react";
 import {
   createTurf,
+  deleteTurf,
   listTurfs,
   loadTurfUniverse,
   rebucketTurf,
@@ -19,8 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@uprise/field";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
@@ -47,8 +51,11 @@ export default function TurfCuttingPage() {
   const campaignId = params.campaignId;
   const { showToast } = useToast();
 
-  const [turfs, setTurfs] = useState<TurfSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, noPermission, refetch } = useApi(
+    `/canvass/turfs?campaignId=${campaignId}`,
+    () => listTurfs(campaignId),
+  );
+  const turfs = data ?? [];
   const [name, setName] = useState("");
   const [universe, setUniverse] = useState<Universe>("hybrid");
   const [polygons, setPolygons] = useState<GeoJSON.Polygon[]>([]);
@@ -58,12 +65,8 @@ export default function TurfCuttingPage() {
   const [editingTurf, setEditingTurf] = useState<TurfSummary | null>(null);
   const [turfName, setTurfName] = useState("");
   const [renaming, setRenaming] = useState(false);
-
-  const reload = useCallback(async () => {
-    const res = await listTurfs(campaignId);
-    if (res.ok) setTurfs(res.data);
-    setLoading(false);
-  }, [campaignId]);
+  const [deletingTurf, setDeletingTurf] = useState<TurfSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const openRename = (t: TurfSummary) => {
     setEditingTurf(t);
@@ -80,13 +83,23 @@ export default function TurfCuttingPage() {
       return;
     }
     setEditingTurf(null);
-    await reload();
+    await refetch();
     showToast({ tone: "success", title: "Turf renamed" });
-  }, [editingTurf, turfName, reload, showToast]);
+  }, [editingTurf, turfName, refetch, showToast]);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const confirmDelete = useCallback(async () => {
+    if (!deletingTurf) return;
+    setDeleting(true);
+    const res = await deleteTurf(deletingTurf.id);
+    setDeleting(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't delete turf", description: res.error });
+      return;
+    }
+    setDeletingTurf(null);
+    await refetch();
+    showToast({ tone: "success", title: "Turf deleted" });
+  }, [deletingTurf, refetch, showToast]);
 
   const existing: ExistingTurf[] = turfs.map((t, i) => ({
     id: t.id,
@@ -143,7 +156,7 @@ export default function TurfCuttingPage() {
     setPolygons([]);
     setSelectedAreas([]);
     setClearToken((k) => k + 1);
-    await reload();
+    await refetch();
     const existingCount = bucketed.ok ? bucketed.data.total : 0;
     const coldCount = cold?.ok ? cold.data.materialised : 0;
     showToast({
@@ -155,7 +168,7 @@ export default function TurfCuttingPage() {
           : `${existingCount} door${existingCount === 1 ? "" : "s"} in this turf.`
         : "Turf saved; re-bucket the doors from the list.",
     });
-  }, [hasSelection, selectedAreas, polygons, name, universe, turfs.length, campaignId, reload, showToast]);
+  }, [hasSelection, selectedAreas, polygons, name, universe, turfs.length, campaignId, refetch, showToast]);
 
   return (
     <div className="page-stack">
@@ -247,11 +260,16 @@ export default function TurfCuttingPage() {
           </SectionCard>
 
           <SectionCard title={`Turfs (${turfs.length})`}>
-            {loading ? (
-              <Skeleton className="h-20 w-full" />
-            ) : turfs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No turf cut yet.</p>
-            ) : (
+            <StateRegion
+              loading={loading}
+              error={error}
+              noPermission={noPermission}
+              onRetry={() => void refetch()}
+              empty={turfs.length === 0}
+              emptyTitle="No turf cut yet"
+              emptyDescription="Draw a polygon or claim areas above to cut your first turf."
+              skeleton={<Skeleton className="h-20 w-full" />}
+            >
               <ul className="space-y-2">
                 {turfs.map((t, i) => (
                   <li key={t.id} className="flex items-center gap-2 text-sm">
@@ -274,10 +292,18 @@ export default function TurfCuttingPage() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
+                    <button
+                      type="button"
+                      aria-label="Delete turf"
+                      onClick={() => setDeletingTurf(t)}
+                      className="text-muted-foreground hover:text-error"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </li>
                 ))}
               </ul>
-            )}
+            </StateRegion>
           </SectionCard>
         </div>
       </div>
@@ -294,6 +320,16 @@ export default function TurfCuttingPage() {
           <Input id="turf-name" value={turfName} onChange={(e) => setTurfName(e.target.value)} autoFocus />
         </Field>
       </FormDialog>
+
+      <ConfirmDialog
+        open={!!deletingTurf}
+        title="Delete turf?"
+        description="Contacts are released, assignments removed."
+        confirmLabel="Delete turf"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeletingTurf(null)}
+        busy={deleting}
+      />
     </div>
   );
 }

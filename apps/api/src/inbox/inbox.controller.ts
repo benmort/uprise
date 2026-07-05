@@ -2,15 +2,22 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/c
 import type { Request } from "express";
 import { InboxService } from "./inbox.service";
 import type { AuthUser } from "../auth/auth-user";
+import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 import { ListConversationsDto, MarkConversationDto, ReplyDto } from "./dto/inbox.dto";
+
+// Shared inbox — messaging.conversation (member: read; organiser/owner: manage via messaging.all).
+const READ = { action: "read", resource: "messaging.conversation" } as const;
+const MANAGE = { action: "manage", resource: "messaging.conversation" } as const;
 
 @Controller("inbox")
 export class InboxController {
   constructor(private readonly inbox: InboxService) {}
 
   @Get("conversations")
-  listConversations(@Query() dto: ListConversationsDto) {
-    return this.inbox.listConversations({
+  @RequirePermission(READ)
+  listConversations(@TenantId() tenantId: string, @Query() dto: ListConversationsDto) {
+    return this.inbox.listConversations(tenantId, {
       query: dto.query,
       blastId: dto.blastId,
       audienceId: dto.audienceId,
@@ -18,43 +25,56 @@ export class InboxController {
   }
 
   @Get("conversations/:contactPhone")
+  @RequirePermission(READ)
   getThread(
+    @TenantId() tenantId: string,
     @Param("contactPhone") contactPhone: string,
     @Query("channel") channel?: string,
   ) {
-    return this.inbox.getThread(contactPhone, channel);
+    return this.inbox.getThread(tenantId, contactPhone, channel);
   }
 
   @Post("reply")
-  reply(@Body() dto: ReplyDto) {
-    return this.inbox.reply(dto.contactPhone, dto.body, dto.channel);
+  @RequirePermission(MANAGE)
+  reply(@TenantId() tenantId: string, @Body() dto: ReplyDto) {
+    return this.inbox.reply(tenantId, dto.contactPhone, dto.body, dto.channel);
   }
 
   @Patch("conversations/:contactPhone")
+  @RequirePermission(MANAGE)
   markConversation(
+    @TenantId() tenantId: string,
     @Param("contactPhone") contactPhone: string,
     @Body() dto: MarkConversationDto,
   ) {
-    return this.inbox.markConversation(contactPhone, Boolean(dto.resolved), dto.channel);
+    return this.inbox.markConversation(tenantId, contactPhone, Boolean(dto.resolved), dto.channel);
   }
 
   @Post("conversations/:contactPhone/claim")
+  @RequirePermission(MANAGE)
   claim(
+    @TenantId() tenantId: string,
     @Param("contactPhone") contactPhone: string,
     @Body() body: { channel?: string },
     @Req() req: Request & { user?: AuthUser },
   ) {
     const ownerId = req.user?.id ?? "env-admin";
-    return this.inbox.claimConversation(contactPhone, ownerId, body?.channel);
+    return this.inbox.claimConversation(tenantId, contactPhone, ownerId, body?.channel);
   }
 
   @Post("conversations/:contactPhone/release")
-  release(@Param("contactPhone") contactPhone: string, @Body() body: { channel?: string }) {
-    return this.inbox.releaseConversation(contactPhone, body?.channel);
+  @RequirePermission(MANAGE)
+  release(
+    @TenantId() tenantId: string,
+    @Param("contactPhone") contactPhone: string,
+    @Body() body: { channel?: string },
+  ) {
+    return this.inbox.releaseConversation(tenantId, contactPhone, body?.channel);
   }
 
   @Get("ai-suggestions")
-  aiSuggestions(@Query("message") message?: string) {
-    return this.inbox.suggest(message || "");
+  @RequirePermission(READ)
+  aiSuggestions(@TenantId() tenantId: string, @Query("message") message?: string) {
+    return this.inbox.suggest(tenantId, message || "");
   }
 }

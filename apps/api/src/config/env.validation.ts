@@ -108,7 +108,6 @@ export type ValidatedEnv = {
   INTERNAL_SOURCE_API_BASE_URL: string;
   INTERNAL_SOURCE_API_KEY: string;
   INTEGRATION_CREDENTIAL_SECRET: string;
-  DEFAULT_ORGANIZATION_SLUG: string;
   QUIET_HOURS_START: number;
   QUIET_HOURS_END: number;
   REQUIRE_OPTOUT_LANGUAGE: boolean;
@@ -337,7 +336,6 @@ export function validateEnv(config: Env): ValidatedEnv {
     INTERNAL_SOURCE_API_BASE_URL: required(config, "INTERNAL_SOURCE_API_BASE_URL", errors),
     INTERNAL_SOURCE_API_KEY: required(config, "INTERNAL_SOURCE_API_KEY", errors),
     INTEGRATION_CREDENTIAL_SECRET: required(config, "INTEGRATION_CREDENTIAL_SECRET", errors),
-    DEFAULT_ORGANIZATION_SLUG: config.DEFAULT_ORGANIZATION_SLUG?.trim() || "default",
     QUIET_HOURS_START: numberInRange(config, "QUIET_HOURS_START", 0, 23, 21, errors),
     QUIET_HOURS_END: numberInRange(config, "QUIET_HOURS_END", 0, 23, 8, errors),
     REQUIRE_OPTOUT_LANGUAGE: boolish(config, "REQUIRE_OPTOUT_LANGUAGE", true),

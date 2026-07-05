@@ -5,6 +5,7 @@ import { validateEnv } from "./config/env.validation";
 import { BasicAuthGuard } from "./auth/basic-auth.guard";
 import { AbilityGuard } from "./auth/ability.guard";
 import { RolesGuard } from "./auth/roles.guard";
+import { SuperAdminGuard } from "./auth/super-admin.guard";
 import { CaptchaModule } from "./common/captcha/captcha.module";
 import { TurnstileGuard } from "./common/captcha/turnstile.guard";
 import { AuthController } from "./auth/auth.controller";
@@ -14,7 +15,6 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { TwilioModule } from "./twilio/twilio.module";
 import { MessagingModule } from "./messaging/messaging.module";
 import { WhatsappModule } from "./whatsapp/whatsapp.module";
-import { MessagesModule } from "./messages/messages.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { AudiencesModule } from "./audiences/audiences.module";
@@ -78,7 +78,6 @@ import { QueueModule } from "./common/queue/queue.module";
     TwilioModule,
     MessagingModule,
     WhatsappModule,
-    MessagesModule,
     WebhooksModule,
     IntegrationsModule,
     AudiencesModule,
@@ -114,6 +113,11 @@ import { QueueModule } from "./common/queue/queue.module";
     {
       provide: APP_GUARD,
       useClass: AbilityGuard,
+    },
+    // Enforces @SuperAdmin() (platform-operator routes); a no-op for routes without it.
+    {
+      provide: APP_GUARD,
+      useClass: SuperAdminGuard,
     },
   ],
 })

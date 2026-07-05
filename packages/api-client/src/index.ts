@@ -23,6 +23,8 @@ import type {
   RequestAccessResponse,
   SessionGrantResponse,
   SessionSummaryResponse,
+  TenantOnboarding,
+  TenantOnboardingPatch,
   UpdateProfileRequest,
   UserAvatarResponse,
   UserProfileResponse,
@@ -485,6 +487,15 @@ export const tenants = {
       `/tenants/${encodeURIComponent(tenantId)}/invitations/${encodeURIComponent(invitationId)}`,
       { method: "DELETE" },
     ),
+
+  // Organiser getting-started progress — read tenant.org-profile / manage to patch.
+  getOnboarding: (tenantId: string) =>
+    request<TenantOnboarding>(`/tenants/${encodeURIComponent(tenantId)}/onboarding`),
+  updateOnboarding: (tenantId: string, body: TenantOnboardingPatch) =>
+    request<TenantOnboarding>(`/tenants/${encodeURIComponent(tenantId)}/onboarding`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 };
 
 // ── Public marketing-site form intake (meld doc 12) ──────────────────

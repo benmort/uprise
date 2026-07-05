@@ -5,6 +5,8 @@ import { AuthUser } from "./auth-user";
 import { IamFlowsService } from "./iam-flows.service";
 import { createStreamToken } from "./stream-token";
 import { resolveStreamTokenSecret } from "./stream-token-secret";
+import { RequirePermission } from "./require-permission.decorator";
+import { TenantId } from "./tenant-id.decorator";
 
 @Controller("auth")
 export class AuthController {
@@ -45,15 +47,18 @@ export class AuthController {
     };
   }
 
+  // Mints the SSE stream token, bound to the caller's tenant so the stream is filtered to it.
+  // Gated on analytics read (the stream only carries analytics/inbox events) + a live tenant.
   @Get("stream-token")
-  streamToken() {
+  @RequirePermission({ action: "read", resource: "analytics.all" })
+  streamToken(@TenantId() tenantId: string) {
     const { secret } = resolveStreamTokenSecret(this.config);
     if (!secret) {
       throw new InternalServerErrorException("Stream token secret is not configured");
     }
     const ttlRaw = Number(this.config.get<string>("STREAM_TOKEN_TTL_SECONDS", "43200"));
     const ttlSeconds = Number.isFinite(ttlRaw) ? Math.min(Math.max(60, Math.trunc(ttlRaw)), 86400) : 43200;
-    const issued = createStreamToken(secret, ttlSeconds);
+    const issued = createStreamToken(secret, ttlSeconds, tenantId);
     return {
       token: issued.token,
       expiresAt: new Date(issued.expiresAt).toISOString(),

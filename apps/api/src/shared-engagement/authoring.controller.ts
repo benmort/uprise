@@ -1,9 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { AppUserRole } from "@uprise/db";
-import { PrismaService } from "../prisma/prisma.service";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { TenantId } from "../auth/tenant-id.decorator";
 import { SurveysService } from "./surveys.service";
 import { ScriptsService } from "./scripts.service";
 import {
@@ -19,80 +18,67 @@ import {
 @Roles(AppUserRole.ORGANISER)
 export class AuthoringController {
   constructor(
-    private readonly config: ConfigService,
-    private readonly prisma: PrismaService,
     private readonly surveys: SurveysService,
     private readonly scripts: ScriptsService,
   ) {}
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
   // ── Surveys ──────────────────────────────────────────────────
   @Get("surveys")
-  async listSurveys() {
-    const org = await this.ensureOrganization();
-    return this.surveys.list(org.id);
+  async listSurveys(@TenantId() tenantId: string) {
+    return this.surveys.list(tenantId);
   }
 
   @Get("surveys/:id")
-  async getSurvey(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.surveys.get(org.id, id);
+  async getSurvey(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.surveys.get(tenantId, id);
   }
 
   @Post("surveys")
-  async createSurvey(@Body() dto: CreateSurveyDto) {
-    const org = await this.ensureOrganization();
-    return this.surveys.create(org.id, dto);
+  async createSurvey(@TenantId() tenantId: string, @Body() dto: CreateSurveyDto) {
+    return this.surveys.create(tenantId, dto);
   }
 
   @Patch("surveys/:id")
-  async updateSurvey(@Param("id") id: string, @Body() dto: UpdateSurveyDto) {
-    const org = await this.ensureOrganization();
-    return this.surveys.update(org.id, id, dto);
+  async updateSurvey(
+    @TenantId() tenantId: string,
+    @Param("id") id: string,
+    @Body() dto: UpdateSurveyDto,
+  ) {
+    return this.surveys.update(tenantId, id, dto);
   }
 
   @Delete("surveys/:id")
-  async deleteSurvey(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.surveys.archive(org.id, id);
+  async deleteSurvey(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.surveys.archive(tenantId, id);
   }
 
   // ── Scripts ──────────────────────────────────────────────────
   @Get("scripts")
-  async listScripts() {
-    const org = await this.ensureOrganization();
-    return this.scripts.list(org.id);
+  async listScripts(@TenantId() tenantId: string) {
+    return this.scripts.list(tenantId);
   }
 
   @Get("scripts/:id")
-  async getScript(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.scripts.get(org.id, id);
+  async getScript(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.scripts.get(tenantId, id);
   }
 
   @Post("scripts")
-  async createScript(@Body() dto: CreateScriptDto) {
-    const org = await this.ensureOrganization();
-    return this.scripts.create(org.id, dto);
+  async createScript(@TenantId() tenantId: string, @Body() dto: CreateScriptDto) {
+    return this.scripts.create(tenantId, dto);
   }
 
   @Patch("scripts/:id")
-  async updateScript(@Param("id") id: string, @Body() dto: UpdateScriptDto) {
-    const org = await this.ensureOrganization();
-    return this.scripts.update(org.id, id, dto);
+  async updateScript(
+    @TenantId() tenantId: string,
+    @Param("id") id: string,
+    @Body() dto: UpdateScriptDto,
+  ) {
+    return this.scripts.update(tenantId, id, dto);
   }
 
   @Delete("scripts/:id")
-  async deleteScript(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    return this.scripts.archive(org.id, id);
+  async deleteScript(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.scripts.archive(tenantId, id);
   }
 }

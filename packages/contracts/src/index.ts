@@ -332,3 +332,29 @@ export interface AvailabilityResponse {
   slug: string;
   available: boolean;
 }
+
+// ── Organiser onboarding (getting-started) ────────────────────────────
+/** Getting-started steps a new OWNER/ORGANISER completes. Order = display order. */
+export const ONBOARDING_STEP_KEYS = [
+  "verifyEmail",
+  "orgProfile",
+  "inviteTeammate",
+  "connectAudience",
+  "firstCampaign",
+] as const;
+export type OnboardingStep = (typeof ONBOARDING_STEP_KEYS)[number];
+
+/** Per-tenant onboarding progress stored on Tenant.onboarding (advisory). Steps are
+ *  monotonic — once true they stay true even if the underlying data is later removed. */
+export interface TenantOnboarding {
+  version: number;
+  dismissed: boolean;
+  steps: Record<OnboardingStep, boolean>;
+  updatedAt: string | null;
+}
+
+/** Patch body for PATCH /tenants/:id/onboarding. Steps merge (OR); dismissed replaces. */
+export interface TenantOnboardingPatch {
+  dismissed?: boolean;
+  steps?: Partial<Record<OnboardingStep, boolean>>;
+}

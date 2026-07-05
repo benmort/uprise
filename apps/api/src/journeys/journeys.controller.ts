@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Query } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { JourneyEnrolmentState, JourneyStatus, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
+import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 import { ApiHttpException } from "../common/http/api-response";
 import { JourneysService } from "./journeys.service";
 import {
@@ -18,39 +19,34 @@ const RUNG_LABEL: Record<string, string> = {
   action: "Do action",
 };
 
+// Journeys are an organiser/owner domain (journey.journey; manage via journey.all).
+// sweep-due is the platform cron (Bearer token, no session).
+const READ = { action: "read", resource: "journey.journey" } as const;
+const MANAGE = { action: "manage", resource: "journey.journey" } as const;
+
 @Controller("journeys")
 export class JourneysController {
   constructor(
-    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly journeys: JourneysService,
   ) {}
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
   @Get()
-  async list() {
-    const org = await this.ensureOrganization();
+  @RequirePermission(READ)
+  async list(@TenantId() tenantId: string) {
     return this.prisma.journey.findMany({
-      where: { tenantId: org.id },
+      where: { tenantId },
       include: { rungs: { orderBy: { rungIndex: "asc" } } },
       orderBy: { createdAt: "desc" },
     });
   }
 
   @Post()
-  async create(@Body() dto: CreateJourneyDto) {
-    const org = await this.ensureOrganization();
+  @RequirePermission(MANAGE)
+  async create(@TenantId() tenantId: string, @Body() dto: CreateJourneyDto) {
     return this.prisma.journey.create({
       data: {
-        tenantId: org.id,
+        tenantId,
         name: dto.name,
         triggerType: dto.triggerType,
         triggerConfig: (dto.triggerConfig ?? {}) as Prisma.InputJsonValue,
@@ -71,19 +67,27 @@ export class JourneysController {
   }
 
   @Patch(":id/status")
-  async setStatus(@Param("id") id: string, @Body() dto: UpdateJourneyStatusDto) {
-    const org = await this.ensureOrganization();
+  @RequirePermission(MANAGE)
+  async setStatus(
+    @TenantId() tenantId: string,
+    @Param("id") id: string,
+    @Body() dto: UpdateJourneyStatusDto,
+  ) {
     return this.prisma.journey.updateMany({
-      where: { id, tenantId: org.id },
+      where: { id, tenantId },
       data: { status: dto.status as JourneyStatus },
     });
   }
 
   /** Update journey config; when `rungs` is provided, replace them transactionally. */
   @Patch(":id")
-  async update(@Param("id") id: string, @Body() dto: UpdateJourneyDto) {
-    const org = await this.ensureOrganization();
-    const existing = await this.prisma.journey.findFirst({ where: { id, tenantId: org.id } });
+  @RequirePermission(MANAGE)
+  async update(
+    @TenantId() tenantId: string,
+    @Param("id") id: string,
+    @Body() dto: UpdateJourneyDto,
+  ) {
+    const existing = await this.prisma.journey.findFirst({ where: { id, tenantId } });
     if (!existing) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);
 
     return this.prisma.$transaction(async (tx) => {
@@ -122,18 +126,18 @@ export class JourneysController {
   }
 
   @Delete(":id")
-  async remove(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    const res = await this.prisma.journey.deleteMany({ where: { id, tenantId: org.id } });
+  @RequirePermission(MANAGE)
+  async remove(@TenantId() tenantId: string, @Param("id") id: string) {
+    const res = await this.prisma.journey.deleteMany({ where: { id, tenantId } });
     if (res.count === 0) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);
     return { deleted: true };
   }
 
   /** Enrolment funnel: enrolled / active / completed / exited + conversion %. */
   @Get(":id/stats")
-  async stats(@Param("id") id: string) {
-    const org = await this.ensureOrganization();
-    const journey = await this.prisma.journey.findFirst({ where: { id, tenantId: org.id } });
+  @RequirePermission(READ)
+  async stats(@TenantId() tenantId: string, @Param("id") id: string) {
+    const journey = await this.prisma.journey.findFirst({ where: { id, tenantId } });
     if (!journey) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);
     const grouped = await this.prisma.journeyEnrolment.groupBy({
       by: ["state"],
@@ -160,10 +164,14 @@ export class JourneysController {
 
   /** Static path preview: the ordered rungs the journey would run, with labels. */
   @Post(":id/dry-run")
-  async dryRun(@Param("id") id: string, @Body() _dto: DryRunJourneyDto) {
-    const org = await this.ensureOrganization();
+  @RequirePermission(READ)
+  async dryRun(
+    @TenantId() tenantId: string,
+    @Param("id") id: string,
+    @Body() _dto: DryRunJourneyDto,
+  ) {
     const journey = await this.prisma.journey.findFirst({
-      where: { id, tenantId: org.id },
+      where: { id, tenantId },
       include: { rungs: { orderBy: { rungIndex: "asc" } } },
     });
     if (!journey) throw new ApiHttpException("JOURNEY_NOT_FOUND", "Journey not found", HttpStatus.NOT_FOUND);

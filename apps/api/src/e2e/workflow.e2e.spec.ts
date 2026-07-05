@@ -10,7 +10,7 @@ describe("workflow e2e-style", () => {
   const prisma = {
     $transaction: (cb: any) => cb(prisma),
     tenant: { upsert: jest.fn() },
-    blast: { findUnique: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+    blast: { findUnique: jest.fn(), findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
     audience: { findFirst: jest.fn().mockResolvedValue(null) },
     audienceSegment: { findMany: jest.fn().mockResolvedValue([]) },
     audienceContact: { findMany: jest.fn() },
@@ -110,6 +110,14 @@ describe("workflow e2e-style", () => {
         tenantId: "org_1",
         startedAt: new Date(),
       });
+    prisma.blast.findFirst.mockResolvedValueOnce({
+      id: "blast_1",
+      status: BlastStatus.PROOFED,
+      audienceId: "aud_1",
+      bodyTemplate: "Hi there",
+      tenantId: "org_1",
+      startedAt: null,
+    });
     prisma.blast.update
       .mockResolvedValueOnce({
         id: "blast_1",
@@ -149,7 +157,7 @@ describe("workflow e2e-style", () => {
     prisma.outboundMessage.create.mockResolvedValue({});
     prisma.analyticsSnapshot.create.mockResolvedValue({});
 
-    const scheduled = await service.schedule("blast_1", {
+    const scheduled = await service.schedule("org_1", "blast_1", {
       scheduledFor: scheduledFor.toISOString(),
     });
     expect(scheduled.status).toBe(BlastStatus.SCHEDULED);

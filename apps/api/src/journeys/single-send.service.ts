@@ -53,7 +53,7 @@ export class SingleSendService {
         sentAt: new Date(sent.dateSent || sent.dateCreated),
       },
     });
-    this.events.emit("journey.message_sent", { contactId, to });
+    this.events.emit("journey.message_sent", tenantId, { contactId, to });
     return { sent: true };
   }
 }

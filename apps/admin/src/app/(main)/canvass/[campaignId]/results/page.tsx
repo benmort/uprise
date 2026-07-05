@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Download } from "lucide-react";
 import { getCampaignResults, type CampaignResults } from "@/lib/api/campaigns";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@uprise/field";
 import { ProgressBar } from "@uprise/field";
 import { SupportLevelBar } from "@uprise/field";
@@ -31,23 +31,11 @@ function toCsv(r: CampaignResults): string {
 
 export default function ResultsPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
-  const [results, setResults] = useState<CampaignResults | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const res = await getCampaignResults(campaignId);
-      if (!alive) return;
-      if (!res.ok) setError(res.error);
-      else setResults(res.data);
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [campaignId]);
+  const { data: results, loading, error, noPermission, refetch } = useApi(
+    `/canvass/${campaignId}/results`,
+    () => getCampaignResults(campaignId),
+    { ttlMs: 15_000 },
+  );
 
   function exportCsv() {
     if (!results) return;
@@ -60,9 +48,21 @@ export default function ResultsPage() {
     URL.revokeObjectURL(url);
   }
 
-  if (loading) return <div className="page-stack"><Skeleton className="h-64 w-full" /></div>;
-  if (error || !results) {
-    return <div className="page-stack"><EmptyState title="Can't load results" description={error || "Not found."} /></div>;
+  if (!results) {
+    return (
+      <div className="page-stack">
+        <StateRegion
+          loading={loading}
+          error={error}
+          noPermission={noPermission}
+          onRetry={() => void refetch()}
+          errorTitle="Can't load results"
+          skeleton={<Skeleton className="h-64 w-full" />}
+        >
+          {null}
+        </StateRegion>
+      </div>
+    );
   }
 
   const maxDisp = Math.max(1, ...results.dispositionBreakdown.map((d) => d.count));

@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from "@nestjs/common";
 import { MessagesService } from "./messages.service";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TenantId } from "../auth/tenant-id.decorator";
 
 // Per-message read (meld doc 09). Gated on messaging.outbound; organiser/owner
 // hold `manage messaging.all`, members `read messaging.all`.
@@ -12,7 +13,7 @@ export class MessagesController {
 
   @Get(":id")
   @RequirePermission(READ)
-  get(@Param("id") id: string) {
-    return this.messages.getMessage(id);
+  get(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.messages.getMessage(tenantId, id);
   }
 }

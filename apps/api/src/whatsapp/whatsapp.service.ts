@@ -12,21 +12,11 @@ export class WhatsappService {
     private readonly twilio: TwilioService,
   ) {}
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
   /** Approved (and optionally all) WhatsApp templates for the composer. */
-  async listTemplates(opts?: { status?: string }) {
-    const org = await this.ensureOrganization();
+  async listTemplates(tenantId: string, opts?: { status?: string }) {
     return this.prisma.whatsappTemplate.findMany({
       where: {
-        tenantId: org.id,
+        tenantId,
         ...(opts?.status ? { status: opts.status.toLowerCase() } : {}),
       },
       orderBy: [{ status: "asc" }, { friendlyName: "asc" }],
@@ -34,11 +24,10 @@ export class WhatsappService {
   }
 
   /** Pull templates from Twilio's Content API and upsert them locally. */
-  async syncTemplates() {
+  async syncTemplates(tenantId: string) {
     if (!this.config.get<boolean>("TWILIO_CONTENT_API_ENABLED", false)) {
-      return { synced: 0, skipped: "TWILIO_CONTENT_API_ENABLED is off", templates: await this.listTemplates() };
+      return { synced: 0, skipped: "TWILIO_CONTENT_API_ENABLED is off", templates: await this.listTemplates(tenantId) };
     }
-    const org = await this.ensureOrganization();
     const remote = await this.twilio.listWhatsappContentTemplates();
     let upserted = 0;
     for (const tpl of remote) {
@@ -46,7 +35,7 @@ export class WhatsappService {
       await this.prisma.whatsappTemplate.upsert({
         where: { contentSid: tpl.contentSid },
         update: {
-          tenantId: org.id,
+          tenantId,
           friendlyName: tpl.friendlyName,
           category: tpl.category,
           language: tpl.language,
@@ -55,7 +44,7 @@ export class WhatsappService {
           bodyPreview: tpl.bodyPreview,
         },
         create: {
-          tenantId: org.id,
+          tenantId,
           contentSid: tpl.contentSid,
           friendlyName: tpl.friendlyName,
           category: tpl.category,
@@ -67,6 +56,6 @@ export class WhatsappService {
       });
       upserted += 1;
     }
-    return { synced: upserted, templates: await this.listTemplates() };
+    return { synced: upserted, templates: await this.listTemplates(tenantId) };
   }
 }

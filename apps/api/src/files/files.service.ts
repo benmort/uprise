@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { del, put } from "@vercel/blob";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
@@ -47,13 +46,7 @@ export class FilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
-    private readonly config: ConfigService,
   ) {}
-
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({ where: { slug }, create: { slug, name: "Default Organization" }, update: {} });
-  }
 
   /** Trim + validate an optional folder name; empty/absent → null. */
   private normaliseFolder(folder?: string): string | null {
@@ -72,8 +65,7 @@ export class FilesService {
     return trimmed;
   }
 
-  async list(opts: ListFilesOptions = {}) {
-    const org = await this.ensureOrganization();
+  async list(tenantId: string, opts: ListFilesOptions = {}) {
     const rawTake = Number(opts.take);
     const take = Number.isFinite(rawTake) ? Math.min(Math.max(Math.trunc(rawTake), 1), 100) : 50;
     const rawSkip = Number(opts.skip);
@@ -82,7 +74,7 @@ export class FilesService {
     // rejects it as an actual folder name, so it can never collide.
     const folderWhere =
       opts.folder === UNFOLDERED_SENTINEL ? { folder: null } : opts.folder ? { folder: opts.folder } : {};
-    const where = { tenantId: org.id, ...folderWhere };
+    const where = { tenantId, ...folderWhere };
     const [rows, total] = await Promise.all([
       this.prisma.storedFile.findMany({ where, orderBy: { createdAt: "desc" }, take, skip }),
       this.prisma.storedFile.count({ where }),
@@ -90,18 +82,17 @@ export class FilesService {
     return { rows, total };
   }
 
-  async summary() {
-    const org = await this.ensureOrganization();
+  async summary(tenantId: string) {
     const [byContentType, byFolder] = await Promise.all([
       this.prisma.storedFile.groupBy({
         by: ["contentType"],
-        where: { tenantId: org.id },
+        where: { tenantId },
         _count: { _all: true },
         _sum: { sizeBytes: true },
       }),
       this.prisma.storedFile.groupBy({
         by: ["folder"],
-        where: { tenantId: org.id },
+        where: { tenantId },
         _count: { _all: true },
         _sum: { sizeBytes: true },
       }),
@@ -138,7 +129,7 @@ export class FilesService {
     };
   }
 
-  async upload(file: UploadedFile | undefined, folder?: string) {
+  async upload(tenantId: string, file: UploadedFile | undefined, folder?: string) {
     if (!file?.buffer) throw new BadRequestException("No file provided");
     // Validate the folder before the blob put so a bad name fails fast without a stranded blob.
     const safeFolder = this.normaliseFolder(folder);
@@ -147,9 +138,8 @@ export class FilesService {
     const token = process.env.BLOB_READ_WRITE_TOKEN;
     if (!token && !process.env.BLOB_STORE_ID) throw new BadRequestException("File storage is not configured");
 
-    const org = await this.ensureOrganization();
     const safeName = (file.originalname || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
-    const key = namespacedBlobKey(`files/${org.id}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`);
+    const key = namespacedBlobKey(`files/${tenantId}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`);
     const { url } = await put(key, file.buffer, {
       access: "public",
       contentType: file.mimetype || "application/octet-stream",
@@ -159,7 +149,7 @@ export class FilesService {
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.storedFile.create({
         data: {
-          tenantId: org.id,
+          tenantId,
           name: file.originalname || safeName,
           pathname: key,
           url,
@@ -169,18 +159,17 @@ export class FilesService {
         },
       });
       await this.outbox.append(tx, {
-        tenantId: org.id,
+        tenantId,
         eventType: "tenant.file.uploaded",
         aggregateId: row.id,
-        payload: { fileId: row.id, tenantId: org.id, name: row.name },
+        payload: { fileId: row.id, tenantId, name: row.name },
       });
       return row;
     });
   }
 
-  async remove(id: string) {
-    const org = await this.ensureOrganization();
-    const existing = await this.prisma.storedFile.findFirst({ where: { id, tenantId: org.id } });
+  async remove(tenantId: string, id: string) {
+    const existing = await this.prisma.storedFile.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException("File not found");
 
     const token = process.env.BLOB_READ_WRITE_TOKEN;
@@ -197,10 +186,10 @@ export class FilesService {
     return this.prisma.$transaction(async (tx) => {
       await tx.storedFile.delete({ where: { id } });
       await this.outbox.append(tx, {
-        tenantId: org.id,
+        tenantId,
         eventType: "tenant.file.deleted",
         aggregateId: id,
-        payload: { fileId: id, tenantId: org.id },
+        payload: { fileId: id, tenantId },
       });
       return { id };
     });

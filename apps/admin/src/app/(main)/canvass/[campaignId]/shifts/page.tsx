@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, CalendarPlus, MapPin, Pencil, Trash2 } from "lucide-react";
 import { createShift, deleteShift, listShifts, updateShift, type Shift } from "@/lib/api";
+import { useApi } from "@/lib/use-api";
+import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
@@ -26,8 +28,12 @@ const EMPTY = { name: "", location: "", startsAt: "", endsAt: "" };
 export default function ShiftsPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const { showToast } = useToast();
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, noPermission, refetch } = useApi(
+    `/canvass/${campaignId}/shifts`,
+    () => listShifts(campaignId),
+    { ttlMs: 30_000 },
+  );
+  const shifts: Shift[] = data ?? [];
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
 
@@ -35,16 +41,6 @@ export default function ShiftsPage() {
   const [editForm, setEditForm] = useState(EMPTY);
   const [editBusy, setEditBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await listShifts(campaignId);
-    if (res.ok) setShifts(res.data);
-    setLoading(false);
-  }, [campaignId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const add = useCallback(async () => {
     if (!form.name.trim() || !form.startsAt || !form.endsAt) {
@@ -65,9 +61,9 @@ export default function ShiftsPage() {
       return;
     }
     setForm(EMPTY);
-    await load();
+    void refetch();
     showToast({ tone: "success", title: "Shift scheduled" });
-  }, [campaignId, form, load, showToast]);
+  }, [campaignId, form, refetch, showToast]);
 
   const openEdit = (s: Shift) => {
     setEditing(s);
@@ -94,9 +90,9 @@ export default function ShiftsPage() {
       return;
     }
     setEditing(null);
-    await load();
+    void refetch();
     showToast({ tone: "success", title: "Shift updated" });
-  }, [editing, editForm, load, showToast]);
+  }, [editing, editForm, refetch, showToast]);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -108,8 +104,8 @@ export default function ShiftsPage() {
       return;
     }
     setDeleteTarget(null);
-    await load();
-  }, [deleteTarget, load, showToast]);
+    void refetch();
+  }, [deleteTarget, refetch, showToast]);
 
   return (
     <div className="page-stack">
@@ -144,13 +140,15 @@ export default function ShiftsPage() {
         </Button>
       </SectionCard>
 
-      {loading ? (
-        <Skeleton className="h-32 w-full" />
-      ) : shifts.length === 0 ? (
-        <SectionCard title="Upcoming shifts">
-          <p className="text-sm text-muted-foreground">No shifts scheduled.</p>
-        </SectionCard>
-      ) : (
+      <StateRegion
+        loading={loading}
+        error={error}
+        noPermission={noPermission}
+        onRetry={() => void refetch()}
+        empty={shifts.length === 0}
+        emptyTitle="No shifts scheduled"
+        skeleton={<Skeleton className="h-32 w-full" />}
+      >
         <SectionCard title={`Upcoming shifts (${shifts.length})`}>
           <ul className="space-y-2">
             {shifts.map((s) => (
@@ -189,7 +187,7 @@ export default function ShiftsPage() {
             ))}
           </ul>
         </SectionCard>
-      )}
+      </StateRegion>
 
       <FormDialog
         open={!!editing}

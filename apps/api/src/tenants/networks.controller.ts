@@ -1,9 +1,10 @@
-import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { IsOptional, IsString, MaxLength } from "class-validator";
 import type { Request } from "express";
 import { TenantsService } from "./tenants.service";
 import type { AuthUser } from "../auth/auth-user";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { SuperAdmin } from "../auth/super-admin.decorator";
 import { CreateNetworkDto } from "./dto/tenants.dto";
 
 class UpdateNetworkBillingDto {
@@ -27,11 +28,10 @@ export class NetworksController {
   }
 
   // Super-admin search across ALL networks (powers the feature-flag override editor).
-  // Declared before :id; the explicit isSuperAdmin check is the real gate.
+  // Declared before :id; @SuperAdmin is the gate.
   @Get("search")
-  @RequirePermission(NETWORK_READ)
-  search(@Query("q") q: string | undefined, @Req() req: Request & { user?: AuthUser }) {
-    if (!req.user?.isSuperAdmin) throw new ForbiddenException("Super-admin only");
+  @SuperAdmin()
+  search(@Query("q") q: string | undefined) {
     return this.tenants.searchNetworks(q);
   }
 

@@ -170,7 +170,7 @@ describe("BasicAuthGuard", () => {
 
   it("allows analytics stream requests with a valid signed stream token", () => {
     const guard = createGuard();
-    const streamToken = createStreamToken("stream-secret", 300).token;
+    const streamToken = createStreamToken("stream-secret", 300, "tenant-a").token;
     const context = executionContextWithRequest({
       path: "/api/v1/analytics/stream",
       query: { token: streamToken },
@@ -191,7 +191,7 @@ describe("BasicAuthGuard", () => {
 
   it("allows analytics stream requests signed with fallback integration secret", () => {
     const guard = createGuard({ streamTokenSecret: "", integrationSecret: "integration-secret" });
-    const streamToken = createStreamToken("integration-secret", 300).token;
+    const streamToken = createStreamToken("integration-secret", 300, "tenant-a").token;
     const context = executionContextWithRequest({
       path: "/api/v1/analytics/stream",
       query: { token: streamToken },
@@ -202,7 +202,7 @@ describe("BasicAuthGuard", () => {
 
   it("rejects analytics stream requests when stream secrets are not configured", () => {
     const guard = createGuard({ streamTokenSecret: "", integrationSecret: "" });
-    const streamToken = createStreamToken("stream-secret", 300).token;
+    const streamToken = createStreamToken("stream-secret", 300, "tenant-a").token;
     const context = executionContextWithRequest({
       path: "/api/v1/analytics/stream",
       query: { token: streamToken },

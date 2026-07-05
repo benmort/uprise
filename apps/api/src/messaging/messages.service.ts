@@ -1,28 +1,14 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../prisma/prisma.service";
 
 /** Read surface over OutboundMessage (GetSms / GetSmsStatus, meld doc 09). */
 @Injectable()
 export class MessagesService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  private async ensureOrganization() {
-    const slug = this.config.get<string>("DEFAULT_ORGANIZATION_SLUG", "default");
-    return this.prisma.tenant.upsert({
-      where: { slug },
-      create: { slug, name: "Default Organization" },
-      update: {},
-    });
-  }
-
-  async getMessage(id: string) {
-    const org = await this.ensureOrganization();
+  async getMessage(tenantId: string, id: string) {
     const message = await this.prisma.outboundMessage.findFirst({
-      where: { id, tenantId: org.id },
+      where: { id, tenantId },
     });
     if (!message) throw new NotFoundException("Message not found");
     return {
