@@ -602,9 +602,20 @@ export default function MainLayout({
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
       .filter((n) => n.type !== "group" || n.children.length > 0);
     // Drop a zone header that has no surviving item before the next header / the end.
-    return built.filter(
+    const pruned = built.filter(
       (n, i) => n.type !== "section" || (built[i + 1]?.type ?? "section") !== "section",
     );
+    // Blanket rule: a first-level group left with exactly one visible (flag-filtered)
+    // child collapses into a direct link to that child — it "acts as" the child
+    // (clickable, pointer cursor via the leaf renderer, no expand chevron / flyout)
+    // rather than a group header you have to expand to reach a single item. Keeps the
+    // group's icon + label so the first-level identity is unchanged.
+    return pruned.map((n): NavNode => {
+      if (n.type !== "group" || n.children.length !== 1) return n;
+      const only = n.children[0];
+      if (!("href" in only)) return n; // sole child isn't a direct link → keep the group
+      return { type: "leaf", key: n.key, label: n.label, icon: n.icon, href: only.href, match: n.match, flag: n.flag };
+    });
   }, [campaignId, isSuperAdmin, flagOn]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {

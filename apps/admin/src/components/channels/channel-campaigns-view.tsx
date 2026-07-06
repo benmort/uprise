@@ -143,7 +143,7 @@ export function ChannelCampaignsView({ channel, title, description }: ChannelCam
           </Button>
           <Button className="shrink-0 gap-1.5" disabled={creating} onClick={createBlast}>
             <PlusCircle className="h-4 w-4" />
-            {creating ? (<><Spinner className="mr-2" />Creating...</>) : "New blast"}
+            {creating ? (<><Spinner className="mr-2" />Creating...</>) : "New Blast"}
           </Button>
         </div>
       </CardHeader>
@@ -224,7 +224,7 @@ export function ChannelCampaignsView({ channel, title, description }: ChannelCam
               {!loading && pagedBlasts.length === 0 && (
                 <tr>
                   <td colSpan={7} className="py-6 text-center text-muted-foreground">
-                    No matching blasts. Create one with “New blast”.
+                    No matching blasts. Create one with “New Blast”.
                   </td>
                 </tr>
               )}

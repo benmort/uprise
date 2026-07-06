@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, MapPinned, Pencil, Plus, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, MapPinned, Pencil, Plus, PlusCircle, Target, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
@@ -98,10 +98,20 @@ export default function CanvassPage() {
     };
   }, [activeId]);
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm({ name: "", status: "ACTIVE", doors: "", conversations: "", openJoin: false, selfClaim: false });
-    setDialogOpen(true);
+  // "New campaign" mirrors "New blast": create a campaign with a default name and
+  // drop the user straight into it (cut turf). Works from any state — no modal to
+  // mount — so the empty-state CTA and the header button both use it. Rename/goals
+  // happen via the edit dialog (the pencil) once the campaign exists.
+  const onNewCampaign = async () => {
+    setCreating(true);
+    const res = await createCampaign({ name: "New campaign", status: "ACTIVE" });
+    setCreating(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't create campaign", description: res.error });
+      return;
+    }
+    showToast({ tone: "success", title: "Campaign created", description: "Now cut some turf." });
+    router.push(`/canvass/${res.data.id}/turf`);
   };
 
   const openEdit = () => {
@@ -184,7 +194,7 @@ export default function CanvassPage() {
           title="No campaigns yet"
           description="A campaign holds your turf, walk lists and goals."
           ctaLabel="New campaign"
-          onCta={openCreate}
+          onCta={() => void onNewCampaign()}
         />
       </div>
     );
@@ -212,8 +222,8 @@ export default function CanvassPage() {
               </option>
             ))}
           </select>
-          <Button variant="outline" onClick={openCreate} disabled={creating}>
-            <Plus className="mr-1.5 h-4 w-4" />
+          <Button variant="outline" onClick={() => void onNewCampaign()} disabled={creating}>
+            <PlusCircle className="mr-1.5 h-4 w-4" />
             New campaign
           </Button>
           {activeId ? (
