@@ -79,11 +79,21 @@ export default function AddressesPage() {
 
   const trimmed = q.trim();
 
+  // Guards the map-view auto-plot: the q we last plotted, so a rerun (or the
+  // list→map flip after a manual pick) doesn't re-plot / override. Set on both an
+  // auto-plot and a manual pick; a ref lets pick() read the live q without a dep.
+  const autoPlottedQ = useRef("");
+  const trimmedRef = useRef(trimmed);
+  trimmedRef.current = trimmed;
+
   // Picking a hit plots it + fans out to the nearest G-NAF doors. The flip to
   // map view goes through the URL (persist:false – a programmatic flip must not
   // overwrite the user's saved default view; in map view it's already a no-op).
   const pick = useCallback(
     async (hit: GeocodeHit) => {
+      // A manual pick counts as plotting the current q, so the map-view geocode
+      // effect below won't override it with the top hit on its next run.
+      autoPlottedQ.current = trimmedRef.current;
       setPicked(hit);
       setView("map", { persist: false });
       setActivePid("");
@@ -108,7 +118,6 @@ export default function AddressesPage() {
   // so it auto-plots the top hit — which is what makes a typed query in the
   // default (map) view, or a shared ?view=map&q=… link, resolve to doors without
   // a manual pick. autoPlottedQ stops the same term re-plotting on every rerun.
-  const autoPlottedQ = useRef("");
   useEffect(() => {
     if (trimmed.length < 3) {
       setHits([]);

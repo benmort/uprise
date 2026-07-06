@@ -464,6 +464,8 @@ export class IntegrationsService {
       listName: dto.listName,
       audienceName: dto.audienceName,
     });
+    const source =
+      dto.type === "ACTION_NETWORK" ? AudienceSource.ACTION_NETWORK : AudienceSource.INTERNAL;
 
     const initialPayload: IntegrationSyncJobPayload = {
       syncJobId: "",
@@ -476,15 +478,48 @@ export class IntegrationsService {
     };
     const initialState = this.createInitialCheckpointState(initialPayload);
 
-    const syncJob = await this.prisma.integrationSyncJob.create({
-      data: {
-        tenantId,
-        integrationConnectionId: connection.id,
-        status: IntegrationJobStatus.QUEUED,
-        query: dto.query,
-        remoteListId: dto.listId,
-        errorSummary: JSON.stringify(initialState),
-      },
+    // Create the audience up-front and stamp it on the sync job in one transaction,
+    // so the UI can show the row and its live status immediately instead of waiting
+    // for the worker to lazily create it (and so a failed sync still leaves a
+    // visible, FAILED-badged row rather than nothing). Idempotent on
+    // (tenant, list, source): a re-sync reuses the audience instead of spawning a
+    // duplicate — the old lazy path created a fresh audience on every run.
+    //
+    // NB: there is no unique index on (tenantId, externalListId, source) yet (it is
+    // deferred — prod likely has legacy duplicates that would block CREATE UNIQUE
+    // INDEX). A concurrent double-click can therefore still create two audiences;
+    // when the index lands, add the P2002 re-read OUTSIDE this transaction (a
+    // constraint error aborts the whole interactive tx, so it can't be caught here).
+    const { syncJob, audienceId } = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.audience.findFirst({
+        where: { tenantId, externalListId: dto.listId, source },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      const audience =
+        existing ??
+        (await tx.audience.create({
+          data: {
+            tenantId,
+            name: audienceName,
+            source,
+            externalListId: dto.listId,
+            status: "ACTIVE",
+          },
+          select: { id: true },
+        }));
+      const job = await tx.integrationSyncJob.create({
+        data: {
+          tenantId,
+          integrationConnectionId: connection.id,
+          status: IntegrationJobStatus.QUEUED,
+          query: dto.query,
+          remoteListId: dto.listId,
+          audienceId: audience.id,
+          errorSummary: JSON.stringify(initialState),
+        },
+      });
+      return { syncJob: job, audienceId: audience.id };
     });
 
     const payload: IntegrationSyncJobPayload = {
@@ -511,6 +546,7 @@ export class IntegrationsService {
     }
     return {
       syncJobId: syncJob.id,
+      audienceId,
       queued: queued.queued,
       queueJobId: queued.jobId,
       status: IntegrationJobStatus.QUEUED,

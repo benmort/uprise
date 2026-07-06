@@ -19,8 +19,9 @@ function setup(definition: unknown) {
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const svc = new SegmentEvaluatorService(prisma, logger);
-  return { svc, prisma, created };
+  const outbox = { append: jest.fn(async () => undefined) } as any;
+  const svc = new SegmentEvaluatorService(prisma, logger, outbox);
+  return { svc, prisma, created, outbox };
 }
 
 const idSet = (created: Array<{ contactId: string }>) =>
@@ -153,5 +154,37 @@ describe("SegmentEvaluatorService", () => {
     await svc.evaluate("seg1");
 
     expect(idSet(created)).toEqual(new Set(["c9"]));
+  });
+
+  it("emits audience.segment.recomputed atomically with the rewrite, carrying the count", async () => {
+    const { svc, prisma, outbox } = setup({ type: "all" });
+    prisma.contact.findMany.mockResolvedValueOnce([{ id: "c1" }, { id: "c2" }]);
+
+    await svc.evaluate("seg1");
+
+    // Emitted with the transaction handle (cb receives `prisma` as tx here).
+    expect(outbox.append).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        eventType: "audience.segment.recomputed",
+        aggregateId: "seg1",
+        payload: expect.objectContaining({ segmentId: "seg1", tenantId: "t1", memberCount: 2 }),
+      }),
+    );
+  });
+
+  it("emits audience.segment.recomputed even when membership resolves to empty (count 0)", async () => {
+    const { svc, prisma, outbox } = setup({ type: "emailDomain", domain: "nobody.example" });
+    prisma.contact.findMany.mockResolvedValueOnce([]);
+
+    await svc.evaluate("seg1");
+
+    expect(outbox.append).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        eventType: "audience.segment.recomputed",
+        payload: expect.objectContaining({ memberCount: 0 }),
+      }),
+    );
   });
 });

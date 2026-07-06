@@ -4,6 +4,7 @@ export type DispatchQueueName =
   | "blast-retry"
   | "integration-sync"
   | "journey-run"
+  | "segment-eval"
   | "domain-events";
 
 export type DispatchQueueJob<TPayload> = {

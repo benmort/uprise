@@ -70,6 +70,14 @@ export class AudiencesController {
     return this.audiences.ensureWhatsappOptInAudience(tenantId);
   }
 
+  /** Dynamic/static segments for the tenant (backs the admin "Dynamic Segments" card).
+   *  Declared BEFORE `@Get(":id")` so "segments" isn't captured as an audience id. */
+  @Get("segments")
+  @RequirePermission(READ)
+  listSegments(@TenantId() tenantId: string) {
+    return this.audiences.listSegments(tenantId);
+  }
+
   @Get(":id")
   @RequirePermission(READ)
   getOne(@TenantId() tenantId: string, @Param("id") id: string) {

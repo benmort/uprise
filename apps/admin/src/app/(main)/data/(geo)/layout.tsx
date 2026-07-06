@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { TurfBasketProvider, useTurfBasket } from "@/lib/canvass/turf-basket";
 import {
   GEO_VIEW_PERSIST_EVENT,
+  GeoTabRowSlotContext,
   kindFromPathname,
   writeGeoParam,
   type GeoExplorerKind,
@@ -60,7 +61,7 @@ const DESCRIPTION: Record<GeoExplorerKind, string> = {
   addresses: "Search any address live, plot it, and see the real doors around it.",
 };
 
-function GeoExplorerChrome() {
+function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | null) => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const kind = kindFromPathname(pathname);
@@ -156,7 +157,13 @@ function GeoExplorerChrome() {
             </Link>
           ))}
         </div>
-        {!hideSearch ? (
+        {hideSearch ? (
+          // Areas map view: the map owns its own Areas|Places + search combobox
+          // (it selects areas on the map), so instead of a duplicate box here the
+          // page portals that combobox into this slot — putting it on the tab row
+          // like the shared search sits on the other kinds.
+          <div ref={onTabRowSlot} className="flex min-h-9 flex-1 items-center gap-2" />
+        ) : (
           <div className="relative max-w-md flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -167,7 +174,7 @@ function GeoExplorerChrome() {
               aria-label={`Search ${TITLE[kind].toLowerCase()}`}
             />
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   );
@@ -191,17 +198,23 @@ function MyTurfChip({ onOpen }: { onOpen: () => void }) {
 }
 
 export default function GeoExplorerLayout({ children }: { children: React.ReactNode }) {
+  // The tab-row slot the Areas map view portals its search combobox into (null on
+  // every other view). Lifted here so the chrome (which owns the slot element via
+  // its ref) and the page (which portals into it) share the same node by context.
+  const [tabRowSlot, setTabRowSlot] = useState<HTMLElement | null>(null);
   return (
     // The basket spans all three explorer tabs (persistent group layout).
     <TurfBasketProvider>
-      <div className="page-stack">
-        {/* Suspense: useSearchParams in a client layout – cheap insurance against
-            the CSR-bailout build check, independent of (main)/loading.tsx. */}
-        <Suspense fallback={null}>
-          <GeoExplorerChrome />
-        </Suspense>
-        {children}
-      </div>
+      <GeoTabRowSlotContext.Provider value={tabRowSlot}>
+        <div className="page-stack">
+          {/* Suspense: useSearchParams in a client layout – cheap insurance against
+              the CSR-bailout build check, independent of (main)/loading.tsx. */}
+          <Suspense fallback={null}>
+            <GeoExplorerChrome onTabRowSlot={setTabRowSlot} />
+          </Suspense>
+          {children}
+        </div>
+      </GeoTabRowSlotContext.Provider>
     </TurfBasketProvider>
   );
 }

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { ConsentState, MessageChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
+import { OutboxService } from "../common/outbox/outbox.service";
 
 type Clause = Record<string, unknown>;
 
@@ -26,6 +27,7 @@ export class SegmentEvaluatorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly logger: DomainLogger,
+    private readonly outbox: OutboxService,
   ) {}
 
   /** Re-materialise a segment's membership. Returns the resolved member count. */
@@ -48,6 +50,19 @@ export class SegmentEvaluatorService {
           skipDuplicates: true,
         });
       }
+      // Durable domain event, atomic with the membership rewrite (meld doc 05) —
+      // lets journeys/analytics react to a resolved segment. Emitted even at count 0
+      // (an emptied segment is still a recompute worth publishing).
+      await this.outbox.append(tx, {
+        tenantId: segment.tenantId,
+        eventType: "audience.segment.recomputed",
+        aggregateId: segmentId,
+        payload: {
+          segmentId,
+          tenantId: segment.tenantId,
+          memberCount: contactIds.length,
+        },
+      });
     });
 
     this.logger.debug("audience", "segment evaluated", { segmentId, count: contactIds.length });

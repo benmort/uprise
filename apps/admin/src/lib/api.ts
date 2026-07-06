@@ -17,6 +17,7 @@ import type {
   DoorKnockSurveyAnswer,
   CanvassAssignment,
 } from "@uprise/field";
+import type { IntegrationSyncJob } from "./audience-sync";
 
 export { getApiUrl };
 export type { ApiResult };
@@ -297,6 +298,21 @@ export async function searchIntegrationLists(type: "ACTION_NETWORK" | "INTERNAL"
   return request<{ lists: Array<Record<string, unknown>> }>(`/integrations/lists/search?${q}`);
 }
 
+export type SyncIntegrationListResult = {
+  syncJobId?: string;
+  /** The audience the sync writes into — created up-front so the UI can show it immediately. */
+  audienceId?: string;
+  queued?: boolean;
+  queueJobId?: string;
+  status?: string;
+  audienceName?: string;
+  listId?: string;
+  type?: string;
+  syncedCount?: number;
+  failedCount?: number;
+  stats?: Record<string, unknown>;
+};
+
 export async function syncIntegrationList(input: {
   type: "ACTION_NETWORK" | "INTERNAL";
   listId: string;
@@ -304,11 +320,35 @@ export async function syncIntegrationList(input: {
   listName?: string;
   query?: string;
 }) {
-  return request<Record<string, unknown>>("/integrations/lists/sync", {
+  return request<SyncIntegrationListResult>("/integrations/lists/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
+}
+
+/** Recent integration sync jobs (drives the live sync badge + poll on the audiences page). */
+export async function getSyncJobs(limit = 50) {
+  return request<IntegrationSyncJob[]>(
+    `/integrations/sync-jobs?limit=${encodeURIComponent(String(limit))}`,
+  );
+}
+
+export type AudienceSegmentRow = {
+  id: string;
+  name: string;
+  type: string;
+  audienceId: string;
+  audienceName: string | null;
+  source: string | null;
+  syncedAt: string | null;
+  memberCount: number;
+  updatedAt: string;
+};
+
+/** Dynamic/static segments for the tenant (the "Dynamic Segments" card). */
+export async function getAudienceSegments() {
+  return request<AudienceSegmentRow[]>("/audiences/segments");
 }
 
 export async function upsertIntegrationConnection(input: {

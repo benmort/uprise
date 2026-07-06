@@ -20,7 +20,7 @@ import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
 import { STATE_ABBREVS, stateAbbrevToAsgsDigit } from "@/lib/canvass/states";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
-import { useGeoExplorerUrlState } from "@/components/canvass/use-geo-explorer-url-state";
+import { useGeoExplorerUrlState, useGeoTabRowSlot } from "@/components/canvass/use-geo-explorer-url-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -232,9 +232,13 @@ export default function AreasPage() {
 
   const existing: ExistingTurf[] = [];
 
-  // Map mode's level pills + area/place search portal into this row so they sit
-  // under the page chrome like the divisions tabs, not floating over the map.
+  // Map mode's level pills portal into this row so they sit under the page chrome
+  // like the divisions tabs, not floating over the map.
   const [mapControlsEl, setMapControlsEl] = useState<HTMLDivElement | null>(null);
+  // The Areas|Places + search combobox portals UP onto the (geo) tab row (the
+  // layout exposes the slot via context) so it shares the row with the kind tabs
+  // like the search box does on the other kinds — not on a separate row.
+  const tabRowSlot = useGeoTabRowSlot();
 
   const tabPills = (
     <div className="flex rounded-xl border border-border p-0.5">
@@ -271,6 +275,7 @@ export default function AreasPage() {
               onPolygonsChange={setPolygons}
               clearToken={clearToken}
               controlsContainer={mapControlsEl}
+              searchContainer={tabRowSlot}
               level={level}
               onLevelChange={(l) => setTab(l)}
               searchMode={searchMode}

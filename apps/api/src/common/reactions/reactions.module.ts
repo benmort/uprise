@@ -17,6 +17,9 @@ import { TelephonyProvisioningService } from "../../telephony/telephony-provisio
 import { buildTelephonyProvisioningReactions } from "../../telephony/telephony-provisioning.reactions";
 import { EmailProvisioningService } from "../../email/email-provisioning.service";
 import { buildEmailProvisioningReactions } from "../../email/email-provisioning.reactions";
+import { AudiencesModule } from "../../audiences/audiences.module";
+import { AudiencesService } from "../../audiences/audiences.service";
+import { buildAudienceReactions } from "../../audiences/audience.reactions";
 
 /**
  * Wires the reaction registry + the ported cross-domain reactions (meld doc 12).
@@ -24,7 +27,7 @@ import { buildEmailProvisioningReactions } from "../../email/email-provisioning.
  * Reaction closes over what it needs. Email/Payment/Prisma/Logging are @Global.
  */
 @Module({
-  imports: [LoggingModule],
+  imports: [LoggingModule, AudiencesModule],
   providers: [
     {
       provide: REACTIONS,
@@ -38,10 +41,12 @@ import { buildEmailProvisioningReactions } from "../../email/email-provisioning.
         logger: DomainLogger,
         provisioning: TelephonyProvisioningService,
         emailProvisioning: EmailProvisioningService,
+        audiences: AudiencesService,
       ): ReactionList => [
         ...buildDomainReactions({ prisma, email, sms, stripe, billing, config, logger }),
         ...buildTelephonyProvisioningReactions({ provisioning }),
         ...buildEmailProvisioningReactions({ provisioning: emailProvisioning }),
+        ...buildAudienceReactions({ audiences, logger }),
       ],
       inject: [
         PrismaService,
@@ -53,6 +58,7 @@ import { buildEmailProvisioningReactions } from "../../email/email-provisioning.
         DomainLogger,
         TelephonyProvisioningService,
         EmailProvisioningService,
+        AudiencesService,
       ],
     },
     ReactionRegistry,

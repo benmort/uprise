@@ -99,6 +99,7 @@ export function TurfDrawMap({
   onPolygonsChange,
   clearToken,
   controlsContainer,
+  searchContainer,
   level: levelProp,
   onLevelChange,
   searchMode: searchModeProp,
@@ -120,6 +121,15 @@ export function TurfDrawMap({
    * null while the container ref is still mounting and they render nowhere.
    */
   controlsContainer?: HTMLElement | null;
+  /**
+   * Where the Areas|Places + search combobox renders, split out from the level
+   * pills. Omit → it stays inline with the pills in `controlsContainer` (the
+   * default toolbar). Pass an element (e.g. the (geo) layout's tab-row slot) →
+   * the combobox portals there instead, so it sits on the tab row while the
+   * level pills stay in `controlsContainer`. Only applies when `controlsContainer`
+   * is set (the portaled-toolbar path); the on-map overlay ignores it.
+   */
+  searchContainer?: HTMLElement | null;
   /**
    * Optional controlled state. When a value is supplied the component reads it
    * (and calls the matching callback on change) instead of its own useState, so
@@ -341,6 +351,79 @@ export function TurfDrawMap({
     );
   }
 
+  // The Areas|Places + search combobox. Rendered inline with the level pills by
+  // default; when a `searchContainer` is supplied it portals there instead (the
+  // areas explorer lifts it onto the (geo) tab row). One element, one place at a
+  // time — see the portal branch below.
+  const searchCombobox = (
+    <div className="relative">
+      <div className="flex h-9 items-center overflow-hidden rounded-lg border border-border bg-surface">
+        {(["area", "place"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => {
+              setSearchMode(m);
+              setHits([]);
+            }}
+            className={`self-stretch px-2.5 text-[11px] font-bold uppercase tracking-[0.05em] transition ${
+              searchMode === m ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {m === "area" ? "Areas" : "Places"}
+          </button>
+        ))}
+        <span className="h-5 w-px bg-border" />
+        <div className="flex items-center gap-1.5 px-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setAreaOpen(true)}
+            onBlur={() => setTimeout(() => setAreaOpen(false), 150)}
+            onKeyDown={(e) => e.key === "Enter" && void runSearch()}
+            placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
+            className="w-52 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+          {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+          {query ? (
+            <button type="button" aria-label="Clear" onClick={() => { setQuery(""); setHits([]); }}>
+              <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {displayList.length > 0 ? (
+        <ul className="absolute left-0 top-full z-20 mt-1 max-h-64 w-72 overflow-auto rounded-lg border border-border bg-surface shadow-card">
+          {displayList.map((h, i) => (
+            <li key={`${h.code ?? h.label}-${i}`}>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void pickHit(h)}
+                className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-surface-variant"
+              >
+                <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <span className="truncate">{h.label}</span>
+              </button>
+            </li>
+          ))}
+          {areaListTruncated ? (
+            <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
+              Showing first {AREA_LIST_CAP} — type to search the full {level.toUpperCase()} list.
+            </li>
+          ) : null}
+        </ul>
+      ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
+        <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-surface px-2 py-1.5 text-[11px] text-muted-foreground shadow-card">
+          {tooZoomedOut
+            ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
+            : `No ${level.toUpperCase()} areas in view — type to search.`}
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <div className="relative h-full w-full">
       <Map
@@ -389,99 +472,40 @@ export function TurfDrawMap({
 
       {/* Level toggle + search panel: portaled toolbar or on-map overlay. */}
       {controlsContainer !== undefined ? (
-        controlsContainer &&
-        createPortal(
-          <>
-            <div className="flex rounded-xl border border-border p-0.5">
-              {LEVELS.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => selectLevel(l.id)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                    level === l.id ? "bg-primary text-white" : "text-foreground"
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative">
-              <div className="flex h-9 items-center overflow-hidden rounded-lg border border-border bg-surface">
-                {(["area", "place"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setSearchMode(m);
-                      setHits([]);
-                    }}
-                    className={`self-stretch px-2.5 text-[11px] font-bold uppercase tracking-[0.05em] transition ${
-                      searchMode === m ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {m === "area" ? "Areas" : "Places"}
-                  </button>
-                ))}
-                <span className="h-5 w-px bg-border" />
-                <div className="flex items-center gap-1.5 px-2">
-                  <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onFocus={() => setAreaOpen(true)}
-                    onBlur={() => setTimeout(() => setAreaOpen(false), 150)}
-                    onKeyDown={(e) => e.key === "Enter" && void runSearch()}
-                    placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
-                    className="w-52 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                  />
-                  {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
-                  {query ? (
-                    <button type="button" aria-label="Clear" onClick={() => { setQuery(""); setHits([]); }}>
-                      <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+        <>
+          {controlsContainer &&
+            createPortal(
+              <>
+                <div className="flex rounded-xl border border-border p-0.5">
+                  {LEVELS.map((l) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => selectLevel(l.id)}
+                      className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                        level === l.id ? "bg-primary text-white" : "text-foreground"
+                      }`}
+                    >
+                      {l.label}
                     </button>
-                  ) : null}
-                </div>
-              </div>
-              {displayList.length > 0 ? (
-                <ul className="absolute left-0 top-full z-20 mt-1 max-h-64 w-72 overflow-auto rounded-lg border border-border bg-surface shadow-card">
-                  {displayList.map((h, i) => (
-                    <li key={`${h.code ?? h.label}-${i}`}>
-                      <button
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={() => void pickHit(h)}
-                        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs hover:bg-surface-variant"
-                      >
-                        <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{h.label}</span>
-                      </button>
-                    </li>
                   ))}
-                  {areaListTruncated ? (
-                    <li className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                      Showing first {AREA_LIST_CAP} — type to search the full {level.toUpperCase()} list.
-                    </li>
-                  ) : null}
-                </ul>
-              ) : searchMode === "area" && areaOpen && query.trim().length < 2 ? (
-                <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-surface px-2 py-1.5 text-[11px] text-muted-foreground shadow-card">
-                  {tooZoomedOut
-                    ? `Zoom in to list ${level.toUpperCase()} areas, or type to search.`
-                    : `No ${level.toUpperCase()} areas in view — type to search.`}
                 </div>
-              ) : null}
-            </div>
 
-            {tooZoomedOut ? (
-              <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground">
-                Zoom in to load {level.toUpperCase()} boundaries.
-              </p>
-            ) : null}
-          </>,
-          controlsContainer,
-        )
+                {/* Search sits inline with the pills by default; when a
+                    searchContainer (the tab-row slot) is supplied it portals
+                    there instead, so it lands on the tab row. */}
+                {searchContainer == null ? searchCombobox : null}
+
+                {tooZoomedOut ? (
+                  <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground">
+                    Zoom in to load {level.toUpperCase()} boundaries.
+                  </p>
+                ) : null}
+              </>,
+              controlsContainer,
+            )}
+          {controlsContainer && searchContainer ? createPortal(searchCombobox, searchContainer) : null}
+        </>
       ) : (
         <div className="absolute right-2 top-2 z-10 w-64 space-y-2">
           <div className="flex overflow-hidden rounded-lg border border-border bg-surface shadow-card">

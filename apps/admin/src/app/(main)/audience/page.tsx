@@ -6,13 +6,21 @@ import {
   createAudience,
   createWhatsappOptInAudience,
   getAudienceImportStatus,
+  getAudienceSegments,
+  getSyncJobs,
   importAudienceCsv,
   listAudiences,
   searchIntegrationLists,
   syncIntegrationList,
   type AudienceChannel,
   type AudienceImportProgress,
+  type AudienceSegmentRow,
 } from "@/lib/api";
+import {
+  mergeSyncBadges,
+  pollSyncJob,
+  type IntegrationSyncJob,
+} from "@/lib/audience-sync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -51,6 +59,20 @@ type UploadState = {
 
 const AUDIENCE_SEARCH_KEY = "uprise.audience.search";
 const FILE_UPLOAD_PROGRESS_WEIGHT = 10;
+const SEGMENT_TYPE_LABEL: Record<string, string> = { DYNAMIC: "Dynamic", STATIC: "Static" };
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Pull a human-readable reason out of a sync job's errorSummary JSON blob. */
+function summariseSyncError(errorSummary: string | null | undefined): string {
+  if (!errorSummary) return "";
+  try {
+    const parsed = JSON.parse(errorSummary) as { error?: unknown };
+    return typeof parsed.error === "string" ? parsed.error : "";
+  } catch {
+    return errorSummary.slice(0, 200);
+  }
+}
 
 function clampProgress(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -129,6 +151,31 @@ export default function AudiencePage() {
   const [uploadState, setUploadState] = useState<UploadState | null>(null);
   const [validationMessage, setValidationMessage] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncJobs, setSyncJobs] = useState<IntegrationSyncJob[]>([]);
+  const [segments, setSegments] = useState<AudienceSegmentRow[]>([]);
+  const [segmentsLoading, setSegmentsLoading] = useState(true);
+  const [segmentsError, setSegmentsError] = useState("");
+  // Guards the sync poll loop so it stops if the user navigates away mid-sync.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const loadSegments = async () => {
+    setSegmentsLoading(true);
+    const res = await getAudienceSegments();
+    if (res.ok) {
+      setSegments(res.data);
+      setSegmentsError("");
+    } else {
+      setSegmentsError(res.error);
+    }
+    setSegmentsLoading(false);
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -167,12 +214,100 @@ export default function AudiencePage() {
     setListsLoading(false);
   };
 
+  const handleSyncSelectedList = async () => {
+    if (!selectedListId || syncing) return;
+    const selectedList = lists.find((list) => String(list.id) === selectedListId);
+    const selectedListName = String(selectedList?.name || "").trim();
+    const audienceNameForSync = `Action Network: ${selectedListName || "Unnamed list"}`;
+    setSyncing(true);
+    setSyncMessage("");
+    try {
+      const synced = await syncIntegrationList({
+        type: integrationType,
+        listId: selectedListId,
+        listName: selectedListName || undefined,
+        audienceName: audienceNameForSync,
+      });
+      if (!synced.ok) {
+        setSyncMessage(synced.error);
+        showToast({ tone: "error", title: "Integration sync failed", description: synced.error });
+        return;
+      }
+      const response = synced.data ?? {};
+      const audienceId = String(response.audienceId || "").trim();
+      const syncJobId = String(response.syncJobId || "").trim();
+      setSyncMessage(
+        `Sync queued${syncJobId ? ` (job ${syncJobId.slice(0, 8)})` : ""}. Tracking progress…`,
+      );
+      showToast({
+        tone: "success",
+        title: "Integration sync queued",
+        description: "The worker is processing this list — the row below updates live.",
+      });
+
+      // The audience is created up-front by the API, so surface the row immediately
+      // (with a QUEUED badge), then poll the sync job to a terminal state and reflect
+      // success/failure — no more silent "queued and vanished".
+      if (audienceId) {
+        setRows((prev) =>
+          prev.some((r) => r.id === audienceId)
+            ? prev
+            : [
+                {
+                  id: audienceId,
+                  name: audienceNameForSync,
+                  source: "ACTION_NETWORK",
+                  status: "QUEUED",
+                  channel: "ALL",
+                  _count: { contacts: 0 },
+                },
+                ...prev,
+              ],
+        );
+        const fetchJobs = async (): Promise<IntegrationSyncJob[]> => {
+          const res = await getSyncJobs();
+          const jobs = res.ok ? res.data : [];
+          if (mountedRef.current) setSyncJobs(jobs);
+          return jobs;
+        };
+        const terminal = await pollSyncJob({
+          audienceId,
+          fetchJobs,
+          sleep,
+          shouldContinue: () => mountedRef.current,
+        });
+        if (!mountedRef.current) return;
+        if (terminal?.status === "FAILED") {
+          const reason = summariseSyncError(terminal.errorSummary);
+          setSyncMessage(`Sync failed${reason ? `: ${reason}` : ""}.`);
+          showToast({
+            tone: "error",
+            title: "Integration sync failed",
+            description: reason || "The worker could not complete this sync.",
+          });
+        } else if (terminal?.status === "SUCCEEDED") {
+          setSyncMessage(`Synced ${Number(terminal.syncedCount ?? 0)} contacts.`);
+          showToast({
+            tone: "success",
+            title: "Integration sync completed",
+            description: `Synced ${Number(terminal.syncedCount ?? 0)} contacts.`,
+          });
+        }
+      }
+      await refresh();
+      await loadSegments();
+    } finally {
+      if (mountedRef.current) setSyncing(false);
+    }
+  };
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setFilter(window.localStorage.getItem(AUDIENCE_SEARCH_KEY) || "");
     }
     refresh();
     loadIntegrationLists();
+    loadSegments();
   }, []);
 
   useEffect(() => {
@@ -463,61 +598,20 @@ export default function AudiencePage() {
               </Button>
               <Button
                 size="sm"
-                onClick={async () => {
-                  if (!selectedListId) return;
-                  const selectedList = lists.find((list) => String(list.id) === selectedListId);
-                  const selectedListName = String(selectedList?.name || "").trim();
-                  const audienceNameForSync =
-                    integrationType === "ACTION_NETWORK"
-                      ? `Action Network: ${selectedListName || "Unnamed list"}`
-                      : `${integrationType === "ACTION_NETWORK" ? "Action Network" : "Internal"}: ${selectedListName || selectedListId}`;
-                  const synced = await syncIntegrationList({
-                    type: integrationType,
-                    listId: selectedListId,
-                    listName: selectedListName || undefined,
-                    audienceName: audienceNameForSync,
-                  });
-                  if (synced.ok) {
-                    const response = (synced.data || {}) as Record<string, unknown>;
-                    if (response.queued || response.status === "QUEUED" || response.syncJobId) {
-                      const syncJobId = String(response.syncJobId || "").trim();
-                      setSyncMessage(
-                        `Sync queued${syncJobId ? ` (job ${syncJobId.slice(0, 8)})` : ""}. It will continue in the background.`,
-                      );
-                      showToast({
-                        tone: "success",
-                        title: "Integration sync queued",
-                        description: "The worker will process this list in the background.",
-                      });
-                    } else {
-                      const stats = response.stats as Record<string, unknown> | undefined;
-                      const skippedNoPhone = Number((stats?.skippedNoPhone as number) || 0);
-                      const skippedInvalidPhone = Number((stats?.skippedInvalidPhone as number) || 0);
-                      const nonContactableTotal = skippedNoPhone + skippedInvalidPhone;
-                      setSyncMessage(
-                        `Synced ${String(response.syncedCount)} contacts${
-                          nonContactableTotal > 0 ? ` (${nonContactableTotal} marked non-contactable)` : ""
-                        }`,
-                      );
-                      showToast({
-                        tone: "success",
-                        title: "Integration sync completed",
-                        description: `Synced ${String(response.syncedCount)} contacts.`,
-                      });
-                    }
-                    await refresh();
-                  } else {
-                    setSyncMessage(synced.error);
-                    showToast({
-                      tone: "error",
-                      title: "Integration sync failed",
-                      description: synced.error,
-                    });
-                  }
-                }}
-                disabled={!selectedListId}
+                onClick={() => void handleSyncSelectedList()}
+                disabled={!selectedListId || syncing}
               >
-                Sync Selected List
+                {syncing ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
+                      aria-hidden
+                    />
+                    Syncing…
+                  </span>
+                ) : (
+                  "Sync Selected List"
+                )}
               </Button>
             </div>
           </CardHeader>
@@ -619,7 +713,7 @@ export default function AudiencePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paged.map((row) => {
+                    {mergeSyncBadges(paged, syncJobs).map((row) => {
                       const isUploading = uploadState?.audienceId === row.id;
                       const progressPercent = uploadState ? clampProgress(uploadState.progress) : 0;
                       const progressDetails = uploadState ? getUploadProgressDetails(uploadState) : "";
@@ -689,7 +783,9 @@ export default function AudiencePage() {
                             )}
                           </td>
                           <td className="py-3 pr-4">
-                            <StatusBadge status={isUploading ? uploadState.status : row.status} />
+                            <StatusBadge
+                              status={isUploading ? uploadState.status : (row.syncBadge ?? row.status)}
+                            />
                           </td>
                           <td className="py-3 pr-4">
                             <div className="flex items-center gap-2 opacity-60 transition group-hover:opacity-100">
@@ -732,6 +828,75 @@ export default function AudiencePage() {
                 />
               </div>
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="tour-audience-segments">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>Dynamic Segments</CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void loadSegments()}
+            disabled={segmentsLoading}
+          >
+            Refresh
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {segmentsLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12" />
+              <Skeleton className="h-12" />
+            </div>
+          ) : segmentsError ? (
+            <EmptyState
+              title="We couldn't load segments"
+              description={segmentsError}
+              ctaLabel="Retry"
+              onCta={() => void loadSegments()}
+            />
+          ) : segments.length === 0 ? (
+            <EmptyState
+              title="No segments yet"
+              description="Segments are created automatically when you sync a list — sync an Action Network list to see its members resolved here."
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
+                    <th className="py-2 pr-4">Segment</th>
+                    <th className="py-2 pr-4">Audience</th>
+                    <th className="py-2 pr-4">Type</th>
+                    <th className="py-2 pr-4">Members</th>
+                    <th className="py-2 pr-4">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {segments.map((segment) => (
+                    <tr
+                      key={segment.id}
+                      className="cursor-pointer border-b border-border/70 hover:bg-primary-container/10"
+                      onClick={() => router.push(`/audience/${segment.audienceId}`)}
+                    >
+                      <td className="py-3 pr-4 font-medium">{segment.name}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">
+                        {segment.audienceName ?? "—"}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <StatusBadge status={SEGMENT_TYPE_LABEL[segment.type] ?? segment.type} />
+                      </td>
+                      <td className="py-3 pr-4">{segment.memberCount.toLocaleString()}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">
+                        {new Date(segment.updatedAt).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

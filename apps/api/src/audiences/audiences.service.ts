@@ -3,6 +3,7 @@ import {
   AudienceChannel,
   AudienceImportStatus,
   AudienceKind,
+  AudienceSegmentType,
   AudienceSource,
   AudienceStatus,
   ConsentState,
@@ -19,6 +20,7 @@ import { FeatureFlagsService } from "../common/flags/feature-flags.service";
 import { DispatchQueue } from "../common/queue/dispatch-queue";
 import {
   getAudienceImportJobId,
+  getSegmentEvalJobId,
   QUEUE_JOB_TYPES,
   QUEUE_NAMES,
 } from "../common/queue/queue.constants";
@@ -165,6 +167,101 @@ export class AudiencesService {
       this.prisma.audience.count({ where }),
     ]);
     return { rows, total };
+  }
+
+  /** Reserved name of the default dynamic segment auto-created for an imported audience. */
+  private static readonly IMPORT_SEGMENT_NAME = "Imported contacts";
+
+  /** Provenance source-system key for an audience source — matches what the import
+   *  writes to ContactSourceRecord (see IntegrationsService.sourceSystemFor). */
+  private sourceSystemForAudience(source: AudienceSource): string {
+    switch (source) {
+      case AudienceSource.ACTION_NETWORK:
+        return "action_network";
+      case AudienceSource.INTERNAL:
+        return "internal_source";
+      case AudienceSource.CSV:
+        return "csv";
+      default:
+        return "manual";
+    }
+  }
+
+  /**
+   * Ensure the default "Imported contacts" DYNAMIC segment exists for an audience and
+   * (re-)materialise its membership. Called from the `audience.imported` reaction after
+   * a sync completes. Idempotent: reuses the segment on re-sync, and the stable
+   * segment-eval jobId dedupes concurrent evaluations. Returns null if the audience is
+   * gone (e.g. deleted between the event and the reaction).
+   */
+  async ensureImportSegment(
+    tenantId: string,
+    audienceId: string,
+  ): Promise<{ segmentId: string; created: boolean } | null> {
+    const audience = await this.prisma.audience.findFirst({
+      where: { id: audienceId, tenantId },
+      select: { id: true, source: true },
+    });
+    if (!audience) return null;
+
+    const sourceSystem = this.sourceSystemForAudience(audience.source);
+    const existing = await this.prisma.audienceSegment.findFirst({
+      where: {
+        tenantId,
+        audienceId,
+        type: AudienceSegmentType.DYNAMIC,
+        name: AudiencesService.IMPORT_SEGMENT_NAME,
+      },
+      select: { id: true },
+    });
+    const segment =
+      existing ??
+      (await this.prisma.audienceSegment.create({
+        data: {
+          tenantId,
+          audienceId,
+          name: AudiencesService.IMPORT_SEGMENT_NAME,
+          type: AudienceSegmentType.DYNAMIC,
+          definition: { type: "hasSource", sourceSystem } as Prisma.InputJsonValue,
+        },
+        select: { id: true },
+      }));
+
+    // Re-materialise membership on the built-in segment-eval worker. Stable jobId
+    // collapses duplicate evals from a re-sync / event replay.
+    await this.queue.enqueue({
+      id: getSegmentEvalJobId(segment.id),
+      queue: QUEUE_NAMES.SEGMENT_EVAL,
+      type: QUEUE_JOB_TYPES.SEGMENT_EVAL_RUN,
+      payload: { segmentId: segment.id },
+      removeOnComplete: true,
+    });
+
+    return { segmentId: segment.id, created: !existing };
+  }
+
+  /** Dynamic/static segments for the tenant, with live member counts and their
+   *  parent audience — backs the admin "Dynamic Segments" surface. */
+  async listSegments(tenantId: string) {
+    const rows = await this.prisma.audienceSegment.findMany({
+      where: { tenantId },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        _count: { select: { members: true } },
+        audience: { select: { id: true, name: true, source: true, syncedAt: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      audienceId: r.audienceId,
+      audienceName: r.audience?.name ?? null,
+      source: r.audience?.source ?? null,
+      syncedAt: r.audience?.syncedAt ?? null,
+      memberCount: r._count.members,
+      updatedAt: r.updatedAt,
+    }));
   }
 
   async getAudience(tenantId: string, id: string) {
