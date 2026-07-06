@@ -5,6 +5,7 @@
 // callback for inbox.inbound / inbox.reply events so the shared inbox can refetch.
 import { useEffect, useRef } from 'react';
 import { getApiUrl, getRealtimeStreamToken } from '@/lib/api';
+import { nextReconnectDelay } from './reconnect-backoff';
 
 export type InboxRealtimeEvent = { type: string; payload: Record<string, unknown> };
 
@@ -32,6 +33,14 @@ export function useRealtimeInbox(onEvent: (event: InboxRealtimeEvent) => void, e
       refreshTimer = null;
       reconnectTimer = null;
     };
+    // One backoff path for both failure modes (no token, or a dropped stream):
+    // bump the attempt count and retry after an exponentially-growing, capped
+    // delay so a persistent failure stops hammering (and stops re-logging the
+    // browser's CORS/network error) every few seconds. onopen resets attempts.
+    const scheduleReconnect = () => {
+      attempts += 1;
+      reconnectTimer = setTimeout(() => void connect(), nextReconnectDelay(attempts));
+    };
 
     const connect = async () => {
       if (cancelled) return;
@@ -39,7 +48,7 @@ export function useRealtimeInbox(onEvent: (event: InboxRealtimeEvent) => void, e
       const tok = await getRealtimeStreamToken();
       if (cancelled) return;
       if (!tok.ok) {
-        reconnectTimer = setTimeout(() => void connect(), 10000);
+        scheduleReconnect();
         return;
       }
       const expiresAtMs = Date.parse(tok.data.expiresAt);
@@ -58,9 +67,7 @@ export function useRealtimeInbox(onEvent: (event: InboxRealtimeEvent) => void, e
       };
       source.onerror = () => {
         close();
-        attempts += 1;
-        const delay = Math.min(15000, 1000 * 2 ** Math.min(attempts, 4));
-        reconnectTimer = setTimeout(() => void connect(), delay);
+        scheduleReconnect();
       };
       source.onmessage = (evt) => {
         try {

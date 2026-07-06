@@ -153,7 +153,8 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       children: [
         { label: "General", href: "/settings", match: (p) => p === "/settings" || p.startsWith("/future/tenant-settings") },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
-        { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
+        // Integrations moved into Settings → General (the tenant-settings tab); the
+        // /settings/integrations route still works but isn't a standalone nav item.
         // Customer-facing multi-brand: owners on a multi-brand (Scale) plan manage
         // their own tenants here. Super-admins get the all-tenants view under the
         // Super Admin group below instead, so this is non-super-admin only.

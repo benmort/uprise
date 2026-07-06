@@ -1,6 +1,6 @@
 {
   "$comment": "Coverage ratchet for scripts/coverage-check.mjs. Each value is the committed no-regression floor (total line %) for that package's instrumented scope: apps/api = all src, web apps = src/lib logic layer. It only ever moves UP – run `pnpm coverage:check --update-baseline` once total coverage genuinely rises, and commit the bump. The patch floor (new/changed lines >= 80%) is separate and set in the script. See dev/ai/how-to/definition-of-done.md.",
-  "apps/api": 64.32,
+  "apps/api": 77.5,
   "apps/admin": 2.18,
   "packages/field": 39.41
 }

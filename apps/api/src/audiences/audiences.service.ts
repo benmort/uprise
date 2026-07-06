@@ -7,6 +7,7 @@ import {
   AudienceSource,
   AudienceStatus,
   ConsentState,
+  IntegrationJobStatus,
   MessageChannel,
   Prisma,
 } from "@uprise/db";
@@ -55,6 +56,30 @@ function parseSyncStats(summary: string | null | undefined): Record<string, unkn
   } catch {
     return null;
   }
+}
+
+// A sync job is "stalled" when it has waited far longer than a healthy worker
+// would take — either QUEUED but never picked up (the worker is down or pointed at
+// a different Redis/prefix), or RUNNING well past a chunk's ~114s run budget (the
+// worker died mid-run). Surfaced so the UI can say "stuck — the importer may not be
+// running" instead of showing a never-touched, all-zero summary as if it were a
+// finished import that returned nothing. SUCCEEDED/FAILED are terminal → never stalled.
+const SYNC_QUEUED_STALL_MS = 120_000; // 2 min: a live worker consumes near-instantly
+const SYNC_RUNNING_STALL_MS = 300_000; // 5 min: >> one chunk's run budget
+
+export function isSyncStalled(
+  status: IntegrationJobStatus,
+  createdAt: Date,
+  startedAt: Date | null,
+  now: number = Date.now(),
+): boolean {
+  if (status === IntegrationJobStatus.QUEUED) {
+    return now - createdAt.getTime() > SYNC_QUEUED_STALL_MS;
+  }
+  if (status === IntegrationJobStatus.RUNNING) {
+    return now - (startedAt ?? createdAt).getTime() > SYNC_RUNNING_STALL_MS;
+  }
+  return false;
 }
 
 @Injectable()
@@ -297,6 +322,9 @@ export class AudiencesService {
             remoteListId: latestSync.remoteListId,
             errorSummary: latestSync.errorSummary,
             completedAt: latestSync.completedAt,
+            createdAt: latestSync.createdAt,
+            startedAt: latestSync.startedAt,
+            stalled: isSyncStalled(latestSync.status, latestSync.createdAt, latestSync.startedAt),
             stats: parseSyncStats(latestSync.errorSummary),
           }
         : null,

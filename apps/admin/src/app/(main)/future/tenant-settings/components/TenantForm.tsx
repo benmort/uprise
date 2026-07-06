@@ -21,15 +21,24 @@ export interface TenantFormProps {
   onChange: (values: TenantFormValues) => void;
   errors?: Partial<Record<keyof TenantFormValues, string>>;
   disabled?: boolean;
+  /**
+   * Which card(s) to render. The tenant-settings page splits this form across two
+   * tabs — "tenant" (identity, on the Tenant tab) and "access" (Access Control, on
+   * the Access tab). Defaults to "all" so any other caller renders both.
+   */
+  section?: "tenant" | "access" | "all";
 }
 
-export function TenantForm({ values, onChange, errors = {}, disabled }: TenantFormProps) {
+export function TenantForm({ values, onChange, errors = {}, disabled, section = "all" }: TenantFormProps) {
   const handleChange = <K extends keyof TenantFormValues>(field: K) => (value: TenantFormValues[K]) => {
     onChange({ ...values, [field]: value } as TenantFormValues);
   };
+  const showTenant = section === "tenant" || section === "all";
+  const showAccess = section === "access" || section === "all";
 
   return (
     <>
+      {showTenant ? (
       <FormSectionCard
         title="Tenant"
         description="Tenant basic information"
@@ -54,7 +63,9 @@ export function TenantForm({ values, onChange, errors = {}, disabled }: TenantFo
           disabled={disabled}
         />
       </FormSectionCard>
+      ) : null}
 
+      {showAccess ? (
       <FormSectionCard
         title="Access Control"
         description="Configure member invitations and organisation access"
@@ -144,6 +155,7 @@ export function TenantForm({ values, onChange, errors = {}, disabled }: TenantFo
           />
         </div>
       </FormSectionCard>
+      ) : null}
     </>
   );
 }

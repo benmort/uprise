@@ -5,7 +5,7 @@
 // Org/brand tabs persist via orgProfile.*; Tenant & Access via tenants.update; the last
 // three tabs are the former /settings sections (shared from components/settings).
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Lock, Save } from "lucide-react";
 import {
   orgProfile,
   tenants,
@@ -40,24 +40,35 @@ import {
 } from "@/components/settings/observability";
 import { SecuritySettings } from "@/components/settings/security";
 import { ComplianceSettings } from "@/components/settings/compliance";
+import { IntegrationsSettings } from "@/components/settings/integrations";
 import { getSession } from "@/lib/session";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
-const PAGE_TABS = [
+// Row 1 — any admin. "Tenant" (network + tenant identity) leads; "Access" keeps its
+// slot but now holds only the Access Control card (see TenantForm's `section` prop).
+const PRIMARY_TABS = [
+  { key: "tenant", label: "Tenant" },
   { key: "organisation", label: "Organisation" },
   { key: "branding", label: "Branding" },
   { key: "business", label: "Business & Legal" },
   { key: "contacts", label: "Contacts" },
   { key: "addresses", label: "Addresses" },
-  { key: "access", label: "Tenant & Access" },
+  { key: "access", label: "Access" },
+  { key: "integrations", label: "Integrations" },
   { key: "security", label: "Security" },
   { key: "compliance", label: "Compliance" },
   { key: "alerts", label: "Alerts" },
+] as const;
+// Row 2 — super-admin only. Rendered lock-badged + greyed, and the whole row only
+// appears when isSuperAdmin (content stays defensively gated by TenantLockedSection).
+const SUPERADMIN_TABS = [
   { key: "flags", label: "Feature Flags" },
   { key: "queue", label: "Queue & Redis" },
 ] as const;
-type PageTab = (typeof PAGE_TABS)[number]["key"];
+type PageTab =
+  | (typeof PRIMARY_TABS)[number]["key"]
+  | (typeof SUPERADMIN_TABS)[number]["key"];
 
 const EMPTY_ADDR = {
   addressLine1: "",
@@ -173,7 +184,7 @@ function addrToInput(addressType: string, a: OrganisationAddressFormValues["regi
 
 export default function TenantSettingsPage() {
   const { showToast } = useToast();
-  const [tab, setTab] = useState<PageTab>("organisation");
+  const [tab, setTab] = useState<PageTab>("tenant");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [savingTab, setSavingTab] = useState<PageTab | null>(null);
@@ -282,10 +293,6 @@ export default function TenantSettingsPage() {
       twitterUrl: twitterUrl || null,
       linkedinUrl: linkedinUrl || null,
       instagramUrl: instagramUrl || null,
-      logoBlockUrl,
-      logoLandscapeUrl,
-      faviconUrl,
-      heroImageUrl,
     });
     setSavingTab(null);
     if (res.ok) done("Organisation saved", false);
@@ -294,7 +301,13 @@ export default function TenantSettingsPage() {
 
   const saveBranding = async () => {
     setSavingTab("branding");
+    // Logos & images live on this tab now, so this save persists them alongside
+    // the brand colours + custom CSS.
     const res = await orgProfile.update({
+      logoBlockUrl,
+      logoLandscapeUrl,
+      faviconUrl,
+      heroImageUrl,
       primaryColour: primaryColour || null,
       secondaryColour: secondaryColour || null,
       customCss: customCss || null,
@@ -425,22 +438,49 @@ export default function TenantSettingsPage() {
           </p>
         </div>
 
-        {/* Tab pills */}
-        <div className="flex flex-wrap gap-1 rounded-xl border border-border p-0.5">
-          {PAGE_TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              aria-pressed={tab === t.key}
-              onClick={() => setTab(t.key)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-                tab === t.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Tab pills — row 1 for any admin; row 2 (super-admin only) is lock-badged
+            and greyed, and only rendered when the session is a super-admin. */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1 rounded-xl border border-border p-0.5">
+            {PRIMARY_TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                aria-pressed={tab === t.key}
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                  tab === t.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {isSuperAdmin ? (
+            <div className="flex flex-wrap items-center gap-1 rounded-xl border border-dashed border-border/70 bg-surface-variant/30 p-0.5">
+              <span className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                Super-admin
+              </span>
+              {SUPERADMIN_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={tab === t.key}
+                  onClick={() => setTab(t.key)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                    tab === t.key
+                      ? "bg-primary text-white"
+                      : "text-muted-foreground hover:bg-surface-variant hover:text-foreground",
+                  )}
+                >
+                  <Lock className="h-3 w-3" />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {loadError ? (
@@ -455,6 +495,18 @@ export default function TenantSettingsPage() {
           </div>
         ) : (
           <div className="space-y-6">
+            {tab === "tenant" ? (
+              <>
+                <NetworkForm values={networkForm} onChange={setNetworkForm} disabled />
+                <TenantForm values={tenantForm} onChange={setTenantForm} section="tenant" />
+                {tenantId ? (
+                  <SaveButton onClick={() => void saveAccess()} tabKey="access" />
+                ) : (
+                  <p className="text-sm text-muted-foreground">No active tenant to configure.</p>
+                )}
+              </>
+            ) : null}
+
             {tab === "organisation" ? (
               <>
                 <FormSectionCard title="Organisation" description="Your public name and description.">
@@ -472,6 +524,12 @@ export default function TenantSettingsPage() {
                   </div>
                 </FormSectionCard>
 
+                <SaveButton onClick={() => void saveOrganisation()} tabKey="organisation" />
+              </>
+            ) : null}
+
+            {tab === "branding" ? (
+              <>
                 <FormSectionCard title="Logos & images" description="Upload and crop. Logos keep transparency (PNG).">
                   <div className="grid gap-6 sm:grid-cols-2">
                     <ImageCropUpload label="Block logo" helpText="Square, for tight spaces." value={logoBlockUrl} onChange={setLogoBlockUrl} aspect={1} boxClassName="h-40" />
@@ -481,12 +539,6 @@ export default function TenantSettingsPage() {
                   </div>
                 </FormSectionCard>
 
-                <SaveButton onClick={() => void saveOrganisation()} tabKey="organisation" />
-              </>
-            ) : null}
-
-            {tab === "branding" ? (
-              <>
                 <FormSectionCard title="Brand colours" description="Used across your public surfaces.">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex items-center gap-3">
@@ -531,8 +583,7 @@ export default function TenantSettingsPage() {
 
             {tab === "access" ? (
               <>
-                <NetworkForm values={networkForm} onChange={setNetworkForm} disabled />
-                <TenantForm values={tenantForm} onChange={setTenantForm} />
+                <TenantForm values={tenantForm} onChange={setTenantForm} section="access" />
                 {tenantId ? (
                   <SaveButton onClick={() => void saveAccess()} tabKey="access" />
                 ) : (
@@ -544,6 +595,8 @@ export default function TenantSettingsPage() {
             {tab === "security" ? <SecuritySettings /> : null}
 
             {tab === "compliance" ? <ComplianceSettings /> : null}
+
+            {tab === "integrations" ? <IntegrationsSettings /> : null}
 
             {tab === "alerts" ? <ResponderAlertsSettings /> : null}
 

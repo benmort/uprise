@@ -67,6 +67,11 @@ describe("IntegrationsService — sync queue", () => {
         update: jest.fn().mockResolvedValue({}),
       },
       audienceContact: { upsert: jest.fn().mockResolvedValue({}) },
+      integrationConnection: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(tx)),
     };
     const contacts = {
@@ -262,6 +267,47 @@ describe("IntegrationsService — sync queue", () => {
     ).rejects.toThrow("redis down");
     const failUpdate = prisma.integrationSyncJob.update.mock.calls.at(-1)[0];
     expect(failUpdate.data.status).toBe("FAILED");
+  });
+
+  // ── connection management ──────────────────────────────────────────────────
+  it("setConnectionStatus updates the scoped connection and echoes the new status", async () => {
+    const { service, prisma } = build();
+    prisma.integrationConnection.updateMany.mockResolvedValue({ count: 1 });
+    const res = await service.setConnectionStatus("org1", "conn1", "INACTIVE" as any);
+    expect(res).toEqual({ id: "conn1", status: "INACTIVE" });
+    expect(prisma.integrationConnection.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "conn1", tenantId: "org1" }, data: { status: "INACTIVE" } }),
+    );
+  });
+
+  it("setConnectionStatus throws NotFoundException when nothing matched", async () => {
+    const { service, prisma } = build();
+    prisma.integrationConnection.updateMany.mockResolvedValue({ count: 0 });
+    await expect(
+      service.setConnectionStatus("org1", "missing", "INACTIVE" as any),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("deleteConnection removes the scoped connection", async () => {
+    const { service, prisma } = build();
+    prisma.integrationConnection.deleteMany.mockResolvedValue({ count: 1 });
+    expect(await service.deleteConnection("org1", "conn1")).toEqual({ deleted: true });
+  });
+
+  it("deleteConnection throws NotFoundException when nothing matched", async () => {
+    const { service, prisma } = build();
+    prisma.integrationConnection.deleteMany.mockResolvedValue({ count: 0 });
+    await expect(service.deleteConnection("org1", "missing")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("listConnections returns the tenant's connections", async () => {
+    const { service, prisma } = build();
+    prisma.integrationConnection.findMany.mockResolvedValue([{ id: "conn1", type: "ACTION_NETWORK" }]);
+    const res = await service.listConnections("org1");
+    expect(res).toEqual([{ id: "conn1", type: "ACTION_NETWORK" }]);
+    expect(prisma.integrationConnection.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: "org1" } }),
+    );
   });
 
   // ── getSyncJobs ────────────────────────────────────────────────────────────

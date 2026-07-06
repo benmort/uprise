@@ -21,6 +21,7 @@ export const KEEP_TENANTS: readonly SeedTenant[] = [
   { slug: "climate-200", name: "Climate 200" },
   { slug: "australian-progress", name: "Australian Progress" },
   { slug: "getup", name: "GetUp" },
+  { slug: "victoria-trades-hall", name: "Victoria Trades Hall" },
 ] as const;
 
 // The tenant all demo/tour/seed data is written into.

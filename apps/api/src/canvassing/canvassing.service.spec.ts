@@ -1,9 +1,24 @@
-import { Prisma, TurfAssignmentStatus } from "@uprise/db";
+import { AppUserRole, Prisma, TurfAssignmentStatus } from "@uprise/db";
 import { CanvassingService } from "./canvassing.service";
+
+// uploadDoorPhoto's happy path calls into @vercel/blob; mock the SDK so it never
+// touches the network and returns a deterministic public URL.
+jest.mock("@vercel/blob", () => ({
+  put: jest.fn(async () => ({ url: "https://blob.example/door-knocks/x.jpg" })),
+}));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { put } = require("@vercel/blob") as { put: jest.Mock };
 
 function p2002(): Prisma.PrismaClientKnownRequestError {
   return new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
     code: "P2002",
+    clientVersion: "5.22.0",
+  });
+}
+
+function p2025(): Prisma.PrismaClientKnownRequestError {
+  return new Prisma.PrismaClientKnownRequestError("Record to update not found", {
+    code: "P2025",
     clientVersion: "5.22.0",
   });
 }
@@ -16,26 +31,40 @@ describe("CanvassingService", () => {
 
   beforeEach(() => {
     prisma = {
-      turf: { findFirst: jest.fn().mockResolvedValue({ id: "t1", tenantId: "org1" }), findMany: jest.fn() },
+      turf: {
+        findFirst: jest.fn().mockResolvedValue({ id: "t1", tenantId: "org1" }),
+        findMany: jest.fn(),
+        create: jest.fn(async ({ data }: any) => ({ id: "turf_new", ...data })),
+        update: jest.fn(async ({ data }: any) => ({ id: "t1", ...data })),
+        delete: jest.fn().mockResolvedValue({ id: "t1" }),
+      },
       turfAssignment: {
         create: jest.fn(),
         findFirst: jest.fn(),
         updateMany: jest.fn(),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn(),
       },
       doorKnock: {
         findUnique: jest.fn(),
         create: jest.fn(async ({ data }: any) => ({ id: "dk1", ...data })),
         findMany: jest.fn(),
+        count: jest.fn(),
       },
+      questionResponse: { groupBy: jest.fn() },
+      canvassCampaign: { findFirst: jest.fn() },
       walkListItem: { updateMany: jest.fn() },
       walkList: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        create: jest.fn(async ({ data }: any) => ({ id: "w_new", ...data })),
         update: jest.fn(async ({ data }: any) => ({ id: "w1", ...data })),
       },
       shift: {
         findFirst: jest.fn(),
+        findMany: jest.fn(),
+        create: jest.fn(async ({ data }: any) => ({ id: "s_new", ...data })),
+        deleteMany: jest.fn(),
         update: jest.fn(async ({ data }: any) => ({ id: "s1", ...data })),
       },
       qaFlagResolution: {
@@ -61,12 +90,19 @@ describe("CanvassingService", () => {
         update: jest.fn(async ({ data }: any) => ({ tenantId: "org1", userId: "u1", role: data.role })),
       },
       $transaction: jest.fn(async (cb: any) => cb(prisma)),
+      $queryRawUnsafe: jest.fn(),
+      $executeRawUnsafe: jest.fn(),
     };
     engagement = {
       recordDisposition: jest.fn().mockResolvedValue({ id: "disp1" }),
       recordSurveyAnswer: jest.fn().mockResolvedValue({ id: "qr1" }),
     };
-    geo = { addresses: jest.fn().mockResolvedValue([]) };
+    geo = {
+      addresses: jest.fn().mockResolvedValue([]),
+      unionAreas: jest.fn(),
+      unionSources: jest.fn(),
+    };
+    put.mockClear();
     service = new CanvassingService(prisma, engagement, geo);
   });
 
@@ -518,6 +554,669 @@ describe("CanvassingService", () => {
     it("throws for an unknown user", async () => {
       prisma.tenantMember.findFirst.mockResolvedValue(null);
       await expect(service.updateVolunteer("org1", "missing", { displayName: "x" })).rejects.toThrow();
+    });
+
+    it("updates only the role (no user fields) and returns the new role", async () => {
+      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
+      const res = await service.updateVolunteer("org1", "u1", { role: AppUserRole.ORGANISER });
+      // No displayName/password → the user row is read, not written.
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.findUniqueOrThrow).toHaveBeenCalled();
+      expect(prisma.tenantMember.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { role: AppUserRole.ORGANISER } }),
+      );
+      expect(res.role).toBe(AppUserRole.ORGANISER);
+    });
+
+    it("maps a P2025 (record not found) to USER_NOT_FOUND", async () => {
+      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
+      prisma.user.update.mockRejectedValue(p2025());
+      await expect(service.updateVolunteer("org1", "u1", { displayName: "Ada B" })).rejects.toThrow();
+    });
+
+    it("rethrows a non-P2025 error", async () => {
+      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
+      prisma.user.update.mockRejectedValue(new Error("db down"));
+      await expect(service.updateVolunteer("org1", "u1", { displayName: "Ada B" })).rejects.toThrow("db down");
+    });
+  });
+
+  describe("assignTurf (rethrow)", () => {
+    it("rethrows a non-P2002 create error", async () => {
+      prisma.turfAssignment.create.mockRejectedValue(new Error("db down"));
+      await expect(service.assignTurf("org1", "t1", "u1")).rejects.toThrow("db down");
+    });
+
+    it("throws for an unknown turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue(null);
+      await expect(service.assignTurf("org1", "missing", "u1")).rejects.toThrow();
+    });
+  });
+
+  describe("createVolunteer (rethrow)", () => {
+    it("rethrows a non-P2002 error", async () => {
+      prisma.user.create.mockRejectedValue(new Error("boom"));
+      await expect(
+        service.createVolunteer("org1", { displayName: "Ada", email: "a@b.c", password: "supersecret" }),
+      ).rejects.toThrow("boom");
+    });
+
+    it("honours an explicit role", async () => {
+      const user = await service.createVolunteer("org1", {
+        displayName: "Org",
+        email: "org@x.com",
+        password: "supersecret",
+        role: AppUserRole.ORGANISER,
+      });
+      expect(prisma.tenantMember.create.mock.calls[0][0].data.role).toBe(AppUserRole.ORGANISER);
+      expect(user.role).toBe(AppUserRole.ORGANISER);
+    });
+  });
+
+  describe("listAssignments", () => {
+    it("maps each locked turf to its walk lists", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([
+        {
+          turfId: "t1",
+          lockedUntil: null,
+          turf: { id: "t1", name: "Turf 1", geometry: { type: "Polygon" }, campaignId: "c1", walkLists: [{ id: "w1" }] },
+        },
+      ]);
+      const res = await service.listAssignments("org1", "u1");
+      expect(res).toEqual([
+        {
+          turfId: "t1",
+          lockedUntil: null,
+          turf: { id: "t1", name: "Turf 1", geometry: { type: "Polygon" }, campaignId: "c1" },
+          walkLists: [{ id: "w1" }],
+        },
+      ]);
+    });
+  });
+
+  describe("getVolunteerMetrics", () => {
+    it("tallies doors, conversations and distinct surveyed residents", async () => {
+      prisma.doorKnock.count
+        .mockResolvedValueOnce(3) // doorsToday
+        .mockResolvedValueOnce(30) // doorsTotal
+        .mockResolvedValueOnce(1) // conversationsToday
+        .mockResolvedValueOnce(12); // conversationsTotal
+      prisma.questionResponse.groupBy
+        .mockResolvedValueOnce([{ contactId: "a" }]) // surveysToday → 1 distinct
+        .mockResolvedValueOnce([{ contactId: "a" }, { contactId: "b" }]); // surveysTotal → 2 distinct
+
+      const res = await service.getVolunteerMetrics("org1", "u1");
+      expect(res).toEqual({
+        doorsToday: 3,
+        doorsTotal: 30,
+        conversationsToday: 1,
+        conversationsTotal: 12,
+        surveysToday: 1,
+        surveysTotal: 2,
+      });
+      expect(prisma.doorKnock.count).toHaveBeenCalledTimes(4);
+      expect(prisma.questionResponse.groupBy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("uploadDoorPhoto (happy path)", () => {
+    it("puts the buffer to blob storage and returns the public URL", async () => {
+      const prev = process.env.BLOB_READ_WRITE_TOKEN;
+      process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_tok";
+      try {
+        const res = await service.uploadDoorPhoto({
+          buffer: Buffer.from("img"),
+          originalname: "photo.PNG",
+          mimetype: "image/png",
+        });
+        expect(put).toHaveBeenCalledTimes(1);
+        const [key, buf, opts] = put.mock.calls[0];
+        expect(key).toContain("door-knocks/");
+        expect(key).toMatch(/\.png$/); // extension lower-cased + sanitised
+        expect(buf).toBeInstanceOf(Buffer);
+        expect(opts).toMatchObject({ access: "public", contentType: "image/png", token: "vercel_blob_tok" });
+        expect(res).toEqual({ url: "https://blob.example/door-knocks/x.jpg" });
+      } finally {
+        if (prev === undefined) delete process.env.BLOB_READ_WRITE_TOKEN;
+        else process.env.BLOB_READ_WRITE_TOKEN = prev;
+      }
+    });
+  });
+
+  describe("recordDoorKnock (survey answer resilience)", () => {
+    it("logs and continues when one survey answer fails, still returning the knock", async () => {
+      prisma.doorKnock.findUnique.mockResolvedValue(null);
+      prisma.contact.findFirst.mockResolvedValue({ turfId: "t1", turf: { campaignId: "camp1" } });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+      engagement.recordSurveyAnswer
+        .mockRejectedValueOnce(new Error("FK violation")) // first answer blows up
+        .mockResolvedValueOnce({ id: "qr2" }); // second succeeds
+
+      const knock = await service.recordDoorKnock("org1", {
+        contactId: "c1",
+        volunteerId: "u1",
+        localId: "local-x",
+        dispositionCode: "spoke_to_target",
+        surveyAnswers: [
+          { questionId: "q1", optionId: "o1" },
+          { questionId: "q2", valueText: "yes" },
+        ],
+      });
+
+      expect(engagement.recordSurveyAnswer).toHaveBeenCalledTimes(2);
+      expect(knock.id).toBe("dk1"); // the knock still committed
+    });
+
+    it("throws CONTACT_NOT_FOUND when the contact does not exist", async () => {
+      prisma.doorKnock.findUnique.mockResolvedValue(null);
+      prisma.contact.findFirst.mockResolvedValue(null);
+      await expect(
+        service.recordDoorKnock("org1", { contactId: "missing", volunteerId: "u1", localId: "l1" }),
+      ).rejects.toThrow();
+      expect(prisma.doorKnock.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("listVolunteers", () => {
+    it("returns [] when the org has no members", async () => {
+      prisma.tenantMember.findMany = jest.fn().mockResolvedValue([]);
+      const res = await service.listVolunteers("org1");
+      expect(res).toEqual([]);
+    });
+
+    it("joins users to their membership role, defaulting to VOLUNTEER", async () => {
+      prisma.tenantMember.findMany = jest.fn().mockResolvedValue([
+        { userId: "u1", role: "ORGANISER" },
+        { userId: "u2", role: "VOLUNTEER" },
+      ]);
+      prisma.user.findMany = jest.fn().mockResolvedValue([
+        { id: "u1", displayName: "Ada", email: "ada@x.com" },
+        { id: "u3", displayName: "Ghost", email: "ghost@x.com" }, // no membership → default role
+      ]);
+      const res = await service.listVolunteers("org1");
+      expect(res).toEqual([
+        { id: "u1", displayName: "Ada", email: "ada@x.com", role: "ORGANISER" },
+        { id: "u3", displayName: "Ghost", email: "ghost@x.com", role: AppUserRole.VOLUNTEER },
+      ]);
+    });
+  });
+
+  describe("listTurfContacts", () => {
+    it("returns the turf's contacts ordered for a walk list", async () => {
+      const contacts = [{ id: "c1", firstName: "A", lastName: "B", address: "1 St", lat: 1, lng: 2 }];
+      prisma.contact.findMany.mockResolvedValue(contacts);
+      const res = await service.listTurfContacts("org1", "t1");
+      expect(prisma.contact.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "org1", turfId: "t1" }, orderBy: { createdAt: "asc" } }),
+      );
+      expect(res).toBe(contacts);
+    });
+  });
+
+  describe("listTurfs", () => {
+    it("summarises stop progress and the active assignee", async () => {
+      prisma.turf.findMany.mockResolvedValue([
+        {
+          id: "t1",
+          name: "Turf 1",
+          campaignId: "c1",
+          geometry: { type: "Polygon" },
+          _count: { contacts: 12, walkLists: 2 },
+          assignments: [{ volunteerId: "u1", volunteer: { displayName: "Ada" } }],
+          walkLists: [
+            { items: [{ status: "VISITED" }, { status: "PENDING" }] },
+            { items: [{ status: "VISITED" }] },
+          ],
+        },
+        {
+          id: "t2",
+          name: "Turf 2",
+          campaignId: "c1",
+          geometry: null,
+          _count: { contacts: 0, walkLists: 0 },
+          assignments: [],
+          walkLists: [],
+        },
+      ]);
+      const res = await service.listTurfs("org1", "c1");
+      expect(res[0]).toMatchObject({
+        id: "t1",
+        contactCount: 12,
+        walkListCount: 2,
+        totalStops: 3,
+        visitedStops: 2,
+        assignedTo: { volunteerId: "u1", name: "Ada" },
+      });
+      expect(res[1].assignedTo).toBeNull();
+      expect(res[1].totalStops).toBe(0);
+    });
+  });
+
+  describe("createTurf + syncTurfGeom", () => {
+    it("creates the row then mirrors the PostGIS geom", async () => {
+      const geometry = { type: "Polygon", coordinates: [] };
+      const turf = await service.createTurf("org1", { name: "New", geometry });
+      expect(prisma.turf.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tenantId: "org1", name: "New" }) }),
+      );
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalledTimes(1); // geom mirror
+      expect(turf.id).toBe("turf_new");
+    });
+
+    it("syncTurfGeom is a no-op for empty geometry", async () => {
+      await service.syncTurfGeom("t1", null);
+      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    it("syncTurfGeom swallows a bad-mirror error (geom is derived)", async () => {
+      prisma.$executeRawUnsafe.mockRejectedValue(new Error("invalid geometry"));
+      await expect(service.syncTurfGeom("t1", { type: "Polygon" })).resolves.toBeUndefined();
+    });
+  });
+
+  describe("clipToCampaign", () => {
+    const geometry = { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] };
+
+    it("returns the geometry unchanged when there is no campaign", async () => {
+      const res = await service.clipToCampaign("org1", null, geometry);
+      expect(res).toBe(geometry);
+      expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    it("returns the clipped GeoJSON when something is left", async () => {
+      const clipped = { type: "MultiPolygon", coordinates: [] };
+      prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: JSON.stringify(clipped), empty: false }]);
+      const res = await service.clipToCampaign("org1", "camp1", geometry);
+      expect(res).toEqual(clipped);
+    });
+
+    it("returns null when the clip is empty", async () => {
+      prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null, empty: true }]);
+      const res = await service.clipToCampaign("org1", "camp1", geometry);
+      expect(res).toBeNull();
+    });
+
+    it("returns null when the clip query yields no rows", async () => {
+      prisma.$queryRawUnsafe.mockResolvedValue([]);
+      const res = await service.clipToCampaign("org1", "camp1", geometry);
+      expect(res).toBeNull();
+    });
+  });
+
+  describe("createTurfFromDivision", () => {
+    const square = { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] };
+
+    it("cuts a turf from a division boundary (no campaign → no clip query)", async () => {
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([{ name: "Div A", geojson: JSON.stringify(square) }]);
+      const turf = await service.createTurfFromDivision("org1", { type: "ced", code: "C1" });
+      expect(prisma.turf.create).toHaveBeenCalled();
+      expect(turf.id).toBe("turf_new");
+    });
+
+    it("throws DIVISION_NOT_FOUND when the boundary is missing", async () => {
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([]);
+      await expect(service.createTurfFromDivision("org1", { type: "lga", code: "X" })).rejects.toThrow();
+    });
+
+    it("throws OUTSIDE_BOUNDARY when the clip against the campaign is empty", async () => {
+      prisma.$queryRawUnsafe
+        .mockResolvedValueOnce([{ name: "Div A", geojson: JSON.stringify(square) }]) // division lookup
+        .mockResolvedValueOnce([{ geojson: null, empty: true }]); // clipToCampaign → null
+      await expect(
+        service.createTurfFromDivision("org1", { type: "sed", code: "C2", campaignId: "camp1" }),
+      ).rejects.toThrow();
+    });
+
+    it("materialises the cold-door universe when requested", async () => {
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([{ name: "Div A", geojson: JSON.stringify(square) }]);
+      prisma.contact.count.mockResolvedValue(0);
+      const spy = jest.spyOn(service, "loadUniverseIntoTurf").mockResolvedValue({ materialised: 0, total: 0 });
+      await service.createTurfFromDivision("org1", { type: "ced", code: "C1", universe: "hybrid" });
+      expect(spy).toHaveBeenCalledWith("org1", "turf_new", { universe: "hybrid" });
+      spy.mockRestore();
+    });
+  });
+
+  describe("createTurfFromAreas", () => {
+    const square = { type: "Polygon", coordinates: [] };
+
+    it("throws EMPTY_SELECTION when nothing resolves from the geo union", async () => {
+      geo.unionAreas.mockResolvedValue(null);
+      await expect(
+        service.createTurfFromAreas("org1", { name: "T", areas: [{ layer: "sa1", code: "A" }] }),
+      ).rejects.toThrow();
+    });
+
+    it("cuts a turf from the unioned areas", async () => {
+      geo.unionAreas.mockResolvedValue(square);
+      const turf = await service.createTurfFromAreas("org1", {
+        name: "T",
+        areas: [{ layer: "sa1", code: "A" }],
+      });
+      expect(geo.unionAreas).toHaveBeenCalledWith([{ layer: "sa1", code: "A" }], []);
+      expect(prisma.turf.create).toHaveBeenCalled();
+      expect(turf.id).toBe("turf_new");
+    });
+
+    it("throws OUTSIDE_BOUNDARY when the campaign clip is empty", async () => {
+      geo.unionAreas.mockResolvedValue(square);
+      prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null, empty: true }]);
+      await expect(
+        service.createTurfFromAreas("org1", {
+          name: "T",
+          campaignId: "camp1",
+          areas: [{ layer: "sa1", code: "A" }],
+        }),
+      ).rejects.toThrow();
+    });
+
+    it("materialises the cold-door universe when requested", async () => {
+      geo.unionAreas.mockResolvedValue(square);
+      const spy = jest.spyOn(service, "loadUniverseIntoTurf").mockResolvedValue({ materialised: 0, total: 0 });
+      await service.createTurfFromAreas("org1", {
+        name: "T",
+        areas: [{ layer: "sa1", code: "A" }],
+        universe: "none",
+      });
+      expect(spy).toHaveBeenCalledWith("org1", "turf_new", { universe: "none" });
+      spy.mockRestore();
+    });
+  });
+
+  describe("createTurfFromSources", () => {
+    const square = { type: "Polygon", coordinates: [] };
+
+    it("throws EMPTY_SELECTION when no sources and no addresses are given", async () => {
+      await expect(service.createTurfFromSources("org1", { name: "T" })).rejects.toThrow();
+      expect(geo.unionSources).not.toHaveBeenCalled();
+    });
+
+    it("throws EMPTY_SELECTION when the union resolves to nothing", async () => {
+      geo.unionSources.mockResolvedValue(null);
+      await expect(
+        service.createTurfFromSources("org1", { name: "T", gnafPids: ["GA1"] }),
+      ).rejects.toThrow();
+    });
+
+    it("unions divisions, areas, polygons and G-NAF pids into one turf", async () => {
+      geo.unionSources.mockResolvedValue(square);
+      const turf = await service.createTurfFromSources("org1", {
+        name: "T",
+        divisions: [{ type: "ced", code: "C" }],
+        areas: [{ layer: "sa2", code: "A" }],
+        polygons: [{ type: "Polygon" }],
+        gnafPids: ["GA1", ""], // falsy pids are filtered
+      });
+      const [sources, pids] = geo.unionSources.mock.calls[0];
+      expect(sources).toEqual([
+        { kind: "division", type: "ced", code: "C" },
+        { kind: "area", layer: "sa2", code: "A" },
+        { kind: "polygon", geometry: { type: "Polygon" } },
+      ]);
+      expect(pids).toEqual(["GA1"]);
+      expect(turf.id).toBe("turf_new");
+    });
+
+    it("throws OUTSIDE_BOUNDARY when the campaign clip is empty", async () => {
+      geo.unionSources.mockResolvedValue(square);
+      prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null, empty: true }]);
+      await expect(
+        service.createTurfFromSources("org1", { name: "T", campaignId: "camp1", gnafPids: ["GA1"] }),
+      ).rejects.toThrow();
+    });
+
+    it("materialises the cold-door universe when requested", async () => {
+      geo.unionSources.mockResolvedValue(square);
+      const spy = jest.spyOn(service, "loadUniverseIntoTurf").mockResolvedValue({ materialised: 0, total: 0 });
+      await service.createTurfFromSources("org1", { name: "T", gnafPids: ["GA1"], universe: "hybrid" });
+      expect(spy).toHaveBeenCalledWith("org1", "turf_new", { universe: "hybrid" });
+      spy.mockRestore();
+    });
+  });
+
+  describe("self-serve turf claiming", () => {
+    const campaign = {
+      id: "camp1",
+      boundary: { type: "Polygon" },
+      volunteerCanSelfClaimTurf: true,
+      selfClaimModes: null,
+    };
+    const square = { type: "Polygon", coordinates: [] };
+
+    describe("selfServeAvailable", () => {
+      it("returns the boundary, modes and ready turfs", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.turf.findMany.mockResolvedValue([
+          { id: "t1", name: "Ready", geometry: square, _count: { contacts: 4 } },
+        ]);
+        const res = await service.selfServeAvailable("org1", "camp1");
+        expect(res.boundary).toEqual(campaign.boundary);
+        expect(res.modes).toEqual(["area", "draw", "existing"]); // default when unset
+        expect(res.readyTurfs).toEqual([{ id: "t1", name: "Ready", geometry: square, contactCount: 4 }]);
+      });
+
+      it("throws CAMPAIGN_NOT_FOUND when the campaign is missing", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(null);
+        await expect(service.selfServeAvailable("org1", "missing")).rejects.toThrow();
+      });
+
+      it("throws SELF_CLAIM_DISABLED when self-serve is off", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue({ ...campaign, volunteerCanSelfClaimTurf: false });
+        await expect(service.selfServeAvailable("org1", "camp1")).rejects.toThrow();
+      });
+    });
+
+    describe("claimAreaSelfServe", () => {
+      it("throws SELF_CLAIM_DISABLED when the area mode is not allowed", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue({ ...campaign, selfClaimModes: ["draw"] });
+        await expect(
+          service.claimAreaSelfServe("org1", "camp1", "u1", [{ layer: "sa1", code: "A" }]),
+        ).rejects.toThrow();
+      });
+
+      it("throws EMPTY_SELECTION when the geo union is empty", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        geo.unionAreas.mockResolvedValue(null);
+        await expect(service.claimAreaSelfServe("org1", "camp1", "u1", [])).rejects.toThrow();
+      });
+
+      it("clips, creates and assigns the turf inside a campaign lock", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        geo.unionAreas.mockResolvedValue(square);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: JSON.stringify(square), empty: false }]);
+        prisma.turfAssignment.create.mockResolvedValue({ id: "a1" });
+        prisma.contact.count.mockResolvedValue(0);
+
+        const turf = await service.claimAreaSelfServe("org1", "camp1", "u1", [{ layer: "sa1", code: "A" }]);
+
+        // advisory lock + geom mirror both go through $executeRawUnsafe.
+        expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
+        expect(prisma.turf.create).toHaveBeenCalled();
+        expect(prisma.turfAssignment.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ volunteerId: "u1", status: TurfAssignmentStatus.ASSIGNED }) }),
+        );
+        expect(turf.id).toBe("turf_new");
+      });
+
+      it("throws AREA_ALREADY_CLAIMED when the clip inside the lock is empty", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        geo.unionAreas.mockResolvedValue(square);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null, empty: true }]);
+        await expect(
+          service.claimAreaSelfServe("org1", "camp1", "u1", [{ layer: "sa1", code: "A" }]),
+        ).rejects.toThrow();
+        expect(prisma.turf.create).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("claimDrawSelfServe", () => {
+      it("throws INVALID_POLYGON when the drawn polygon resolves to nothing", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        geo.unionSources.mockResolvedValue(null);
+        await expect(service.claimDrawSelfServe("org1", "camp1", "u1", { type: "Polygon" })).rejects.toThrow();
+      });
+
+      it("claims a self-drawn polygon", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        geo.unionSources.mockResolvedValue(square);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: JSON.stringify(square), empty: false }]);
+        prisma.turfAssignment.create.mockResolvedValue({ id: "a1" });
+        prisma.contact.count.mockResolvedValue(0);
+        const turf = await service.claimDrawSelfServe("org1", "camp1", "u1", { type: "Polygon" });
+        expect(geo.unionSources).toHaveBeenCalledWith([{ kind: "polygon", geometry: { type: "Polygon" } }]);
+        expect(turf.id).toBe("turf_new");
+      });
+    });
+
+    describe("claimExistingTurfSelfServe", () => {
+      it("assigns a ready-made unassigned turf", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.turf.findFirst.mockResolvedValue({ id: "t1", tenantId: "org1", campaignId: "camp1" });
+        prisma.turfAssignment.create.mockResolvedValue({ id: "a1", volunteerId: "u1" });
+        const res = await service.claimExistingTurfSelfServe("org1", "camp1", "u1", "t1");
+        expect(res.id).toBe("a1");
+      });
+
+      it("throws TURF_NOT_FOUND when the turf is not in the campaign", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.turf.findFirst.mockResolvedValue(null);
+        await expect(service.claimExistingTurfSelfServe("org1", "camp1", "u1", "t9")).rejects.toThrow();
+      });
+    });
+  });
+
+  describe("createWalkList", () => {
+    it("creates a walk list with route-ordered items", async () => {
+      await service.createWalkList("org1", {
+        name: "Route 1",
+        turfId: "t1",
+        contactIds: ["c1", "c2", "c3"],
+      });
+      const arg = prisma.walkList.create.mock.calls[0][0];
+      expect(arg.data.name).toBe("Route 1");
+      expect(arg.data.items.create).toEqual([
+        { contactId: "c1", orderIndex: 0 },
+        { contactId: "c2", orderIndex: 1 },
+        { contactId: "c3", orderIndex: 2 },
+      ]);
+    });
+  });
+
+  describe("updateTurf", () => {
+    it("updates name + geometry for an owned turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", tenantId: "org1" });
+      const geometry = { type: "Polygon" };
+      await service.updateTurf("org1", "t1", { name: "Renamed", geometry });
+      expect(prisma.turf.update).toHaveBeenCalledWith({
+        where: { id: "t1" },
+        data: { name: "Renamed", geometry },
+      });
+    });
+
+    it("throws for an unknown turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue(null);
+      await expect(service.updateTurf("org1", "missing", { name: "x" })).rejects.toThrow();
+    });
+  });
+
+  describe("deleteTurf", () => {
+    it("releases contacts + assignments then deletes the turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", tenantId: "org1" });
+      prisma.contact.updateMany.mockResolvedValue({ count: 3 });
+      const res = await service.deleteTurf("org1", "t1");
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
+        where: { tenantId: "org1", turfId: "t1" },
+        data: { turfId: null },
+      });
+      expect(prisma.turfAssignment.deleteMany).toHaveBeenCalledWith({ where: { turfId: "t1" } });
+      expect(prisma.turf.delete).toHaveBeenCalledWith({ where: { id: "t1" } });
+      expect(res).toEqual({ deleted: true });
+    });
+
+    it("throws for an unknown turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue(null);
+      await expect(service.deleteTurf("org1", "missing")).rejects.toThrow();
+    });
+  });
+
+  describe("unassignTurf", () => {
+    it("releases the active lock and returns the released count", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", tenantId: "org1" });
+      prisma.turfAssignment.updateMany.mockResolvedValue({ count: 1 });
+      const res = await service.unassignTurf("org1", "t1");
+      expect(prisma.turfAssignment.updateMany).toHaveBeenCalledWith({
+        where: { turfId: "t1", status: TurfAssignmentStatus.ASSIGNED },
+        data: { status: TurfAssignmentStatus.RELEASED, releasedAt: expect.any(Date) },
+      });
+      expect(res).toEqual({ released: 1 });
+    });
+
+    it("throws for an unknown turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue(null);
+      await expect(service.unassignTurf("org1", "missing")).rejects.toThrow();
+    });
+  });
+
+  describe("reassignTurf", () => {
+    it("releases the current lock then assigns the new volunteer", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", tenantId: "org1" });
+      prisma.turfAssignment.updateMany.mockResolvedValue({ count: 1 });
+      prisma.turfAssignment.create.mockResolvedValue({ id: "a2", volunteerId: "u2" });
+      const res = await service.reassignTurf("org1", "t1", "u2");
+      expect(prisma.turfAssignment.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: TurfAssignmentStatus.RELEASED }) }),
+      );
+      expect(prisma.turfAssignment.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ turfId: "t1", volunteerId: "u2", status: TurfAssignmentStatus.ASSIGNED }) }),
+      );
+      expect(res.id).toBe("a2");
+    });
+
+    it("throws for an unknown turf", async () => {
+      prisma.turf.findFirst.mockResolvedValue(null);
+      await expect(service.reassignTurf("org1", "missing", "u2")).rejects.toThrow();
+    });
+  });
+
+  describe("shifts", () => {
+    it("listShifts filters by campaign when given", async () => {
+      prisma.shift.findMany.mockResolvedValue([{ id: "s1" }]);
+      await service.listShifts("org1", "camp1");
+      expect(prisma.shift.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "org1", campaignId: "camp1" } }),
+      );
+    });
+
+    it("listShifts omits the campaign filter when not given", async () => {
+      prisma.shift.findMany.mockResolvedValue([]);
+      await service.listShifts("org1");
+      expect(prisma.shift.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "org1" } }),
+      );
+    });
+
+    it("createShift coerces the start/end strings to Dates", async () => {
+      await service.createShift("org1", {
+        campaignId: "camp1",
+        name: "AM",
+        startsAt: "2026-07-01T09:00:00Z",
+        endsAt: "2026-07-01T12:00:00Z",
+      });
+      const arg = prisma.shift.create.mock.calls[0][0];
+      expect(arg.data.startsAt).toBeInstanceOf(Date);
+      expect(arg.data.endsAt).toBeInstanceOf(Date);
+      expect(arg.data.location).toBeNull();
+    });
+
+    it("deleteShift returns deleted when a row was removed", async () => {
+      prisma.shift.deleteMany.mockResolvedValue({ count: 1 });
+      const res = await service.deleteShift("org1", "s1");
+      expect(res).toEqual({ deleted: true });
+    });
+
+    it("deleteShift throws SHIFT_NOT_FOUND when nothing matched", async () => {
+      prisma.shift.deleteMany.mockResolvedValue({ count: 0 });
+      await expect(service.deleteShift("org1", "missing")).rejects.toThrow();
     });
   });
 });

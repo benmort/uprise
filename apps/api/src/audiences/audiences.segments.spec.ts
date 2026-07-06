@@ -1,3 +1,4 @@
+import { NotFoundException } from "@nestjs/common";
 import { AudiencesService } from "./audiences.service";
 
 /**
@@ -9,6 +10,7 @@ function setup() {
   const prisma: any = {
     audience: { findFirst: jest.fn() },
     audienceSegment: { findFirst: jest.fn(), create: jest.fn(), findMany: jest.fn() },
+    integrationSyncJob: { findFirst: jest.fn().mockResolvedValue(null) },
   };
   const config: any = { get: (_k: string, d?: unknown) => d };
   const queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "q1", queued: true }) };
@@ -94,6 +96,47 @@ describe("AudiencesService — dynamic segments", () => {
         source: "ACTION_NETWORK",
         memberCount: 42,
       });
+    });
+  });
+
+  describe("getAudience", () => {
+    it("merges the audience with its latest sync (status + parsed stats)", async () => {
+      const { svc, prisma } = setup();
+      prisma.audience.findFirst.mockResolvedValue({ id: "aud1", name: "Vols", _count: { contacts: 3 } });
+      prisma.integrationSyncJob.findFirst.mockResolvedValue({
+        id: "job1",
+        status: "SUCCEEDED",
+        syncedCount: 3,
+        failedCount: 0,
+        remoteListId: "list1",
+        errorSummary: JSON.stringify({ pagesFetched: 1 }),
+        completedAt: new Date("2026-01-02T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        startedAt: new Date("2026-01-01T00:00:00.000Z"),
+      });
+
+      const res: any = await svc.getAudience("org1", "aud1");
+
+      expect(res.id).toBe("aud1");
+      expect(res.latestSync.status).toBe("SUCCEEDED");
+      expect(res.latestSync.syncedCount).toBe(3);
+      expect(res.latestSync.stats).toEqual({ pagesFetched: 1 });
+    });
+
+    it("returns latestSync=null when the audience has never been synced", async () => {
+      const { svc, prisma } = setup();
+      prisma.audience.findFirst.mockResolvedValue({ id: "aud1", _count: { contacts: 0 } });
+      prisma.integrationSyncJob.findFirst.mockResolvedValue(null);
+
+      const res: any = await svc.getAudience("org1", "aud1");
+
+      expect(res.latestSync).toBeNull();
+    });
+
+    it("throws NotFoundException when the audience is missing", async () => {
+      const { svc, prisma } = setup();
+      prisma.audience.findFirst.mockResolvedValue(null);
+      await expect(svc.getAudience("org1", "missing")).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

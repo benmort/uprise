@@ -32,6 +32,10 @@ type AudienceDetail = {
     failedCount: number;
     remoteListId?: string | null;
     completedAt?: string | null;
+    createdAt?: string | null;
+    startedAt?: string | null;
+    /** Server-computed: job waited far past a healthy window (worker down / stuck). */
+    stalled?: boolean;
     errorSummary?: string | null;
     stats?: Record<string, unknown> | null;
   } | null;
@@ -70,6 +74,8 @@ export default function AudienceShowPage() {
   const skippedTotal = skippedNoPhone + skippedInvalidPhone;
   const listNameFromStats = String(syncStats.listName || "").trim();
   const displayListName = listNameFromStats || audience?.name || "—";
+  // Present only on a genuinely FAILED job (the failure handler stamps `.error`).
+  const syncError = String((syncStats.error as string) || "").trim();
 
   useEffect(() => {
     if (!id) return;
@@ -175,21 +181,43 @@ export default function AudienceShowPage() {
                   {audience.syncedAt ? new Date(audience.syncedAt).toLocaleString() : "Never"}
                 </p>
                 {audience.latestSync && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    <p>
-                      Imported: {Number(audience.latestSync.syncedCount || 0).toLocaleString()} | Failed:{" "}
-                      {Number(audience.latestSync.failedCount || 0).toLocaleString()}
-                    </p>
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    {/* Status-aware: only a genuinely FAILED job shows an error, and a job
+                        that never progressed (QUEUED/RUNNING past the healthy window) reads
+                        as "stuck" rather than a finished import that returned nothing. */}
+                    {audience.latestSync.status === "SUCCEEDED" ? (
+                      <p>
+                        Imported {Number(audience.latestSync.syncedCount || 0).toLocaleString()} · Failed{" "}
+                        {Number(audience.latestSync.failedCount || 0).toLocaleString()}
+                      </p>
+                    ) : audience.latestSync.status === "FAILED" ? (
+                      <p className="text-error">Import failed{syncError ? `: ${syncError}` : "."}</p>
+                    ) : audience.latestSync.stalled ? (
+                      <p className="text-warning-foreground">
+                        Import{" "}
+                        {audience.latestSync.status === "RUNNING"
+                          ? "started but stalled"
+                          : "is queued but hasn’t started"}{" "}
+                        — the background importer isn’t processing it, so no contacts have been pulled yet.
+                        Check the worker and its queue, then re-sync.
+                      </p>
+                    ) : (
+                      <p>
+                        {audience.latestSync.status === "RUNNING"
+                          ? "Importing…"
+                          : "Queued — waiting for the importer to start…"}
+                        {Number(audience.latestSync.syncedCount || 0) > 0
+                          ? ` ${Number(audience.latestSync.syncedCount).toLocaleString()} imported so far.`
+                          : ""}
+                      </p>
+                    )}
                     {reasonRows.length > 0 && (
-                      <p className="mt-1">
+                      <p>
                         Reasons:{" "}
                         {reasonRows
                           .map(([reason, count]) => `${reason}: ${Number(count).toLocaleString()}`)
                           .join(", ")}
                       </p>
-                    )}
-                    {audience.latestSync.errorSummary && (
-                      <p className="mt-1">Error summary: {audience.latestSync.errorSummary}</p>
                     )}
                   </div>
                 )}
