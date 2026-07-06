@@ -1,6 +1,23 @@
+/// <reference path="./vt-pbf.d.ts" />
 import { Injectable } from "@nestjs/common";
+import geojsonvt from "geojson-vt";
+import { fromGeojsonVt } from "vt-pbf";
+import type { FeatureCollection, Geometry } from "geojson";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
+
+/** Source table + code/name columns for a tileable geo layer (areas, divisions, state). */
+const TILE_SOURCE: Record<string, { table: string; codeCol: string; nameExpr: string }> = {
+  mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "mb_code" },
+  sa1: { table: "geo.sa1", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  sa3: { table: "geo.sa3", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  sa4: { table: "geo.sa4", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  ced: { table: "geo.ced", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  sed: { table: "geo.sed", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  lga: { table: "geo.lga", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+  state: { table: "geo.state", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+};
 
 export type DivisionType = "ced" | "sed" | "lga";
 const DIVISION_TABLE: Record<DivisionType, string> = { ced: "geo.ced", sed: "geo.sed", lga: "geo.lga" };
@@ -110,6 +127,81 @@ export class GeoService {
         properties: { code: r.code, name: r.name ?? r.code, level: opts.layer },
       })),
     };
+  }
+
+  /** Web-Mercator XYZ tile → [west, south, east, north] in EPSG:4326 degrees. */
+  private tileToBBox(z: number, x: number, y: number): [number, number, number, number] {
+    const n = 2 ** z;
+    const lon = (xx: number) => (xx / n) * 360 - 180;
+    const lat = (yy: number) => {
+      const r = Math.PI * (1 - (2 * yy) / n);
+      return (Math.atan(Math.sinh(r)) * 180) / Math.PI;
+    };
+    return [lon(x), lat(y + 1), lon(x + 1), lat(y)];
+  }
+
+  private tileSource(layer: string): { table: string; codeCol: string; nameExpr: string } {
+    const src = TILE_SOURCE[layer];
+    if (!src) throw new ApiHttpException("BAD_TILE_LAYER", `unknown tile layer: ${layer}`);
+    return src;
+  }
+
+  /**
+   * One Mapbox Vector Tile (MVT) for a geo layer, generated on demand. Mapbox
+   * requests only the tiles visible at the current zoom, so this replaces the
+   * per-viewport GeoJSON fetch (`areas()`) as the map's boundary source — fast at
+   * any zoom, and cacheable. The tile is encoded in Node (geojson-vt + vt-pbf)
+   * rather than via PostGIS ST_AsMVT, so it works on any PostGIS build (the dev DB
+   * is compiled without protobuf-c). The `geom && envelope` filter hits the same
+   * GIST index `areas()` uses; ST_SimplifyPreserveTopology trims transfer volume
+   * before geojson-vt re-simplifies into tile space. Returns empty bytes for a
+   * tile with no features (the controller answers 204).
+   */
+  async tile(layer: string, z: number, x: number, y: number): Promise<Buffer> {
+    const src = this.tileSource(layer);
+    if (![z, x, y].every((v) => Number.isInteger(v)) || z < 0 || z > 24) {
+      throw new ApiHttpException("BAD_TILE", "z, x, y must be integers and 0 <= z <= 24");
+    }
+    const span = 2 ** z;
+    if (x < 0 || x >= span || y < 0 || y >= span) {
+      throw new ApiHttpException("BAD_TILE", "x/y out of range for this zoom");
+    }
+    const [w, s, e, n] = this.tileToBBox(z, x, y);
+    // Drop vertices finer than ~1/2048 of the tile width before transfer; geojson-vt
+    // re-simplifies in tile space, so this only trims payload for dense tiles.
+    const tolerance = Math.min((e - w) / 2048, 0.02);
+    const geomExpr =
+      tolerance > 0.00002 ? `ST_SimplifyPreserveTopology(geom, ${tolerance})` : "geom";
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT ${src.codeCol} AS code, ${src.nameExpr} AS name, ST_AsGeoJSON(${geomExpr}) AS geojson
+       FROM ${src.table}
+       WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+       LIMIT 20000`,
+      w,
+      s,
+      e,
+      n,
+    )) as Array<{ code: string; name: string | null; geojson: string }>;
+    if (rows.length === 0) return Buffer.alloc(0);
+    const fc: FeatureCollection = {
+      type: "FeatureCollection",
+      features: rows.map((r) => ({
+        type: "Feature",
+        geometry: JSON.parse(r.geojson) as Geometry,
+        properties: { code: r.code, name: r.name ?? r.code },
+      })),
+    };
+    // Slice/clip to this tile in tile-space coordinates, then encode to MVT.
+    const index = geojsonvt(fc, {
+      maxZoom: Math.max(z, 1),
+      indexMaxZoom: Math.min(z, 5),
+      extent: 4096,
+      buffer: 64,
+      tolerance: 3,
+    });
+    const tile = index.getTile(z, x, y);
+    if (!tile || tile.features.length === 0) return Buffer.alloc(0);
+    return Buffer.from(fromGeojsonVt({ areas: tile }, { version: 2 }));
   }
 
   /** Type-ahead over a level's name/code for the area search box, optionally

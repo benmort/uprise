@@ -23,7 +23,7 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
     key: "orgProfile",
     title: "Set up your organisation",
     blurb: "Add your name, logo and brand colour so your messages look like you.",
-    href: "/future/tenant-settings",
+    href: "/settings/organisation",
     cta: "Open settings",
   },
   {

@@ -15,6 +15,7 @@ describe("GeoController", () => {
       area: jest.fn().mockResolvedValue({}),
       areaDetail: jest.fn().mockResolvedValue({}),
       areas: jest.fn().mockResolvedValue([]),
+      tile: jest.fn().mockResolvedValue(Buffer.alloc(0)),
       nearbyAddresses: jest.fn().mockResolvedValue([]),
       addresses: jest.fn().mockResolvedValue([]),
     }) as unknown as jest.Mocked<GeoService>;
@@ -132,5 +133,42 @@ describe("GeoController", () => {
     const svc = makeSvc();
     const c = new GeoController(svc);
     await expect(c.ingest("t1")).resolves.toMatchObject({ queued: true });
+  });
+
+  const makeRes = () =>
+    ({
+      setHeader: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+      end: jest.fn(),
+      send: jest.fn(),
+    }) as unknown as import("express").Response & {
+      setHeader: jest.Mock;
+      status: jest.Mock;
+      end: jest.Mock;
+      send: jest.Mock;
+    };
+
+  it("tile parses coords, sets binary + cache headers, and sends the buffer", async () => {
+    const svc = makeSvc();
+    (svc.tile as jest.Mock).mockResolvedValue(Buffer.from([1, 2, 3]));
+    const c = new GeoController(svc);
+    const res = makeRes();
+    await c.tile("sa2", "9", "462", "314", res);
+    expect(svc.tile).toHaveBeenCalledWith("sa2", 9, 462, 314);
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "application/x-protobuf");
+    expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "public, max-age=86400");
+    expect(res.send).toHaveBeenCalledWith(Buffer.from([1, 2, 3]));
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("tile answers 204 for an empty tile without sending a body", async () => {
+    const svc = makeSvc();
+    (svc.tile as jest.Mock).mockResolvedValue(Buffer.alloc(0));
+    const c = new GeoController(svc);
+    const res = makeRes();
+    await c.tile("mb", "5", "3", "3", res);
+    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.end).toHaveBeenCalled();
+    expect(res.send).not.toHaveBeenCalled();
   });
 });

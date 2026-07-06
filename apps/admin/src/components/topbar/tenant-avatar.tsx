@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Deterministic gradient avatar for a tenant, keyed on its id — tenants have no
- * uploaded logo, so we render a stable, colourful disc (Vercel-switcher style)
- * derived from the id. No asset, no schema field.
+ * Tenant brand mark. When the tenant has an uploaded block logo we render it;
+ * otherwise we fall back to a deterministic, colourful gradient disc keyed on the
+ * tenant id (Vercel-switcher style) so every tenant still has a stable mark.
  */
 function hashHue(seed: string): number {
   let h = 0;
@@ -13,11 +13,27 @@ function hashHue(seed: string): number {
 
 export function TenantAvatar({
   tenantId,
+  logoUrl,
+  name,
   className,
 }: {
   tenantId: string;
+  /** The tenant's uploaded block logo; when present it replaces the gradient disc. */
+  logoUrl?: string | null;
+  /** Tenant name, for the logo's alt text. */
+  name?: string;
   className?: string;
 }) {
+  if (logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt={name ? `${name} logo` : "Tenant logo"}
+        className={cn("inline-block shrink-0 rounded-md bg-surface object-contain", className)}
+      />
+    );
+  }
   const h1 = hashHue(tenantId);
   const h2 = (h1 + 48) % 360;
   return (

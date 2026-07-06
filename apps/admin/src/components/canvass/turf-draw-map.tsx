@@ -7,7 +7,8 @@ import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Loader2, MapPin, Search, X } from "lucide-react";
 import { AU_BOUNDS } from "@uprise/field";
-import { getArea, listAreas, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
+import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
+import { getApiUrl } from "@/lib/api";
 import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
@@ -28,13 +29,22 @@ export type SelectedArea = { level: AreaLevel; code: string; name: string; geome
 
 type MapEvents = { on: (e: string, cb: () => void) => void; off: (e: string, cb: () => void) => void };
 
-const LEVELS: Array<{ id: AreaLevel; label: string; minZoom: number }> = [
-  { id: "sa4", label: "SA4", minZoom: 5 },
-  { id: "sa3", label: "SA3", minZoom: 7 },
-  { id: "sa2", label: "SA2", minZoom: 9 },
-  { id: "sa1", label: "SA1", minZoom: 11 },
-  { id: "mb", label: "Meshblock", minZoom: 13 },
+const LEVELS: Array<{ id: AreaLevel; label: string }> = [
+  { id: "sa4", label: "SA4" },
+  { id: "sa3", label: "SA3" },
+  { id: "sa2", label: "SA2" },
+  { id: "sa1", label: "SA1" },
+  { id: "mb", label: "Meshblock" },
 ];
+
+// Boundaries load as Mapbox Vector Tiles (GET /geo/tiles), so mapbox only requests
+// the tiles visible at the current zoom — fast at any zoom, no "zoom in" wall. The
+// one exception is meshblocks (368k nationally): only request their tiles once
+// zoomed in enough that a tile's row count stays bounded. Every coarser level has
+// no floor. `maxzoom` caps tile generation and overzooms finer detail from there.
+const MB_MIN_ZOOM = 9;
+const TILE_MAX_ZOOM = 16;
+const sourceMinZoom = (lvl: AreaLevel) => (lvl === "mb" ? MB_MIN_ZOOM : 0);
 
 /** Polygon draw tool. Emits every drawn polygon's geometry on each edit. */
 function DrawControl({ onChange, clearToken }: { onChange: (polygons: GeoJSON.Polygon[]) => void; clearToken?: number }) {
@@ -147,7 +157,6 @@ export function TurfDrawMap({
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
-  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Controlled-or-internal: read the prop when supplied, else own state; the
   // setter delegates to the callback when controlled. Keeps the two uncontrolled
@@ -158,7 +167,14 @@ export function TurfDrawMap({
     (l: AreaLevel) => (onLevelChange ? onLevelChange(l) : setLevelInternal(l)),
     [onLevelChange],
   );
-  const [areas, setAreas] = useState<GeoJSON.FeatureCollection | null>(null);
+  // The areas currently rendered in the viewport, read from the vector-tile layer
+  // (queryRenderedFeatures) rather than a fetched GeoJSON blob — backs the sidebar
+  // list + the search dropdown's "browse in view".
+  const [viewportHits, setViewportHits] = useState<AreaHit[]>([]);
+  const [loadingTiles, setLoadingTiles] = useState(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  // Only the meshblock level has a zoom floor (below it its tiles aren't requested);
+  // every other level loads at any zoom.
   const [tooZoomedOut, setTooZoomedOut] = useState(false);
   const [searchModeInternal, setSearchModeInternal] = useState<"place" | "area">("area");
   const searchMode = searchModeProp ?? searchModeInternal;
@@ -176,8 +192,6 @@ export function TurfDrawMap({
   const [searching, setSearching] = useState(false);
   const [areaOpen, setAreaOpen] = useState(false);
 
-  const minZoom = useMemo(() => LEVELS.find((l) => l.id === level)?.minZoom ?? 9, [level]);
-
   const initialViewState = useMemo<MapProps["initialViewState"]>(
     () =>
       center
@@ -190,43 +204,67 @@ export function TurfDrawMap({
     [center],
   );
 
-  const refreshAreas = useCallback(
-    async (lvl: AreaLevel) => {
-      const map = mapRef.current?.getMap();
-      if (!map) return;
-      const zoom = map.getZoom();
-      const min = LEVELS.find((l) => l.id === lvl)?.minZoom ?? 9;
-      if (zoom < min) {
-        setTooZoomedOut(true);
-        setAreas(null);
-        return;
-      }
-      setTooZoomedOut(false);
-      const b = map.getBounds();
-      if (!b) return;
-      const res = await listAreas({
-        layer: lvl,
-        bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
-        limit: 1500,
-      });
-      if (res.ok) setAreas(res.data as GeoJSON.FeatureCollection);
-    },
-    [],
+  // Vector-tile boundary source for the active level. mapbox requests only the
+  // tiles visible at the current zoom, so this is what makes boundaries fast at any
+  // zoom (no per-viewport GeoJSON, no zoom gate). Keyed by level so switching pills
+  // swaps the source cleanly. Same-origin session cookie is attached via the map's
+  // transformRequest below.
+  const tileUrl = `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}`;
+
+  // Send the parent-domain session cookie on our own tile requests (the API is
+  // ORGANISER-gated); leave mapbox's own style/sprite/tile requests untouched.
+  const apiBase = getApiUrl();
+  const transformRequest = useCallback(
+    (url: string, resourceType?: string) =>
+      resourceType === "Tile" && apiBase && url.startsWith(apiBase)
+        ? { url, credentials: "include" as const }
+        : { url },
+    [apiBase],
   );
 
-  const scheduleRefresh = useCallback(
-    (lvl: AreaLevel) => {
-      if (debounce.current) clearTimeout(debounce.current);
-      debounce.current = setTimeout(() => void refreshAreas(lvl), 250);
-    },
-    [refreshAreas],
-  );
+  // Read the areas currently rendered in the viewport off the vector-tile layer,
+  // deduped by code — replaces deriving them from a fetched GeoJSON collection.
+  const syncViewport = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    setTooZoomedOut(level === "mb" && map.getZoom() < MB_MIN_ZOOM);
+    let rendered: Array<{ properties: Record<string, unknown> | null }> = [];
+    try {
+      rendered = map.queryRenderedFeatures({ layers: ["areas-fill"] }) as never;
+    } catch {
+      rendered = [];
+    }
+    const seen = new Set<string>();
+    const out: AreaHit[] = [];
+    for (const f of rendered) {
+      const p = f.properties as { code?: string; name?: string } | null;
+      if (!p?.code || seen.has(p.code)) continue;
+      seen.add(p.code);
+      out.push({ level, code: p.code, name: p.name ?? p.code });
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    setViewportHits(out);
+  }, [level]);
 
-  // Refresh when the (possibly external/URL-driven) level changes. On mount the
-  // map isn't ready so refreshAreas bails — onLoad does the first load.
+  // Drive the loading spinner off the map's tile lifecycle, and refresh the
+  // viewport list once rendering settles (idle). Attaches once the map is ready.
   useEffect(() => {
-    void refreshAreas(level);
-  }, [level, refreshAreas]);
+    const map = mapRef.current?.getMap();
+    if (!map || !mapLoaded) return;
+    const onSourceData = (e: { sourceId?: string; isSourceLoaded?: boolean }) => {
+      if (e.sourceId === "areas" && !e.isSourceLoaded) setLoadingTiles(true);
+    };
+    const onIdle = () => {
+      setLoadingTiles(false);
+      syncViewport();
+    };
+    map.on("sourcedata", onSourceData);
+    map.on("idle", onIdle);
+    return () => {
+      map.off("sourcedata", onSourceData);
+      map.off("idle", onIdle);
+    };
+  }, [mapLoaded, syncViewport]);
 
   const selectedFc = useMemo<GeoJSON.FeatureCollection>(
     () => ({
@@ -297,19 +335,10 @@ export function TurfDrawMap({
   // What the area dropdown shows: search hits when typing, else the active
   // level's areas currently on the map (scrollable). Capped for DOM sanity.
   const AREA_LIST_CAP = 300;
-  const viewportAreas = useMemo(() => {
-    const feats = (areas?.features ?? []) as Array<GeoJSON.Feature>;
-    const seen = new Set<string>();
-    const opts: Array<{ label: string; code?: string; lat: number; lng: number }> = [];
-    for (const f of feats) {
-      const p = f.properties as { code?: string; name?: string } | null;
-      if (!p?.code || seen.has(p.code)) continue;
-      seen.add(p.code);
-      opts.push({ label: `${p.name ?? p.code} · ${p.code}`, code: p.code, lat: 0, lng: 0 });
-    }
-    opts.sort((a, b) => a.label.localeCompare(b.label));
-    return opts;
-  }, [areas]);
+  const viewportAreas = useMemo(
+    () => viewportHits.map((h) => ({ label: `${h.name} · ${h.code}`, code: h.code, lat: 0, lng: 0 })),
+    [viewportHits],
+  );
 
   const areaOptions = query.trim().length >= 2 ? hits : viewportAreas;
   const areaListTruncated = query.trim().length < 2 && viewportAreas.length > AREA_LIST_CAP;
@@ -318,27 +347,13 @@ export function TurfDrawMap({
   // Surface the in-view areas (+ zoomed-out flag) so a consumer can render a
   // divisions-style sidebar list. onViewportAreasChange must be stable (parent
   // useCallback) or this re-fires each render.
-  const viewportAreaHits = useMemo<AreaHit[]>(() => {
-    const feats = (areas?.features ?? []) as Array<GeoJSON.Feature>;
-    const seen = new Set<string>();
-    const out: AreaHit[] = [];
-    for (const f of feats) {
-      const p = f.properties as { code?: string; name?: string } | null;
-      if (!p?.code || seen.has(p.code)) continue;
-      seen.add(p.code);
-      out.push({ level, code: p.code, name: p.name ?? p.code });
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name));
-    return out;
-  }, [areas, level]);
-
   useEffect(() => {
-    onViewportAreasChange?.(viewportAreaHits, tooZoomedOut);
-  }, [viewportAreaHits, tooZoomedOut, onViewportAreasChange]);
+    onViewportAreasChange?.(viewportHits, tooZoomedOut);
+  }, [viewportHits, tooZoomedOut, onViewportAreasChange]);
 
   const selectLevel = (id: AreaLevel) => {
     // Keep the search term across a level switch (it maps to the shared ?q= when
-    // controlled); the refresh runs via the [level] effect below.
+    // controlled); the vector source swaps via its `key={level}` + `tiles` url.
     setLevel(id);
     setHits([]);
   };
@@ -433,14 +448,30 @@ export function TurfDrawMap({
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
         interactiveLayerIds={["areas-fill"]}
-        onLoad={() => void refreshAreas(level)}
-        onMoveEnd={() => scheduleRefresh(level)}
+        transformRequest={transformRequest}
+        onLoad={() => {
+          setMapLoaded(true);
+          syncViewport();
+        }}
+        onMoveEnd={() => syncViewport()}
         onClick={(e) => {
           const f = e.features?.[0];
           if (!f || !onToggleArea) return;
-          const p = f.properties as { code?: string; name?: string; level?: AreaLevel } | null;
+          const p = f.properties as { code?: string; name?: string } | null;
           if (!p?.code) return;
-          onToggleArea({ level, code: String(p.code), name: String(p.name ?? p.code), geometry: f.geometry as GeoJSON.Geometry });
+          // Tile geometry is clipped to the tile; fetch the true boundary for the
+          // highlight + union (same as picking a search/sidebar result).
+          const code = String(p.code);
+          void getArea(level, code).then((res) => {
+            if (res.ok) {
+              onToggleArea({
+                level,
+                code: res.data.properties.code,
+                name: res.data.properties.name,
+                geometry: res.data.geometry,
+              });
+            }
+          });
         }}
       >
         <DrawControl onChange={onPolygonsChange} clearToken={clearToken} />
@@ -455,13 +486,19 @@ export function TurfDrawMap({
           ) : null,
         )}
 
-        {/* Selectable statistical areas for the active level. */}
-        {areas && (
-          <Source id="areas" type="geojson" data={areas} promoteId="code">
-            <Layer id="areas-fill" type="fill" paint={{ "fill-color": "#2563eb", "fill-opacity": 0.04 }} />
-            <Layer id="areas-line" type="line" paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
-          </Source>
-        )}
+        {/* Selectable statistical areas for the active level, as on-demand vector
+            tiles. Keyed by level so the source is recreated cleanly on a pill switch. */}
+        <Source
+          key={level}
+          id="areas"
+          type="vector"
+          tiles={[tileUrl]}
+          minzoom={sourceMinZoom(level)}
+          maxzoom={TILE_MAX_ZOOM}
+        >
+          <Layer id="areas-fill" source-layer="areas" type="fill" paint={{ "fill-color": "#2563eb", "fill-opacity": 0.04 }} />
+          <Layer id="areas-line" source-layer="areas" type="line" paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
+        </Source>
 
         {/* Selected areas — bold highlight on top. */}
         <Source id="selected" type="geojson" data={selectedFc}>
@@ -496,9 +533,14 @@ export function TurfDrawMap({
                     there instead, so it lands on the tab row. */}
                 {searchContainer == null ? searchCombobox : null}
 
-                {tooZoomedOut ? (
+                {loadingTiles ? (
+                  <p className="flex items-center gap-1.5 rounded-lg bg-surface-variant px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading boundaries…
+                  </p>
+                ) : tooZoomedOut ? (
                   <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground">
-                    Zoom in to load {level.toUpperCase()} boundaries.
+                    Zoom in to load meshblocks.
                   </p>
                 ) : null}
               </>,
@@ -589,9 +631,14 @@ export function TurfDrawMap({
             ) : null}
           </div>
 
-          {tooZoomedOut ? (
+          {loadingTiles ? (
+            <p className="flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-card">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading boundaries…
+            </p>
+          ) : tooZoomedOut ? (
             <p className="rounded-lg bg-warning-container px-2.5 py-1.5 text-[11px] font-medium text-warning-foreground shadow-card">
-              Zoom in to load {level.toUpperCase()} boundaries.
+              Zoom in to load meshblocks.
             </p>
           ) : null}
         </div>

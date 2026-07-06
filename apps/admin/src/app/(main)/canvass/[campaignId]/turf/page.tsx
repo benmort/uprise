@@ -239,7 +239,7 @@ export default function TurfCuttingPage() {
             </SectionCard>
           ) : null}
 
-          <SectionCard title="Universe">
+          <SectionCard title="Who to include">
             <div className="space-y-2">
               {UNIVERSE_OPTIONS.map((o) => (
                 <button

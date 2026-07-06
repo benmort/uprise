@@ -169,7 +169,7 @@ export default function StatesPage() {
             ) : null}
 
             <UniverseCards value={universe} onChange={setUniverse} />
-            <MyTurfPanel />
+            <MyTurfPanel universe={universe} onUniverseChange={setUniverse} />
           </div>
         </div>
 

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
-import { auth, tenants, type Membership, type TenantSearchRow } from "@uprise/api-client";
+import { auth, orgProfile, tenants, type Membership, type TenantSearchRow } from "@uprise/api-client";
 import { cn } from "@/lib/utils";
 import { TenantAvatar } from "./tenant-avatar";
 import { CreateTenantDialog } from "./create-tenant-dialog";
@@ -49,23 +50,95 @@ export function TenantSwitcher({
   isSuperAdmin = false,
   activeTenant = null,
   collapsed = false,
+  onSlideChange,
 }: {
   memberships: Membership[];
   currentTenantId: string | null;
   isSuperAdmin?: boolean;
   activeTenant?: { id: string; name: string; slug: string } | null;
   collapsed?: boolean;
+  /** Reports how far (px) the top-bar's left group should slide right so the
+   *  hover-unfurled full-name pill doesn't cover it. 0 when not expanded. */
+  onSlideChange?: (px: number) => void;
 }) {
   const [switching, setSwitching] = useState(false);
   const [query, setQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [allTenants, setAllTenants] = useState<TenantSearchRow[]>([]);
   const [searching, setSearching] = useState(false);
+  // The current session tenant's uploaded block logo, shown as the top-left brand
+  // mark. `/org-profile` is session-tenant-scoped, and switching reloads the page,
+  // so this always reflects whichever tenant the session is on (null → gradient).
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void orgProfile.get().then((res) => {
+      if (active && res.ok) setLogoUrl(res.data.logoBlockUrl);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const current = memberships.find((m) => m.tenantId === currentTenantId) ?? memberships[0];
   // Label/avatar fall back to the impersonated tenant (super-admin, no membership).
   const currentName = current?.tenantName ?? activeTenant?.name ?? "Select tenant";
   const seedId = current?.tenantId ?? activeTenant?.id ?? currentTenantId ?? "uprise";
+
+  // ── Name unfurl ──────────────────────────────────────────────────────────
+  // On hover / keyboard-focus, reveal the FULL tenant name in a floating pill that
+  // overflows the sidebar over the top-bar (portalled, so the sidebar's overflow
+  // clip doesn't apply — same trick as the dropdown). We report how far the
+  // top-bar's hamburger+search should slide right to clear it; layout applies the
+  // slide. Desktop only; the pill is pointer-events-none so clicks fall through to
+  // the trigger and the switcher dropdown is unaffected.
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const pillRef = useRef<HTMLDivElement | null>(null);
+  const pointerDownRef = useRef(false);
+  const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const expanded = hovered || focused;
+  const isDesktop = () => typeof window !== "undefined" && window.innerWidth >= 1024;
+  const captureRect = () => {
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (r) setRect(r);
+  };
+  const onTriggerEnter = () => {
+    if (!isDesktop()) return;
+    if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+    captureRect();
+    setHovered(true);
+  };
+  const onTriggerLeave = () => {
+    if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+    hoverCloseTimer.current = setTimeout(() => setHovered(false), 80);
+  };
+  // Reveal on focus for keyboard only — a pointer-driven focus (click to open the
+  // dropdown) is already covered by hover and must not leave the pill stuck open.
+  const onTriggerFocus = () => {
+    if (!isDesktop() || pointerDownRef.current) return;
+    captureRect();
+    setFocused(true);
+  };
+  const onTriggerBlur = () => {
+    setFocused(false);
+    pointerDownRef.current = false;
+  };
+
+  // Slide = how much wider the full-name pill is than the truncated trigger.
+  useEffect(() => {
+    if (!expanded || !pillRef.current || !triggerRef.current) {
+      onSlideChange?.(0);
+      return;
+    }
+    const extra = Math.max(0, pillRef.current.offsetWidth - triggerRef.current.offsetWidth + 8);
+    onSlideChange?.(extra);
+  }, [expanded, currentName, onSlideChange]);
+
+  // Never leave the top-bar slid if we unmount mid-hover (e.g. tenant switch reload).
+  useEffect(() => () => onSlideChange?.(0), [onSlideChange]);
 
   const canCreate =
     isSuperAdmin ||
@@ -126,8 +199,16 @@ export function TenantSwitcher({
         contentClassName="w-80 p-0 overflow-hidden"
         trigger={({ toggle }) => (
           <button
+            ref={triggerRef}
             type="button"
             onClick={toggle}
+            onMouseEnter={onTriggerEnter}
+            onMouseLeave={onTriggerLeave}
+            onMouseDown={() => {
+              pointerDownRef.current = true;
+            }}
+            onFocus={onTriggerFocus}
+            onBlur={onTriggerBlur}
             title={currentName}
             aria-label="Switch tenant"
             className={cn(
@@ -135,7 +216,7 @@ export function TenantSwitcher({
               collapsed && "lg:justify-center lg:px-1",
             )}
           >
-            <TenantAvatar tenantId={seedId} className="h-7 w-7" />
+            <TenantAvatar tenantId={seedId} logoUrl={logoUrl} name={currentName} className="h-7 w-7" />
             <span className={cn("flex min-w-0 flex-1 items-center gap-2", collapsed && "lg:hidden")}>
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
                 {currentName}
@@ -200,6 +281,28 @@ export function TenantSwitcher({
       </Dropdown>
 
       <CreateTenantDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+
+      {/* Hover/focus unfurl: the full name floating over the top-bar. Portalled to
+          escape the sidebar's overflow clip; pointer-events-none so the trigger
+          underneath stays clickable. Mirrors the trigger's layout for alignment. */}
+      {expanded && rect && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={pillRef}
+              aria-hidden
+              style={{ position: "fixed", top: rect.top, left: rect.left, minWidth: rect.width }}
+              className="pointer-events-none z-[60] flex w-max max-w-[340px] origin-left animate-pop-in items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 shadow-theme-lg motion-reduce:animate-none"
+            >
+              <TenantAvatar tenantId={seedId} logoUrl={logoUrl} name={currentName} className="h-7 w-7" />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{currentName}</span>
+              {current?.planName ? <PlanPill plan={current.planName} /> : null}
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+                <ChevronsUpDown className="h-4 w-4" />
+              </span>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

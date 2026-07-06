@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, Post, Query, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
 import { AppUserRole } from "@uprise/db";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
@@ -95,6 +96,31 @@ export class GeoController {
     @Query("limit") limit?: string,
   ) {
     return this.geo.areas({ layer, bbox, limit: limit ? Number(limit) : undefined });
+  }
+
+  /**
+   * One Mapbox Vector Tile of a geo layer's boundaries. The map source requests
+   * only the tiles it needs at each zoom, so this is the fast, any-zoom replacement
+   * for the per-viewport `GET /geo/areas` GeoJSON. Binary MVT via `@Res()`, which
+   * bypasses the global `{ok,data}` interceptor (same as the analytics `@Sse`).
+   * Long-cacheable — boundaries are static reference data.
+   */
+  @Get("tiles/:layer/:z/:x/:y")
+  async tile(
+    @Param("layer") layer: string,
+    @Param("z") z: string,
+    @Param("x") x: string,
+    @Param("y") y: string,
+    @Res() res: Response,
+  ) {
+    const buf = await this.geo.tile(layer, Number(z), Number(x), Number(y));
+    res.setHeader("Content-Type", "application/x-protobuf");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    if (!buf.length) {
+      res.status(204).end();
+      return;
+    }
+    res.send(buf);
   }
 
   /** Nearest real doors to a point (the Addresses page's geocoded search pin). */

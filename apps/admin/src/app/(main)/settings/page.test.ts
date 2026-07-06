@@ -7,20 +7,27 @@ const read = (rel: string) => readFileSync(join(adminSrc, rel), "utf8");
 
 const settingsIndex = read("app/(main)/settings/page.tsx");
 const observability = read("components/settings/observability.tsx");
-const general = read("app/(main)/future/tenant-settings/page.tsx");
+const general = read("app/(main)/future/tenant-settings/general-settings.tsx");
+const sectionRoute = read("app/(main)/settings/[section]/page.tsx");
 const queues = read("app/(main)/settings/queues/page.tsx");
 
 describe("settings consolidated into the tabbed General page", () => {
-  it("/settings redirects to the General page", () => {
+  it("/settings redirects to the first General tab", () => {
     expect(settingsIndex).toContain("redirect");
-    expect(settingsIndex).toContain("/future/tenant-settings");
+    expect(settingsIndex).toContain("/settings/tenant");
+  });
+
+  it("General tabs are served as real /settings/[section] routes", () => {
+    expect(sectionRoute).toContain("GeneralSettings");
+    expect(sectionRoute).toContain("sectionToTab");
   });
 
   it("General page exposes the former /settings cards as tabs", () => {
     expect(general).toContain("Alerts");
     expect(general).toContain("Feature Flags");
     expect(general).toContain("Queue & Redis");
-    expect(general).toContain("Tenant & Access");
+    expect(general).toContain("Access");
+    expect(general).toContain("Integrations");
     expect(general).toContain("ResponderAlertsSettings");
     expect(general).toContain("TenantFeatureFlagsEditor");
     expect(general).toContain("TenantQueueRedisPanel");

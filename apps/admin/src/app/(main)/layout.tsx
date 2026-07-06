@@ -39,12 +39,12 @@ import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search
 import { NotificationsDropdown } from "@/components/topbar/notifications-dropdown";
 import { TenantSwitcher } from "@/components/topbar/tenant-switcher";
 import { UserDropdown } from "@/components/topbar/user-dropdown";
-import { listCampaigns } from "@/lib/api/campaigns";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
+import { OnboardingLauncher } from "@/components/overview/onboarding-launcher";
 import { FlagsProvider } from "@/components/flags/flags-provider";
 import { listFlags } from "@/lib/api/flags";
 import { FLAG_DEFAULTS, FLAG_META, type FeatureFlagKey, type FeatureFlagMap } from "@uprise/flags";
@@ -68,16 +68,9 @@ type NavNode =
   | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch; flag?: FeatureFlagKey }
   | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
 
-// The campaign-scoped subpages under /canvass/[campaignId]/… — used to recognise
-// a campaign id in the pathname (vs /canvass/volunteers, /canvass/divisions etc).
-const CAMPAIGN_SUBPAGES = new Set(["turf", "boundary", "walklists", "live", "results", "goals", "qa", "shifts"]);
-
 // Cascade sidebar model (matches the design prototype): leaf items + expandable
-// groups whose children appear on an indented rail. Campaign-scoped children use
-// the current campaign id when one exists, else fall back to the canvass overview.
-function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
-  const scoped = (suffix: string) =>
-    campaignId ? `/canvass/${campaignId}/${suffix}` : "/canvass";
+// groups whose children appear on an indented rail.
+function buildNav(isSuperAdmin: boolean): NavNode[] {
   // Prefix matcher for the parked future routes (all under /future/*).
   const px = (s: string): NavMatch => (p) => p.startsWith(`/future/${s}`);
   return [
@@ -104,12 +97,11 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
       // The geo explorers moved to /data/*; only volunteers still shares /canvass.
       match: (p) => p.startsWith("/canvass") && !p.startsWith("/canvass/volunteers"),
       flag: "FEATURE_NAV_CANVASS",
+      // Turf map / Walk lists / Live / Results are campaign-scoped routes — reachable
+      // from the campaign dashboard cards, not the global sidebar. Only Campaigns
+      // remains, so the single-child rule collapses this into a direct "Canvass" link.
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
-        { label: "Turf map", href: scoped("turf"), match: (p) => p.includes("/turf"), flag: "FEATURE_NAV_CANVASS_TURF" },
-        { label: "Walk lists", href: scoped("walklists"), match: (p) => p.includes("/walklists"), flag: "FEATURE_NAV_CANVASS_WALKLISTS" },
-        { label: "Live", href: scoped("live"), match: (p) => p.includes("/live"), flag: "FEATURE_NAV_CANVASS_LIVE" },
-        { label: "Results", href: scoped("results"), match: (p) => p.includes("/results"), flag: "FEATURE_NAV_CANVASS_RESULTS" },
       ],
     },
     { type: "leaf", key: "volunteers", label: "Volunteers", href: "/canvass/volunteers", icon: Megaphone, match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
@@ -151,7 +143,19 @@ function buildNav(campaignId: string, isSuperAdmin: boolean): NavNode[] {
         p.startsWith("/compliance") ||
         px("tenant-settings")(p) || px("security")(p),
       children: [
-        { label: "General", href: "/settings", match: (p) => p === "/settings" || p.startsWith("/future/tenant-settings") },
+        // General settings tabs are real /settings/<section> routes now; highlight for
+        // any of them (i.e. /settings and its sections, excluding the sibling settings
+        // items — team/flags/plans/queues — which have their own nav entries).
+        {
+          label: "General",
+          href: "/settings/tenant",
+          match: (p) =>
+            (p === "/settings" || p.startsWith("/settings/")) &&
+            !p.startsWith("/settings/team") &&
+            !p.startsWith("/settings/flags") &&
+            !p.startsWith("/settings/plans") &&
+            !p.startsWith("/settings/queues"),
+        },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         // Integrations moved into Settings → General (the tenant-settings tab); the
         // /settings/integrations route still works but isn't a standalone nav item.
@@ -530,27 +534,6 @@ export default function MainLayout({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [router, handleCreateBlast]);
 
-  // Current campaign for the campaign-scoped Canvass children in the cascade nav:
-  // the id in the pathname wins (the campaign you're actually looking at); the
-  // fetched first campaign is only the fallback for un-scoped routes.
-  const [firstCampaignId, setFirstCampaignId] = useState("");
-  const urlCampaignId = useMemo(() => {
-    const m = (pathname || "").match(/^\/canvass\/([^/]+)\/([^/?#]+)/);
-    return m && CAMPAIGN_SUBPAGES.has(m[2]) ? m[1] : "";
-  }, [pathname]);
-  const campaignId = urlCampaignId || firstCampaignId;
-  useEffect(() => {
-    if (!ready) return;
-    let alive = true;
-    void (async () => {
-      const res = await listCampaigns();
-      if (alive && res.ok && res.data[0]) setFirstCampaignId(res.data[0].id);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [ready]);
-
   const isSuperAdmin = principal?.isSuperAdmin === true;
   // Whose plan the greyed sidebar items refer to — the "Acting as" tenant when a
   // super-admin is impersonating one, else "your current".
@@ -597,7 +580,7 @@ export default function MainLayout({
         (e, i) => !("subheading" in e) || (i + 1 < kept.length && !("subheading" in kept[i + 1])),
       );
     };
-    const built = buildNav(campaignId, isSuperAdmin)
+    const built = buildNav(isSuperAdmin)
       .filter((n) => flagOn(n.flag))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
       .filter((n) => n.type !== "group" || n.children.length > 0);
@@ -616,7 +599,7 @@ export default function MainLayout({
       if (!("href" in only)) return n; // sole child isn't a direct link → keep the group
       return { type: "leaf", key: n.key, label: n.label, icon: n.icon, href: only.href, match: n.match, flag: n.flag };
     });
-  }, [campaignId, isSuperAdmin, flagOn]);
+  }, [isSuperAdmin, flagOn]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
@@ -642,8 +625,8 @@ export default function MainLayout({
         if (ge.flag && !flagOn(ge.flag) && ge.match(p)) return true;
         return ge.children ? blocked(ge.children) : false;
       });
-    if (blocked(buildNav(campaignId, isSuperAdmin))) router.replace("/dashboard");
-  }, [ready, isSuperAdmin, campaignId, p, flagOn, router]);
+    if (blocked(buildNav(isSuperAdmin))) router.replace("/dashboard");
+  }, [ready, isSuperAdmin, p, flagOn, router]);
   // Groups toggle independently (prototype: openGroups array). Default-open is the
   // active group only; an explicit user toggle overrides the default.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -655,6 +638,9 @@ export default function MainLayout({
   // drawer on mobile. The hamburger toggles whichever applies to the viewport.
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Px the top-bar's left group slides right while the tenant name is unfurled over
+  // it (reported by TenantSwitcher; 0 when not hovering). Keeps the map/content still.
+  const [brandSlidePx, setBrandSlidePx] = useState(0);
   const toggleNav = useCallback(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 1024) setCollapsed((c) => !c);
     else setMobileOpen((o) => !o);
@@ -896,6 +882,7 @@ export default function MainLayout({
                   isSuperAdmin={principal.isSuperAdmin}
                   activeTenant={principal.activeTenant}
                   collapsed={collapsed}
+                  onSlideChange={setBrandSlidePx}
                 />
               ) : (
                 <>
@@ -1049,7 +1036,10 @@ export default function MainLayout({
 
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4 lg:px-6">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div
+              className="flex min-w-0 flex-1 items-center gap-3 transition-[margin] duration-200 ease-in-out motion-reduce:transition-none"
+              style={{ marginLeft: brandSlidePx }}
+            >
               <button
                 type="button"
                 onClick={toggleNav}
@@ -1082,6 +1072,9 @@ export default function MainLayout({
           </main>
         </div>
       </div>
+      {/* Global onboarding launcher — hovers bottom-right across the shell (hidden on
+          the dashboard + getting-started, which own their own onboarding UI). */}
+      <OnboardingLauncher />
       {flyout ? (
         <div
           className="fixed z-[95] flex max-h-[70vh] min-w-[184px] max-w-[264px] flex-col overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-theme-lg"

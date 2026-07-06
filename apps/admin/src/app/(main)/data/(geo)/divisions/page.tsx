@@ -267,7 +267,7 @@ export default function DivisionsPage() {
             ) : null}
 
             <UniverseCards value={universe} onChange={setUniverse} />
-            <MyTurfPanel />
+            <MyTurfPanel universe={universe} onUniverseChange={setUniverse} />
           </div>
         </div>
       </div>

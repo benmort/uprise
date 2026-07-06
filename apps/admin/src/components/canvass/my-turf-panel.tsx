@@ -18,8 +18,19 @@ import { UniverseCards } from "@/components/canvass/universe-select";
  * Addresses explorers, with per-item remove, a name + universe, and one "Cut turf"
  * that unions the lot server-side (createTurfFromSources). Mirrors the campaign
  * boundary editor's "Boundary parts" card. Renders nothing when the basket is empty.
+ *
+ * The universe (who lands in the turf) can be lifted to the page: pass `universe`
+ * + `onUniverseChange` and the page owns the single "Who to include" selector that
+ * governs both this basket cut and the page's own immediate cut. Left uncontrolled,
+ * the panel keeps its own state and renders its own selector.
  */
-export function MyTurfPanel() {
+export function MyTurfPanel({
+  universe: universeProp,
+  onUniverseChange,
+}: {
+  universe?: TurfUniverse;
+  onUniverseChange?: (u: TurfUniverse) => void;
+} = {}) {
   const router = useRouter();
   const { showToast } = useToast();
   const {
@@ -32,7 +43,10 @@ export function MyTurfPanel() {
     clear,
   } = useTurfBasket();
   const [name, setName] = useState("");
-  const [universe, setUniverse] = useState<TurfUniverse>("hybrid");
+  const [universeState, setUniverseState] = useState<TurfUniverse>("hybrid");
+  const controlled = universeProp !== undefined;
+  const universe = controlled ? universeProp : universeState;
+  const setUniverse = controlled ? onUniverseChange! : setUniverseState;
   const [saving, setSaving] = useState(false);
 
   if (count === 0) return null;
@@ -156,7 +170,9 @@ export function MyTurfPanel() {
         </div>
       </SectionCard>
 
-      <UniverseCards value={universe} onChange={setUniverse} />
+      {/* When the page lifts the universe, it owns the single selector – don't
+          render a second one here. */}
+      {controlled ? null : <UniverseCards value={universe} onChange={setUniverse} />}
     </>
   );
 }

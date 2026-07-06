@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarClock,
   ClipboardCheck,
+  ListChecks,
   Map as MapIcon,
   Target,
   Users,
@@ -24,6 +25,7 @@ export function CampaignNavCards({ campaignId, className, id }: { campaignId: st
     { href: `/canvass/${campaignId}/shifts`, label: "Shifts", desc: "Schedule & sign-ups", icon: CalendarClock },
     { href: `/canvass/${campaignId}/qa`, label: "QA", desc: "Flagged knocks to review", icon: ClipboardCheck },
     { href: "/canvass/volunteers", label: "Volunteers", desc: "Team & assignments", icon: Users },
+    { href: `/canvass/${campaignId}/walklists`, label: "Walk lists", desc: "Build & assign door routes", icon: ListChecks },
   ];
   return (
     <div id={id} className={`grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 ${className ?? ""}`}>

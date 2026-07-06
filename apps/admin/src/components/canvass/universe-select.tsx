@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { TurfUniverse } from "@/lib/api/geo";
 import { SectionCard } from "@uprise/field";
 
@@ -22,7 +23,7 @@ export function UniverseSelect({
 }) {
   return (
     <div className={`flex items-center gap-2 ${className ?? ""}`}>
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cut with</span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Who to include</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as TurfUniverse)}
@@ -41,12 +42,14 @@ export function UniverseSelect({
 export function UniverseCards({
   value,
   onChange,
+  description = "Applies to the turf you cut now and to My turf.",
 }: {
   value: TurfUniverse;
   onChange: (u: TurfUniverse) => void;
+  description?: ReactNode;
 }) {
   return (
-    <SectionCard title="Universe">
+    <SectionCard title="Who to include" description={description}>
       <div className="space-y-2">
         {UNIVERSE_OPTIONS.map((o) => (
           <button

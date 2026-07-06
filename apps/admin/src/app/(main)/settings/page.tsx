@@ -4,5 +4,5 @@ import { redirect } from "next/navigation";
 // contacts + addresses + tenant & access + alerts + feature flags + queue). The former
 // standalone cards now live there as tabs (see components/settings/observability).
 export default function SettingsPage() {
-  redirect("/future/tenant-settings");
+  redirect("/settings/tenant");
 }

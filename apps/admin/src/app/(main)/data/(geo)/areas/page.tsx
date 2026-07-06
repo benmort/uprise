@@ -321,7 +321,10 @@ export default function AreasPage() {
               )}
             </SectionCard>
 
-            <SectionCard title="Cut turf">
+            <SectionCard
+              title="Cut selection"
+              description="Cut these areas now, or add them to My turf below to combine with other parts."
+            >
               <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
                 Name
               </label>
@@ -372,7 +375,7 @@ export default function AreasPage() {
             ) : null}
 
             <UniverseCards value={universe} onChange={setUniverse} />
-            <MyTurfPanel />
+            <MyTurfPanel universe={universe} onUniverseChange={setUniverse} />
           </div>
         </div>
       </div>
