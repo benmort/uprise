@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CornerDownRight, Plus, Save, Trash2 } from "lucide-react";
+import { CornerDownRight, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   createScript,
   deleteScript,
@@ -132,19 +133,22 @@ export default function ScriptsPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/engagement">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Engagement
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Scripts</h1>
-        <Button className="ml-auto" onClick={openCreate}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          New script
-        </Button>
-      </div>
+      <PageHeader
+        title="Scripts"
+        icon={Sparkles}
+        description="Branching talk tracks for canvassers and callers."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Content", href: "/content" },
+          { label: "Scripts" },
+        ]}
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New script
+          </Button>
+        }
+      />
 
       <StateRegion
         loading={loading}

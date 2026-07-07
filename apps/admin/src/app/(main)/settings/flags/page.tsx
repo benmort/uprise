@@ -10,6 +10,7 @@ import {
   Network as NetworkIcon,
   Search,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   X,
 } from "lucide-react";
@@ -181,7 +182,10 @@ export default function FeatureFlagsPage() {
     <main className="page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Feature flags</h1>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Feature flags</h1>
+          </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Per-tenant and per-network overrides on top of each target&apos;s plan. Pick a
             workspace or network, then force a feature on or off, or leave it to inherit

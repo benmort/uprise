@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
  * four feedback states – new pages become consistent by construction.
  */
 export function PageShell({
+  icon: Icon,
   title,
   description,
   backHref,
@@ -17,6 +18,8 @@ export function PageShell({
   actions,
   children,
 }: {
+  /** Leading title icon — pass the page's sidebar-menu icon for a consistent header. */
+  icon?: LucideIcon;
   title: string;
   description?: string;
   backHref?: string;
@@ -35,6 +38,7 @@ export function PageShell({
             </Link>
           </Button>
         ) : null}
+        {Icon ? <Icon className="h-6 w-6 shrink-0 text-primary" /> : null}
         <h1 className="text-2xl font-extrabold">{title}</h1>
         {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
       </div>

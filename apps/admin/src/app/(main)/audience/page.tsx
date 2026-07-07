@@ -31,6 +31,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { fuzzyIncludes } from "@/lib/fuzzy";
+import { Users } from "lucide-react";
 
 type AudienceRow = {
   id: string;
@@ -360,7 +361,10 @@ export default function AudiencePage() {
     <div className="page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">Build and Manage Audience Segments</h1>
+          <div className="flex items-center gap-2">
+            <Users className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Audience</h1>
+          </div>
           <p className="text-sm text-muted-foreground">
             Import subscribers, sync remote lists, and prepare recipients for sends.
           </p>

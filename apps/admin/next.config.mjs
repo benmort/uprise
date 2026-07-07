@@ -70,6 +70,9 @@ const nextConfig = {
       { source: "/canvass/addresses", destination: "/data/addresses", permanent: false },
       { source: "/settings/data", destination: "/data/datasets", permanent: false },
       { source: "/future/file-manager", destination: "/data/file-manager", permanent: false },
+      // The engagement library became the Content section (routes /content/*).
+      { source: "/engagement", destination: "/content", permanent: false },
+      { source: "/engagement/:path*", destination: "/content/:path*", permanent: false },
     ];
   },
 };

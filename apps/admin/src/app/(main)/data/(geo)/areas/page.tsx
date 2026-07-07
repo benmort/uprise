@@ -18,7 +18,7 @@ import type { ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-
 import { useCutTurf } from "@/lib/canvass/use-cut-turf";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
-import { STATE_ABBREVS, stateAbbrevToAsgsDigit } from "@/lib/canvass/states";
+import { STATE_ABBREVS, stateAbbrevToAsgsDigit, stateBounds } from "@/lib/canvass/states";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
 import { useGeoExplorerUrlState, useGeoTabRowSlot } from "@/components/canvass/use-geo-explorer-url-state";
 import { Button } from "@/components/ui/button";
@@ -64,7 +64,7 @@ const TAB_LEVELS = new Set<string>(TABS.map((t) => t.level));
 export default function AreasPage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const { q, view, tab, state, places, setTab, setState, setPlaces, setQ } = useGeoExplorerUrlState({
+  const { q, view, tab, state, places, setTab, setPlaces, setQ } = useGeoExplorerUrlState({
     viewStorageKey: "uprise.areasView",
     // Old Settings→Data bookmarks used ?layer= and #sa2-style hashes.
     legacyTabParam: "layer",
@@ -72,9 +72,10 @@ export default function AreasPage() {
   });
   const level = (TAB_LEVELS.has(tab ?? "") ? tab : "sa2") as AreaLevel;
   const [universe, setUniverse] = useState<TurfUniverse>("hybrid");
-  // State filter is the shared abbreviation in ?state=; searchAreas + AustraliaMap
-  // want the ASGS digit.
+  // The shared ?state= (abbreviation): the ASGS digit filters the list/search, and
+  // the bounds frame the map to that state.
   const stateCode = stateAbbrevToAsgsDigit(state) ?? "";
+  const focusBounds = stateBounds(state);
   const searchMode: "place" | "area" = places ? "place" : "area";
 
   // ── List mode: server-paged browse of the level's full national set ────────
@@ -270,6 +271,7 @@ export default function AreasPage() {
           <div className="h-[65vh] overflow-hidden rounded-2xl border border-border">
             <TurfDrawMap
               existing={existing}
+              focusBounds={focusBounds}
               selectedAreas={selectedAreas}
               onToggleArea={toggleArea}
               onPolygonsChange={setPolygons}
@@ -386,25 +388,6 @@ export default function AreasPage() {
     <div className="section-stack">
       <div className="flex flex-wrap items-center gap-2">
         {tabPills}
-        <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          State Filter:
-          <select
-            value={state || "all"}
-            onChange={(e) => {
-              setState(e.target.value === "all" ? "" : e.target.value);
-              setHits([]);
-            }}
-            title="Filter areas by state"
-            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
-          >
-            <option value="all">All states</option>
-            {STATE_ABBREVS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
         <UniverseSelect value={universe} onChange={setUniverse} className="ml-auto" />
       </div>
 

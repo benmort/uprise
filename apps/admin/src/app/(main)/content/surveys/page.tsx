@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, MessageSquare, Plus, Save, Smartphone, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Save, Smartphone, Sparkles, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   createSurvey,
   deleteSurvey,
@@ -165,19 +166,22 @@ export default function SurveysPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/engagement">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Engagement
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Surveys</h1>
-        <Button className="ml-auto" onClick={openCreate}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          New survey
-        </Button>
-      </div>
+      <PageHeader
+        title="Surveys"
+        icon={Sparkles}
+        description="Reusable question sets for doors and texts."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Content", href: "/content" },
+          { label: "Surveys" },
+        ]}
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            New survey
+          </Button>
+        }
+      />
 
       <StateRegion
         loading={loading}

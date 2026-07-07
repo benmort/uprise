@@ -172,11 +172,16 @@ export class GeoService {
     const tolerance = Math.min((e - w) / 2048, 0.02);
     const geomExpr =
       tolerance > 0.00002 ? `ST_SimplifyPreserveTopology(geom, ${tolerance})` : "geom";
+    // No feature cap — a tile holds every feature in its bbox so nothing truncates in
+    // view. "Batching" is the vector-tile grid itself: mapbox requests the covering
+    // tiles at the current zoom and renders each as it arrives, so a dense level loads
+    // progressively rather than in one blocking chunk. The one runaway case (a whole
+    // level's worth of meshblocks in a single low-zoom tile, ~368k) is kept off the
+    // wire by the client's per-level minzoom floor, so that tile is never requested.
     const rows = (await this.prisma.$queryRawUnsafe(
       `SELECT ${src.codeCol} AS code, ${src.nameExpr} AS name, ST_AsGeoJSON(${geomExpr}) AS geojson
        FROM ${src.table}
-       WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
-       LIMIT 20000`,
+       WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)`,
       w,
       s,
       e,
@@ -195,6 +200,8 @@ export class GeoService {
     const index = geojsonvt(fc, {
       maxZoom: Math.max(z, 1),
       indexMaxZoom: Math.min(z, 5),
+      // Don't drop features on a dense tile (default caps the index at 100k points).
+      indexMaxPoints: 0,
       extent: 4096,
       buffer: 64,
       tolerance: 3,

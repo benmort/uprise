@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, PlusCircle } from "lucide-react";
+import { ArrowLeft, Check, PlusCircle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -370,7 +370,10 @@ export default function TeamPage() {
             Settings
           </Link>
         </Button>
-        <h1 className="text-2xl font-extrabold">Team</h1>
+        <div className="flex items-center gap-2">
+          <Settings className="h-6 w-6 shrink-0 text-primary" />
+          <h1 className="text-2xl font-extrabold">Team</h1>
+        </div>
       </div>
 
       {noPermission ? (

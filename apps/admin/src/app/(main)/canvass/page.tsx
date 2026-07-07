@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, MapPinned, Pencil, Plus, PlusCircle, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
@@ -185,7 +185,10 @@ export default function CanvassPage() {
     return (
       <div className="page-stack">
         <div>
-          <h1 className="text-2xl font-extrabold">Canvassing</h1>
+          <div className="flex items-center gap-2">
+            <MapPin className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Canvassing</h1>
+          </div>
           <p className="text-sm text-muted-foreground">
             Create a campaign to start cutting turf and assigning volunteers.
           </p>
@@ -204,7 +207,10 @@ export default function CanvassPage() {
     <div className="page-stack">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold">Canvassing</h1>
+          <div className="flex items-center gap-2">
+            <MapPin className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Canvassing</h1>
+          </div>
           <p className="text-sm text-muted-foreground">
             Cut turf, build walk lists and track the doors.
           </p>

@@ -12,6 +12,7 @@ import {
   type DivisionDetail,
   type TurfUniverse,
 } from "@/lib/api/geo";
+import { getApiUrl } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { useCutTurf } from "@/lib/canvass/use-cut-turf";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
@@ -19,6 +20,7 @@ import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
 import { RegionHierarchy } from "@/components/canvass/region-hierarchy";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
 import { useGeoExplorerUrlState, writeGeoParam } from "@/components/canvass/use-geo-explorer-url-state";
+import { stateAbbrevToAsgsDigit, stateAsgsDigitToAbbrev, stateBounds, stateNameToAbbrev } from "@/lib/canvass/states";
 import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,10 +44,10 @@ const TurfMap = dynamic(() => import("@uprise/field").then((m) => m.TurfMap), {
  * filter and there are no sub-tabs or pagination.
  */
 export default function StatesPage() {
-  const { q, view } = useGeoExplorerUrlState({ viewStorageKey: "uprise.statesView" });
+  const { q, view, state } = useGeoExplorerUrlState({ viewStorageKey: "uprise.statesView" });
   const [universe, setUniverse] = useState<TurfUniverse>("hybrid");
   const { cutTurf, busy } = useCutTurf(universe);
-  const { addDivision, hasDivision } = useTurfBasket();
+  const { addDivision, hasDivision, removeDivision } = useTurfBasket();
 
   // Cached 5 min: the derived state set changes only with a geo re-ingest.
   const { data, loading, error, noPermission, refetch } = useApi(
@@ -54,9 +56,15 @@ export default function StatesPage() {
     { ttlMs: 300_000 },
   );
   const rows: Division[] = useMemo(() => data ?? [], [data]);
+  // ?state= (abbreviation) → ASGS digit; a state's code IS its digit, so this filters
+  // the list (and the map, below) to the picked state. Undefined = "All states".
+  const stateDigit = stateAbbrevToAsgsDigit(state);
   const filtered = useMemo(
-    () => rows.filter((r) => r.name.toLowerCase().includes(q.trim().toLowerCase())),
-    [rows, q],
+    () =>
+      rows.filter(
+        (r) => r.name.toLowerCase().includes(q.trim().toLowerCase()) && (!stateDigit || r.code === stateDigit),
+      ),
+    [rows, q, stateDigit],
   );
 
   // Selection lives in ?code= so breadcrumbs from an area/address can deep-link a
@@ -65,6 +73,12 @@ export default function StatesPage() {
   const searchParams = useSearchParams();
   const selectedCode = searchParams.get("code") ?? "";
   const selectState = (code: string) => writeGeoParam("code", code || null);
+  // Frame the map on the selected state (list or map click), else the shared State
+  // Filter — so selecting a state centres/zooms the map onto it.
+  const selectedState = rows.find((s) => s.code === selectedCode);
+  const focusBounds = stateBounds(
+    stateNameToAbbrev(selectedState?.name) ?? stateAsgsDigitToAbbrev(selectedCode) ?? state,
+  );
   const detailKey = selectedCode ? `/geo/states/${selectedCode}` : null;
   const detail = useApi<DivisionDetail>(detailKey, () => getState(selectedCode), { ttlMs: 300_000 });
   const hierarchyPanel = selectedCode ? <RegionHierarchy kind="state" code={selectedCode} /> : null;
@@ -83,25 +97,18 @@ export default function StatesPage() {
           <div className="relative h-[65vh] overflow-hidden rounded-2xl border border-border">
             <TurfMap
               mode="edit"
-              turfGeometry={(detail.data?.geometry as GeoJSON.Geometry | undefined) ?? null}
               stops={[]}
               defaultBounds={AU_BOUNDS}
+              focusBounds={focusBounds}
+              boundaryTilesUrl={`${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}`}
+              boundaryFilter={stateDigit ? ["==", ["get", "code"], stateDigit] : undefined}
+              selectedBoundaryCode={selectedCode || undefined}
+              onBoundaryClick={(code) => selectState(selectedCode === code ? "" : code)}
             />
-            {!detail.data?.geometry && (
+            {!selectedCode && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
-                <span
-                  className={cn(
-                    "rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-xs font-medium shadow-card backdrop-blur",
-                    detail.error ? "text-error" : "text-muted-foreground",
-                  )}
-                >
-                  {detail.loading
-                    ? "Loading boundary…"
-                    : detail.noPermission
-                      ? "You don't have permission to view boundaries."
-                      : detail.error
-                        ? `Couldn't load the boundary – ${detail.error}`
-                        : "Pick a state from the list to see its boundary."}
+                <span className="rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-card backdrop-blur">
+                  Click a state on the map to select it, or pick one from the list.
                 </span>
               </div>
             )}
@@ -121,7 +128,7 @@ export default function StatesPage() {
                     <li key={s.code}>
                       <button
                         type="button"
-                        onClick={() => selectState(s.code)}
+                        onClick={() => selectState(selectedCode === s.code ? "" : s.code)}
                         aria-pressed={selectedCode === s.code}
                         className={cn(
                           "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-surface-variant",
@@ -157,7 +164,11 @@ export default function StatesPage() {
                 <Button
                   variant="outline"
                   className="mt-2 w-full"
-                  onClick={() => addDivision({ type: "ste", code: detail.data!.code, name: detail.data!.name })}
+                  onClick={() =>
+                    hasDivision("ste", detail.data!.code)
+                      ? removeDivision("ste", detail.data!.code)
+                      : addDivision({ type: "ste", code: detail.data!.code, name: detail.data!.name })
+                  }
                 >
                   {hasDivision("ste", detail.data.code) ? (
                     <><Check className="mr-1.5 h-4 w-4" />In my turf</>
@@ -209,7 +220,7 @@ export default function StatesPage() {
                       <td className="py-3 pr-4">
                         <button
                           type="button"
-                          onClick={() => selectState(s.code)}
+                          onClick={() => selectState(selectedCode === s.code ? "" : s.code)}
                           className={cn(
                             "font-medium text-primary hover:underline",
                             selectedCode === s.code && "underline",
@@ -224,7 +235,11 @@ export default function StatesPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => addDivision({ type: "ste", code: s.code, name: s.name })}
+                            onClick={() =>
+                              hasDivision("ste", s.code)
+                                ? removeDivision("ste", s.code)
+                                : addDivision({ type: "ste", code: s.code, name: s.name })
+                            }
                           >
                             {hasDivision("ste", s.code) ? (
                               <><Check className="mr-1.5 h-3.5 w-3.5" />Added</>

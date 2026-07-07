@@ -3,10 +3,12 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Layers, Search } from "lucide-react";
+import { Layers, Map as MapIcon, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/ui/page-header";
 import { WalkModeToggle, type WalkMode } from "@uprise/field";
 import { cn } from "@/lib/utils";
+import { STATE_ABBREVS } from "@/lib/canvass/states";
 import { TurfBasketProvider, useTurfBasket } from "@/lib/canvass/turf-basket";
 import {
   GEO_VIEW_PERSIST_EVENT,
@@ -67,6 +69,7 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
   const kind = kindFromPathname(pathname);
 
   const urlQ = searchParams.get("q") ?? "";
+  const stateParam = searchParams.get("state") ?? "";
   const rawView = searchParams.get("view");
   // Map is the explorer default; the page hook seeds ?view= from the saved
   // per-kind preference on mount, so this fallback only shows pre-seed.
@@ -103,6 +106,7 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
   const kindHref = (base: string) => {
     const params = new URLSearchParams();
     if (input.trim()) params.set("q", input.trim());
+    if (stateParam) params.set("state", stateParam);
     params.set("view", view);
     return `${base}?${params.toString()}`;
   };
@@ -130,14 +134,16 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
 
   return (
     <div className="section-stack">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-extrabold">{TITLE[kind]}</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <MyTurfChip onOpen={() => setView("map")} />
-          <WalkModeToggle value={view} onChange={setView} />
-        </div>
-      </div>
-      <p className="text-sm text-muted-foreground">{DESCRIPTION[kind]}</p>
+      <PageHeader
+        title={TITLE[kind]}
+        icon={MapIcon}
+        description={DESCRIPTION[kind]}
+        breadcrumbs={[
+          { label: "Data Sets", href: "/data/datasets" },
+          { label: TITLE[kind] },
+        ]}
+        actions={<MyTurfChip onOpen={() => setView("map")} />}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {/* Segmented kind control – client navigation under the persistent
@@ -157,6 +163,25 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
             </Link>
           ))}
         </div>
+        {/* Shared State Filter: narrows the list on Divisions/Areas and frames the
+            map to the chosen state on every kind. Round-trips ?state= (carried
+            across kind switches by kindHref). */}
+        <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          State
+          <select
+            value={stateParam || "all"}
+            onChange={(e) => writeGeoParam("state", e.target.value === "all" ? null : e.target.value)}
+            title="Filter and frame the map by state or territory"
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+          >
+            <option value="all">All states</option>
+            {STATE_ABBREVS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
         {hideSearch ? (
           // Areas map view: the map owns its own Areas|Places + search combobox
           // (it selects areas on the map), so instead of a duplicate box here the
@@ -175,6 +200,10 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
             />
           </div>
         )}
+        {/* List/Map view toggle — pinned to the far right of the controls row. */}
+        <div className="ml-auto">
+          <WalkModeToggle value={view} onChange={setView} />
+        </div>
       </div>
     </div>
   );

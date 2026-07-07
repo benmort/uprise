@@ -89,6 +89,7 @@ export default function DataSettingsPage() {
 
   return (
     <PageShell
+      icon={Database}
       title="Datasets"
       actions={
         <Button variant="outline" size="sm" disabled={busy} onClick={reingest}>

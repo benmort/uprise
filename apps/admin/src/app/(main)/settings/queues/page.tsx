@@ -5,6 +5,7 @@
 // super-admin both in the nav and by the API (GET /system/queue-stats requires the
 // super-admin-only system.queue-stats permission).
 import { useCallback, useEffect, useState } from "react";
+import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -54,7 +55,10 @@ export default function GlobalQueueStatsPage() {
     <div className="page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">Queue &amp; Redis Stats</h1>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Queue &amp; Redis Stats</h1>
+          </div>
           <p className="text-sm text-muted-foreground">
             Platform-wide BullMQ queues + Redis health (all tenants). Super-admin only.
           </p>

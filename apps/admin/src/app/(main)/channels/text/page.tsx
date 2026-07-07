@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MessageSquareText } from "lucide-react";
 import { getOptOuts, getRecentBlasts } from "@/lib/api";
 import { KpiTile } from "@uprise/field";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,10 @@ export default function TextChannelPage() {
     <div className="page-stack">
       <div className="section-stack">
         <div>
-          <h1 className="text-3xl font-semibold">Text (SMS)</h1>
+          <div className="flex items-center gap-2">
+            <MessageSquareText className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Text (SMS)</h1>
+          </div>
           <p className="text-sm text-muted-foreground">
             Your SMS campaigns, delivery and compliance in one place.
           </p>

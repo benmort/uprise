@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, ChevronLeft, EyeOff, Loader2, Pencil, Plus, ShieldAlert, Star, X } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronLeft, EyeOff, Loader2, Pencil, Plus, ShieldAlert, ShieldCheck, Star, X } from "lucide-react";
 import { FEATURE_FLAG_KEYS, FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import {
@@ -295,7 +295,10 @@ export default function PlansPage() {
           >
             <ChevronLeft className="h-4 w-4" /> Feature flags
           </Link>
-          <h1 className="text-2xl font-bold text-foreground">Plans</h1>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Plans</h1>
+          </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Subscription plans: pricing and limits for the public page, plus the features each one
             grants. A plan&apos;s key must match the network&apos;s plan name. Tenants inherit a

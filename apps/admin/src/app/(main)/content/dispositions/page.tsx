@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Lock, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import {
   createDispositionDef,
   deleteDispositionDef,
@@ -19,6 +18,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
+import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@uprise/field";
 import { SupportPill } from "@uprise/field";
 import { SUPPORT_ORDER } from "@uprise/field";
@@ -109,15 +109,16 @@ export default function DispositionsPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/engagement">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Engagement
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Dispositions</h1>
-      </div>
+      <PageHeader
+        title="Dispositions"
+        icon={Sparkles}
+        description="The outcome codes your team tags each contact with."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Content", href: "/content" },
+          { label: "Dispositions" },
+        ]}
+      />
 
       <StateRegion
         loading={loading}

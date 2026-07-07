@@ -6,7 +6,8 @@
 // three tabs are the former /settings sections (shared from components/settings).
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Lock, Save } from "lucide-react";
+import { Loader2, Lock, Save, Settings } from "lucide-react";
+import { PageHeader } from "@/components/shell/page-header";
 import {
   orgProfile,
   tenants,
@@ -435,12 +436,11 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
   return (
     <AdminOrHigher>
       <section className="page-stack">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">General settings</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your workspace identity, brand assets, legal details and operational preferences. Each tab saves on its own.
-          </p>
-        </div>
+        <PageHeader
+          icon={Settings}
+          title="General settings"
+          description="Your workspace identity, brand assets, legal details and operational preferences. Each tab saves on its own."
+        />
 
         {/* Tab pills — row 1 for any admin; row 2 (super-admin only) is lock-badged
             and greyed, and only rendered when the session is a super-admin. */}

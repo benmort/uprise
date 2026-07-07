@@ -1,33 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, MessageSquareText, ListChecks, Tag, FileText } from "lucide-react";
+import { ArrowRight, MessageSquareText, ListChecks, Sparkles, Tag, FileText } from "lucide-react";
 import { SectionCard } from "@uprise/field";
+import { PageHeader } from "@/components/ui/page-header";
 
 const TOOLS = [
   {
-    href: "/engagement/dispositions",
+    href: "/content/dispositions",
     label: "Dispositions",
     desc: "The shared outcome taxonomy for doors and texts.",
     icon: Tag,
     ready: true,
   },
   {
-    href: "/engagement/canned-responses",
+    href: "/content/canned-responses",
     label: "Canned responses",
     desc: "Reusable replies that log a disposition when sent.",
     icon: MessageSquareText,
     ready: true,
   },
   {
-    href: "/engagement/surveys",
+    href: "/content/surveys",
     label: "Surveys & questions",
     desc: "Author once — renders to a door button and a text reply.",
     icon: ListChecks,
     ready: true,
   },
   {
-    href: "/engagement/scripts",
+    href: "/content/scripts",
     label: "Scripts",
     desc: "Opening lines and branches for a conversation.",
     icon: FileText,
@@ -38,12 +39,11 @@ const TOOLS = [
 export default function EngagementPage() {
   return (
     <div className="page-stack">
-      <div>
-        <h1 className="text-2xl font-extrabold">Engagement library</h1>
-        <p className="text-sm text-muted-foreground">
-          Shared building blocks for door and text conversations.
-        </p>
-      </div>
+      <PageHeader
+        title="Content"
+        icon={Sparkles}
+        description="Shared building blocks for door and text conversations."
+      />
 
       <div id="tour-engagement-grid" className="grid gap-3 md:grid-cols-2">
         {TOOLS.map((t) => {

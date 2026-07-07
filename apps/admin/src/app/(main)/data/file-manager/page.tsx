@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
-  ChevronRight,
   Eye,
   FileText,
+  Database,
   Folder,
   FolderPlus,
   HardDrive,
@@ -33,6 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useToast } from "@/components/ui/toast";
+import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/lib/utils";
 
 /** Prog's file-manager chrome (media tiles / folder grid / storage donut /
@@ -259,21 +259,14 @@ export default function FileManagerPage() {
 
   return (
     <div className="page-stack">
-      {/* Header – prog's title + breadcrumb row */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-foreground">File Manager</h1>
-        <nav>
-          <ol className="flex items-center gap-1.5 text-sm">
-            <li>
-              <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
-                Home
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </li>
-            <li className="text-foreground">File Manager</li>
-          </ol>
-        </nav>
-      </div>
+      <PageHeader
+        title="File Manager"
+        icon={Database}
+        breadcrumbs={[
+          { label: "Data Sets", href: "/data/datasets" },
+          { label: "File Manager" },
+        ]}
+      />
 
       {denied ? (
         <StateRegion noPermission>

@@ -95,18 +95,29 @@ export function TenantSwitcher({
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const setTriggerEl = (el: HTMLElement | null) => {
+    triggerRef.current = el;
+  };
+  const nameRef = useRef<HTMLSpanElement | null>(null);
   const pillRef = useRef<HTMLDivElement | null>(null);
   const pointerDownRef = useRef(false);
   const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expanded = hovered || focused;
   const isDesktop = () => typeof window !== "undefined" && window.innerWidth >= 1024;
+  // Only unfurl when the name is actually clipped (ellipsis); on the collapsed rail
+  // the name is hidden entirely, which counts. A fully-visible name never pops out.
+  const isTruncated = () => {
+    if (collapsed) return true;
+    const el = nameRef.current;
+    return !!el && el.scrollWidth > el.clientWidth + 1;
+  };
   const captureRect = () => {
     const r = triggerRef.current?.getBoundingClientRect();
     if (r) setRect(r);
   };
   const onTriggerEnter = () => {
-    if (!isDesktop()) return;
+    if (!isDesktop() || !isTruncated()) return;
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
     captureRect();
     setHovered(true);
@@ -118,7 +129,7 @@ export function TenantSwitcher({
   // Reveal on focus for keyboard only — a pointer-driven focus (click to open the
   // dropdown) is already covered by hover and must not leave the pill stuck open.
   const onTriggerFocus = () => {
-    if (!isDesktop() || pointerDownRef.current) return;
+    if (!isDesktop() || pointerDownRef.current || !isTruncated()) return;
     captureRect();
     setFocused(true);
   };
@@ -143,6 +154,12 @@ export function TenantSwitcher({
   const canCreate =
     isSuperAdmin ||
     (current?.role === "OWNER" && TENANT_CREATE_PLANS_UI.includes(current?.planName ?? ""));
+
+  // The tenant selector only makes sense for users who can act across tenants: a
+  // super-admin (acts as any tenant) or a network on the Scale plan (multi-brand).
+  // Everyone else sees a static brand mark instead of a switcher (planName is the
+  // owning network's plan, flattened onto the membership).
+  const canSwitch = isSuperAdmin || current?.planName === "scale";
 
   // Super-admin: debounced search across ALL tenants (empty query → first 50).
   useEffect(() => {
@@ -188,6 +205,93 @@ export function TenantSwitcher({
     setSwitching(false);
   };
 
+  const triggerHandlers = {
+    onMouseEnter: onTriggerEnter,
+    onMouseLeave: onTriggerLeave,
+    onMouseDown: () => {
+      pointerDownRef.current = true;
+    },
+    onFocus: onTriggerFocus,
+    onBlur: onTriggerBlur,
+  };
+
+  // The brand mark: avatar + (truncating) name + plan pill, and the switch chevron
+  // only when it's an actual switcher. Shared by the switcher button and the static
+  // brand so both align + measure identically.
+  const brandContent = (withChevron: boolean) => (
+    <>
+      <TenantAvatar tenantId={seedId} logoUrl={logoUrl} name={currentName} className="h-7 w-7" />
+      <span className={cn("flex min-w-0 flex-1 items-center gap-2", collapsed && "lg:hidden")}>
+        <span ref={nameRef} className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+          {currentName}
+        </span>
+        {current?.planName ? <PlanPill plan={current.planName} /> : null}
+        {withChevron ? (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+            <ChevronsUpDown className="h-4 w-4" />
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+
+  // Hover/focus unfurl: the full name floating over the top-bar. Portalled to escape
+  // the sidebar's overflow clip; pointer-events-none so the trigger underneath stays
+  // clickable. Only present while `expanded` (which only happens when truncated).
+  const pill =
+    expanded && rect && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={pillRef}
+            // The floating reveal doubles as the trigger: clicking it anywhere (name,
+            // avatar or chevron) opens the switcher, exactly like the sidebar button,
+            // and hovering it keeps the reveal open. Non-switchers get a passive
+            // (pointer-events-none) reveal — nothing to open.
+            onClick={canSwitch ? () => triggerRef.current?.click() : undefined}
+            onMouseEnter={() => {
+              if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+            }}
+            onMouseLeave={onTriggerLeave}
+            style={{ position: "fixed", top: rect.top, left: rect.left, minWidth: rect.width }}
+            className={cn(
+              "z-[60] flex w-max max-w-[340px] origin-left animate-pop-in items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 shadow-theme-lg motion-reduce:animate-none",
+              canSwitch ? "cursor-pointer" : "pointer-events-none",
+            )}
+          >
+            <TenantAvatar tenantId={seedId} logoUrl={logoUrl} name={currentName} className="h-7 w-7" />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{currentName}</span>
+            {current?.planName ? <PlanPill plan={current.planName} /> : null}
+            {canSwitch ? (
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+                <ChevronsUpDown className="h-4 w-4" />
+              </span>
+            ) : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  // No switcher for single-tenant, non-scale, non-super-admin users — just the static
+  // brand mark (still unfurls on hover if the name is clipped, purely to read it).
+  if (!canSwitch) {
+    return (
+      <>
+        <div
+          ref={setTriggerEl}
+          {...triggerHandlers}
+          title={currentName}
+          className={cn(
+            "flex w-full min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-left",
+            collapsed && "lg:justify-center lg:px-1",
+          )}
+        >
+          {brandContent(false)}
+        </div>
+        {pill}
+      </>
+    );
+  }
+
   return (
     <>
       <Dropdown
@@ -199,16 +303,10 @@ export function TenantSwitcher({
         contentClassName="w-80 p-0 overflow-hidden"
         trigger={({ toggle }) => (
           <button
-            ref={triggerRef}
+            ref={setTriggerEl}
             type="button"
             onClick={toggle}
-            onMouseEnter={onTriggerEnter}
-            onMouseLeave={onTriggerLeave}
-            onMouseDown={() => {
-              pointerDownRef.current = true;
-            }}
-            onFocus={onTriggerFocus}
-            onBlur={onTriggerBlur}
+            {...triggerHandlers}
             title={currentName}
             aria-label="Switch tenant"
             className={cn(
@@ -216,16 +314,7 @@ export function TenantSwitcher({
               collapsed && "lg:justify-center lg:px-1",
             )}
           >
-            <TenantAvatar tenantId={seedId} logoUrl={logoUrl} name={currentName} className="h-7 w-7" />
-            <span className={cn("flex min-w-0 flex-1 items-center gap-2", collapsed && "lg:hidden")}>
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-                {currentName}
-              </span>
-              {current?.planName ? <PlanPill plan={current.planName} /> : null}
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
-                <ChevronsUpDown className="h-4 w-4" />
-              </span>
-            </span>
+            {brandContent(true)}
           </button>
         )}
       >
@@ -259,7 +348,7 @@ export function TenantSwitcher({
                   type="button"
                   disabled={switching}
                   onClick={() => void switchTo(r.tenantId)}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-variant disabled:opacity-60"
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <TenantAvatar tenantId={r.tenantId} className="h-7 w-7" />
                   <span className="min-w-0 flex-1">
@@ -282,27 +371,7 @@ export function TenantSwitcher({
 
       <CreateTenantDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
 
-      {/* Hover/focus unfurl: the full name floating over the top-bar. Portalled to
-          escape the sidebar's overflow clip; pointer-events-none so the trigger
-          underneath stays clickable. Mirrors the trigger's layout for alignment. */}
-      {expanded && rect && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              ref={pillRef}
-              aria-hidden
-              style={{ position: "fixed", top: rect.top, left: rect.left, minWidth: rect.width }}
-              className="pointer-events-none z-[60] flex w-max max-w-[340px] origin-left animate-pop-in items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 shadow-theme-lg motion-reduce:animate-none"
-            >
-              <TenantAvatar tenantId={seedId} logoUrl={logoUrl} name={currentName} className="h-7 w-7" />
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{currentName}</span>
-              {current?.planName ? <PlanPill plan={current.planName} /> : null}
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
-                <ChevronsUpDown className="h-4 w-4" />
-              </span>
-            </div>,
-            document.body,
-          )
-        : null}
+      {pill}
     </>
   );
 }

@@ -14,13 +14,14 @@ import {
   type DivisionType,
   type TurfUniverse,
 } from "@/lib/api/geo";
+import { getApiUrl } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { useCutTurf } from "@/lib/canvass/use-cut-turf";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
 import { useGeoExplorerUrlState } from "@/components/canvass/use-geo-explorer-url-state";
-import { STATE_ABBREVS, stateAbbrevToAsgsDigit, stateNameToAbbrev } from "@/lib/canvass/states";
+import { stateAbbrevToAsgsDigit, stateBounds, stateNameToAbbrev } from "@/lib/canvass/states";
 import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,6 +43,15 @@ const TABS: Array<{ type: DivisionType; label: string }> = [
   { type: "lga", label: "Local (LGA)" },
 ];
 
+// Map colour per division type — all three are drawn together on the map; the pills
+// carry a matching dot as the legend. The active (pill-selected) type is the clickable
+// one, the others are colour-coded outlines.
+const TYPE_COLORS: Record<DivisionType, string> = {
+  ced: "#2563eb", // Federal — blue
+  sed: "#059669", // State — green
+  lga: "#d97706", // Local (LGA) — amber
+};
+
 /**
  * Divisions explorer panel. The chrome (kind switcher, search box, list/map
  * toggle) lives in the persistent (geo) layout; this page reads the shared URL
@@ -50,19 +60,22 @@ const TABS: Array<{ type: DivisionType; label: string }> = [
  */
 export default function DivisionsPage() {
   const router = useRouter();
-  const { q, view, tab, state, setTab, setState } = useGeoExplorerUrlState({
+  const { q, view, tab, state, setTab } = useGeoExplorerUrlState({
     viewStorageKey: "uprise.divisionsView",
     // Old Settings→Data bookmarks: /data/divisions#federal|#state|#local.
     legacyHashToTab: { federal: "ced", state: "sed", local: "lga" },
   });
   const type = (TABS.some((t) => t.type === tab) ? tab : "ced") as DivisionType;
-  const stateFilter = state || "all"; // ?state= (abbreviation) → the state <select>
+  // Shared ?state= (abbreviation) → ASGS digit. Division codes are state-prefixed
+  // (first digit = state), so filtering the list + map is a cheap code-prefix match
+  // (the same rule the backend uses). Undefined = "All states".
+  const stateDigit = stateAbbrevToAsgsDigit(state);
 
   const [universe, setUniverse] = useState<TurfUniverse>("hybrid");
   const [page, setPage] = useState(0);
   const pageSize = 8;
   const { cutTurf, busy } = useCutTurf(universe);
-  const { addDivision, hasDivision, coveredBy } = useTurfBasket();
+  const { addDivision, hasDivision, removeDivision, coveredBy } = useTurfBasket();
   // The ASGS state digit for a division (from its state name) — the basket's
   // containment cover key, so a basketed whole state dedups its divisions.
   const divDigit = (stateName: string | null) =>
@@ -78,31 +91,29 @@ export default function DivisionsPage() {
   );
   const rows: Division[] = useMemo(() => data ?? [], [data]);
 
-  // Options are abbreviations (shared ?state= vocabulary) present in the loaded set.
-  const states = useMemo(
-    () =>
-      STATE_ABBREVS.filter((abbrev) => rows.some((r) => stateNameToAbbrev(r.state) === abbrev)),
-    [rows],
-  );
   const filtered = useMemo(
     () =>
       rows.filter(
         (r) =>
           r.name.toLowerCase().includes(q.trim().toLowerCase()) &&
-          (stateFilter === "all" || stateNameToAbbrev(r.state) === stateFilter),
+          (!stateDigit || r.code.startsWith(stateDigit)),
       ),
-    [rows, q, stateFilter],
+    [rows, q, stateDigit],
   );
   const paged = filtered.slice(page * pageSize, page * pageSize + pageSize);
   useEffect(() => {
     setPage(0);
-  }, [type, q, stateFilter]);
+  }, [type, q, stateDigit]);
 
   // Map mode: pick a division from the sidebar → fetch + render its boundary.
   // Selection carries its type so a tab switch can never pair the new type
   // with a stale code (an effect-based reset fires AFTER useApi's fetch).
   const [selected, setSelected] = useState<{ type: DivisionType; code: string } | null>(null);
   const selectedCode = selected?.type === type ? selected.code : "";
+  // Frame the map on the selected division's state (else the shared State Filter) so
+  // picking a division centres the map on its region.
+  const selectedDivision = rows.find((r) => r.code === selectedCode);
+  const focusBounds = stateBounds(stateNameToAbbrev(selectedDivision?.state) ?? state);
   const detailKey = selectedCode ? `/geo/divisions/${type}/${selectedCode}` : null;
   const detail = useApi<DivisionDetail>(detailKey, () => getDivision(type, selectedCode), {
     ttlMs: 300_000,
@@ -116,40 +127,23 @@ export default function DivisionsPage() {
     });
 
   const tabPills = (
-    <>
-      <div className="flex rounded-xl border border-border p-0.5">
-        {TABS.map((t) => (
-          <button
-            key={t.type}
-            type="button"
-            aria-pressed={type === t.type}
-            onClick={() => setTab(t.type)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-              type === t.type ? "bg-primary text-white" : "text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        State Filter:
-        <select
-          value={stateFilter}
-          onChange={(e) => setState(e.target.value === "all" ? "" : e.target.value)}
-          title="Filter divisions by state or territory"
-          className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+    <div className="flex rounded-xl border border-border p-0.5">
+      {TABS.map((t) => (
+        <button
+          key={t.type}
+          type="button"
+          aria-pressed={type === t.type}
+          onClick={() => setTab(t.type)}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+            type === t.type ? "bg-primary text-white" : "text-foreground",
+          )}
         >
-          <option value="all">All states</option>
-          {states.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </label>
-    </>
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: TYPE_COLORS[t.type] }} />
+          {t.label}
+        </button>
+      ))}
+    </div>
   );
 
   if (view === "map") {
@@ -161,25 +155,23 @@ export default function DivisionsPage() {
           <div className="relative h-[65vh] overflow-hidden rounded-2xl border border-border">
             <TurfMap
               mode="edit"
-              turfGeometry={(detail.data?.geometry as GeoJSON.Geometry | undefined) ?? null}
               stops={[]}
               defaultBounds={AU_BOUNDS}
+              focusBounds={focusBounds}
+              boundaryLayers={TABS.map((t) => ({
+                id: t.type,
+                tilesUrl: `${getApiUrl()}/geo/tiles/${t.type}/{z}/{x}/{y}`,
+                color: TYPE_COLORS[t.type],
+                interactive: t.type === type,
+              }))}
+              boundaryFilter={stateDigit ? ["==", ["slice", ["get", "code"], 0, 1], stateDigit] : undefined}
+              selectedBoundaryCode={selectedCode || undefined}
+              onBoundaryClick={(code) => setSelected(selectedCode === code ? null : { type, code })}
             />
-            {!detail.data?.geometry && (
+            {!selectedCode && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
-                <span
-                  className={cn(
-                    "rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-xs font-medium shadow-card backdrop-blur",
-                    detail.error ? "text-error" : "text-muted-foreground",
-                  )}
-                >
-                  {detail.loading
-                    ? "Loading boundary…"
-                    : detail.noPermission
-                      ? "You don't have permission to view boundaries."
-                      : detail.error
-                        ? `Couldn't load the boundary – ${detail.error}`
-                        : "Pick a division from the list to see its boundary."}
+                <span className="rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-card backdrop-blur">
+                  Click a division on the map to select it, or pick one from the list.
                 </span>
               </div>
             )}
@@ -211,7 +203,7 @@ export default function DivisionsPage() {
                     <li key={d.code}>
                       <button
                         type="button"
-                        onClick={() => setSelected({ type, code: d.code })}
+                        onClick={() => setSelected(selectedCode === d.code ? null : { type, code: d.code })}
                         aria-pressed={selectedCode === d.code}
                         className={cn(
                           "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-surface-variant",
@@ -251,7 +243,11 @@ export default function DivisionsPage() {
                       variant="outline"
                       className="mt-2 w-full"
                       disabled={!!cov}
-                      onClick={() => addDiv(detail.data!)}
+                      onClick={() =>
+                        hasDivision(type, detail.data!.code)
+                          ? removeDivision(type, detail.data!.code)
+                          : addDiv(detail.data!)
+                      }
                     >
                       {cov ? (
                         <><Check className="mr-1.5 h-4 w-4" />Covered by {cov}</>
@@ -332,7 +328,8 @@ export default function DivisionsPage() {
                                 disabled={!!cov}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  addDiv(d);
+                                  if (hasDivision(type, d.code)) removeDivision(type, d.code);
+                                  else addDiv(d);
                                 }}
                               >
                                 {cov ? (

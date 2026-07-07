@@ -6,6 +6,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
+import { Inbox } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { createBlastAndOpen } from '@/lib/blasts';
 import { NewConversationMenu } from '@/components/inbox/new-conversation-menu';
@@ -22,8 +23,11 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
   return (
     <div className="page-stack">
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white/90">Inbox</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
+          <div className="flex items-center gap-2">
+            <Inbox className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Inbox</h1>
+          </div>
           <nav>
             <ol className="flex items-center gap-1.5">
               <li>
@@ -53,6 +57,9 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
             </ol>
           </nav>
         </div>
+        <p className="mb-6 text-sm text-muted-foreground">
+          Every conversation across your channels, in one queue.
+        </p>
 
         <div className="sm:h-[calc(100vh-174px)] h-screen xl:h-[calc(100vh-186px)]">
           <div className="xl:grid xl:grid-cols-12 flex flex-col gap-5 sm:gap-5">

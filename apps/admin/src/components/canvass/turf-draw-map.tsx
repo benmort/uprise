@@ -104,6 +104,7 @@ function DrawControl({ onChange, clearToken }: { onChange: (polygons: GeoJSON.Po
 export function TurfDrawMap({
   existing = [],
   center,
+  focusBounds,
   selectedAreas = [],
   onToggleArea,
   onPolygonsChange,
@@ -120,6 +121,8 @@ export function TurfDrawMap({
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
+  /** `[w,s,e,n]` to frame the map to on change — the shared State Filter zooming to a state. */
+  focusBounds?: [number, number, number, number];
   selectedAreas?: SelectedArea[];
   onToggleArea?: (area: SelectedArea) => void;
   onPolygonsChange: (polygons: GeoJSON.Polygon[]) => void;
@@ -192,17 +195,32 @@ export function TurfDrawMap({
   const [searching, setSearching] = useState(false);
   const [areaOpen, setAreaOpen] = useState(false);
 
-  const initialViewState = useMemo<MapProps["initialViewState"]>(
-    () =>
-      center
-        ? { latitude: center.lat, longitude: center.lng, zoom: 11 }
-        : {
-            // No focus yet → open on the whole country, not a hardcoded city.
-            bounds: [[AU_BOUNDS[0], AU_BOUNDS[1]], [AU_BOUNDS[2], AU_BOUNDS[3]]],
-            fitBoundsOptions: { padding: 32 },
-          },
-    [center],
-  );
+  const initialViewState = useMemo<MapProps["initialViewState"]>(() => {
+    if (center) return { latitude: center.lat, longitude: center.lng, zoom: 11 };
+    // A picked state frames its bounds; otherwise open on the whole country.
+    const frame = focusBounds ?? AU_BOUNDS;
+    return {
+      bounds: [[frame[0], frame[1]], [frame[2], frame[3]]],
+      fitBoundsOptions: { padding: 32 },
+    };
+  }, [center, focusBounds]);
+
+  // Re-frame on a State Filter change: to the picked state, or back to the national
+  // (AU) view when cleared to "All states". Skip the first run — initialViewState +
+  // onLoad already frame the map on mount. A `center` point view stays put.
+  const framedOnce = useRef(false);
+  useEffect(() => {
+    if (!framedOnce.current) {
+      framedOnce.current = true;
+      return;
+    }
+    if (center) return;
+    const frame = focusBounds ?? AU_BOUNDS;
+    mapRef.current
+      ?.getMap()
+      ?.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32, duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusBounds]);
 
   // Vector-tile boundary source for the active level. mapbox requests only the
   // tiles visible at the current zoom, so this is what makes boundaries fast at any
@@ -451,6 +469,18 @@ export function TurfDrawMap({
         transformRequest={transformRequest}
         onLoad={() => {
           setMapLoaded(true);
+          const map = mapRef.current?.getMap();
+          if (map) {
+            // The container finishes laying out (next/dynamic + grid) after the map
+            // computes its initial view, so re-fit once sized or the wrong tiles load
+            // and boundaries look missing until you interact. A `center` point view
+            // is already correct — leave it.
+            map.resize();
+            if (!center) {
+              const frame = focusBounds ?? AU_BOUNDS;
+              map.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32 });
+            }
+          }
           syncViewport();
         }}
         onMoveEnd={() => syncViewport()}

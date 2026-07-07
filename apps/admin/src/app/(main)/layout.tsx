@@ -1,6 +1,7 @@
 "use client";
 
 import { Logo } from "@/components/brand/logo";
+import MainLoading from "./loading";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import {
   Database,
   Inbox,
   LayoutDashboard,
-  Loader2,
   Lock,
   LogOut,
   MapPin,
@@ -34,6 +34,7 @@ import {
 import { tenants, type AuthPrincipal } from "@uprise/api-client";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, goToLogin, logout } from "@/lib/session";
+import { ONBOARDING_STEPS, deriveOnboardingSteps } from "@/lib/onboarding";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search";
 import { NotificationsDropdown } from "@/components/topbar/notifications-dropdown";
@@ -75,8 +76,9 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
   const px = (s: string): NavMatch => (p) => p.startsWith(`/future/${s}`);
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
-    // First-run organiser checklist — sits under Dashboard, flag-gated (default on).
-    { type: "leaf", key: "getting-started", label: "Getting started", href: "/getting-started", icon: Rocket, match: (p) => p.startsWith("/getting-started"), flag: "FEATURE_NAV_GETTING_STARTED" },
+    // First-run organiser checklist — flag-gated (default on); the shell hides it
+    // once every onboarding step is complete (see onboardingDone).
+    { type: "leaf", key: "getting-started", label: "Getting Started", href: "/getting-started", icon: Rocket, match: (p) => p.startsWith("/getting-started"), flag: "FEATURE_NAV_GETTING_STARTED" },
     // Shared inbox (unified cross-channel queue). Open to organisers, flag-gated
     // (FEATURE_NAV_PROG_CHANNELS). The SMS-only inbox is parked in Future as "SMS inbox".
     { type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
@@ -106,14 +108,16 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
     },
     { type: "leaf", key: "volunteers", label: "Volunteers", href: "/canvass/volunteers", icon: Megaphone, match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
     {
-      type: "group", key: "engagement", label: "Scripts", icon: Sparkles,
-      match: (p) => p.startsWith("/engagement"),
+      // "Content" section (routes /content/*). Flag keys keep their FEATURE_NAV_ENGAGEMENT_*
+      // names — they're internal identifiers wired to plans/overrides, not user-visible.
+      type: "group", key: "content", label: "Content", icon: Sparkles,
+      match: (p) => p.startsWith("/content"),
       flag: "FEATURE_NAV_ENGAGEMENT",
       children: [
-        { label: "Surveys", href: "/engagement/surveys", match: (p) => p.startsWith("/engagement/surveys"), flag: "FEATURE_NAV_ENGAGEMENT_SURVEYS" },
-        { label: "Scripts", href: "/engagement/scripts", match: (p) => p.startsWith("/engagement/scripts"), flag: "FEATURE_NAV_ENGAGEMENT_SCRIPTS" },
-        { label: "Dispositions", href: "/engagement/dispositions", match: (p) => p.startsWith("/engagement/dispositions"), flag: "FEATURE_NAV_ENGAGEMENT_DISPOSITIONS" },
-        { label: "Canned responses", href: "/engagement/canned-responses", match: (p) => p.startsWith("/engagement/canned-responses"), flag: "FEATURE_NAV_ENGAGEMENT_CANNED" },
+        { label: "Surveys", href: "/content/surveys", match: (p) => p.startsWith("/content/surveys"), flag: "FEATURE_NAV_ENGAGEMENT_SURVEYS" },
+        { label: "Scripts", href: "/content/scripts", match: (p) => p.startsWith("/content/scripts"), flag: "FEATURE_NAV_ENGAGEMENT_SCRIPTS" },
+        { label: "Dispositions", href: "/content/dispositions", match: (p) => p.startsWith("/content/dispositions"), flag: "FEATURE_NAV_ENGAGEMENT_DISPOSITIONS" },
+        { label: "Canned responses", href: "/content/canned-responses", match: (p) => p.startsWith("/content/canned-responses"), flag: "FEATURE_NAV_ENGAGEMENT_CANNED" },
       ],
     },
 
@@ -287,6 +291,10 @@ export default function MainLayout({
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
+  // True once every getting-started step is done — hides the "Getting started" nav
+  // item. Same signal the dashboard nudge uses (persisted OR live-derived), so the
+  // two stay consistent.
+  const [onboardingDone, setOnboardingDone] = useState(false);
   const [creatingBlast, setCreatingBlast] = useState(false);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [pendingJoinCount, setPendingJoinCount] = useState(0);
@@ -388,6 +396,31 @@ export default function MainLayout({
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [ready, principal]);
+
+  // Resolve onboarding completion once the session is ready, mirroring the dashboard
+  // nudge: persisted step cache OR live-derived. When all steps are done the
+  // "Getting started" nav item is dropped (see the nav memo).
+  useEffect(() => {
+    if (!ready) return;
+    let alive = true;
+    void (async () => {
+      const session = await getSession();
+      const tid = session?.tenantId ?? null;
+      const canManage = (session?.role === "OWNER" || session?.role === "ORGANISER") && Boolean(tid);
+      if (!alive || !session || !canManage || !tid) return;
+      const [persistedRes, derived] = await Promise.all([
+        tenants.getOnboarding(tid).catch(() => null),
+        deriveOnboardingSteps(tid, session),
+      ]);
+      if (!alive) return;
+      const persisted = persistedRes?.ok ? persistedRes.data.steps : null;
+      const complete = ONBOARDING_STEPS.every((s) => derived[s.key] || Boolean(persisted?.[s.key]));
+      setOnboardingDone(complete);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -582,6 +615,7 @@ export default function MainLayout({
     };
     const built = buildNav(isSuperAdmin)
       .filter((n) => flagOn(n.flag))
+      .filter((n) => !(onboardingDone && n.key === "getting-started"))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
       .filter((n) => n.type !== "group" || n.children.length > 0);
     // Drop a zone header that has no surviving item before the next header / the end.
@@ -599,7 +633,7 @@ export default function MainLayout({
       if (!("href" in only)) return n; // sole child isn't a direct link → keep the group
       return { type: "leaf", key: n.key, label: n.label, icon: n.icon, href: only.href, match: n.match, flag: n.flag };
     });
-  }, [isSuperAdmin, flagOn]);
+  }, [isSuperAdmin, flagOn, onboardingDone]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
@@ -838,10 +872,11 @@ export default function MainLayout({
   );
 
   if (!ready) {
+    // Loading a workspace (initial load / after a tenant switch reload) shows the
+    // app's normal page-loading skeleton, not a bare spinner.
     return (
-      <div className="flex min-h-screen items-center justify-center gap-2 text-muted-foreground" role="status" aria-live="polite">
-        <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-        Loading...
+      <div role="status" aria-label="Loading workspace">
+        <MainLoading />
       </div>
     );
   }

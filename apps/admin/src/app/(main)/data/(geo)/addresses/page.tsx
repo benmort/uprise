@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Check, LocateFixed, MapPin, Plus, Search, UserCheck } from "lucide-react";
 import { nearbyAddresses, type NearbyAddress } from "@/lib/api/geo";
 import { useGeoExplorerUrlState } from "@/components/canvass/use-geo-explorer-url-state";
+import { stateBounds } from "@/lib/canvass/states";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
 import { RegionHierarchy } from "@/components/canvass/region-hierarchy";
@@ -53,16 +54,53 @@ async function geocode(q: string): Promise<GeocodeHit[]> {
     });
 }
 
+// Common AU street-type abbreviations for the compact door label.
+const STREET_TYPE_ABBR: Record<string, string> = {
+  street: "St", road: "Rd", avenue: "Ave", lane: "Ln", drive: "Dr", court: "Ct",
+  place: "Pl", crescent: "Cres", parade: "Pde", terrace: "Tce", boulevard: "Blvd",
+  highway: "Hwy", close: "Cl", circuit: "Cct", esplanade: "Esp", way: "Way",
+  grove: "Grove", walk: "Walk", crest: "Crest", rise: "Rise", square: "Sq",
+};
+
+const titleCase = (s: string) =>
+  s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
+/**
+ * Compact door label — "17 Fulham St · 2042" — from a G-NAF `address_label` or a
+ * geocode label. Takes the street segment (before the first comma, or the "·" in
+ * the minimal national load), title-cases it, abbreviates the trailing street
+ * type, and appends the postcode. NB: when the loaded `address_label` is only
+ * "number · postcode" (the minimal G-NAF load), there is no street to show and it
+ * passes the number through — richer labels need a G-NAF load with STREET_LOCALITY.
+ */
+function formatDoorLabel(raw: string): string {
+  const postcode = raw.match(/\b\d{4}\b/)?.[0] ?? null;
+  const head = (raw.includes(",") ? raw.split(",")[0] : raw.split("·")[0])
+    .trim()
+    .replace(/\s+\d{4}$/, "")
+    .trim();
+  let street = head;
+  if (/[A-Za-z]/.test(head)) {
+    const words = titleCase(head).split(/\s+/).filter(Boolean);
+    const lastKey = words[words.length - 1]?.toLowerCase();
+    if (lastKey && STREET_TYPE_ABBR[lastKey]) words[words.length - 1] = STREET_TYPE_ABBR[lastKey];
+    street = words.join(" ");
+  }
+  return postcode && street && street !== postcode ? `${street} · ${postcode}` : street || raw;
+}
+
 /**
  * Addresses explorer panel. Chrome (kind switcher, search box, view toggle)
  * lives in the persistent (geo) layout; this page reads ?q/?view – which is
  * exactly what makes the search term survive list↔map flips and reloads.
  */
 export default function AddressesPage() {
-  const { q, view, setView } = useGeoExplorerUrlState({
+  const { q, view, state, setView } = useGeoExplorerUrlState({
     viewStorageKey: "uprise.addressesView",
   });
-  const { addAddress, hasAddress, coveredBy } = useTurfBasket();
+  // The shared State Filter frames the map to the picked state.
+  const focusBounds = stateBounds(state);
+  const { addAddress, hasAddress, removeAddress, coveredBy } = useTurfBasket();
 
   // ── List mode: live geocode over ?q (the layout already debounced the write) ─
   const [hits, setHits] = useState<GeocodeHit[]>([]);
@@ -182,8 +220,10 @@ export default function AddressesPage() {
               stops={stops}
               activeStopId={activePid || undefined}
               userPosition={picked ? { lat: picked.lat, lng: picked.lng } : undefined}
-              onStopTap={(id) => setActivePid(id)}
+              focusPoint={picked ? { lat: picked.lat, lng: picked.lng } : null}
+              onStopTap={(id) => setActivePid(activePid === id ? "" : id)}
               defaultBounds={AU_BOUNDS}
+              focusBounds={focusBounds}
             />
             {!picked && (
               <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center">
@@ -198,8 +238,11 @@ export default function AddressesPage() {
             <SectionCard title="Searched address">
               {picked ? (
                 <>
-                  <p className="text-sm font-semibold text-foreground">{picked.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                  <div className="flex items-start gap-2.5">
+                    <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                    <p className="text-lg font-bold leading-snug text-foreground">{picked.label}</p>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground tabular-nums">
                     {picked.lat.toFixed(5)}, {picked.lng.toFixed(5)}
                   </p>
                   <Button
@@ -238,13 +281,15 @@ export default function AddressesPage() {
                       className="mt-3 w-full"
                       disabled={!!cov}
                       onClick={() =>
-                        addAddress({
-                          gnafPid: active.gnafPid,
-                          label: active.address,
-                          lat: active.lat,
-                          lng: active.lng,
-                          stateDigit,
-                        })
+                        hasAddress(active.gnafPid)
+                          ? removeAddress(active.gnafPid)
+                          : addAddress({
+                              gnafPid: active.gnafPid,
+                              label: active.address,
+                              lat: active.lat,
+                              lng: active.lng,
+                              stateDigit,
+                            })
                       }
                     >
                       {cov ? (
@@ -295,14 +340,15 @@ export default function AddressesPage() {
                     <li key={d.gnafPid}>
                       <button
                         type="button"
-                        onClick={() => setActivePid(d.gnafPid)}
+                        onClick={() => setActivePid(activePid === d.gnafPid ? "" : d.gnafPid)}
+                        title={d.address}
                         className={cn(
                           "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-surface-variant",
                           activePid === d.gnafPid && "bg-primary-container/20",
                         )}
                       >
                         <LocateFixed className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <span className="truncate font-medium text-foreground">{d.address}</span>
+                        <span className="truncate font-medium text-foreground">{formatDoorLabel(d.address)}</span>
                         {d.hasContact ? (
                           <UserCheck className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--success))]" />
                         ) : null}

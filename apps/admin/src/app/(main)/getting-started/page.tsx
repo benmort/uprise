@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle, Rocket } from "lucide-react";
 import { Button, EmptyState, StepProgress } from "@uprise/ui";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@uprise/field";
 import { tenants } from "@uprise/api-client";
 import { getSession } from "@/lib/session";
@@ -80,10 +81,11 @@ export default function GettingStartedPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Rocket className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-extrabold">Getting started</h1>
-      </div>
+      <PageHeader
+        title="Getting Started"
+        icon={Rocket}
+        description="A few quick steps to get your workspace ready."
+      />
 
       {loading ? (
         <SectionCard title="Your setup">
@@ -94,7 +96,7 @@ export default function GettingStartedPage() {
           </div>
         </SectionCard>
       ) : error ? (
-        <SectionCard title="Getting started">
+        <SectionCard title="Getting Started">
           <EmptyState
             title="Couldn't load your setup"
             description="Something went wrong resolving your session. Try again."
@@ -103,7 +105,7 @@ export default function GettingStartedPage() {
           />
         </SectionCard>
       ) : noPermission ? (
-        <SectionCard title="Getting started">
+        <SectionCard title="Getting Started">
           <EmptyState
             title="Organisers only"
             description="You need organiser access to set up this workspace."

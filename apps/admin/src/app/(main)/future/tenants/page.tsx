@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Building2,
   Plus,
+  ShieldCheck,
   Users,
   Settings,
   ShieldAlert,
@@ -164,7 +165,10 @@ export default function TenantsPage() {
     <section className="page-stack">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tenants</h1>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
+            <h1 className="text-2xl font-extrabold">Tenants</h1>
+          </div>
           <p className="text-gray-600 dark:text-gray-400">
             {isSuperAdmin
               ? 'Manage every tenant on the platform.'

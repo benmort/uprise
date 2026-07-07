@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import { Pencil, Plus, Sparkles, Trash2, Zap } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   createCannedResponse,
   deleteCannedResponse,
@@ -125,28 +126,33 @@ export default function CannedResponsesPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/engagement">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Engagement
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Canned responses</h1>
-        <select
-          value={channelFilter}
-          onChange={(e) => setChannelFilter(e.target.value as "SMS" | "DOOR")}
-          className="ml-auto h-9 rounded-md border border-input bg-background px-2 text-sm"
-          aria-label="Filter by channel"
-        >
-          <option value="SMS">SMS &amp; both</option>
-          <option value="DOOR">Door &amp; both</option>
-        </select>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          New canned response
-        </Button>
-      </div>
+      <PageHeader
+        title="Canned responses"
+        icon={Sparkles}
+        description="Saved replies your team can send in a tap."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Content", href: "/content" },
+          { label: "Canned responses" },
+        ]}
+        actions={
+          <>
+            <select
+              value={channelFilter}
+              onChange={(e) => setChannelFilter(e.target.value as "SMS" | "DOOR")}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              aria-label="Filter by channel"
+            >
+              <option value="SMS">SMS &amp; both</option>
+              <option value="DOOR">Door &amp; both</option>
+            </select>
+            <Button size="sm" onClick={openCreate}>
+              <Plus className="mr-1.5 h-4 w-4" />
+              New canned response
+            </Button>
+          </>
+        }
+      />
 
       <StateRegion
         loading={loading}

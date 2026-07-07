@@ -642,7 +642,7 @@ export const engagementTourSteps: TourStep[] = [
     content: "Shared building blocks for door and text conversations.",
     detail: "Dispositions, canned responses, surveys and scripts — authored once, used on both channels.",
     selector: "#tour-engagement-grid",
-    route: "/engagement",
+    route: "/content",
   },
   {
     icon: Tag,
@@ -651,7 +651,7 @@ export const engagementTourSteps: TourStep[] = [
     detail:
       "Add your own contact-result codes; the terminal / data-quality codes are locked system defaults so cross-org benchmarking stays valid. The support-level scale sits below.",
     selector: "#tour-nav",
-    route: "/engagement/dispositions",
+    route: "/content/dispositions",
   },
   {
     icon: MessageSquareText,
@@ -659,7 +659,7 @@ export const engagementTourSteps: TourStep[] = [
     content: "Reusable replies in three tiers — Recommended, Mine and Auto-send.",
     detail: "Each canned reply logs a disposition when sent, and powers the inbox's suggested replies.",
     selector: "#tour-nav",
-    route: "/engagement/canned-responses",
+    route: "/content/canned-responses",
   },
   {
     icon: ListChecks,
@@ -668,7 +668,7 @@ export const engagementTourSteps: TourStep[] = [
     detail:
       "The live dual preview shows the same option as a door button and as a chat reply — edit it once, both channels update. This is the heart of unified door+text engagement.",
     selector: "#tour-nav",
-    route: "/engagement/surveys",
+    route: "/content/surveys",
   },
   {
     icon: FileText,
@@ -676,7 +676,7 @@ export const engagementTourSteps: TourStep[] = [
     content: "An opening line plus outcome-keyed branches for the conversation.",
     detail: "“If interested → …”, “If not → …”. One script can drive both a door workflow and a text journey.",
     selector: "#tour-nav",
-    route: "/engagement/scripts",
+    route: "/content/scripts",
   },
   {
     icon: CheckCircle2,
@@ -684,7 +684,7 @@ export const engagementTourSteps: TourStep[] = [
     content: "Dispositions, canned replies, surveys and scripts — shared across channels.",
     detail: "Attach a survey/script to a campaign, then watch the answers land on contacts. Re-run from the help menu.",
     selector: "#tour-help-button",
-    route: "/engagement",
+    route: "/content",
   },
 ];
 
