@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Map, { Layer, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { Layer, Marker, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
@@ -46,6 +46,10 @@ const LEVELS: Array<{ id: AreaLevel; label: string }> = [
 const MB_MIN_ZOOM = 9;
 const TILE_MAX_ZOOM = 16;
 const sourceMinZoom = (lvl: AreaLevel) => (lvl === "mb" ? MB_MIN_ZOOM : 0);
+// Brand primary for boundary overlays (mapbox paint needs a literal hex).
+const PRIMARY = "#465fff";
+// Street-level zoom for a plotted address (points mode) — read individual doors.
+const POINT_ZOOM = 16.5;
 
 /** Polygon draw tool. Emits every drawn polygon's geometry on each edit. */
 function DrawControl({ onChange, clearToken }: { onChange: (polygons: GeoJSON.Polygon[]) => void; clearToken?: number }) {
@@ -120,6 +124,17 @@ export function TurfDrawMap({
   onQueryChange,
   onViewportAreasChange,
   stateDigit,
+  mode = "areas",
+  boundaryLayers,
+  boundaryTilesUrl,
+  boundaryFilter,
+  selectedBoundaryCode,
+  onBoundaryClick,
+  stops = [],
+  activeStopId,
+  onStopTap,
+  userPosition,
+  focusPoint,
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
@@ -162,6 +177,28 @@ export function TurfDrawMap({
   onQueryChange?: (q: string) => void;
   /** Emits the areas currently loaded in the viewport (+ zoomed-out flag) for a sidebar list. */
   onViewportAreasChange?: (areas: AreaHit[], tooZoomedOut: boolean) => void;
+  /**
+   * Which overlay this map draws (the unified geo explorer, Phase 2). Default
+   * "areas" = the statistical-area select machinery (unchanged; the campaign
+   * turf/boundary pages rely on it). "boundaries" = clickable ced/sed/lga/state
+   * vector-tile overlays. "points" = a plotted point + nearby-door stops. DrawControl
+   * and `transformRequest` are always on, so freehand draw works in every mode.
+   */
+  mode?: "areas" | "boundaries" | "points";
+  /** boundaries mode — several colour-coded tile layers drawn together (Divisions). */
+  boundaryLayers?: Array<{ id: string; tilesUrl: string; color: string; interactive: boolean }>;
+  /** boundaries mode — a single tile overlay (States). */
+  boundaryTilesUrl?: string;
+  boundaryFilter?: FilterSpecification;
+  selectedBoundaryCode?: string;
+  onBoundaryClick?: (code: string, name: string | null, layerId?: string) => void;
+  /** points mode — nearby-door markers (clustered) around the plotted point. */
+  stops?: Array<{ id: string; lat: number; lng: number; status?: string }>;
+  activeStopId?: string;
+  onStopTap?: (id: string) => void;
+  userPosition?: { lat: number; lng: number } | null;
+  /** points mode — the plotted address; flies to it and frames at street zoom. */
+  focusPoint?: { lat: number; lng: number } | null;
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
@@ -202,13 +239,29 @@ export function TurfDrawMap({
 
   const initialViewState = useMemo<MapProps["initialViewState"]>(() => {
     if (center) return { latitude: center.lat, longitude: center.lng, zoom: 11 };
+    if (focusPoint) return { latitude: focusPoint.lat, longitude: focusPoint.lng, zoom: POINT_ZOOM };
     // A picked state frames its bounds; otherwise open on the whole country.
     const frame = focusBounds ?? AU_BOUNDS;
     return {
       bounds: [[frame[0], frame[1]], [frame[2], frame[3]]],
       fitBoundsOptions: { padding: 32 },
     };
-  }, [center, focusBounds]);
+  }, [center, focusBounds, focusPoint]);
+
+  // points mode: fly to the plotted address whenever it changes (skip the first
+  // run — initialViewState/onLoad already frame it on mount).
+  const pointedOnce = useRef(false);
+  useEffect(() => {
+    if (!pointedOnce.current) {
+      pointedOnce.current = true;
+      return;
+    }
+    if (!focusPoint) return;
+    mapRef.current
+      ?.getMap()
+      ?.flyTo({ center: [focusPoint.lng, focusPoint.lat], zoom: POINT_ZOOM, duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPoint]);
 
   // Re-frame on a State Filter change: to the picked state, or back to the national
   // (AU) view when cleared to "All states". Skip the first run — initialViewState +
@@ -313,6 +366,22 @@ export function TurfDrawMap({
     }),
     [selectedAreas],
   );
+
+  // points mode — nearby doors as clustered circles (excluding the active one).
+  const stopsGeoJson = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: "FeatureCollection",
+      features: stops
+        .filter((s) => s.id !== activeStopId)
+        .map((s) => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [s.lng, s.lat] },
+          properties: { id: s.id, status: s.status ?? "PENDING" },
+        })),
+    }),
+    [stops, activeStopId],
+  );
+  const activeStop = stops.find((s) => s.id === activeStopId);
 
   const runSearch = useCallback(async () => {
     const q = query.trim();
@@ -487,7 +556,16 @@ export function TurfDrawMap({
         initialViewState={initialViewState}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
-        interactiveLayerIds={["areas-fill"]}
+        interactiveLayerIds={
+          mode === "boundaries"
+            ? [
+                ...(boundaryTilesUrl ? ["boundaries-fill"] : []),
+                ...(boundaryLayers?.filter((bl) => bl.interactive).map((bl) => `boundaries-${bl.id}-fill`) ?? []),
+              ]
+            : mode === "points"
+              ? ["stops-circles"]
+              : ["areas-fill"]
+        }
         transformRequest={transformRequest}
         onLoad={() => {
           setMapLoaded(true);
@@ -495,10 +573,12 @@ export function TurfDrawMap({
           if (map) {
             // The container finishes laying out (next/dynamic + grid) after the map
             // computes its initial view, so re-fit once sized or the wrong tiles load
-            // and boundaries look missing until you interact. A `center` point view
-            // is already correct — leave it.
+            // and boundaries look missing until you interact. A `center`/`focusPoint`
+            // point view is already correct — leave it.
             map.resize();
-            if (!center) {
+            if (focusPoint) {
+              map.flyTo({ center: [focusPoint.lng, focusPoint.lat], zoom: POINT_ZOOM, duration: 0 });
+            } else if (!center) {
               const frame = focusBounds ?? AU_BOUNDS;
               map.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32 });
             }
@@ -507,6 +587,29 @@ export function TurfDrawMap({
         }}
         onMoveEnd={() => syncViewport()}
         onClick={(e) => {
+          if (mode === "boundaries") {
+            // A boundary click selects that region (single "boundaries-fill" or a
+            // multi-layer "boundaries-<id>-fill").
+            const boundary = e.features?.find((f) => {
+              const id = f.layer?.id ?? "";
+              return id === "boundaries-fill" || (id.startsWith("boundaries-") && id.endsWith("-fill"));
+            });
+            if (boundary && onBoundaryClick) {
+              const p = (boundary.properties ?? {}) as { code?: unknown; name?: unknown };
+              const m = (boundary.layer?.id ?? "").match(/^boundaries-(.+)-fill$/);
+              if (p.code != null) {
+                onBoundaryClick(String(p.code), p.name != null ? String(p.name) : null, m ? m[1] : undefined);
+              }
+            }
+            return;
+          }
+          if (mode === "points") {
+            const f = e.features?.[0];
+            const id = f?.properties?.id;
+            if (id && onStopTap) onStopTap(String(id));
+            return;
+          }
+          // areas mode (default): select a statistical area.
           const f = e.features?.[0];
           if (!f || !onToggleArea) return;
           const p = f.properties as { code?: string; name?: string } | null;
@@ -538,29 +641,87 @@ export function TurfDrawMap({
           ) : null,
         )}
 
-        {/* Selectable statistical areas for the active level, as on-demand vector
-            tiles. Keyed by level so the source is recreated cleanly on a pill switch. */}
-        <Source
-          key={level}
-          id="areas"
-          type="vector"
-          tiles={[tileUrl]}
-          minzoom={sourceMinZoom(level)}
-          maxzoom={TILE_MAX_ZOOM}
-        >
-          <Layer id="areas-fill" source-layer="areas" type="fill" filter={areaFilter} paint={{ "fill-color": "#2563eb", "fill-opacity": 0.04 }} />
-          <Layer id="areas-line" source-layer="areas" type="line" filter={areaFilter} paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
-        </Source>
+        {/* areas mode — selectable statistical areas for the active level, as
+            on-demand vector tiles. Keyed by level so the source recreates on a pill
+            switch. Plus the selected-area highlight on top. */}
+        {mode === "areas" ? (
+          <>
+            <Source
+              key={level}
+              id="areas"
+              type="vector"
+              tiles={[tileUrl]}
+              minzoom={sourceMinZoom(level)}
+              maxzoom={TILE_MAX_ZOOM}
+            >
+              <Layer id="areas-fill" source-layer="areas" type="fill" filter={areaFilter} paint={{ "fill-color": "#2563eb", "fill-opacity": 0.04 }} />
+              <Layer id="areas-line" source-layer="areas" type="line" filter={areaFilter} paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
+            </Source>
+            <Source id="selected" type="geojson" data={selectedFc}>
+              <Layer id="selected-fill" type="fill" paint={{ "fill-color": "#2563eb", "fill-opacity": 0.32 }} />
+              <Layer id="selected-line" type="line" paint={{ "line-color": "#1d4ed8", "line-width": 2.5 }} />
+            </Source>
+          </>
+        ) : null}
 
-        {/* Selected areas — bold highlight on top. */}
-        <Source id="selected" type="geojson" data={selectedFc}>
-          <Layer id="selected-fill" type="fill" paint={{ "fill-color": "#2563eb", "fill-opacity": 0.32 }} />
-          <Layer id="selected-line" type="line" paint={{ "line-color": "#1d4ed8", "line-width": 2.5 }} />
-        </Source>
+        {/* boundaries mode — single overlay (States). */}
+        {mode === "boundaries" && boundaryTilesUrl ? (
+          <Source key={boundaryTilesUrl} id="boundaries" type="vector" tiles={[boundaryTilesUrl]} minzoom={0} maxzoom={16}>
+            <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": PRIMARY, "fill-opacity": 0.04 }} />
+            <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
+            {selectedBoundaryCode ? (
+              <>
+                <Layer id="boundaries-selected-fill" source-layer="areas" type="fill" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "fill-color": PRIMARY, "fill-opacity": 0.28 }} />
+                <Layer id="boundaries-selected-line" source-layer="areas" type="line" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "line-color": PRIMARY, "line-width": 2.5 }} />
+              </>
+            ) : null}
+          </Source>
+        ) : null}
+
+        {/* boundaries mode — several colour-coded overlays drawn together (Divisions). */}
+        {mode === "boundaries" && boundaryLayers
+          ? boundaryLayers.map((bl) => (
+              <Source key={bl.tilesUrl} id={`boundaries-${bl.id}`} type="vector" tiles={[bl.tilesUrl]} minzoom={0} maxzoom={16}>
+                {bl.interactive ? (
+                  <Layer id={`boundaries-${bl.id}-fill`} source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": bl.color, "fill-opacity": 0.05 }} />
+                ) : null}
+                <Layer id={`boundaries-${bl.id}-line`} source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": bl.color, "line-width": bl.interactive ? 1.1 : 0.7, "line-opacity": bl.interactive ? 0.9 : 0.5 }} />
+                {bl.interactive && selectedBoundaryCode ? (
+                  <>
+                    <Layer id={`boundaries-${bl.id}-selfill`} source-layer="areas" type="fill" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "fill-color": bl.color, "fill-opacity": 0.28 }} />
+                    <Layer id={`boundaries-${bl.id}-selline`} source-layer="areas" type="line" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "line-color": bl.color, "line-width": 2.5 }} />
+                  </>
+                ) : null}
+              </Source>
+            ))
+          : null}
+
+        {/* points mode — nearby doors (clustered) + the active door / user markers. */}
+        {mode === "points" ? (
+          <>
+            <Source id="stops" type="geojson" data={stopsGeoJson} cluster clusterRadius={40}>
+              <Layer id="stops-clusters" type="circle" filter={["has", "point_count"]} paint={{ "circle-color": "#94a3b8", "circle-radius": 16 }} />
+              <Layer
+                id="stops-circles"
+                type="circle"
+                filter={["!", ["has", "point_count"]]}
+                paint={{
+                  "circle-radius": 7,
+                  "circle-color": ["match", ["get", "status"], "VISITED", "#16a34a", "SKIPPED", "#94a3b8", PRIMARY],
+                  "circle-stroke-width": 1.5,
+                  "circle-stroke-color": "#ffffff",
+                }}
+              />
+            </Source>
+            {activeStop ? <Marker latitude={activeStop.lat} longitude={activeStop.lng} color="#dc2626" /> : null}
+            {userPosition ? <Marker latitude={userPosition.lat} longitude={userPosition.lng} color="#0ea5e9" /> : null}
+          </>
+        ) : null}
       </Map>
 
-      {/* Level toggle + search panel: portaled toolbar or on-map overlay. */}
-      {controlsContainer !== undefined ? (
+      {/* Level toggle + search panel (areas mode only): portaled toolbar or on-map
+          overlay. Boundaries/points modes render no in-map controls. */}
+      {mode !== "areas" ? null : controlsContainer !== undefined ? (
         <>
           {controlsContainer &&
             createPortal(
@@ -698,3 +859,11 @@ export function TurfDrawMap({
     </div>
   );
 }
+
+/**
+ * The unified geo-explorer map (Phase 2). Same component as TurfDrawMap — aliased
+ * so the persistent geo surface imports `GeoMap` while the campaign turf/boundary
+ * pages keep importing `TurfDrawMap` unchanged. Drive its overlay with `mode` +
+ * the boundary/point props; `mode="areas"` (default) is the original behaviour.
+ */
+export const GeoMap = TurfDrawMap;
