@@ -12,6 +12,7 @@ import { createTurfFromSources, type TurfUniverse } from "@/lib/api/geo";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { invalidateApi } from "@/lib/use-api";
 import { UniverseCards } from "@/components/canvass/universe-select";
+import { CampaignAssignPicker } from "@/components/canvass/campaign-assign-picker";
 
 /**
  * The stacked "my turf" basket panel: every part added from the Divisions/Areas/
@@ -43,6 +44,7 @@ export function MyTurfPanel({
     clear,
   } = useTurfBasket();
   const [name, setName] = useState("");
+  const [campaignId, setCampaignId] = useState("");
   const [universeState, setUniverseState] = useState<TurfUniverse>("hybrid");
   const controlled = universeProp !== undefined;
   const universe = controlled ? universeProp : universeState;
@@ -56,6 +58,7 @@ export function MyTurfPanel({
     const res = await createTurfFromSources({
       name: name.trim() || "New turf",
       universe,
+      campaignId: campaignId || undefined,
       divisions: basket.divisions.map((d) => ({ type: d.type, code: d.code })),
       areas: basket.areas.map((a) => ({ layer: a.level, code: a.code })),
       polygons: basket.polygons,
@@ -149,6 +152,10 @@ export function MyTurfPanel({
           Name
         </label>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="New turf" />
+
+        <div className="mt-3">
+          <CampaignAssignPicker value={campaignId} onChange={setCampaignId} />
+        </div>
 
         <div className="mt-3 flex gap-2">
           <Button className="flex-1" onClick={() => void cut()} disabled={saving}>

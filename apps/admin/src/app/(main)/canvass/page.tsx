@@ -10,6 +10,7 @@ import {
   getCampaignSummary,
   listCampaigns,
   updateCampaign,
+  type CampaignChannel,
   type CampaignKpis,
   type CampaignStatus,
   type CampaignSummary,
@@ -43,7 +44,7 @@ export default function CanvassPage() {
   // Campaign create/edit dialog.
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CampaignSummary | null>(null);
-  const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, doors: "", conversations: "", openJoin: false, selfClaim: false });
+  const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, channel: "BOTH" as CampaignChannel, doors: "", conversations: "", openJoin: false, selfClaim: false });
 
   // Load the campaign list once; the active campaign comes from ?campaign= when
   // it names a real campaign (shareable/deep-linkable), else the first campaign.
@@ -122,6 +123,7 @@ export default function CanvassPage() {
     setForm({
       name: c.name,
       status: c.status,
+      channel: c.channel,
       doors: goals.doors != null ? String(goals.doors) : "",
       conversations: goals.conversations != null ? String(goals.conversations) : "",
       openJoin: c.openJoinEnabled,
@@ -141,8 +143,8 @@ export default function CanvassPage() {
         : undefined;
     setCreating(true);
     const res = editing
-      ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim })
-      : await createCampaign({ name: form.name.trim(), status: form.status, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim });
+      ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, channel: form.channel, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim })
+      : await createCampaign({ name: form.name.trim(), status: form.status, channel: form.channel, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim });
     setCreating(false);
     if (!res.ok) {
       showToast({ tone: "error", title: editing ? "Couldn't update" : "Couldn't create campaign", description: res.error });
@@ -366,6 +368,17 @@ export default function CanvassPage() {
             </Select>
           </Field>
         ) : null}
+        <Field label="Medium" htmlFor="camp-channel">
+          <Select
+            id="camp-channel"
+            value={form.channel}
+            onValueChange={(v) => setForm((f) => ({ ...f, channel: v as CampaignChannel }))}
+          >
+            <SelectItem value="BOTH">Doors + SMS</SelectItem>
+            <SelectItem value="DOOR">Doors</SelectItem>
+            <SelectItem value="SMS">SMS</SelectItem>
+          </Select>
+        </Field>
         {editing ? (
           <Field label="Open join" htmlFor="camp-open-join">
             <label className="flex items-start gap-2.5 text-sm">

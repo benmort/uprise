@@ -112,6 +112,17 @@ async function main(): Promise<void> {
     );
     log("  ✓ geo.state");
 
+    // Register the derived State/Territory layer as a dataset so it shows on
+    // /data/datasets alongside the divisions/areas/addresses layers.
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO geo.dataset_meta (key,label,source_url,release_date,licence,row_count,status,last_ingested)
+       VALUES ('state','States & territories','(derived from ASGS SA4)','May 2026','CC BY 4.0',(SELECT count(*) FROM geo.state),'loaded',now())
+       ON CONFLICT (key) DO UPDATE SET
+         label=EXCLUDED.label, source_url=EXCLUDED.source_url, release_date=EXCLUDED.release_date,
+         licence=EXCLUDED.licence, row_count=EXCLUDED.row_count, status='loaded',
+         last_ingested=now(), updated_at=now()`,
+    );
+
     // G-NAF carries its full provenance here (geo:load-boundaries owns the boundary
     // layers' provenance); this also clears the seed's stale "(demo)" label/release.
     await prisma.$executeRawUnsafe(

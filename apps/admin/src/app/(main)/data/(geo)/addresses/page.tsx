@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Check, LocateFixed, MapPin, Plus, Search, UserCheck } from "lucide-react";
-import { nearbyAddresses, type NearbyAddress } from "@/lib/api/geo";
+import { Check, LocateFixed, MapPin, Plus, Scissors, Search, UserCheck } from "lucide-react";
+import { Spinner } from "@uprise/ui";
+import { createTurfFromSources, nearbyAddresses, type NearbyAddress } from "@/lib/api/geo";
+import { useCutTurf } from "@/lib/canvass/use-cut-turf";
 import { useGeoExplorerUrlState } from "@/components/canvass/use-geo-explorer-url-state";
 import { stateBounds } from "@/lib/canvass/states";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
@@ -101,6 +103,9 @@ export default function AddressesPage() {
   // The shared State Filter frames the map to the picked state.
   const focusBounds = stateBounds(state);
   const { addAddress, hasAddress, removeAddress, coveredBy } = useTurfBasket();
+  // Direct single-door cut (parity with the other kinds' "cut from this row"); the
+  // basket path (MyTurfPanel) handles multi-door + campaign assignment.
+  const { cutTurf, busy } = useCutTurf("hybrid");
 
   // ── List mode: live geocode over ?q (the layout already debounced the write) ─
   const [hits, setHits] = useState<GeocodeHit[]>([]);
@@ -302,6 +307,25 @@ export default function AddressesPage() {
                     </Button>
                   );
                 })()}
+                <Button
+                  size="sm"
+                  className="mt-2 w-full"
+                  disabled={busy === active.gnafPid}
+                  onClick={() =>
+                    void cutTurf({
+                      id: active.gnafPid,
+                      name: active.address,
+                      create: () =>
+                        createTurfFromSources({ name: active.address, gnafPids: [active.gnafPid] }),
+                    })
+                  }
+                >
+                  {busy === active.gnafPid ? (
+                    <><Spinner className="mr-2" />Cutting…</>
+                  ) : (
+                    <><Scissors className="mr-1.5 h-3.5 w-3.5" />Cut turf from this door</>
+                  )}
+                </Button>
               </SectionCard>
             ) : null}
 
@@ -335,7 +359,8 @@ export default function AddressesPage() {
                   {picked ? "No addresses in the national set near this point." : "Plot an address first."}
                 </p>
               ) : (
-                <ul className="max-h-72 space-y-1 overflow-y-auto">
+                <>
+                  <ul className="max-h-72 space-y-1 overflow-y-auto">
                   {doors.map((d) => (
                     <li key={d.gnafPid}>
                       <button
@@ -358,7 +383,30 @@ export default function AddressesPage() {
                       </button>
                     </li>
                   ))}
-                </ul>
+                  </ul>
+                  <Button
+                    size="sm"
+                    className="mt-3 w-full"
+                    disabled={busy === "nearby"}
+                    onClick={() =>
+                      void cutTurf({
+                        id: "nearby",
+                        name: picked ? `Doors near ${picked.label}` : "Nearby doors",
+                        create: () =>
+                          createTurfFromSources({
+                            name: picked ? `Doors near ${picked.label}` : "Nearby doors",
+                            gnafPids: doors.map((d) => d.gnafPid),
+                          }),
+                      })
+                    }
+                  >
+                    {busy === "nearby" ? (
+                      <><Spinner className="mr-2" />Cutting…</>
+                    ) : (
+                      <><Scissors className="mr-1.5 h-3.5 w-3.5" />Cut turf from these {doors.length} doors</>
+                    )}
+                  </Button>
+                </>
               )}
             </SectionCard>
 

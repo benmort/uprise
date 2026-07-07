@@ -1,11 +1,14 @@
 import { request } from "@/lib/api";
 
 export type CampaignStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
+/** Outreach medium a campaign runs on — door-knock, SMS, or both. */
+export type CampaignChannel = "DOOR" | "SMS" | "BOTH";
 
 export type CampaignSummary = {
   id: string;
   name: string;
   status: CampaignStatus;
+  channel: CampaignChannel;
   surveyId: string | null;
   scriptId: string | null;
   goals: Record<string, unknown> | null;
@@ -22,6 +25,7 @@ export type CampaignSummary = {
 export type CampaignInput = {
   name?: string;
   status?: CampaignStatus;
+  channel?: CampaignChannel;
   surveyId?: string | null;
   scriptId?: string | null;
   goals?: Record<string, unknown> | null;

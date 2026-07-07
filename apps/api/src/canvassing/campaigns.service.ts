@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { HttpStatus } from "@nestjs/common";
 import {
   CanvassCampaignStatus,
+  EngagementChannel,
   Prisma,
   TurfAssignmentStatus,
   WalkListItemStatus,
@@ -22,6 +23,7 @@ function startOfToday(): Date {
 export type CreateCampaignInput = {
   name: string;
   status?: CanvassCampaignStatus;
+  channel?: EngagementChannel;
   surveyId?: string | null;
   scriptId?: string | null;
   goals?: Record<string, unknown> | null;
@@ -49,6 +51,7 @@ export class CampaignsService {
       id: c.id,
       name: c.name,
       status: c.status,
+      channel: c.channel,
       surveyId: c.surveyId,
       scriptId: c.scriptId,
       goals: c.goals,
@@ -75,6 +78,7 @@ export class CampaignsService {
       id: campaign.id,
       name: campaign.name,
       status: campaign.status,
+      channel: campaign.channel,
       surveyId: campaign.surveyId,
       scriptId: campaign.scriptId,
       goals: campaign.goals,
@@ -269,6 +273,7 @@ export class CampaignsService {
         tenantId,
         name: input.name,
         status: input.status ?? CanvassCampaignStatus.DRAFT,
+        channel: input.channel ?? EngagementChannel.BOTH,
         surveyId: input.surveyId ?? null,
         scriptId: input.scriptId ?? null,
         goals: (input.goals ?? Prisma.DbNull) as Prisma.InputJsonValue,
@@ -290,6 +295,7 @@ export class CampaignsService {
     const data: Prisma.CanvassCampaignUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.status !== undefined) data.status = input.status;
+    if (input.channel !== undefined) data.channel = input.channel;
     if (input.surveyId !== undefined) data.surveyId = input.surveyId;
     if (input.scriptId !== undefined) data.scriptId = input.scriptId;
     if (input.goals !== undefined) {

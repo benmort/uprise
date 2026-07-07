@@ -148,6 +148,7 @@ export async function getAreaDetail(layer: AreaLevel, code: string) {
 export async function createTurfFromAreas(input: {
   name: string;
   campaignId?: string;
+  universe?: TurfUniverse;
   areas: Array<{ layer: AreaLevel; code: string }>;
   polygons?: GeoJSON.Polygon[];
 }) {

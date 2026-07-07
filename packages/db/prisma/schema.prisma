@@ -1003,6 +1003,10 @@ model CanvassCampaign {
   tenantId String
   name           String
   status         CanvassCampaignStatus @default(DRAFT)
+  // The campaign's outreach medium — door-knock, SMS, or both. Drives which turf a
+  // cut is assigned to and how the campaign is run. Default BOTH keeps existing
+  // campaigns unchanged (they predate the field).
+  channel        EngagementChannel     @default(BOTH)
   surveyId       String?               // shared-engagement Survey attached to the door script
   scriptId       String?
   goals          Json?                 // { doors, conversations, surveys, ... } pace-to-target targets

@@ -32,6 +32,7 @@ const AREA_LEVEL_LAYER: Record<string, string> = {
   sa4: "sa4",
 };
 function datasetHref(key: string): string | null {
+  if (key === "state") return "/data/states";
   if (key === "ced") return "/data/divisions?tab=ced";
   if (key === "sed") return "/data/divisions?tab=sed";
   if (key === "lga") return "/data/divisions?tab=lga";
@@ -43,6 +44,7 @@ function datasetHref(key: string): string | null {
 // Plain-language description per dataset, keyed by the geo-status dataset key.
 const DATASET_DESCRIPTION: Record<string, string> = {
   gnaf: "Every Australian address — the geocoded address universe (Geoscape G-NAF).",
+  state: "States & territories — derived from the ASGS SA4 layer.",
   ced: "Federal electoral divisions (AEC).",
   sed: "State & territory electoral districts.",
   lga: "Local government areas (councils).",
@@ -56,7 +58,7 @@ const DATASET_DESCRIPTION: Record<string, string> = {
 // Display order: electoral/council boundaries coarsest-first, then the ASGS
 // hierarchy SA4 → meshblock, addresses last. The API returns rows keyed
 // alphabetically; unknown future keys sink to the bottom.
-const DATASET_ORDER = ["ced", "sed", "lga", "sa4", "sa3", "sa2", "sa1", "asgs_mb", "gnaf"];
+const DATASET_ORDER = ["state", "ced", "sed", "lga", "sa4", "sa3", "sa2", "sa1", "asgs_mb", "gnaf"];
 const datasetRank = (key: string) => {
   const i = DATASET_ORDER.indexOf(key);
   return i === -1 ? DATASET_ORDER.length : i;

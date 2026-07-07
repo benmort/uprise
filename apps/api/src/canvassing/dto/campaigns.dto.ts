@@ -1,5 +1,5 @@
 import { IsArray, IsBoolean, IsEnum, IsObject, IsOptional, IsString } from "class-validator";
-import { CanvassCampaignStatus } from "@uprise/db";
+import { CanvassCampaignStatus, EngagementChannel } from "@uprise/db";
 import type { BoundarySource } from "../../geo/geo.service";
 
 export class CreateCampaignDto {
@@ -9,6 +9,11 @@ export class CreateCampaignDto {
   @IsOptional()
   @IsEnum(CanvassCampaignStatus)
   status?: CanvassCampaignStatus;
+
+  /** Outreach medium — door-knock, SMS, or both. */
+  @IsOptional()
+  @IsEnum(EngagementChannel)
+  channel?: EngagementChannel;
 
   @IsOptional()
   @IsString()
@@ -44,6 +49,10 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsEnum(CanvassCampaignStatus)
   status?: CanvassCampaignStatus;
+
+  @IsOptional()
+  @IsEnum(EngagementChannel)
+  channel?: EngagementChannel;
 
   @IsOptional()
   @IsString()

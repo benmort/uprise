@@ -204,6 +204,28 @@ export function TurfMap({
 
   const active = stops.find((s) => s.id === activeStopId);
 
+  // Our boundary vector tiles come from the ORGANISER-gated API on a (same-site)
+  // cross-origin host; Mapbox GL won't send the parent-domain session cookie unless
+  // the request opts in. Derive the API origin from the tile URLs we were handed and
+  // attach credentials for Tile requests to it (mirrors TurfDrawMap.transformRequest).
+  // Without this, divisions/states boundary tiles come back 401 and never paint.
+  const tileOrigin = useMemo(() => {
+    const sample = boundaryTilesUrl ?? boundaryLayers?.[0]?.tilesUrl;
+    if (!sample) return null;
+    try {
+      return new URL(sample).origin;
+    } catch {
+      return null;
+    }
+  }, [boundaryTilesUrl, boundaryLayers]);
+  const transformRequest = useCallback(
+    (url: string, resourceType?: string) =>
+      resourceType === "Tile" && tileOrigin && url.startsWith(tileOrigin)
+        ? { url, credentials: "include" as const }
+        : { url },
+    [tileOrigin],
+  );
+
   if (!TOKEN) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg bg-surface-variant p-6 text-center text-sm text-muted-foreground">
@@ -219,6 +241,7 @@ export function TurfMap({
       initialViewState={initialViewState}
       mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
+      transformRequest={transformRequest}
       onLoad={() => {
         const map = mapRef.current?.getMap();
         if (!map) return;
