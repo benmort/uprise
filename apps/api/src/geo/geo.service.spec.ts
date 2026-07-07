@@ -79,3 +79,61 @@ describe("GeoService.tile", () => {
     await expect(svc.tile("sa2", 3, 0, 8)).rejects.toThrow(); // y >= 2^3
   });
 });
+
+/**
+ * The "Other Territories" split: Christmas Is./Cocos/Jervis Bay/Norfolk Is. are one
+ * ASGS SA4 (901) but distinct SA3s (90101–90104), so their state code is the SA3
+ * code. These assert the state-derivation (contactCount join + containment parent)
+ * splits OT out while leaving the eight states + NT/ACT on their leading digit.
+ */
+describe("GeoService — Other Territories state split", () => {
+  it("stateDetail joins OT contacts on the SA3 code, not the leading digit", async () => {
+    const $queryRawUnsafe = jest
+      .fn()
+      .mockResolvedValueOnce([{ code: "90101", name: "Christmas Island", geojson: '{"type":"MultiPolygon","coordinates":[]}' }])
+      .mockResolvedValueOnce([{ addressCount: 12, contactCount: 3 }]);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    const res = await svc.stateDetail("tenant-1", "90101");
+    const countsSql = $queryRawUnsafe.mock.calls[1][0] as string;
+    expect(countsSql).toContain("CASE WHEN left(ar.sa4_code, 1) = '9' THEN ar.sa3_code");
+    expect(res).toMatchObject({ code: "90101", name: "Christmas Island", addressCount: 12, contactCount: 3, withoutContacts: 9 });
+  });
+
+  // Every containment level that carries an SA3 resolves its state parent to the
+  // OT territory (SA3 code) rather than the vanished lumped "9" row.
+  it.each([
+    { kind: "sa3", code: "90101", join: [{ s4: "901", s4n: "Other Territories" }] },
+    { kind: "sa2", code: "901011001", join: [{ s3: "90101", s3n: "Christmas Island", s4: "901", s4n: "Other Territories" }] },
+    { kind: "sa1", code: "90101100101", join: [{ s2: "901011001", s2n: "Christmas Island", s3: "90101", s3n: "Christmas Island", s4: "901", s4n: "Other Territories" }] },
+    {
+      kind: "mb",
+      code: "90101100101001",
+      join: [{ sa4_code: "901", s4n: "Other Territories", sa3_code: "90101", s3n: "Christmas Island", sa2_code: "901011001", s2n: "Christmas Island", sa1_code: "90101100101", s1n: "Christmas Island", lga_code: null, lgan: null }],
+    },
+    {
+      kind: "address",
+      code: "GAOT0001",
+      join: [{ sa4_code: "901", s4n: "Other Territories", sa3_code: "90101", s3n: "Christmas Island", sa2_code: "901011001", s2n: "Christmas Island", sa1_code: "90101100101", s1n: "Christmas Island", mb_code: "90101100101001", ced_code: null, cedn: null, sed_code: null, sedn: null, lga_code: null, lgan: null }],
+    },
+  ])("regionParents puts an OT $kind under its territory (SA3 code)", async ({ kind, code, join }) => {
+    const $queryRawUnsafe = jest
+      .fn()
+      .mockResolvedValueOnce(join)
+      .mockResolvedValueOnce([{ name: "Christmas Island" }]);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    const parents = await (svc as unknown as { regionParents: (k: string, c: string) => Promise<Array<{ kind: string; code: string; name: string }>> }).regionParents(kind, code);
+    expect(parents[0]).toMatchObject({ kind: "state", code: "90101", name: "Christmas Island" });
+  });
+
+  it("regionParents keeps a mainland region under its single-digit state", async () => {
+    const $queryRawUnsafe = jest
+      .fn()
+      .mockResolvedValueOnce([{ s4: "101", s4n: "Sydney" }])
+      .mockResolvedValueOnce([{ name: "New South Wales" }]);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    const parents = await (svc as unknown as { regionParents: (k: string, c: string) => Promise<Array<{ kind: string; code: string; name: string }>> }).regionParents("sa3", "10102");
+    expect(parents[0]).toMatchObject({ kind: "state", code: "1", name: "New South Wales" });
+    // stateRef was queried with the leading digit, not the full SA3 code.
+    expect($queryRawUnsafe.mock.calls[1][1]).toBe("1");
+  });
+});

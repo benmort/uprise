@@ -37,6 +37,16 @@ const TYPE_COLORS: Record<DivisionType, string> = {
 };
 const AREA_LEVELS = new Set<string>(["sa4", "sa3", "sa2", "sa1", "mb"]);
 
+// The split Other Territories are SA3-level, so their state code IS the SA3 code
+// (no abbreviation → no STATE_BBOX entry). Frame the map on the island directly so
+// selecting one zooms to it instead of the whole country.
+const OT_BOUNDS: Record<string, [number, number, number, number]> = {
+  "90101": [105.5, -10.6, 105.75, -10.4], // Christmas Island
+  "90102": [96.79, -12.25, 96.94, -11.8], // Cocos (Keeling) Islands
+  "90103": [150.55, -35.2, 150.8, -35.07], // Jervis Bay
+  "90104": [167.9, -29.12, 168.0, -28.98], // Norfolk Island
+};
+
 /**
  * The unified geo explorer surface (Phase 2). Rendered once by the persistent
  * `(geo)` layout, so the ONE `<GeoMap>` never remounts — a kind switch only
@@ -117,9 +127,10 @@ export function GeoSurface() {
     if (kind === "states") {
       return {
         ...common,
-        // Frame on the selected state (its code IS its ASGS digit) so picking one
-        // centres the map; else the shared State Filter, else the whole country.
-        focusBounds: stateBounds(stateAsgsDigitToAbbrev(code) ?? stateParam),
+        // Frame on the selected state so picking one centres the map: an Other
+        // Territories island by its SA3 code, else the state (code = ASGS digit),
+        // else the shared State Filter, else the whole country.
+        focusBounds: OT_BOUNDS[code] ?? stateBounds(stateAsgsDigitToAbbrev(code) ?? stateParam),
         mode: "boundaries",
         boundaryTilesUrl: `${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=2`,
         boundaryFilter: stateDigit ? (["==", ["get", "code"], stateDigit] as FilterSpecification) : undefined,

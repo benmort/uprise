@@ -470,7 +470,8 @@ export class GeoService {
 
   /** One state: boundary GeoJSON + total/contact/without-contact counts for an org.
    *  contactCount joins on the SA4 leading digit (states have no code column on
-   *  address_region). Same return shape as divisionDetail. */
+   *  address_region) — except Other Territories, which join on their SA3 code so
+   *  the split territories count separately. Same return shape as divisionDetail. */
   async stateDetail(tenantId: string, code: string) {
     const meta = (await this.prisma.$queryRawUnsafe(
       `SELECT code, name, ST_AsGeoJSON(geom) AS geojson FROM geo.state WHERE code = $1`,
@@ -484,7 +485,8 @@ export class GeoService {
          (SELECT COUNT(DISTINCT c."gnafPid")
             FROM "Contact" c
             JOIN geo.address_region ar ON ar.gnaf_pid = c."gnafPid"
-            WHERE left(ar.sa4_code, 1) = $1 AND c."tenantId" = $2)::int AS "contactCount"`,
+            WHERE (CASE WHEN left(ar.sa4_code, 1) = '9' THEN ar.sa3_code ELSE left(ar.sa4_code, 1) END) = $1
+              AND c."tenantId" = $2)::int AS "contactCount"`,
       code,
       tenantId,
     )) as Array<{ addressCount: number; contactCount: number }>;
@@ -658,6 +660,29 @@ export class GeoService {
     return r.length ? { kind: "state", code: digit, name: r[0].name as string } : null;
   }
 
+  /**
+   * The explorer's state code for an address/area: the ASGS state digit for the
+   * eight states + NT/ACT, but the SA3 code for Other Territories (leading digit
+   * 9) — so Christmas Is./Cocos/Jervis Bay/Norfolk Is. are separate selectable
+   * states, not one lumped "Other Territories". Mirrors the geo:map state split.
+   * Returns null when the state can't be resolved (e.g. the OT umbrella SA4, which
+   * spans all four territories, has no single SA3).
+   */
+  private stateCodeOf(sa4Code?: string | null, sa3Code?: string | null): string | null {
+    if (!sa4Code) return null;
+    const digit = String(sa4Code).slice(0, 1);
+    return digit === "9" ? (sa3Code ? String(sa3Code) : null) : digit;
+  }
+
+  /** {@link stateRef} for a region, resolving the OT split via {@link stateCodeOf}. */
+  private async stateRefFor(sa4Code?: unknown, sa3Code?: unknown): Promise<RegionRef | null> {
+    const code = this.stateCodeOf(
+      sa4Code == null ? null : String(sa4Code),
+      sa3Code == null ? null : String(sa3Code),
+    );
+    return code ? this.stateRef(code) : null;
+  }
+
   /** One region's own ref (name + national address count). */
   private async regionRef(kind: RegionKind, code: string): Promise<RegionRef | null> {
     if (kind === "address") {
@@ -708,7 +733,7 @@ export class GeoService {
           code,
         );
         const row = r[0];
-        const st = row ? await this.stateRef(String(row.s4).slice(0, 1)) : null;
+        const st = row ? await this.stateRefFor(row.s4, code) : null;
         return compact([st, ref("sa4", row?.s4, row?.s4n)]);
       }
       case "sa2": {
@@ -719,7 +744,7 @@ export class GeoService {
           code,
         );
         const row = r[0];
-        const st = row ? await this.stateRef(String(row.s4).slice(0, 1)) : null;
+        const st = row ? await this.stateRefFor(row.s4, row.s3) : null;
         return compact([st, ref("sa4", row?.s4, row?.s4n), ref("sa3", row?.s3, row?.s3n)]);
       }
       case "sa1": {
@@ -731,7 +756,7 @@ export class GeoService {
           code,
         );
         const row = r[0];
-        const st = row ? await this.stateRef(String(row.s4).slice(0, 1)) : null;
+        const st = row ? await this.stateRefFor(row.s4, row.s3) : null;
         return compact([st, ref("sa4", row?.s4, row?.s4n), ref("sa3", row?.s3, row?.s3n), ref("sa2", row?.s2, row?.s2n)]);
       }
       case "mb": {
@@ -750,7 +775,7 @@ export class GeoService {
         );
         const row = r[0];
         if (!row) return [];
-        const st = row.sa4_code ? await this.stateRef(String(row.sa4_code).slice(0, 1)) : null;
+        const st = row.sa4_code ? await this.stateRefFor(row.sa4_code, row.sa3_code) : null;
         return compact([
           st,
           ref("sa4", row.sa4_code, row.s4n),
@@ -778,7 +803,7 @@ export class GeoService {
         );
         const row = r[0];
         if (!row) return [];
-        const st = row.sa4_code ? await this.stateRef(String(row.sa4_code).slice(0, 1)) : null;
+        const st = row.sa4_code ? await this.stateRefFor(row.sa4_code, row.sa3_code) : null;
         return compact([
           st,
           ref("sa4", row.sa4_code, row.s4n),

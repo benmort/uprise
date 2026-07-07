@@ -84,8 +84,10 @@ async function main(): Promise<void> {
       ["sa2", "sa2_code"],
       ["sa3", "sa3_code"],
       ["sa4", "sa4_code"],
-      // State/Territory = leading digit of the SA4 code (col is an expression).
-      ["state", "left(sa4_code, 1)"],
+      // State/Territory: leading SA4 digit for the eight states + NT/ACT, but the
+      // SA3 code for Other Territories (digit 9) so Christmas Is./Cocos/Jervis Bay/
+      // Norfolk Is. count separately (mirrors the geo.state split below).
+      ["state", "CASE WHEN left(sa4_code, 1) = '9' THEN sa3_code ELSE left(sa4_code, 1) END"],
     ] as const) {
       await prisma.$executeRawUnsafe(
         `INSERT INTO geo.region_address_count (kind, code, address_count, updated_at)
@@ -95,8 +97,11 @@ async function main(): Promise<void> {
     }
     log("  ✓ region_address_count");
 
-    // Rebuild the derived State/Territory boundary layer (union of SA4 per
-    // leading digit) — the explorer's States kind reads this.
+    // Rebuild the derived State/Territory boundary layer — the explorer's States
+    // kind reads this. The eight states + NT/ACT are a union of SA4s per leading
+    // digit; Other Territories (digit 9) are ONE ASGS SA4 (901) but distinct SA3s
+    // (Christmas Is., Cocos (Keeling), Jervis Bay, Norfolk Is.), so split them into
+    // their own state rows (code = SA3 code) rather than lumping them as one.
     await prisma.$executeRawUnsafe(`DELETE FROM geo.state`);
     await prisma.$executeRawUnsafe(
       `INSERT INTO geo.state (code, name, geom)
@@ -105,12 +110,17 @@ async function main(): Promise<void> {
            WHEN '1' THEN 'New South Wales' WHEN '2' THEN 'Victoria' WHEN '3' THEN 'Queensland'
            WHEN '4' THEN 'South Australia' WHEN '5' THEN 'Western Australia' WHEN '6' THEN 'Tasmania'
            WHEN '7' THEN 'Northern Territory' WHEN '8' THEN 'Australian Capital Territory'
-           ELSE 'Other Territories'
+           ELSE 'State ' || s.d
          END,
          ST_Multi(ST_Union(s.geom))
-       FROM (SELECT left(code, 1) AS d, geom FROM geo.sa4) s GROUP BY s.d`,
+       FROM (SELECT left(code, 1) AS d, geom FROM geo.sa4 WHERE left(code, 1) <> '9') s GROUP BY s.d`,
     );
-    log("  ✓ geo.state");
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO geo.state (code, name, geom)
+       SELECT code, COALESCE(name, code), ST_Multi(ST_Union(geom))
+       FROM geo.sa3 WHERE left(code, 1) = '9' GROUP BY code, name`,
+    );
+    log("  ✓ geo.state (states + split Other Territories)");
 
     // Register the derived State/Territory layer as a dataset so it shows on
     // /data/datasets alongside the divisions/areas/addresses layers.
