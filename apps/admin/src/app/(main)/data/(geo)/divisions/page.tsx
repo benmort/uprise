@@ -160,7 +160,7 @@ export default function DivisionsPage() {
               focusBounds={focusBounds}
               boundaryLayers={TABS.map((t) => ({
                 id: t.type,
-                tilesUrl: `${getApiUrl()}/geo/tiles/${t.type}/{z}/{x}/{y}`,
+                tilesUrl: `${getApiUrl()}/geo/tiles/${t.type}/{z}/{x}/{y}?v=2`,
                 color: TYPE_COLORS[t.type],
                 interactive: t.type === type,
               }))}

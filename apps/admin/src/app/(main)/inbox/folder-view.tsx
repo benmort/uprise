@@ -11,7 +11,7 @@ import { Input } from '@/components/prog/ui/input';
 import { StateRegion } from '@/components/shell/state-region';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRealtimeInbox } from '@/lib/inbox/use-realtime-inbox';
-import { Star, Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, Search, RefreshCw, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { listConversations } from '@/lib/api';
 import { getSession } from '@/lib/session';
 import {
@@ -210,8 +210,18 @@ export default function InboxFolderView() {
                 placeholder="Search every channel..."
                 value={q}
                 onChange={(e) => setRoute({ q: e.target.value })}
-                className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pl-[42px] text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
+                className="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pl-[42px] pr-10 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"
               />
+              {q ? (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setRoute({ q: '' })}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : null}
             </div>
           </form>
         </div>

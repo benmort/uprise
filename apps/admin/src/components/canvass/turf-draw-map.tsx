@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Map, { Layer, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import type { FilterSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Loader2, MapPin, Search, X } from "lucide-react";
@@ -118,11 +119,15 @@ export function TurfDrawMap({
   query: queryProp,
   onQueryChange,
   onViewportAreasChange,
+  stateDigit,
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
   /** `[w,s,e,n]` to frame the map to on change — the shared State Filter zooming to a state. */
   focusBounds?: [number, number, number, number];
+  /** ASGS state digit (first char of every area code). Set → only that state's areas
+   *  render (and appear in the viewport list); "" / undefined → all states. */
+  stateDigit?: string;
   selectedAreas?: SelectedArea[];
   onToggleArea?: (area: SelectedArea) => void;
   onPolygonsChange: (polygons: GeoJSON.Polygon[]) => void;
@@ -227,7 +232,16 @@ export function TurfDrawMap({
   // zoom (no per-viewport GeoJSON, no zoom gate). Keyed by level so switching pills
   // swaps the source cleanly. Same-origin session cookie is attached via the map's
   // transformRequest below.
-  const tileUrl = `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}`;
+  // ?v= busts the 24h tile cache when the tile output changes (bump on any change
+  // to the tile generator, e.g. the feature cap). Same URL → stale cached tile.
+  const tileUrl = `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}?v=2`;
+
+  // Shared State Filter: every area code is prefixed by its state's ASGS digit, so
+  // restrict the rendered layers (and thus the queryRenderedFeatures "in view" list)
+  // to that state — same first-char filter the Divisions map uses. Undefined = all.
+  const areaFilter: FilterSpecification | undefined = stateDigit
+    ? ["==", ["slice", ["get", "code"], 0, 1], stateDigit]
+    : undefined;
 
   // Send the parent-domain session cookie on our own tile requests (the API is
   // ORGANISER-gated); leave mapbox's own style/sprite/tile requests untouched.
@@ -263,6 +277,14 @@ export function TurfDrawMap({
     out.sort((a, b) => a.name.localeCompare(b.name));
     setViewportHits(out);
   }, [level]);
+
+  // The State Filter is applied client-side to already-loaded tiles (no refetch), so
+  // re-read the rendered features on the next frame when it changes to refresh the
+  // "in view" count/list immediately.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => syncViewport());
+    return () => cancelAnimationFrame(id);
+  }, [stateDigit, syncViewport]);
 
   // Drive the loading spinner off the map's tile lifecycle, and refresh the
   // viewport list once rendering settles (idle). Attaches once the map is ready.
@@ -526,8 +548,8 @@ export function TurfDrawMap({
           minzoom={sourceMinZoom(level)}
           maxzoom={TILE_MAX_ZOOM}
         >
-          <Layer id="areas-fill" source-layer="areas" type="fill" paint={{ "fill-color": "#2563eb", "fill-opacity": 0.04 }} />
-          <Layer id="areas-line" source-layer="areas" type="line" paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
+          <Layer id="areas-fill" source-layer="areas" type="fill" filter={areaFilter} paint={{ "fill-color": "#2563eb", "fill-opacity": 0.04 }} />
+          <Layer id="areas-line" source-layer="areas" type="line" filter={areaFilter} paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
         </Source>
 
         {/* Selected areas — bold highlight on top. */}

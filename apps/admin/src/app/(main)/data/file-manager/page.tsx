@@ -12,7 +12,6 @@ import {
   Loader2,
   Music,
   Plus,
-  Search,
   Trash2,
   Video,
 } from "lucide-react";
@@ -26,7 +25,7 @@ import {
 } from "@/lib/api/files";
 import { useApi, invalidateApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -281,16 +280,13 @@ export default function FileManagerPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-lg font-semibold text-foreground">All Media</h3>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="relative">
-                      <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Search files…"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="h-11 w-full rounded-lg pl-[42px] xl:w-[300px]"
-                        aria-label="Search files by name"
-                      />
-                    </div>
+                    <SearchInput
+                      placeholder="Search files…"
+                      value={search}
+                      onValueChange={setSearch}
+                      className="h-11 w-full rounded-lg xl:w-[300px]"
+                      aria-label="Search files by name"
+                    />
                     <input ref={inputRef} type="file" className="hidden" onChange={onUpload} />
                     <Button
                       className="h-11 gap-2 px-4"

@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Layers, Map as MapIcon, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Layers, Map as MapIcon } from "lucide-react";
+import { SearchInput } from "@/components/ui/search-input";
 import { PageHeader } from "@/components/ui/page-header";
 import { WalkModeToggle, type WalkMode } from "@uprise/field";
 import { cn } from "@/lib/utils";
@@ -189,16 +189,13 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
           // like the shared search sits on the other kinds.
           <div ref={onTabRowSlot} className="flex min-h-9 flex-1 items-center gap-2" />
         ) : (
-          <div className="relative max-w-md flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={PLACEHOLDER[kind]}
-              className="h-9 pl-8"
-              aria-label={`Search ${TITLE[kind].toLowerCase()}`}
-            />
-          </div>
+          <SearchInput
+            value={input}
+            onValueChange={setInput}
+            placeholder={PLACEHOLDER[kind]}
+            aria-label={`Search ${TITLE[kind].toLowerCase()}`}
+            wrapperClassName="max-w-md flex-1"
+          />
         )}
         {/* List/Map view toggle — pinned to the far right of the controls row. */}
         <div className="ml-auto">

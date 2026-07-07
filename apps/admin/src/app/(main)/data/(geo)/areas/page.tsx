@@ -272,6 +272,7 @@ export default function AreasPage() {
             <TurfDrawMap
               existing={existing}
               focusBounds={focusBounds}
+              stateDigit={stateCode || undefined}
               selectedAreas={selectedAreas}
               onToggleArea={toggleArea}
               onPolygonsChange={setPolygons}

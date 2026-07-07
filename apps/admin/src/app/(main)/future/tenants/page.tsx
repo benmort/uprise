@@ -12,13 +12,12 @@ import {
   Loader2,
   Trash2,
   ArrowRightLeft,
-  Search,
 } from 'lucide-react';
 import { auth, tenants as tenantsApi, type AuthPrincipal } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/card';
 import { Button } from '@/components/prog/ui/button';
 import { Badge } from '@/components/prog/ui/badge';
-import { Input } from '@/components/prog/ui/input';
+import { SearchInput } from '@/components/ui/search-input';
 import { useFlag } from '@/components/flags/flags-provider';
 import { getSession } from '@/lib/session';
 import { CreateTenantDialog } from '@/components/topbar/create-tenant-dialog';
@@ -183,15 +182,12 @@ export default function TenantsPage() {
         ) : null}
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={isSuperAdmin ? 'Search all tenants…' : 'Search your tenants…'}
-          className="pl-9"
-        />
-      </div>
+      <SearchInput
+        value={query}
+        onValueChange={setQuery}
+        placeholder={isSuperAdmin ? 'Search all tenants…' : 'Search your tenants…'}
+        wrapperClassName="max-w-sm"
+      />
 
       {error ? (
         <div className="rounded-md border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/15 px-4 py-3 text-sm text-red-800 dark:text-red-400">

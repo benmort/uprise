@@ -644,8 +644,9 @@ export default function MainLayout({
       node.type === "section"
         ? []
         : node.type === "leaf"
-          ? [{ label: node.label, href: node.href }]
-          : collect(node.children).map((c) => ({ ...c, group: node.label })),
+          ? [{ label: node.label, href: node.href, icon: node.icon }]
+          : // Group children reuse the group's icon (leaves under a group carry none).
+            collect(node.children).map((c) => ({ ...c, group: node.label, icon: node.icon })),
     );
   }, [nav]);
   const p = pathname || "";

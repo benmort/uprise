@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Clock, LayoutGrid, List, Search, Users } from "lucide-react";
+import { Clock, LayoutGrid, List, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -66,15 +66,12 @@ export function AudienceList() {
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(e) => resetPage(setQ)(e.target.value)}
-            placeholder="Search audiences…"
-            className="pl-9"
-          />
-        </div>
+        <SearchInput
+          value={q}
+          onValueChange={(v) => resetPage(setQ)(v)}
+          placeholder="Search audiences…"
+          wrapperClassName="w-full max-w-sm"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <Select value={sort} onValueChange={setSort} aria-label="Sort" className="w-[140px]">
             <SelectItem value="recent">Most recent</SelectItem>

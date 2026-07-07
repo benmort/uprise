@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search as SearchIcon } from "lucide-react";
+import { CornerDownLeft, Search as SearchIcon, X, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export type SearchItem = { label: string; href: string; group?: string };
+export type SearchItem = { label: string; href: string; group?: string; icon?: LucideIcon };
 
 /**
  * Command-palette over the shell's nav index (prog parity). ⌘K focuses the field;
@@ -74,33 +75,82 @@ export function TopbarSearch({ items }: { items: SearchItem[] }) {
           }}
           className="h-full flex-1 bg-transparent pl-11 pr-16 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
-        <span className="absolute right-3 select-none rounded border border-border bg-surface-variant px-1.5 py-0.5 text-xs text-muted-foreground">
-          ⌘K
-        </span>
+        {query ? (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setQuery("");
+              setOpen(false);
+              inputRef.current?.focus();
+            }}
+            className="absolute right-3 text-muted-foreground transition hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : (
+          <span className="absolute right-3 select-none rounded border border-border bg-surface-variant px-1.5 py-0.5 text-xs text-muted-foreground">
+            ⌘K
+          </span>
+        )}
       </div>
 
-      {open && results.length > 0 ? (
+      {open ? (
         <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-theme-lg animate-pop-in">
-          {results.map((item, i) => (
-            <button
-              key={item.href + item.label}
-              type="button"
-              // onMouseDown so it fires before the input's blur closes the panel
-              onMouseDown={(e) => {
-                e.preventDefault();
-                go(item);
-              }}
-              onMouseEnter={() => setActive(i)}
-              className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                i === active ? "bg-surface-variant" : "hover:bg-surface-variant"
-              }`}
-            >
-              <span className="font-medium text-foreground">{item.label}</span>
-              {item.group ? (
-                <span className="text-xs text-muted-foreground">{item.group}</span>
-              ) : null}
-            </button>
-          ))}
+          {results.length === 0 ? (
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+              No matches for “{query.trim()}”
+            </p>
+          ) : (
+            results.map((item, i) => {
+              const Icon = item.icon ?? SearchIcon;
+              const isActive = i === active;
+              return (
+                <button
+                  key={item.href + item.label}
+                  type="button"
+                  // onMouseDown so it fires before the input's blur closes the panel
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    go(item);
+                  }}
+                  onMouseEnter={() => setActive(i)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors",
+                    isActive ? "bg-surface-variant" : "hover:bg-surface-variant",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                      isActive
+                        ? "bg-primary/15 text-primary dark:bg-primary/25"
+                        : "bg-surface-variant text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-foreground">
+                      {item.label}
+                    </span>
+                    {item.group ? (
+                      <span className="block truncate text-xs text-muted-foreground">{item.group}</span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={cn(
+                      "flex h-6 shrink-0 items-center gap-1 rounded-md border border-border px-1.5 text-[11px] font-medium text-muted-foreground transition-opacity",
+                      isActive ? "opacity-100" : "opacity-0",
+                    )}
+                  >
+                    <CornerDownLeft className="h-3 w-3" />
+                  </span>
+                </button>
+              );
+            })
+          )}
         </div>
       ) : null}
     </div>

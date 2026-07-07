@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
 import { auth, orgProfile, tenants, type Membership, type TenantSearchRow } from "@uprise/api-client";
 import { cn } from "@/lib/utils";
@@ -328,6 +328,16 @@ export function TenantSwitcher({
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
+          {query ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setQuery("")}
+              className="shrink-0 text-muted-foreground transition hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
           <kbd className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
             Esc
           </kbd>

@@ -100,7 +100,7 @@ export default function StatesPage() {
               stops={[]}
               defaultBounds={AU_BOUNDS}
               focusBounds={focusBounds}
-              boundaryTilesUrl={`${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}`}
+              boundaryTilesUrl={`${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=2`}
               boundaryFilter={stateDigit ? ["==", ["get", "code"], stateDigit] : undefined}
               selectedBoundaryCode={selectedCode || undefined}
               onBoundaryClick={(code) => selectState(selectedCode === code ? "" : code)}
