@@ -1,20 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLocalStorage, type WalkMode } from "@uprise/field";
-
-/**
- * The (geo) layout owns the tab row; the Areas map view owns its own search
- * combobox (state lives inside TurfDrawMap). This context hands the page the
- * layout's tab-row slot element so the map's Areas|Places + search box can
- * portal UP onto the tab row — matching where the shared search sits on the
- * other kinds. Null when the current view has no slot (any non-areas-map view).
- */
-export const GeoTabRowSlotContext = createContext<HTMLElement | null>(null);
-export function useGeoTabRowSlot(): HTMLElement | null {
-  return useContext(GeoTabRowSlotContext);
-}
 
 /**
  * The one URL-state contract for the geo explorer (divisions/areas/addresses),

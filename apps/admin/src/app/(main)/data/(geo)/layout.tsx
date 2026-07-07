@@ -10,29 +10,30 @@ import { WalkModeToggle, type WalkMode } from "@uprise/field";
 import { cn } from "@/lib/utils";
 import { STATE_ABBREVS } from "@/lib/canvass/states";
 import { TurfBasketProvider, useTurfBasket } from "@/lib/canvass/turf-basket";
+import { GeoExplorerProvider } from "@/lib/canvass/geo-explorer-state";
+import { GeoSurface } from "@/components/canvass/geo-surface";
 import {
   GEO_VIEW_PERSIST_EVENT,
-  GeoTabRowSlotContext,
   kindFromPathname,
   writeGeoParam,
   type GeoExplorerKind,
 } from "@/components/canvass/use-geo-explorer-url-state";
 
 /**
- * The unified geo-explorer shell – ONE base layout + search interface for
- * Divisions, Areas and Addresses. This is a route-group layout, so it stays
- * MOUNTED when switching between the three (the segmented control's <Link>s
- * are plain client navigations: "just push state" – the search input never
- * loses focus or content). Detail routes ([type]/[code], [layer]/[code]) live
- * OUTSIDE the (geo) group, so everything rendered here IS an index page – no
- * pathname gating needed.
+ * The unified geo-explorer shell (Phase 2) — ONE persistent layout that owns the
+ * chrome (kind switcher, search, state filter, list/map toggle) AND the surface
+ * (the single map + the per-kind panels). Because this is a route-group layout it
+ * stays MOUNTED across the four kind routes, so the kind switcher's <Link>s are
+ * plain client navigations that never remount the map — `GeoSurface` just toggles
+ * its layers and cross-fades the panel. The four `page.tsx` files are inert
+ * markers (they render nothing); everything visible is rendered here.
  *
- * State contract (shared with the pages via the URL only – no context):
- *   ?q=    the search term – the layout owns the input + the ONE 250ms
- *          debounce and writes via history.replaceState (no RSC re-fetch);
- *          pages own execution (client filter / server search / geocode).
- *   ?view= list|map – written by the toggle here, read by the pages.
- *   ?tab=  the page's sub-level (ced/sed/lga · mb/sa1–4) – written by pages.
+ * State contract (shared via the URL only):
+ *   ?q=    search term — owned here (input + the ONE 250ms debounce, written via
+ *          history.replaceState so there's no RSC re-fetch per keystroke).
+ *   ?view= list|map — written by the toggle here, read by the surface + panels.
+ *   ?tab=  the kind's sub-level (ced/sed/lga · mb/sa1–4) — written by the panels.
+ *   ?state=/?code= the shared state filter + the selected state (deep-linkable).
  */
 
 const KINDS: Array<{ kind: GeoExplorerKind; label: string; href: string }> = [
@@ -63,7 +64,14 @@ const DESCRIPTION: Record<GeoExplorerKind, string> = {
   addresses: "Search any address live, plot it, and see the real doors around it.",
 };
 
-function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | null) => void }) {
+const VIEW_KEY: Record<GeoExplorerKind, string> = {
+  divisions: "uprise.divisionsView",
+  states: "uprise.statesView",
+  areas: "uprise.areasView",
+  addresses: "uprise.addressesView",
+};
+
+function GeoExplorerChrome() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const kind = kindFromPathname(pathname);
@@ -71,18 +79,12 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
   const urlQ = searchParams.get("q") ?? "";
   const stateParam = searchParams.get("state") ?? "";
   const rawView = searchParams.get("view");
-  // Map is the explorer default; the page hook seeds ?view= from the saved
-  // per-kind preference on mount, so this fallback only shows pre-seed.
   const view: WalkMode = rawView === "list" ? "list" : "map";
-  // Areas map view has its own in-map search combobox (it also selects areas on
-  // the map) bound to the same ?q= — so suppress this header box there to keep
-  // ONE visible search box per view.
-  const hideSearch = kind === "areas" && view === "map";
 
   // The input is local state (keystrokes must never wait on the URL); the ONE
-  // debounce point writes ?q= after 250ms. lastWritten distinguishes our own
-  // URL writes from external changes (kind switch carrying ?q, back/forward,
-  // deep links) – only external changes sync back into the input.
+  // debounce point writes ?q= after 250ms. lastWritten distinguishes our own URL
+  // writes from external changes (kind switch carrying ?q, back/forward, deep
+  // links) – only external changes sync back into the input.
   const [input, setInput] = useState(urlQ);
   const lastWritten = useRef(urlQ);
   useEffect(() => {
@@ -100,9 +102,9 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
     return () => clearTimeout(t);
   }, [input]);
 
-  // Kind switches carry the search term (?q) AND the current view (?view) so the
-  // List/Map selection stays put across Divisions/States/Areas/Addresses (a valid
-  // ?view= wins over the target kind's saved default). The per-kind ?tab still drops.
+  // Kind switches carry ?q + ?state + ?view so search term, filter and List/Map
+  // selection stay put across kinds (a valid ?view= wins over the target's saved
+  // default). The per-kind ?tab / ?code drop.
   const kindHref = (base: string) => {
     const params = new URLSearchParams();
     if (input.trim()) params.set("q", input.trim());
@@ -111,16 +113,6 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
     return `${base}?${params.toString()}`;
   };
 
-  // The view toggle writes ?view= (Next 14.2 syncs history.replaceState into
-  // useSearchParams – no router call needed) and signals the page hook to
-  // persist the per-kind default (the hook is the one localStorage writer;
-  // writing it directly here would desync the hook's in-memory state).
-  const VIEW_KEY: Record<GeoExplorerKind, string> = {
-    divisions: "uprise.divisionsView",
-    states: "uprise.statesView",
-    areas: "uprise.areasView",
-    addresses: "uprise.addressesView",
-  };
   const setView = (next: WalkMode) => {
     writeGeoParam("view", next);
     window.dispatchEvent(
@@ -146,13 +138,15 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        {/* Segmented kind control – client navigation under the persistent
-            layout: the shell (and this input) never remounts. */}
+        {/* Segmented kind control – client navigation under the persistent layout:
+            the shell, the input and the map never remount. scroll={false} keeps the
+            viewport put on a kind switch. */}
         <div className="flex rounded-xl border border-border p-0.5">
           {KINDS.map((k) => (
             <Link
               key={k.kind}
               href={kindHref(k.href)}
+              scroll={false}
               aria-current={kind === k.kind ? "page" : undefined}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
@@ -163,9 +157,8 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
             </Link>
           ))}
         </div>
-        {/* Shared State Filter: narrows the list on Divisions/Areas and frames the
-            map to the chosen state on every kind. Round-trips ?state= (carried
-            across kind switches by kindHref). */}
+        {/* Shared State Filter: narrows the list and frames the map to the chosen
+            state on every kind. Round-trips ?state= (carried across kind switches). */}
         <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           State
           <select
@@ -182,21 +175,13 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
             ))}
           </select>
         </label>
-        {hideSearch ? (
-          // Areas map view: the map owns its own Areas|Places + search combobox
-          // (it selects areas on the map), so instead of a duplicate box here the
-          // page portals that combobox into this slot — putting it on the tab row
-          // like the shared search sits on the other kinds.
-          <div ref={onTabRowSlot} className="flex min-h-9 flex-1 items-center gap-2" />
-        ) : (
-          <SearchInput
-            value={input}
-            onValueChange={setInput}
-            placeholder={PLACEHOLDER[kind]}
-            aria-label={`Search ${TITLE[kind].toLowerCase()}`}
-            wrapperClassName="max-w-md flex-1"
-          />
-        )}
+        <SearchInput
+          value={input}
+          onValueChange={setInput}
+          placeholder={PLACEHOLDER[kind]}
+          aria-label={`Search ${TITLE[kind].toLowerCase()}`}
+          wrapperClassName="max-w-md flex-1"
+        />
         {/* List/Map view toggle — pinned to the far right of the controls row. */}
         <div className="ml-auto">
           <WalkModeToggle value={view} onChange={setView} />
@@ -206,8 +191,8 @@ function GeoExplorerChrome({ onTabRowSlot }: { onTabRowSlot: (el: HTMLElement | 
   );
 }
 
-/** The "My turf (N)" basket indicator — visible in every view (incl. list mode
- *  where the panel isn't shown); clicking flips to map view to review/cut. */
+/** The "My turf (N)" basket indicator — visible in every view; clicking flips to
+ *  map view to review/cut. */
 function MyTurfChip({ onOpen }: { onOpen: () => void }) {
   const { count } = useTurfBasket();
   if (count === 0) return null;
@@ -224,23 +209,25 @@ function MyTurfChip({ onOpen }: { onOpen: () => void }) {
 }
 
 export default function GeoExplorerLayout({ children }: { children: React.ReactNode }) {
-  // The tab-row slot the Areas map view portals its search combobox into (null on
-  // every other view). Lifted here so the chrome (which owns the slot element via
-  // its ref) and the page (which portals into it) share the same node by context.
-  const [tabRowSlot, setTabRowSlot] = useState<HTMLElement | null>(null);
   return (
-    // The basket spans all three explorer tabs (persistent group layout).
+    // The basket + durable explorer state span all four kinds (persistent group
+    // layout). GeoExplorerProvider sits inside the basket so panels can read both.
     <TurfBasketProvider>
-      <GeoTabRowSlotContext.Provider value={tabRowSlot}>
+      <GeoExplorerProvider>
         <div className="page-stack">
-          {/* Suspense: useSearchParams in a client layout – cheap insurance against
-              the CSR-bailout build check, independent of (main)/loading.tsx. */}
+          {/* Suspense: useSearchParams in a client layout – insurance against the
+              CSR-bailout build check. */}
           <Suspense fallback={null}>
-            <GeoExplorerChrome onTabRowSlot={setTabRowSlot} />
+            <GeoExplorerChrome />
           </Suspense>
+          <Suspense fallback={null}>
+            <GeoSurface />
+          </Suspense>
+          {/* The four page.tsx are inert markers (return null) — they only exist to
+              keep four bookmarkable, prefetchable segments + the kind contract. */}
           {children}
         </div>
-      </GeoTabRowSlotContext.Provider>
+      </GeoExplorerProvider>
     </TurfBasketProvider>
   );
 }

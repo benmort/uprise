@@ -135,6 +135,7 @@ export function TurfDrawMap({
   onStopTap,
   userPosition,
   focusPoint,
+  resizeToken,
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
@@ -199,6 +200,9 @@ export function TurfDrawMap({
   userPosition?: { lat: number; lng: number } | null;
   /** points mode — the plotted address; flies to it and frames at street zoom. */
   focusPoint?: { lat: number; lng: number } | null;
+  /** Bumped by the persistent geo surface when the map returns from list view
+   *  (where it's display:none, so its canvas measures 0×0 and must resize on show). */
+  resizeToken?: number;
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
@@ -262,6 +266,14 @@ export function TurfDrawMap({
       ?.flyTo({ center: [focusPoint.lng, focusPoint.lat], zoom: POINT_ZOOM, duration: 600 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPoint]);
+
+  // The persistent geo surface keeps this map mounted but display:none in list view;
+  // a hidden mapbox canvas measures 0×0, so resize once it's shown again (token bump).
+  useEffect(() => {
+    if (resizeToken === undefined) return;
+    const id = requestAnimationFrame(() => mapRef.current?.getMap()?.resize());
+    return () => cancelAnimationFrame(id);
+  }, [resizeToken]);
 
   // Re-frame on a State Filter change: to the picked state, or back to the national
   // (AU) view when cleared to "All states". Skip the first run — initialViewState +
