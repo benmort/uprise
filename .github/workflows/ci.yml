@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 30
     env:
       API_BASE_URL: http://localhost:3001
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/yarn_sms?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uprise?schema=public
       BASIC_AUTH_USERNAME: ci-user
       BASIC_AUTH_PASSWORD: ci-password
       TWILIO_ACCOUNT_SID: AC00000000000000000000000000000000
