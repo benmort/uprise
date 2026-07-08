@@ -16,7 +16,7 @@ Cross-layer rules. Layer-specific patterns live in the per-layer how-to guides r
 - **Typecheck:** `pnpm -r typecheck` (whole workspace) or `pnpm --filter <pkg> typecheck` for one project.
 - **Test:** `pnpm --filter api test` (the api suite – includes `app.module.boot.spec.ts`, the DI boot gate); `pnpm --filter <pkg> test` elsewhere. `pnpm --filter api test -- <pattern>` to scope.
 - **Build:** `pnpm -r build` (all) or `pnpm --filter <app> build`.
-- **Dev:** `pnpm dev:all` (every app + worker in parallel) or `pnpm dev:api` / `dev:admin` / `dev:auth` / `dev:marketing` / `dev:worker`.
+- **Dev:** `pnpm dev:all` (every app + worker in parallel) or `pnpm dev:api` / `dev:admin` / `dev:auth` / `dev:product-marketing` / `dev:organisation-marketing` / `dev:worker`.
 - **Prisma:** `pnpm --filter @uprise/db prisma:generate` after a schema change; `pnpm --filter @uprise/db prisma:deploy` to apply migrations. **Never `prisma migrate dev`** – see `apps/api/dev/ai/how-to/migrations.md`.
 
 ## Imports & packages

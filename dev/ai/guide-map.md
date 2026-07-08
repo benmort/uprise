@@ -59,7 +59,7 @@ Every how-to has: YAML frontmatter (`name`, `description`, `layer`, `topic`, `us
 CLAUDE.md  apps/api/CLAUDE.md  apps/admin/CLAUDE.md   ← navigation + hard rules (auto-loaded)
 dev/ai/{guide-map,conventions}.md + how-to/        ← root: navigation + process
 apps/api/dev/ai/how-to/                             ← backend pattern guides
-apps/admin/dev/ai/how-to/                             ← frontend pattern guides (web/auth/marketing)
+apps/admin/dev/ai/how-to/                             ← frontend pattern guides (web/auth/marketing sites)
 packages/dev/ai/how-to/                             ← @uprise/* package guides
 .claude/skills/<skill>/SKILL.md                     ← codified workflows, invoked on demand
 ```

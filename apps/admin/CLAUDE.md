@@ -1,6 +1,6 @@
 # apps/admin – frontend layer
 
-The organiser `(main)` shell and canvasser `(field)` PWA. `apps/auth` (the SSO identity app) and `apps/marketing` follow the same invariants.
+The organiser `(main)` shell and canvasser `(field)` PWA. `apps/auth` (the SSO identity app), `apps/product-marketing` and `apps/organisation-marketing` follow the same invariants.
 
 Start at `.claude/skills/web-engineer/SKILL.md`.
 

@@ -13,8 +13,8 @@
 version: "2"
 
 tunnels:
-  # Marketing site → dev.uprise.org.au
-  marketing:
+  # Product marketing site → dev.uprise.org.au
+  product-marketing:
     addr: 3003
     proto: http
     domain: dev.uprise.org.au
@@ -42,3 +42,10 @@ tunnels:
     addr: 3005
     proto: http
     domain: field.dev.uprise.org.au
+
+  # Uprise Labs organisation site → labs.dev.uprise.org.au (under the *.dev.uprise.org.au
+  # reservation; the real site ships to upriselabs.org at deploy)
+  organisation-marketing:
+    addr: 3006
+    proto: http
+    domain: labs.dev.uprise.org.au

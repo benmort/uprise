@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+/*
+ * Uprise Labs design tokens — from docs/design_handoff_uprise_labs/ (the .dc.html is
+ * the authority). Deliberately NOT the @uprise/ui product theme: warm cream / ink /
+ * vermilion, Archivo + JetBrains Mono, hairline borders, pill radii, no shadows.
+ */
+@theme {
+  --color-cream: #f3f0e9;
+  --color-ink: #17140f;
+  --color-vermilion: #ec4a2b;
+  --color-vermilion-deep: #c9351d;
+  /* 1px hairline borders + hairline-grid gap fills */
+  --color-hairline: rgba(23, 20, 15, 0.12);
+  --color-hairline-dark: rgba(243, 240, 233, 0.16);
+  /* Muted text on cream / on ink */
+  --color-muted: rgba(23, 20, 15, 0.62);
+  --color-muted-dark: rgba(243, 240, 233, 0.55);
+
+  --font-sans: var(--font-archivo), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --radius-pill: 100px;
+  --radius-card: 4px;
+
+  --animate-marquee: marq 26s linear infinite;
+  --animate-marquee-reverse: marqR 30s linear infinite;
+  --animate-page-in: pageIn 0.5s ease both;
+  --animate-floaty: floaty 9s ease-in-out infinite;
+  --animate-bob: bob 2s ease-in-out infinite;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--color-vermilion);
+  color: var(--color-cream);
+}
+
+@keyframes marq {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes marqR {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes wipeIn {
+  0% {
+    transform: translateY(101%);
+  }
+  44% {
+    transform: translateY(0);
+  }
+  56% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-101%);
+  }
+}
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-22px) rotate(8deg);
+  }
+}
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(8px);
+  }
+}
+@keyframes rvl {
+  from {
+    opacity: 0;
+    transform: translateY(34px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Diagonal-stripe media placeholder fill (the design's deliberate image slots). */
+.stripe-placeholder {
+  background-color: var(--color-ink);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(243, 240, 233, 0.055) 0 2px,
+    transparent 2px 12px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

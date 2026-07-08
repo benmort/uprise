@@ -1,0 +1,30 @@
+{
+  "name": "organisation-marketing",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "node ../../scripts/dev-supervisor.mjs --label organisation-marketing --heal-next -- next dev -p 3006",
+    "build": "next build",
+    "start": "next start -p 3006",
+    "lint": "tsc --noEmit --pretty false",
+    "typecheck": "tsc --noEmit --pretty false"
+  },
+  "dependencies": {
+    "@uprise/api-client": "workspace:*",
+    "@uprise/contracts": "workspace:*",
+    "@uprise/ui": "workspace:*",
+    "next": "^14.2.20",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/node": "^20.17.9",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^4.3.1",
+    "typescript": "^5.7.2"
+  }
+}

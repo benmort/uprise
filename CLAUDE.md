@@ -52,7 +52,8 @@ uprise/  (pnpm workspace – apps/* + packages/*)
 │   ├── worker/      # BullMQ consumers + the outbox relay
 │   ├── admin/       # Next.js admin app (App Router)         (see apps/admin/CLAUDE.md)
 │   ├── auth/        # Next.js standalone auth/SSO app (port 3002)
-│   └── marketing/   # Next.js marketing site (port 3003)
+│   ├── product-marketing/      # Next.js product marketing site – uprise.org.au (port 3003)
+│   └── organisation-marketing/ # Next.js Uprise Labs organisation site – upriselabs.org (port 3006)
 └── packages/
     ├── db/          # @uprise/db – Prisma schema (multiSchema) + generated client
     ├── events/      # @uprise/events – domain-event catalogue + Reaction contract

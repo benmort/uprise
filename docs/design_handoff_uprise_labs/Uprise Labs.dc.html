@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#F3F0E9;color:#17140F;font-family:'Archivo',system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+input,textarea{font-family:inherit}
+::selection{background:#EC4A2B;color:#F3F0E9}
+@keyframes marq{to{transform:translateX(-50%)}}
+@keyframes marqR{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+@keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes wipeIn{0%{transform:translateY(101%)}44%{transform:translateY(0)}56%{transform:translateY(0)}100%{transform:translateY(-101%)}}
+@keyframes floaty{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-22px) rotate(8deg)}}
+@keyframes blink{50%{opacity:0}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(8px)}}
+@keyframes rvl{from{opacity:0;transform:translateY(34px)}to{opacity:1;transform:none}}
+[data-reveal]{animation:rvl .9s cubic-bezier(.16,1,.3,1) both}
+</style>
+</helmet>
+
+<div ref="{{ dotRef }}" style="position:fixed;top:0;left:0;width:7px;height:7px;border-radius:50%;background:#EC4A2B;pointer-events:none;z-index:10000;mix-blend-mode:normal"></div>
+<div ref="{{ ringRef }}" style="position:fixed;top:0;left:0;width:34px;height:34px;border-radius:50%;border:1px solid rgba(23,20,15,0.4);pointer-events:none;z-index:10000;transition:width .2s,height .2s"></div>
+
+<sc-if value="{{ wiping }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;inset:0;background:#EC4A2B;z-index:9998;animation:wipeIn .78s cubic-bezier(.76,0,.24,1) forwards;display:flex;align-items:center;justify-content:center">
+    <div style="font:500 13px 'JetBrains Mono',monospace;letter-spacing:.3em;color:#F3F0E9">UPRISE LABS</div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ showChrome }}" hint-placeholder-val="{{ true }}">
+<header style="position:fixed;top:0;left:0;right:0;z-index:900;background:rgba(243,240,233,0.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid rgba(23,20,15,0.09)">
+  <div style="max-width:1360px;margin:0 auto;padding:0 40px;height:72px;display:flex;align-items:center;justify-content:space-between">
+    <a onClick="{{ goHome }}" data-cursor style="display:flex;align-items:center;gap:10px;cursor:pointer">
+      <span style="width:11px;height:11px;border-radius:50%;background:#EC4A2B;display:inline-block"></span>
+      <span style="font-weight:800;letter-spacing:-.02em;font-size:17px">Uprise Labs</span>
+    </a>
+    <nav style="display:flex;align-items:center;gap:38px">
+      <sc-for list="{{ navLinks }}" as="l" hint-placeholder-count="3">
+        <a onClick="{{ l.go }}" data-cursor style="cursor:pointer;font-size:14.5px;font-weight:500;color:{{ l.color }};position:relative;padding:4px 0">{{ l.label }}</a>
+      </sc-for>
+      <a onClick="{{ goSignin }}" data-cursor style="cursor:pointer;font-size:14.5px;font-weight:500;color:#17140F;padding:4px 0" style-hover="color:#EC4A2B">Client login</a>
+      <a onClick="{{ goContact }}" data-cursor style="cursor:pointer;background:#17140F;color:#F3F0E9;font-size:14px;font-weight:600;padding:11px 20px;border-radius:100px;display:flex;align-items:center;gap:8px" style-hover="background:#EC4A2B;color:#F3F0E9">Start a project <span style="font-size:13px">↗</span></a>
+    </nav>
+  </div>
+</header>
+</sc-if>
+
+<!-- ============ HOME ============ -->
+<sc-if value="{{ pHome }}" hint-placeholder-val="{{ true }}">
+<div style="animation:pageIn .5s ease">
+  <section style="position:relative;padding:168px 40px 60px;max-width:1360px;margin:0 auto;overflow:hidden">
+    <div style="position:absolute;top:120px;right:-40px;width:340px;height:340px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#EC4A2B,#c9351d);opacity:0.14;filter:blur(10px);animation:floaty 9s ease-in-out infinite;pointer-events:none"></div>
+    <div style="max-width:1120px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:34px" data-reveal>
+        <span style="font:500 12.5px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#EC4A2B">◆ WEB STUDIO FOR THE MOVEMENT</span>
+      </div>
+      <h1 style="font-size:clamp(44px,6.6vw,94px);line-height:0.98;letter-spacing:-.035em;font-weight:800;margin:0" data-reveal>
+        We build the digital<br>backbone of progressive
+        <span style="display:inline-block;height:1.02em;overflow:hidden;vertical-align:bottom;color:#EC4A2B">
+          <span style="display:block;transition:transform .7s cubic-bezier(.7,0,.15,1);transform:translateY({{ wordShift }})">
+            <sc-for list="{{ words }}" as="w" hint-placeholder-count="4"><span style="display:block;height:1.02em">{{ w }}.</span></sc-for>
+          </span>
+        </span>
+      </h1>
+      <div style="display:flex;flex-wrap:wrap;gap:60px;margin-top:44px;align-items:flex-end" data-reveal>
+        <p style="font-size:19px;line-height:1.5;max-width:440px;margin:0;color:rgba(23,20,15,0.66)">From first-in-the-nation ballot initiatives to Senate campaigns, we design and engineer the platforms that turn organizing energy into votes, dollars, and wins.</p>
+        <div style="display:flex;gap:14px">
+          <a onClick="{{ goWork }}" data-cursor style="cursor:pointer;background:#EC4A2B;color:#F3F0E9;font-size:15px;font-weight:600;padding:15px 26px;border-radius:100px;display:flex;align-items:center;gap:10px" style-hover="background:#17140F">See the work <span>→</span></a>
+          <a onClick="{{ goContact }}" data-cursor style="cursor:pointer;border:1px solid rgba(23,20,15,0.25);font-size:15px;font-weight:600;padding:15px 26px;border-radius:100px" style-hover="border-color:#17140F;background:#17140F;color:#F3F0E9">Get in touch</a>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:80px;color:rgba(23,20,15,0.4);font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em">
+      <span style="animation:bob 2s ease-in-out infinite;display:inline-block">↓</span> SCROLL TO EXPLORE
+    </div>
+  </section>
+
+  <!-- accent marquee -->
+  <div style="background:#EC4A2B;color:#F3F0E9;padding:22px 0;overflow:hidden;white-space:nowrap;margin-top:40px;border-top:1px solid #17140F;border-bottom:1px solid #17140F">
+    <div style="display:inline-flex;animation:marq 26s linear infinite">
+      <div style="display:inline-flex;gap:0">
+        <sc-for list="{{ capabilities }}" as="c" hint-placeholder-count="6"><span style="font-size:30px;font-weight:700;letter-spacing:-.02em;padding:0 30px">{{ c }}</span><span style="font-size:30px;opacity:.5">✳</span></sc-for>
+      </div>
+      <div style="display:inline-flex;gap:0" aria-hidden="true">
+        <sc-for list="{{ capabilities }}" as="c" hint-placeholder-count="6"><span style="font-size:30px;font-weight:700;letter-spacing:-.02em;padding:0 30px">{{ c }}</span><span style="font-size:30px;opacity:.5">✳</span></sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- positioning -->
+  <section style="max-width:1360px;margin:0 auto;padding:120px 40px">
+    <div style="display:grid;grid-template-columns:1fr 1.15fr;gap:80px;align-items:start">
+      <div data-reveal>
+        <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:20px">(01) WHO WE ARE</div>
+        <div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.5);line-height:1.8">EST. 2016<br>DISTRIBUTED TEAM<br>MISSION-DRIVEN<br>UNION SHOP</div>
+      </div>
+      <div data-reveal>
+        <p style="font-size:clamp(26px,3vw,40px);line-height:1.28;letter-spacing:-.02em;font-weight:500;margin:0">We're a web development studio working <span style="color:#EC4A2B">exclusively with candidates, causes, and coalitions on the progressive left.</span> We know the rhythm of a campaign cycle, the stakes of a filing deadline, and how to ship software that holds up when a million people show up at once.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- stats -->
+  <section style="max-width:1360px;margin:0 auto;padding:0 40px 120px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(23,20,15,0.12);border:1px solid rgba(23,20,15,0.12)">
+      <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+        <div style="background:#F3F0E9;padding:40px 32px" data-reveal>
+          <div style="font-size:clamp(38px,4.5vw,60px);font-weight:800;letter-spacing:-.03em;line-height:1">{{ s.num }}</div>
+          <div style="font:500 12.5px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);margin-top:12px;letter-spacing:.02em">{{ s.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- selected work -->
+  <section style="max-width:1360px;margin:0 auto;padding:0 40px 120px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:52px;border-bottom:1px solid rgba(23,20,15,0.14);padding-bottom:24px" data-reveal>
+      <div>
+        <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:14px">(02) SELECTED WORK</div>
+        <h2 style="font-size:clamp(30px,4vw,52px);font-weight:800;letter-spacing:-.03em;margin:0">Platforms that moved the needle</h2>
+      </div>
+      <a onClick="{{ goWork }}" data-cursor style="cursor:pointer;font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;white-space:nowrap" style-hover="color:#EC4A2B">All projects <span>→</span></a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:40px 32px">
+      <sc-for list="{{ homeProjects }}" as="p" hint-placeholder-count="4">
+        <a onClick="{{ p.open }}" data-cursor style="grid-column:span 6;cursor:pointer;color:inherit" data-reveal>
+          <div style="position:relative;aspect-ratio:16/10;background:#17140F;overflow:hidden;border-radius:3px">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.055) 0 2px,transparent 2px 12px);transition:transform .6s ease" style-hover="transform:scale(1.04)"></div>
+            <div style="position:absolute;left:20px;bottom:18px;font:500 11px 'JetBrains Mono',monospace;letter-spacing:.06em;color:#EC4A2B">[ {{ p.client }} — SCREENSHOT ]</div>
+            <div style="position:absolute;right:18px;top:16px;font:500 11px 'JetBrains Mono',monospace;color:rgba(243,240,233,.45)">{{ p.year }}</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:18px;gap:16px">
+            <div>
+              <div style="font:500 11.5px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.05em;margin-bottom:7px">{{ p.tag }}</div>
+              <div style="font-size:23px;font-weight:600;letter-spacing:-.02em;line-height:1.18">{{ p.title }}</div>
+            </div>
+            <div style="font-size:20px;flex:none">↗</div>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- services teaser -->
+  <section style="background:#17140F;color:#F3F0E9;padding:120px 0">
+    <div style="max-width:1360px;margin:0 auto;padding:0 40px">
+      <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:14px" data-reveal>(03) WHAT WE DO</div>
+      <h2 style="font-size:clamp(30px,4vw,54px);font-weight:800;letter-spacing:-.03em;margin:0 0 56px;max-width:700px" data-reveal>Full-stack digital, built for the pace of politics</h2>
+      <div style="border-top:1px solid rgba(243,240,233,0.16)">
+        <sc-for list="{{ services }}" as="s" hint-placeholder-count="6">
+          <div onClick="{{ goServices }}" data-cursor style="display:grid;grid-template-columns:80px 1fr 1.3fr 40px;gap:24px;padding:30px 8px;border-bottom:1px solid rgba(243,240,233,0.16);align-items:center;cursor:pointer;transition:padding .3s ease" style-hover="padding-left:24px;padding-right:24px;background:rgba(243,240,233,0.03)" data-reveal>
+            <div style="font:500 13px 'JetBrains Mono',monospace;color:#EC4A2B">{{ s.no }}</div>
+            <div style="font-size:26px;font-weight:600;letter-spacing:-.02em">{{ s.title }}</div>
+            <div style="font-size:15px;color:rgba(243,240,233,0.6);line-height:1.5">{{ s.desc }}</div>
+            <div style="font-size:20px;text-align:right;color:#EC4A2B">→</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- testimonials -->
+  <section style="max-width:1360px;margin:0 auto;padding:120px 40px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:14px" data-reveal>(04) FROM THE FIELD</div>
+    <h2 style="font-size:clamp(30px,4vw,52px);font-weight:800;letter-spacing:-.03em;margin:0 0 56px;max-width:760px" data-reveal>The people who trusted us with a deadline</h2>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(23,20,15,0.12);border:1px solid rgba(23,20,15,0.12)">
+      <sc-for list="{{ testimonials }}" as="t" hint-placeholder-count="3">
+        <div style="background:#F3F0E9;padding:44px 36px;display:flex;flex-direction:column;justify-content:space-between;gap:36px" data-reveal>
+          <p style="font-size:21px;line-height:1.4;letter-spacing:-.01em;font-weight:500;margin:0">"{{ t.quote }}"</p>
+          <div>
+            <div style="font:600 13px 'JetBrains Mono',monospace;letter-spacing:.02em">{{ t.name }}</div>
+            <div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.5);margin-top:6px">{{ t.org }}</div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- CTA band -->
+  <section style="max-width:1360px;margin:0 auto;padding:140px 40px;text-align:center">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:24px" data-reveal>◆ THERE'S AN ELECTION COMING</div>
+    <h2 style="font-size:clamp(40px,7vw,100px);font-weight:800;letter-spacing:-.04em;line-height:0.98;margin:0 auto;max-width:1000px" data-reveal>Let's build power<br>together.</h2>
+    <a onClick="{{ goContact }}" data-cursor style="cursor:pointer;display:inline-flex;align-items:center;gap:12px;margin-top:48px;background:#EC4A2B;color:#F3F0E9;font-size:17px;font-weight:600;padding:18px 34px;border-radius:100px" style-hover="background:#17140F" data-reveal>Start a project <span>→</span></a>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ WORK ============ -->
+<sc-if value="{{ pWork }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:160px 40px 60px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:22px">WORK / {{ projectCount }} PROJECTS</div>
+    <h1 style="font-size:clamp(44px,7vw,104px);font-weight:800;letter-spacing:-.04em;line-height:0.96;margin:0;max-width:1100px">The receipts.</h1>
+    <p style="font-size:19px;color:rgba(23,20,15,0.62);max-width:560px;margin:28px 0 0;line-height:1.5">A decade of shipping for campaigns, PACs, unions, and advocacy organizations across all fifty states.</p>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:20px 40px 40px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;border-bottom:1px solid rgba(23,20,15,0.14);padding-bottom:28px">
+      <sc-for list="{{ filters }}" as="f" hint-placeholder-count="5">
+        <button onClick="{{ f.set }}" data-cursor style="cursor:pointer;border:1px solid {{ f.border }};background:{{ f.bg }};color:{{ f.color }};font-size:14px;font-weight:600;padding:9px 18px;border-radius:100px;transition:all .2s">{{ f.label }}</button>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:20px 40px 120px">
+    <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:48px 32px">
+      <sc-for list="{{ filtered }}" as="p" hint-placeholder-count="6">
+        <a onClick="{{ p.open }}" data-cursor style="grid-column:span 6;cursor:pointer;color:inherit" data-reveal>
+          <div style="position:relative;aspect-ratio:16/10;background:#17140F;overflow:hidden;border-radius:3px">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.055) 0 2px,transparent 2px 12px);transition:transform .6s ease" style-hover="transform:scale(1.04)"></div>
+            <div style="position:absolute;left:20px;bottom:18px;font:500 11px 'JetBrains Mono',monospace;letter-spacing:.06em;color:#EC4A2B">[ {{ p.client }} — SCREENSHOT ]</div>
+            <div style="position:absolute;right:18px;top:16px;font:500 11px 'JetBrains Mono',monospace;color:rgba(243,240,233,.45)">{{ p.year }}</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:18px;gap:16px">
+            <div>
+              <div style="font:500 11.5px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.05em;margin-bottom:7px">{{ p.tag }}</div>
+              <div style="font-size:23px;font-weight:600;letter-spacing:-.02em;line-height:1.18">{{ p.title }}</div>
+            </div>
+            <div style="font-size:20px;flex:none">↗</div>
+          </div>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ CASE STUDY ============ -->
+<sc-if value="{{ pCase }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:150px 40px 0">
+    <a onClick="{{ goWork }}" data-cursor style="cursor:pointer;font:500 13px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);display:inline-flex;gap:8px;align-items:center" style-hover="color:#EC4A2B">← BACK TO WORK</a>
+    <div style="display:flex;gap:14px;margin:40px 0 18px;font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.06em">CAMPAIGNS · 2026 · US SENATE</div>
+    <h1 style="font-size:clamp(40px,6vw,88px);font-weight:800;letter-spacing:-.04em;line-height:0.98;margin:0;max-width:1050px">Rivera for Senate: a campaign platform that raised $18M</h1>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:56px 40px">
+    <div style="aspect-ratio:16/8;background:#17140F;border-radius:4px;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.05) 0 2px,transparent 2px 14px)"></div>
+      <div style="position:absolute;left:28px;bottom:24px;font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B">[ RIVERA FOR SENATE — HERO SCREENSHOT ]</div>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:60px 40px">
+    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:80px;align-items:start">
+      <div>
+        <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin-bottom:20px">THE BRIEF</div>
+        <div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);line-height:2;border-top:1px solid rgba(23,20,15,0.14);padding-top:18px">
+          CLIENT — Rivera for Senate<br>SERVICES — Web, Fundraising, Data<br>TIMELINE — 14 months<br>TEAM — 6 people
+        </div>
+      </div>
+      <div>
+        <p style="font-size:clamp(24px,2.6vw,34px);line-height:1.32;letter-spacing:-.02em;font-weight:500;margin:0 0 28px">A first-time statewide candidate needed to out-raise a two-term incumbent — without a corporate PAC dollar in sight.</p>
+        <p style="font-size:17px;line-height:1.65;color:rgba(23,20,15,0.66);margin:0 0 20px">We rebuilt the campaign's entire digital stack from scratch: a lightning-fast marketing site, a custom small-dollar donation flow with one-click recurring giving, and a real-time dashboard that let the finance team watch every fundraising email land.</p>
+        <p style="font-size:17px;line-height:1.65;color:rgba(23,20,15,0.66);margin:0">When the debate went viral at 10pm, the site absorbed a 40x traffic spike without dropping a single donation. By election night, grassroots donors had powered the biggest small-dollar haul in the state's history.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:#EC4A2B;color:#F3F0E9;margin:60px 0;padding:80px 0">
+    <div style="max-width:1360px;margin:0 auto;padding:0 40px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:40px">
+        <sc-for list="{{ caseResults }}" as="r" hint-placeholder-count="4">
+          <div>
+            <div style="font-size:clamp(40px,5vw,68px);font-weight:800;letter-spacing:-.03em;line-height:1">{{ r.num }}</div>
+            <div style="font:500 13px 'JetBrains Mono',monospace;margin-top:12px;opacity:.85">{{ r.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:20px 40px 40px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px">
+      <sc-for list="{{ caseGallery }}" as="g" hint-placeholder-count="2">
+        <div style="aspect-ratio:4/3;background:#17140F;border-radius:4px;position:relative;overflow:hidden" data-reveal>
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.05) 0 2px,transparent 2px 12px)"></div>
+          <div style="position:absolute;left:20px;bottom:16px;font:500 11px 'JetBrains Mono',monospace;color:#EC4A2B">[ {{ g }} ]</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:80px 40px">
+    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:80px;align-items:start">
+      <div>
+        <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin-bottom:20px">THE STACK</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ caseStack }}" as="t" hint-placeholder-count="6">
+            <span style="border:1px solid rgba(23,20,15,0.2);border-radius:100px;padding:8px 16px;font:500 13px 'JetBrains Mono',monospace">{{ t }}</span>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border-left:2px solid #EC4A2B;padding-left:36px">
+        <p style="font-size:clamp(22px,2.4vw,30px);line-height:1.4;letter-spacing:-.01em;font-weight:500;margin:0 0 24px">"Uprise didn't build us a website. They built us a fundraising machine that ran itself while we were out knocking doors."</p>
+        <div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.6)">— J. RIVERA, CAMPAIGN MANAGER</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 120px">
+    <a onClick="{{ goWork }}" data-cursor style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(23,20,15,0.14);padding-top:32px" style-hover="color:#EC4A2B">
+      <span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.5)">NEXT</span>
+      <span style="font-size:clamp(24px,3vw,40px);font-weight:700;letter-spacing:-.02em">All projects →</span>
+    </a>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ SERVICES ============ -->
+<sc-if value="{{ pServices }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:160px 40px 60px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:22px">SERVICES / CAPABILITIES</div>
+    <h1 style="font-size:clamp(44px,7vw,104px);font-weight:800;letter-spacing:-.04em;line-height:0.96;margin:0;max-width:1100px">Everything you need to win online.</h1>
+    <p style="font-size:19px;color:rgba(23,20,15,0.62);max-width:600px;margin:28px 0 0;line-height:1.5">One team for strategy, design, engineering, and rapid response — so nothing falls between the cracks when it matters most.</p>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 100px">
+    <sc-for list="{{ services }}" as="s" hint-placeholder-count="6">
+      <div onClick="{{ openService }}" data-cursor style="display:grid;grid-template-columns:110px 1fr 1.2fr 40px;gap:40px;padding:44px 12px;border-top:1px solid rgba(23,20,15,0.14);align-items:start;cursor:pointer;transition:padding .3s ease,background .3s ease" style-hover="padding-left:24px;padding-right:24px;background:rgba(23,20,15,0.03)" data-reveal>
+        <div style="font:500 15px 'JetBrains Mono',monospace;color:#EC4A2B">{{ s.no }}</div>
+        <h3 style="font-size:clamp(26px,3vw,40px);font-weight:700;letter-spacing:-.02em;margin:0">{{ s.title }}</h3>
+        <div>
+          <p style="font-size:17px;line-height:1.6;color:rgba(23,20,15,0.7);margin:0 0 18px">{{ s.long }}</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <sc-for list="{{ s.tags }}" as="t" hint-placeholder-count="3">
+              <span style="border:1px solid rgba(23,20,15,0.2);border-radius:100px;padding:7px 14px;font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.7)">{{ t }}</span>
+            </sc-for>
+          </div>
+        </div>
+        <div style="font-size:22px;text-align:right;color:#EC4A2B">→</div>
+      </div>
+    </sc-for>
+  </section>
+
+  <section style="background:#17140F;color:#F3F0E9;padding:110px 0">
+    <div style="max-width:1360px;margin:0 auto;padding:0 40px">
+      <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:14px" data-reveal>HOW WE WORK</div>
+      <h2 style="font-size:clamp(30px,4vw,52px);font-weight:800;letter-spacing:-.03em;margin:0 0 56px" data-reveal>A process built for deadlines that don't move</h2>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(243,240,233,0.16);border:1px solid rgba(243,240,233,0.16)">
+        <sc-for list="{{ process }}" as="p" hint-placeholder-count="4">
+          <div style="background:#17140F;padding:36px 28px;min-height:220px;display:flex;flex-direction:column;justify-content:space-between" data-reveal>
+            <div style="font:500 14px 'JetBrains Mono',monospace;color:#EC4A2B">{{ p.no }}</div>
+            <div>
+              <div style="font-size:24px;font-weight:600;letter-spacing:-.02em;margin-bottom:12px">{{ p.title }}</div>
+              <div style="font-size:14px;color:rgba(243,240,233,0.6);line-height:1.5">{{ p.desc }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ ABOUT ============ -->
+<sc-if value="{{ pAbout }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:160px 40px 60px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:22px">ABOUT / OUR STORY</div>
+    <h1 style="font-size:clamp(38px,5.4vw,80px);font-weight:800;letter-spacing:-.035em;line-height:1.0;margin:0;max-width:1150px">We started Uprise because the movement deserved better tools than the ones it was renting.</h1>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 80px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:80px">
+      <p style="font-size:18px;line-height:1.65;color:rgba(23,20,15,0.7);margin:0" data-reveal>In 2016, a handful of engineers and organizers got tired of watching campaigns lose donations to slow, template-locked platforms. So we built our own — and then we built them for everyone fighting for a fairer country.</p>
+      <p style="font-size:18px;line-height:1.65;color:rgba(23,20,15,0.7);margin:0" data-reveal>Today we're a distributed, unionized studio of designers, engineers, and strategists. We only work with the progressive movement, and we measure our success in wins — not billable hours.</p>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 100px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:40px" data-reveal>WHAT WE BELIEVE</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:rgba(23,20,15,0.12);border:1px solid rgba(23,20,15,0.12)">
+      <sc-for list="{{ values }}" as="v" hint-placeholder-count="4">
+        <div style="background:#F3F0E9;padding:48px 40px" data-reveal>
+          <div style="font:500 13px 'JetBrains Mono',monospace;color:#EC4A2B;margin-bottom:18px">{{ v.no }}</div>
+          <h3 style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin:0 0 12px">{{ v.title }}</h3>
+          <p style="font-size:16px;line-height:1.55;color:rgba(23,20,15,0.65);margin:0">{{ v.desc }}</p>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:20px 40px 120px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:44px;border-bottom:1px solid rgba(23,20,15,0.14);padding-bottom:22px">
+      <h2 style="font-size:clamp(30px,4vw,52px);font-weight:800;letter-spacing:-.03em;margin:0">The team</h2>
+      <div style="font:500 13px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.5)">22 PEOPLE · 14 STATES</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:36px 28px">
+      <sc-for list="{{ team }}" as="m" hint-placeholder-count="6">
+        <div data-reveal>
+          <div style="aspect-ratio:4/5;background:#17140F;border-radius:3px;position:relative;overflow:hidden">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.05) 0 2px,transparent 2px 12px)"></div>
+            <div style="position:absolute;left:16px;bottom:14px;font:500 10px 'JetBrains Mono',monospace;color:#EC4A2B">[ PORTRAIT ]</div>
+          </div>
+          <div style="font-size:19px;font-weight:600;letter-spacing:-.01em;margin-top:16px">{{ m.name }}</div>
+          <div style="font:500 12.5px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);margin-top:5px">{{ m.role }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ CONTACT ============ -->
+<sc-if value="{{ pContact }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:160px 40px 40px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:22px">CONTACT / START A PROJECT</div>
+    <h1 style="font-size:clamp(44px,7vw,104px);font-weight:800;letter-spacing:-.04em;line-height:0.94;margin:0">Let's talk.</h1>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 120px">
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:80px;align-items:start">
+      <sc-if value="{{ submitted }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid rgba(23,20,15,0.14);border-radius:4px;padding:60px 48px">
+          <div style="width:52px;height:52px;border-radius:50%;background:#EC4A2B;color:#F3F0E9;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:28px">✓</div>
+          <h2 style="font-size:34px;font-weight:700;letter-spacing:-.02em;margin:0 0 14px">Message received.</h2>
+          <p style="font-size:17px;line-height:1.6;color:rgba(23,20,15,0.65);margin:0">Thanks for reaching out. Someone from our team will get back to you within one business day. If it's urgent — like, election-urgent — call the number on the right.</p>
+        </div>
+      </sc-if>
+      <sc-if value="{{ notSubmitted }}" hint-placeholder-val="{{ true }}">
+        <form onSubmit="{{ submitForm }}" style="display:flex;flex-direction:column;gap:26px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:26px">
+            <label style="display:flex;flex-direction:column;gap:10px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">YOUR NAME</span><input required placeholder="Jane Organizer" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+            <label style="display:flex;flex-direction:column;gap:10px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">EMAIL</span><input required type="email" placeholder="jane@campaign.org" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:10px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">ORGANIZATION</span><input placeholder="Rivera for Senate" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+          <label style="display:flex;flex-direction:column;gap:10px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">WHAT ARE YOU BUILDING?</span><textarea required rows="4" placeholder="Tell us about your campaign, timeline, and goals..." style="border:1px solid rgba(23,20,15,0.25);border-radius:4px;background:transparent;padding:14px;font-size:16px;outline:none;resize:vertical" style-focus="border-color:#EC4A2B"></textarea></label>
+          <button type="submit" data-cursor style="cursor:pointer;align-self:flex-start;background:#EC4A2B;color:#F3F0E9;border:none;font-size:16px;font-weight:600;padding:16px 32px;border-radius:100px;display:flex;align-items:center;gap:10px" style-hover="background:#17140F">Send message <span>→</span></button>
+        </form>
+      </sc-if>
+      <div style="display:flex;flex-direction:column;gap:40px">
+        <div>
+          <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.05em;margin-bottom:14px">EMAIL</div>
+          <a href="mailto:hello@upriselabs.co" data-cursor style="font-size:22px;font-weight:600;letter-spacing:-.01em" style-hover="color:#EC4A2B">hello@upriselabs.co</a>
+        </div>
+        <div>
+          <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.05em;margin-bottom:14px">WAR ROOM (24/7)</div>
+          <div style="font-size:22px;font-weight:600;letter-spacing:-.01em">+1 (202) 555-0148</div>
+        </div>
+        <div>
+          <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.05em;margin-bottom:14px">BASED IN</div>
+          <div style="font:500 14px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.7);line-height:2">WASHINGTON DC<br>OAKLAND CA<br>+ FULLY REMOTE</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ PRICING ============ -->
+<sc-if value="{{ pPricing }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:160px 40px 60px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:22px">PRICING / ENGAGEMENTS</div>
+    <h1 style="font-size:clamp(44px,7vw,104px);font-weight:800;letter-spacing:-.04em;line-height:0.96;margin:0;max-width:1100px">Priced for the pace of a cycle.</h1>
+    <p style="font-size:19px;color:rgba(23,20,15,0.62);max-width:620px;margin:28px 0 0;line-height:1.5">Fixed-scope sprints for a single race, or a standing retainer for a whole operation. No corporate markup — you are the movement, and we price like it.</p>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:20px 40px 60px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px">
+      <sc-for list="{{ pricingTiers }}" as="t" hint-placeholder-count="3">
+        <div style="background:{{ t.cardBg }};color:{{ t.cardColor }};border:1px solid {{ t.cardBorder }};border-radius:4px;padding:40px 34px;display:flex;flex-direction:column" data-reveal>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px">
+            <div style="font:600 13px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#EC4A2B">{{ t.name }}</div>
+            <sc-if value="{{ t.featured }}" hint-placeholder-val="{{ false }}"><span style="font:500 10px 'JetBrains Mono',monospace;letter-spacing:.08em;background:#EC4A2B;color:#F3F0E9;padding:4px 10px;border-radius:100px">POPULAR</span></sc-if>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+            <span style="font-size:clamp(38px,4vw,56px);font-weight:800;letter-spacing:-.03em;line-height:1">{{ t.price }}</span>
+            <span style="font:500 13px 'JetBrains Mono',monospace;opacity:.6">{{ t.unit }}</span>
+          </div>
+          <p style="font-size:15.5px;line-height:1.5;opacity:.72;margin:0 0 28px">{{ t.tagline }}</p>
+          <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:34px;flex:1">
+            <sc-for list="{{ t.features }}" as="f" hint-placeholder-count="5">
+              <div style="display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.4"><span style="color:#EC4A2B;flex:none">✳</span><span>{{ f }}</span></div>
+            </sc-for>
+          </div>
+          <a onClick="{{ goContact }}" data-cursor style="cursor:pointer;text-align:center;background:{{ t.btnBg }};color:{{ t.btnColor }};border:1px solid {{ t.btnBorder }};font-size:15px;font-weight:600;padding:14px;border-radius:100px" style-hover="background:#EC4A2B;color:#F3F0E9;border-color:#EC4A2B">{{ t.cta }}</a>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:60px 40px 130px">
+    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:80px;align-items:start">
+      <div>
+        <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:14px" data-reveal>FAQ</div>
+        <h2 style="font-size:clamp(28px,3.4vw,44px);font-weight:800;letter-spacing:-.03em;margin:0" data-reveal>Questions we get<br>a lot</h2>
+      </div>
+      <div>
+        <sc-for list="{{ pricingFaqs }}" as="q" hint-placeholder-count="4">
+          <div style="border-top:1px solid rgba(23,20,15,0.14);padding:30px 0" data-reveal>
+            <div style="font-size:21px;font-weight:600;letter-spacing:-.01em;margin-bottom:12px">{{ q.q }}</div>
+            <p style="font-size:16px;line-height:1.6;color:rgba(23,20,15,0.66);margin:0;max-width:640px">{{ q.a }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ SERVICE DETAIL ============ -->
+<sc-if value="{{ pServiceDetail }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:150px 40px 0">
+    <a onClick="{{ goServices }}" data-cursor style="cursor:pointer;font:500 13px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);display:inline-flex;gap:8px;align-items:center" style-hover="color:#EC4A2B">← ALL SERVICES</a>
+    <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin:40px 0 18px">SERVICE {{ serviceDetail.no }}</div>
+    <h1 style="font-size:clamp(40px,6.4vw,96px);font-weight:800;letter-spacing:-.04em;line-height:0.96;margin:0;max-width:1050px">{{ serviceDetail.title }}</h1>
+    <p style="font-size:clamp(20px,2.2vw,28px);line-height:1.4;font-weight:500;color:rgba(23,20,15,0.72);max-width:760px;margin:32px 0 0">{{ serviceDetail.lede }}</p>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:70px 40px">
+    <div style="aspect-ratio:16/7;background:#17140F;border-radius:4px;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.05) 0 2px,transparent 2px 14px)"></div>
+      <div style="position:absolute;left:28px;bottom:24px;font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B">[ DONATION FLOW — SCREENSHOT ]</div>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:20px 40px 40px">
+    <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:80px;align-items:start">
+      <div>
+        <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin-bottom:20px">WHAT YOU GET</div>
+        <div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid rgba(23,20,15,0.14);padding-top:18px">
+          <sc-for list="{{ serviceDetail.deliverables }}" as="d" hint-placeholder-count="6">
+            <div style="display:flex;gap:12px;align-items:flex-start;font:500 14px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.72);line-height:1.5"><span style="color:#EC4A2B">✳</span>{{ d }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <sc-for list="{{ serviceDetail.body }}" as="para" hint-placeholder-count="2">
+          <p style="font-size:18px;line-height:1.65;color:rgba(23,20,15,0.72);margin:0 0 24px">{{ para }}</p>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="background:#17140F;color:#F3F0E9;margin-top:60px;padding:110px 0">
+    <div style="max-width:1360px;margin:0 auto;padding:0 40px">
+      <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:14px">HOW IT SHIPS</div>
+      <h2 style="font-size:clamp(28px,3.4vw,46px);font-weight:800;letter-spacing:-.03em;margin:0 0 52px">Four steps from audit to election day</h2>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(243,240,233,0.16);border:1px solid rgba(243,240,233,0.16)">
+        <sc-for list="{{ serviceDetail.steps }}" as="s" hint-placeholder-count="4">
+          <div style="background:#17140F;padding:36px 28px;min-height:200px;display:flex;flex-direction:column;justify-content:space-between">
+            <div style="font:500 14px 'JetBrains Mono',monospace;color:#EC4A2B">{{ s.no }}</div>
+            <div>
+              <div style="font-size:23px;font-weight:600;letter-spacing:-.02em;margin-bottom:10px">{{ s.t }}</div>
+              <div style="font-size:14px;color:rgba(243,240,233,0.6);line-height:1.5">{{ s.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:120px 40px;text-align:center">
+    <h2 style="font-size:clamp(32px,5vw,72px);font-weight:800;letter-spacing:-.03em;line-height:1;margin:0 auto;max-width:820px">Stop leaking donations.</h2>
+    <a onClick="{{ goContact }}" data-cursor style="cursor:pointer;display:inline-flex;align-items:center;gap:12px;margin-top:40px;background:#EC4A2B;color:#F3F0E9;font-size:17px;font-weight:600;padding:18px 34px;border-radius:100px" style-hover="background:#17140F">Book a build sprint <span>→</span></a>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ BLOG (DISPATCH) ============ -->
+<sc-if value="{{ pBlog }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:160px 40px 40px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:22px">DISPATCH / FIELD NOTES</div>
+    <h1 style="font-size:clamp(44px,7vw,104px);font-weight:800;letter-spacing:-.04em;line-height:0.96;margin:0">The Dispatch.</h1>
+    <p style="font-size:19px;color:rgba(23,20,15,0.62);max-width:600px;margin:28px 0 0;line-height:1.5">Monthly notes on digital organizing, fundraising, and shipping software under a deadline that will not move.</p>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 60px">
+    <a onClick="{{ openPost }}" data-cursor style="cursor:pointer;color:inherit;display:grid;grid-template-columns:1.1fr 1fr;gap:48px;align-items:center;border-top:1px solid rgba(23,20,15,0.14);border-bottom:1px solid rgba(23,20,15,0.14);padding:48px 0" data-reveal>
+      <div style="aspect-ratio:16/10;background:#17140F;border-radius:4px;position:relative;overflow:hidden">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.055) 0 2px,transparent 2px 12px);transition:transform .6s ease" style-hover="transform:scale(1.04)"></div>
+        <div style="position:absolute;left:20px;bottom:18px;font:500 11px 'JetBrains Mono',monospace;color:#EC4A2B">[ FEATURED — ILLUSTRATION ]</div>
+      </div>
+      <div>
+        <div style="font:500 11.5px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.06em;margin-bottom:16px">{{ currentPost.tag }} · {{ currentPost.date }} · {{ currentPost.read }}</div>
+        <h2 style="font-size:clamp(28px,3.4vw,44px);font-weight:700;letter-spacing:-.025em;line-height:1.1;margin:0 0 18px">{{ currentPost.title }}</h2>
+        <p style="font-size:17px;line-height:1.6;color:rgba(23,20,15,0.66);margin:0 0 22px;max-width:520px">{{ currentPost.excerpt }}</p>
+        <span style="font-weight:600;font-size:15px;display:inline-flex;gap:8px;align-items:center">Read the dispatch <span>→</span></span>
+      </div>
+    </a>
+  </section>
+
+  <section style="max-width:1360px;margin:0 auto;padding:0 40px 120px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:44px 32px">
+      <sc-for list="{{ posts }}" as="p" hint-placeholder-count="6">
+        <a onClick="{{ p.open }}" data-cursor style="cursor:pointer;color:inherit" data-reveal>
+          <div style="aspect-ratio:16/11;background:#17140F;border-radius:3px;position:relative;overflow:hidden;margin-bottom:20px">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.055) 0 2px,transparent 2px 12px);transition:transform .6s ease" style-hover="transform:scale(1.04)"></div>
+            <div style="position:absolute;left:16px;bottom:14px;font:500 10px 'JetBrains Mono',monospace;color:#EC4A2B">[ {{ p.tag }} — ILLUSTRATION ]</div>
+          </div>
+          <div style="font:500 11px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.05em;margin-bottom:10px">{{ p.tag }} · {{ p.date }} · {{ p.read }}</div>
+          <div style="font-size:21px;font-weight:600;letter-spacing:-.02em;line-height:1.22;margin-bottom:10px">{{ p.title }}</div>
+          <p style="font-size:15px;line-height:1.55;color:rgba(23,20,15,0.6);margin:0">{{ p.excerpt }}</p>
+        </a>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ BLOG POST ============ -->
+<sc-if value="{{ pPost }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:820px;margin:0 auto;padding:150px 40px 0">
+    <a onClick="{{ goBlog }}" data-cursor style="cursor:pointer;font:500 13px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);display:inline-flex;gap:8px;align-items:center" style-hover="color:#EC4A2B">← ALL DISPATCHES</a>
+    <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.06em;margin:36px 0 18px">{{ currentPost.tag }} · {{ currentPost.date }} · {{ currentPost.read }} READ</div>
+    <h1 style="font-size:clamp(34px,4.6vw,60px);font-weight:800;letter-spacing:-.03em;line-height:1.04;margin:0">{{ currentPost.title }}</h1>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:32px">
+      <div style="width:40px;height:40px;border-radius:50%;background:#17140F;position:relative;overflow:hidden"><div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.08) 0 2px,transparent 2px 8px)"></div></div>
+      <div>
+        <div style="font-size:14px;font-weight:600">Maya Okonkwo</div>
+        <div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.5)">FOUNDER & PRINCIPAL</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1160px;margin:0 auto;padding:48px 40px">
+    <div style="aspect-ratio:16/7;background:#17140F;border-radius:4px;position:relative;overflow:hidden">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(243,240,233,.05) 0 2px,transparent 2px 14px)"></div>
+      <div style="position:absolute;left:24px;bottom:20px;font:500 11px 'JetBrains Mono',monospace;color:#EC4A2B">[ HERO — ILLUSTRATION ]</div>
+    </div>
+  </section>
+
+  <article style="max-width:720px;margin:0 auto;padding:20px 40px 60px;font-size:19px;line-height:1.72;color:rgba(23,20,15,0.82)">
+    <p style="margin:0 0 28px">Every campaign obsesses over acquisition — the ad spend, the email list, the door knocks. Far fewer sweat the ten seconds between "I want to give" and "thank you for your donation." That gap is where races are quietly lost.</p>
+    <p style="margin:0 0 28px">The single highest-leverage change we make on almost every engagement is the same: a genuine one-click recurring donation, offered at the exact moment intent peaks. Not a checkbox buried in a form. A first-class, thumb-friendly choice.</p>
+    <h2 style="font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.2;margin:44px 0 18px;color:#17140F">Why the moment matters more than the ask</h2>
+    <p style="margin:0 0 28px">A donor who just watched a two-minute stump video is a different person than the one who opens your fundraising email three days later. Capture the recurring commitment while the conviction is hot, and you compound it across the entire cycle.</p>
+    <blockquote style="border-left:2px solid #EC4A2B;padding-left:28px;margin:36px 0;font-size:24px;line-height:1.4;font-weight:500;color:#17140F">"A one-point lift in recurring opt-in is worth more than a month of new acquisition. It just does not show up on the dashboard the same way."</blockquote>
+    <p style="margin:0 0 28px">Ship the flow, test the ask strings, and watch the recurring line — not the one-time total — because that is the number that carries you to election day.</p>
+  </article>
+
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 120px">
+    <div style="border-top:1px solid rgba(23,20,15,0.14);padding-top:40px">
+      <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin-bottom:28px">KEEP READING</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:32px">
+        <sc-for list="{{ posts }}" as="p" hint-placeholder-count="3">
+          <a onClick="{{ p.open }}" data-cursor style="cursor:pointer;color:inherit">
+            <div style="font:500 11px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.05em;margin-bottom:10px">{{ p.tag }} · {{ p.date }}</div>
+            <div style="font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.25">{{ p.title }}</div>
+          </a>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ DOCS ============ -->
+<sc-if value="{{ pDocs }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease">
+  <section style="max-width:1360px;margin:0 auto;padding:150px 40px 40px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:22px">DOCS / CLIENT PLAYBOOK</div>
+    <h1 style="font-size:clamp(40px,5.4vw,76px);font-weight:800;letter-spacing:-.035em;line-height:1;margin:0;max-width:900px">Everything you need to run the platform we built you.</h1>
+  </section>
+  <section style="max-width:1360px;margin:0 auto;padding:40px 40px 120px">
+    <div style="display:grid;grid-template-columns:260px 1fr;gap:60px;align-items:start">
+      <nav style="position:sticky;top:100px;display:flex;flex-direction:column;gap:28px">
+        <sc-for list="{{ docsNav }}" as="g" hint-placeholder-count="4">
+          <div>
+            <div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.45);letter-spacing:.1em;margin-bottom:12px">{{ g.group }}</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <sc-for list="{{ g.items }}" as="it" hint-placeholder-count="3">
+                <a href="#" data-cursor style="font-size:14.5px;color:rgba(23,20,15,0.68)" style-hover="color:#EC4A2B">{{ it }}</a>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </nav>
+      <div style="max-width:720px;font-size:17px;line-height:1.7;color:rgba(23,20,15,0.8)">
+        <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin-bottom:12px">GETTING STARTED</div>
+        <h2 style="font-size:clamp(30px,3.6vw,44px);font-weight:800;letter-spacing:-.03em;margin:0 0 24px;color:#17140F">Kickoff &amp; discovery</h2>
+        <p style="margin:0 0 24px">Welcome to your platform. This playbook walks your team through everything from publishing a rapid-response page to reading the finance dashboard at 11pm on election night. Bookmark it — and know the war-room line is always open.</p>
+        <p style="margin:0 0 24px">Before the build begins, we run a discovery session to map your race, your list, your processor, and your deadlines. The output is a shared build calendar every stakeholder can see.</p>
+        <div style="background:#17140F;color:#F3F0E9;border-radius:4px;padding:22px 26px;margin:32px 0;font:500 14px 'JetBrains Mono',monospace;line-height:1.7">
+          <span style="color:#EC4A2B">→ TIP</span><br>Add your finance director and comms lead to the shared calendar on day one. Access delays are the number-one cause of a slipped launch.
+        </div>
+        <h3 style="font-size:24px;font-weight:700;letter-spacing:-.02em;margin:36px 0 14px;color:#17140F">What we need from you</h3>
+        <ul style="margin:0 0 24px;padding-left:22px">
+          <li style="margin-bottom:10px">Domain registrar and DNS access</li>
+          <li style="margin-bottom:10px">ActBlue (or processor) entity ID</li>
+          <li style="margin-bottom:10px">Brand assets — logo, colors, typefaces</li>
+          <li style="margin-bottom:10px">A single point of contact for approvals</li>
+        </ul>
+        <p style="margin:0">Once those land, we schedule the kickoff and the clock starts. Next up: <a href="#" data-cursor style="color:#EC4A2B;font-weight:600">Access &amp; credentials →</a></p>
+      </div>
+    </div>
+  </section>
+</div>
+</sc-if>
+
+<!-- ============ SIGN IN ============ -->
+<sc-if value="{{ pSignin }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease;min-height:100vh;display:grid;grid-template-columns:1fr 1fr">
+  <div style="background:#17140F;color:#F3F0E9;padding:120px 60px 60px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
+    <div style="position:absolute;bottom:-60px;right:-40px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#EC4A2B,#c9351d);opacity:0.22;filter:blur(6px);animation:floaty 10s ease-in-out infinite"></div>
+    <a onClick="{{ goHome }}" data-cursor style="cursor:pointer;display:flex;align-items:center;gap:10px">
+      <span style="width:11px;height:11px;border-radius:50%;background:#EC4A2B;display:inline-block"></span>
+      <span style="font-weight:800;letter-spacing:-.02em;font-size:17px">Uprise Labs</span>
+    </a>
+    <div style="max-width:420px;position:relative">
+      <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin-bottom:20px">CLIENT WAR ROOM</div>
+      <p style="font-size:clamp(24px,2.6vw,34px);line-height:1.32;letter-spacing:-.02em;font-weight:500;margin:0">Your dashboards, your content, your live fundraising numbers — all in one place, 24/7.</p>
+    </div>
+    <div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(243,240,233,0.4)">© 2026 UPRISE LABS</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;padding:60px 40px">
+    <div style="width:100%;max-width:400px">
+      <h1 style="font-size:40px;font-weight:800;letter-spacing:-.03em;margin:0 0 10px">Welcome back.</h1>
+      <p style="font-size:16px;color:rgba(23,20,15,0.6);margin:0 0 40px">Sign in to your client portal.</p>
+      <form onSubmit="{{ submitForm }}" style="display:flex;flex-direction:column;gap:24px">
+        <label style="display:flex;flex-direction:column;gap:9px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">EMAIL</span><input required type="email" placeholder="you@campaign.org" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+        <label style="display:flex;flex-direction:column;gap:9px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">PASSWORD</span><input required type="password" placeholder="••••••••" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:13.5px">
+          <label style="display:flex;align-items:center;gap:8px;color:rgba(23,20,15,0.65);cursor:pointer"><input type="checkbox" style="accent-color:#EC4A2B"> Keep me signed in</label>
+          <a href="#" data-cursor style="color:#EC4A2B;font-weight:600">Forgot password?</a>
+        </div>
+        <button type="submit" data-cursor style="cursor:pointer;background:#EC4A2B;color:#F3F0E9;border:none;font-size:16px;font-weight:600;padding:15px;border-radius:100px" style-hover="background:#17140F">Sign in</button>
+      </form>
+      <div style="font-size:14.5px;color:rgba(23,20,15,0.6);margin-top:28px">New here? <a onClick="{{ goSignup }}" data-cursor style="cursor:pointer;color:#EC4A2B;font-weight:600">Create an account</a></div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ============ SIGN UP ============ -->
+<sc-if value="{{ pSignup }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease;min-height:100vh;display:grid;grid-template-columns:1fr 1fr">
+  <div style="background:#17140F;color:#F3F0E9;padding:120px 60px 60px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden">
+    <div style="position:absolute;top:40px;left:-40px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#EC4A2B,#c9351d);opacity:0.22;filter:blur(6px);animation:floaty 11s ease-in-out infinite"></div>
+    <a onClick="{{ goHome }}" data-cursor style="cursor:pointer;display:flex;align-items:center;gap:10px">
+      <span style="width:11px;height:11px;border-radius:50%;background:#EC4A2B;display:inline-block"></span>
+      <span style="font-weight:800;letter-spacing:-.02em;font-size:17px">Uprise Labs</span>
+    </a>
+    <div style="max-width:440px;position:relative">
+      <div style="font:500 12px 'JetBrains Mono',monospace;color:#EC4A2B;letter-spacing:.08em;margin-bottom:20px">GET SET UP</div>
+      <p style="font-size:clamp(24px,2.6vw,34px);line-height:1.32;letter-spacing:-.02em;font-weight:500;margin:0 0 32px">Create your portal account and we will get your team onboarded within a day.</p>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;gap:12px;align-items:center;font-size:15px"><span style="color:#EC4A2B">✳</span> Live fundraising dashboards</div>
+        <div style="display:flex;gap:12px;align-items:center;font-size:15px"><span style="color:#EC4A2B">✳</span> Edit content without a ticket</div>
+        <div style="display:flex;gap:12px;align-items:center;font-size:15px"><span style="color:#EC4A2B">✳</span> Direct line to your build pod</div>
+      </div>
+    </div>
+    <div style="font:500 12px 'JetBrains Mono',monospace;color:rgba(243,240,233,0.4)">© 2026 UPRISE LABS</div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:center;padding:60px 40px">
+    <div style="width:100%;max-width:400px">
+      <h1 style="font-size:40px;font-weight:800;letter-spacing:-.03em;margin:0 0 10px">Create account.</h1>
+      <p style="font-size:16px;color:rgba(23,20,15,0.6);margin:0 0 40px">Start with your organization.</p>
+      <form onSubmit="{{ submitForm }}" style="display:flex;flex-direction:column;gap:24px">
+        <label style="display:flex;flex-direction:column;gap:9px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">FULL NAME</span><input required placeholder="Jane Organizer" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+        <label style="display:flex;flex-direction:column;gap:9px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">WORK EMAIL</span><input required type="email" placeholder="jane@campaign.org" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+        <label style="display:flex;flex-direction:column;gap:9px"><span style="font:500 12px 'JetBrains Mono',monospace;color:rgba(23,20,15,0.55);letter-spacing:.05em">PASSWORD</span><input required type="password" placeholder="At least 12 characters" style="border:none;border-bottom:1.5px solid rgba(23,20,15,0.25);background:transparent;padding:10px 0;font-size:17px;outline:none" style-focus="border-color:#EC4A2B"></label>
+        <button type="submit" data-cursor style="cursor:pointer;background:#EC4A2B;color:#F3F0E9;border:none;font-size:16px;font-weight:600;padding:15px;border-radius:100px" style-hover="background:#17140F">Create account</button>
+      </form>
+      <div style="font-size:14.5px;color:rgba(23,20,15,0.6);margin-top:28px">Already have one? <a onClick="{{ goSignin }}" data-cursor style="cursor:pointer;color:#EC4A2B;font-weight:600">Sign in</a></div>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ============ 404 ============ -->
+<sc-if value="{{ p404 }}" hint-placeholder-val="{{ false }}">
+<div style="animation:pageIn .5s ease;min-height:82vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:160px 40px 100px">
+  <div style="max-width:640px">
+    <div style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#EC4A2B;margin-bottom:20px">ERROR / 404</div>
+    <div style="font-size:clamp(120px,22vw,300px);font-weight:800;letter-spacing:-.05em;line-height:0.9;color:#17140F">404</div>
+    <h1 style="font-size:clamp(28px,3.4vw,44px);font-weight:800;letter-spacing:-.03em;margin:24px 0 16px">This page went off the ballot.</h1>
+    <p style="font-size:18px;line-height:1.6;color:rgba(23,20,15,0.62);margin:0 auto 40px;max-width:440px">The link you followed does not exist — or it moved. Let us get you back to something that ships.</p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a onClick="{{ goHome }}" data-cursor style="cursor:pointer;background:#EC4A2B;color:#F3F0E9;font-size:15px;font-weight:600;padding:15px 26px;border-radius:100px" style-hover="background:#17140F">Back home →</a>
+      <a onClick="{{ goContact }}" data-cursor style="cursor:pointer;border:1px solid rgba(23,20,15,0.25);font-size:15px;font-weight:600;padding:15px 26px;border-radius:100px" style-hover="border-color:#17140F;background:#17140F;color:#F3F0E9">Get in touch</a>
+    </div>
+  </div>
+</div>
+</sc-if>
+
+<!-- ============ FOOTER ============ -->
+<sc-if value="{{ showChrome }}" hint-placeholder-val="{{ true }}">
+<footer style="background:#17140F;color:#F3F0E9;overflow:hidden">
+  <div style="padding:20px 0;border-bottom:1px solid rgba(243,240,233,0.12);white-space:nowrap;overflow:hidden">
+    <div style="display:inline-flex;animation:marqR 30s linear infinite">
+      <span style="font-size:clamp(40px,8vw,110px);font-weight:800;letter-spacing:-.04em;padding:0 40px">Let's build power —</span>
+      <span style="font-size:clamp(40px,8vw,110px);font-weight:800;letter-spacing:-.04em;padding:0 40px;color:#EC4A2B">Let's build power —</span>
+      <span style="font-size:clamp(40px,8vw,110px);font-weight:800;letter-spacing:-.04em;padding:0 40px">Let's build power —</span>
+      <span style="font-size:clamp(40px,8vw,110px);font-weight:800;letter-spacing:-.04em;padding:0 40px;color:#EC4A2B">Let's build power —</span>
+    </div>
+  </div>
+  <div style="max-width:1360px;margin:0 auto;padding:70px 40px 40px">
+    <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.4fr;gap:40px">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <span style="width:11px;height:11px;border-radius:50%;background:#EC4A2B;display:inline-block"></span>
+          <span style="font-weight:800;letter-spacing:-.02em;font-size:18px">Uprise Labs</span>
+        </div>
+        <p style="font-size:14px;color:rgba(243,240,233,0.55);line-height:1.6;max-width:260px;margin:0">The web development studio for progressive campaigns, causes, and coalitions.</p>
+      </div>
+      <div>
+        <div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(243,240,233,0.4);letter-spacing:.1em;margin-bottom:18px">SITEMAP</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <a onClick="{{ goWork }}" data-cursor style="cursor:pointer;font-size:15px" style-hover="color:#EC4A2B">Work</a>
+          <a onClick="{{ goServices }}" data-cursor style="cursor:pointer;font-size:15px" style-hover="color:#EC4A2B">Services</a>
+          <a onClick="{{ goPricing }}" data-cursor style="cursor:pointer;font-size:15px" style-hover="color:#EC4A2B">Pricing</a>
+          <a onClick="{{ goBlog }}" data-cursor style="cursor:pointer;font-size:15px" style-hover="color:#EC4A2B">Dispatch</a>
+          <a onClick="{{ goAbout }}" data-cursor style="cursor:pointer;font-size:15px" style-hover="color:#EC4A2B">About</a>
+          <a onClick="{{ goDocs }}" data-cursor style="cursor:pointer;font-size:15px" style-hover="color:#EC4A2B">Docs</a>
+          <a onClick="{{ goContact }}" data-cursor style="cursor:pointer;font-size:15px" style-hover="color:#EC4A2B">Contact</a>
+        </div>
+      </div>
+      <div>
+        <div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(243,240,233,0.4);letter-spacing:.1em;margin-bottom:18px">SOCIAL</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <a href="#" data-cursor style="font-size:15px" style-hover="color:#EC4A2B">Twitter / X ↗</a>
+          <a href="#" data-cursor style="font-size:15px" style-hover="color:#EC4A2B">Bluesky ↗</a>
+          <a href="#" data-cursor style="font-size:15px" style-hover="color:#EC4A2B">GitHub ↗</a>
+          <a href="#" data-cursor style="font-size:15px" style-hover="color:#EC4A2B">LinkedIn ↗</a>
+        </div>
+      </div>
+      <div>
+        <div style="font:500 11px 'JetBrains Mono',monospace;color:rgba(243,240,233,0.4);letter-spacing:.1em;margin-bottom:18px">DISPATCH — MONTHLY NOTES ON DIGITAL ORGANIZING</div>
+        <div style="display:flex;border-bottom:1.5px solid rgba(243,240,233,0.3);padding-bottom:8px">
+          <input placeholder="you@campaign.org" style="flex:1;border:none;background:transparent;color:#F3F0E9;font-size:15px;outline:none">
+          <button data-cursor style="cursor:pointer;background:none;border:none;color:#EC4A2B;font-size:18px;font-weight:700">→</button>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:60px;padding-top:24px;border-top:1px solid rgba(243,240,233,0.12);font:500 12px 'JetBrains Mono',monospace;color:rgba(243,240,233,0.4);flex-wrap:wrap;gap:12px">
+      <span>© 2026 UPRISE LABS · A WORKER-OWNED STUDIO</span>
+      <span>MADE WITH SOLIDARITY IN THE USA ✊</span>
+    </div>
+  </div>
+</footer>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { page:'home', filter:'All', wiping:false, submitted:false, wordIndex:0 };
+
+  componentDidMount(){
+    this._fine = window.matchMedia('(pointer:fine)').matches;
+    if(this._fine){ document.body.style.cursor='none'; }
+    this.mouse={x:innerWidth/2,y:innerHeight/2};
+    this.dp={x:this.mouse.x,y:this.mouse.y};
+    this.rp={x:this.mouse.x,y:this.mouse.y};
+    this.hover=false;
+    this._mm=(e)=>{ this.mouse.x=e.clientX; this.mouse.y=e.clientY; };
+    this._ov=(e)=>{ this.hover=!!(e.target.closest&&e.target.closest('a,button,input,textarea,[data-cursor]')); };
+    window.addEventListener('mousemove',this._mm);
+    document.addEventListener('mouseover',this._ov);
+    const loop=()=>{
+      this.dp.x+=(this.mouse.x-this.dp.x)*0.35; this.dp.y+=(this.mouse.y-this.dp.y)*0.35;
+      this.rp.x+=(this.mouse.x-this.rp.x)*0.16; this.rp.y+=(this.mouse.y-this.rp.y)*0.16;
+      const d=this.dotRef&&this.dotRef.current, r=this.ringRef&&this.ringRef.current;
+      if(d){ d.style.transform='translate3d('+this.dp.x+'px,'+this.dp.y+'px,0) translate(-50%,-50%)'; }
+      if(r){ const s=this.hover?1.9:1; r.style.transform='translate3d('+this.rp.x+'px,'+this.rp.y+'px,0) translate(-50%,-50%) scale('+s+')'; r.style.borderColor=this.hover?'#EC4A2B':'rgba(23,20,15,0.4)'; r.style.background=this.hover?'rgba(236,74,43,0.09)':'transparent'; }
+      this._fc=(this._fc||0)+1; if(this._fc%5===0){ this.checkReveal(); }
+      this._raf=requestAnimationFrame(loop);
+    };
+    loop();
+    this.words=['campaigns','movements','causes','coalitions'];
+    this._wi=setInterval(()=>this.setState(st=>({wordIndex:(st.wordIndex+1)%4})),2200);
+    this._sc=()=>{ if(this._ticking) return; this._ticking=true; requestAnimationFrame(()=>{ this._ticking=false; this.checkReveal(); }); };
+    window.addEventListener('scroll',this._sc,{passive:true});
+    window.addEventListener('resize',this._sc,{passive:true});
+    this.armReveal();
+  }
+  componentDidUpdate(pp,ps){ if(ps.page!==this.state.page){ window.scrollTo(0,0); this.armReveal(); } }
+  componentWillUnmount(){
+    cancelAnimationFrame(this._raf); clearInterval(this._wi);
+    window.removeEventListener('mousemove',this._mm);
+    document.removeEventListener('mouseover',this._ov);
+    window.removeEventListener('scroll',this._sc);
+    window.removeEventListener('resize',this._sc);
+    clearTimeout(this._t1); clearTimeout(this._t2);
+  }
+  armReveal(){
+    document.querySelectorAll('[data-reveal]').forEach(el=>{ if(!el.__ri){ el.__ri=1; el.__rv=0; el.style.opacity='0'; el.style.transform='translateY(30px)'; el.style.transition='opacity .9s cubic-bezier(.16,1,.3,1), transform .9s cubic-bezier(.16,1,.3,1)'; } });
+    requestAnimationFrame(()=>this.checkReveal());
+  }
+  checkReveal(){
+    const h=window.innerHeight;
+    document.querySelectorAll('[data-reveal]').forEach(el=>{
+      if(el.__ri && !el.__rv){ const r=el.getBoundingClientRect(); if(r.top < h*0.9 && r.bottom > -40){ el.__rv=1; el.style.opacity='1'; el.style.transform='none'; } }
+    });
+  }
+  nav(p){
+    if(p===this.state.page){ return; }
+    this.setState({wiping:true});
+    clearTimeout(this._t1); clearTimeout(this._t2);
+    this._t1=setTimeout(()=>this.setState({page:p, submitted:false}),380);
+    this._t2=setTimeout(()=>this.setState({wiping:false}),790);
+  }
+
+  renderVals(){
+    this.dotRef=this.dotRef||React.createRef();
+    this.ringRef=this.ringRef||React.createRef();
+    const page=this.state.page;
+    const go=(p)=>()=>this.nav(p);
+    const openCase=go('case');
+
+    const allProjects=[
+      {client:'Rivera for Senate', title:'A campaign platform that raised $18M', tag:'Campaigns', year:'2026'},
+      {client:'Yes on Prop 12', title:'Ballot initiative hub with live vote tracking', tag:'Advocacy', year:'2025'},
+      {client:'Frontline Workers United', title:'Digital organizing for 240k members', tag:'Organizing', year:'2025'},
+      {client:'People First PAC', title:'Donation infrastructure at national scale', tag:'Fundraising', year:'2024'},
+      {client:'Climate Forward', title:'Advocacy action network & rapid response', tag:'Advocacy', year:'2024'},
+      {client:'GOTV Collective', title:'Voter turnout toolkit used in 30 states', tag:'Organizing', year:'2023'},
+      {client:'Housing Now Coalition', title:'Statewide petition & pledge platform', tag:'Fundraising', year:'2023'},
+      {client:'Chen for Governor', title:'Bilingual campaign site & volunteer portal', tag:'Campaigns', year:'2022'}
+    ].map(p=>({ ...p, open:openCase }));
+
+    const filter=this.state.filter;
+    const filtered = filter==='All'? allProjects : allProjects.filter(p=>p.tag===filter);
+    const filterNames=['All','Campaigns','Fundraising','Organizing','Advocacy'];
+    const filters=filterNames.map(name=>{
+      const active=filter===name;
+      return { label:name, set:()=>this.setState({filter:name}),
+        bg: active?'#17140F':'transparent', color: active?'#F3F0E9':'#17140F',
+        border: active?'#17140F':'rgba(23,20,15,0.2)' };
+    });
+
+    const openPost=go('post');
+    const openService=go('serviceDetail');
+
+    const navLinks=[
+      {label:'Work', color: page==='work'||page==='case'?'#EC4A2B':'#17140F', go:go('work')},
+      {label:'Services', color: page==='services'||page==='serviceDetail'?'#EC4A2B':'#17140F', go:go('services')},
+      {label:'Pricing', color: page==='pricing'?'#EC4A2B':'#17140F', go:go('pricing')},
+      {label:'Dispatch', color: page==='blog'||page==='post'?'#EC4A2B':'#17140F', go:go('blog')},
+      {label:'About', color: page==='about'?'#EC4A2B':'#17140F', go:go('about')}
+    ];
+
+    const posts=[
+      {tag:'FUNDRAISING', date:'JUN 2026', read:'6 MIN', title:'The one-click recurring donation is still your biggest untapped lever', excerpt:'Most campaigns leave money on the table at the exact moment a donor is most motivated. Here is the flow we ship every time.'},
+      {tag:'ENGINEERING', date:'MAY 2026', read:'9 MIN', title:'Surviving the viral moment: how we absorb a 40x traffic spike', excerpt:'When the debate clip hits 2 million views at 10pm, your donate page cannot blink. A field guide to edge caching under load.'},
+      {tag:'ORGANIZING', date:'APR 2026', read:'5 MIN', title:'Your volunteer portal is a funnel — treat it like one', excerpt:'Sign-up is not the finish line. The design decisions that turn a curious supporter into a shift-showing volunteer.'},
+      {tag:'ACCESSIBILITY', date:'MAR 2026', read:'7 MIN', title:'Every voter, every device: accessibility as a turnout strategy', excerpt:'A campaign site that fails a screen reader fails voters. Why we build to WCAG AA from line one — and what it costs when you do not.'},
+      {tag:'DATA', date:'FEB 2026', read:'8 MIN', title:'What a real-time finance dashboard actually needs to show', excerpt:'Vanity metrics lose races. The four numbers your finance director should be watching every hour of the closing stretch.'},
+      {tag:'STRATEGY', date:'JAN 2026', read:'4 MIN', title:'Ship in hours, not days: building a rapid-response practice', excerpt:'The news cycle will not wait for your two-week sprint. How we structure an on-call team that can put a page live before the story breaks.'}
+    ].map(p=>({ ...p, open:openPost }));
+
+    const currentPost=posts[0];
+
+    const pricingTiers=[
+      {name:'RAPID', price:'$8k', unit:'/ starting', tagline:'For a single race with a hard deadline.', cta:'Start here', featured:false,
+       features:['Campaign marketing site','ActBlue donation integration','Mobile-first, WCAG AA','2-week build sprint','Launch-day support']},
+      {name:'CAMPAIGN', price:'$25k', unit:'/ starting', tagline:'The full digital stack for a competitive cycle.', cta:'Most popular', featured:true,
+       features:['Everything in Rapid','Custom small-dollar donation flow','Volunteer & event portal','Real-time finance dashboard','A/B testing program','Priority rapid response']},
+      {name:'COALITION', price:'Custom', unit:'/ retainer', tagline:'For PACs, unions & multi-race operations.', cta:'Talk to us', featured:false,
+       features:['Everything in Campaign','Multi-site / multi-brand','Dedicated engineering pod','24/7 war-room on-call','Data & targeting models','Quarterly roadmap planning']}
+    ].map(t=>({
+      ...t,
+      cardBg: t.featured?'#17140F':'#F3F0E9',
+      cardColor: t.featured?'#F3F0E9':'#17140F',
+      cardBorder: t.featured?'#17140F':'rgba(23,20,15,0.14)',
+      btnBg: t.featured?'#EC4A2B':'transparent',
+      btnColor: t.featured?'#F3F0E9':'#17140F',
+      btnBorder: t.featured?'#EC4A2B':'rgba(23,20,15,0.25)'
+    }));
+
+    const pricingFaqs=[
+      {q:'Do you work with campaigns of any size?', a:'Yes — from a first-time city council run to a statewide Senate race. The Rapid tier exists precisely so small races get first-rate infrastructure.'},
+      {q:'What is your turnaround?', a:'Rapid builds ship in two weeks. Full campaign stacks run four to eight weeks depending on scope. Rapid-response pages go live the same day.'},
+      {q:'Do we own the code?', a:'Always. No lock-in, no black boxes. Everything we build lives in your repo on your accounts. You can walk away with all of it.'},
+      {q:'Who do you work with?', a:'The progressive movement, exclusively — candidates, causes, PACs, unions, and coalitions on the left. It is a values screen, not a size screen.'}
+    ];
+
+    const testimonials=[
+      {quote:'Uprise didn\u2019t build us a website. They built us a fundraising machine that ran itself while we were out knocking doors.', name:'J. RIVERA', org:'CAMPAIGN MANAGER, RIVERA FOR SENATE'},
+      {quote:'They shipped a statement page during a live crisis in under an hour. That page raised six figures before midnight.', name:'A. OKAFOR', org:'DIGITAL DIRECTOR, CLIMATE FORWARD'},
+      {quote:'The only vendor we\u2019ve worked with who understands a filing deadline is not a suggestion.', name:'M. LINDQVIST', org:'EXEC DIRECTOR, HOUSING NOW'}
+    ];
+
+    const docsNav=[
+      {group:'GETTING STARTED', items:['Kickoff & discovery','Access & credentials','The build calendar']},
+      {group:'DONATIONS', items:['ActBlue setup','Recurring giving','Testing a donation']},
+      {group:'CONTENT', items:['Editing pages','Publishing a post','Rapid-response pages']},
+      {group:'DATA', items:['Reading the dashboard','Exporting your list','Targeting models']}
+    ];
+
+    const serviceDetail={
+      no:'02', title:'Fundraising Platforms',
+      lede:'Small-dollar donation flows engineered to protect every single dollar of intent — from the first click to the recurring confirmation.',
+      body:[
+        'The moment a supporter decides to give is the most fragile moment in your entire funnel. A slow page, a confusing form, a broken mobile layout — each one leaks dollars you will never win back. We treat the donation flow as the highest-stakes surface a campaign owns.',
+        'We build custom donation experiences with one-click recurring giving, native ActBlue integration, saved payment methods, and relentless conversion optimization baked in. Then we test everything — button copy, ask amounts, upsell timing — because the difference between a 2% and a 3% conversion rate is an entire field program.'
+      ],
+      deliverables:['Custom donation UI','One-click recurring','ActBlue / Stripe integration','A/B testing harness','Upsell & ask-string logic','Receipt & compliance flows'],
+      steps:[
+        {no:'01', t:'Audit', d:'We map your current flow and find every leak.'},
+        {no:'02', t:'Design', d:'A donation surface built mobile-first, for speed.'},
+        {no:'03', t:'Integrate', d:'Wired into your processor and CRM cleanly.'},
+        {no:'04', t:'Optimize', d:'Continuous testing through election day.'}
+      ]
+    };
+
+    return {
+      dotRef:this.dotRef, ringRef:this.ringRef,
+      wiping:this.state.wiping,
+      pHome:page==='home', pWork:page==='work', pCase:page==='case',
+      pServices:page==='services', pAbout:page==='about', pContact:page==='contact',
+      pPricing:page==='pricing', pBlog:page==='blog', pPost:page==='post',
+      pServiceDetail:page==='serviceDetail', pDocs:page==='docs',
+      pSignin:page==='signin', pSignup:page==='signup', p404:page==='404',
+      goHome:go('home'), goWork:go('work'), goServices:go('services'),
+      goAbout:go('about'), goContact:go('contact'), goPricing:go('pricing'),
+      goBlog:go('blog'), goDocs:go('docs'), goSignin:go('signin'), goSignup:go('signup'),
+      showChrome: page!=='signin' && page!=='signup',
+      openPost, openService,
+      posts, currentPost, pricingTiers, pricingFaqs, testimonials, docsNav, serviceDetail,
+      navLinks,
+      words:this.words||['campaigns','movements','causes','coalitions'],
+      wordShift: '-'+(this.state.wordIndex*1.02)+'em',
+      capabilities:['Campaign Websites','Fundraising Platforms','Voter Tools','Rapid Response','Data & Analytics','Brand Systems'],
+      stats:[
+        {num:'$180M+', label:'RAISED ONLINE'},
+        {num:'92%', label:'WIN RATE'},
+        {num:'120+', label:'CAMPAIGNS SHIPPED'},
+        {num:'14M', label:'VOTERS REACHED'}
+      ],
+      services:[
+        {no:'01', title:'Campaign Websites', desc:'Fast, accessible sites that convert visitors into supporters.', long:'Sub-second load times, WCAG-compliant, and built to survive the traffic spike after a viral moment. Modern stacks, no template lock-in.', tags:['Next.js','Design systems','Accessibility','CMS']},
+        {no:'02', title:'Fundraising Platforms', desc:'Small-dollar donation flows optimized for every dollar.', long:'Custom donation experiences with one-click recurring giving, ActBlue integration, and relentless conversion optimization built in.', tags:['ActBlue','Recurring giving','A/B testing']},
+        {no:'03', title:'Digital Organizing', desc:'Tools that turn supporters into volunteers into voters.', long:'Volunteer portals, distributed phone and text banking, event RSVP, and CRM integrations that keep your list clean and activated.', tags:['CRM','SMS / Email','Volunteer tools']},
+        {no:'04', title:'Data & Analytics', desc:'Real-time dashboards so you always know what is working.', long:'Live fundraising and traffic dashboards, voter targeting models, and rigorous experimentation to spend every dollar where it counts.', tags:['Dashboards','Targeting','Experimentation']},
+        {no:'05', title:'Rapid Response', desc:'War-room support when the news cycle will not wait.', long:'A 24/7 on-call team that ships landing pages, statements, and fundraising asks in hours, not days — because in politics, timing is everything.', tags:['24/7 on-call','Landing pages','Same-day']},
+        {no:'06', title:'Brand & Identity', desc:'Names, logos, and messaging that make people believe.', long:'Full brand systems from naming and identity to messaging frameworks — the visual and verbal language that carries a movement.', tags:['Naming','Identity','Messaging']}
+      ],
+      homeProjects: allProjects.slice(0,4),
+      filtered, filters,
+      projectCount: allProjects.length,
+      caseResults:[
+        {num:'$18M', label:'RAISED ONLINE'},
+        {num:'3.2M', label:'INDIVIDUAL DONORS'},
+        {num:'+41%', label:'CONVERSION LIFT'},
+        {num:'0.4s', label:'MEDIAN LOAD TIME'}
+      ],
+      caseGallery:['DONATION FLOW — SCREENSHOT','FINANCE DASHBOARD — SCREENSHOT'],
+      caseStack:['Next.js','TypeScript','Tailwind','ActBlue API','Supabase','Vercel Edge'],
+      values:[
+        {no:'01', title:'Mission over metrics', desc:'We only work with the progressive movement. If it does not move the cause forward, we do not build it.'},
+        {no:'02', title:'Ship at the speed of politics', desc:'Deadlines do not move for us, so we do not miss them. Filing dates, debate nights, election days — we are ready.'},
+        {no:'03', title:'Accessible to everyone', desc:'Every voter, every donor, every device. Accessibility is not a feature we add — it is how we build from line one.'},
+        {no:'04', title:'Radically transparent', desc:'Open roadmaps, honest estimates, and code you own. No black boxes, no lock-in, no surprises on the invoice.'}
+      ],
+      process:[
+        {no:'01', title:'Discovery', desc:'We learn your race, your list, your goals, and your deadlines — fast.'},
+        {no:'02', title:'Strategy', desc:'A clear plan for what to build, when to ship, and how to measure a win.'},
+        {no:'03', title:'Design & Build', desc:'Rapid design and engineering in tight loops, with you in the room.'},
+        {no:'04', title:'Launch & Iterate', desc:'We ship, watch the data, and keep optimizing through election day.'}
+      ],
+      team:[
+        {name:'Maya Okonkwo', role:'FOUNDER & PRINCIPAL'},
+        {name:'Dev Ramírez', role:'ENGINEERING LEAD'},
+        {name:'Sana Whitfield', role:'DESIGN DIRECTOR'},
+        {name:'Theo Nakamura', role:'DATA & GROWTH'},
+        {name:'Priya Anand', role:'CLIENT STRATEGY'},
+        {name:'Marcus Bell', role:'RAPID RESPONSE LEAD'}
+      ],
+      submitted:this.state.submitted,
+      notSubmitted:!this.state.submitted,
+      submitForm:(e)=>{ e.preventDefault(); this.setState({submitted:true}); }
+    };
+  }
+}
+</script>
+</body>
+</html>

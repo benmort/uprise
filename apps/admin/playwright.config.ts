@@ -69,7 +69,7 @@ export default defineConfig({
           timeout: 120_000,
         },
         {
-          command: "npm --prefix ../marketing run dev",
+          command: "npm --prefix ../product-marketing run dev",
           url: MARKETING_URL,
           reuseExistingServer: true,
           timeout: 120_000,

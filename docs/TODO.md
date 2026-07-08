@@ -9,7 +9,7 @@ updated as work lands.
 **Deferred from:** the Uprise → Uprise rebrand + the live `www.uprise.org.au` launch. Symptom that
 surfaced it: the marketing sign-in/up buttons link to `http://localhost:3002` because
 `NEXT_PUBLIC_AUTH_APP_URL` is unset on the Vercel project and the localhost default
-(`apps/marketing/src/lib/links.ts`, `apps/marketing/src/app/layout.tsx`) gets baked in at build.
+(`apps/product-marketing/src/lib/links.ts`, `apps/product-marketing/src/app/layout.tsx`) gets baked in at build.
 
 `NEXT_PUBLIC_*` is **inlined at build time**, so every change below needs a **redeploy** of that
 project, not just a save. This section is the authoritative env matrix; it supersedes the
@@ -150,7 +150,7 @@ shipped in the auth port.
 **Deferred from:** moving all uprise apps to the `prog-network` Vercel team. Done so far:
 `uprise-admin` (transferred from common-threads `uprise-web`, same project id, Root Directory now
 `apps/admin`) and `uprise-api` (holds `api.uprise.org.au`) live in prog-network and serve their
-domains; `uprise-marketing` (`apps/marketing`) and `uprise-action` (`apps/action`) created with
+domains; `uprise-marketing` (`apps/product-marketing`) and `uprise-action` (`apps/action`) created with
 Root Directory + `NEXT_PUBLIC_API_URL` (+ `NEXT_PUBLIC_APP_URL` for marketing) set; `uprise-auth`
 (`apps/auth`) scaffolded. common-threads is now uprise-free.
 

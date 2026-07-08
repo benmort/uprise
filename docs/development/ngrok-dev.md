@@ -8,13 +8,14 @@ instead of bare `localhost:PORT`.
 
 | ngrok domain | local | uprise app |
 |---|---|---|
-| `dev.uprise.org.au` | `localhost:3003` | marketing |
+| `dev.uprise.org.au` | `localhost:3003` | product-marketing |
 | `auth.dev.uprise.org.au` | `localhost:3002` | auth (SSO) |
 | `admin.dev.uprise.org.au` | `localhost:3000` | admin (organiser) |
 | `api.dev.uprise.org.au` | `localhost:3001` | api (frontend calls + webhooks) |
 | `field.dev.uprise.org.au` | `localhost:3005` | field (canvasser PWA) |
+| `labs.dev.uprise.org.au` | `localhost:3006` | organisation-marketing (Uprise Labs) |
 
-`admin.*`, `api.*` and `field.*` sit under the reserved `*.dev.uprise.org.au` wildcard. Tenancy is
+`admin.*`, `api.*`, `field.*` and `labs.*` sit under the reserved `*.dev.uprise.org.au` wildcard. Tenancy is
 still chosen in-session (`/select-tenant`) — subdomains map apps, not tenants. (Per-tenant
 subdomain routing is a deferred item in `docs/TODO.md`.)
 
@@ -54,12 +55,12 @@ pnpm dev:tunnel    # the ngrok tunnels on their own (optional, second terminal)
 see ngrok errors under the `tunnel` label while the apps keep running.
 
 Then copy the **"ngrok / prog-subdomain dev"** block from each app's `.env.example` into its
-`.env` (api, admin, auth, marketing) and restart `dev:all`. The key overrides:
+`.env` (api, admin, auth, product-marketing) and restart `dev:all`. The key overrides:
 
 - **api**: `SESSION_COOKIE_DOMAIN=.dev.uprise.org.au`, `AUTH_APP_URL=https://auth.dev.uprise.org.au`,
   `API_BASE_URL=https://api.dev.uprise.org.au`,
   `CORS_ALLOWED_ORIGINS=https://admin.dev.uprise.org.au,https://auth.dev.uprise.org.au,https://dev.uprise.org.au`
-- **admin / marketing**: `NEXT_PUBLIC_API_URL=https://api.dev.uprise.org.au/api/v1`,
+- **admin / product-marketing**: `NEXT_PUBLIC_API_URL=https://api.dev.uprise.org.au/api/v1`,
   `NEXT_PUBLIC_AUTH_APP_URL=https://auth.dev.uprise.org.au`
 - **auth**: `NEXT_PUBLIC_API_URL=https://api.dev.uprise.org.au/api/v1`,
   `NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS=https://admin.dev.uprise.org.au`
@@ -71,7 +72,7 @@ so providers POST to `https://api.dev.uprise.org.au/api/v1/...`.
 ## Smoke check
 
 ```
-curl -sI https://dev.uprise.org.au                       # marketing 200
+curl -sI https://dev.uprise.org.au                       # product-marketing 200
 curl -sI https://auth.dev.uprise.org.au/sign-in          # auth 200
 curl -s  https://api.dev.uprise.org.au/api/v1/health     # api ok
 ```

@@ -1,13 +1,13 @@
 ---
 name: web-engineer
-description: Frontend layer-engineer entry point for the uprise web apps (web/auth/marketing) – the invariants every UI change obeys plus a router to every frontend how-to. Use when building or changing any page, component, route, form, settings surface, or auth-touching frontend in apps/admin, apps/auth or apps/marketing.
+description: Frontend layer-engineer entry point for the uprise web apps (web/auth/marketing sites) – the invariants every UI change obeys plus a router to every frontend how-to. Use when building or changing any page, component, route, form, settings surface, or auth-touching frontend in apps/admin, apps/auth, apps/product-marketing or apps/organisation-marketing.
 ---
 
 # Web engineer
 
 The entry point for any frontend work in uprise. The unit of work is a task brief, the plan file, or a docs runbook – read it, classify the surface you're building, then route to the guides below and walk their checklists. This skill carries the invariants; the guides carry the patterns.
 
-The apps: the organiser `(main)` shell and the canvasser `(field)` PWA in `apps/admin`, the standalone identity app `apps/auth`, and `apps/marketing`. All four share these invariants.
+The apps: the organiser `(main)` shell and the canvasser `(field)` PWA in `apps/admin`, the standalone identity app `apps/auth`, and the marketing sites `apps/product-marketing` + `apps/organisation-marketing`. All of them share these invariants.
 
 ## Invariants
 

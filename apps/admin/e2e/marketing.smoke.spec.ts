@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 /**
  * Marketing site smoke (meld doc 12 / prog marketing.smoke). Public — no session.
- * Drives the apps/marketing app (port 3003) via absolute URLs.
+ * Drives the apps/product-marketing app (port 3003) via absolute URLs.
  */
 const MKT = process.env.MARKETING_URL || "http://localhost:3003";
 
