@@ -36,7 +36,15 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
           <span className="font-mono text-xs tracking-[0.3em] text-cream">UPRISE LABS</span>
         </div>
       ) : null}
-      <div key={pathname} style={{ animation: "pageIn .5s ease both" }}>
+      {/* On a wipe, keep the incoming page hidden (opacity 0 via `both`) until the
+          orange block has fully covered the viewport (~.34s into wipeIn's .78s), so
+          the content swap + scroll reset happen behind the cover and are never seen.
+          The block then exits upward, revealing the settled new page. First load has
+          no wipe, so it plays in immediately. */}
+      <div
+        key={pathname}
+        style={{ animation: `pageIn .5s ease ${first.current ? "0s" : "0.36s"} both` }}
+      >
         {children}
       </div>
     </>
