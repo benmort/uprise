@@ -1,20 +1,24 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, MapPin, Save } from "lucide-react";
+import { ArrowLeft, Crosshair, MapPin, Save } from "lucide-react";
 import {
+  assignTurf,
   createTurf,
   deleteTurf,
   listTurfs,
+  listVolunteers,
   loadTurfUniverse,
   rebucketTurf,
   updateTurf,
   type TurfSummary,
 } from "@/lib/api";
-import { createTurfFromAreas } from "@/lib/api/geo";
+import { Select, SelectItem } from "@/components/ui/select";
+import { createTurfFromAreas, type AreaLevel } from "@/lib/api/geo";
+import { getCampaignBoundary, getCampaignAreas } from "@/lib/api/campaigns";
 import { Spinner } from "@uprise/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +31,7 @@ import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { Pencil, Trash2 } from "lucide-react";
-import type { ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
+import type { AreaHoverInfo, ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
 
 // mapbox-gl + draw touch window: keep them out of SSR.
 const TurfDrawMap = dynamic(
@@ -46,6 +50,21 @@ const UNIVERSE_OPTIONS: Array<{ id: Universe; label: string; desc: string }> = [
   { id: "hybrid", label: "Hybrid — recommended", desc: "Existing contacts plus cold addresses." },
 ];
 
+/**
+ * A turf name derived from what's selected, so organisers don't have to type one.
+ * The picked areas already carry human names (the same ones shown in the panel), so
+ * a deterministic join reads better and is faster/cheaper than an AI round-trip:
+ * one area → its name; a few → "A + B"; many → "A + N more"; polygons-only → "Drawn
+ * turf". Empty (nothing selected) never saves — the button is disabled.
+ */
+function autoTurfName(areas: SelectedArea[], polygons: GeoJSON.Polygon[]): string {
+  const names = areas.map((a) => a.name).filter(Boolean);
+  if (names.length === 0) return polygons.length > 1 ? `Drawn turf (${polygons.length} zones)` : "Drawn turf";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} + ${names[1]}`;
+  return `${names[0]} + ${names.length - 1} more`;
+}
+
 export default function TurfCuttingPage() {
   const params = useParams<{ campaignId: string }>();
   const campaignId = params.campaignId;
@@ -56,11 +75,43 @@ export default function TurfCuttingPage() {
     () => listTurfs(campaignId),
   );
   const turfs = data ?? [];
+
+  // The campaign's saved boundary (if any): the map fits to it and shades it grey,
+  // so turf is cut against the campaign's extent. Cached — it changes only when
+  // edited on the boundary page.
+  const { data: boundaryData } = useApi(
+    `/canvass/campaigns/${campaignId}/boundary`,
+    () => getCampaignBoundary(campaignId),
+    { ttlMs: 300_000 },
+  );
+  const campaignBoundary = (boundaryData?.boundary ?? null) as GeoJSON.Geometry | null;
+
+  // Bounded campaign: the area level to cut at (SA4→Meshblock), lifted here so we
+  // fetch just the areas inside the boundary for the chosen level. Switching the
+  // level pill re-fetches. No boundary → the map falls back to national tiles.
+  const [level, setLevel] = useState<AreaLevel>("sa1");
+  const { data: boundaryAreasData } = useApi(
+    campaignBoundary ? `/canvass/campaigns/${campaignId}/areas/${level}` : null,
+    () => getCampaignAreas(campaignId, level),
+    { ttlMs: 300_000 },
+  );
+  const boundaryAreas = campaignBoundary ? (boundaryAreasData ?? null) : null;
+  const [hovered, setHovered] = useState<AreaHoverInfo | null>(null);
+
   const [name, setName] = useState("");
+  // Auto-name from the selection by default; uncheck to type one. `name` holds the
+  // manual override (only used when autoName is off).
+  const [autoName, setAutoName] = useState(true);
   const [universe, setUniverse] = useState<Universe>("hybrid");
   const [polygons, setPolygons] = useState<GeoJSON.Polygon[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<SelectedArea[]>([]);
+  // Optional inline assignment: assign the new turf to a canvasser on save.
+  const [assigneeId, setAssigneeId] = useState("");
+  const { data: volunteersData } = useApi("/canvass/volunteers", listVolunteers, { ttlMs: 300_000 });
+  const volunteers = volunteersData ?? [];
+  const suggestedName = useMemo(() => autoTurfName(selectedAreas, polygons), [selectedAreas, polygons]);
   const [clearToken, setClearToken] = useState(0); // bump to wipe drawn polygons in place
+  const [recenterToken, setRecenterToken] = useState(0); // bump to snap the map back to the boundary
   const [saving, setSaving] = useState(false);
   const [editingTurf, setEditingTurf] = useState<TurfSummary | null>(null);
   const [turfName, setTurfName] = useState("");
@@ -127,7 +178,7 @@ export default function TurfCuttingPage() {
       });
       return;
     }
-    const turfName = name.trim() || `Turf ${turfs.length + 1}`;
+    const turfName = (autoName ? suggestedName : name.trim() || suggestedName) || `Turf ${turfs.length + 1}`;
     setSaving(true);
     // Single free-drawn polygon, no areas → the simple createTurf path (works
     // with no geo data loaded). Otherwise union the whole selection server-side.
@@ -151,24 +202,35 @@ export default function TurfCuttingPage() {
     // chosen universe wants them. Degrades to 0 when no geo data is loaded.
     const cold =
       universe === "existing" ? null : await loadTurfUniverse(turfId, universe);
+    // Optional inline assignment — assign the fresh turf to a canvasser now instead
+    // of a second trip through the turf list. Best-effort: a save that succeeded
+    // isn't rolled back if the assignment fails; we just warn.
+    const assignee = assigneeId ? volunteers.find((v) => v.id === assigneeId) : null;
+    const assigned = assigneeId ? await assignTurf(turfId, assigneeId) : null;
     setSaving(false);
     setName("");
     setPolygons([]);
     setSelectedAreas([]);
+    setAssigneeId("");
     setClearToken((k) => k + 1);
     await refetch();
+    if (assigned && !assigned.ok) {
+      showToast({ tone: "warning", title: `Saved “${turfName}”, but couldn't assign it`, description: assigned.error });
+      return;
+    }
     const existingCount = bucketed.ok ? bucketed.data.total : 0;
     const coldCount = cold?.ok ? cold.data.materialised : 0;
+    const doorsLine = bucketed.ok
+      ? coldCount > 0
+        ? `${existingCount} existing + ${coldCount} cold door${coldCount === 1 ? "" : "s"} loaded.`
+        : `${existingCount} door${existingCount === 1 ? "" : "s"} in this turf.`
+      : "Turf saved; re-bucket the doors from the list.";
     showToast({
       tone: "success",
-      title: `Saved “${turfName}”`,
-      description: bucketed.ok
-        ? coldCount > 0
-          ? `${existingCount} existing + ${coldCount} cold door${coldCount === 1 ? "" : "s"} loaded.`
-          : `${existingCount} door${existingCount === 1 ? "" : "s"} in this turf.`
-        : "Turf saved; re-bucket the doors from the list.",
+      title: assignee ? `Saved “${turfName}” · assigned to ${assignee.displayName}` : `Saved “${turfName}”`,
+      description: doorsLine,
     });
-  }, [hasSelection, selectedAreas, polygons, name, universe, turfs.length, campaignId, refetch, showToast]);
+  }, [hasSelection, selectedAreas, polygons, name, autoName, suggestedName, assigneeId, volunteers, universe, turfs.length, campaignId, refetch, showToast]);
 
   return (
     <div className="page-stack">
@@ -186,23 +248,86 @@ export default function TurfCuttingPage() {
         <div className="h-[60vh] overflow-hidden rounded-2xl border border-border">
           <TurfDrawMap
             existing={existing}
+            campaignBoundary={campaignBoundary}
+            boundaryAreas={boundaryAreas}
+            onAreaHover={setHovered}
+            level={level}
+            onLevelChange={setLevel}
             selectedAreas={selectedAreas}
             onToggleArea={toggleArea}
             onPolygonsChange={setPolygons}
             clearToken={clearToken}
+            recenterToken={recenterToken}
           />
         </div>
 
         <div className="space-y-4">
+          {/* Boundary context: only shown for a bounded campaign. Says what's inside
+              at the active level and offers a snap-back-to-boundary recentre. */}
+          {campaignBoundary ? (
+            <SectionCard
+              title="Campaign boundary"
+              description="Turf here is cut against this campaign's saved extent (shaded on the map)."
+            >
+              <p className="text-sm text-muted-foreground">
+                {boundaryAreas
+                  ? `${boundaryAreas.features.length.toLocaleString()} ${level.toUpperCase()} area${
+                      boundaryAreas.features.length === 1 ? "" : "s"
+                    } inside — click to claim, or draw within the shaded zone.`
+                  : `Loading ${level.toUpperCase()} areas inside the boundary…`}
+              </p>
+              <Button
+                variant="outline"
+                className="mt-3 w-full"
+                onClick={() => setRecenterToken((k) => k + 1)}
+              >
+                <Crosshair className="mr-1.5 h-4 w-4" />
+                Recentre on boundary
+              </Button>
+            </SectionCard>
+          ) : null}
+
           <SectionCard title="New turf">
+            {/* Auto-name from the selection so organisers don't have to type one;
+                uncheck to name it manually. */}
+            <label className="mb-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={autoName}
+                onChange={(e) => setAutoName(e.target.checked)}
+                className="h-4 w-4 shrink-0"
+              />
+              <span className="text-muted-foreground">Auto-name from selection</span>
+            </label>
             <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
               Name
             </label>
             <Input
-              value={name}
+              value={autoName ? suggestedName : name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={`Turf ${turfs.length + 1}`}
+              disabled={autoName}
+              placeholder={suggestedName || `Turf ${turfs.length + 1}`}
             />
+
+            {/* Assign the turf to a canvasser inline, so creation + hand-off is one
+                step. Optional — defaults to unassigned. */}
+            <label className="mb-1 mt-3 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+              Assign to
+            </label>
+            <Select
+              id="turf-assignee"
+              value={assigneeId || "none"}
+              onValueChange={(v) => setAssigneeId(v === "none" ? "" : v)}
+            >
+              <SelectItem value="none">Unassigned</SelectItem>
+              {volunteers.map((v) => (
+                <SelectItem key={v.id} value={v.id}>
+                  {v.displayName}
+                  {v.email ? ` · ${v.email}` : ""}
+                </SelectItem>
+              ))}
+            </Select>
+
             <p className="mt-2 text-xs text-muted-foreground">
               {hasSelection
                 ? `${selectedAreas.length} area${selectedAreas.length === 1 ? "" : "s"}${
@@ -215,6 +340,22 @@ export default function TurfCuttingPage() {
               {saving ? (<><Spinner className="mr-2" />Saving…</>) : "Save & re-bucket"}
             </Button>
           </SectionCard>
+
+          {hovered ? (
+            <SectionCard title="Area">
+              <p className="text-sm font-semibold text-foreground">{hovered.name}</p>
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="rounded bg-surface-variant px-1.5 py-0.5 text-[10px] font-bold uppercase">
+                  {hovered.level}
+                </span>
+                <span className="tabular-nums">{hovered.code}</span>
+              </p>
+              <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+                {Math.round(hovered.coverage * 100)}% within campaign boundary
+                {hovered.coverage < 0.5 ? " — edge area" : ""}
+              </p>
+            </SectionCard>
+          ) : null}
 
           {selectedAreas.length > 0 ? (
             <SectionCard title={`Selected areas (${selectedAreas.length})`}>

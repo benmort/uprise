@@ -27,6 +27,9 @@ export type ExistingTurf = {
 
 /** A statistical area picked on the map, carrying its boundary for highlight + union. */
 export type SelectedArea = { level: AreaLevel; code: string; name: string; geometry: GeoJSON.Geometry };
+/** An area hovered on the bounded turf-cut map — surfaced to the right sidebar.
+ *  `coverage` is the 0–1 fraction of the area inside the campaign boundary. */
+export type AreaHoverInfo = { level: AreaLevel; code: string; name: string; coverage: number };
 
 type MapEvents = { on: (e: string, cb: () => void) => void; off: (e: string, cb: () => void) => void };
 
@@ -48,6 +51,10 @@ const TILE_MAX_ZOOM = 16;
 const sourceMinZoom = (lvl: AreaLevel) => (lvl === "mb" ? MB_MIN_ZOOM : 0);
 // Brand primary for boundary overlays (mapbox paint needs a literal hex).
 const PRIMARY = "#465fff";
+// "In My turf" (basket) overlay colour — green, matching the "Added / In my turf"
+// affordance in the panels. Rendered dashed so it reads as banked, distinct from
+// the solid `selectedBoundaryCode` highlight (what you've just clicked).
+const BASKET_COLOR = "#16a34a";
 // Street-level zoom for a plotted address (points mode) — read individual doors.
 const POINT_ZOOM = 16.5;
 
@@ -110,6 +117,9 @@ export function TurfDrawMap({
   existing = [],
   center,
   focusBounds,
+  campaignBoundary,
+  boundaryAreas,
+  onAreaHover,
   selectedAreas = [],
   onToggleArea,
   onPolygonsChange,
@@ -129,6 +139,7 @@ export function TurfDrawMap({
   boundaryTilesUrl,
   boundaryFilter,
   selectedBoundaryCode,
+  basketCodes,
   onBoundaryClick,
   stops = [],
   activeStopId,
@@ -136,11 +147,24 @@ export function TurfDrawMap({
   userPosition,
   focusPoint,
   resizeToken,
+  recenterToken,
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
   /** `[w,s,e,n]` to frame the map to on change — the shared State Filter zooming to a state. */
   focusBounds?: [number, number, number, number];
+  /** A campaign's saved boundary (GeoJSON MultiPolygon). When set — and no explicit
+   *  focusBounds/point view is given — the map fits to it and draws it as a grey shaded
+   *  backdrop so turf is cut against the campaign's extent. */
+  campaignBoundary?: GeoJSON.Geometry | null;
+  /** The areas (at the active level) intersecting the campaign boundary, as GeoJSON.
+   *  When set, the areas layer is drawn from THIS (clipped to the campaign) instead of
+   *  the national vector tiles — so a bounded campaign only shows selectable areas
+   *  inside it. The parent re-fetches this on `onLevelChange`. */
+  boundaryAreas?: GeoJSON.FeatureCollection | null;
+  /** Hovering an area on the bounded map reports it here (null on leave) for the
+   *  sidebar. Only fires when `boundaryAreas` is active. */
+  onAreaHover?: (area: AreaHoverInfo | null) => void;
   /** ASGS state digit (first char of every area code). Set → only that state's areas
    *  render (and appear in the viewport list); "" / undefined → all states. */
   stateDigit?: string;
@@ -192,6 +216,10 @@ export function TurfDrawMap({
   boundaryTilesUrl?: string;
   boundaryFilter?: FilterSpecification;
   selectedBoundaryCode?: string;
+  /** Codes already in the "My turf" basket for the active kind/level — drawn as a
+   *  distinct green dashed overlay (vs the solid `selectedBoundaryCode` highlight)
+   *  so it's clear what's banked vs what's currently picked. */
+  basketCodes?: string[];
   onBoundaryClick?: (code: string, name: string | null, layerId?: string) => void;
   /** points mode — nearby-door markers (clustered) around the plotted point. */
   stops?: Array<{ id: string; lat: number; lng: number; status?: string }>;
@@ -203,6 +231,9 @@ export function TurfDrawMap({
   /** Bumped by the persistent geo surface when the map returns from list view
    *  (where it's display:none, so its canvas measures 0×0 and must resize on show). */
   resizeToken?: number;
+  /** Bump to re-fit the map to the campaign boundary (or focusBounds/country
+   *  fallback) on demand — the "Recentre on boundary" affordance. */
+  recenterToken?: number;
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
@@ -241,16 +272,28 @@ export function TurfDrawMap({
   const [searching, setSearching] = useState(false);
   const [areaOpen, setAreaOpen] = useState(false);
 
+  // A campaign boundary's bounding box → the frame to fit when no explicit
+  // focusBounds is passed, so cutting a campaign's turf opens on its boundary.
+  const boundaryBounds = useMemo<[number, number, number, number] | null>(() => {
+    if (!campaignBoundary) return null;
+    try {
+      const [w, s, e, n] = bbox({ type: "Feature", geometry: campaignBoundary, properties: {} });
+      return [w, s, e, n].every((v) => Number.isFinite(v)) ? [w, s, e, n] : null;
+    } catch {
+      return null;
+    }
+  }, [campaignBoundary]);
+
   const initialViewState = useMemo<MapProps["initialViewState"]>(() => {
     if (center) return { latitude: center.lat, longitude: center.lng, zoom: 11 };
     if (focusPoint) return { latitude: focusPoint.lat, longitude: focusPoint.lng, zoom: POINT_ZOOM };
-    // A picked state frames its bounds; otherwise open on the whole country.
-    const frame = focusBounds ?? AU_BOUNDS;
+    // A picked state (focusBounds) or the campaign boundary frames the view; else the country.
+    const frame = focusBounds ?? boundaryBounds ?? AU_BOUNDS;
     return {
       bounds: [[frame[0], frame[1]], [frame[2], frame[3]]],
       fitBoundsOptions: { padding: 32 },
     };
-  }, [center, focusBounds, focusPoint]);
+  }, [center, focusBounds, focusPoint, boundaryBounds]);
 
   // points mode: fly to the plotted address whenever it changes (skip the first
   // run — initialViewState/onLoad already frame it on mount).
@@ -268,11 +311,26 @@ export function TurfDrawMap({
   }, [focusPoint]);
 
   // The persistent geo surface keeps this map mounted but display:none in list view;
-  // a hidden mapbox canvas measures 0×0, so resize once it's shown again (token bump).
+  // a hidden mapbox canvas measures 0×0. When it's shown again (token bump) we must
+  // BOTH resize AND re-frame to the data — resize alone keeps the stale 0×0-era
+  // viewport, which is exactly what makes areas/boundaries look empty until you pan.
+  // Reads the current focus values from the render where the token changed (the
+  // moment we became visible), so it always frames what's now selected.
   useEffect(() => {
     if (resizeToken === undefined) return;
-    const id = requestAnimationFrame(() => mapRef.current?.getMap()?.resize());
+    const id = requestAnimationFrame(() => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+      map.resize();
+      if (focusPoint) {
+        map.flyTo({ center: [focusPoint.lng, focusPoint.lat], zoom: POINT_ZOOM, duration: 0 });
+      } else if (!center) {
+        const frame = focusBounds ?? boundaryBounds ?? AU_BOUNDS;
+        map.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32 });
+      }
+    });
     return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resizeToken]);
 
   // Re-frame on a State Filter change: to the picked state, or back to the national
@@ -292,6 +350,36 @@ export function TurfDrawMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusBounds]);
 
+  // Fit to the campaign boundary when it loads (fetched async, after mount).
+  // A point view (center/focusPoint) or an explicit focusBounds takes precedence.
+  useEffect(() => {
+    if (!boundaryBounds || center || focusPoint || focusBounds) return;
+    mapRef.current
+      ?.getMap()
+      ?.fitBounds([[boundaryBounds[0], boundaryBounds[1]], [boundaryBounds[2], boundaryBounds[3]]], {
+        padding: 32,
+        duration: 600,
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boundaryBounds]);
+
+  // On-demand recentre (the sidebar "Recentre on boundary" button bumps the token):
+  // snap back to the campaign boundary after panning/zooming away. Skips the first
+  // run so a 0-initialised token doesn't fight the mount-time framing.
+  const recenteredOnce = useRef(false);
+  useEffect(() => {
+    if (recenterToken === undefined) return;
+    if (!recenteredOnce.current) {
+      recenteredOnce.current = true;
+      return;
+    }
+    const frame = boundaryBounds ?? focusBounds ?? AU_BOUNDS;
+    mapRef.current
+      ?.getMap()
+      ?.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32, duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recenterToken]);
+
   // Vector-tile boundary source for the active level. mapbox requests only the
   // tiles visible at the current zoom, so this is what makes boundaries fast at any
   // zoom (no per-viewport GeoJSON, no zoom gate). Keyed by level so switching pills
@@ -299,7 +387,7 @@ export function TurfDrawMap({
   // transformRequest below.
   // ?v= busts the 24h tile cache when the tile output changes (bump on any change
   // to the tile generator, e.g. the feature cap). Same URL → stale cached tile.
-  const tileUrl = `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}?v=2`;
+  const tileUrl = `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}?v=3`;
 
   // Shared State Filter: every area code is prefixed by its state's ASGS digit, so
   // restrict the rendered layers (and thus the queryRenderedFeatures "in view" list)
@@ -308,15 +396,46 @@ export function TurfDrawMap({
     ? ["==", ["slice", ["get", "code"], 0, 1], stateDigit]
     : undefined;
 
+  // "In My turf" highlight: match any tile feature whose code is in the basket for
+  // the active kind/level. Undefined (nothing banked) → the basket layers don't render.
+  const basketFilter = useMemo<FilterSpecification | undefined>(
+    () =>
+      basketCodes && basketCodes.length
+        ? (["in", ["get", "code"], ["literal", basketCodes]] as FilterSpecification)
+        : undefined,
+    [basketCodes],
+  );
+
+  // Bounded campaign: draw the areas layer from the campaign-clipped GeoJSON
+  // (`boundaryAreas`) rather than the national vector tiles, so only areas inside
+  // the boundary are shown + selectable.
+  const useBoundaryAreas = mode === "areas" && !!boundaryAreas;
+  // Split by how much of the area sits inside the boundary: ≥50% draws solid
+  // (mostly-inside), <50% draws as a faint dashed "edge" outline.
+  const insideFilter: FilterSpecification = [">=", ["coalesce", ["get", "coverage"], 1], 0.5];
+  const edgeFilter: FilterSpecification = ["<", ["coalesce", ["get", "coverage"], 1], 0.5];
+  // Dedupe hover: onMouseMove fires per pixel, so only report when the area changes.
+  const hoverCodeRef = useRef<string>("");
+
   // Send the parent-domain session cookie on our own tile requests (the API is
   // ORGANISER-gated); leave mapbox's own style/sprite/tile requests untouched.
-  const apiBase = getApiUrl();
+  // Match by ORIGIN (not the full /api/v1 base) so any formatting of getApiUrl()
+  // still opts every boundary tile into credentials — a prefix mismatch here is
+  // exactly what makes the tiles 401 and the boundaries never paint. Mapbox's own
+  // tiles live on a different origin (api.mapbox.com), so they're untouched.
+  const apiOrigin = useMemo(() => {
+    try {
+      return new URL(getApiUrl()).origin;
+    } catch {
+      return "";
+    }
+  }, []);
   const transformRequest = useCallback(
     (url: string, resourceType?: string) =>
-      resourceType === "Tile" && apiBase && url.startsWith(apiBase)
+      resourceType === "Tile" && apiOrigin && url.startsWith(apiOrigin)
         ? { url, credentials: "include" as const }
         : { url },
-    [apiBase],
+    [apiOrigin],
   );
 
   // Read the areas currently rendered in the viewport off the vector-tile layer,
@@ -576,7 +695,9 @@ export function TurfDrawMap({
               ]
             : mode === "points"
               ? ["stops-circles"]
-              : ["areas-fill"]
+              : useBoundaryAreas
+                ? ["boundary-areas-fill", "boundary-areas-fill-edge"]
+                : ["areas-fill"]
         }
         transformRequest={transformRequest}
         onLoad={() => {
@@ -591,13 +712,38 @@ export function TurfDrawMap({
             if (focusPoint) {
               map.flyTo({ center: [focusPoint.lng, focusPoint.lat], zoom: POINT_ZOOM, duration: 0 });
             } else if (!center) {
-              const frame = focusBounds ?? AU_BOUNDS;
+              const frame = focusBounds ?? boundaryBounds ?? AU_BOUNDS;
               map.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32 });
             }
           }
           syncViewport();
         }}
         onMoveEnd={() => syncViewport()}
+        onMouseMove={(e) => {
+          if (!useBoundaryAreas || !onAreaHover) return;
+          const f = e.features?.find(
+            (ft) => ft.layer?.id === "boundary-areas-fill" || ft.layer?.id === "boundary-areas-fill-edge",
+          );
+          const p = f?.properties as { code?: string; name?: string; level?: string; coverage?: number } | null;
+          const code = p?.code ? String(p.code) : "";
+          if (code === hoverCodeRef.current) return;
+          hoverCodeRef.current = code;
+          onAreaHover(
+            code
+              ? {
+                  level: (p?.level as AreaLevel) ?? level,
+                  code,
+                  name: p?.name ? String(p.name) : code,
+                  coverage: Number(p?.coverage ?? 1),
+                }
+              : null,
+          );
+        }}
+        onMouseLeave={() => {
+          if (!onAreaHover || hoverCodeRef.current === "") return;
+          hoverCodeRef.current = "";
+          onAreaHover(null);
+        }}
         onClick={(e) => {
           if (mode === "boundaries") {
             // A boundary click selects that region (single "boundaries-fill" or a
@@ -626,9 +772,23 @@ export function TurfDrawMap({
           if (!f || !onToggleArea) return;
           const p = f.properties as { code?: string; name?: string } | null;
           if (!p?.code) return;
+          const code = String(p.code);
+          // Bounded campaign: the clipped GeoJSON already carries the full area
+          // geometry, so toggle straight from it (no per-click getArea fetch).
+          if (useBoundaryAreas) {
+            const src = boundaryAreas?.features.find(
+              (ft) => (ft.properties as { code?: string } | null)?.code === code,
+            );
+            onToggleArea({
+              level,
+              code,
+              name: p.name ?? code,
+              geometry: (src?.geometry ?? f.geometry) as GeoJSON.Geometry,
+            });
+            return;
+          }
           // Tile geometry is clipped to the tile; fetch the true boundary for the
           // highlight + union (same as picking a search/sidebar result).
-          const code = String(p.code);
           void getArea(level, code).then((res) => {
             if (res.ok) {
               onToggleArea({
@@ -642,6 +802,15 @@ export function TurfDrawMap({
         }}
       >
         <DrawControl onChange={onPolygonsChange} clearToken={clearToken} />
+
+        {/* Campaign boundary — grey shaded backdrop of the campaign's extent. Drawn
+            first so it sits beneath the selectable areas and the turf being cut. */}
+        {campaignBoundary ? (
+          <Source id="campaign-boundary" type="geojson" data={{ type: "Feature", geometry: campaignBoundary, properties: {} }}>
+            <Layer id="campaign-boundary-fill" type="fill" paint={{ "fill-color": "#64748b", "fill-opacity": 0.15 }} />
+            <Layer id="campaign-boundary-line" type="line" paint={{ "line-color": "#64748b", "line-width": 1.5 }} />
+          </Source>
+        ) : null}
 
         {/* Already-claimed turf (any campaign) — amber dashed warning. */}
         {existing.map((t) =>
@@ -658,20 +827,37 @@ export function TurfDrawMap({
             switch. Plus the selected-area highlight on top. */}
         {mode === "areas" ? (
           <>
-            <Source
-              key={level}
-              id="areas"
-              type="vector"
-              tiles={[tileUrl]}
-              minzoom={sourceMinZoom(level)}
-              maxzoom={TILE_MAX_ZOOM}
-            >
-              <Layer id="areas-fill" source-layer="areas" type="fill" filter={areaFilter} paint={{ "fill-color": "#2563eb", "fill-opacity": 0.04 }} />
-              <Layer id="areas-line" source-layer="areas" type="line" filter={areaFilter} paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
-            </Source>
+            {useBoundaryAreas ? (
+              // Bounded campaign: areas clipped to the boundary, from GeoJSON. Areas
+              // ≥50% inside draw solid; <50% ("edge") draw as a faint dashed outline.
+              <Source id="boundary-areas" type="geojson" data={boundaryAreas ?? { type: "FeatureCollection", features: [] }}>
+                <Layer id="boundary-areas-fill" type="fill" filter={insideFilter} paint={{ "fill-color": "#2563eb", "fill-opacity": 0.06 }} />
+                <Layer id="boundary-areas-line" type="line" filter={insideFilter} paint={{ "line-color": "#2563eb", "line-width": 1 }} />
+                <Layer id="boundary-areas-fill-edge" type="fill" filter={edgeFilter} paint={{ "fill-color": "#64748b", "fill-opacity": 0.03 }} />
+                <Layer id="boundary-areas-line-edge" type="line" filter={edgeFilter} paint={{ "line-color": "#64748b", "line-width": 1, "line-dasharray": [2, 2] }} />
+              </Source>
+            ) : (
+              <Source
+                key={level}
+                id="areas"
+                type="vector"
+                tiles={[tileUrl]}
+                minzoom={sourceMinZoom(level)}
+                maxzoom={TILE_MAX_ZOOM}
+              >
+                <Layer id="areas-fill" source-layer="areas" type="fill" filter={areaFilter} paint={{ "fill-color": "#2563eb", "fill-opacity": 0.06 }} />
+                <Layer id="areas-line" source-layer="areas" type="line" filter={areaFilter} paint={{ "line-color": "#2563eb", "line-width": 1.2, "line-opacity": 0.75 }} />
+                {basketFilter ? (
+                  <>
+                    <Layer id="areas-basket-fill" source-layer="areas" type="fill" filter={basketFilter} paint={{ "fill-color": BASKET_COLOR, "fill-opacity": 0.22 }} />
+                    <Layer id="areas-basket-line" source-layer="areas" type="line" filter={basketFilter} paint={{ "line-color": BASKET_COLOR, "line-width": 2.5, "line-dasharray": [2, 1.5] }} />
+                  </>
+                ) : null}
+              </Source>
+            )}
             <Source id="selected" type="geojson" data={selectedFc}>
-              <Layer id="selected-fill" type="fill" paint={{ "fill-color": "#2563eb", "fill-opacity": 0.32 }} />
-              <Layer id="selected-line" type="line" paint={{ "line-color": "#1d4ed8", "line-width": 2.5 }} />
+              <Layer id="selected-fill" type="fill" paint={{ "fill-color": "#2563eb", "fill-opacity": 0.4 }} />
+              <Layer id="selected-line" type="line" paint={{ "line-color": "#1d4ed8", "line-width": 3.5 }} />
             </Source>
           </>
         ) : null}
@@ -679,12 +865,18 @@ export function TurfDrawMap({
         {/* boundaries mode — single overlay (States). */}
         {mode === "boundaries" && boundaryTilesUrl ? (
           <Source key={boundaryTilesUrl} id="boundaries" type="vector" tiles={[boundaryTilesUrl]} minzoom={0} maxzoom={16}>
-            <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": PRIMARY, "fill-opacity": 0.04 }} />
-            <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": "#64748b", "line-width": 0.8 }} />
+            <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": PRIMARY, "fill-opacity": 0.06 }} />
+            <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": PRIMARY, "line-width": 1.2, "line-opacity": 0.7 }} />
+            {basketFilter ? (
+              <>
+                <Layer id="boundaries-basket-fill" source-layer="areas" type="fill" filter={basketFilter} paint={{ "fill-color": BASKET_COLOR, "fill-opacity": 0.22 }} />
+                <Layer id="boundaries-basket-line" source-layer="areas" type="line" filter={basketFilter} paint={{ "line-color": BASKET_COLOR, "line-width": 2.5, "line-dasharray": [2, 1.5] }} />
+              </>
+            ) : null}
             {selectedBoundaryCode ? (
               <>
-                <Layer id="boundaries-selected-fill" source-layer="areas" type="fill" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "fill-color": PRIMARY, "fill-opacity": 0.28 }} />
-                <Layer id="boundaries-selected-line" source-layer="areas" type="line" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "line-color": PRIMARY, "line-width": 2.5 }} />
+                <Layer id="boundaries-selected-fill" source-layer="areas" type="fill" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "fill-color": PRIMARY, "fill-opacity": 0.55 }} />
+                <Layer id="boundaries-selected-line" source-layer="areas" type="line" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "line-color": PRIMARY, "line-width": 4 }} />
               </>
             ) : null}
           </Source>
@@ -697,11 +889,17 @@ export function TurfDrawMap({
                 {bl.interactive ? (
                   <Layer id={`boundaries-${bl.id}-fill`} source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": bl.color, "fill-opacity": 0.05 }} />
                 ) : null}
-                <Layer id={`boundaries-${bl.id}-line`} source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": bl.color, "line-width": bl.interactive ? 1.1 : 0.7, "line-opacity": bl.interactive ? 0.9 : 0.5 }} />
+                <Layer id={`boundaries-${bl.id}-line`} source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": bl.color, "line-width": bl.interactive ? 1.4 : 1, "line-opacity": bl.interactive ? 1 : 0.6 }} />
+                {bl.interactive && basketFilter ? (
+                  <>
+                    <Layer id={`boundaries-${bl.id}-basketfill`} source-layer="areas" type="fill" filter={basketFilter} paint={{ "fill-color": BASKET_COLOR, "fill-opacity": 0.22 }} />
+                    <Layer id={`boundaries-${bl.id}-basketline`} source-layer="areas" type="line" filter={basketFilter} paint={{ "line-color": BASKET_COLOR, "line-width": 2.5, "line-dasharray": [2, 1.5] }} />
+                  </>
+                ) : null}
                 {bl.interactive && selectedBoundaryCode ? (
                   <>
-                    <Layer id={`boundaries-${bl.id}-selfill`} source-layer="areas" type="fill" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "fill-color": bl.color, "fill-opacity": 0.28 }} />
-                    <Layer id={`boundaries-${bl.id}-selline`} source-layer="areas" type="line" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "line-color": bl.color, "line-width": 2.5 }} />
+                    <Layer id={`boundaries-${bl.id}-selfill`} source-layer="areas" type="fill" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "fill-color": bl.color, "fill-opacity": 0.75 }} />
+                    <Layer id={`boundaries-${bl.id}-selline`} source-layer="areas" type="line" filter={["==", ["get", "code"], selectedBoundaryCode]} paint={{ "line-color": bl.color, "line-width": 4 }} />
                   </>
                 ) : null}
               </Source>

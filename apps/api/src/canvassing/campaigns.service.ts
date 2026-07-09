@@ -335,4 +335,16 @@ export class CampaignsService {
     });
     return { boundary, sources };
   }
+
+  /** Statistical areas (at `layer`) intersecting this campaign's boundary — the
+   *  selectable layer for cutting turf inside a bounded campaign. Empty when the
+   *  campaign has no boundary set. */
+  async areasInBoundary(tenantId: string, id: string, layer: string) {
+    const c = await this.prisma.canvassCampaign.findFirst({
+      where: { id, tenantId },
+      select: { boundary: true },
+    });
+    if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
+    return this.geo.areasInBoundary(layer, c.boundary ?? null);
+  }
 }

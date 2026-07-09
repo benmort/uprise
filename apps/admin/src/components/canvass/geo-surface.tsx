@@ -31,9 +31,9 @@ type GeoMapProps = ComponentProps<typeof GeoMap>;
 
 const DIVISION_TABS: DivisionType[] = ["ced", "sed", "lga"];
 const TYPE_COLORS: Record<DivisionType, string> = {
-  ced: "#2563eb",
-  sed: "#059669",
-  lga: "#d97706",
+  ced: "#dc2626", // Federal — red
+  sed: "#7c3aed", // State — violet
+  lga: "#d97706", // Local (LGA) — amber
 };
 const AREA_LEVELS = new Set<string>(["sa4", "sa3", "sa2", "sa1", "mb"]);
 
@@ -67,6 +67,9 @@ export function GeoSurface() {
   const q = searchParams.get("q") ?? "";
   const code = searchParams.get("code") ?? "";
   const places = searchParams.get("places") === "1";
+  // Divisions: show ONE layer (the active tab) by default; ?overlay=1 stacks all
+  // three (Federal + State + Local) together, colour-coded, as a comparison view.
+  const overlay = searchParams.get("overlay") === "1";
 
   const provider = useGeoExplorer();
   const {
@@ -109,17 +112,28 @@ export function GeoSurface() {
       const boundaryFilter: FilterSpecification | undefined = stateDigit
         ? ["==", ["slice", ["get", "code"], 0, 1], stateDigit]
         : undefined;
+      // Selecting a division frames the map to it (parity with the pre-Phase-2
+      // page, lost in the map hoist). Division codes are state-prefixed (first
+      // char = ASGS state digit), so the state bounds come from the code alone —
+      // no extra fetch. Falls back to the shared State Filter, then the country.
+      const selectionBounds = selectedCode
+        ? stateBounds(stateAsgsDigitToAbbrev(selectedCode[0]) ?? "")
+        : undefined;
       return {
         ...common,
+        focusBounds: selectionBounds ?? common.focusBounds,
         mode: "boundaries",
-        boundaryLayers: DIVISION_TABS.map((t) => ({
+        // One layer at a time by default (the active tab); overlay stacks all three.
+        boundaryLayers: (overlay ? DIVISION_TABS : [type]).map((t) => ({
           id: t,
-          tilesUrl: `${getApiUrl()}/geo/tiles/${t}/{z}/{x}/{y}?v=2`,
+          tilesUrl: `${getApiUrl()}/geo/tiles/${t}/{z}/{x}/{y}?v=3`,
           color: TYPE_COLORS[t],
           interactive: t === type,
         })),
         boundaryFilter,
         selectedBoundaryCode: selectedCode,
+        // "My turf" divisions of the active type — drawn green-dashed on the map.
+        basketCodes: basket.divisions.filter((d) => d.type === type).map((d) => d.code),
         onBoundaryClick: (clicked: string) =>
           setDivisionSelected(selectedCode === clicked ? null : { type, code: clicked }),
       };
@@ -132,9 +146,11 @@ export function GeoSurface() {
         // else the shared State Filter, else the whole country.
         focusBounds: OT_BOUNDS[code] ?? stateBounds(stateAsgsDigitToAbbrev(code) ?? stateParam),
         mode: "boundaries",
-        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=2`,
+        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=3`,
         boundaryFilter: stateDigit ? (["==", ["get", "code"], stateDigit] as FilterSpecification) : undefined,
         selectedBoundaryCode: code || undefined,
+        // Whole states banked in "My turf" (stored as division type "ste") — green-dashed.
+        basketCodes: basket.divisions.filter((d) => d.type === "ste").map((d) => d.code),
         onBoundaryClick: (clicked: string) => writeGeoParam("code", code === clicked ? null : clicked),
       };
     }
@@ -147,6 +163,8 @@ export function GeoSurface() {
         onLevelChange: (l: AreaLevel) => writeGeoParam("tab", l),
         stateDigit: stateDigit || undefined,
         selectedAreas,
+        // Areas banked in "My turf" at the active level — green-dashed on the map.
+        basketCodes: basket.areas.filter((a) => a.level === level).map((a) => a.code),
         onToggleArea: toggleSelectedArea,
         onViewportAreasChange: setViewportAreas,
         searchMode: places ? "place" : "area",
@@ -171,9 +189,9 @@ export function GeoSurface() {
       focusPoint: picked ? { lat: picked.lat, lng: picked.lng } : null,
     };
   }, [
-    kind, tab, stateDigit, stateParam, code, q, places, focusBounds, clearToken, resizeToken,
+    kind, tab, overlay, stateDigit, stateParam, code, q, places, focusBounds, clearToken, resizeToken,
     divisionSelected, setDivisionSelected, selectedAreas, toggleSelectedArea, setViewportAreas,
-    setDrawnPolygons, doors, activePid, setActivePid, picked,
+    setDrawnPolygons, doors, activePid, setActivePid, picked, basket.divisions, basket.areas,
   ]);
 
   if (!kind) return null;

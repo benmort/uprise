@@ -33,11 +33,13 @@ export default function HomePage() {
       {/* Hero */}
       <section className={`relative overflow-hidden ${container} pb-16 pt-40`}>
         <div
-          className="pointer-events-none absolute right-[-40px] top-[120px] h-[340px] w-[340px] rounded-full opacity-[0.14]"
+          className="pointer-events-none absolute right-[72px] top-[96px] h-[340px] w-[340px] rounded-full opacity-[0.14]"
           style={{
             background: "radial-gradient(circle at 30% 30%, #EC4A2B, #c9351d)",
-            filter: "blur(10px)",
-            animation: "floaty 9s ease-in-out infinite",
+            // Blur lives in the animation (it breathes the focus); base is its 0% frame.
+            filter: "blur(12px)",
+            animation: "blobDrift 15s ease-in-out infinite",
+            willChange: "transform, filter",
           }}
         />
         <div className="max-w-[1120px]">

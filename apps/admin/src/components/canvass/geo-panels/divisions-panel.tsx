@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Check, Map as MapIcon, Plus, Scissors } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Check, Layers, Map as MapIcon, Plus, Scissors } from "lucide-react";
 import {
   createTurfFromDivision,
   getDivision,
@@ -18,7 +18,7 @@ import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { useGeoExplorer } from "@/lib/canvass/geo-explorer-state";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
-import { useGeoExplorerUrlState } from "@/components/canvass/use-geo-explorer-url-state";
+import { useGeoExplorerUrlState, writeGeoParam } from "@/components/canvass/use-geo-explorer-url-state";
 import { stateAbbrevToAsgsDigit, stateNameToAbbrev } from "@/lib/canvass/states";
 import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
@@ -38,9 +38,9 @@ const TABS: Array<{ type: DivisionType; label: string }> = [
 // Map colour per division type — matches the legend dot on the pills (the map's
 // boundary layers use the same palette; see geo-surface.tsx).
 const TYPE_COLORS: Record<DivisionType, string> = {
-  ced: "#2563eb",
-  sed: "#059669",
-  lga: "#d97706",
+  ced: "#dc2626", // Federal — red
+  sed: "#7c3aed", // State — violet
+  lga: "#d97706", // Local (LGA) — amber
 };
 
 /**
@@ -52,11 +52,15 @@ const TYPE_COLORS: Record<DivisionType, string> = {
  */
 export function DivisionsPanel({ view }: { view: WalkMode }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { q, tab, state, setTab } = useGeoExplorerUrlState({
     viewStorageKey: "uprise.divisionsView",
     legacyHashToTab: { federal: "ced", state: "sed", local: "lga" },
   });
   const type = (TABS.some((t) => t.type === tab) ? tab : "ced") as DivisionType;
+  // Show one layer at a time by default; ?overlay=1 stacks all three (Federal +
+  // State + Local) together on the map. The map itself reads the same param.
+  const overlay = searchParams.get("overlay") === "1";
   const stateDigit = stateAbbrevToAsgsDigit(state);
 
   const { universe, setUniverse, divisionSelected, setDivisionSelected } = useGeoExplorer();
@@ -131,7 +135,26 @@ export function DivisionsPanel({ view }: { view: WalkMode }) {
     const mapList = filtered.slice(0, 100);
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">{tabPills}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {tabPills}
+          {/* Overlay: stack all three division layers together vs the single
+              active one. Off by default so only the selected tab's boundaries show. */}
+          <button
+            type="button"
+            aria-pressed={overlay}
+            onClick={() => writeGeoParam("overlay", overlay ? null : "1")}
+            title={overlay ? "Showing all three layers — click to show one at a time" : "Overlay Federal + State + Local together"}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition",
+              overlay
+                ? "border-primary bg-primary/10 text-primary dark:bg-primary/20"
+                : "border-border text-foreground hover:bg-surface-variant",
+            )}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Overlay all
+          </button>
+        </div>
 
         <SectionCard
           title={`Divisions (${filtered.length.toLocaleString()})${q ? ` matching “${q.trim()}”` : ""}`}

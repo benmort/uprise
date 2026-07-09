@@ -5,6 +5,10 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts"],
+  // The pricing page became the FAQs page — keep the old path working.
+  async redirects() {
+    return [{ source: "/pricing", destination: "/faqs", permanent: true }];
+  },
 };
 
 export default nextConfig;

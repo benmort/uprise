@@ -4,6 +4,8 @@
 // resource has a dedicated, shareable URL. Wiring this to the real inbox API (keyed by
 // the same channel + uid) is the next step.
 
+import type { FeatureFlagKey } from '@uprise/flags';
+
 export type Channel = 'Email' | 'WhatsApp' | 'Text' | 'Call' | 'Live chat' | 'Social';
 
 /** Per-channel routing prefix + pill colour. The prefix is the URL segment. */
@@ -19,6 +21,32 @@ export const CHANNELS: Record<Channel, { prefix: string; labelColor: string }> =
 export const CHANNEL_BY_PREFIX: Record<string, Channel> = Object.fromEntries(
   (Object.keys(CHANNELS) as Channel[]).map((ch) => [CHANNELS[ch].prefix, ch]),
 ) as Record<string, Channel>;
+
+// ── Channel filter (plan-gated) ─────────────────────────────────────────────
+// The shared-inbox list can be narrowed to one channel. Only channels with a real
+// inbox backend are offered: Text (SMS) is the always-on baseline; WhatsApp rides
+// the plan's FEATURE_WHATSAPP_ENABLED. Email/Call/Live-chat/Social have no inbound
+// pipeline yet (they'd only ever show an empty list), so they aren't offered — add
+// an entry here (with its plan flag) when their inbox ships. The list only surfaces
+// the channel control when 2+ of these are plan-enabled (see folder-view).
+export type ChannelFilter = 'all' | 'text' | 'whatsapp';
+
+export const CHANNEL_FILTERS: Array<{ key: Exclude<ChannelFilter, 'all'>; channel: Channel; flag?: FeatureFlagKey }> = [
+  { key: 'text', channel: 'Text' },
+  { key: 'whatsapp', channel: 'WhatsApp', flag: 'FEATURE_WHATSAPP_ENABLED' },
+];
+
+/** Parse the `?channel=` param to a known filter key, defaulting to 'all'. */
+export function parseChannelFilter(value: string | null | undefined): ChannelFilter {
+  return value === 'text' || value === 'whatsapp' ? value : 'all';
+}
+
+/** Whether a unified row matches the active channel filter ('all' matches every row). */
+export function matchesConversationChannel(row: { channel: Channel }, channel: ChannelFilter): boolean {
+  if (channel === 'all') return true;
+  const opt = CHANNEL_FILTERS.find((c) => c.key === channel);
+  return !!opt && row.channel === opt.channel;
+}
 
 /** Sidebar folders — the URL path segment + its display label. */
 export const FOLDERS = [

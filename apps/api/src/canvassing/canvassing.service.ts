@@ -17,6 +17,7 @@ import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
 import { hashPassword } from "../auth/password.util";
 import { EngagementService } from "../shared-engagement/engagement.service";
 import { GeoService, type BoundarySource } from "../geo/geo.service";
+import { assertTurfAssignmentTransition } from "./turf-assignment-state.machine";
 
 /** Which addresses a turf should be populated with when it's cut. */
 export type TurfUniverse = "existing" | "none" | "hybrid";
@@ -752,7 +753,13 @@ export class CanvassingService {
   private async assertSelfClaim(tenantId: string, campaignId: string, mode?: string) {
     const c = await this.prisma.canvassCampaign.findFirst({
       where: { id: campaignId, tenantId },
-      select: { id: true, boundary: true, volunteerCanSelfClaimTurf: true, selfClaimModes: true },
+      select: {
+        id: true,
+        boundary: true,
+        volunteerCanSelfClaimTurf: true,
+        selfClaimModes: true,
+        turfClaimRequiresApproval: true,
+      },
     });
     if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found");
     if (!c.volunteerCanSelfClaimTurf) {
@@ -798,25 +805,26 @@ export class CanvassingService {
     volunteerId: string,
     areas: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }>,
   ) {
-    await this.assertSelfClaim(tenantId, campaignId, "area");
+    const c = await this.assertSelfClaim(tenantId, campaignId, "area");
     const raw = await this.geo.unionAreas(areas ?? [], []);
     if (!raw) throw new ApiHttpException("EMPTY_SELECTION", "Pick at least one area");
-    return this.claimTurfInCampaign(tenantId, campaignId, volunteerId, raw);
+    return this.claimTurfInCampaign(tenantId, campaignId, volunteerId, raw, c.turfClaimRequiresApproval);
   }
 
   /** Mode B: claim a self-drawn polygon within the campaign boundary. */
   async claimDrawSelfServe(tenantId: string, campaignId: string, volunteerId: string, polygon: unknown) {
-    await this.assertSelfClaim(tenantId, campaignId, "draw");
+    const c = await this.assertSelfClaim(tenantId, campaignId, "draw");
     const raw = await this.geo.unionSources([{ kind: "polygon", geometry: polygon }]);
     if (!raw) throw new ApiHttpException("INVALID_POLYGON", "Draw a valid area");
-    return this.claimTurfInCampaign(tenantId, campaignId, volunteerId, raw);
+    return this.claimTurfInCampaign(tenantId, campaignId, volunteerId, raw, c.turfClaimRequiresApproval);
   }
 
   /** Mode C: claim a ready-made unassigned organiser turf. */
   async claimExistingTurfSelfServe(tenantId: string, campaignId: string, volunteerId: string, turfId: string) {
-    await this.assertSelfClaim(tenantId, campaignId, "existing");
+    const c = await this.assertSelfClaim(tenantId, campaignId, "existing");
     const turf = await this.prisma.turf.findFirst({ where: { id: turfId, tenantId, campaignId } });
     if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found in this campaign");
+    if (c.turfClaimRequiresApproval) return this.requestTurf(turfId, volunteerId);
     return this.assignTurf(tenantId, turfId, volunteerId);
   }
 
@@ -831,7 +839,11 @@ export class CanvassingService {
     campaignId: string,
     volunteerId: string,
     rawGeometry: unknown,
+    requiresApproval = false,
   ) {
+    // Approval-required campaigns land the claim as a pending REQUESTED assignment (an
+    // organiser approves it later); otherwise it takes the instant ASSIGNED lock.
+    const status = requiresApproval ? TurfAssignmentStatus.REQUESTED : TurfAssignmentStatus.ASSIGNED;
     const turf = await this.prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, campaignId);
       const clipped = await this.clipToCampaign(tenantId, campaignId, rawGeometry, true, tx);
@@ -853,12 +865,174 @@ export class CanvassingService {
         created.id,
       );
       await tx.turfAssignment.create({
-        data: { turfId: created.id, volunteerId, status: TurfAssignmentStatus.ASSIGNED },
+        data: { turfId: created.id, volunteerId, status },
       });
       return created;
     });
-    await this.loadUniverseIntoTurf(tenantId, turf.id, { universe: "hybrid" }).catch(() => undefined);
+    // Cold doors are expensive to load; defer for a pending request until it's approved.
+    if (status === TurfAssignmentStatus.ASSIGNED) {
+      await this.loadUniverseIntoTurf(tenantId, turf.id, { universe: "hybrid" }).catch(() => undefined);
+    }
     return turf;
+  }
+
+  // ── Turf requests + approval (volunteer requests, organiser approves) ────────
+
+  /** A pending self-claim on an approval-required campaign. REQUESTED does NOT take the
+   *  ASSIGNED lock, so several volunteers can queue on one turf; approving one promotes it
+   *  and denies the rest. Idempotent — reuses an existing pending/active row for this pair. */
+  private async requestTurf(turfId: string, volunteerId: string) {
+    const existing = await this.prisma.turfAssignment.findFirst({
+      where: {
+        turfId,
+        volunteerId,
+        status: { in: [TurfAssignmentStatus.REQUESTED, TurfAssignmentStatus.ASSIGNED] },
+      },
+    });
+    if (existing) return existing;
+    return this.prisma.turfAssignment.create({
+      data: { turfId, volunteerId, status: TurfAssignmentStatus.REQUESTED },
+    });
+  }
+
+  /** Organiser approves a pending request → the volunteer holds the turf. Promotes
+   *  REQUESTED→ASSIGNED (FSM-guarded, row locked FOR UPDATE), denies the losing requests
+   *  on the same turf, then loads its cold doors. The DB partial-unique index makes a
+   *  double-approval a clean 409 rather than two owners. */
+  async approveTurfRequest(tenantId: string, assignmentId: string) {
+    const req = await this.prisma.turfAssignment.findFirst({
+      where: { id: assignmentId, turf: { tenantId } },
+      select: { id: true, status: true, turfId: true },
+    });
+    if (!req) throw new ApiHttpException("ASSIGNMENT_NOT_FOUND", "Turf request not found", HttpStatus.NOT_FOUND);
+    assertTurfAssignmentTransition(req.status, TurfAssignmentStatus.ASSIGNED);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          `SELECT id FROM "canvass"."TurfAssignment" WHERE id = $1 FOR UPDATE`,
+          assignmentId,
+        );
+        await tx.turfAssignment.update({
+          where: { id: assignmentId },
+          data: { status: TurfAssignmentStatus.ASSIGNED },
+        });
+        await tx.turfAssignment.updateMany({
+          where: {
+            turfId: req.turfId,
+            status: TurfAssignmentStatus.REQUESTED,
+            id: { not: assignmentId },
+          },
+          data: { status: TurfAssignmentStatus.RELEASED, releasedAt: new Date() },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ApiHttpException("TURF_LOCKED", "This turf is already assigned to another volunteer");
+      }
+      throw error;
+    }
+    await this.loadUniverseIntoTurf(tenantId, req.turfId, { universe: "hybrid" }).catch(() => undefined);
+    return { id: assignmentId, status: TurfAssignmentStatus.ASSIGNED };
+  }
+
+  /** Organiser denies a pending request (or releases an assignment). FSM-guarded. */
+  async denyTurfRequest(tenantId: string, assignmentId: string) {
+    const req = await this.prisma.turfAssignment.findFirst({
+      where: { id: assignmentId, turf: { tenantId } },
+      select: { id: true, status: true },
+    });
+    if (!req) throw new ApiHttpException("ASSIGNMENT_NOT_FOUND", "Turf request not found", HttpStatus.NOT_FOUND);
+    assertTurfAssignmentTransition(req.status, TurfAssignmentStatus.RELEASED);
+    await this.prisma.turfAssignment.update({
+      where: { id: assignmentId },
+      data: { status: TurfAssignmentStatus.RELEASED, releasedAt: new Date() },
+    });
+    return { id: assignmentId, status: TurfAssignmentStatus.RELEASED };
+  }
+
+  /** Pending self-claims awaiting approval in a campaign — the organiser's request queue. */
+  async listTurfRequests(tenantId: string, campaignId: string) {
+    const rows = await this.prisma.turfAssignment.findMany({
+      where: { status: TurfAssignmentStatus.REQUESTED, turf: { tenantId, campaignId } },
+      include: {
+        turf: { select: { id: true, name: true, _count: { select: { contacts: true } } } },
+        volunteer: { select: { id: true, displayName: true, email: true } },
+      },
+      orderBy: { assignedAt: "asc" },
+    });
+    return rows.map((r) => ({
+      assignmentId: r.id,
+      requestedAt: r.assignedAt,
+      turf: { id: r.turf.id, name: r.turf.name, contactCount: r.turf._count.contacts },
+      volunteer: { id: r.volunteer.id, name: r.volunteer.displayName, email: r.volunteer.email },
+    }));
+  }
+
+  /** The campaign roster: every volunteer with their held turfs, pending-request count, and
+   *  door/conversation tallies — the Volunteers-page overview (one query set, no N+1). */
+  async getVolunteerRoster(tenantId: string, campaignId: string) {
+    const [volunteers, assignments, doorAgg, convoAgg] = await Promise.all([
+      this.listVolunteers(tenantId),
+      this.prisma.turfAssignment.findMany({
+        where: {
+          status: { in: [TurfAssignmentStatus.ASSIGNED, TurfAssignmentStatus.REQUESTED] },
+          turf: { tenantId, campaignId },
+        },
+        include: { turf: { select: { id: true, name: true, _count: { select: { contacts: true } } } } },
+      }),
+      this.prisma.doorKnock.groupBy({ by: ["volunteerId"], where: { tenantId }, _count: { _all: true } }),
+      this.prisma.doorKnock.groupBy({
+        by: ["volunteerId"],
+        where: { tenantId, dispositionCode: { in: SPOKE_TO_CODES } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    type Held = { id: string; name: string; contactCount: number };
+    const held = new Map<string, { turfs: Held[]; requested: number; contacts: number }>();
+    for (const a of assignments) {
+      const v = held.get(a.volunteerId) ?? { turfs: [], requested: 0, contacts: 0 };
+      if (a.status === TurfAssignmentStatus.ASSIGNED) {
+        v.turfs.push({ id: a.turf.id, name: a.turf.name, contactCount: a.turf._count.contacts });
+        v.contacts += a.turf._count.contacts;
+      } else {
+        v.requested += 1;
+      }
+      held.set(a.volunteerId, v);
+    }
+    const doors = new Map(
+      doorAgg.filter((d) => d.volunteerId).map((d) => [d.volunteerId as string, d._count._all]),
+    );
+    const convos = new Map(
+      convoAgg.filter((d) => d.volunteerId).map((d) => [d.volunteerId as string, d._count._all]),
+    );
+
+    return volunteers.map((vol) => {
+      const v = held.get(vol.id);
+      return {
+        id: vol.id,
+        name: vol.displayName,
+        email: vol.email,
+        role: vol.role,
+        turfs: v?.turfs ?? [],
+        turfCount: v?.turfs.length ?? 0,
+        requestedCount: v?.requested ?? 0,
+        contactCount: v?.contacts ?? 0,
+        doorsKnocked: doors.get(vol.id) ?? 0,
+        conversations: convos.get(vol.id) ?? 0,
+      };
+    });
+  }
+
+  /** Every contact across the turfs a volunteer currently holds in a campaign — the
+   *  "view all their contacts" drill-through. Reuses listTurfContacts per held turf. */
+  async listVolunteerContacts(tenantId: string, campaignId: string, volunteerId: string) {
+    const held = await this.prisma.turfAssignment.findMany({
+      where: { volunteerId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId, campaignId } },
+      select: { turfId: true },
+    });
+    const perTurf = await Promise.all(held.map((h) => this.listTurfContacts(tenantId, h.turfId)));
+    return perTurf.flat();
   }
 
   async createWalkList(

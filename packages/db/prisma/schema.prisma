@@ -220,6 +220,9 @@ enum CanvassCampaignStatus {
 }
 
 enum TurfAssignmentStatus {
+  // A volunteer self-claim on an approval-required campaign, awaiting an organiser.
+  // Does NOT take the exclusive ASSIGNED lock, so several can queue on one turf.
+  REQUESTED
   ASSIGNED
   RELEASED
   @@schema("canvass")
@@ -1020,6 +1023,9 @@ model CanvassCampaign {
   // "existing"; null ⇒ all modes when the switch is on).
   volunteerCanSelfClaimTurf Boolean    @default(false)
   selfClaimModes Json?
+  // When self-claim is on: true ⇒ a volunteer's claim lands as a REQUESTED assignment
+  // an organiser must approve; false ⇒ instant ASSIGNED (the default, existing path).
+  turfClaimRequiresApproval Boolean    @default(false)
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)

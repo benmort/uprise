@@ -125,6 +125,22 @@ describe("GeoService — Other Territories state split", () => {
     expect(parents[0]).toMatchObject({ kind: "state", code: "90101", name: "Christmas Island" });
   });
 
+  it("addresses(turfId) qualifies the canvass-schema Turf table (42P01 regression)", async () => {
+    // Turf lives in the `canvass` schema; an unqualified "Turf" in the raw query threw
+    // `relation "Turf" does not exist`, aborting cold-door materialisation so every cut
+    // turf ended up with zero bucketed doors. The lookup MUST use canvass."Turf".
+    const $queryRawUnsafe = jest
+      .fn()
+      .mockResolvedValueOnce([{ geometry: { type: "MultiPolygon", coordinates: [] } }])
+      .mockResolvedValueOnce([{ gnafPid: "GA1", address: "1 St", lat: -33, lng: 151 }]);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    const rows = await svc.addresses("tenant-1", { turfId: "turf-1", withoutContacts: true });
+    const turfSql = $queryRawUnsafe.mock.calls[0][0] as string;
+    expect(turfSql).toContain('canvass."Turf"');
+    expect(turfSql).not.toMatch(/FROM\s+"Turf"/); // never the unqualified form
+    expect(rows).toHaveLength(1);
+  });
+
   it("regionParents keeps a mainland region under its single-digit state", async () => {
     const $queryRawUnsafe = jest
       .fn()

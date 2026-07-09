@@ -61,16 +61,6 @@ export interface Post {
   body: PostBlock[];
 }
 
-export interface PricingTier {
-  name: string;
-  price: string;
-  unit: string;
-  tagline: string;
-  cta: string;
-  features: string[];
-  featured?: boolean;
-}
-
 export interface Faq {
   q: string;
   a: string;

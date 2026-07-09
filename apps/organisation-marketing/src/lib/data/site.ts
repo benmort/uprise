@@ -111,7 +111,7 @@ export const DOCS_GROUPS: DocsGroup[] = [
 export const SITEMAP: Array<{ label: string; href: string }> = [
   { label: "Work", href: "/work" },
   { label: "Services", href: "/services" },
-  { label: "Pricing", href: "/pricing" },
+  { label: "FAQs", href: "/faqs" },
   { label: "Dispatch", href: "/dispatch" },
   { label: "About", href: "/about" },
   { label: "Docs", href: "/docs" },

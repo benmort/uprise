@@ -1,16 +1,20 @@
 import Link from "next/link";
 import { Marquee } from "@/components/system/Marquee";
+import { PatternBackdrop } from "@/components/system/PatternBackdrop";
 import { NewsletterForm } from "@/components/forms/NewsletterForm";
 import { Wordmark } from "./SiteHeader";
 import { CONTACT, FOOTER_BLURB, LEGAL, SITEMAP, SOCIALS } from "@/lib/data/site";
 
 /**
- * Dark footer: the reverse "Let's build power —" marquee band, four columns
- * (blurb / sitemap / social / Dispatch signup), and the mono legal bar.
+ * Dark footer: a faded-in Bauhaus pattern backdrop, the reverse "Let's build
+ * power —" marquee band, four columns (blurb / sitemap / social / Dispatch
+ * signup), and the mono legal bar. `isolate` scopes the backdrop's -z-10 so it
+ * sits above the ink fill but behind all content.
  */
 export function SiteFooter() {
   return (
-    <footer className="bg-ink text-cream">
+    <footer className="relative isolate overflow-hidden bg-ink text-cream">
+      <PatternBackdrop src="/bauhaus-pattern.jpg" />
       <Marquee reverse durationS={30} className="border-b border-hairline-dark py-8">
         {Array.from({ length: 4 }).map((_, i) => (
           <span

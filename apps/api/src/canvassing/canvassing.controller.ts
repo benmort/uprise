@@ -189,6 +189,41 @@ export class CanvassingController {
     );
   }
 
+  // ── Turf requests + campaign roster (organiser) ──────────────
+  @Get("campaigns/:campaignId/turf-requests")
+  @Roles(AppUserRole.ORGANISER)
+  async turfRequests(@Param("campaignId") campaignId: string, @TenantId() tenantId: string) {
+    return this.canvassing.listTurfRequests(tenantId, campaignId);
+  }
+
+  @Post("turf-requests/:assignmentId/approve")
+  @Roles(AppUserRole.ORGANISER)
+  async approveTurfRequest(@Param("assignmentId") assignmentId: string, @TenantId() tenantId: string) {
+    return this.canvassing.approveTurfRequest(tenantId, assignmentId);
+  }
+
+  @Post("turf-requests/:assignmentId/deny")
+  @Roles(AppUserRole.ORGANISER)
+  async denyTurfRequest(@Param("assignmentId") assignmentId: string, @TenantId() tenantId: string) {
+    return this.canvassing.denyTurfRequest(tenantId, assignmentId);
+  }
+
+  @Get("campaigns/:campaignId/volunteer-roster")
+  @Roles(AppUserRole.ORGANISER)
+  async volunteerRoster(@Param("campaignId") campaignId: string, @TenantId() tenantId: string) {
+    return this.canvassing.getVolunteerRoster(tenantId, campaignId);
+  }
+
+  @Get("campaigns/:campaignId/volunteers/:volunteerId/contacts")
+  @Roles(AppUserRole.ORGANISER)
+  async volunteerContacts(
+    @Param("campaignId") campaignId: string,
+    @Param("volunteerId") volunteerId: string,
+    @TenantId() tenantId: string,
+  ) {
+    return this.canvassing.listVolunteerContacts(tenantId, campaignId, volunteerId);
+  }
+
   // Volunteer
   @Get("assignments")
   @RequirePermission(CANVASS_READ)

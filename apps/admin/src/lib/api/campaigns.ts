@@ -52,6 +52,14 @@ export async function setCampaignBoundary(id: string, sources: BoundarySource[])
   );
 }
 
+/** Areas (at `layer`: sa4/sa3/sa2/sa1/mb) intersecting the campaign boundary — the
+ *  selectable layer for cutting turf inside a bounded campaign. */
+export async function getCampaignAreas(id: string, layer: string) {
+  return request<GeoJSON.FeatureCollection>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/areas/${encodeURIComponent(layer)}`,
+  );
+}
+
 export async function listCampaigns() {
   return request<CampaignSummary[]>("/canvass/campaigns");
 }

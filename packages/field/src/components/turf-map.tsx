@@ -303,14 +303,14 @@ export function TurfMap({
                 source-layer="areas"
                 type="fill"
                 filter={["==", ["get", "code"], selectedBoundaryCode]}
-                paint={{ "fill-color": PRIMARY, "fill-opacity": 0.28 }}
+                paint={{ "fill-color": PRIMARY, "fill-opacity": 0.55 }}
               />
               <Layer
                 id="boundaries-selected-line"
                 source-layer="areas"
                 type="line"
                 filter={["==", ["get", "code"], selectedBoundaryCode]}
-                paint={{ "line-color": PRIMARY, "line-width": 2.5 }}
+                paint={{ "line-color": PRIMARY, "line-width": 4 }}
               />
             </>
           ) : null}
@@ -340,14 +340,14 @@ export function TurfMap({
                 source-layer="areas"
                 type="fill"
                 filter={["==", ["get", "code"], selectedBoundaryCode]}
-                paint={{ "fill-color": bl.color, "fill-opacity": 0.3 }}
+                paint={{ "fill-color": bl.color, "fill-opacity": 0.55 }}
               />
               <Layer
                 id={`boundaries-${bl.id}-selline`}
                 source-layer="areas"
                 type="line"
                 filter={["==", ["get", "code"], selectedBoundaryCode]}
-                paint={{ "line-color": bl.color, "line-width": 2.5 }}
+                paint={{ "line-color": bl.color, "line-width": 4 }}
               />
             </>
           ) : null}

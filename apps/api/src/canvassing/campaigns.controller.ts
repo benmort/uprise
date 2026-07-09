@@ -64,4 +64,16 @@ export class CampaignsController {
   async setBoundary(@Param("id") id: string, @Body() dto: SetBoundaryDto, @TenantId() tenantId: string) {
     return this.campaigns.setBoundary(tenantId, id, dto.sources);
   }
+
+  // Areas at `layer` (sa4/sa3/sa2/sa1/mb) intersecting the campaign boundary — the
+  // selectable layer for cutting turf inside a bounded campaign.
+  @Get(":id/areas/:layer")
+  @Roles(AppUserRole.ORGANISER)
+  async areasInBoundary(
+    @Param("id") id: string,
+    @Param("layer") layer: string,
+    @TenantId() tenantId: string,
+  ) {
+    return this.campaigns.areasInBoundary(tenantId, id, layer);
+  }
 }

@@ -27,6 +27,7 @@ import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionCard } from "@uprise/field";
 import { StateRegion } from "@/components/shell/state-region";
@@ -35,6 +36,10 @@ import { useToast } from "@/components/ui/toast";
 
 type Volunteer = { id: string; displayName: string; email: string | null; role: string };
 type ListType = "STATIC" | "DYNAMIC";
+
+// A turf can hold thousands of doors; render the route a page at a time so a big
+// list doesn't stall the page (the whole route is still optimised + saved).
+const STOPS_PER_PAGE = 25;
 
 function contactName(c: TurfContact): string {
   return [c.firstName, c.lastName].filter(Boolean).join(" ") || c.address || "Unknown resident";
@@ -56,6 +61,8 @@ export default function WalkListBuilderPage() {
   const [name, setName] = useState("");
   const [selectedVolunteer, setSelectedVolunteer] = useState("");
   const [loading, setLoading] = useState(true);
+  const [turfLoading, setTurfLoading] = useState(false);
+  const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [noPermission, setNoPermission] = useState(false);
@@ -98,12 +105,17 @@ export default function WalkListBuilderPage() {
   // Load the selected turf's contacts + existing walk lists.
   const loadTurf = useCallback(async () => {
     if (!turfId) return;
-    const [cs, wls] = await Promise.all([listTurfContacts(turfId), listWalkLists(turfId)]);
-    if (cs.ok) {
-      setContacts(cs.data);
-      optimise(cs.data);
+    setTurfLoading(true);
+    try {
+      const [cs, wls] = await Promise.all([listTurfContacts(turfId), listWalkLists(turfId)]);
+      if (cs.ok) {
+        setContacts(cs.data);
+        optimise(cs.data);
+      }
+      if (wls.ok) setWalkLists(wls.data);
+    } finally {
+      setTurfLoading(false);
     }
-    if (wls.ok) setWalkLists(wls.data);
   }, [turfId, optimise]);
 
   useEffect(() => {
@@ -114,6 +126,14 @@ export default function WalkListBuilderPage() {
     const byId = new Map(contacts.map((c) => [c.id, c]));
     return order.map((id) => byId.get(id)).filter((c): c is TurfContact => Boolean(c));
   }, [order, contacts]);
+
+  // Render one page of the route at a time (a big turf can hold thousands of stops).
+  const pagedContacts = useMemo(
+    () => orderedContacts.slice(page * STOPS_PER_PAGE, page * STOPS_PER_PAGE + STOPS_PER_PAGE),
+    [orderedContacts, page],
+  );
+  // Back to the first page when the turf or the route order changes.
+  useEffect(() => setPage(0), [turfId, order]);
 
   // Synthesise the canvasser's assignment so we can embed the SAME field WalkView
   // (map + walking directions) here, read-only — one component, zero duplication.
@@ -288,29 +308,55 @@ export default function WalkListBuilderPage() {
               </Button>
             }
           >
-            {orderedContacts.length === 0 ? (
+            {turfLoading ? (
+              <div className="space-y-1.5">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : orderedContacts.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No contacts bucketed into this turf. Re-bucket it from the turf-cutting map.
               </p>
             ) : (
-              <ol className="space-y-1.5">
-                {orderedContacts.map((c, i) => (
-                  <li
-                    key={c.id}
-                    className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3 py-2"
-                  >
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20 text-xs font-bold tabular-nums text-primary">
-                      {i + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">{contactName(c)}</p>
-                      {c.address ? (
-                        <p className="truncate text-xs text-muted-foreground">{c.address}</p>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ol>
+              <>
+                <ol className="space-y-1.5">
+                  {pagedContacts.map((c, i) => {
+                    const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
+                    return (
+                      <li
+                        key={c.id}
+                        className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-2"
+                      >
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20 text-xs font-bold tabular-nums text-primary">
+                          {page * STOPS_PER_PAGE + i + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground">{contactName(c)}</p>
+                          {name && c.address ? (
+                            <p className="text-xs text-muted-foreground">{c.address}</p>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {orderedContacts.length > STOPS_PER_PAGE ? (
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <p className="text-xs tabular-nums text-muted-foreground">
+                      {page * STOPS_PER_PAGE + 1}–{Math.min((page + 1) * STOPS_PER_PAGE, orderedContacts.length)} of{" "}
+                      {orderedContacts.length}
+                    </p>
+                    <PaginationControls
+                      page={page}
+                      pageSize={STOPS_PER_PAGE}
+                      total={orderedContacts.length}
+                      onPrev={() => setPage((p) => Math.max(0, p - 1))}
+                      onNext={() => setPage((p) => p + 1)}
+                    />
+                  </div>
+                ) : null}
+              </>
             )}
           </SectionCard>
 

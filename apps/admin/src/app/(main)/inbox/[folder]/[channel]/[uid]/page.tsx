@@ -34,6 +34,8 @@ import {
   folderPath,
   fromMock,
   fromRealRow,
+  matchesConversationChannel,
+  parseChannelFilter,
   phoneSlug,
   unifiedInFolder,
   type RealChannel,
@@ -67,6 +69,7 @@ export default function SharedInboxDetailPage() {
   const prefix = String(params.channel ?? '');
   const uid = String(params.uid ?? '');
   const filter = parseFilter(search.get('filter'));
+  const channelFilter = parseChannelFilter(search.get('channel'));
   const q = search.get('q') ?? '';
   const query = search.toString();
   const withQuery = (href: string) => `${href}${query ? `?${query}` : ''}`;
@@ -104,10 +107,11 @@ export default function SharedInboxDetailPage() {
           (u) =>
             unifiedInFolder(u, folder, currentUserId) &&
             matchesConversationFilter(u, filter) &&
+            matchesConversationChannel(u, channelFilter) &&
             matchesConversationSearch(u, q),
         ),
       ),
-    [realRows, folder, filter, q, currentUserId],
+    [realRows, folder, filter, channelFilter, q, currentUserId],
   );
   const currentKey = mock ? `mock:${mock.id}` : realCurrent?.key;
   const index = currentKey ? folderList.findIndex((u) => u.key === currentKey) : -1;

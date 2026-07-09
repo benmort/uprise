@@ -137,6 +137,37 @@ export function AreasPanel({ view }: { view: WalkMode }) {
     };
   }, [effectiveQ, level, view, stateCode, page]);
 
+  // ── Map mode: "in view" base ────────────────────────────────────────────────
+  // The viewport list is what's rendered on the map right now. When a State
+  // Filter is set but the viewport has nothing to show (too zoomed out for the
+  // level, or between tile loads), fall back to the whole state's areas so the
+  // state is always the *base* of the list — the live viewport still takes over
+  // the moment areas are actually rendered.
+  const [stateBase, setStateBase] = useState<AreaHit[]>([]);
+  const needStateBase = view === "map" && !!stateCode && viewportAreas.length === 0;
+  useEffect(() => {
+    if (!needStateBase) {
+      setStateBase([]);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const res = await browseAreas({ layer: level, state: stateCode, limit: 300 });
+      if (!alive) return;
+      setStateBase(
+        res.ok ? res.data.rows.map((r) => ({ level: r.level, code: r.code, name: r.name })) : [],
+      );
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [needStateBase, level, stateCode]);
+
+  // The "in view" card shows the live viewport areas when present, else the state
+  // base (when a State Filter is set), else nothing.
+  const inViewAreas = viewportAreas.length ? viewportAreas : stateBase;
+  const usingStateBase = viewportAreas.length === 0 && stateBase.length > 0;
+
   const cutFromArea = (hit: AreaHit) =>
     cutTurf({
       id: hit.code,
@@ -230,18 +261,17 @@ export function AreasPanel({ view }: { view: WalkMode }) {
   if (view === "map") {
     return (
       <div className="space-y-4">
-        <SectionCard title={`${level.toUpperCase()} in view (${viewportAreas.length})`}>
-          {viewTooZoomed ? (
-            <p className="text-sm text-muted-foreground">
-              Zoom in to load {level.toUpperCase()} boundaries, or search on the map.
-            </p>
-          ) : viewportAreas.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No {level.toUpperCase()} areas in view — pan or zoom the map, or search on it.
-            </p>
-          ) : (
+        <SectionCard
+          title={
+            usingStateBase
+              ? `${level.toUpperCase()} in ${state} (${inViewAreas.length})`
+              : `${level.toUpperCase()} in view (${viewportAreas.length})`
+          }
+          description={usingStateBase ? `Whole of ${state} — zoom in on the map to narrow to what's in view.` : undefined}
+        >
+          {inViewAreas.length > 0 ? (
             <ul className="max-h-64 space-y-1 overflow-y-auto">
-              {viewportAreas.map((a) => {
+              {inViewAreas.map((a) => {
                 const sel = selectedAreas.some((s) => s.level === a.level && s.code === a.code);
                 return (
                   <li key={`${a.level}:${a.code}`}>
@@ -261,6 +291,14 @@ export function AreasPanel({ view }: { view: WalkMode }) {
                 );
               })}
             </ul>
+          ) : viewTooZoomed ? (
+            <p className="text-sm text-muted-foreground">
+              Zoom in to load {level.toUpperCase()} boundaries, or search on the map.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No {level.toUpperCase()} areas in view — pan or zoom the map, or search on it.
+            </p>
           )}
         </SectionCard>
 

@@ -129,6 +129,50 @@ export class GeoService {
     };
   }
 
+  /**
+   * Statistical-area boundaries intersecting a campaign boundary polygon, as a
+   * GeoJSON FeatureCollection — the selectable layer for cutting turf inside a
+   * *bounded* campaign (only the areas within the campaign are drawn). The
+   * boundary's own bbox drives the GIST index (`t.geom && b.g`), then ST_Intersects
+   * refines. Whole areas are returned (selection is by code; the saved turf is
+   * clipped to the boundary server-side), simplified to keep meshblock payloads
+   * sane, and capped so a huge boundary can't ship the whole country.
+   */
+  async areasInBoundary(layer: string, boundary: unknown, limit = 5000) {
+    const { table, codeCol, nameExpr } = this.areaTable(layer);
+    if (boundary == null) return { type: "FeatureCollection" as const, features: [] };
+    const lim = Math.min(Math.max(1, limit), 8000);
+    // GeoJSON is always WGS84; SetSRID guards against a mixed-SRID `&&`/intersects.
+    const geojson = JSON.stringify(boundary);
+    // `coverage` = the fraction of each area that falls inside the boundary
+    // (0–1). The area units cancel in the ratio, so raw EPSG:4326 ST_Area is fine.
+    // The UI draws <50%-inside areas as dashed "edge" outlines.
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `WITH b AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1::text), 4326) AS g)
+       SELECT ${codeCol} AS code, ${nameExpr} AS name,
+              (ST_Area(ST_Intersection(t.geom, b.g)) / NULLIF(ST_Area(t.geom), 0))::double precision AS coverage,
+              ST_AsGeoJSON(ST_SimplifyPreserveTopology(t.geom, 0.0002)) AS geojson
+       FROM ${table} t, b
+       WHERE t.geom && b.g AND ST_Intersects(t.geom, b.g)
+       LIMIT ${lim}`,
+      geojson,
+    )) as Array<{ code: string; name: string | null; coverage: number | null; geojson: string }>;
+    return {
+      type: "FeatureCollection" as const,
+      features: rows.map((r) => ({
+        type: "Feature" as const,
+        id: r.code,
+        geometry: JSON.parse(r.geojson),
+        properties: {
+          code: r.code,
+          name: r.name ?? r.code,
+          level: layer,
+          coverage: r.coverage ?? 1,
+        },
+      })),
+    };
+  }
+
   /** Web-Mercator XYZ tile → [west, south, east, north] in EPSG:4326 degrees. */
   private tileToBBox(z: number, x: number, y: number): [number, number, number, number] {
     const n = 2 ** z;
@@ -563,7 +607,11 @@ export class GeoService {
     if (opts.turfId) {
       // ST_Contains against the drawn turf polygon (GeoJSON stored on Turf.geometry).
       const turf = (await this.prisma.$queryRawUnsafe(
-        `SELECT geometry FROM "Turf" WHERE id = $1 AND "tenantId" = $2`,
+        // Turf lives in the `canvass` schema (multiSchema) — the raw-query connection's
+        // search_path doesn't include it, so it MUST be qualified. Unqualified "Turf"
+        // throws 42P01 (relation does not exist), which aborted loadUniverseIntoTurf and
+        // silently left every cut turf with zero bucketed cold doors.
+        `SELECT geometry FROM canvass."Turf" WHERE id = $1 AND "tenantId" = $2`,
         opts.turfId,
         tenantId,
       )) as Array<{ geometry: unknown }>;
