@@ -2,8 +2,7 @@
 // Source of truth: the design prototype in docs/design_handoff_uprise_labs/ –
 // all six card entries (tag/date/read time/title/excerpt) are verbatim, and the
 // first post's body is transcribed verbatim from the prototype's post view.
-// The other five bodies are patterned placeholders. Copy keeps the prototype's
-// US spellings.
+// The other five bodies are patterned placeholders. Copy is converted from the prototype to Australian (en-GB) spelling.
 
 import type { Post } from "./types";
 
@@ -73,7 +72,7 @@ export const POSTS: Post[] = [
   },
   {
     slug: "volunteer-portal-is-a-funnel",
-    tag: "ORGANIZING",
+    tag: "ORGANISING",
     date: "APR 2026",
     readMins: 5,
     title: "Your volunteer portal is a funnel — treat it like one",
@@ -117,7 +116,7 @@ export const POSTS: Post[] = [
       },
       {
         type: "p",
-        text: "We build to WCAG AA from line one — not as a compliance pass at the end, but as the default way every component ships. Semantic markup, real focus states, color contrast that survives sunlight on a cracked phone screen.",
+        text: "We build to WCAG AA from line one — not as a compliance pass at the end, but as the default way every component ships. Semantic markup, real focus states, colour contrast that survives sunlight on a cracked phone screen.",
       },
       {
         type: "quote",

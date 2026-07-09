@@ -8,7 +8,7 @@ import { POSTS } from "@/lib/data/posts";
 export const metadata: Metadata = {
   title: "Dispatch — Uprise Labs",
   description:
-    "Monthly notes on digital organizing, fundraising, and shipping software under a deadline that will not move.",
+    "Monthly notes on digital organising, fundraising, and shipping software under a deadline that will not move.",
 };
 
 export default function DispatchPage() {
@@ -29,7 +29,7 @@ export default function DispatchPage() {
           The Dispatch.
         </h1>
         <p className="mt-7 max-w-[600px] text-[19px] leading-normal text-ink/60">
-          Monthly notes on digital organizing, fundraising, and shipping software under a deadline
+          Monthly notes on digital organising, fundraising, and shipping software under a deadline
           that will not move.
         </p>
       </section>

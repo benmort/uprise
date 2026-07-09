@@ -63,7 +63,7 @@ export function SiteFooter() {
 
         <div>
           <h3 className="mb-4 font-mono text-xs uppercase tracking-[0.14em] text-cream/45">
-            Dispatch — monthly notes on digital organizing
+            Dispatch — monthly notes on digital organising
           </h3>
           <NewsletterForm />
           <p className="mt-6 font-mono text-xs text-cream/45">{CONTACT.email}</p>

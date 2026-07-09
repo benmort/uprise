@@ -3,23 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * A single decorative image behind a dark section (the Bauhaus footer backdrop).
- * The source art is black shapes on cream, so it's inverted to read as faint light
- * shapes on the near-black background, shown ONCE (cover, never tiled — so it can't
- * repeat even at high zoom), and masked to fade out downwards. It fades IN the first
- * time the section scrolls into view (IntersectionObserver) — reduced-motion users
- * get it immediately. Purely decorative (aria-hidden, pointer-events-none) and sits
- * behind content via a negative z-index inside an `isolate`d parent.
+ * A tiled decorative pattern behind a dark section (the Bauhaus footer backdrop).
+ * The source art is black shapes on cream, so it's inverted to read as light shapes
+ * on the near-black background, tiled densely, and shaded with a RADIAL mask so it's
+ * strongest at the top (behind the marquee) and falls away along a curve toward the
+ * bottom-right — "progressive curved shading". It fades IN the first time the section
+ * scrolls into view (IntersectionObserver); reduced-motion users get it immediately.
+ * Purely decorative (aria-hidden, pointer-events-none) and sits behind content via a
+ * negative z-index inside an `isolate`d parent.
  */
+// Radial (curved) falloff: opaque across the top, fading out down-and-outward.
+const CURVED_MASK =
+  "radial-gradient(135% 115% at 42% -12%, #000 0%, #000 40%, rgba(0,0,0,0.55) 66%, transparent 92%)";
+
 export function PatternBackdrop({
   src,
-  size = "cover",
-  opacity = 0.08,
+  size = "340px auto",
+  opacity = 0.13,
 }: {
   src: string;
-  /** CSS background-size (default "cover" — one non-repeating image). */
+  /** CSS background-size for the tile (default a dense ~340px repeat). */
   size?: string;
-  /** Target opacity once faded in — kept low so it recedes into the background. */
+  /** Target opacity once faded in. */
   opacity?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -53,14 +58,14 @@ export function PatternBackdrop({
       style={{
         opacity: shown ? opacity : 0,
         backgroundImage: `url(${src})`,
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "center top",
+        backgroundRepeat: "repeat",
+        backgroundPosition: "left top",
         backgroundSize: size,
-        // Source art is black-on-cream → invert to faint light shapes on dark.
+        // Source art is black-on-cream → invert to light shapes on the dark footer.
         filter: "invert(1)",
-        // Strongest at the top (behind the marquee), fading out downwards.
-        WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%)",
-        maskImage: "linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%)",
+        // Progressive curved shading — strongest at the top, curving away below.
+        WebkitMaskImage: CURVED_MASK,
+        maskImage: CURVED_MASK,
       }}
     />
   );

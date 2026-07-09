@@ -2,7 +2,6 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Archivo, JetBrains_Mono } from "next/font/google";
 import { CustomCursor } from "@/components/system/CustomCursor";
-import { PageTransition } from "@/components/system/PageTransition";
 
 const archivo = Archivo({
   subsets: ["latin"],
@@ -42,7 +41,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           }}
         />
         <CustomCursor />
-        <PageTransition>{children}</PageTransition>
+        {/* PageTransition lives in the chromed (site) layout so the header stays
+            visible while it holds/reveals only the page content. Auth routes have
+            their own layout and no wipe. */}
+        {children}
       </body>
     </html>
   );

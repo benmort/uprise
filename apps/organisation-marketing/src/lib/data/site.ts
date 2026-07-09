@@ -1,8 +1,7 @@
 // Site-wide content for the Uprise Labs organisation site – hero, stats,
 // values, process, team, testimonials, docs nav, footer, contact and about.
 // Source of truth: the design prototype in docs/design_handoff_uprise_labs/ –
-// all copy is verbatim from the prototype unless noted. Copy keeps the
-// prototype's US spellings.
+// all copy is verbatim from the prototype unless noted. Copy is converted from the prototype to Australian (en-GB) spelling.
 
 import type { DocsGroup, ProcessStep, Stat, TeamMember, Testimonial, ValueItem } from "./types";
 
@@ -64,7 +63,7 @@ export const PROCESS: ProcessStep[] = [
   {
     no: "04",
     title: "Launch & Iterate",
-    desc: "We ship, watch the data, and keep optimizing through election day.",
+    desc: "We ship, watch the data, and keep optimising through election day.",
   },
 ];
 
@@ -126,16 +125,15 @@ export const SOCIALS: Array<{ label: string; href: string }> = [
 ];
 
 export const CONTACT = {
-  // The prototype reads hello@upriselabs.co – deliberately corrected to the
-  // .org TLD for the real site.
-  email: "hello@upriselabs.org",
+  // The platform contact address (matches the API's PLATFORM_CONTACT_EMAIL).
+  email: "contact@upriselabs.org",
   phone: "+1 (202) 555-0148",
-  basedIn: "WASHINGTON DC\nOAKLAND CA\n+ FULLY REMOTE",
+  basedIn: "SYDNEY NSW\nMELBOURNE VIC\nBRISBANE QLD\n+ FULLY REMOTE",
 };
 
 export const LEGAL = {
   left: "© 2026 UPRISE LABS · A WORKER-OWNED COOPERATIVE STUDIO",
-  right: "MADE WITH SOLIDARITY IN AUSTRALIA ✊",
+  right: "MADE WITH SOLIDARITY IN AUSTRALIA",
 };
 
 export const FOOTER_BLURB =
@@ -154,8 +152,8 @@ export const ABOUT = {
   heroTitle:
     "We started Uprise because the movement deserved better tools than the ones it was renting.",
   story: [
-    "In 2016, a handful of engineers and organizers got tired of watching campaigns lose donations to slow, template-locked platforms. So we built our own — and then we built them for everyone fighting for a fairer country.",
-    "Today we're a distributed, unionized studio of designers, engineers, and strategists. We only work with the progressive movement, and we measure our success in wins — not billable hours.",
+    "In 2016, a handful of engineers and organisers got tired of watching campaigns lose donations to slow, template-locked platforms. So we built our own — and then we built them for everyone fighting for a fairer country.",
+    "Today we're a distributed, unionised studio of designers, engineers, and strategists. We only work with the progressive movement, and we measure our success in wins — not billable hours.",
   ] as [string, string],
   teamMeta: "22 PEOPLE · 14 STATES",
 };
@@ -165,5 +163,5 @@ export const ABOUT = {
 export const HERO = {
   eyebrow: "◆ WEB STUDIO FOR THE MOVEMENT",
   titlePrefix: "We build the digital backbone of progressive",
-  sub: "From first-in-the-nation ballot initiatives to Senate campaigns, we design and engineer the platforms that turn organizing energy into votes, dollars, and wins.",
+  sub: "From first-in-the-nation ballot initiatives to Senate campaigns, we design and engineer the platforms that turn organising energy into votes, dollars, and wins.",
 };

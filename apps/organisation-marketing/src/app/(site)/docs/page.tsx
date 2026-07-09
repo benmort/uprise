@@ -109,7 +109,7 @@ export default function DocsPage() {
               <ul className="mb-6 flex flex-col gap-2.5">
                 {NEEDS.map((need) => (
                   <li key={need} className="flex gap-3">
-                    <span className="text-vermilion">✳</span>
+                    <span className="text-vermilion" aria-hidden>◆</span>
                     {need}
                   </li>
                 ))}

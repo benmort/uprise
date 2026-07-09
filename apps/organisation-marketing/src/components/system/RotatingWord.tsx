@@ -23,20 +23,29 @@ export function RotatingWord({
     return () => clearInterval(t);
   }, [words.length, intervalMs]);
 
+  // One clip-line height, used for the window, each word box, the translate step AND
+  // the line-height — so every word is laid out inside its own box and its descenders
+  // (campaigns/coalitions) can't overflow into the slot above/below. Keep all four in
+  // sync: 1.15em is tall enough to contain the glyphs at the hero's tight tracking.
+  const em = 1.15;
   return (
     <span
       className={`inline-block overflow-hidden align-bottom ${className ?? ""}`}
-      style={{ height: "1.02em" }}
+      style={{ height: `${em}em`, lineHeight: `${em}em` }}
     >
       <span
         className="block"
         style={{
-          transform: `translateY(${-index * 1.02}em)`,
+          transform: `translateY(${-index * em}em)`,
           transition: "transform .7s cubic-bezier(.7,0,.15,1)",
         }}
       >
         {words.map((w) => (
-          <span key={w} className="block text-vermilion" style={{ height: "1.02em" }}>
+          <span
+            key={w}
+            className="block text-vermilion"
+            style={{ height: `${em}em`, lineHeight: `${em}em` }}
+          >
             {w}
           </span>
         ))}

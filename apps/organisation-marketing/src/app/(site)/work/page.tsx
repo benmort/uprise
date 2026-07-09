@@ -9,7 +9,7 @@ import { PROJECTS } from "@/lib/data/projects";
 import type { ProjectTag } from "@/lib/data/types";
 
 // Filter pills in the prototype's order – "All" plus the four project tags.
-const FILTERS = ["All", "Platform", "Campaigns", "Fundraising", "Organizing", "Advocacy"] as const;
+const FILTERS = ["All", "Platform", "Campaigns", "Fundraising", "Organising", "Advocacy"] as const;
 
 type Filter = (typeof FILTERS)[number];
 
@@ -32,7 +32,7 @@ export default function WorkPage() {
           The receipts.
         </h1>
         <p className="mt-7 max-w-[560px] text-[19px] leading-normal text-ink/60">
-          A decade of shipping for campaigns, PACs, unions, and advocacy organizations across all
+          A decade of shipping for campaigns, PACs, unions, and advocacy organisations across all
           fifty states.
         </p>
       </section>

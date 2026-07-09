@@ -5,7 +5,7 @@ import { MediaPlaceholder } from "@/components/system/MediaPlaceholder";
 import { Reveal } from "@/components/system/Reveal";
 import { RotatingWord } from "@/components/system/RotatingWord";
 import { PROJECTS } from "@/lib/data/projects";
-import { SERVICES } from "@/lib/data/services";
+import { VISIBLE_SERVICES } from "@/lib/data/services";
 import {
   CAPABILITIES,
   HERO,
@@ -37,8 +37,8 @@ export default function HomePage() {
           style={{
             background: "radial-gradient(circle at 30% 30%, #EC4A2B, #c9351d)",
             // Blur lives in the animation (it breathes the focus); base is its 0% frame.
-            filter: "blur(12px)",
-            animation: "blobDrift 15s ease-in-out infinite",
+            filter: "blur(15px)",
+            animation: "blobDrift 40s ease-in-out infinite",
             willChange: "transform, filter",
           }}
         />
@@ -93,7 +93,7 @@ export default function HomePage() {
             {CAPABILITIES.map((c) => (
               <span key={c} className="flex items-center whitespace-nowrap">
                 <span className="px-[30px] text-[30px] font-bold tracking-[-0.02em]">{c}</span>
-                <span className="text-[30px] opacity-50">✳</span>
+                <span aria-hidden className="text-[19px] leading-none opacity-55">◆</span>
               </span>
             ))}
           </Marquee>
@@ -215,7 +215,7 @@ export default function HomePage() {
               Full-stack digital, built for the pace of politics
             </h2>
             <div className="border-t border-hairline-dark">
-              {SERVICES.map((s) => (
+              {VISIBLE_SERVICES.map((s) => (
                 <Link
                   key={s.slug}
                   href={`/services/${s.slug}`}

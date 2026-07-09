@@ -47,7 +47,7 @@ export default function SignUpPage() {
             {FEATURES.map((feature) => (
               <div key={feature} className="flex items-center gap-3 text-[15px]">
                 <span className="text-vermilion" aria-hidden>
-                  ✳
+                  ◆
                 </span>{" "}
                 {feature}
               </div>
@@ -66,7 +66,7 @@ export default function SignUpPage() {
             Create account.
           </h1>
           <p className="mb-10 text-base text-ink/60">
-            Start with your organization.
+            Start with your organisation.
           </p>
           <form
             className="flex flex-col gap-6"
@@ -76,7 +76,7 @@ export default function SignUpPage() {
             }}
           >
             <Field label="Full name" htmlFor="signup-name">
-              <Input id="signup-name" required placeholder="Jane Organizer" />
+              <Input id="signup-name" required placeholder="Jane Organiser" />
             </Field>
             <Field label="Work email" htmlFor="signup-email">
               <Input

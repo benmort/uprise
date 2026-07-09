@@ -56,7 +56,7 @@ export default function ContactPage() {
                 </a>
               </SidebarBlock>
 
-              <SidebarBlock label="War room (24/7)">
+              <SidebarBlock label="Rapid response (24/7)">
                 <div className="text-[22px] font-semibold tracking-[-0.01em]">{CONTACT.phone}</div>
               </SidebarBlock>
 

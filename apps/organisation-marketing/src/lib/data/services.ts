@@ -2,7 +2,7 @@
 // Source of truth: the design prototype in docs/design_handoff_uprise_labs/ –
 // the six service cards are verbatim; the Fundraising Platforms detail is
 // transcribed verbatim from the prototype's service-detail view and the other
-// five details are patterned from it. Copy keeps the prototype's US spellings.
+// five details are patterned from it. Copy is converted from the prototype to Australian (en-GB) spelling.
 
 import type { Service, ServiceDetail } from "./types";
 
@@ -19,14 +19,14 @@ export const SERVICES: Service[] = [
     no: "02",
     slug: "fundraising-platforms",
     title: "Fundraising Platforms",
-    desc: "Small-dollar donation flows optimized for every dollar.",
-    long: "Custom donation experiences with one-click recurring giving, ActBlue integration, and relentless conversion optimization built in.",
+    desc: "Small-dollar donation flows optimised for every dollar.",
+    long: "Custom donation experiences with one-click recurring giving, ActBlue integration, and relentless conversion optimisation built in.",
     tags: ["ActBlue", "Recurring giving", "A/B testing"],
   },
   {
     no: "03",
-    slug: "digital-organizing",
-    title: "Digital Organizing",
+    slug: "digital-organising",
+    title: "Digital Organising",
     desc: "Tools that turn supporters into volunteers into voters.",
     long: "Volunteer portals, distributed phone and text banking, event RSVP, and CRM integrations that keep your list clean and activated.",
     tags: ["CRM", "SMS / Email", "Volunteer tools"],
@@ -46,6 +46,7 @@ export const SERVICES: Service[] = [
     desc: "War-room support when the news cycle will not wait.",
     long: "A 24/7 on-call team that ships landing pages, statements, and fundraising asks in hours, not days — because in politics, timing is everything.",
     tags: ["24/7 on-call", "Landing pages", "Same-day"],
+    hidden: true,
   },
   {
     no: "06",
@@ -54,8 +55,14 @@ export const SERVICES: Service[] = [
     desc: "Names, logos, and messaging that make people believe.",
     long: "Full brand systems from naming and identity to messaging frameworks — the visual and verbal language that carries a movement.",
     tags: ["Naming", "Identity", "Messaging"],
+    hidden: true,
   },
 ];
+
+/** The services shown on the site — the catalogue minus anything flagged `hidden`.
+ *  Every listing, nav, and the detail route's static params use this; `SERVICES`
+ *  (the full catalogue) stays intact so hiding is a one-line, reversible flag. */
+export const VISIBLE_SERVICES: Service[] = SERVICES.filter((s) => !s.hidden);
 
 export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
   // Placeholder detail patterned from the prototype's exemplar – replace in the content pass.
@@ -97,20 +104,20 @@ export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
     ],
     body: [
       "The moment a supporter decides to give is the most fragile moment in your entire funnel. A slow page, a confusing form, a broken mobile layout — each one leaks dollars you will never win back. We treat the donation flow as the highest-stakes surface a campaign owns.",
-      "We build custom donation experiences with one-click recurring giving, native ActBlue integration, saved payment methods, and relentless conversion optimization baked in. Then we test everything — button copy, ask amounts, upsell timing — because the difference between a 2% and a 3% conversion rate is an entire field program.",
+      "We build custom donation experiences with one-click recurring giving, native ActBlue integration, saved payment methods, and relentless conversion optimisation baked in. Then we test everything — button copy, ask amounts, upsell timing — because the difference between a 2% and a 3% conversion rate is an entire field programme.",
     ],
     steps: [
       { no: "01", title: "Audit", desc: "We map your current flow and find every leak." },
       { no: "02", title: "Design", desc: "A donation surface built mobile-first, for speed." },
       { no: "03", title: "Integrate", desc: "Wired into your processor and CRM cleanly." },
-      { no: "04", title: "Optimize", desc: "Continuous testing through election day." },
+      { no: "04", title: "Optimise", desc: "Continuous testing through election day." },
     ],
     cta: { heading: "Stop leaking donations.", button: "Book a build sprint →" },
   },
 
   // Placeholder detail patterned from the prototype's exemplar – replace in the content pass.
-  "digital-organizing": {
-    lede: "Organizing tools that move a supporter from a sign-up form to a shift sheet — and keep your list clean and activated the whole way.",
+  "digital-organising": {
+    lede: "Organising tools that move a supporter from a sign-up form to a shift sheet — and keep your list clean and activated the whole way.",
     heroCaption: "VOLUNTEER PORTAL — SCREENSHOT",
     deliverables: [
       "Volunteer portal",
@@ -122,15 +129,15 @@ export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
     ],
     body: [
       "Sign-up is not the finish line — it is the top of a funnel that ends with a volunteer showing up for a shift. We design every step in between: the portal, the event flows, the reminders, and the follow-up asks that turn a curious supporter into a regular.",
-      "Under the hood, we wire it all into your CRM so the list stays clean without a data team: deduped records, synced tags, and phone and text banking your organizers can launch in minutes, not meetings.",
+      "Under the hood, we wire it all into your CRM so the list stays clean without a data team: deduped records, synced tags, and phone and text banking your organisers can launch in minutes, not meetings.",
     ],
     steps: [
       { no: "01", title: "Audit", desc: "We map your supporter journey and find where people fall out." },
       { no: "02", title: "Design", desc: "A volunteer experience built for phones, shifts, and follow-through." },
       { no: "03", title: "Integrate", desc: "Wired into your CRM with clean, two-way sync." },
-      { no: "04", title: "Optimize", desc: "Continuous tuning of asks and reminders through election day." },
+      { no: "04", title: "Optimise", desc: "Continuous tuning of asks and reminders through election day." },
     ],
-    cta: { heading: "Turn supporters into voters.", button: "Plan your organizing stack →" },
+    cta: { heading: "Turn supporters into voters.", button: "Plan your organising stack →" },
   },
 
   // Placeholder detail patterned from the prototype's exemplar – replace in the content pass.
@@ -141,7 +148,7 @@ export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
       "Real-time fundraising dashboard",
       "Traffic & conversion analytics",
       "Voter targeting models",
-      "Experimentation program",
+      "Experimentation programme",
       "Alerting & anomaly detection",
       "Warehouse & exports",
     ],
@@ -153,7 +160,7 @@ export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
       { no: "01", title: "Audit", desc: "We map your data sources and the decisions they need to feed." },
       { no: "02", title: "Design", desc: "Dashboards built around the numbers that win races." },
       { no: "03", title: "Integrate", desc: "Wired into your processor, CRM, and ad platforms cleanly." },
-      { no: "04", title: "Optimize", desc: "A standing experimentation program through election day." },
+      { no: "04", title: "Optimise", desc: "A standing experimentation programme through election day." },
     ],
     cta: { heading: "Know what is working.", button: "Book a data sprint →" },
   },
@@ -178,7 +185,7 @@ export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
       { no: "01", title: "Audit", desc: "We map your approval chain and everything that slows a page down." },
       { no: "02", title: "Design", desc: "Pre-approved templates ready to fill and ship in minutes." },
       { no: "03", title: "Integrate", desc: "Wired into your site, your list, and your donation flow." },
-      { no: "04", title: "Optimize", desc: "Drills, on-call cover, and faster ship times every cycle." },
+      { no: "04", title: "Optimise", desc: "Drills, on-call cover, and faster ship times every cycle." },
     ],
     cta: { heading: "The news will not wait.", button: "Put the war room on call →" },
   },
@@ -191,7 +198,7 @@ export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
       "Naming & identity",
       "Logo & visual system",
       "Messaging framework",
-      "Typography & color",
+      "Typography & colour",
       "Brand guidelines",
       "Collateral & templates",
     ],
@@ -203,7 +210,7 @@ export const SERVICE_DETAILS: Record<string, ServiceDetail> = {
       { no: "01", title: "Audit", desc: "We map your story, your audience, and the field you are running in." },
       { no: "02", title: "Design", desc: "Identity and messaging developed together, not bolted on." },
       { no: "03", title: "Integrate", desc: "Rolled out across your site, collateral, and channels." },
-      { no: "04", title: "Optimize", desc: "Guidelines and templates that keep the system coherent as you grow." },
+      { no: "04", title: "Optimise", desc: "Guidelines and templates that keep the system coherent as you grow." },
     ],
     cta: { heading: "Make people believe.", button: "Start a brand sprint →" },
   },

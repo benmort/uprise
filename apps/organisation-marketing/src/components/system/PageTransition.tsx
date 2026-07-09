@@ -4,25 +4,49 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 
 /**
- * The design's orange page-wipe: on every route change a full-screen vermilion
- * overlay slides up, holds, and exits top (wipeIn, .78s) with a mono "UPRISE LABS"
- * label, while the incoming page fades/rises in (pageIn). Scroll resets to top.
- * The first render (fresh load) skips the wipe and just plays pageIn.
+ * The design's orange page-wipe — on a fresh load AND on every route change. It sits
+ * inside the chromed layout, so the header + cream background are already on screen; a
+ * full-screen vermilion block then slides up, holds, and exits (wipeIn, .78s) with a
+ * mono "UPRISE LABS" label, and the page content is only revealed once the block has
+ * fully covered the viewport (~44% into the wipe).
+ *
+ * The content is always rendered (so it stays in the SSR'd HTML for SEO). On first load
+ * it's held invisible behind the wipe with a delayed pageIn — so only the header + cream
+ * show, then the block sweeps, then the page fades in as the block exits. On navigation
+ * the OUTGOING page is held in place until the block covers, then swapped for the
+ * incoming one. Either way the swap + scroll-reset happen behind the full cover and are
+ * never seen.
  */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [wiping, setWiping] = useState(false);
   const first = useRef(true);
+  const latest = useRef(children);
+  latest.current = children;
+  const [shown, setShown] = useState<{ node: React.ReactNode; key: string; anim: string }>({
+    node: children,
+    key: pathname,
+    // First load: hold the (SSR'd) content invisible until the block covers (~.35s).
+    anim: "pageIn .5s ease .35s both",
+  });
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    const wasFirst = first.current;
+    first.current = false;
     setWiping(true);
-    window.scrollTo(0, 0);
-    const t = setTimeout(() => setWiping(false), 790);
-    return () => clearTimeout(t);
+    const swap = setTimeout(() => {
+      // Navigation: swap the held outgoing page for the incoming one behind the cover.
+      // First load already shows the right page (just hidden), so only reset scroll.
+      if (!wasFirst) {
+        setShown({ node: latest.current, key: pathname, anim: "pageIn .5s ease both" });
+      }
+      window.scrollTo(0, 0);
+    }, 350);
+    const end = setTimeout(() => setWiping(false), 790);
+    return () => {
+      clearTimeout(swap);
+      clearTimeout(end);
+    };
   }, [pathname]);
 
   return (
@@ -36,16 +60,8 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
           <span className="font-mono text-xs tracking-[0.3em] text-cream">UPRISE LABS</span>
         </div>
       ) : null}
-      {/* On a wipe, keep the incoming page hidden (opacity 0 via `both`) until the
-          orange block has fully covered the viewport (~.34s into wipeIn's .78s), so
-          the content swap + scroll reset happen behind the cover and are never seen.
-          The block then exits upward, revealing the settled new page. First load has
-          no wipe, so it plays in immediately. */}
-      <div
-        key={pathname}
-        style={{ animation: `pageIn .5s ease ${first.current ? "0s" : "0.36s"} both` }}
-      >
-        {children}
+      <div key={shown.key} style={{ animation: shown.anim }}>
+        {shown.node}
       </div>
     </>
   );

@@ -1,7 +1,7 @@
 // Shared content types for the Uprise Labs organisation site.
 // Source of truth: the design prototype in docs/design_handoff_uprise_labs/.
 
-export type ProjectTag = "Platform" | "Campaigns" | "Fundraising" | "Organizing" | "Advocacy";
+export type ProjectTag = "Platform" | "Campaigns" | "Fundraising" | "Organising" | "Advocacy";
 
 export interface Project {
   slug: string;
@@ -34,6 +34,9 @@ export interface Service {
   desc: string;
   long: string;
   tags: string[];
+  /** Kept in the catalogue but hidden from every listing/nav (and its detail
+   *  page 404s). Flip off to restore — nothing about the service is deleted. */
+  hidden?: boolean;
 }
 
 export interface ServiceDetail {

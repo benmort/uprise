@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/chrome/SiteHeader";
 import { SiteFooter } from "@/components/chrome/SiteFooter";
+import { PageTransition } from "@/components/system/PageTransition";
 
 /**
  * The chromed route group — every page except the split-screen auth views gets
@@ -11,7 +12,9 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
   return (
     <>
       <SiteHeader />
-      <main>{children}</main>
+      <main>
+        <PageTransition>{children}</PageTransition>
+      </main>
       <SiteFooter />
     </>
   );

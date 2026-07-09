@@ -1,7 +1,7 @@
 // Project index and case-study detail for the Uprise Labs organisation site.
 // Source of truth: the design prototype in docs/design_handoff_uprise_labs/ –
 // the Rivera for Senate case study is transcribed verbatim; the other seven
-// details are patterned from it. Copy keeps the prototype's US spellings.
+// details are patterned from it. Copy is converted from the prototype to Australian (en-GB) spelling.
 
 import type { CaseDetail, Project } from "./types";
 
@@ -30,8 +30,8 @@ export const PROJECTS: Project[] = [
   {
     slug: "frontline-workers-united",
     name: "Frontline Workers United",
-    blurb: "Digital organizing for 240k members",
-    tag: "Organizing",
+    blurb: "Digital organising for 240k members",
+    tag: "Organising",
     year: "2025",
   },
   {
@@ -52,7 +52,7 @@ export const PROJECTS: Project[] = [
     slug: "gotv-collective",
     name: "GOTV Collective",
     blurb: "Voter turnout toolkit used in 30 states",
-    tag: "Organizing",
+    tag: "Organising",
     year: "2023",
   },
   {
@@ -141,7 +141,7 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
     lede: "A statewide ballot initiative needed one place to explain the measure, collect pledges, and show the count moving in real time.",
     body: [
       "We built a single campaign hub: plain-language explainers on the measure, a pledge-to-vote flow tuned for mobile, and a live results tracker wired straight to the county feeds so supporters watched the count come in together.",
-      "On election night the tracker became the state's unofficial scoreboard, and the pledge list became the backbone of the final-week turnout program.",
+      "On election night the tracker became the state's unofficial scoreboard, and the pledge list became the backbone of the final-week turnout programme.",
     ],
     results: [
       { value: "58%", label: "YES VOTE" },
@@ -159,17 +159,17 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
 
   // Placeholder detail patterned from the prototype's exemplar – replace in the content pass.
   "frontline-workers-united": {
-    meta: "ORGANIZING · 2025 · NATIONAL UNION",
-    title: "Frontline Workers United: digital organizing for 240k members",
+    meta: "ORGANISING · 2025 · NATIONAL UNION",
+    title: "Frontline Workers United: digital organising for 240k members",
     heroCaption: "FRONTLINE WORKERS UNITED — HERO SCREENSHOT",
     client: "Frontline Workers United",
-    services: "Web, Organizing, CRM",
+    services: "Web, Organising, CRM",
     timeline: "11 months",
     team: "5 people",
-    lede: "A national union with 240k members needed organizing tools that met workers where they were — on their phones, between shifts.",
+    lede: "A national union with 240k members needed organising tools that met workers where they were — on their phones, between shifts.",
     body: [
       "We shipped a member portal with shift-friendly onboarding, distributed phone and text banking, event RSVP, and a CRM integration that kept every local's list clean and activated without a data team.",
-      "Within two cycles of contract fights, the portal had become the union's default organizing surface — actions launched in minutes, not meetings.",
+      "Within two cycles of contract fights, the portal had become the union's default organising surface — actions launched in minutes, not meetings.",
     ],
     results: [
       { value: "240k", label: "MEMBERS ONBOARDED" },
@@ -181,7 +181,7 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
     stack: ["Next.js", "TypeScript", "Tailwind", "Postgres", "Twilio"],
     quote: {
       text: "Our locals used to wait weeks for a list pull. Now a steward can launch an action from the break room.",
-      attribution: "— ORGANIZING DIRECTOR, FRONTLINE WORKERS UNITED",
+      attribution: "— ORGANISING DIRECTOR, FRONTLINE WORKERS UNITED",
     },
   },
 
@@ -197,7 +197,7 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
     lede: "A national PAC moving money to hundreds of races needed donation infrastructure that never blinked — on any night, for any candidate.",
     body: [
       "We built a multi-race donation platform: one checkout, hundreds of destinations, with one-click recurring giving, split-gift asks, and compliance flows baked in from the first commit.",
-      "Through two peak fundraising nights the platform processed record volume without dropping a gift, and the recurring program became the PAC's steadiest revenue line.",
+      "Through two peak fundraising nights the platform processed record volume without dropping a gift, and the recurring programme became the PAC's steadiest revenue line.",
     ],
     results: [
       { value: "$62M", label: "PROCESSED ONLINE" },
@@ -222,7 +222,7 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
     services: "Web, Rapid Response, Advocacy",
     timeline: "10 months",
     team: "4 people",
-    lede: "A national climate organization needed to turn breaking news into action — petitions, statements, and asks live before the story cooled.",
+    lede: "A national climate organisation needed to turn breaking news into action — petitions, statements, and asks live before the story cooled.",
     body: [
       "We built an action network with pre-approved page templates, a same-day publishing pipeline, and an on-call rota, so a statement page could go from draft to live in under an hour.",
       "When a live crisis broke, the team shipped a statement page in under an hour — and that page raised six figures before midnight.",
@@ -233,7 +233,7 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
       { value: "$100k+", label: "RAISED BEFORE MIDNIGHT" },
       { value: "120k", label: "NEW SUPPORTERS" },
     ],
-    gallery: ["ACTION CENTER — SCREENSHOT", "RAPID-RESPONSE PAGE — SCREENSHOT"],
+    gallery: ["ACTION CENTRE — SCREENSHOT", "RAPID-RESPONSE PAGE — SCREENSHOT"],
     stack: ["Next.js", "TypeScript", "Tailwind", "Supabase", "Vercel Edge"],
     quote: {
       text: "They shipped a statement page during a live crisis in under an hour. That page raised six figures before midnight.",
@@ -243,17 +243,17 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
 
   // Placeholder detail patterned from the prototype's exemplar – replace in the content pass.
   "gotv-collective": {
-    meta: "ORGANIZING · 2023 · MULTI-STATE",
+    meta: "ORGANISING · 2023 · MULTI-STATE",
     title: "GOTV Collective: a voter turnout toolkit used in 30 states",
     heroCaption: "GOTV COLLECTIVE — HERO SCREENSHOT",
     client: "GOTV Collective",
-    services: "Web, Organizing, Data",
+    services: "Web, Organising, Data",
     timeline: "8 months",
     team: "5 people",
     lede: "A turnout coalition needed one toolkit any partner could deploy — polling place lookup, vote plans, and reminders — in any state, under any rules.",
     body: [
       "We built a white-label turnout toolkit: polling place lookup, vote-plan builders, and SMS reminders, all configurable per state so partners could launch without an engineering team.",
-      "By election day the toolkit was live in 30 states, and the vote-plan pledges it collected drove the final-week reminder program across the whole coalition.",
+      "By election day the toolkit was live in 30 states, and the vote-plan pledges it collected drove the final-week reminder programme across the whole coalition.",
     ],
     results: [
       { value: "30", label: "STATES DEPLOYED" },
@@ -265,7 +265,7 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
     stack: ["Next.js", "TypeScript", "Postgres", "Twilio", "Vercel Edge"],
     quote: {
       text: "Thirty states, thirty rulebooks, one toolkit. Our partners launched in days instead of months.",
-      attribution: "— PROGRAM LEAD, GOTV COLLECTIVE",
+      attribution: "— PROGRAMME LEAD, GOTV COLLECTIVE",
     },
   },
 
@@ -303,13 +303,13 @@ export const CASE_DETAILS: Record<string, CaseDetail> = {
     title: "Chen for Governor: a bilingual campaign site & volunteer portal",
     heroCaption: "CHEN FOR GOVERNOR — HERO SCREENSHOT",
     client: "Chen for Governor",
-    services: "Web, Organizing, Brand",
+    services: "Web, Organising, Brand",
     timeline: "10 months",
     team: "4 people",
-    lede: "A governor's race in a majority-bilingual state needed a campaign site and volunteer program that treated both languages as first-class.",
+    lede: "A governor's race in a majority-bilingual state needed a campaign site and volunteer programme that treated both languages as first-class.",
     body: [
       "We built the campaign site and volunteer portal bilingual from the first commit — parallel content workflows, language-aware volunteer matching, and a design system that held up in both scripts.",
-      "The bilingual volunteer program became the campaign's signature: sign-ups split almost evenly across languages, and shift attendance held through the final weekend.",
+      "The bilingual volunteer programme became the campaign's signature: sign-ups split almost evenly across languages, and shift attendance held through the final weekend.",
     ],
     results: [
       { value: "2", label: "LANGUAGES AT PARITY" },

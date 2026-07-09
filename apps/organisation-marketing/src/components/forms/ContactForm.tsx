@@ -85,7 +85,7 @@ export function ContactForm() {
     <form onSubmit={submit} noValidate className="space-y-8">
       <div className="grid gap-8 sm:grid-cols-2">
         <Field label="Your name" htmlFor="name">
-          <Input id="name" name="name" placeholder="Jane Organizer" value={data.name} onChange={set("name")} required />
+          <Input id="name" name="name" placeholder="Jane Organiser" value={data.name} onChange={set("name")} required />
           {errors.name ? <p className="mt-1.5 font-mono text-xs text-vermilion">{errors.name}</p> : null}
         </Field>
         <Field label="Email" htmlFor="email">
@@ -93,7 +93,7 @@ export function ContactForm() {
           {errors.email ? <p className="mt-1.5 font-mono text-xs text-vermilion">{errors.email}</p> : null}
         </Field>
       </div>
-      <Field label="Organization" htmlFor="organisation">
+      <Field label="Organisation" htmlFor="organisation">
         <Input id="organisation" name="organisation" placeholder="Rivera for Senate" value={data.organisation ?? ""} onChange={set("organisation")} />
       </Field>
       <Field label="What are you building?" htmlFor="message">

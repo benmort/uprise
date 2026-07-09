@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { MediaPlaceholder } from "@/components/system/MediaPlaceholder";
 import { Reveal } from "@/components/system/Reveal";
-import { SERVICES, getService, getServiceDetail } from "@/lib/data/services";
+import { VISIBLE_SERVICES, getService, getServiceDetail } from "@/lib/data/services";
 
 /**
  * Service detail template – transcribed from the prototype's service-detail
@@ -14,7 +14,7 @@ import { SERVICES, getService, getServiceDetail } from "@/lib/data/services";
  */
 
 export function generateStaticParams() {
-  return SERVICES.map((service) => ({ slug: service.slug }));
+  return VISIBLE_SERVICES.map((service) => ({ slug: service.slug }));
 }
 
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
@@ -25,7 +25,8 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
 export default function ServiceDetailPage({ params }: { params: { slug: string } }) {
   const service = getService(params.slug);
   const detail = getServiceDetail(params.slug);
-  if (!service || !detail) notFound();
+  // Hidden services stay in the catalogue but are unreachable — no orphan live page.
+  if (!service || !detail || service.hidden) notFound();
 
   return (
     <div className="pt-40">
@@ -75,7 +76,7 @@ export default function ServiceDetailPage({ params }: { params: { slug: string }
                     key={item}
                     className="flex items-start gap-3 font-mono text-sm font-medium leading-[1.5] text-ink/70"
                   >
-                    <span className="text-vermilion">✳</span>
+                    <span className="text-vermilion" aria-hidden>◆</span>
                     {item}
                   </div>
                 ))}

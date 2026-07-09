@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Reveal } from "@/components/system/Reveal";
-import { SERVICES } from "@/lib/data/services";
+import { VISIBLE_SERVICES } from "@/lib/data/services";
 import { PROCESS } from "@/lib/data/site";
 
 export const metadata: Metadata = {
@@ -35,7 +35,7 @@ export default function ServicesPage() {
 
       {/* Service index – each row links through to its detail page */}
       <section className="mx-auto max-w-[1360px] px-6 pb-24 lg:px-10">
-        {SERVICES.map((service, i) => (
+        {VISIBLE_SERVICES.map((service, i) => (
           <Reveal key={service.slug} delay={i * 60}>
             <Link
               href={`/services/${service.slug}`}
