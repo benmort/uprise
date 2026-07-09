@@ -43,6 +43,14 @@ tunnels:
     proto: http
     domain: field.dev.uprise.org.au
 
+  # Public action app → action.dev.uprise.org.au (under the *.dev.uprise.org.au reservation).
+  # Where /volunteer/[campaignId] lands a freshly-joined volunteer, so the auth app's
+  # NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS must include this origin.
+  action:
+    addr: 3004
+    proto: http
+    domain: action.dev.uprise.org.au
+
   # Uprise Labs organisation site → labs.dev.uprise.org.au (under the *.dev.uprise.org.au
   # reservation; the real site ships to upriselabs.org at deploy)
   organisation-marketing:

@@ -73,7 +73,7 @@ export function VolunteerBrandSidebar() {
   return (
     <div className="relative hidden w-1/2 items-center justify-center overflow-hidden bg-brand-950 lg:flex">
       <GridShape />
-      <div className="relative z-10 flex max-w-xs flex-col items-center gap-4 text-center">
+      <div className="relative z-10 flex max-w-xs flex-col items-start gap-4 text-left">
         {brand ? (
           <>
             <TenantAvatar seed={brand.seed} className="h-20 w-20" />

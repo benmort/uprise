@@ -35,12 +35,14 @@ const DIGIT_TO_STATE: Record<string, string> = Object.fromEntries(
   STATE_ABBREVS.map((s) => [stateAbbrevToAsgsDigit(s) ?? "", s]),
 );
 
-const TABS: Array<{ level: AreaLevel; label: string }> = [
-  { level: "sa4", label: "SA4" },
-  { level: "sa3", label: "SA3" },
-  { level: "sa2", label: "SA2" },
-  { level: "sa1", label: "SA1" },
-  { level: "mb", label: "Meshblock" },
+// Per-level legend-dot colour for the sub-level pills (mirrors the divisions tabs).
+// Coarse → fine: SA4 violet → meshblock amber.
+const TABS: Array<{ level: AreaLevel; label: string; color: string }> = [
+  { level: "sa4", label: "SA4", color: "#7c3aed" },
+  { level: "sa3", label: "SA3", color: "#2563eb" },
+  { level: "sa2", label: "SA2", color: "#0891b2" },
+  { level: "sa1", label: "SA1", color: "#059669" },
+  { level: "mb", label: "Meshblock", color: "#ca8a04" },
 ];
 const TAB_LEVELS = new Set<string>(TABS.map((t) => t.level));
 
@@ -248,10 +250,11 @@ export function AreasPanel({ view }: { view: WalkMode }) {
             setHits([]);
           }}
           className={cn(
-            "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition",
             level === t.level ? "bg-primary text-white" : "text-foreground",
           )}
         >
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: t.color }} />
           {t.label}
         </button>
       ))}

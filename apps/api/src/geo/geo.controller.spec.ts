@@ -18,7 +18,46 @@ describe("GeoController", () => {
       tile: jest.fn().mockResolvedValue(Buffer.alloc(0)),
       nearbyAddresses: jest.fn().mockResolvedValue([]),
       addresses: jest.fn().mockResolvedValue([]),
+      listChambers: jest.fn().mockResolvedValue([]),
+      listChamberElectorates: jest.fn().mockResolvedValue([]),
+      chamberElectorateDetail: jest.fn().mockResolvedValue({}),
+      listFirstNations: jest.fn().mockResolvedValue({ rows: [], total: 0 }),
+      firstNationsDetail: jest.fn().mockResolvedValue({}),
     }) as unknown as jest.Mocked<GeoService>;
+
+  it("listFirstNations delegates, defaults to ireg, and coerces paging to numbers", async () => {
+    const svc = makeSvc();
+    await new GeoController(svc).listFirstNations("iloc", "dub", "1", "10", "20");
+    expect(svc.listFirstNations).toHaveBeenCalledWith("iloc", { q: "dub", state: "1", limit: 10, offset: 20 });
+
+    const svc2 = makeSvc();
+    await new GeoController(svc2).listFirstNations();
+    expect(svc2.listFirstNations).toHaveBeenCalledWith("ireg", { q: "", state: undefined, limit: undefined, offset: undefined });
+  });
+
+  it("firstNationsDetail delegates with the tenant, level and code", async () => {
+    const svc = makeSvc();
+    await new GeoController(svc).firstNationsDetail("tenant-1", "iloc", "10100101");
+    expect(svc.firstNationsDetail).toHaveBeenCalledWith("tenant-1", "iloc", "10100101");
+  });
+
+  it("listChambers delegates", async () => {
+    const svc = makeSvc();
+    await new GeoController(svc).listChambers();
+    expect(svc.listChambers).toHaveBeenCalledWith();
+  });
+
+  it("listChamberElectorates delegates", async () => {
+    const svc = makeSvc();
+    await new GeoController(svc).listChamberElectorates();
+    expect(svc.listChamberElectorates).toHaveBeenCalledWith();
+  });
+
+  it("chamberElectorateDetail delegates with the tenant + code", async () => {
+    const svc = makeSvc();
+    await new GeoController(svc).chamberElectorateDetail("tenant-1", "SENATE-VIC");
+    expect(svc.chamberElectorateDetail).toHaveBeenCalledWith("tenant-1", "SENATE-VIC");
+  });
 
   it("status delegates", async () => {
     const svc = makeSvc();

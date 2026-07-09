@@ -1,9 +1,43 @@
 import { request } from "@/lib/api";
 
-export type DivisionType = "ced" | "sed" | "lga";
-/** Division sources that can be stacked into a turf — the electoral/LGA types
- *  plus "ste" (a whole state/territory from the derived geo.state layer). */
-export type TurfDivisionType = DivisionType | "ste";
+/**
+ * A division layer. `sed` is the raw ABS "State Electoral Division" layer; `sed_lower`
+ * and `sed_upper` are the chamber-pure layers derived from it. Prefer the derived pair
+ * when showing a state seat: for Tasmania the raw `sed` rows are House-of-Assembly ×
+ * Legislative-Council intersection cells and belong to neither chamber.
+ */
+export type DivisionType = "ced" | "sed" | "sed_lower" | "sed_upper" | "lga" | "ward";
+/** Division sources that can be stacked into a turf — the division layers plus "ste" (a
+ *  whole state/territory) and "chamber_electorate" (the Senate, or a state-wide
+ *  Legislative Council, whose boundary is the jurisdiction itself). */
+export type TurfDivisionType = DivisionType | "ste" | "chamber_electorate";
+
+/** A legislative chamber, including the ones that do not exist — Queensland abolished its
+ *  Legislative Council in 1922, the ACT and NT are unicameral, councils have no upper
+ *  house, and the ACT has no local government at all. */
+export type Chamber = {
+  key: string;
+  jurisdiction: string;
+  level: "federal" | "state" | "local";
+  chamber: "lower" | "upper" | "unicameral";
+  name: string;
+  exists: boolean;
+  electorateLayer: string | null;
+  subElectorateLayer: string | null;
+  memberCount: number | null;
+  note: string | null;
+};
+
+/** An electorate of a chamber with no sub-state boundaries: the Senate, or the NSW/SA/WA
+ *  Legislative Councils. Its boundary is the state itself. */
+export type ChamberElectorate = {
+  code: string;
+  name: string;
+  state: string | null;
+  chamberKey: string;
+  memberCount: number | null;
+  addressCount: number;
+};
 
 export type GeoDataset = {
   key: string;
@@ -45,7 +79,23 @@ export type AreaDetail = {
 export type TurfUniverse = "existing" | "none" | "hybrid";
 
 // ── Containment hierarchy (state → SA4 → … → meshblock → address, + divisions) ──
-export type RegionKind = "state" | "ced" | "sed" | "lga" | "sa4" | "sa3" | "sa2" | "sa1" | "mb" | "address";
+export type RegionKind =
+  | "state"
+  | "ced"
+  | "sed"
+  | "sed_lower"
+  | "sed_upper"
+  | "lga"
+  | "ward"
+  | "ireg"
+  | "iare"
+  | "iloc"
+  | "sa4"
+  | "sa3"
+  | "sa2"
+  | "sa1"
+  | "mb"
+  | "address";
 export type RegionRef = { kind: RegionKind; code: string; name: string; addressCount?: number };
 export type RegionHierarchy = {
   region: RegionRef;
@@ -102,6 +152,63 @@ export async function listStates() {
 
 export async function getState(code: string) {
   return request<DivisionDetail>(`/geo/states/${encodeURIComponent(code)}`);
+}
+
+/** The chamber catalogue — read this to explain a gap rather than render an empty tab. */
+export async function listChambers() {
+  return request<Chamber[]>("/geo/chambers");
+}
+
+/** Electorates of the chambers whose boundary is the whole jurisdiction. */
+export async function listChamberElectorates() {
+  return request<ChamberElectorate[]>("/geo/chamber-electorates");
+}
+
+export async function getChamberElectorate(code: string) {
+  return request<DivisionDetail>(`/geo/chamber-electorates/${encodeURIComponent(code)}`);
+}
+
+// ── First Nations (ABS Indigenous Structure) — reference-only ────────────────
+/**
+ * The three levels of the ASGS Indigenous Structure: Regions ⊃ Areas ⊃ Locations.
+ * These are ABS **statistical** geographies, not cultural, language or nation boundaries.
+ *
+ * Deliberately NOT part of `DivisionType`/`TurfDivisionType`: a First Nations layer can be
+ * browsed, mapped and inspected, but never cut into a turf or stacked into a campaign
+ * boundary. The API enforces it; a unit test on the service pins it.
+ */
+export type FirstNationsLevel = "ireg" | "iare" | "iloc";
+export type FirstNationsRow = {
+  level: FirstNationsLevel;
+  /** The ABS code ('107'). Numeric and state-digit-prefixed — the map keys on this. */
+  code: string;
+  name: string;
+  state: string | null;
+  /** URL-friendly name ('sydney-wollongong'). Unique per level; what the URLs carry. */
+  slug: string;
+  addressCount: number;
+};
+export type FirstNationsDetail = FirstNationsRow & {
+  geometry: unknown;
+  contactCount: number;
+  withoutContacts: number;
+};
+
+export async function listFirstNations(
+  level: FirstNationsLevel,
+  params: { q?: string; state?: string; limit?: number; offset?: number } = {},
+) {
+  const qs = new URLSearchParams({ level });
+  if (params.q) qs.set("q", params.q);
+  if (params.state) qs.set("state", params.state);
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.offset) qs.set("offset", String(params.offset));
+  return request<{ rows: FirstNationsRow[]; total: number }>(`/geo/first-nations?${qs}`);
+}
+
+/** `key` is the slug ('sydney-wollongong') or the ABS code ('107') — the API resolves both. */
+export async function getFirstNations(level: FirstNationsLevel, key: string) {
+  return request<FirstNationsDetail>(`/geo/first-nations/${level}/${encodeURIComponent(key)}`);
 }
 
 export async function listUniverseAddresses(params: {
@@ -228,8 +335,16 @@ export type NearbyAddress = {
   distanceM: number;
   cedCode: string | null;
   cedName: string | null;
+  /** The raw ABS division. For Tasmania this is an intersection cell, not a seat — use
+   *  sedLower/sedUpper to name the chamber the door actually votes in. */
   sedCode: string | null;
   sedName: string | null;
+  sedLowerCode: string | null;
+  sedLowerName: string | null;
+  sedUpperCode: string | null;
+  sedUpperName: string | null;
+  wardCode: string | null;
+  wardName: string | null;
   sa1Code: string | null;
   sa2Code: string | null;
   sa3Code: string | null;
@@ -242,4 +357,72 @@ export type NearbyAddress = {
 export async function nearbyAddresses(lat: number, lng: number, limit = 25) {
   const qs = new URLSearchParams({ lat: String(lat), lng: String(lng), limit: String(limit) });
   return request<NearbyAddress[]>(`/geo/addresses/near?${qs}`);
+}
+
+// ── Polling places (booths) — federal (AEC) + state/territory (The Tally Room) ──
+
+/** The nine electoral jurisdictions a booth can belong to. "all" is the unfiltered
+ *  UI sentinel (never sent to the API). */
+export type PollingJurisdiction = "federal" | "nsw" | "vic" | "qld" | "wa" | "sa" | "tas" | "act" | "nt";
+
+/** One polling place with its resolved federal division + state electorate. */
+export type PollingPlace = {
+  id: string;
+  jurisdiction: PollingJurisdiction;
+  name: string | null;
+  premises: string | null;
+  address: string | null;
+  suburb: string | null;
+  state: string | null;
+  postcode: string | null;
+  divisionName: string | null;
+  placeType: string | null;
+  lat: number;
+  lng: number;
+  cedCode: string | null;
+  cedName: string | null;
+  sedCode: string | null;
+  sedName: string | null;
+};
+
+export type PollingPlaceDetail = PollingPlace & { sourceId: string | null };
+
+/** Minimal map-layer shape — one clustered pin per booth. */
+export type PollingPlacePoint = {
+  id: string;
+  lat: number;
+  lng: number;
+  jurisdiction: PollingJurisdiction;
+  name: string | null;
+};
+
+/** Paged, filterable booth list for the polling-places explorer list view. */
+export async function browsePollingPlaces(params: {
+  jurisdiction?: string;
+  state?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const qs = new URLSearchParams();
+  if (params.jurisdiction && params.jurisdiction !== "all") qs.set("jurisdiction", params.jurisdiction);
+  if (params.state) qs.set("state", params.state);
+  if (params.q) qs.set("q", params.q);
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.offset) qs.set("offset", String(params.offset));
+  return request<{ rows: PollingPlace[]; total: number }>(`/geo/polling-places?${qs}`);
+}
+
+/** All booth points for the map layer (one cached request; mapbox clusters). */
+export async function listPollingPlacePoints(params: { jurisdiction?: string; state?: string; limit?: number }) {
+  const qs = new URLSearchParams();
+  if (params.jurisdiction && params.jurisdiction !== "all") qs.set("jurisdiction", params.jurisdiction);
+  if (params.state) qs.set("state", params.state);
+  if (params.limit) qs.set("limit", String(params.limit));
+  return request<PollingPlacePoint[]>(`/geo/polling-places/points?${qs}`);
+}
+
+/** One booth's full detail (backs the selected-booth card). */
+export async function getPollingPlace(id: string) {
+  return request<PollingPlaceDetail>(`/geo/polling-places/${encodeURIComponent(id)}`);
 }

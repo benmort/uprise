@@ -135,7 +135,17 @@ export const openJoinAcceptSchema = z.object({
 });
 export type OpenJoinAcceptRequest = z.infer<typeof openJoinAcceptSchema>;
 
-export type OpenJoinPreview = { campaignId: string; campaignName: string; tenantName: string };
+export type OpenJoinPreview = {
+  campaignId: string;
+  /** The campaign's tenant id — keys the deterministic fallback avatar gradient when
+   *  the org has no logo (same as the tenant selector). */
+  tenantId: string;
+  campaignName: string;
+  tenantName: string;
+  /** The tenant's block/avatar logo (OrgProfile.logoBlockUrl) — the one the tenant
+   *  selector shows. Null when the org hasn't set a logo. */
+  logoUrl: string | null;
+};
 
 export const selectTenantSchema = z.object({ tenantId: z.string().min(1) });
 export type SelectTenantRequest = z.infer<typeof selectTenantSchema>;

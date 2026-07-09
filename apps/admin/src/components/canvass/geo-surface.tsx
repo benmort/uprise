@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { FilterSpecification } from "mapbox-gl";
-import type { WalkMode } from "@uprise/field";
+import { AU_BOUNDS, type WalkMode } from "@uprise/field";
 import { getApiUrl } from "@/lib/api";
 import type { AreaLevel, DivisionType } from "@/lib/api/geo";
 import { stateAbbrevToAsgsDigit, stateAsgsDigitToAbbrev, stateBounds } from "@/lib/canvass/states";
@@ -16,6 +16,11 @@ import { DivisionsPanel } from "@/components/canvass/geo-panels/divisions-panel"
 import { StatesPanel } from "@/components/canvass/geo-panels/states-panel";
 import { AreasPanel } from "@/components/canvass/geo-panels/areas-panel";
 import { AddressesPanel } from "@/components/canvass/geo-panels/addresses-panel";
+import { PollingPlacesPanel } from "@/components/canvass/geo-panels/polling-places-panel";
+import { FirstNationsPanel } from "@/components/canvass/geo-panels/first-nations-panel";
+import { firstNationsSlug, resolveFirstNationsLevel } from "@/lib/canvass/first-nations";
+import { getFirstNations } from "@/lib/api/geo";
+import { useApi } from "@/lib/use-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -29,12 +34,7 @@ const GeoMap = dynamic(() => import("@/components/canvass/turf-draw-map").then((
 });
 type GeoMapProps = ComponentProps<typeof GeoMap>;
 
-const DIVISION_TABS: DivisionType[] = ["ced", "sed", "lga"];
-const TYPE_COLORS: Record<DivisionType, string> = {
-  ced: "#dc2626", // Federal — red
-  sed: "#7c3aed", // State — violet
-  lga: "#d97706", // Local (LGA) — amber
-};
+import { DIVISION_TAB_TYPES as DIVISION_TABS, TYPE_COLORS, resolveDivisionTab } from "@/components/canvass/division-layers";
 const AREA_LEVELS = new Set<string>(["sa4", "sa3", "sa2", "sa1", "mb"]);
 
 // The split Other Territories are SA3-level, so their state code IS the SA3 code
@@ -68,7 +68,7 @@ export function GeoSurface() {
   const code = searchParams.get("code") ?? "";
   const places = searchParams.get("places") === "1";
   // Divisions: show ONE layer (the active tab) by default; ?overlay=1 stacks all
-  // three (Federal + State + Local) together, colour-coded, as a comparison view.
+  // every division layer together, colour-coded, as a comparison view.
   const overlay = searchParams.get("overlay") === "1";
 
   const provider = useGeoExplorer();
@@ -86,6 +86,9 @@ export function GeoSurface() {
     doors,
     activePid,
     setActivePid,
+    pollingPlaces,
+    pollingSelectedId,
+    setPollingSelectedId,
   } = provider;
   const { basket, setPolygons: basketSetPolygons } = useTurfBasket();
 
@@ -99,6 +102,16 @@ export function GeoSurface() {
   const stateDigit = stateAbbrevToAsgsDigit(stateParam);
   const focusBounds = stateBounds(stateParam);
 
+  // The First Nations URL carries a name slug; the map needs the ABS code to filter tiles and
+  // to frame from its state digit. Resolve via the SAME cache key the panel's detail fetch
+  // uses, so useApi's module-level cache serves both from a single request. `null` key when
+  // the kind is anything else, or when nothing is selected — then the map shows all of
+  // Australia with every boundary drawn.
+  const fnLevel = resolveFirstNationsLevel(tab);
+  const fnKey = kind === "first-nations" && code ? `/geo/first-nations/${fnLevel}/${code}` : null;
+  const fnDetail = useApi(fnKey, () => getFirstNations(fnLevel, code), { ttlMs: 300_000 });
+  const fnCode = fnDetail.data?.code ?? "";
+
   const mapProps = useMemo<GeoMapProps>(() => {
     const common = {
       focusBounds,
@@ -107,7 +120,7 @@ export function GeoSurface() {
       resizeToken,
     };
     if (kind === "divisions") {
-      const type = (DIVISION_TABS.includes(tab as DivisionType) ? tab : "ced") as DivisionType;
+      const type = resolveDivisionTab(tab);
       const selectedCode = divisionSelected?.type === type ? divisionSelected.code : undefined;
       const boundaryFilter: FilterSpecification | undefined = stateDigit
         ? ["==", ["slice", ["get", "code"], 0, 1], stateDigit]
@@ -123,7 +136,9 @@ export function GeoSurface() {
         ...common,
         focusBounds: selectionBounds ?? common.focusBounds,
         mode: "boundaries",
-        // One layer at a time by default (the active tab); overlay stacks all three.
+        // One layer at a time by default (the active tab); overlay stacks every layer.
+        // Derived chamber codes are state-digit-prefixed like every other layer, so the
+        // `slice(code,0,1) == stateDigit` boundaryFilter and the framing below still hold.
         boundaryLayers: (overlay ? DIVISION_TABS : [type]).map((t) => ({
           id: t,
           tilesUrl: `${getApiUrl()}/geo/tiles/${t}/{z}/{x}/{y}?v=3`,
@@ -154,6 +169,41 @@ export function GeoSurface() {
         onBoundaryClick: (clicked: string) => writeGeoParam("code", code === clicked ? null : clicked),
       };
     }
+    if (kind === "first-nations") {
+      // The URL carries a name slug ('sydney-wollongong'); the vector tiles key on the ABS
+      // code ('107'). `fnCode` is the resolved code — until it arrives there is simply no
+      // highlight. With no `?code=` at all, focusBounds stays undefined and boundaryFilter
+      // stays off, so the map opens on the whole of Australia with every boundary drawn.
+      //
+      // ABS codes are state-digit-prefixed at every level (IREG '101', IARE '101001',
+      // ILOC '10100101'), so the shared state filter and the code[0] framing hold.
+      // No `basketCodes`: these layers are reference-only, never turf.
+      const level = resolveFirstNationsLevel(tab);
+      return {
+        ...common,
+        // Explicitly AU_BOUNDS rather than `undefined` when nothing is picked. Undefined only
+        // *incidentally* frames the country (initialViewState falls through to it on a fresh
+        // load); naming it makes the map refit to the whole of Australia whenever the
+        // selection clears — switching level, deselecting, or arriving from a state-framed
+        // view — instead of keeping the previous kind's frame.
+        focusBounds:
+          (fnCode ? stateBounds(stateAsgsDigitToAbbrev(fnCode[0]) ?? "") : undefined) ??
+          common.focusBounds ??
+          AU_BOUNDS,
+        mode: "boundaries",
+        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}?v=1`,
+        boundaryFilter: stateDigit
+          ? (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
+          : undefined,
+        selectedBoundaryCode: fnCode || undefined,
+        // The tile carries no slug, so derive it from the boundary's name — exactly the way
+        // the API derives it — rather than writing an opaque code into the URL.
+        onBoundaryClick: (clicked: string, name: string | null) => {
+          const slug = name ? firstNationsSlug(name) : clicked;
+          writeGeoParam("code", code === slug ? null : slug);
+        },
+      };
+    }
     if (kind === "areas") {
       const level = (AREA_LEVELS.has(tab) ? tab : "sa2") as AreaLevel;
       return {
@@ -171,6 +221,19 @@ export function GeoSurface() {
         onSearchModeChange: (m: "place" | "area") => writeGeoParam("places", m === "place" ? "1" : null),
         query: q,
         onQueryChange: (v: string) => writeGeoParam("q", v || null),
+      };
+    }
+    if (kind === "polling-places") {
+      // Every booth is a clustered point; the status field carries the jurisdiction
+      // so the map tints federal vs each state/territory (see turf-draw-map palette).
+      const selected = pollingPlaces.find((p) => p.id === pollingSelectedId);
+      return {
+        ...common,
+        mode: "points",
+        stops: pollingPlaces.map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, status: p.jurisdiction })),
+        activeStopId: pollingSelectedId || undefined,
+        onStopTap: (id: string) => setPollingSelectedId(pollingSelectedId === id ? "" : id),
+        focusPoint: selected ? { lat: selected.lat, lng: selected.lng } : null,
       };
     }
     // addresses
@@ -192,6 +255,8 @@ export function GeoSurface() {
     kind, tab, overlay, stateDigit, stateParam, code, q, places, focusBounds, clearToken, resizeToken,
     divisionSelected, setDivisionSelected, selectedAreas, toggleSelectedArea, setViewportAreas,
     setDrawnPolygons, doors, activePid, setActivePid, picked, basket.divisions, basket.areas,
+    pollingPlaces, pollingSelectedId, setPollingSelectedId,
+    fnCode,
   ]);
 
   if (!kind) return null;
@@ -200,6 +265,8 @@ export function GeoSurface() {
     kind === "divisions" ? <DivisionsPanel view={view} /> :
     kind === "states" ? <StatesPanel view={view} /> :
     kind === "areas" ? <AreasPanel view={view} /> :
+    kind === "polling-places" ? <PollingPlacesPanel view={view} /> :
+    kind === "first-nations" ? <FirstNationsPanel view={view} /> :
     <AddressesPanel view={view} />;
 
   // Freehand draw is on for every kind; the areas panel folds polygons into its

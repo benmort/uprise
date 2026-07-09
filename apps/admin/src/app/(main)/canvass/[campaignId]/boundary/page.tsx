@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StateRegion } from "@/components/shell/state-region";
 import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
-import { listDivisions, type AreaLevel, type Division, type DivisionType } from "@/lib/api/geo";
+import { listDivisions, type AreaLevel, type Division, type DivisionType, type TurfDivisionType } from "@/lib/api/geo";
 import { getCampaignBoundary, setCampaignBoundary, type BoundarySource } from "@/lib/api/campaigns";
 import type { ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
 
@@ -23,7 +23,9 @@ const TurfDrawMap = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-full w-full" /> },
 );
 
-type DivPick = { type: DivisionType; code: string; name: string };
+/** A saved boundary part may reference a whole state ("ste") or a state-wide chamber, which
+ *  the picker below cannot create but the list must still render and remove. */
+type DivPick = { type: TurfDivisionType; code: string; name: string };
 
 /**
  * Campaign boundary editor. The boundary is a union of divisions (SED/CED/LGA),
@@ -50,7 +52,7 @@ export default function CampaignBoundaryPage() {
   const [reloadToken, setReloadToken] = useState(0);
 
   // Division picker
-  const [divType, setDivType] = useState<DivisionType>("sed");
+  const [divType, setDivType] = useState<DivisionType>("sed_lower");
   const [divList, setDivList] = useState<Division[]>([]);
   const [divQuery, setDivQuery] = useState("");
 
@@ -195,9 +197,11 @@ export default function CampaignBoundaryPage() {
           <SectionCard title="Add electorate / LGA">
             <div className="flex gap-2">
               <Select value={divType} onValueChange={(v) => setDivType(v as DivisionType)}>
-                <SelectItem value="sed">State (SED)</SelectItem>
-                <SelectItem value="ced">Federal (CED)</SelectItem>
+                <SelectItem value="ced">Federal – House of Reps</SelectItem>
+                <SelectItem value="sed_lower">State – lower house</SelectItem>
+                <SelectItem value="sed_upper">State – upper house</SelectItem>
                 <SelectItem value="lga">LGA</SelectItem>
+                <SelectItem value="ward">Ward</SelectItem>
               </Select>
               <Input placeholder="Search…" value={divQuery} onChange={(e) => setDivQuery(e.target.value)} />
             </div>

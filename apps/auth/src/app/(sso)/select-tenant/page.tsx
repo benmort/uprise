@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button } from "@uprise/ui";
+import { Alert, Button, Input } from "@uprise/ui";
 import { auth, type Membership } from "@uprise/api-client";
 import { validateReturnTo } from "@/lib/return-to";
 
@@ -13,10 +13,15 @@ const ROLE_LABELS: Record<string, string> = {
   VOLUNTEER: "Volunteer",
 };
 
+// Show the filter only once the list is long enough to need it — a superadmin sees
+// every workspace, but a regular multi-tenant user with a handful doesn't need a search.
+const SEARCH_THRESHOLD = 6;
+
 
 export default function SelectTenantPage() {
   const returnTo = useQueryParams().get("return_to");
   const [memberships, setMemberships] = useState<Membership[] | null>(null);
+  const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -56,16 +61,42 @@ export default function SelectTenantPage() {
       </div>
       {error ? <Alert variant="error" title={error} className="mb-4" /> : null}
       {memberships ? (
-        <ul className="space-y-2">
-          {memberships.map((m) => (
-            <li key={m.tenantId}>
-              <Button variant="outline" className="w-full justify-between" disabled={busy} onClick={() => choose(m.tenantId)}>
-                <span>{m.tenantName}</span>
-                <span className="text-xs text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
-              </Button>
-            </li>
-          ))}
-        </ul>
+        (() => {
+          const q = query.trim().toLowerCase();
+          const filtered = q
+            ? memberships.filter((m) => m.tenantName.toLowerCase().includes(q))
+            : memberships;
+          return (
+            <>
+              {memberships.length > SEARCH_THRESHOLD ? (
+                <Input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search workspaces…"
+                  aria-label="Search workspaces"
+                  autoFocus
+                  className="mb-3"
+                />
+              ) : null}
+              <ul className="space-y-2">
+                {filtered.map((m) => (
+                  <li key={m.tenantId}>
+                    <Button variant="outline" className="w-full justify-between" disabled={busy} onClick={() => choose(m.tenantId)}>
+                      <span>{m.tenantName}</span>
+                      <span className="text-xs text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
+                    </Button>
+                  </li>
+                ))}
+                {filtered.length === 0 ? (
+                  <li className="py-6 text-center text-sm text-muted-foreground">
+                    No workspaces match “{query.trim()}”.
+                  </li>
+                ) : null}
+              </ul>
+            </>
+          );
+        })()
       ) : (
         <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
       )}

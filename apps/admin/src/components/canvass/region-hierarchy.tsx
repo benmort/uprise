@@ -16,7 +16,9 @@ import {
 import { cn } from "@/lib/utils";
 
 const ASGS_ORDER: RegionKind[] = ["state", "sa4", "sa3", "sa2", "sa1", "mb"];
-const ADMIN_KINDS: RegionKind[] = ["ced", "sed", "lga"];
+const ADMIN_KINDS: RegionKind[] = [
+  "ced", "sed", "sed_lower", "sed_upper", "lga", "ward", "ireg", "iare", "iloc",
+];
 
 /** A region as a link (or plain text for leaf kinds with no detail route). */
 function RefLink({ r, className }: { r: RegionRef; className?: string }) {

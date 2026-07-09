@@ -41,6 +41,8 @@ const KINDS: Array<{ kind: GeoExplorerKind; label: string; href: string }> = [
   { kind: "states", label: "States", href: "/data/states" },
   { kind: "areas", label: "Areas", href: "/data/areas" },
   { kind: "addresses", label: "Addresses", href: "/data/addresses" },
+  { kind: "polling-places", label: "Polling places", href: "/data/polling-places" },
+  { kind: "first-nations", label: "First Nations", href: "/data/first-nations" },
 ];
 
 const PLACEHOLDER: Record<GeoExplorerKind, string> = {
@@ -48,6 +50,8 @@ const PLACEHOLDER: Record<GeoExplorerKind, string> = {
   states: "Search states and territories…",
   areas: "Search areas by name or code…",
   addresses: "Search an address, street or suburb…",
+  "polling-places": "Search booths by name, venue or suburb…",
+  "first-nations": "Search Indigenous regions, areas or locations…",
 };
 
 const TITLE: Record<GeoExplorerKind, string> = {
@@ -55,6 +59,8 @@ const TITLE: Record<GeoExplorerKind, string> = {
   states: "States",
   areas: "Areas",
   addresses: "Addresses",
+  "polling-places": "Polling places",
+  "first-nations": "First Nations",
 };
 
 const DESCRIPTION: Record<GeoExplorerKind, string> = {
@@ -62,6 +68,8 @@ const DESCRIPTION: Record<GeoExplorerKind, string> = {
   states: "States and territories – browse, inspect and cut turf, or stack whole states into your turf.",
   areas: "ASGS statistical areas (meshblock → SA4) – search a level or work on the map.",
   addresses: "Search any address live, plot it, and see the real doors around it.",
+  "polling-places": "Every federal and state/territory polling booth – search, filter by jurisdiction, and plot on the map.",
+  "first-nations": "ABS Indigenous Structure – Regions, Areas and Locations. Statistical geographies for reference, not cultural, language or nation boundaries, and not cuttable into turf.",
 };
 
 const VIEW_KEY: Record<GeoExplorerKind, string> = {
@@ -69,6 +77,8 @@ const VIEW_KEY: Record<GeoExplorerKind, string> = {
   states: "uprise.statesView",
   areas: "uprise.areasView",
   addresses: "uprise.addressesView",
+  "polling-places": "uprise.pollingPlacesView",
+  "first-nations": "uprise.firstNationsView",
 };
 
 function GeoExplorerChrome() {

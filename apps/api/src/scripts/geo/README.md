@@ -56,7 +56,46 @@ npm --prefix apps/api run geo:map
 ```
 `map.ts`: mb_code from G-NAF; SA1–SA4 + LGA from mesh-block codes/attributes; CED + SED via
 GIST-indexed `ST_Contains` spatial join (address point → latest electoral polygon);
-populates `geo.address_region` + refreshes `geo.dataset_meta` row counts.
+populates `geo.address_region` + refreshes `geo.dataset_meta` row counts. It also rebuilds
+the derived chamber layers and backfills their per-address columns.
+
+## 4b. Light up the chamber layers (fast path)
+```
+npm --prefix apps/api run geo:chambers
+```
+Needed **after `prisma migrate deploy` applies `20260709120000_geo_chambers_wards`** on a DB
+whose `geo.address_region` is already mapped. The migration builds the chamber-pure geometry
+(`geo.sed_lower`, `geo.sed_upper`) but leaves the per-address columns NULL and publishes no
+address counts for them — a 16.9M-row UPDATE has no business holding a write lock for a
+deploy. Until this runs, the chamber layers render their boundaries and tiles but report
+zero addresses and zero contacts (symmetric, like the `state` layer before the mesh-block
+backfill). Minutes, not hours: chamber attribution is a 432-row crosswalk join, not a
+spatial one. `geo:map` does the same work as part of a full re-ingest.
+
+## 4c. First Nations (ABS ASGS Indigenous Structure)
+```
+npm --prefix apps/api run geo:load-first-nations   # fetches from the ABS FeatureServer
+npm --prefix apps/api run geo:first-nations        # attributes addresses + publishes counts
+```
+Populates `geo.ireg` / `geo.iare` / `geo.iloc` — Indigenous Regions (40), Areas (412) and
+Locations (1,120). **Reference-only**: these layers are deliberately absent from
+`DivisionType`/`TURF_DIVISION_TYPES`/`UNION_SOURCES`, so an organiser cannot cut a turf from
+an Indigenous Area. A unit test in `geo.service.spec.ts` pins that.
+
+Unlike the other layers there is no shapefile download: ABS serves the whole structure as
+GeoJSON from `geo.abs.gov.au/arcgis/rest/services/ASGS2021/{IREG,IARE,ILOC}/FeatureServer/0`,
+and it is only 1,572 polygons. The loader drops the **19 non-spatial pseudo-rows per level**
+(each jurisdiction's `x94 "No usual address"` and `x97 "Migratory - Offshore - Shipping"`,
+plus `ZZZ "Outside Australia"`) by testing for geometry — never by code prefix, which would
+catch only `ZZZ`.
+
+`geo:first-nations` is the slow step: one `ST_Contains` of 16.9M addresses against 1,120
+Indigenous Locations, updating three indexed columns. Budget **1–2 hours**, and run it as a
+manual ETL step — never inside a deploy. It publishes the per-address columns and the
+`region_address_count` rows in a single transaction, so the layer never reports a real
+`addressCount` beside a false `contactCount`. `geo:map` does the same work as part of a full
+re-ingest. Licence: the data.gov.au mirrors say "notspecified"; confirm with ABS before
+treating the data as redistributable.
 
 ## 5. Verify
 - `SELECT count(*) FROM geo.address_region;` ≈ G-NAF address count.
@@ -101,3 +140,36 @@ ABS ASGS Ed3 boundary files + AEC federal boundaries are downloaded from the ABS
 (GeoPackage/Shapefile); record each file's release date in `geo.dataset_meta`.
 
 Then `npm --prefix apps/api run geo:map` populates `geo.address_region`.
+
+---
+
+## Polling places (booths)
+
+`geo.polling_place` holds every federal + state/territory voting booth as a point
+(`geo:load-polling-places`). Federal booths come from the AEC directly (CC BY 4.0);
+state/territory booths from **The Tally Room** (Ben Raue, tallyroom.com.au) — no open
+licence, so this is for internal, attributed, derived display only (not redistribution).
+
+Download the sources into `data/geo/polling-places/<jur>/` (gitignored), then load:
+
+```sh
+# Federal — AEC 2025 general polling places (skip the mobile-team rows with no coords)
+mkdir -p data/geo/polling-places/federal
+curl -fsSL https://results.aec.gov.au/31496/Website/Downloads/GeneralPollingPlacesDownload-31496.csv \
+  -o data/geo/polling-places/federal/GeneralPollingPlacesDownload-31496.csv
+
+# States/territories — The Tally Room booth master (<JUR>-<YEAR>-Pollingplaces.xlsx, plural).
+# Folders are public; grab only the *-Pollingplaces.xlsx (NOT the -PollingPlace vote files).
+#   pip install gdown
+#   gdown --folder <driveURL> -O data/geo/polling-places/<jur>   # then keep only *-Pollingplaces.xlsx
+# If Google rate-limits the folder download, list it for the master's file id and fetch just that:
+#   curl -sL "https://drive.google.com/uc?export=download&id=<FILE_ID>" -o data/geo/polling-places/<jur>/<JUR>-<YEAR>-Pollingplaces.xlsx
+# Latest free election + Drive folder per jurisdiction is listed at https://www.tallyroom.com.au/data
+#   nsw 2023 · vic 2022 · qld 2024 · wa 2025 · sa 2026 · tas 2025 · act 2024 · nt 2024
+
+npm --prefix apps/api run geo:load-polling-places
+```
+
+The loader upserts by a namespaced `<jur>:<sourceId>` id, then point-in-polygon tags each
+booth with its federal division (`geo.ced`) and state electorate (`geo.sed`), and writes the
+`polling_places` row in `geo.dataset_meta` (surfaced on /data/datasets).

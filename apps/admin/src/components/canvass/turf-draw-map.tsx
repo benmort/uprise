@@ -917,7 +917,16 @@ export function TurfDrawMap({
                 filter={["!", ["has", "point_count"]]}
                 paint={{
                   "circle-radius": 7,
-                  "circle-color": ["match", ["get", "status"], "VISITED", "#16a34a", "SKIPPED", "#94a3b8", PRIMARY],
+                  "circle-color": [
+                    "match",
+                    ["get", "status"],
+                    // Addresses mode — door contact status.
+                    "VISITED", "#16a34a", "SKIPPED", "#94a3b8",
+                    // Polling-places mode — one colour per electoral jurisdiction.
+                    "federal", "#dc2626", "nsw", "#0ea5e9", "vic", "#2563eb", "qld", "#7c3aed",
+                    "wa", "#d97706", "sa", "#db2777", "tas", "#059669", "act", "#0891b2", "nt", "#ea580c",
+                    PRIMARY,
+                  ],
                   "circle-stroke-width": 1.5,
                   "circle-stroke-color": "#ffffff",
                 }}

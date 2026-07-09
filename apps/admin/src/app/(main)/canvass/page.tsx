@@ -158,7 +158,7 @@ export default function CanvassPage() {
 
   // Shareable tokenless-join link for the open-join toggle (auth app, per campaign).
   const joinLink = editing
-    ? `${process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002"}/v/c/${editing.id}`
+    ? `${process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002"}/volunteer/${editing.id}`
     : "";
 
   if (loading) {

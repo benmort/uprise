@@ -9,6 +9,12 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
+import {
+  DIVISION_TYPES,
+  TURF_DIVISION_TYPES,
+  type DivisionType,
+  type TurfDivisionType,
+} from "../../geo/geo.service";
 
 export class SurveyAnswerDto {
   @IsString()
@@ -207,8 +213,8 @@ export class CreateDoorContactDto {
 }
 
 export class CreateTurfFromDivisionDto {
-  @IsIn(["ced", "sed", "lga"])
-  type!: "ced" | "sed" | "lga";
+  @IsIn(DIVISION_TYPES)
+  type!: DivisionType;
 
   @IsString()
   code!: string;
@@ -259,9 +265,10 @@ export class CreateTurfFromAreasDto {
 }
 
 export class TurfDivisionDto {
-  // "ste" = a whole state/territory (derived geo.state layer).
-  @IsIn(["ced", "sed", "lga", "ste"])
-  type!: "ced" | "sed" | "lga" | "ste";
+  // "ste" = a whole state/territory (derived geo.state layer); "chamber_electorate" = a
+  // state-wide chamber (the Senate, or the NSW/SA/WA Legislative Councils).
+  @IsIn(TURF_DIVISION_TYPES)
+  type!: TurfDivisionType;
 
   @IsString()
   code!: string;

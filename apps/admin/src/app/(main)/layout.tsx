@@ -138,6 +138,7 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
         { label: "States", href: "/data/states", match: (p) => p.startsWith("/data/states") },
         { label: "Areas", href: "/data/areas", match: (p) => p.startsWith("/data/areas"), flag: "FEATURE_NAV_CANVASS_AREAS" },
         { label: "Addresses", href: "/data/addresses", match: (p) => p.startsWith("/data/addresses"), flag: "FEATURE_NAV_CANVASS_ADDRESSES" },
+        { label: "Polling places", href: "/data/polling-places", match: (p) => p.startsWith("/data/polling-places") },
         { label: "File Manager", href: "/data/file-manager", match: (p) => p.startsWith("/data/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
       ],
     },

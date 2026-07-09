@@ -54,6 +54,15 @@ export function getAuthAppUrl(): string {
   return process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
 }
 
+/** Action app origin — where a freshly-joined volunteer lands after onboarding. */
+export function getActionAppUrl(): string {
+  if (typeof window !== "undefined") {
+    const runtime = (window as unknown as { __ACTION_APP_URL__?: string }).__ACTION_APP_URL__;
+    if (runtime) return runtime;
+  }
+  return process.env.NEXT_PUBLIC_ACTION_APP_URL || "http://localhost:3004";
+}
+
 function redirectToLogin(): void {
   if (typeof window === "undefined") return;
   const returnTo = encodeURIComponent(window.location.href);
@@ -163,6 +172,9 @@ export const auth = {
   // Tokenless open-join (per-campaign): same wizard, no token – gated by the campaign flag.
   openJoinPreview: (campaignId: string) =>
     request<OpenJoinPreview>(`/iam/open-join/${encodeURIComponent(campaignId)}`, undefined, { redirectOn401: false }),
+  // The generic /volunteer board – every open-join opportunity (same item shape).
+  openJoinList: () =>
+    request<OpenJoinPreview[]>("/iam/open-join/opportunities", undefined, { redirectOn401: false }),
   openJoinStartPhone: (body: OpenJoinStartPhoneRequest, captchaToken?: string) =>
     post<{ challengeId: string }>("/iam/open-join/phone/start", body, captchaToken),
   openJoinAccept: (body: OpenJoinAcceptRequest) => post<SessionGrantResponse>("/iam/open-join/accept", body),

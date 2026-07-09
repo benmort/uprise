@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { AppModule } from "../../app.module";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -221,6 +221,100 @@ async function loadLayer(prisma: PrismaService, spec: LayerSpec): Promise<number
   return n;
 }
 
+// ── Council wards ───────────────────────────────────────────────────────────
+/**
+ * Wards are the sub-division of a (unicameral) council — the local-government analogue of
+ * a lower-house district. There is NO national ward dataset: each state publishes its own,
+ * with different field names, and Queensland calls them "divisions". Coverage is partial by
+ * nature — many councils are undivided, all Tasmanian councils are, and the ACT has no local
+ * government at all — so an absent file is normal, not an error.
+ *
+ * Drop shapefiles at `data/geo/ward/<state>/*.shp`, where <state> is one of the keys below:
+ *   nsw  NSW Electoral Commission / NSW SEED
+ *   vic  Vicmap Admin (DataVic) — WARD_LGA_POLYGON
+ *   qld  QSpatial / ECQ — "divisions"
+ *   wa   Landgate (SLIP) / WAEC
+ *   sa   data.sa.gov.au / ECSA
+ *   nt   data.nt.gov.au / NTEC
+ *
+ * There is no national ward-code standard, so the PK is synthesised as
+ * `<lga_code>-W-<SLUG(ward name)>`. That makes it the most fragile identifier in the geo
+ * schema: a source that renames a ward re-keys it. The LGA is resolved from an LGA code
+ * field when the source carries one, else by matching the LGA name against geo.lga.
+ *
+ * NOTE: unverified against real ward shapefiles — none ship with the repo. Treat the field
+ * regexes below as a starting point and check the `code←FIELD` line the loader prints.
+ */
+const WARD_STATES: Record<string, string> = {
+  nsw: "New South Wales",
+  vic: "Victoria",
+  qld: "Queensland",
+  wa: "Western Australia",
+  sa: "South Australia",
+  nt: "Northern Territory",
+};
+const WARD_NAME_RE = [/WARD_NAME/i, /DIV_NAME/i, /DIVISION/i, /WARD/i, /^NAME$/i];
+const WARD_LGA_CODE_RE = [/LGA_CODE/i, /LG_CODE/i, /COUNCIL_C/i];
+const WARD_LGA_NAME_RE = [/LGA_NAME/i, /LG_NAME/i, /COUNCIL/i, /ABB_NAME/i];
+
+const slug = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+async function loadWards(prisma: PrismaService): Promise<number> {
+  const dir = resolve(ROOT, "data/geo/ward");
+  if (!existsSync(dir)) {
+    console.warn("  ⚠ skip geo.ward: data/geo/ward not found (no ward shapefiles downloaded)"); // eslint-disable-line no-console
+    return -1;
+  }
+  // LGA name → code, so a ward file carrying only a council name can still be keyed.
+  const lgaRows = (await prisma.$queryRawUnsafe(`SELECT code, name FROM geo.lga`)) as Array<{
+    code: string;
+    name: string;
+  }>;
+  const lgaByName = new Map(lgaRows.map((r) => [r.name.toUpperCase().trim(), r.code]));
+
+  let total = 0;
+  for (const [key, stateName] of Object.entries(WARD_STATES)) {
+    const stateDir = resolve(dir, key);
+    if (!existsSync(stateDir)) continue;
+    const shpFile = readdirSync(stateDir).find((f) => f.toLowerCase().endsWith(".shp"));
+    if (!shpFile) continue;
+    const shp = resolve(stateDir, shpFile);
+    const source = await shapefile.open(shp, shp.replace(/\.shp$/i, ".dbf"));
+
+    let n = 0;
+    let logged = false;
+    for (;;) {
+      const r = await source.read();
+      if (r.done) break;
+      const f = r.value as { geometry: unknown; properties: Record<string, unknown> } | null;
+      if (!f?.geometry) continue;
+      const props = f.properties || {};
+      const wardName = pick(props, WARD_NAME_RE);
+      const lgaCode = pick(props, WARD_LGA_CODE_RE) ?? lgaByName.get((pick(props, WARD_LGA_NAME_RE) ?? "").toUpperCase().trim()) ?? null;
+      if (!wardName || !lgaCode) continue; // cannot key it → skip rather than invent a code
+      if (!logged) {
+        console.log(`  geo.ward[${key}]: name←${detectKey(props, WARD_NAME_RE)}, lga←${detectKey(props, WARD_LGA_CODE_RE)}/${detectKey(props, WARD_LGA_NAME_RE)}`); // eslint-disable-line no-console
+        logged = true;
+      }
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO geo.ward (code, name, lga_code, state, geom)
+         VALUES ($1,$2,$3,$4,ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON($5),4326)))
+         ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, lga_code=EXCLUDED.lga_code,
+           state=EXCLUDED.state, geom=EXCLUDED.geom`,
+        `${lgaCode}-W-${slug(wardName)}`,
+        wardName,
+        lgaCode,
+        stateName,
+        JSON.stringify(f.geometry),
+      );
+      n += 1;
+    }
+    console.log(`  ✓ ${n} wards from ${key}`); // eslint-disable-line no-console
+    total += n;
+  }
+  return total;
+}
+
 async function upsertMeta(prisma: PrismaService, spec: LayerSpec, rowCount: number): Promise<void> {
   await prisma.$executeRawUnsafe(
     `INSERT INTO geo.dataset_meta (key,label,source_url,release_date,licence,row_count,status,last_ingested)
@@ -248,6 +342,20 @@ async function main(): Promise<void> {
       if (n < 0) continue; // file missing — leave dataset_meta untouched
       await upsertMeta(prisma, spec, n);
       console.log(`  ✓ ${n} features into ${spec.table}`); // eslint-disable-line no-console
+    }
+
+    console.log("Loading data/geo/ward/<state>/*.shp → geo.ward…"); // eslint-disable-line no-console
+    const wards = await loadWards(prisma);
+    if (wards >= 0) {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO geo.dataset_meta (key,label,source_url,release_date,licence,row_count,status,last_ingested)
+         VALUES ('ward','Local-government wards','(per-state electoral commissions)',NULL,$1,$2,'loaded',now())
+         ON CONFLICT (key) DO UPDATE SET
+           row_count=EXCLUDED.row_count, status='loaded', last_ingested=now(), updated_at=now()`,
+        CCBY,
+        wards,
+      );
+      console.log(`  ✓ ${wards} wards into geo.ward`); // eslint-disable-line no-console
     }
   } finally {
     await app.close();

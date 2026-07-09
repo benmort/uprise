@@ -35,10 +35,17 @@ const AREA_LEVEL_LAYER: Record<string, string> = {
 function datasetHref(key: string): string | null {
   if (key === "state") return "/data/states";
   if (key === "ced") return "/data/divisions?tab=ced";
-  if (key === "sed") return "/data/divisions?tab=sed";
+  if (key === "sed") return "/data/divisions?tab=sed_lower";
+  if (key === "sed_lower") return "/data/divisions?tab=sed_lower";
+  if (key === "sed_upper") return "/data/divisions?tab=sed_upper";
   if (key === "lga") return "/data/divisions?tab=lga";
+  if (key === "ward") return "/data/divisions?tab=ward";
+  if (key === "ireg") return "/data/first-nations?tab=regions";
+  if (key === "iare") return "/data/first-nations?tab=areas";
+  if (key === "iloc") return "/data/first-nations?tab=locations";
   if (AREA_LEVEL_LAYER[key]) return `/data/areas?tab=${AREA_LEVEL_LAYER[key]}`;
   if (key === "gnaf") return "/data/addresses";
+  if (key === "polling_places") return "/data/polling-places";
   return null;
 }
 
@@ -46,20 +53,32 @@ function datasetHref(key: string): string | null {
 const DATASET_DESCRIPTION: Record<string, string> = {
   gnaf: "Every Australian address — the geocoded address universe (Geoscape G-NAF).",
   state: "States & territories — derived from the ASGS SA4 layer.",
-  ced: "Federal electoral divisions (AEC).",
-  sed: "State & territory electoral districts.",
+  ced: "Federal electoral divisions — the House of Representatives (AEC).",
+  sed: "Raw ABS state electoral divisions. For Tasmania these are lower × upper house intersection cells, so prefer the chamber-pure layers below.",
+  sed_lower: "State lower houses — Legislative Assemblies, plus the unicameral Queensland, ACT and NT assemblies.",
+  sed_upper: "State upper houses with their own boundaries — Victoria's 8 Legislative Council regions and Tasmania's 15 divisions.",
+  chamber_electorate: "Chambers whose electorate is the whole jurisdiction — the Senate, and the NSW, SA and WA Legislative Councils.",
   lga: "Local government areas (councils).",
+  ward: "Council wards — the sub-division of a council. Partial coverage: many councils are undivided, and there is no national dataset.",
+  ireg: "ABS Indigenous Regions — the coarsest level of the ASGS Indigenous Structure. A statistical geography, not a cultural, language or nation boundary.",
+  iare: "ABS Indigenous Areas — medium-scale statistical geographies for reporting on Aboriginal and Torres Strait Islander populations.",
+  iloc: "ABS Indigenous Locations — the finest level of the ASGS Indigenous Structure. Reference only; not cuttable into turf.",
   asgs_mb: "Mesh blocks — the ABS's smallest statistical area.",
   sa1: "Statistical Area 1 — small ABS units.",
   sa2: "Statistical Area 2 — suburb-scale communities.",
   sa3: "Statistical Area 3 — regional groupings of SA2s.",
   sa4: "Statistical Area 4 — the largest sub-state regions.",
+  polling_places: "Polling booths — every federal (AEC) and state/territory (The Tally Room) voting location, geocoded.",
 };
 
 // Display order: electoral/council boundaries coarsest-first, then the ASGS
 // hierarchy SA4 → meshblock, addresses last. The API returns rows keyed
 // alphabetically; unknown future keys sink to the bottom.
-const DATASET_ORDER = ["state", "ced", "sed", "lga", "sa4", "sa3", "sa2", "sa1", "asgs_mb", "gnaf"];
+const DATASET_ORDER = [
+  "state", "ced", "chamber_electorate", "sed_lower", "sed_upper", "sed", "lga", "ward",
+  "ireg", "iare", "iloc",
+  "sa4", "sa3", "sa2", "sa1", "asgs_mb", "gnaf", "polling_places",
+];
 const datasetRank = (key: string) => {
   const i = DATASET_ORDER.indexOf(key);
   return i === -1 ? DATASET_ORDER.length : i;
@@ -184,8 +203,11 @@ export default function DataSettingsPage() {
             ]}
           />
           <p className="mt-3 text-xs text-muted-foreground">
-            Sources: G-NAF © Geoscape Australia; ASGS & LGA © Australian Bureau of Statistics;
-            federal divisions © Australian Electoral Commission. Open data, attribution required.
+            Sources: G-NAF © Geoscape Australia; ASGS &amp; LGA © Australian Bureau of Statistics;
+            federal divisions &amp; polling places © Australian Electoral Commission; state &amp; territory
+            polling places © The Tally Room (Ben Raue); ASGS Indigenous Structure (Indigenous
+            Regions, Areas &amp; Locations) © Australian Bureau of Statistics. Open data, attribution
+            required.
           </p>
         </div>
       </StateRegion>

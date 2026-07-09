@@ -763,6 +763,55 @@ describe("IamFlowsService", () => {
       await expect(svc.openJoinStartPhone("c1", "0400000001")).rejects.toThrow();
     });
 
+    it("openJoinList returns every open+active campaign with its org name + logo", async () => {
+      const { svc, prisma } = setup();
+      (prisma.canvassCampaign as any).findMany = jest.fn(async () => [
+        { id: "c1", name: "Spring Doorknock", tenantId: "t1" },
+        { id: "c2", name: "Autumn Blitz", tenantId: "t2" },
+      ]);
+      (prisma.tenant as any).findMany = jest.fn(async () => [
+        { id: "t1", name: "Org One" },
+        { id: "t2", name: "Org Two" },
+      ]);
+      (prisma as any).orgProfile = {
+        findMany: jest.fn(async () => [{ tenantId: "t1", logoBlockUrl: "logo1.png" }]),
+      };
+      const res = await svc.openJoinList();
+      expect(res).toEqual([
+        { campaignId: "c1", tenantId: "t1", campaignName: "Spring Doorknock", tenantName: "Org One", logoUrl: "logo1.png" },
+        { campaignId: "c2", tenantId: "t2", campaignName: "Autumn Blitz", tenantName: "Org Two", logoUrl: null },
+      ]);
+      // Only open + active campaigns are listed.
+      expect((prisma.canvassCampaign as any).findMany.mock.calls[0][0].where).toMatchObject({
+        openJoinEnabled: true,
+        status: "ACTIVE",
+      });
+    });
+
+    it("openJoinList short-circuits to [] (no related lookups) when nothing is open", async () => {
+      const { svc, prisma } = setup();
+      (prisma.canvassCampaign as any).findMany = jest.fn(async () => []);
+      (prisma.tenant as any).findMany = jest.fn();
+      const res = await svc.openJoinList();
+      expect(res).toEqual([]);
+      expect((prisma.tenant as any).findMany).not.toHaveBeenCalled();
+    });
+
+    it("openJoinPreview returns the campaign + org name + logo for an open campaign", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
+      (prisma as any).orgProfile = { findFirst: jest.fn(async () => ({ logoBlockUrl: "logo1.png" })) };
+      const res = await svc.openJoinPreview("c1");
+      expect(res).toEqual({
+        campaignId: "c1",
+        tenantId: "t1",
+        campaignName: "Spring Doorknock",
+        tenantName: "Org One",
+        logoUrl: "logo1.png",
+      });
+    });
+
     it("accept verifies the OTP, then creates a VOLUNTEER membership + session immediately (no approval)", async () => {
       const { svc, prisma, sessions } = setup();
       prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);

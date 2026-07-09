@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { AreaHit, DivisionType, NearbyAddress, TurfUniverse } from "@/lib/api/geo";
+import type { AreaHit, DivisionType, NearbyAddress, PollingPlacePoint, TurfUniverse } from "@/lib/api/geo";
 import type { SelectedArea } from "@/components/canvass/turf-draw-map";
 
 /** A Mapbox forward-geocoding hit (AU, address-biased) — the Addresses kind's picked
@@ -53,6 +53,13 @@ type GeoExplorerValue = {
   setDoors: (doors: NearbyAddress[]) => void;
   activePid: string;
   setActivePid: (pid: string) => void;
+
+  // Polling places: the map's booth points + the selected booth (its detail is
+  // re-fetched from the useApi cache), mirroring the addresses doors/activePid pair.
+  pollingPlaces: PollingPlacePoint[];
+  setPollingPlaces: (places: PollingPlacePoint[]) => void;
+  pollingSelectedId: string;
+  setPollingSelectedId: (id: string) => void;
 };
 
 const GeoExplorerContext = createContext<GeoExplorerValue | null>(null);
@@ -68,6 +75,8 @@ export function GeoExplorerProvider({ children }: { children: ReactNode }) {
   const [picked, setPicked] = useState<GeocodeHit | null>(null);
   const [doors, setDoors] = useState<NearbyAddress[]>([]);
   const [activePid, setActivePid] = useState("");
+  const [pollingPlaces, setPollingPlaces] = useState<PollingPlacePoint[]>([]);
+  const [pollingSelectedId, setPollingSelectedId] = useState("");
 
   const toggleSelectedArea = useCallback((area: SelectedArea) => {
     setSelectedAreas((cur) => {
@@ -103,6 +112,10 @@ export function GeoExplorerProvider({ children }: { children: ReactNode }) {
       setDoors,
       activePid,
       setActivePid,
+      pollingPlaces,
+      setPollingPlaces,
+      pollingSelectedId,
+      setPollingSelectedId,
     }),
     [
       universe,
@@ -118,6 +131,8 @@ export function GeoExplorerProvider({ children }: { children: ReactNode }) {
       picked,
       doors,
       activePid,
+      pollingPlaces,
+      pollingSelectedId,
     ],
   );
 

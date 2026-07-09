@@ -16,7 +16,13 @@ import { ApiHttpException } from "../common/http/api-response";
 import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
 import { hashPassword } from "../auth/password.util";
 import { EngagementService } from "../shared-engagement/engagement.service";
-import { GeoService, type BoundarySource } from "../geo/geo.service";
+import {
+  GeoService,
+  DIVISION_TABLES,
+  type BoundarySource,
+  type DivisionType,
+  type TurfDivisionType,
+} from "../geo/geo.service";
 import { assertTurfAssignmentTransition } from "./turf-assignment-state.machine";
 
 /** Which addresses a turf should be populated with when it's cut. */
@@ -487,14 +493,14 @@ export class CanvassingService {
   async createTurfFromDivision(
     tenantId: string,
     input: {
-      type: "ced" | "sed" | "lga";
+      type: DivisionType;
       code: string;
       name?: string;
       campaignId?: string | null;
       universe?: TurfUniverse;
     },
   ) {
-    const table = { ced: "geo.ced", sed: "geo.sed", lga: "geo.lga" }[input.type];
+    const table = DIVISION_TABLES[input.type];
     const rows = (await this.prisma.$queryRawUnsafe(
       `SELECT name, ST_AsGeoJSON(geom) AS geojson FROM ${table} WHERE code = $1`,
       input.code,
@@ -571,7 +577,7 @@ export class CanvassingService {
     input: {
       name: string;
       campaignId?: string | null;
-      divisions?: Array<{ type: "ced" | "sed" | "lga" | "ste"; code: string }>;
+      divisions?: Array<{ type: TurfDivisionType; code: string }>;
       areas?: Array<{ layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }>;
       polygons?: Record<string, unknown>[];
       gnafPids?: string[];

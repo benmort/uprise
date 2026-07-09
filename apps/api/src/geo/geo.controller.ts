@@ -41,6 +41,53 @@ export class GeoController {
     return this.geo.stateDetail(tenantId, code);
   }
 
+  /** The chamber catalogue — including the chambers that do NOT exist (Queensland, the
+   *  ACT and the NT have no upper house; councils are unicameral), so the explorer can say
+   *  so rather than render an empty tab. */
+  @Get("chambers")
+  listChambers() {
+    return this.geo.listChambers();
+  }
+
+  /** Electorates of the chambers that have no sub-state boundaries: the Senate and the
+   *  NSW/SA/WA Legislative Councils. Their boundary is the jurisdiction itself. */
+  @Get("chamber-electorates")
+  listChamberElectorates() {
+    return this.geo.listChamberElectorates();
+  }
+
+  @Get("chamber-electorates/:code")
+  async chamberElectorateDetail(@TenantId() tenantId: string, @Param("code") code: string) {
+    return this.geo.chamberElectorateDetail(tenantId, code);
+  }
+
+  /** First Nations (ABS Indigenous Structure) — a REFERENCE-ONLY layer. Browsable and
+   *  tileable, but absent from every turf/boundary code path by construction. */
+  @Get("first-nations")
+  listFirstNations(
+    @Query("level") level = "ireg",
+    @Query("q") q = "",
+    @Query("state") state?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    return this.geo.listFirstNations(level, {
+      q,
+      state,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
+
+  @Get("first-nations/:level/:code")
+  async firstNationsDetail(
+    @TenantId() tenantId: string,
+    @Param("level") level: string,
+    @Param("code") code: string,
+  ) {
+    return this.geo.firstNationsDetail(tenantId, level, code);
+  }
+
   /** One region's place in the containment tree: what contains it + what it
    *  contains (state ↔ SA4 ↔ … ↔ meshblock ↔ address, plus CED/SED/LGA). */
   @Get("hierarchy")
@@ -121,6 +168,41 @@ export class GeoController {
       return;
     }
     res.send(buf);
+  }
+
+  // ── Polling places (booths) — federal (AEC) + state/territory (The Tally Room) ──
+
+  /** Minimal booth points for the map layer (declared before polling-places/:id). */
+  @Get("polling-places/points")
+  pollingPlacePoints(
+    @Query("jurisdiction") jurisdiction?: string,
+    @Query("state") state?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return this.geo.pollingPlacePoints({ jurisdiction, state, limit: limit ? Number(limit) : undefined });
+  }
+
+  /** Paged, filterable booth list for the polling-places explorer list view. */
+  @Get("polling-places")
+  browsePollingPlaces(
+    @Query("jurisdiction") jurisdiction?: string,
+    @Query("state") state?: string,
+    @Query("q") q?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+  ) {
+    return this.geo.browsePollingPlaces({
+      jurisdiction,
+      state,
+      q,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
+
+  @Get("polling-places/:id")
+  pollingPlaceDetail(@Param("id") id: string) {
+    return this.geo.pollingPlaceDetail(id);
   }
 
   /** Nearest real doors to a point (the Addresses page's geocoded search pin). */

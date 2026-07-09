@@ -875,6 +875,19 @@ describe("CanvassingService", () => {
       expect(spy).toHaveBeenCalledWith("org1", "turf_new", { universe: "hybrid" });
       spy.mockRestore();
     });
+
+    // The table map is shared with GeoService, so a new chamber layer becomes cuttable
+    // without a second copy of the ced/sed/lga mapping drifting out of sync here.
+    it.each([
+      ["sed_lower", "geo.sed_lower"],
+      ["sed_upper", "geo.sed_upper"],
+      ["ward", "geo.ward"],
+    ] as const)("cuts a turf from a %s division", async (type, table) => {
+      prisma.$queryRawUnsafe.mockResolvedValueOnce([{ name: "Southern Metropolitan", geojson: JSON.stringify(square) }]);
+      await service.createTurfFromDivision("org1", { type, code: "X1" });
+      expect(prisma.$queryRawUnsafe.mock.calls[0][0]).toContain(table);
+      expect(prisma.turf.create).toHaveBeenCalled();
+    });
   });
 
   describe("createTurfFromAreas", () => {

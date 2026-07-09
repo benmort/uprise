@@ -19,7 +19,13 @@ import { useLocalStorage, type WalkMode } from "@uprise/field";
  * loading a `?view=map` link never rewrites someone's saved default.
  */
 
-export type GeoExplorerKind = "divisions" | "states" | "areas" | "addresses";
+export type GeoExplorerKind =
+  | "divisions"
+  | "states"
+  | "areas"
+  | "addresses"
+  | "polling-places"
+  | "first-nations";
 
 /** The layout's view toggle persists the per-kind default through this event so
  *  the page hook stays the ONE localStorage writer (a direct setItem from the
@@ -32,6 +38,8 @@ export function kindFromPathname(pathname: string | null): GeoExplorerKind | nul
   if (p === "/data/states") return "states";
   if (p === "/data/areas") return "areas";
   if (p === "/data/addresses") return "addresses";
+  if (p === "/data/polling-places") return "polling-places";
+  if (p === "/data/first-nations") return "first-nations";
   return null;
 }
 

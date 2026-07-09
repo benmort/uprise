@@ -29,19 +29,7 @@ import { cn } from "@/lib/utils";
 import { Spinner } from "@uprise/ui";
 import { SectionCard, type WalkMode } from "@uprise/field";
 
-const TABS: Array<{ type: DivisionType; label: string }> = [
-  { type: "ced", label: "Federal" },
-  { type: "sed", label: "State" },
-  { type: "lga", label: "Local (LGA)" },
-];
-
-// Map colour per division type — matches the legend dot on the pills (the map's
-// boundary layers use the same palette; see geo-surface.tsx).
-const TYPE_COLORS: Record<DivisionType, string> = {
-  ced: "#dc2626", // Federal — red
-  sed: "#7c3aed", // State — violet
-  lga: "#d97706", // Local (LGA) — amber
-};
+import { DIVISION_TABS as TABS, TYPE_COLORS, resolveDivisionTab } from "@/components/canvass/division-layers";
 
 /**
  * Divisions panel for the unified geo surface (Phase 2). The persistent map lives
@@ -55,11 +43,12 @@ export function DivisionsPanel({ view }: { view: WalkMode }) {
   const searchParams = useSearchParams();
   const { q, tab, state, setTab } = useGeoExplorerUrlState({
     viewStorageKey: "uprise.divisionsView",
-    legacyHashToTab: { federal: "ced", state: "sed", local: "lga" },
+    legacyHashToTab: { federal: "ced", state: "sed_lower", local: "lga" },
   });
-  const type = (TABS.some((t) => t.type === tab) ? tab : "ced") as DivisionType;
-  // Show one layer at a time by default; ?overlay=1 stacks all three (Federal +
-  // State + Local) together on the map. The map itself reads the same param.
+  // `?tab=sed` bookmarks predate the chamber split — they meant the lower house.
+  const type = resolveDivisionTab(tab);
+  // Show one layer at a time by default; ?overlay=1 stacks every layer together on the
+  // map. The map itself reads the same param.
   const overlay = searchParams.get("overlay") === "1";
   const stateDigit = stateAbbrevToAsgsDigit(state);
 
@@ -137,13 +126,13 @@ export function DivisionsPanel({ view }: { view: WalkMode }) {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           {tabPills}
-          {/* Overlay: stack all three division layers together vs the single
-              active one. Off by default so only the selected tab's boundaries show. */}
+          {/* Overlay: stack every division layer together vs the single active one.
+              Off by default so only the selected tab's boundaries show. */}
           <button
             type="button"
             aria-pressed={overlay}
             onClick={() => writeGeoParam("overlay", overlay ? null : "1")}
-            title={overlay ? "Showing all three layers — click to show one at a time" : "Overlay Federal + State + Local together"}
+            title={overlay ? "Showing every layer — click to show one at a time" : "Overlay every division layer together"}
             className={cn(
               "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition",
               overlay

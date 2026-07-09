@@ -18,7 +18,7 @@ describe("major route files", () => {
 
   it("contains audience page scaffold", () => {
     const source = read("audience/page.tsx");
-    expect(source).toContain("Build and Manage Audience Segments");
+    expect(source).toContain(">Audience</h1>");
     expect(source).toContain("Upload CSV");
   });
 

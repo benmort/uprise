@@ -85,6 +85,8 @@ export function VolunteerOnboardWizard({
   invitedPhone,
   returnTo,
   onExit,
+  onComplete,
+  completeLabel = "Start canvassing",
 }: {
   token?: string;
   campaignId?: string;
@@ -92,6 +94,10 @@ export function VolunteerOnboardWizard({
   invitedPhone: string | null;
   returnTo: string | null;
   onExit: () => void;
+  /** Overrides the final redirect. Defaults to `completeAuth(memberships, returnTo)`. */
+  onComplete?: (memberships: Parameters<typeof completeAuth>[0]) => void;
+  /** Label on the final button — the entry point names the destination. */
+  completeLabel?: string;
 }) {
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState(invitedPhone ? invitedPhone.replace(/^\+61/, "0").replace(/\D/g, "") : "");
@@ -247,9 +253,9 @@ export function VolunteerOnboardWizard({
         </dl>
         <Button
           className="mt-7 h-14 w-full text-base"
-          onClick={() => completeAuth(memberships, returnTo)}
+          onClick={() => (onComplete ? onComplete(memberships) : completeAuth(memberships, returnTo))}
         >
-          Start canvassing
+          {completeLabel}
         </Button>
       </div>
     );
@@ -277,7 +283,12 @@ export function VolunteerOnboardWizard({
           <p className="mt-2 text-muted-foreground">
             Your number is your sign-in. We&apos;ll text you a code to verify it — no passwords.
           </p>
-          <PhoneNumberField value={phone} className="mt-8" />
+          <PhoneNumberField
+            value={phone}
+            className="mt-8"
+            autoFocus
+            onValueChange={(digits) => setPhone(digits)}
+          />
           <p className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
             <Shield className="mt-0.5 h-4 w-4 shrink-0" />
             Standard message rates may apply. We never share your number.

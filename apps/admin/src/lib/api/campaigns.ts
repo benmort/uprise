@@ -1,4 +1,5 @@
 import { request } from "@/lib/api";
+import type { TurfDivisionType } from "@/lib/api/geo";
 
 export type CampaignStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
 /** Outreach medium a campaign runs on — door-knock, SMS, or both. */
@@ -34,8 +35,10 @@ export type CampaignInput = {
   selfClaimModes?: string[] | null;
 };
 
+/** Mirrors the API's BoundarySource. `type` spans every division layer plus the two
+ *  whole-jurisdiction layers ("ste", "chamber_electorate"). */
 export type BoundarySource =
-  | { kind: "division"; type: "ced" | "sed" | "lga"; code: string }
+  | { kind: "division"; type: TurfDivisionType; code: string }
   | { kind: "area"; layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }
   | { kind: "polygon"; geometry: unknown };
 

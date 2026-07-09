@@ -1008,16 +1008,73 @@ export class IamFlowsService {
     return campaign;
   }
 
-  /** Public preview for the `/v/c/[campaignId]` landing – campaign + org name, gated. */
+  /** Public preview for the `/volunteer/[campaignId]` landing – campaign + org name, gated. */
   async openJoinPreview(
     campaignId: string,
-  ): Promise<{ campaignId: string; campaignName: string; tenantName: string }> {
+  ): Promise<{
+    campaignId: string;
+    tenantId: string;
+    campaignName: string;
+    tenantName: string;
+    logoUrl: string | null;
+  }> {
     const campaign = await this.loadOpenCampaign(campaignId);
-    const tenant = await this.prisma.tenant.findUnique({
-      where: { id: campaign.tenantId },
-      select: { name: true },
+    const [tenant, profile] = await Promise.all([
+      this.prisma.tenant.findUnique({ where: { id: campaign.tenantId }, select: { name: true } }),
+      // The org's block/avatar logo — the same one the tenant selector renders.
+      this.prisma.orgProfile.findFirst({
+        where: { tenantId: campaign.tenantId },
+        select: { logoBlockUrl: true },
+      }),
+    ]);
+    return {
+      campaignId: campaign.id,
+      tenantId: campaign.tenantId,
+      campaignName: campaign.name,
+      tenantName: tenant?.name ?? "",
+      logoUrl: profile?.logoBlockUrl ?? null,
+    };
+  }
+
+  /**
+   * Public board for the generic `/volunteer` landing – every campaign that has
+   * opted into tokenless open-join (openJoinEnabled + ACTIVE), with its org name +
+   * logo. Same item shape as {@link openJoinPreview}, so the board can deep-link
+   * each opportunity into `/volunteer/[campaignId]`. Pre-session (allowlisted).
+   */
+  async openJoinList(): Promise<
+    Array<{
+      campaignId: string;
+      tenantId: string;
+      campaignName: string;
+      tenantName: string;
+      logoUrl: string | null;
+    }>
+  > {
+    const campaigns = await this.prisma.canvassCampaign.findMany({
+      where: { openJoinEnabled: true, status: CanvassCampaignStatus.ACTIVE },
+      select: { id: true, name: true, tenantId: true },
+      orderBy: { name: "asc" },
     });
-    return { campaignId: campaign.id, campaignName: campaign.name, tenantName: tenant?.name ?? "" };
+    if (campaigns.length === 0) return [];
+    // One round-trip per related table across the distinct tenants (not per campaign).
+    const tenantIds = [...new Set(campaigns.map((c) => c.tenantId))];
+    const [tenants, profiles] = await Promise.all([
+      this.prisma.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true } }),
+      this.prisma.orgProfile.findMany({
+        where: { tenantId: { in: tenantIds } },
+        select: { tenantId: true, logoBlockUrl: true },
+      }),
+    ]);
+    const nameById = new Map(tenants.map((t) => [t.id, t.name]));
+    const logoById = new Map(profiles.map((p) => [p.tenantId, p.logoBlockUrl]));
+    return campaigns.map((c) => ({
+      campaignId: c.id,
+      tenantId: c.tenantId,
+      campaignName: c.name,
+      tenantName: nameById.get(c.tenantId) ?? "",
+      logoUrl: logoById.get(c.tenantId) ?? null,
+    }));
   }
 
   /**

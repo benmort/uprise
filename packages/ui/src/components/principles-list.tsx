@@ -60,7 +60,7 @@ export function PrinciplesList({ items = CANVASSER_PRINCIPLES, boxed, className 
             boxed && "rounded-2xl border border-border bg-surface p-4",
           )}
         >
-          <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-xl", TONE[tone])}>
+          <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", TONE[tone])}>
             <Icon className="h-5 w-5" />
           </span>
           <div className="min-w-0">

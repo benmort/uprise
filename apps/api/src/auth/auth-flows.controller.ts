@@ -170,6 +170,14 @@ export class AuthFlowsController {
   // ── Tokenless open-join (per-campaign master switch) ────────────────────
   // Same onboarding wizard as the invite path, but gated by the campaign's
   // openJoinEnabled flag instead of a token. Reachable pre-session (allowlisted).
+  // Declared BEFORE the :campaignId route so the static path wins over the param
+  // (else "opportunities" would be read as a campaignId). Matches the pre-session
+  // /iam/open-join/ allowlist.
+  @Get("open-join/opportunities")
+  openJoinList() {
+    return this.flows.openJoinList();
+  }
+
   @Get("open-join/:campaignId")
   openJoinPreview(@Param("campaignId") campaignId: string) {
     return this.flows.openJoinPreview(campaignId);
