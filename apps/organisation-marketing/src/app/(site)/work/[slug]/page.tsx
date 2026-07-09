@@ -45,7 +45,7 @@ export default function CaseStudyPage({ params }: { params: { slug: string } }) 
 
       {/* Hero image slot */}
       <section className={`${CONTAINER} py-14`}>
-        <MediaPlaceholder caption={`[ ${detail.heroCaption} ]`} ratio="16/8" />
+        <MediaPlaceholder caption={`[ ${detail.heroCaption} ]`} ratio="16/8" src={detail.heroImage} />
       </section>
 
       {/* The brief — mono fact stack beside the lede and body copy */}
@@ -109,7 +109,11 @@ export default function CaseStudyPage({ params }: { params: { slug: string } }) 
         <div className="grid gap-7 md:grid-cols-2">
           {detail.gallery.map((caption, i) => (
             <Reveal key={caption} delay={i * 80}>
-              <MediaPlaceholder caption={`[ ${caption} ]`} ratio="4/3" />
+              <MediaPlaceholder
+                caption={`[ ${caption} ]`}
+                ratio="4/3"
+                src={detail.galleryImages?.[i] ?? undefined}
+              />
             </Reveal>
           ))}
         </div>

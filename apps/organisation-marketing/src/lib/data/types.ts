@@ -23,6 +23,10 @@ export interface CaseDetail {
   body: string[];
   results: Array<{ value: string; label: string }>;
   gallery: string[];
+  /** Real screenshot for the hero slot (public path); falls back to the placeholder. */
+  heroImage?: string;
+  /** Real screenshots aligned index-for-index with `gallery` (null → keep placeholder). */
+  galleryImages?: Array<string | null>;
   stack: string[];
   quote: { text: string; attribution: string };
 }
