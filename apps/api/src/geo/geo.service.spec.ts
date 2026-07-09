@@ -657,3 +657,48 @@ describe("GeoService — First Nations", () => {
     expect(sql).not.toContain("geo.iloc");
   });
 });
+
+// Mesh blocks + SA1s now carry a backfilled place-like name (geo:names). These pin the
+// read-path flip: mb is labelled/searched by COALESCE(name, mb_code), not the bare code.
+describe("GeoService — area names", () => {
+  const svcWith = (impl: (m: jest.Mock) => void) => {
+    const $queryRawUnsafe = jest.fn();
+    impl($queryRawUnsafe);
+    return { svc: new GeoService({ $queryRawUnsafe } as never), $queryRawUnsafe };
+  };
+
+  it("searchAreas matches a mesh block by its new name as well as its code", async () => {
+    const { svc, $queryRawUnsafe } = svcWith((m) =>
+      m.mockResolvedValue([{ code: "20388010000", name: "Fitzroy North · SE" }]),
+    );
+    const res = await svc.searchAreas("mb", "fitzroy");
+    const sql = $queryRawUnsafe.mock.calls[0][0] as string;
+    expect(sql).toContain("mb_code ILIKE $1 OR name ILIKE $1"); // trigram-indexed, code OR name
+    expect(sql).toContain("COALESCE(name, mb_code)"); // SELECT label
+    expect(res[0]).toMatchObject({ level: "mb", code: "20388010000", name: "Fitzroy North · SE" });
+  });
+
+  it("areaDetail labels a mesh block by name, falling back to the code", async () => {
+    const { svc, $queryRawUnsafe } = svcWith((m) =>
+      m
+        .mockResolvedValueOnce([{ code: "20388010000", name: "Fitzroy North · SE", geojson: null }])
+        .mockResolvedValueOnce([{ addressCount: 12, contactCount: 3 }]),
+    );
+    const res = await svc.areaDetail("t1", "mb", "20388010000");
+    expect($queryRawUnsafe.mock.calls[0][0]).toContain("COALESCE(name, mb_code)");
+    expect(res).toMatchObject({
+      level: "mb",
+      name: "Fitzroy North · SE",
+      addressCount: 12,
+      contactCount: 3,
+      withoutContacts: 9,
+    });
+  });
+
+  it("regionRef resolves a mesh block name via COALESCE(name, mb_code)", async () => {
+    const { svc, $queryRawUnsafe } = svcWith((m) => m.mockResolvedValue([]));
+    // Empty row → not found; the point is line coverage of the mb nameSel expr it builds first.
+    await expect(svc.regionHierarchy("mb", "20388010000")).rejects.toThrow();
+    expect($queryRawUnsafe.mock.calls[0][0]).toContain("COALESCE(name, mb_code)");
+  });
+});

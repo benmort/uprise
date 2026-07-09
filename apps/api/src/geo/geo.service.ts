@@ -8,7 +8,7 @@ import { ApiHttpException } from "../common/http/api-response";
 
 /** Source table + code/name columns for a tileable geo layer (areas, divisions, state). */
 const TILE_SOURCE: Record<string, { table: string; codeCol: string; nameExpr: string }> = {
-  mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "mb_code" },
+  mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "COALESCE(name, mb_code)" },
   sa1: { table: "geo.sa1", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa3: { table: "geo.sa3", codeCol: "code", nameExpr: "COALESCE(name, code)" },
@@ -73,8 +73,9 @@ export type TurfDivisionType = (typeof TURF_DIVISION_TYPES)[number];
  *  hierarchy Mesh Block → SA1 → SA2 → SA3 → SA4. */
 export type AreaLevel = "mb" | "sa1" | "sa2" | "sa3" | "sa4";
 const AREA_TABLE: Record<AreaLevel, { table: string; codeCol: string; nameExpr: string }> = {
-  // Meshblocks have no name — fall back to the code as the label.
-  mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "mb_code" },
+  // Mesh blocks are named by the geo:names backfill (suburb + compass, e.g. "Fitzroy North · SE");
+  // fall back to the code for any row not yet named.
+  mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "COALESCE(name, mb_code)" },
   sa1: { table: "geo.sa1", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa3: { table: "geo.sa3", codeCol: "code", nameExpr: "COALESCE(name, code)" },
@@ -394,9 +395,10 @@ export class GeoService {
     // WHERE must hit the PLAIN columns so the GIN trigram indexes apply — a
     // COALESCE(name, code) ILIKE wraps the column in an expression and forces a
     // seq scan (368k meshblocks per keystroke before this). nameExpr stays in
-    // the SELECT only. Meshblocks have no name column at all.
+    // the SELECT only. Mesh blocks now carry a name (trigram-indexed), so every
+    // level searches code OR name.
     const params: unknown[] = [term];
-    const clauses = [layer === "mb" ? `${codeCol} ILIKE $1` : `(${codeCol} ILIKE $1 OR name ILIKE $1)`];
+    const clauses = [`(${codeCol} ILIKE $1 OR name ILIKE $1)`];
     // ASGS codes are state-prefixed (first digit = state), so a state filter is a
     // cheap code-prefix match. Restrict to one digit so it can't smuggle a pattern.
     if (state && /^[1-9]$/.test(state)) {
@@ -433,15 +435,11 @@ export class GeoService {
     // `COALESCE(name, code)` nameExpr — is ambiguous and Postgres rejects the statement.
     // That made /geo/areas 500 for every sa1..sa4 browse; `mb` escaped it only because its
     // code column is `mb_code`.
-    const nameSel = layer === "mb" ? `d.${codeCol}` : `COALESCE(d.name, d.${codeCol})`;
+    const nameSel = `COALESCE(d.name, d.${codeCol})`;
     if (q) {
       // Plain columns only, same trigram-index reasoning as searchAreas.
       params.push(`%${q}%`);
-      clauses.push(
-        layer === "mb"
-          ? `d.${codeCol} ILIKE $${params.length}`
-          : `(d.${codeCol} ILIKE $${params.length} OR d.name ILIKE $${params.length})`,
-      );
+      clauses.push(`(d.${codeCol} ILIKE $${params.length} OR d.name ILIKE $${params.length})`);
     }
     if (opts.state && /^[1-9]$/.test(opts.state)) {
       params.push(`${opts.state}%`);
@@ -499,9 +497,9 @@ export class GeoService {
   async areaDetail(tenantId: string, layer: string, code: string) {
     const { table, codeCol } = this.areaTable(layer);
     const regionCol = AREA_REGION_COL[layer as AreaLevel];
-    // Meshblocks have no name column — fall back to the code as the label. Single-table
-    // meta query, so the column refs are unambiguous without an alias.
-    const nameSel = layer === "mb" ? codeCol : "COALESCE(name, code)";
+    // Single-table meta query, so column refs are unambiguous without an alias.
+    // codeCol differs for mb (mb_code) vs sa1..sa4 (code); COALESCE falls back to it.
+    const nameSel = `COALESCE(name, ${codeCol})`;
     const meta = (await this.prisma.$queryRawUnsafe(
       `SELECT ${codeCol} AS code, ${nameSel} AS name, ST_AsGeoJSON(geom) AS geojson
        FROM ${table} WHERE ${codeCol} = $1`,
@@ -1169,9 +1167,10 @@ export class GeoService {
       const r = await this.q(`SELECT COALESCE(name, code) AS name FROM ${table} WHERE code = $1`, code);
       return r.length ? { kind, code, name: r[0].name as string, addressCount: await this.countOf(kind, code) } : null;
     }
-    // ASGS area kinds (meshblock has no name column → fall back to its code).
+    // ASGS area kinds. codeCol differs for mb (mb_code) vs sa1..sa4 (code); the
+    // name backfill fills both, COALESCE falls back to the code for unnamed rows.
     const { table, codeCol } = this.areaTable(kind);
-    const nameSel = kind === "mb" ? codeCol : "COALESCE(name, code)";
+    const nameSel = `COALESCE(name, ${codeCol})`;
     const r = await this.q(`SELECT ${nameSel} AS name FROM ${table} WHERE ${codeCol} = $1`, code);
     return r.length ? { kind, code, name: (r[0].name as string) ?? code, addressCount: await this.countOf(kind, code) } : null;
   }

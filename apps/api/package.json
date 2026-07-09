@@ -27,6 +27,7 @@
     "geo:chambers": "ts-node src/scripts/geo/backfill-chambers.ts",
     "geo:load-first-nations": "ts-node src/scripts/geo/load-first-nations.ts",
     "geo:first-nations": "ts-node src/scripts/geo/backfill-first-nations.ts",
+    "geo:names": "ts-node src/scripts/geo/backfill-area-names.ts",
     "geo:load-boundaries": "ts-node src/scripts/geo/load-boundaries.ts",
     "geo:load-polling-places": "ts-node src/scripts/geo/load-polling-places.ts",
     "insights:load-vic-treaty-poll": "ts-node src/scripts/insights/load-vic-treaty-poll.ts"
