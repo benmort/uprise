@@ -24,7 +24,8 @@
     "seed:admin": "ts-node src/scripts/seed-admin-user.ts",
     "reset:tenants": "ts-node src/scripts/reset-to-tenants.ts",
     "geo:map": "ts-node src/scripts/geo/map.ts",
-    "geo:load-boundaries": "ts-node src/scripts/geo/load-boundaries.ts"
+    "geo:load-boundaries": "ts-node src/scripts/geo/load-boundaries.ts",
+    "insights:load-vic-treaty-poll": "ts-node src/scripts/insights/load-vic-treaty-poll.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",
@@ -68,6 +69,7 @@
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "xlsx": "^0.18.5"
   }
 }

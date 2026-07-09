@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StateRegion } from "@/components/shell/state-region";
 import { KpiTile } from "@uprise/field";
 import { RegionHierarchy } from "@/components/canvass/region-hierarchy";
+import { RegionPolling } from "@/components/canvass/region-polling";
 import { useToast } from "@/components/ui/toast";
 
 const TurfMap = dynamic(() => import("@uprise/field").then((m) => m.TurfMap), {
@@ -110,6 +111,7 @@ export default function AreaDetailPage() {
               <TurfMap mode="edit" turfGeometry={d.geometry as GeoJSON.Geometry} />
             </div>
 
+            <RegionPolling kind={layer} code={d.code} />
             <RegionHierarchy kind={layer} code={d.code} />
           </div>
         )}

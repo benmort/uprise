@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BarChart3,
   Boxes,
   ChevronDown,
   ChevronLeft,
@@ -122,6 +123,9 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
     },
 
     { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
+    // Insights / Polling — public-opinion polls attached to geo regions (choropleth,
+    // electorate detail, targeting). Flag-gated, default on.
+    { type: "leaf", key: "insights", label: "Polling", href: "/insights", icon: BarChart3, match: (p) => p.startsWith("/insights"), flag: "FEATURE_NAV_INSIGHTS" },
 
     // ── Manage: workspace admin — data, settings (incl. compliance), business, dev ──
     { type: "section", key: "sec-manage", label: "Manage" },
@@ -199,7 +203,7 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
               p.startsWith("/settings/queues") ||
               px("tenants")(p),
             children: [
-              { label: "Tenants", href: "/future/tenants", match: px("tenants") },
+              { label: "Workspaces", href: "/future/tenants", match: px("tenants") },
               { label: "Plans", href: "/settings/plans", match: (p) => p.startsWith("/settings/plans") },
               { label: "Feature flags", href: "/settings/flags", match: (p) => p === "/settings/flags" },
               // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version

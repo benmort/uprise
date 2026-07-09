@@ -29,6 +29,7 @@ import { ComplianceModule } from "./compliance/compliance.module";
 import { SharedSeedModule } from "./shared-seed/shared-seed.module";
 import { PushModule } from "./push/push.module";
 import { GeoModule } from "./geo/geo.module";
+import { InsightsModule } from "./insights/insights.module";
 import { HealthModule } from "./health/health.module";
 import { LoggingModule } from "./common/logging/logging.module";
 import { FlagsModule } from "./common/flags/flags.module";
@@ -91,6 +92,7 @@ import { QueueModule } from "./common/queue/queue.module";
     SharedSeedModule,
     PushModule,
     GeoModule,
+    InsightsModule,
     InboxModule,
     HealthModule,
   ],

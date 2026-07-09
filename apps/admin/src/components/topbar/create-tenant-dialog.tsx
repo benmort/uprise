@@ -84,7 +84,7 @@ export function CreateTenantDialog({
   const submit = async () => {
     setError(null);
     if (!name.trim()) {
-      setError("Enter a tenant name.");
+      setError("Enter a workspace name.");
       return;
     }
     if (!slug) {
@@ -119,7 +119,7 @@ export function CreateTenantDialog({
   return (
     <FormDialog
       open={open}
-      title="Create tenant"
+      title="Create workspace"
       description="Spin up a new workspace. You'll be its owner."
       onClose={() => {
         if (busy) return;
@@ -127,12 +127,12 @@ export function CreateTenantDialog({
         onClose();
       }}
       onSubmit={submit}
-      submitLabel="Create tenant"
+      submitLabel="Create workspace"
       busy={busy}
       submitDisabled={!name.trim() || !slug}
       size="sm"
     >
-      <Field label="Tenant name" htmlFor="create-tenant-name" hint="Letters, numbers and spaces.">
+      <Field label="Workspace name" htmlFor="create-tenant-name" hint="Letters, numbers and spaces.">
         <Input
           id="create-tenant-name"
           value={name}

@@ -16,12 +16,14 @@ function setup(definition: unknown) {
         return { count: data.length };
       }),
     },
+    $queryRawUnsafe: jest.fn(async () => []),
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
   const outbox = { append: jest.fn(async () => undefined) } as any;
-  const svc = new SegmentEvaluatorService(prisma, logger, outbox);
-  return { svc, prisma, created, outbox };
+  const insights = { resolvePollThresholdToGeoCodes: jest.fn(async () => []) } as any;
+  const svc = new SegmentEvaluatorService(prisma, logger, outbox, insights);
+  return { svc, prisma, created, outbox, insights };
 }
 
 const idSet = (created: Array<{ contactId: string }>) =>
@@ -96,6 +98,51 @@ describe("SegmentEvaluatorService", () => {
     await svc.evaluate("seg1");
 
     expect(idSet(created)).toEqual(new Set(["c1", "c2"]));
+  });
+
+  it("pollThreshold clause resolves electorates then joins contacts by geo.address_region", async () => {
+    const { svc, prisma, insights, created } = setup({
+      type: "pollThreshold",
+      pollId: "p1",
+      questionCode: "C5",
+      response: "NET Support",
+      op: ">=",
+      value: 50,
+      geoKind: "sed_upper",
+    });
+    insights.resolvePollThresholdToGeoCodes.mockResolvedValueOnce(["2-LC-NM", "2-LC-SM"]);
+    prisma.$queryRawUnsafe.mockResolvedValueOnce([{ id: "c1" }, { id: "c2" }]);
+
+    const { count } = await svc.evaluate("seg1");
+
+    expect(count).toBe(2);
+    // Resolution is visibility-gated by tenant.
+    expect(insights.resolvePollThresholdToGeoCodes).toHaveBeenCalledWith(
+      "t1",
+      expect.objectContaining({ pollId: "p1", questionCode: "C5", op: ">=", value: 50, geoKind: "sed_upper" }),
+    );
+    // The join splices the validated sed_upper column and passes codes as a JSON array.
+    const [sql, tid, codesJson] = prisma.$queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("ar.sed_upper_code IN");
+    expect(tid).toBe("t1");
+    expect(codesJson).toBe(JSON.stringify(["2-LC-NM", "2-LC-SM"]));
+    expect(idSet(created)).toEqual(new Set(["c1", "c2"]));
+  });
+
+  it("pollThreshold clause with an unknown geoKind matches nobody (no SQL)", async () => {
+    const { svc, prisma, insights } = setup({ type: "pollThreshold", geoKind: "galaxy" });
+    const { count } = await svc.evaluate("seg1");
+    expect(count).toBe(0);
+    expect(insights.resolvePollThresholdToGeoCodes).not.toHaveBeenCalled();
+    expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it("pollThreshold clause with no matching electorates skips the contact join", async () => {
+    const { svc, prisma, insights } = setup({ type: "pollThreshold", geoKind: "sed_upper", value: 99 });
+    insights.resolvePollThresholdToGeoCodes.mockResolvedValueOnce([]);
+    const { count } = await svc.evaluate("seg1");
+    expect(count).toBe(0);
+    expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
   });
 
   it("consentState clause ignores unknown channel/state (no members)", async () => {

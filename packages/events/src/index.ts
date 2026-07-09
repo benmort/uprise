@@ -80,6 +80,8 @@ export const EVENT_TYPES = {
   EMAIL_PROVISIONING_ACTIVATED: "email.provisioning.activated",
   EMAIL_PROVISIONING_FAILED: "email.provisioning.failed",
   EMAIL_PROVISIONING_RETRY_REQUESTED: "email.provisioning.retry-requested",
+  POLL_INGESTED: "insights.poll.ingested",
+  POLL_PUBLISHED: "insights.poll.published",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -88,6 +90,8 @@ export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
 export interface DomainEventMap {
   "audience.imported": { audienceId: string; tenantId: string; count: number };
   "audience.segment.recomputed": { segmentId: string; tenantId: string; memberCount: number };
+  "insights.poll.ingested": { pollId: string; tenantId: string | null; questionCount: number; estimateCount: number };
+  "insights.poll.published": { pollId: string; tenantId: string | null };
   "messaging.blast.created": { blastId: string; tenantId: string; title: string };
   "messaging.blast.scheduled": { blastId: string; tenantId: string; scheduledAt: string };
   "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };

@@ -16,6 +16,7 @@ import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { useGeoExplorer } from "@/lib/canvass/geo-explorer-state";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
 import { RegionHierarchy } from "@/components/canvass/region-hierarchy";
+import { RegionPolling } from "@/components/canvass/region-polling";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
 import { useGeoExplorerUrlState, writeGeoParam } from "@/components/canvass/use-geo-explorer-url-state";
 import { stateAbbrevToAsgsDigit } from "@/lib/canvass/states";
@@ -59,7 +60,12 @@ export function StatesPanel({ view }: { view: WalkMode }) {
   const selectState = (code: string) => writeGeoParam("code", code || null);
   const detailKey = selectedCode ? `/geo/states/${selectedCode}` : null;
   const detail = useApi<DivisionDetail>(detailKey, () => getState(selectedCode), { ttlMs: 300_000 });
-  const hierarchyPanel = selectedCode ? <RegionHierarchy kind="state" code={selectedCode} /> : null;
+  const hierarchyPanel = selectedCode ? (
+    <>
+      <RegionPolling kind="state" code={selectedCode} />
+      <RegionHierarchy kind="state" code={selectedCode} />
+    </>
+  ) : null;
 
   const cutFromState = (s: Pick<Division, "code" | "name">) =>
     cutTurf({

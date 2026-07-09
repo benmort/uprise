@@ -86,9 +86,9 @@ export default function TenantDetailPage() {
   if (error || !tenant) {
     return (
       <section className="page-stack">
-        <p className="text-red-600 dark:text-red-400">{error ?? 'Tenant not found.'}</p>
+        <p className="text-red-600 dark:text-red-400">{error ?? 'Workspace not found.'}</p>
         <Button variant="outline" className="mt-4" onClick={() => router.push('/future/tenants')}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tenants
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Workspaces
         </Button>
       </section>
     );
@@ -102,7 +102,7 @@ export default function TenantDetailPage() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{tenant.name}</h1>
-          <p className="text-gray-600 dark:text-gray-400">Tenant details</p>
+          <p className="text-gray-600 dark:text-gray-400">Workspace details</p>
         </div>
 
         {actionError ? (

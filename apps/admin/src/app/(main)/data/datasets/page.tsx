@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { Database, RefreshCw } from "lucide-react";
+import { ArrowUpRight, BarChart3, Database, RefreshCw } from "lucide-react";
+import { useFlag } from "@/components/flags/flags-provider";
 import { getGeoStatus, triggerGeoIngest, type GeoDataset } from "@/lib/api/geo";
 import { useApi } from "@/lib/use-api";
 import { PageShell } from "@/components/shell/page-shell";
@@ -66,6 +67,7 @@ const datasetRank = (key: string) => {
 
 export default function DataSettingsPage() {
   const { showToast } = useToast();
+  const insightsOn = useFlag("FEATURE_NAV_INSIGHTS");
   const [busy, setBusy] = useState(false);
   // Cached 60s: revisits render instantly and revalidate in the background.
   const { data, loading, error, noPermission, refetch } = useApi(
@@ -106,6 +108,29 @@ export default function DataSettingsPage() {
           ? `${totalAddresses.toLocaleString()} Australian addresses, mapped to federal and state electorates, councils and ASGS statistical areas.`
           : "The national address universe — every Australian address, mapped to federal and state electorates, councils and ASGS statistical areas."}
       </p>
+
+      {/* Tenant research — polls & surveys attached to electorates (Insights). Kept
+          out of the global dataset table (that's ABS/AEC national open data); this
+          is tenant-owned + shared-tier polling. Flag-gated on the Polling nav flag. */}
+      {insightsOn ? (
+        <Link
+          href="/insights"
+          className="group flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 hover:border-primary"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-variant">
+            <BarChart3 className="h-5 w-5 text-primary" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1 font-semibold text-foreground group-hover:text-primary">
+              Polls &amp; surveys
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </span>
+            <span className="block text-sm text-muted-foreground">
+              Tenant research attached to electorates — crosstabs, regional choropleths and canvassing targets.
+            </span>
+          </span>
+        </Link>
+      ) : null}
 
       {/* Error, empty and no-permission are DISTINCT states — a 500 no longer
           masquerades as "no datasets loaded yet". */}

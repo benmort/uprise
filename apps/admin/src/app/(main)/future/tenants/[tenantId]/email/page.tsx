@@ -204,7 +204,7 @@ export default function TenantEmailPage() {
           <Button asChild variant="ghost" size="sm">
             <Link href={`/future/tenants/${tenantId}`}>
               <ArrowLeft className="mr-1 h-4 w-4" />
-              {tenant?.name ?? 'Tenant'}
+              {tenant?.name ?? 'Workspace'}
             </Link>
           </Button>
           <h1 className="text-2xl font-bold">Email identities</h1>
@@ -265,7 +265,7 @@ export default function TenantEmailPage() {
         <Button asChild variant="ghost" size="sm">
           <Link href={`/future/tenants/${tenantId}`}>
             <ArrowLeft className="mr-1 h-4 w-4" />
-            {tenant?.name ?? 'Tenant'}
+            {tenant?.name ?? 'Workspace'}
           </Link>
         </Button>
         <h1 className="text-2xl font-bold">Email identities</h1>

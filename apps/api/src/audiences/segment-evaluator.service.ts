@@ -3,8 +3,25 @@ import { ConsentState, MessageChannel } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { OutboxService } from "../common/outbox/outbox.service";
+import { InsightsService } from "../insights/insights.service";
 
 type Clause = Record<string, unknown>;
+
+// geoKind → the `geo.address_region` column that carries a contact's code for that
+// layer. An allowlist: the key is interpolated into raw SQL, so only these validated
+// column names are ever spliced in (never the raw clause value).
+const GEO_REGION_COLUMN: Record<string, string> = {
+  ced: "ced_code",
+  sed: "sed_code",
+  sed_lower: "sed_lower_code",
+  sed_upper: "sed_upper_code",
+  lga: "lga_code",
+  ward: "ward_code",
+  sa1: "sa1_code",
+  sa2: "sa2_code",
+  sa3: "sa3_code",
+  sa4: "sa4_code",
+};
 
 /**
  * Dynamic-segment evaluator (meld doc 10) — the uprise port of prog's
@@ -28,6 +45,7 @@ export class SegmentEvaluatorService {
     private readonly prisma: PrismaService,
     private readonly logger: DomainLogger,
     private readonly outbox: OutboxService,
+    private readonly insights: InsightsService,
   ) {}
 
   /** Re-materialise a segment's membership. Returns the resolved member count. */
@@ -116,6 +134,8 @@ export class SegmentEvaluatorService {
         return this.byConsentState(tenantId, clause.channel, clause.state);
       case "turf":
         return this.byTurf(tenantId, String(clause.turfId ?? ""));
+      case "pollThreshold":
+        return this.byPollThreshold(tenantId, clause);
       case "all":
       default:
         return this.allContactIds(tenantId);
@@ -168,6 +188,43 @@ export class SegmentEvaluatorService {
       where: { tenantId, turfId },
       select: { id: true },
     });
+    return new Set(rows.map((r) => r.id));
+  }
+
+  /**
+   * `{ type: 'pollThreshold', pollId, questionCode, response, op, value, geoKind }` —
+   * contacts whose address falls in an electorate whose poll estimate meets the
+   * threshold (e.g. Treaty NET support ≥ 50%). Resolution is visibility-gated by the
+   * shared InsightsService (own + global-tier polls only); the geo join maps a
+   * contact's G-NAF address to the region layer via `geo.address_region`.
+   */
+  private async byPollThreshold(tenantId: string, clause: Clause): Promise<Set<string>> {
+    const geoKind = String(clause.geoKind ?? "sed_upper");
+    const column = GEO_REGION_COLUMN[geoKind];
+    if (!column) return new Set();
+
+    const codes = await this.insights.resolvePollThresholdToGeoCodes(tenantId, {
+      pollId: String(clause.pollId ?? ""),
+      questionCode: String(clause.questionCode ?? ""),
+      response: String(clause.response ?? ""),
+      op: String(clause.op ?? ">=") as ">" | ">=" | "<" | "<=" | "=",
+      value: Number(clause.value ?? 0),
+      geoKind,
+    });
+    if (codes.length === 0) return new Set();
+
+    // Cross-schema join (public.Contact → geo.address_region). The codes go in as a
+    // JSON array (the repo's raw-list convention, see geo.service unionSources); the
+    // column name is the validated GEO_REGION_COLUMN value, not raw clause input.
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT c.id
+         FROM public."Contact" c
+         JOIN geo.address_region ar ON ar.gnaf_pid = c."gnafPid"
+        WHERE c."tenantId" = $1
+          AND ar.${column} IN (SELECT jsonb_array_elements_text($2::jsonb))`,
+      tenantId,
+      JSON.stringify(codes),
+    )) as Array<{ id: string }>;
     return new Set(rows.map((r) => r.id));
   }
 }

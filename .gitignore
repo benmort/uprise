@@ -67,3 +67,6 @@ ngrok.local.yml
 ds-bundle/
 packages/ui/.ds-css-entry.css
 packages/ui/.ds-styles.css
+
+# Licensed poll source data (crosstab xlsx) — curated key-findings JSON stays tracked
+/data/insights/**/*.xlsx

@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "events", "email", "ops", "payment", "telephony"]
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "events", "email", "ops", "payment", "telephony"]
 }
 
 enum AudienceStatus {
@@ -276,6 +276,7 @@ model Tenant {
   questionResponses QuestionResponse[]
   journeys          Journey[]
   canvassCampaigns  CanvassCampaign[]
+  polls             Poll[]
   turfs             Turf[]
   walkLists         WalkList[]
   doorKnocks        DoorKnock[]
@@ -2049,4 +2050,110 @@ model UserAvatar {
 
   @@index([userId])
   @@schema("iam")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// insights — public-opinion polls attached to geo regions (see docs/insights/).
+// Tenant-owned + shareable: a nullable tenantId (owned when set, a shared/global
+// tier when null, mirroring FeatureFlagOverride). Estimates reference geo regions
+// id-only by (geoKind, geoCode) — geo.* is raw PostGIS, not a Prisma schema, so
+// there is no FK to a region. The partial-unique slug indexes (tenant vs global)
+// are hand-written in the migration (Prisma can't express the WHERE clause).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PollStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@schema("insights")
+}
+
+model Poll {
+  id             String     @id @default(cuid())
+  /// Tenant-owned when set; a shared/global tier when null (super-admin-gated).
+  tenantId       String?
+  slug           String
+  title          String
+  source         String // fieldwork agency, e.g. "YouGov"
+  commissioner   String? // e.g. "Common Threads"
+  fieldworkStart DateTime?
+  fieldworkEnd   DateTime?
+  sampleSize     Int?
+  methodology    String?
+  /// Jurisdiction the geographic breakdowns cover, e.g. "VIC".
+  geoScope       String?
+  weighted       Boolean    @default(true)
+  licence        String?
+  attribution    String?
+  /// Curated key findings from the summary: [{ heading, body, questionCode? }].
+  keyFindings    Json?
+  status         PollStatus @default(DRAFT)
+  publishedAt    DateTime?
+  // Ingest provenance (the tenant analogue of geo.dataset_meta, carried on the row).
+  sourceFileName String?
+  sourceFileHash String?
+  lastIngestedAt DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  tenant    Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  questions PollQuestion[]
+  estimates PollEstimate[]
+
+  @@index([tenantId, status])
+  @@schema("insights")
+}
+
+model PollQuestion {
+  id           String  @id @default(cuid())
+  pollId       String
+  /// Denormalised from Poll for tenant-isolation on estimate reads.
+  tenantId     String?
+  code         String // "C5", "C3_1", "D6"
+  title        String
+  category     String? // "treaty" | "polling_background" | "open_ended"
+  sheet        String?
+  ordinal      Int     @default(0)
+  hasNet       Boolean @default(false)
+  responseKind String? // "support_oppose" | "single_choice" | "agree_disagree" | "open"
+
+  poll      Poll           @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  estimates PollEstimate[]
+
+  @@unique([pollId, code])
+  @@index([pollId, ordinal])
+  @@schema("insights")
+}
+
+model PollEstimate {
+  id              String   @id @default(cuid())
+  pollId          String
+  questionId      String
+  /// Denormalised for tenant-isolation on the hot read path.
+  tenantId        String?
+  responseLabel   String // "Strongly support" | "NET Support" | "Total"
+  responseOrdinal Int      @default(0)
+  isNet           Boolean  @default(false)
+  breakdownGroup  String // "Total" | "Gender" | "VIC Upper House Electorate" | "Region"
+  breakdownValue  String // "Total" | "Male" | "Eastern Victoria"
+  /// Source column index — orders crosstab columns as they appeared in the sheet.
+  breakdownOrdinal Int     @default(0)
+  /// Set only for geographic breakdowns: "sed_upper" now, "sed_lower" (MRP) later.
+  geoKind         String?
+  /// Resolved geo region code (id-only reference to geo.* — no FK).
+  geoCode         String?
+  percent         Decimal? @db.Decimal(5, 2)
+  baseN           Int?
+  /// baseN meets the reportability threshold.
+  reportable      Boolean  @default(true)
+
+  poll     Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  question PollQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, responseLabel, breakdownGroup, breakdownValue])
+  @@index([pollId, geoKind, geoCode])
+  @@index([questionId, breakdownGroup])
+  @@index([tenantId])
+  @@schema("insights")
 }

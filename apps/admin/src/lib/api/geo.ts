@@ -60,6 +60,28 @@ export async function getRegionHierarchy(kind: RegionKind, code: string) {
   return request<RegionHierarchy>(`/geo/hierarchy?${qs}`);
 }
 
+/** Poll estimates attached to a geo region (Insights) — the `<RegionPolling>` panel.
+ *  Empty `polls` when the region has no estimates (e.g. any kind but sed_upper today). */
+export type RegionPolling = {
+  region: { geoKind: string; geoCode: string };
+  polls: Array<{
+    pollId: string;
+    title: string;
+    attribution: string | null;
+    questions: Array<{
+      code: string;
+      title: string;
+      ordinal: number;
+      rows: Array<{ responseLabel: string; isNet: boolean; regionPercent: number | null; totalPercent: number | null }>;
+    }>;
+  }>;
+};
+
+export async function getRegionPolling(kind: RegionKind, code: string) {
+  const qs = new URLSearchParams({ geoKind: kind, geoCode: code });
+  return request<RegionPolling>(`/insights/region?${qs}`);
+}
+
 export async function getGeoStatus(opts?: { signal?: AbortSignal }) {
   return request<GeoDataset[]>("/geo/status", opts?.signal ? { signal: opts.signal } : undefined);
 }

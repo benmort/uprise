@@ -5,9 +5,10 @@ import { SegmentEvaluatorService } from "./segment-evaluator.service";
 import { QueueModule } from "../common/queue/queue.module";
 import { FlagsModule } from "../common/flags/flags.module";
 import { ContactsModule } from "../contacts/contacts.module";
+import { InsightsModule } from "../insights/insights.module";
 
 @Module({
-  imports: [QueueModule, FlagsModule, ContactsModule],
+  imports: [QueueModule, FlagsModule, ContactsModule, InsightsModule],
   controllers: [AudiencesController],
   providers: [AudiencesService, SegmentEvaluatorService],
   exports: [AudiencesService, SegmentEvaluatorService],

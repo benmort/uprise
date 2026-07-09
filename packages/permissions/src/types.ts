@@ -41,6 +41,10 @@ export const UPRISE_RESOURCES = [
   "audience.contact-source",
   "audience.all",
 
+  // insights (public-opinion polls attached to geo regions)
+  "insights.poll",
+  "insights.all",
+
   // messaging (SMS/WhatsApp blasts, inbox, consent)
   "messaging.blast",
   "messaging.inbound",
