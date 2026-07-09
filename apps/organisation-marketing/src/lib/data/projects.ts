@@ -7,6 +7,13 @@ import type { CaseDetail, Project } from "./types";
 
 export const PROJECTS: Project[] = [
   {
+    slug: "uprise",
+    name: "Uprise",
+    blurb: "The organising platform for the Australian movement",
+    tag: "Platform",
+    year: "2026",
+  },
+  {
     slug: "rivera-for-senate",
     name: "Rivera for Senate",
     blurb: "A campaign platform that raised $18M",
@@ -65,6 +72,35 @@ export const PROJECTS: Project[] = [
 ];
 
 export const CASE_DETAILS: Record<string, CaseDetail> = {
+  // Uprise Labs' own flagship — uprise.org.au, the movement's shared campaigning
+  // platform. Australian English + real stack/capabilities (not the US placeholder copy).
+  uprise: {
+    meta: "PLATFORM · 2026 · AUSTRALIA-WIDE",
+    title: "uprise.org.au: the organising platform for the Australian movement",
+    heroCaption: "UPRISE — HERO SCREENSHOT",
+    client: "Uprise Labs",
+    services: "Product, Web, Data, Canvassing, Messaging",
+    timeline: "Ongoing",
+    team: "The cooperative",
+    lede: "The tool we always wished existed, so we built it ourselves – a shared campaigning platform owned by the movement, not rented from a vendor.",
+    body: [
+      "uprise.org.au is one platform for the whole organising cycle: cut turf straight from Australia's national address universe, build and assign walk lists, run SMS and WhatsApp broadcasts, and work every reply from a shared inbox – with audiences, volunteers and multi-org networks wired through the middle.",
+      "Because it's built by a worker-owned cooperative, every campaign on it owns its own data and pays no corporate markup. It's the movement's infrastructure, run for the movement.",
+    ],
+    results: [
+      { value: "16.9M", label: "ADDRESSES MAPPED" },
+      { value: "AU-WIDE", label: "EVERY STATE & TERRITORY" },
+      { value: "SMS + WA", label: "TWO-WAY INBOX" },
+      { value: "$0", label: "CORPORATE MARKUP" },
+    ],
+    gallery: ["TURF-CUTTING MAP — SCREENSHOT", "SHARED INBOX — SCREENSHOT"],
+    stack: ["Next.js", "NestJS", "TypeScript", "PostGIS", "Prisma", "Twilio", "BullMQ"],
+    quote: {
+      text: "We were tired of renting our movement's own infrastructure from vendors who didn't share our values. So we built it – and we own it together.",
+      attribution: "— UPRISE LABS",
+    },
+  },
+
   // Transcribed verbatim from the prototype's case-study view.
   "rivera-for-senate": {
     meta: "CAMPAIGNS · 2026 · US SENATE",

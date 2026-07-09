@@ -1,7 +1,7 @@
 // Shared content types for the Uprise Labs organisation site.
 // Source of truth: the design prototype in docs/design_handoff_uprise_labs/.
 
-export type ProjectTag = "Campaigns" | "Fundraising" | "Organizing" | "Advocacy";
+export type ProjectTag = "Platform" | "Campaigns" | "Fundraising" | "Organizing" | "Advocacy";
 
 export interface Project {
   slug: string;

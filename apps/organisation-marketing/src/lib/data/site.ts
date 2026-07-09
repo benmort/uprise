@@ -134,8 +134,8 @@ export const CONTACT = {
 };
 
 export const LEGAL = {
-  left: "© 2026 UPRISE LABS · A WORKER-OWNED STUDIO",
-  right: "MADE WITH SOLIDARITY IN THE USA ✊",
+  left: "© 2026 UPRISE LABS · A WORKER-OWNED COOPERATIVE STUDIO",
+  right: "MADE WITH SOLIDARITY IN AUSTRALIA ✊",
 };
 
 export const FOOTER_BLURB =

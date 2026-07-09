@@ -9,7 +9,7 @@ import { PROJECTS } from "@/lib/data/projects";
 import type { ProjectTag } from "@/lib/data/types";
 
 // Filter pills in the prototype's order – "All" plus the four project tags.
-const FILTERS = ["All", "Campaigns", "Fundraising", "Organizing", "Advocacy"] as const;
+const FILTERS = ["All", "Platform", "Campaigns", "Fundraising", "Organizing", "Advocacy"] as const;
 
 type Filter = (typeof FILTERS)[number];
 
