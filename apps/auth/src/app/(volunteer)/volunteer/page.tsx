@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Alert, LogoMark, Spinner } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
+import { useQueryParams } from "@/lib/use-query";
+import { withReturnTo } from "@/lib/return-to";
 
 /**
  * Generic volunteer landing (`/volunteer`, no campaign) – the same chrome + hero as
@@ -28,6 +30,9 @@ function tenantGradient(id: string): string {
 }
 
 export default function VolunteerBoardPage() {
+  // The field app bounces unauthenticated volunteers here. Carry its `return_to` through
+  // every link out of this page, or finishing the flow strands them on the wrong app.
+  const returnTo = useQueryParams().get("return_to");
   const [opportunities, setOpportunities] = useState<OpenJoinPreview[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +81,7 @@ export default function VolunteerBoardPage() {
             {opportunities.map((o) => (
               <li key={o.campaignId}>
                 <Link
-                  href={`/volunteer/${o.campaignId}`}
+                  href={withReturnTo(`/volunteer/${o.campaignId}`, returnTo)}
                   className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03]"
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl">
@@ -115,7 +120,7 @@ export default function VolunteerBoardPage() {
       {/* Sign in */}
       <div className="px-[1.625rem] pb-5 pt-5">
         <p className="text-center text-base">
-          <Link href="/v" className="font-bold text-primary hover:underline">
+          <Link href={withReturnTo("/v", returnTo)} className="font-bold text-primary hover:underline">
             Already a volunteer? Sign in
           </Link>
         </p>

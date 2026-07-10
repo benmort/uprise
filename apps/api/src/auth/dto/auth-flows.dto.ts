@@ -1,11 +1,17 @@
 import { ArrayMaxSize, IsArray, IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
-/** Canvasser roles offered at volunteer onboarding (advisory; organiser can change). */
+/**
+ * Canvasser roles offered at volunteer onboarding (advisory; organiser can change).
+ *
+ * Duplicated from `packages/contracts` on purpose – this app does not depend on that
+ * package, and this copy is the one the `@IsIn` validator below enforces. Change both.
+ * `preferredRole` is a plain nullable string column, so dropping a value strands no row.
+ */
 export const VOLUNTEER_PREFERRED_ROLES = [
-  "hander-outer",
   "doorknocker",
+  "hander-outer",
   "booth-captain",
-  "scrutineer",
+  "p2p-texter",
 ] as const;
 
 /** Doorknocker onboarding prefs (advisory), assembled into TenantMember.canvassPrefs. */

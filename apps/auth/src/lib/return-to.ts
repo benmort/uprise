@@ -14,6 +14,17 @@ export function defaultReturnTo(): string {
   return allowedOrigins()[0] || "http://localhost:3000";
 }
 
+/**
+ * Carry an inbound `return_to` across an internal hop, so a volunteer bounced here from
+ * the field app still lands back there once they finish. The value is passed through
+ * untouched – it is `validateReturnTo` at the actual redirect that gates the origin, so
+ * a hostile value never becomes a redirect no matter how many internal links it crosses.
+ */
+export function withReturnTo(path: string, returnTo: string | null | undefined): string {
+  if (!returnTo) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}return_to=${encodeURIComponent(returnTo)}`;
+}
+
 export function validateReturnTo(raw: string | null | undefined): string {
   const fallback = defaultReturnTo();
   if (!raw) return fallback;

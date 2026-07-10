@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQueryParams } from "@/lib/use-query";
+import { useWizardStep } from "@/lib/wizard-step";
 import { Alert, Button, LogoMark, PrinciplesList, Spinner } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 import { VolunteerOnboardWizard } from "@/components/volunteer-onboard-wizard";
@@ -16,11 +17,11 @@ import { VolunteerOnboardWizard } from "@/components/volunteer-onboard-wizard";
 export default function VolunteerInvitePage() {
   const token = String(useParams().token ?? "");
   const returnTo = useQueryParams().get("return_to");
+  const { step, goTo, canGoBack } = useWizardStep();
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [invitedPhone, setInvitedPhone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -50,7 +51,8 @@ export default function VolunteerInvitePage() {
     );
   }
 
-  if (started) {
+  // `?step=` is the wizard; without it, the invite hero.
+  if (step) {
     return (
       <div className="px-5 py-6">
         <VolunteerOnboardWizard
@@ -58,7 +60,9 @@ export default function VolunteerInvitePage() {
           tenantName={tenantName ?? ""}
           invitedPhone={invitedPhone}
           returnTo={returnTo}
-          onExit={() => setStarted(false)}
+          step={step}
+          goTo={goTo}
+          canGoBack={canGoBack}
         />
       </div>
     );
@@ -90,7 +94,7 @@ export default function VolunteerInvitePage() {
 
       {/* Actions */}
       <div className="mt-auto space-y-4 px-6 pb-8 pt-8">
-        <Button className="h-14 w-full text-base" onClick={() => setStarted(true)}>
+        <Button className="h-14 w-full text-base" onClick={() => goTo("phone")}>
           Get started
         </Button>
         <p className="text-center text-base">

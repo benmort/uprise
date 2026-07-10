@@ -77,12 +77,18 @@ export const twofaVerifySchema = z.object({
 });
 export type TwofaVerifyRequest = z.infer<typeof twofaVerifySchema>;
 
-/** Canvasser roles offered at volunteer onboarding (advisory; organiser can change). */
+/**
+ * Canvasser roles offered at volunteer onboarding (advisory; organiser can change).
+ * Doorknocker leads because it is the default the wizard preselects.
+ *
+ * Duplicated in `apps/api/src/auth/dto/auth-flows.dto.ts`, which backs the `@IsIn`
+ * validator – the API deliberately does not depend on this package. Change both.
+ */
 export const VOLUNTEER_PREFERRED_ROLES = [
-  "hander-outer",
   "doorknocker",
+  "hander-outer",
   "booth-captain",
-  "scrutineer",
+  "p2p-texter",
 ] as const;
 export type VolunteerPreferredRole = (typeof VOLUNTEER_PREFERRED_ROLES)[number];
 

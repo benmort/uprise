@@ -26,8 +26,10 @@ function publicHref(req: NextRequest): string {
 export function middleware(req: NextRequest): NextResponse {
   if (req.cookies.get(COOKIE)) return NextResponse.next();
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
-  // Volunteers get the mobile, phone-first auth flow (/v), not the organiser /sign-in.
-  const url = new URL("/v", authAppUrl);
+  // Volunteers get the mobile, phone-first volunteer entry — not the organiser /sign-in.
+  // `/volunteer` boards the open campaigns and links on to sign-in for returning
+  // canvassers; both carry the `return_to` below, so either path lands back here.
+  const url = new URL("/volunteer", authAppUrl);
   url.searchParams.set("return_to", publicHref(req));
   return NextResponse.redirect(url);
 }

@@ -11,7 +11,7 @@ import {
   Mountain,
   Route,
   Accessibility,
-  Search,
+  Smartphone,
   Shield,
   CheckCircle2,
 } from "lucide-react";
@@ -37,13 +37,16 @@ import {
 import { auth, VOLUNTEER_PREFERRED_ROLES, type WalkingCapability, type SessionLength } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 import { captureAttribution } from "@/lib/attribution";
+import type { GoToOptions } from "@/lib/wizard-step";
 
+/** Doorknocking leads, and is the role the wizard preselects — it is what most campaigns need. */
 const ROLE_OPTIONS: RoleOption[] = [
-  { value: "hander-outer", title: "Hander-outer", subtitle: "Hand flyers at booths & stalls", icon: Megaphone },
   { value: "doorknocker", title: "Doorknocker", subtitle: "Have conversations at the door", icon: Home },
+  { value: "hander-outer", title: "Hander-outer", subtitle: "Hand flyers at booths & stalls", icon: Megaphone },
   { value: "booth-captain", title: "Booth captain", subtitle: "Run a polling booth on the day", icon: Flag },
-  { value: "scrutineer", title: "Scrutineer", subtitle: "Observe the count", icon: Search },
+  { value: "p2p-texter", title: "Peer-to-peer texting", subtitle: "Text voters one-to-one, from home", icon: Smartphone },
 ];
+const DEFAULT_ROLE = "doorknocker";
 const ROLE_TITLE = Object.fromEntries(ROLE_OPTIONS.map((r) => [r.value, r.title]));
 
 // Doorknocker-only follow-up: how much walking suits them + preferred session length.
@@ -71,12 +74,28 @@ function toE164(national: string): string {
 
 type Step = "phone" | "code" | "name" | "role" | "doorknock" | "conduct" | "done";
 
+/** Names the progress bar reads out; index matches the flow. */
+const STEP_LABEL: Record<Step, string> = {
+  phone: "Your mobile",
+  code: "Verify your number",
+  name: "Your name",
+  role: "How you'll help",
+  doorknock: "About your knocking",
+  conduct: "Code of conduct",
+  done: "Done",
+};
+
 /**
  * Volunteer onboarding wizard (phone → OTP → name → role/days → [doorknock] → conduct)
  * that turns an invite OR an open campaign into a VOLUNTEER membership + session.
  * Doorknockers get an extra step capturing walking capability + session length (stored
  * as advisory canvassPrefs). Exactly one of `token` (organiser invite) / `campaignId`
  * (tokenless open-join) is set; the phone-send + finalise calls branch on which.
+ *
+ * The step lives in the URL (`?step=`), owned by the page and handed down – see
+ * `useWizardStep`. So the phone's Back gesture walks back through the questions, the
+ * progress bar can jump to a finished one, and a half-filled flow survives a reload by
+ * snapping to the furthest step whose answers are still in hand.
  */
 export function VolunteerOnboardWizard({
   token,
@@ -84,7 +103,9 @@ export function VolunteerOnboardWizard({
   tenantName,
   invitedPhone,
   returnTo,
-  onExit,
+  step,
+  goTo,
+  canGoBack,
   onComplete,
   completeLabel = "Start canvassing",
 }: {
@@ -93,19 +114,24 @@ export function VolunteerOnboardWizard({
   tenantName?: string;
   invitedPhone: string | null;
   returnTo: string | null;
-  onExit: () => void;
+  /** The step named in the URL. */
+  step: string;
+  goTo: (step: string | null, opts?: GoToOptions) => void;
+  /** Whether Back stays inside the flow, or would leave the site. */
+  canGoBack: boolean;
   /** Overrides the final redirect. Defaults to `completeAuth(memberships, returnTo)`. */
   onComplete?: (memberships: Parameters<typeof completeAuth>[0]) => void;
   /** Label on the final button — the entry point names the destination. */
   completeLabel?: string;
 }) {
-  const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState(invitedPhone ? invitedPhone.replace(/^\+61/, "0").replace(/\D/g, "") : "");
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [smsSent, setSmsSent] = useState(false);
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
-  const [role, setRole] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(DEFAULT_ROLE);
   const [days, setDays] = useState<string[]>([]);
   const [walking, setWalking] = useState<WalkingCapability | null>(null);
   const [sessionLen, setSessionLen] = useState<SessionLength | null>(null);
@@ -113,6 +139,7 @@ export function VolunteerOnboardWizard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
+  const [memberships, setMemberships] = useState<Parameters<typeof completeAuth>[0]>(undefined);
   const captchaRef = useRef<TurnstileHandle>(null);
 
   // Doorknockers get an extra step (walking capability + session length) after "role".
@@ -120,16 +147,58 @@ export function VolunteerOnboardWizard({
     () => ["phone", "code", "name", "role", ...(role === "doorknocker" ? (["doorknock"] as Step[]) : []), "conduct"],
     [role],
   );
-  const stepIndex = flow.indexOf(step);
+
+  /**
+   * The furthest step the answers so far actually support. A URL is a thing people paste,
+   * bookmark and reload, so `?step=conduct` has to mean "as far as you have got", not
+   * "skip the questions". Walking forward from the start means each step's prerequisites
+   * are whatever the steps before it collect.
+   */
+  const reachedIndex = useMemo(() => {
+    const satisfied = (s: Step): boolean => {
+      switch (s) {
+        case "code":
+          return Boolean(challengeId);
+        case "name":
+          return code.length === 6;
+        case "role":
+          return Boolean(first.trim());
+        case "doorknock":
+          return Boolean(role);
+        case "conduct":
+          return role === "doorknocker" ? Boolean(walking && sessionLen) : Boolean(role);
+        default:
+          return false;
+      }
+    };
+    let i = 0;
+    while (i + 1 < flow.length && satisfied(flow[i + 1])) i++;
+    return i;
+  }, [flow, challengeId, code, first, role, walking, sessionLen]);
+
+  const stepIndex = flow.indexOf(step as Step);
   const e164 = useMemo(() => toE164(phone), [phone]);
+
+  // Snap an unreachable step (a stale deep link, a reload mid-flow) back to the last one
+  // whose answers we still hold. `done` is reachable only while its result is in memory.
+  useEffect(() => {
+    if (step === "done") {
+      if (memberships === undefined) goTo("phone", { replace: true });
+      return;
+    }
+    const idx = flow.indexOf(step as Step);
+    if (idx === -1 || idx > reachedIndex) goTo(flow[reachedIndex], { replace: true });
+  }, [step, flow, reachedIndex, memberships, goTo]);
 
   const back = () => {
     setError(null);
     if (stepIndex <= 0) {
-      onExit();
+      goTo(null, { replace: true }); // out of the flow, back to the campaign hero
       return;
     }
-    setStep(flow[stepIndex - 1]);
+    // Prefer the real Back stack so it matches the phone's own gesture.
+    if (canGoBack) window.history.back();
+    else goTo(flow[stepIndex - 1], { replace: true });
   };
 
   // Resend countdown tick.
@@ -139,18 +208,34 @@ export function VolunteerOnboardWizard({
     return () => clearTimeout(t);
   }, [resendIn]);
 
-  // Dev: surface the code (no SMS locally) and prefill the boxes.
+  /**
+   * Dev: no SMS goes out locally, so fetch the code and show it. It is NOT typed into the
+   * boxes for you — filling it used to trip the auto-advance below, and the code screen
+   * flashed past before anyone could read it. Mirrors `/v/code`.
+   */
   useEffect(() => {
     if (step !== "code" || !isDev || !challengeId) return;
+    let cancelled = false;
     void auth.devPeekOtp(challengeId).then((res) => {
-      if (res.ok && res.data.code) setCode(res.data.code);
+      if (cancelled || !res.ok) return;
+      setDevCode(res.data.code);
+      setSmsSent(res.data.smsSent);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [step, challengeId]);
 
-  // OTP complete → advance to the name step.
+  /**
+   * Typing the sixth digit advances. Keyed on the code *growing* to six rather than
+   * being six, or stepping back to this screen with a full code would bounce straight
+   * forward again and the Back button would do nothing.
+   */
+  const codeLen = useRef(0);
   useEffect(() => {
-    if (step === "code" && code.length === 6) setStep("name");
-  }, [step, code]);
+    if (step === "code" && codeLen.current < 6 && code.length === 6) goTo("name");
+    codeLen.current = code.length;
+  }, [step, code, goTo]);
 
   async function sendCode() {
     setBusy(true);
@@ -166,8 +251,9 @@ export function VolunteerOnboardWizard({
     }
     setChallengeId(res.data.challengeId);
     setCode("");
+    setDevCode(null);
     setResendIn(30);
-    setStep("code");
+    goTo("code");
   }
 
   async function resend() {
@@ -178,11 +264,10 @@ export function VolunteerOnboardWizard({
       : await auth.openJoinStartPhone({ campaignId: campaignId!, phone: e164 }, captchaToken);
     if (res.ok) {
       setChallengeId(res.data.challengeId);
+      setDevCode(null);
       setResendIn(30);
     }
   }
-
-  const [memberships, setMemberships] = useState<Parameters<typeof completeAuth>[0]>(undefined);
 
   async function submit() {
     if (!agreed || busy) return;
@@ -221,7 +306,7 @@ export function VolunteerOnboardWizard({
       return;
     }
     setMemberships(res.data.memberships);
-    setStep("done");
+    goTo("done", { replace: true }); // Back must not land on a submitted form
   }
 
   // ── Success ─────────────────────────────────────────────────────────
@@ -273,7 +358,14 @@ export function VolunteerOnboardWizard({
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <StepProgress current={stepIndex + 1} total={flow.length} className="flex-1" />
+        <StepProgress
+          current={stepIndex + 1}
+          total={flow.length}
+          reachable={reachedIndex + 1}
+          labels={flow.map((s) => STEP_LABEL[s])}
+          onSelect={(n) => goTo(flow[n - 1], { replace: true })}
+          className="flex-1"
+        />
       </div>
 
       {/* Step 1 — phone */}
@@ -331,10 +423,15 @@ export function VolunteerOnboardWizard({
               {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
             </button>
           </p>
-          {isDev ? (
-            <p className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-bold text-primary">
-              <Shield className="h-4 w-4" /> Demo: tap any 6 digits
-            </p>
+          {isDev && devCode ? (
+            <button
+              type="button"
+              onClick={() => setCode(devCode)}
+              className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-bold text-primary"
+            >
+              <Shield className="h-4 w-4" />
+              Dev code {devCode} — tap to fill{smsSent ? " (also texted)" : ""}
+            </button>
           ) : null}
           {error ? <Alert variant="error" title={error} className="mt-4" /> : null}
           <div className="flex-1" />
@@ -365,7 +462,7 @@ export function VolunteerOnboardWizard({
           <Button
             className="mt-6 h-14 w-full text-base"
             disabled={!first.trim()}
-            onClick={() => setStep("role")}
+            onClick={() => goTo("role")}
           >
             Continue
           </Button>
@@ -386,7 +483,7 @@ export function VolunteerOnboardWizard({
           <Button
             className="mt-6 h-14 w-full text-base"
             disabled={!role}
-            onClick={() => setStep(role === "doorknocker" ? "doorknock" : "conduct")}
+            onClick={() => goTo(role === "doorknocker" ? "doorknock" : "conduct")}
           >
             Continue
           </Button>
@@ -435,7 +532,7 @@ export function VolunteerOnboardWizard({
           <Button
             className="mt-6 h-14 w-full text-base"
             disabled={!walking || !sessionLen}
-            onClick={() => setStep("conduct")}
+            onClick={() => goTo("conduct")}
           >
             Continue
           </Button>

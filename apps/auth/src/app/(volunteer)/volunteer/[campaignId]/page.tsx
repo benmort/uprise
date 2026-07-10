@@ -6,6 +6,9 @@ import { useParams } from "next/navigation";
 import { Alert, Button, PrinciplesList, Spinner } from "@uprise/ui";
 import { auth, getActionAppUrl } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
+import { useQueryParams } from "@/lib/use-query";
+import { withReturnTo } from "@/lib/return-to";
+import { useWizardStep } from "@/lib/wizard-step";
 import { VolunteerOnboardWizard } from "@/components/volunteer-onboard-wizard";
 
 /** The tenant selector's deterministic fallback: a colourful gradient disc keyed on the
@@ -31,13 +34,16 @@ function tenantGradient(id: string): string {
  */
 export default function OpenJoinPage() {
   const campaignId = String(useParams().campaignId ?? "");
+  // `return_to` is set when something bounced the volunteer here (the field app's
+  // middleware does). It wins over the action-app landing below.
+  const returnTo = useQueryParams().get("return_to");
+  const { step, goTo, canGoBack } = useWizardStep();
   const [campaignName, setCampaignName] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -84,17 +90,23 @@ export default function OpenJoinPage() {
     );
   }
 
-  if (started) {
+  // `?step=` is the wizard; without it, the join hero. The wizard owns the param, so the
+  // Back gesture leaves the flow and lands here rather than off the site.
+  if (step) {
     return (
       <div className="px-5 py-6">
         <VolunteerOnboardWizard
           campaignId={campaignId}
           tenantName={tenantName ?? undefined}
           invitedPhone={null}
-          returnTo={null}
-          onExit={() => setStarted(false)}
-          onComplete={onComplete}
-          completeLabel="Start volunteering"
+          returnTo={returnTo}
+          step={step}
+          goTo={goTo}
+          canGoBack={canGoBack}
+          // Someone sent here by the field app goes back to the field app; everyone else
+          // lands on the action app carrying the campaign they just joined.
+          onComplete={returnTo ? undefined : onComplete}
+          completeLabel={returnTo ? "Start canvassing" : "Start volunteering"}
         />
       </div>
     );
@@ -122,10 +134,7 @@ export default function OpenJoinPage() {
             />
           )}
           {tenantName ? (
-            <span
-              className="flex-1 text-justify text-lg font-extrabold leading-tight text-white"
-              style={{ textAlignLast: "justify" }}
-            >
+            <span className="min-w-0 flex-1 text-left text-lg font-extrabold leading-tight text-white">
               {tenantName}
             </span>
           ) : null}
@@ -147,11 +156,11 @@ export default function OpenJoinPage() {
 
       {/* Actions */}
       <div className="mt-auto space-y-3 px-[1.625rem] pb-5 pt-5">
-        <Button className="h-14 w-full rounded-[0.75rem] text-base" onClick={() => setStarted(true)}>
+        <Button className="h-14 w-full rounded-[0.75rem] text-base" onClick={() => goTo("phone")}>
           Get started
         </Button>
         <p className="text-center text-base">
-          <Link href="/v" className="font-bold text-primary hover:underline">
+          <Link href={withReturnTo("/v", returnTo)} className="font-bold text-primary hover:underline">
             Already a volunteer? Sign in
           </Link>
         </p>
