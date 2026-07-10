@@ -8,7 +8,6 @@ import { Button } from "@/components/prog/ui/button";
 import { Skeleton } from "@/components/prog/ui/skeleton";
 import { getCroppedImg } from "@/lib/crop-image";
 import { profile, type UserAvatarResponse } from "@uprise/api-client";
-import { BAUHAUS_PLACEHOLDER_AVATARS } from "./placeholder-avatars";
 
 interface AvatarEditCardProps {
   onClose: () => void;
@@ -18,15 +17,15 @@ interface AvatarEditCardProps {
 }
 
 /**
- * Edit-profile-picture experience (prog parity): saved-avatar gallery (Use/Delete),
- * upload + round crop, and a Bauhaus placeholder grid. Wired to the uprise profile API.
+ * Edit-profile-picture experience (prog parity): saved-avatar gallery (Use/Delete) and
+ * upload + round crop. Wired to the uprise profile API. Users with no photo fall back to
+ * initials — there are no placeholder avatars.
  */
 export default function AvatarEditCard({ onClose, onSave, inModal = false }: AvatarEditCardProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
-  const [selectedPlaceholder, setSelectedPlaceholder] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avatars, setAvatars] = useState<UserAvatarResponse[]>([]);
@@ -55,7 +54,6 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSelectedPlaceholder(null);
     setImageSrc(URL.createObjectURL(file));
     setCroppedAreaPixels(null);
     setZoom(1);
@@ -75,12 +73,8 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
         } else {
           setError(res.error || "Failed to upload avatar");
         }
-      } else if (selectedPlaceholder) {
-        const res = await profile.clearSelectedAvatar();
-        if (res.ok) onSave();
-        else setError(res.error || "Failed to set placeholder");
       } else {
-        setError("Please upload a photo or choose a placeholder.");
+        setError("Please upload a photo.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -122,7 +116,6 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
     if (imageSrc) URL.revokeObjectURL(imageSrc);
     setImageSrc(null);
     setCroppedAreaPixels(null);
-    setSelectedPlaceholder(null);
   };
 
   const content = (
@@ -244,37 +237,8 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
         )}
       </div>
 
-      {/* Placeholder avatars */}
-      <div>
-        <p className="mb-3 text-sm font-medium text-gray-700 dark:text-gray-300">Or choose a placeholder</p>
-        <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
-          {BAUHAUS_PLACEHOLDER_AVATARS.map((src) => (
-            <button
-              key={src}
-              type="button"
-              onClick={() => {
-                setSelectedPlaceholder(src);
-                if (imageSrc) {
-                  URL.revokeObjectURL(imageSrc);
-                  setImageSrc(null);
-                  setCroppedAreaPixels(null);
-                }
-              }}
-              className={`relative h-12 w-12 overflow-hidden rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
-                selectedPlaceholder === src
-                  ? "border-brand-500 ring-2 ring-brand-500 ring-offset-2"
-                  : "border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600"
-              }`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" className="h-full w-full object-cover" />
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="flex items-center gap-3 pt-2">
-        {(imageSrc || selectedPlaceholder) && (
+        {imageSrc && (
           <Button
             variant="outline"
             className="h-11 cursor-pointer rounded-lg px-6 font-medium"
@@ -287,7 +251,7 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
         <Button
           className="h-11 cursor-pointer rounded-lg bg-brand-500 px-6 font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-50"
           onClick={() => void handleSave()}
-          disabled={(!imageSrc && !selectedPlaceholder) || isUploading}
+          disabled={!imageSrc || isUploading}
         >
           {isUploading ? "Saving..." : "Save"}
         </Button>

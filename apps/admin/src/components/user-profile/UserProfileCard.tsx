@@ -4,7 +4,7 @@ import { UserAvatar } from "./user-avatar";
 
 interface UserProfileCardProps {
   profile: UserProfileResponse | null;
-  /** Resolved selected-avatar URL (from the avatars gallery); falls back to a placeholder. */
+  /** Resolved selected-avatar URL (from the avatars gallery); falls back to initials. */
   avatarUrl?: string | null;
   email: string | null;
   role?: string;
@@ -52,7 +52,6 @@ export default function UserProfileCard({ profile, avatarUrl, email, role, super
     [profile?.givenName, profile?.familyName].filter(Boolean).join(" ") ||
     email ||
     "Profile";
-  const seed = profile?.userId ?? email ?? 0;
 
   const links: { key: keyof typeof ICONS; url: string | null | undefined }[] = [
     { key: "facebook", url: profile?.facebookUrl },
@@ -71,7 +70,7 @@ export default function UserProfileCard({ profile, avatarUrl, email, role, super
             className="group relative h-20 w-20 cursor-pointer overflow-hidden rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 dark:border-gray-800"
             aria-label="Edit profile picture"
           >
-            <UserAvatar src={avatarUrl ?? profile?.avatarUrl} name={displayName} seed={seed} placeholder className="h-20 w-20" />
+            <UserAvatar src={avatarUrl ?? profile?.avatarUrl} name={displayName} className="h-20 w-20" />
             <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-sm font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
               Edit
             </span>

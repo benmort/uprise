@@ -17,6 +17,7 @@ import {
 import { profile, type UserAvatarResponse, type UserProfileResponse } from "@uprise/api-client";
 import { useToast } from "@/components/ui/toast";
 import { getSession } from "@/lib/session";
+import { emitProfileUpdated } from "@/lib/profile-events";
 import { Modal } from "@/components/prog/ui/modal";
 import UserProfileCard from "@/components/user-profile/UserProfileCard";
 import AvatarEditCard from "@/components/user-profile/AvatarEditCard";
@@ -129,6 +130,7 @@ export default function ProfilePage() {
       return;
     }
     setData(res.data);
+    emitProfileUpdated(); // refresh the topbar name/avatar
     showToast({ tone: "success", title: "Profile saved" });
   };
 
@@ -179,6 +181,7 @@ export default function ProfilePage() {
             onSave={() => {
               setShowAvatarEdit(false);
               void load();
+              emitProfileUpdated(); // refresh the topbar avatar
             }}
           />
         </div>

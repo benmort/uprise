@@ -6,6 +6,7 @@ import { ChevronDown, LogOut, Settings, UserCircle } from "lucide-react";
 import { Dropdown, DropdownItem } from "@uprise/ui";
 import { profile } from "@uprise/api-client";
 import { logout } from "@/lib/session";
+import { onProfileUpdated } from "@/lib/profile-events";
 import { UserAvatar } from "@/components/user-profile/user-avatar";
 
 /**
@@ -19,18 +20,25 @@ export function UserDropdown({ email }: { email: string | null }) {
 
   useEffect(() => {
     let alive = true;
-    void profile.listAvatars().then((res) => {
-      if (alive && res.ok) setAvatarUrl(res.data.find((a) => a.isSelected)?.url ?? null);
-    });
-    void profile.get().then((res) => {
-      if (!alive || !res.ok) return;
-      const composed =
-        res.data.displayName?.trim() ||
-        [res.data.givenName, res.data.familyName].filter(Boolean).join(" ").trim();
-      setDisplayName(composed || null);
-    });
+    const refresh = () => {
+      void profile.listAvatars().then((res) => {
+        if (alive && res.ok) setAvatarUrl(res.data.find((a) => a.isSelected)?.url ?? null);
+      });
+      void profile.get().then((res) => {
+        if (!alive || !res.ok) return;
+        const composed =
+          res.data.displayName?.trim() ||
+          [res.data.givenName, res.data.familyName].filter(Boolean).join(" ").trim();
+        setDisplayName(composed || null);
+      });
+    };
+    refresh();
+    // Re-fetch when the /profile page saves a new name or avatar, so the topbar
+    // reflects the change without a full reload.
+    const off = onProfileUpdated(refresh);
     return () => {
       alive = false;
+      off();
     };
   }, []);
 

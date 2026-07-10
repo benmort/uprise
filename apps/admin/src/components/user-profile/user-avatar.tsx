@@ -1,5 +1,4 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/prog/ui/avatar";
-import { getDefaultPlaceholderAvatar } from "./placeholder-avatars";
 
 /** Two-letter initials from a display name or email (prog parity). */
 export function avatarInitials(name?: string | null): string {
@@ -13,28 +12,22 @@ export function avatarInitials(name?: string | null): string {
 }
 
 /**
- * The single way uprise renders a person (prog's radix Avatar). Falls back to a
- * deterministic Bauhaus placeholder when `placeholder` + a `seed` are given, else
- * to initials. Size via `className` (e.g. "h-11 w-11"); defaults to the prog size-8.
+ * The single way uprise renders a person (prog's radix Avatar). Shows the supplied
+ * image when present, else falls back to initials. Size via `className` (e.g. "h-11 w-11");
+ * defaults to the prog size-8.
  */
 export function UserAvatar({
   src,
   name,
-  seed,
-  placeholder = false,
   className,
 }: {
   src?: string | null;
   name?: string | null;
-  seed?: string | number | null;
-  placeholder?: boolean;
   className?: string;
 }) {
-  const imgSrc =
-    src || (placeholder && seed != null && seed !== "" ? getDefaultPlaceholderAvatar(seed) : undefined);
   return (
     <Avatar className={className}>
-      {imgSrc ? <AvatarImage src={imgSrc} alt={name ?? "User"} /> : null}
+      {src ? <AvatarImage src={src} alt={name ?? "User"} /> : null}
       <AvatarFallback>{avatarInitials(name)}</AvatarFallback>
     </Avatar>
   );
