@@ -302,26 +302,37 @@ function QuestionBody({ data, pollId, code }: { data: Crosstab; pollId: string; 
                   >
                     {r.label}
                   </td>
-                  {columns.map((c) => (
-                    <td
-                      key={c.ordinal}
-                      className={cn(
-                        "px-2 py-1.5 text-right tabular-nums",
-                        !c.reportable && "text-muted-foreground/50",
-                        r.isNet && "font-semibold",
-                      )}
-                    >
-                      {c.reportable ? pct(r.cells[c.ordinal]) : "—"}
-                    </td>
-                  ))}
+                  {columns.map((c) => {
+                    const v = r.cells[c.ordinal];
+                    // Heat-shade each cell by its value (primary hue — poll-accent stays ornament).
+                    const shade =
+                      c.reportable && typeof v === "number" ? Math.round(Math.max(0, Math.min(100, v)) * 0.5) : 0;
+                    return (
+                      <td
+                        key={c.ordinal}
+                        className={cn(
+                          "px-2 py-1.5 text-right tabular-nums transition-colors",
+                          !c.reportable && "text-muted-foreground/50",
+                          r.isNet && "font-semibold",
+                        )}
+                        style={
+                          shade > 0
+                            ? { backgroundColor: `color-mix(in oklab, var(--color-primary) ${shade}%, transparent)` }
+                            : undefined
+                        }
+                      >
+                        {c.reportable ? pct(v) : "—"}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Weighted column percentages, rounded to whole numbers. NET rows are emphasised. Columns with a
-          base below the reporting threshold are suppressed.
+          Weighted column percentages, rounded to whole numbers, cells shaded by value. NET rows are
+          emphasised. Columns with a base below the reporting threshold are suppressed.
         </p>
       </SectionCard>
     </div>
