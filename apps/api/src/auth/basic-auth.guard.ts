@@ -203,6 +203,9 @@ export class BasicAuthGuard implements CanActivate {
       (candidate) =>
         allowedPaths.has(candidate) ||
         // Public poll viewer for the `action` app (isPublic-only; enforced in the service).
+        // This also covers /insights/public/tiles/* — the choropleth's boundary vector tiles,
+        // scoped in PublicInsightsController to PUBLIC_TILE_LAYERS (open ABS geo data, no tenant
+        // data). The organiser-gated /geo/tiles/* surface stays session-only.
         /^(?:\/api\/v1)?\/insights\/public\//.test(candidate),
     );
   }

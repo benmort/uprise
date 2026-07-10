@@ -9,6 +9,9 @@ import {
   getPoll,
   getPollQuestion,
   getPollChoropleth,
+  getPublicPoll,
+  getPublicPollQuestion,
+  getPublicPollChoropleth,
   resolvePollThreshold,
   setPollPublic,
   provenanceLine,
@@ -36,6 +39,17 @@ describe("insights api client — wrappers", () => {
     await getPollChoropleth("p1", "C5", "NET Support");
     const url = mockReq.mock.calls[1][0] as string;
     expect(url).toContain("/insights/polls/p1/questions/C5/choropleth?");
+    expect(url).toContain("response=NET+Support");
+  });
+
+  it("public wrappers hit the isPublic-only /insights/public/* endpoints (id/code encoded)", async () => {
+    await getPublicPoll("p 1");
+    expect(mockReq.mock.calls[0][0]).toBe("/insights/public/polls/p%201");
+    await getPublicPollQuestion("p1", "C3 1");
+    expect(mockReq.mock.calls[1][0]).toBe("/insights/public/polls/p1/questions/C3%201");
+    await getPublicPollChoropleth("p1", "C5", "NET Support");
+    const url = mockReq.mock.calls[2][0] as string;
+    expect(url).toContain("/insights/public/polls/p1/questions/C5/choropleth?");
     expect(url).toContain("response=NET+Support");
   });
 

@@ -137,10 +137,21 @@ export class InsightsService {
   async getPublicPoll(id: string) {
     const poll = await this.prisma.poll.findFirst({
       where: { id, isPublic: true },
-      include: POLL_DETAIL_INCLUDE,
+      include: { ...POLL_DETAIL_INCLUDE, tenant: { select: { name: true, slug: true } } },
     });
     if (!poll) throw new ApiHttpException("POLL_NOT_FOUND", "Poll not found");
-    return this.mapPollDetail(poll, null);
+    // The owning tenant brands the public page (name + slug for an initials avatar).
+    return { ...this.mapPollDetail(poll, null), tenant: poll.tenant };
+  }
+
+  /** The choropleth cells for a public poll's question — unauthenticated, isPublic-only. */
+  async getPublicChoropleth(pollId: string, code: string, response: string) {
+    const question = await this.prisma.pollQuestion.findFirst({
+      where: { pollId, code, poll: { isPublic: true } },
+      select: { id: true, code: true, title: true },
+    });
+    if (!question) throw new ApiHttpException("QUESTION_NOT_FOUND", "Question not found");
+    return this.choroplethFor(question, response);
   }
 
   /** Shape a loaded poll for the client. `actingTenantId` is null for public reads. */
@@ -282,6 +293,11 @@ export class InsightsService {
       select: { id: true, code: true, title: true },
     });
     if (!question) throw new ApiHttpException("QUESTION_NOT_FOUND", "Question not found");
+    return this.choroplethFor(question, response);
+  }
+
+  /** Shared by the authed + public choropleth reads: the geographic cells for a question/response. */
+  private async choroplethFor(question: { id: string; code: string; title: string }, response: string) {
     const rows = await this.prisma.pollEstimate.findMany({
       where: { questionId: question.id, responseLabel: response, geoKind: { not: null } },
       orderBy: { breakdownOrdinal: "asc" },

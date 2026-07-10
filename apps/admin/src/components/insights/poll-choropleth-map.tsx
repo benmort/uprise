@@ -17,7 +17,7 @@ const mapStyleFor = (theme: string) =>
 // Victoria's extent — the sed_upper (Legislative Council) regions all sit inside it.
 const VIC_BOUNDS: [number, number, number, number] = [140.8, -39.3, 150.2, -33.9];
 
-/** The `--poll-seq-*` ramp has five steps, and the buckets are cut to match. */
+/** The `--seq-*` ramp has five steps, and the buckets are cut to match. */
 const STEPS = 5;
 
 /**
@@ -49,7 +49,7 @@ function buildScale(cells: ChoroplethCell[]) {
  * are simply absent and paint as no-data. Hover surfaces the region % .
  *
  * Mapbox paint expressions need literal colour strings, which is why this used to carry a
- * hand-picked hex ramp. It reads the `--poll-seq-*` tokens through {@link usePollPalette}
+ * hand-picked hex ramp. It reads the `--seq-*` tokens through {@link usePollPalette}
  * instead: the strings are still literal by the time Mapbox sees them, but they now come
  * from the stylesheet, follow the theme, and are the ramp the contrast checker passed.
  * The old one did not — its lightest step sat at 1.22:1 against the surface.
@@ -58,10 +58,14 @@ export function PollChoroplethMap({
   cells,
   geoKind = "sed_upper",
   height = 380,
+  isPublic = false,
 }: {
   cells: ChoroplethCell[];
   geoKind?: string;
   height?: number;
+  /** Chrome-less public viewer: read the anonymous, layer-scoped tile endpoint
+   *  (`/insights/public/tiles`) instead of the session-gated `/geo/tiles`. */
+  isPublic?: boolean;
 }) {
   const { theme } = useTheme();
   const palette = usePollPalette();
@@ -89,7 +93,9 @@ export function PollChoroplethMap({
     return ["match", ["get", "code"], ...pairs, noData] as unknown as ExpressionSpecification;
   }, [cells, scale, palette]);
 
-  const tileUrl = `${getApiUrl()}/geo/tiles/${geoKind}/{z}/{x}/{y}?v=3`;
+  const tileUrl = isPublic
+    ? `${getApiUrl()}/insights/public/tiles/${geoKind}/{z}/{x}/{y}?v=3`
+    : `${getApiUrl()}/geo/tiles/${geoKind}/{z}/{x}/{y}?v=3`;
 
   const apiOrigin = useMemo(() => {
     try {
@@ -100,10 +106,12 @@ export function PollChoroplethMap({
   }, []);
   const transformRequest = useCallback(
     (url: string, resourceType?: string) =>
-      resourceType === "Tile" && apiOrigin && url.startsWith(apiOrigin)
+      // The authed /geo/tiles surface needs the session cookie; the public tile endpoint is
+      // anonymous, so fetch it without credentials (no credentialed-CORS requirement).
+      resourceType === "Tile" && !isPublic && apiOrigin && url.startsWith(apiOrigin)
         ? { url, credentials: "include" as const }
         : { url },
-    [apiOrigin],
+    [apiOrigin, isPublic],
   );
 
   const onMouseMove = useCallback(

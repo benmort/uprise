@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { ArrowUpRight, Info } from "lucide-react";
 import type { Crosstab, EvidenceItem, PollQuestionRef } from "@/lib/api/insights";
-import { getPollQuestion } from "@/lib/api/insights";
 import { useApi } from "@/lib/use-api";
+import { useInsightsApi } from "@/components/insights/insights-api-context";
 import {
   buildMatrix,
   claimValue,
@@ -104,6 +104,7 @@ function ToplineExhibit({ item, pollId, questions }: { item: EvidenceItem; pollI
   const palette = usePollPalette();
   const { theme } = useTheme();
   const ctx: ChartCtx = { theme };
+  const { getPollQuestion } = useInsightsApi();
 
   // A base question carries its topline on the page. A VARIANT code (e.g. D6-2) is collapsed into
   // its base by groupQuestions, so it isn't in `questions` and its topline isn't on the page —
@@ -187,6 +188,7 @@ function BreakdownExhibit({ item, pollId }: { item: EvidenceItem; pollId: string
   const palette = usePollPalette();
   const { theme } = useTheme();
   const ctx: ChartCtx = { theme };
+  const { getPollQuestion } = useInsightsApi();
 
   const { data, loading, error, noPermission, refetch } = useApi(
     `/insights/polls/${pollId}/questions/${item.code}`,

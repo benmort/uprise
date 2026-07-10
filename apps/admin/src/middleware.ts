@@ -25,6 +25,8 @@ function publicHref(req: NextRequest): string {
 }
 
 export function middleware(req: NextRequest): NextResponse {
+  // Public poll viewer (/p/*) — chrome-less, unauthenticated; the action app rewrites onto it.
+  if (req.nextUrl.pathname.startsWith("/p/")) return NextResponse.next();
   if (req.cookies.get(COOKIE)) return NextResponse.next();
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
   const url = new URL("/sign-in", authAppUrl);

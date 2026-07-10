@@ -105,6 +105,8 @@ export type PollDetail = {
   isPublic: boolean;
   /** The acting tenant owns this poll — so an owner/organiser here may toggle its visibility. */
   owned: boolean;
+  /** The owning tenant — brands the public viewer (name + slug for an initials avatar). Public reads only. */
+  tenant?: { name: string; slug: string } | null;
   themes: PollTheme[];
   questions: PollQuestionRef[];
 };
@@ -194,6 +196,23 @@ export async function getPollChoropleth(id: string, code: string, response: stri
   const qs = new URLSearchParams({ response });
   return request<Choropleth>(
     `/insights/polls/${encodeURIComponent(id)}/questions/${encodeURIComponent(code)}/choropleth?${qs}`,
+  );
+}
+
+// ── Public (unauthenticated) reads — same shapes, isPublic-only endpoints. The chrome-less
+// public poll route swaps these in via <InsightsApiProvider mode="public">. ──
+export async function getPublicPoll(id: string) {
+  return request<PollDetail>(`/insights/public/polls/${encodeURIComponent(id)}`);
+}
+export async function getPublicPollQuestion(id: string, code: string) {
+  return request<Crosstab>(
+    `/insights/public/polls/${encodeURIComponent(id)}/questions/${encodeURIComponent(code)}`,
+  );
+}
+export async function getPublicPollChoropleth(id: string, code: string, response: string) {
+  const qs = new URLSearchParams({ response });
+  return request<Choropleth>(
+    `/insights/public/polls/${encodeURIComponent(id)}/questions/${encodeURIComponent(code)}/choropleth?${qs}`,
   );
 }
 
