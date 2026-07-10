@@ -95,6 +95,9 @@ export type ValidatedEnv = {
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
+  /** Server-side Mapbox token. Absent ⇒ turf walks are priced with straight lines, and say so. */
+  MAPBOX_TOKEN: string;
+  MAPBOX_DIRECTIONS_RPM: number;
   ACTION_NETWORK_API_BASE_URL: string;
   ACTION_NETWORK_API_KEY: string;
   ACTION_NETWORK_SYNC_PER_PAGE: number;
@@ -273,6 +276,8 @@ export function validateEnv(config: Env): ValidatedEnv {
     VAPID_PUBLIC_KEY: config.VAPID_PUBLIC_KEY?.trim() || "",
     VAPID_PRIVATE_KEY: config.VAPID_PRIVATE_KEY?.trim() || "",
     VAPID_SUBJECT: config.VAPID_SUBJECT?.trim() || "mailto:hello@uprise.app",
+    MAPBOX_TOKEN: config.MAPBOX_TOKEN?.trim() || "",
+    MAPBOX_DIRECTIONS_RPM: numberInRange(config, "MAPBOX_DIRECTIONS_RPM", 1, 1200, 240, errors),
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
     ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),

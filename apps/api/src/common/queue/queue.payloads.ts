@@ -32,6 +32,12 @@ export type SegmentEvalRunJobPayload = {
   segmentId: string;
 };
 
+/** Price a turf's doors-per-hour. `force` lets a job order a turf too big for a request. */
+export type TurfEstimateRunJobPayload = {
+  tenantId: string;
+  turfId: string;
+};
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -85,4 +91,10 @@ export function isIntegrationSyncJobPayload(value: unknown): value is Integratio
   if (payload.cursorUrl !== undefined && typeof payload.cursorUrl !== "string") return false;
   if (payload.run !== undefined && !Number.isFinite(payload.run)) return false;
   return true;
+}
+
+export function isTurfEstimateRunJobPayload(value: unknown): value is TurfEstimateRunJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  return isNonEmptyString(payload.tenantId) && isNonEmptyString(payload.turfId);
 }

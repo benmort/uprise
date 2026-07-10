@@ -1,4 +1,4 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { HttpStatus } from "@nestjs/common";
 import {
   AppUserRole,
@@ -24,6 +24,10 @@ import {
   type TurfDivisionType,
 } from "../geo/geo.service";
 import { assertTurfAssignmentTransition } from "./turf-assignment-state.machine";
+import { DispatchQueue } from "../common/queue/dispatch-queue";
+import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
+import { QUEUE_JOB_TYPES, QUEUE_NAMES, getTurfEstimateJobId } from "../common/queue/queue.constants";
+import type { TurfEstimateRunJobPayload } from "../common/queue/queue.payloads";
 
 /** Which addresses a turf should be populated with when it's cut. */
 export type TurfUniverse = "existing" | "none" | "hybrid";
@@ -74,7 +78,32 @@ export class CanvassingService {
     private readonly prisma: PrismaService,
     private readonly engagement: EngagementService,
     private readonly geo: GeoService,
+    @Inject(DISPATCH_QUEUE_TOKEN) private readonly queue: DispatchQueue,
   ) {}
+
+  /**
+   * Ask the `turf-estimate` worker to price this turf.
+   *
+   * Fired twice per cut — once when the polygon is saved, once when its doors are loaded —
+   * and collapsed by the stable job id into a single run. `removeOnComplete` matters: the
+   * dispatcher refuses any id it can still find, and BullMQ keeps the last thousand
+   * completed jobs, so without it a re-cut of the same turf would silently never re-price.
+   *
+   * Never awaited for its result, and never allowed to fail a cut. A turf without a price is
+   * one the UI stays quiet about; a cut that 500s because Redis hiccuped is a bug.
+   */
+  private async queueTurfEstimate(tenantId: string, turfId: string): Promise<void> {
+    const payload: TurfEstimateRunJobPayload = { tenantId, turfId };
+    await this.queue
+      .enqueue({
+        id: getTurfEstimateJobId(turfId),
+        queue: QUEUE_NAMES.TURF_ESTIMATE,
+        type: QUEUE_JOB_TYPES.TURF_ESTIMATE_RUN,
+        payload,
+        removeOnComplete: true,
+      })
+      .catch(() => undefined);
+  }
 
   // ── Turf assignment (server-owned lock) ─────────────────────────
   /**
@@ -116,13 +145,37 @@ export class CanvassingService {
     });
   }
 
-  /** The turfs (and their walk lists) currently locked to a volunteer. */
+  /** The turfs (and their walk lists) currently locked to a volunteer.
+   *  The per-item contact is narrowed to only the fields the field UI renders — the
+   *  full Contact row (esp. the `metadata` JSON blob) times up to ~2000 doors/turf was
+   *  the dominant payload cost on the canvasser's hot path. */
   async listAssignments(tenantId: string, volunteerId: string) {
     const assignments = await this.prisma.turfAssignment.findMany({
       where: { volunteerId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
       include: {
         turf: {
-          include: { walkLists: { include: { items: { orderBy: { orderIndex: "asc" }, include: { contact: true } } } } },
+          include: {
+            walkLists: {
+              include: {
+                items: {
+                  orderBy: { orderIndex: "asc" },
+                  include: {
+                    contact: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        address: true,
+                        lat: true,
+                        lng: true,
+                        phoneE164: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     });
@@ -463,6 +516,9 @@ export class CanvassingService {
         assignments: { where: { status: TurfAssignmentStatus.ASSIGNED }, include: { volunteer: true } },
         _count: { select: { contacts: true, walkLists: true } },
         walkLists: { select: { items: { select: { status: true } } } },
+        // The cached doors/hour estimate. Null until the turf has been priced; `source`
+        // says whether the walk came from Mapbox footpaths or from straight lines.
+        estimate: true,
       },
     });
     return turfs.map((t) => {
@@ -480,6 +536,19 @@ export class CanvassingService {
         visitedStops,
         assignedTo: t.assignments[0]
           ? { volunteerId: t.assignments[0].volunteerId, name: t.assignments[0].volunteer.displayName }
+          : null,
+        estimate: t.estimate
+          ? {
+              doors: t.estimate.doors,
+              buildings: t.estimate.buildings,
+              doorsPerBuilding: t.estimate.doorsPerBuilding,
+              doorsPerHour: t.estimate.doorsPerHour,
+              doorsPerShift: t.estimate.doorsPerShift,
+              shifts: t.estimate.shifts,
+              // "crowflies" is an optimistic lower bound on the walk. The UI must say so.
+              source: t.estimate.source,
+              computedAt: t.estimate.computedAt,
+            }
           : null,
       };
     });
@@ -669,6 +738,8 @@ export class CanvassingService {
     }
 
     const total = await this.prisma.contact.count({ where: { tenantId, turfId } });
+    // The doors just changed, so last cut's price is stale even though the polygon is not.
+    await this.queueTurfEstimate(tenantId, turfId);
     return { materialised, total };
   }
 
@@ -682,6 +753,7 @@ export class CanvassingService {
       },
     });
     await this.syncTurfGeom(turf.id, input.geometry);
+    await this.queueTurfEstimate(tenantId, turf.id);
     return turf;
   }
 

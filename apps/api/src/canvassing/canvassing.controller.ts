@@ -19,6 +19,7 @@ import { AppUserRole, WalkListItemListType } from "@uprise/db";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { TurfEstimateService } from "./turf-estimate.service";
 import { TenantId } from "../auth/tenant-id.decorator";
 import type { AuthUser } from "../auth/auth-user";
 import { CanvassingService } from "./canvassing.service";
@@ -55,13 +56,37 @@ const DOORKNOCK = { action: "manage", resource: "canvass.doorknock" } as const;
 @Controller("canvass")
 @UseGuards(RolesGuard)
 export class CanvassingController {
-  constructor(private readonly canvassing: CanvassingService) {}
+  constructor(
+    private readonly canvassing: CanvassingService,
+    private readonly estimates: TurfEstimateService,
+  ) {}
 
   // Organiser
   @Get("turfs")
   @Roles(AppUserRole.ORGANISER)
   async listTurfs(@TenantId() tenantId: string, @Query("campaignId") campaignId?: string) {
     return this.canvassing.listTurfs(tenantId, campaignId);
+  }
+
+  /**
+   * The cached doors-per-hour estimate for one turf. Null when it has never been priced.
+   * `source` is "directions" (Mapbox walked the real footpaths) or "crowflies" (straight
+   * lines, which always flatter the turf) — the client must say which.
+   */
+  @Get("turfs/:id/estimate")
+  @Roles(AppUserRole.ORGANISER)
+  async getTurfEstimate(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.estimates.get(tenantId, id);
+  }
+
+  /**
+   * Price a turf now. A turf too large to order inside a request is handed to the
+   * `turf-estimate` worker instead, and the response says so (`queued: true`).
+   */
+  @Post("turfs/:id/estimate")
+  @Roles(AppUserRole.ORGANISER)
+  async refreshTurfEstimate(@TenantId() tenantId: string, @Param("id") id: string) {
+    return this.estimates.requestRefresh(tenantId, id);
   }
 
   @Get("volunteers")

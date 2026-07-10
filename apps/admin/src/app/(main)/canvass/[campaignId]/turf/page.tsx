@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Crosshair, MapPin, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Crosshair, MapPin, Save } from "lucide-react";
 import {
   assignTurf,
   createTurf,
@@ -32,6 +32,13 @@ import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { Pencil, Trash2 } from "lucide-react";
 import type { AreaHoverInfo, ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
+import { cn } from "@/lib/utils";
+import {
+  describeBuildings,
+  describeEstimate,
+  isStraightLine,
+  turfWarning,
+} from "@/lib/canvass/turf-estimate";
 
 // mapbox-gl + draw touch window: keep them out of SSR.
 const TurfDrawMap = dynamic(
@@ -412,37 +419,73 @@ export default function TurfCuttingPage() {
               skeleton={<Skeleton className="h-20 w-full" />}
             >
               <ul className="space-y-2">
-                {turfs.map((t, i) => (
-                  <li key={t.id} className="flex items-center gap-2 text-sm">
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full"
-                      style={{ backgroundColor: SWATCHES[i % SWATCHES.length] }}
-                    />
-                    <span className="flex items-center gap-1 font-medium text-foreground">
-                      <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                      {t.name}
-                    </span>
-                    <span className="ml-auto tabular-nums text-muted-foreground">
-                      {t.contactCount} doors
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Rename turf"
-                      onClick={() => openRename(t)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Delete turf"
-                      onClick={() => setDeletingTurf(t)}
-                      className="text-muted-foreground hover:text-error"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
+                {turfs.map((t, i) => {
+                  const warning = turfWarning(t.estimate);
+                  return (
+                    <li key={t.id} className="text-sm">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: SWATCHES[i % SWATCHES.length] }}
+                        />
+                        <span className="flex items-center gap-1 font-medium text-foreground">
+                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                          {t.name}
+                        </span>
+                        <span className="ml-auto tabular-nums text-muted-foreground">
+                          {t.contactCount} doors
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Rename turf"
+                          onClick={() => openRename(t)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Delete turf"
+                          onClick={() => setDeletingTurf(t)}
+                          className="text-muted-foreground hover:text-error"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {/* The estimate, once the turf has been priced. A straight-line walk
+                          is always optimistic, so it is labelled rather than rounded into
+                          looking like a measurement. */}
+                      {t.estimate && t.estimate.doors > 0 ? (
+                        <div className="ml-5 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <span className="tabular-nums">{describeEstimate(t.estimate)}</span>
+                          <span aria-hidden>·</span>
+                          <span className="tabular-nums">{describeBuildings(t.estimate)}</span>
+                          {isStraightLine(t.estimate) ? (
+                            <span
+                              title="The walk was measured in straight lines, not along footpaths — the real turf is slower."
+                              className="rounded border border-border px-1 py-px text-[10px] font-medium uppercase tracking-wide"
+                            >
+                              straight-line estimate
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {warning ? (
+                        <p
+                          className={cn(
+                            "ml-5 mt-1 flex items-center gap-1 text-xs",
+                            warning.level === "warn" ? "font-medium text-warning" : "text-muted-foreground",
+                          )}
+                        >
+                          {warning.level === "warn" ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                          {warning.text}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </StateRegion>
           </SectionCard>

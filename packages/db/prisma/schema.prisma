@@ -278,6 +278,7 @@ model Tenant {
   canvassCampaigns  CanvassCampaign[]
   polls             Poll[]
   turfs             Turf[]
+  turfEstimates     TurfEstimate[]
   walkLists         WalkList[]
   doorKnocks        DoorKnock[]
   shifts            Shift[]
@@ -873,6 +874,7 @@ model QuestionResponse {
 
   @@index([tenantId, contactId, createdAt])
   @@index([questionId, optionId])
+  @@index([tenantId, recordedById, channel, createdAt], map: "QuestionResponse_recordedBy_idx") // field volunteer-metrics
   @@schema("canvass")
 }
 
@@ -888,6 +890,9 @@ model DispositionDef {
   isTerminal     Boolean           @default(false)
   isLocked       Boolean           @default(false)
   orderIndex     Int               @default(0)
+  /// Seconds this outcome takes at the door, for the doors/hour estimate. A PRIOR until
+  /// canvass.DoorKnock has rows: consecutive knocks by one volunteer give the real figure.
+  expectedSeconds Int?
   tenant   Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, code])
@@ -1054,8 +1059,46 @@ model Turf {
   contacts       Contact[]
   walkLists      WalkList[]
   assignments    TurfAssignment[]
+  estimate       TurfEstimate?
 
   @@index([tenantId, campaignId])
+  @@schema("canvass")
+}
+
+/// How long a turf takes to knock. Derived, cached, and invalidated by `geometryHash` —
+/// a re-cut changes the doors, so it must change the estimate.
+///
+/// `source` records how the walking was priced: "directions" means Mapbox walked the real
+/// footpaths; "crowflies" means straight lines, which always flatter the turf. The UI must
+/// say which. Every time constant behind `doorSeconds` is a prior until DoorKnock has rows.
+model TurfEstimate {
+  id               String   @id @default(cuid())
+  turfId           String   @unique
+  tenantId         String
+  doors            Int
+  buildings        Int
+  doorsPerBuilding Float
+  reachableDoors   Float
+  walkSeconds      Float
+  approachWalkSeconds Float
+  entrySeconds     Float
+  doorSeconds      Float
+  totalSeconds     Float
+  doorsPerHour     Float
+  doorsPerShift    Int
+  shifts           Float
+  /// "directions" | "crowflies"
+  source           String
+  /// Directions requests spent. 0 when the walk was priced with straight lines.
+  requests         Int      @default(0)
+  /// Hash of the turf geometry the estimate was computed from.
+  geometryHash     String
+  computedAt       DateTime @default(now())
+
+  turf   Turf   @relation(fields: [turfId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
   @@schema("canvass")
 }
 
@@ -1092,6 +1135,7 @@ model WalkList {
   items          WalkListItem[]
 
   @@index([tenantId, campaignId])
+  @@index([turfId]) // field listAssignments joins walk lists by turfId (was a seq scan)
   @@schema("canvass")
 }
 

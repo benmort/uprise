@@ -6,6 +6,7 @@ export const QUEUE_NAMES = {
   JOURNEY_RUN: "journey-run",
   DOMAIN_EVENTS: "domain-events",
   SEGMENT_EVAL: "segment-eval",
+  TURF_ESTIMATE: "turf-estimate",
 } as const;
 
 export const QUEUE_JOB_TYPES = {
@@ -16,6 +17,7 @@ export const QUEUE_JOB_TYPES = {
   JOURNEY_RUN_RUNG: "journey.run.rung",
   DOMAIN_EVENT: "domain.event",
   SEGMENT_EVAL_RUN: "segment.eval.run",
+  TURF_ESTIMATE_RUN: "turf.estimate.run",
 } as const;
 
 export function getAudienceImportJobId(importId: string, chunkKey?: string): string {
@@ -42,4 +44,16 @@ export function getJourneyRungJobId(enrolmentId: string, rungIndex: number): str
 
 export function getSegmentEvalJobId(segmentId: string): string {
   return `segment-eval_${segmentId}`;
+}
+
+/**
+ * Stable per-turf id, so the two enqueues a cut fires — one when the polygon is saved, one
+ * when its doors are loaded — collapse into a single run.
+ *
+ * The job is enqueued with `removeOnComplete: true` on purpose. The default keeps the last
+ * thousand completed jobs, and `enqueue` skips any id it can still find: with the default, a
+ * re-cut of the same turf would find its own finished job and never re-price.
+ */
+export function getTurfEstimateJobId(turfId: string): string {
+  return `turf-estimate_${turfId}`;
 }

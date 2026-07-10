@@ -1,4 +1,5 @@
 import {
+  isTurfEstimateRunJobPayload,
   isAudienceImportBatchJobPayload,
   isBlastRetryFailedJobPayload,
   isBlastSendBatchJobPayload,
@@ -60,5 +61,27 @@ describe("queue payload contracts", () => {
         audienceName: "x",
       }),
     ).toBe(false);
+  });
+});
+
+describe("isTurfEstimateRunJobPayload", () => {
+  it("accepts a tenant-scoped turf", () => {
+    expect(isTurfEstimateRunJobPayload({ tenantId: "t1", turfId: "turf1" })).toBe(true);
+  });
+
+  it("rejects anything that would price the wrong tenant's turf, or none at all", () => {
+    for (const bad of [
+      null,
+      undefined,
+      "turf1",
+      {},
+      { turfId: "turf1" },
+      { tenantId: "t1" },
+      { tenantId: "", turfId: "turf1" },
+      { tenantId: "t1", turfId: "  " },
+      { tenantId: 1, turfId: "turf1" },
+    ]) {
+      expect(isTurfEstimateRunJobPayload(bad)).toBe(false);
+    }
   });
 });

@@ -41,12 +41,27 @@ describe("CanvassingController", () => {
     qaReview: jest.fn().mockResolvedValue({}),
     setQaFlagResolution: jest.fn().mockResolvedValue({}),
   } as any;
-  const c = new CanvassingController(svc);
+  const estimates = {
+    get: jest.fn().mockResolvedValue(null),
+    requestRefresh: jest.fn().mockResolvedValue({ queued: false, estimate: {} }),
+  } as any;
+  const c = new CanvassingController(svc, estimates);
   const req = { user: { id: "u1" } } as any;
 
   afterEach(() => jest.clearAllMocks());
 
   // ── Organiser: turfs / volunteers ──
+  it("getTurfEstimate reads the cached price for this tenant's turf", async () => {
+    await c.getTurfEstimate("t1", "turf1");
+    expect(estimates.get).toHaveBeenCalledWith("t1", "turf1");
+  });
+
+  it("refreshTurfEstimate hands off rather than forcing past the inline cap", async () => {
+    await c.refreshTurfEstimate("t1", "turf1");
+    // `force` belongs to the worker; a request handler must not spend minutes of quota.
+    expect(estimates.requestRefresh).toHaveBeenCalledWith("t1", "turf1");
+  });
+
   it("listTurfs delegates with tenantId + campaignId", async () => {
     await c.listTurfs("t1", "camp1");
     expect(svc.listTurfs).toHaveBeenCalledWith("t1", "camp1");

@@ -1,8 +1,13 @@
-// Offline walk-list route ordering. The server uses the Mapbox Optimization API
-// for the canonical order at walk-list-build time; this is the client-side
-// fallback used offline and for lists beyond the Optimization API's stop limit.
-// Nearest-neighbour construction + 2-opt improvement — good enough for walking a
-// turf and runs fully offline with no dependencies.
+// Offline walk-list route ordering. Nearest-neighbour construction + 2-opt
+// improvement — good enough for walking a turf, and runs in a service worker with
+// no dependencies and no network.
+//
+// The server has a twin of this in `apps/api/src/canvassing/route-math.ts`, used to
+// order a turf before pricing its walk. Neither can import the other (the API does not
+// depend on a React package; the PWA must not depend on the API). Keep them in step.
+//
+// (An earlier version of this comment claimed the server ordered walk lists through the
+// Mapbox Optimization API. It never did.)
 
 export type Stop = { id: string; lat: number; lng: number };
 

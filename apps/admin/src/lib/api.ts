@@ -701,6 +701,23 @@ export async function deleteCannedResponse(id: string) {
 
 // ── Canvassing ───────────────────────────────────────────────────────────
 
+/**
+ * How long a turf takes to knock. `source` says how the walk between buildings was priced:
+ * "directions" means Mapbox walked the real footpaths; "crowflies" means straight lines,
+ * which always flatter a turf. Every time-at-the-door constant behind this is a literature
+ * prior until real door-knock timings exist.
+ */
+export type TurfEstimate = {
+  doors: number;
+  buildings: number;
+  doorsPerBuilding: number;
+  doorsPerHour: number;
+  doorsPerShift: number;
+  shifts: number;
+  source: "directions" | "crowflies" | string;
+  computedAt: string;
+};
+
 export type TurfSummary = {
   id: string;
   name: string;
@@ -711,6 +728,8 @@ export type TurfSummary = {
   totalStops: number;
   visitedStops: number;
   assignedTo: { volunteerId: string; name: string } | null;
+  /** Null until the turf has been priced. */
+  estimate: TurfEstimate | null;
 };
 
 export async function listTurfs(campaignId?: string) {

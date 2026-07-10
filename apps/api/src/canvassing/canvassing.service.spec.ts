@@ -28,6 +28,7 @@ describe("CanvassingService", () => {
   let engagement: any;
   let geo: any;
   let service: CanvassingService;
+  let queue: { enqueue: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -103,7 +104,9 @@ describe("CanvassingService", () => {
       unionSources: jest.fn(),
     };
     put.mockClear();
-    service = new CanvassingService(prisma, engagement, geo);
+    // The estimate is queued, never awaited: a cut must not fail because Redis hiccuped.
+    queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "j1", queued: true }) };
+    service = new CanvassingService(prisma, engagement, geo, queue as never);
   });
 
   describe("assignTurf", () => {

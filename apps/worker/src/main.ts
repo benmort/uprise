@@ -12,6 +12,7 @@ import { ExpressAdapter } from "@bull-board/express";
 import type { EventEnvelope } from "@uprise/events";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
 import { SegmentEvaluatorService } from "../../api/src/audiences/segment-evaluator.service";
+import { TurfEstimateService } from "../../api/src/canvassing/turf-estimate.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { IntegrationsService } from "../../api/src/integrations/integrations.service";
 import { JourneysService } from "../../api/src/journeys/journeys.service";
@@ -26,6 +27,7 @@ import {
   isIntegrationSyncJobPayload,
   isJourneyRunRungJobPayload,
   isSegmentEvalRunJobPayload,
+  isTurfEstimateRunJobPayload,
 } from "../../api/src/common/queue/queue.payloads";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES } from "../../api/src/common/queue/queue.constants";
 
@@ -206,6 +208,7 @@ async function bootstrap(): Promise<void> {
   const queueConfig = app.get(QueueConfigService);
   const audiences = app.get(AudiencesService);
   const segmentEvaluator = app.get(SegmentEvaluatorService);
+  const turfEstimates = app.get(TurfEstimateService);
   const blasts = app.get(BlastsService);
   const integrations = app.get(IntegrationsService);
   const journeys = app.get(JourneysService);
@@ -310,6 +313,20 @@ async function bootstrap(): Promise<void> {
         return segmentEvaluator.processEvalJob(job.data);
       },
       { connection, prefix, concurrency: 2 },
+    ),
+    // Pricing a turf is CPU-bound (ordering the buildings) and then rate-limited (Mapbox
+    // walks the footpaths, 25 waypoints per request). Kew is 28,580 buildings and 1,191
+    // requests. One at a time: two of these would fight each other for the same quota.
+    new Worker(
+      QUEUE_NAMES.TURF_ESTIMATE,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.TURF_ESTIMATE_RUN) return null;
+        if (!isTurfEstimateRunJobPayload(job.data)) {
+          throw new Error(`Invalid turf estimate job payload for job ${job.id}`);
+        }
+        return turfEstimates.processEstimateJob(job.data);
+      },
+      { connection, prefix, concurrency: 1 },
     ),
   ];
 
