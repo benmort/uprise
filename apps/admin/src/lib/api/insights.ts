@@ -19,7 +19,34 @@ export type PollSummary = {
   lastIngestedAt: string | null;
 };
 
-export type PollKeyFinding = { heading: string; body: string; questionCode?: string };
+/** A figure the write-up asserts, and where in the estimates to check it. */
+export type EvidenceClaim = {
+  percent: number;
+  response?: string;
+  value?: string;
+  /** 1 = the largest response. Used where the response text is too long to name. */
+  rank?: number;
+};
+
+/** One exhibit behind a key finding. `unverifiable` clauses carry no chart. */
+export type EvidenceItem = {
+  label: string;
+  code?: string;
+  group?: string;
+  response?: string;
+  headline?: boolean;
+  matrix?: string[];
+  claim?: EvidenceClaim;
+  unverifiable?: string;
+};
+
+export type PollKeyFinding = {
+  heading: string;
+  body: string;
+  questionCode?: string;
+  /** The crosstabs that back this finding. Null for a poll the API does not recognise. */
+  evidence?: { items: EvidenceItem[] } | null;
+};
 
 /** One whole-sample response row. `percent` is null when the cell was suppressed. */
 export type ToplineRow = { label: string; percent: number | null; isNet: boolean };

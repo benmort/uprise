@@ -79,6 +79,23 @@
      numerals – never a data mark. 5.24:1 on white, so it is legal for small text. */
   --poll-accent: 8.4 74.8% 45.1%;
 
+  /* ---- Poll sequential ramp (choropleth + heatmap) ----
+     A magnitude scale, not a polarity one, so it is one hue light→dark rather than the
+     two-pole ramp above. Used wherever the number has no "for/against": a regional
+     choropleth, a party-competence heatmap.
+
+     Validated (dataviz validate_palette, ordinal mode, surface #ffffff): monotone lightness,
+     every adjacent ΔL ≥ 0.06, hue spread 3°, light end 2.11:1 against the surface.
+     It replaces a hand-picked ramp that failed that last check at 1.22:1. */
+  --poll-seq-1: 212.6 76.6% 73.1%;
+  --poll-seq-2: 212.5 75.3% 62%;
+  --poll-seq-3: 212.8 67.7% 50.2%;
+  --poll-seq-4: 213.1 71.9% 39%;
+  --poll-seq-5: 213.5 77.9% 28.4%;
+  /* "Base too small to report" – must read as absent, never as a low value, so it is
+     the same neutral grey the diverging midpoint uses. */
+  --poll-nodata: 240 5.9% 90%;
+
   /* ---- TailAdmin text/stroke constants (prog marketing) ---- */
   --title-color: #1e293b;
   --text-color: #475569;
@@ -149,6 +166,16 @@
   --poll-oppose-soft: 10.7 58.8% 44.7%;
   --poll-oppose-strong: 10.6 85% 58.2%;
   --poll-accent: 10.6 85% 58.2%;
+
+  /* Sequential ramp (dark). Selected against #18181b, not inverted: the ramp still runs
+     low→high, but "high" is now the bright end so magnitude reads as luminance against a
+     dark surface. Validated in ordinal mode: monotone, ΔL 0.06+, hue spread 3°, 3.28:1. */
+  --poll-seq-1: 213.1 67.5% 44.7%;
+  --poll-seq-2: 212.8 76.8% 56.1%;
+  --poll-seq-3: 212.6 77% 67.6%;
+  --poll-seq-4: 212.8 79.6% 78.8%;
+  --poll-seq-5: 212.6 85.2% 89.4%;
+  --poll-nodata: 240 5.3% 26.1%;
 
   /* ---- TailAdmin text/stroke constants (dark) ---- */
   --title-color: #f1f5f9;
@@ -272,6 +299,13 @@
   --color-poll-oppose-soft: hsl(var(--poll-oppose-soft));
   --color-poll-oppose-strong: hsl(var(--poll-oppose-strong));
   --color-poll-accent: hsl(var(--poll-accent));
+
+  --color-poll-seq-1: hsl(var(--poll-seq-1));
+  --color-poll-seq-2: hsl(var(--poll-seq-2));
+  --color-poll-seq-3: hsl(var(--poll-seq-3));
+  --color-poll-seq-4: hsl(var(--poll-seq-4));
+  --color-poll-seq-5: hsl(var(--poll-seq-5));
+  --color-poll-nodata: hsl(var(--poll-nodata));
 
   --font-headline: var(--font-outfit), sans-serif;
   --font-body: var(--font-outfit), sans-serif;

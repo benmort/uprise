@@ -4,8 +4,10 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import MapGL, { Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import type { ExpressionSpecification } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { LocateFixed } from "lucide-react";
 import { getApiUrl } from "@/lib/api";
 import { useTheme } from "@/components/theme/theme-provider";
+import { usePollPalette } from "@/components/insights/use-poll-palette";
 import type { ChoroplethCell } from "@/lib/api/insights";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
@@ -15,13 +17,14 @@ const mapStyleFor = (theme: string) =>
 // Victoria's extent — the sed_upper (Legislative Council) regions all sit inside it.
 const VIC_BOUNDS: [number, number, number, number] = [140.8, -39.3, 150.2, -33.9];
 
-// Sequential 5-class ramp (light → dark). Map paint requires literal colour strings,
-// so raw hex here mirrors turf-draw-map's paint expressions (the one design-token
-// exception). Blue = more support.
-const RAMP = ["#dbeafe", "#93c5fd", "#3b82f6", "#1d4ed8", "#1e3a8a"];
-const NO_DATA = "#cbd5e1";
+/** The `--poll-seq-*` ramp has five steps, and the buckets are cut to match. */
+const STEPS = 5;
 
-/** Even 5-bucket thresholds across the reportable range (min→max), rounded to whole %. */
+/**
+ * Even 5-bucket thresholds across the reportable range (min→max), rounded to whole %.
+ * Colour is not its business — the caller pairs each band with a step of the sequential
+ * ramp, which is read from the design tokens so the map re-skins with the theme.
+ */
 function buildScale(cells: ChoroplethCell[]) {
   const vals = cells
     .filter((c) => c.reportable && typeof c.percent === "number")
@@ -30,14 +33,13 @@ function buildScale(cells: ChoroplethCell[]) {
   const min = Math.floor(Math.min(...vals));
   const max = Math.ceil(Math.max(...vals));
   const span = Math.max(1, max - min);
-  const step = span / RAMP.length;
-  const bucketOf = (v: number) => Math.min(RAMP.length - 1, Math.floor((v - min) / step));
-  const legend = RAMP.map((colour, i) => ({
-    colour,
+  const step = span / STEPS;
+  const bucketOf = (v: number) => Math.min(STEPS - 1, Math.floor((v - min) / step));
+  const bands = Array.from({ length: STEPS }, (_, i) => ({
     lo: Math.round(min + i * step),
     hi: Math.round(min + (i + 1) * step),
   }));
-  return { min, max, bucketOf, legend };
+  return { min, max, bucketOf, bands };
 }
 
 /**
@@ -45,6 +47,12 @@ function buildScale(cells: ChoroplethCell[]) {
  * tiles. Fill is a client-side ["match", ["get","code"], …] from the supplied
  * cells (no feature-state) — cells without a geoCode (the non-geo "Region" band)
  * are simply absent and paint as no-data. Hover surfaces the region % .
+ *
+ * Mapbox paint expressions need literal colour strings, which is why this used to carry a
+ * hand-picked hex ramp. It reads the `--poll-seq-*` tokens through {@link usePollPalette}
+ * instead: the strings are still literal by the time Mapbox sees them, but they now come
+ * from the stylesheet, follow the theme, and are the ramp the contrast checker passed.
+ * The old one did not — its lightest step sat at 1.22:1 against the surface.
  */
 export function PollChoroplethMap({
   cells,
@@ -56,6 +64,7 @@ export function PollChoroplethMap({
   height?: number;
 }) {
   const { theme } = useTheme();
+  const palette = usePollPalette();
   const mapRef = useRef<MapRef | null>(null);
   const [hover, setHover] = useState<{ name: string; percent: number | null; reportable: boolean } | null>(null);
 
@@ -67,17 +76,18 @@ export function PollChoroplethMap({
 
   const scale = useMemo(() => buildScale(cells), [cells]);
 
-  // ["match", ["get","code"], code, colour, …, NO_DATA] — one pair per reportable cell.
+  // ["match", ["get","code"], code, colour, …, no-data] — one pair per reportable cell.
   const fillColour = useMemo<ExpressionSpecification | string>(() => {
-    if (!scale) return NO_DATA;
+    const noData = palette?.nodata ?? "transparent";
+    if (!scale || !palette) return noData;
     const pairs: (string | number)[] = [];
     for (const c of cells) {
       if (!c.geoCode || !c.reportable || typeof c.percent !== "number") continue;
-      pairs.push(c.geoCode, RAMP[scale.bucketOf(c.percent)]);
+      pairs.push(c.geoCode, palette.seq[scale.bucketOf(c.percent)]);
     }
-    if (pairs.length === 0) return NO_DATA;
-    return ["match", ["get", "code"], ...pairs, NO_DATA] as unknown as ExpressionSpecification;
-  }, [cells, scale]);
+    if (pairs.length === 0) return noData;
+    return ["match", ["get", "code"], ...pairs, noData] as unknown as ExpressionSpecification;
+  }, [cells, scale, palette]);
 
   const tileUrl = `${getApiUrl()}/geo/tiles/${geoKind}/{z}/{x}/{y}?v=3`;
 
@@ -105,6 +115,21 @@ export function PollChoroplethMap({
     [byCode],
   );
 
+  // Fit the map back to the region extent — used on load (instant) and by the recentre
+  // button (animated) after the user pans/zooms away.
+  const recenter = useCallback((duration: number) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    map.resize();
+    map.fitBounds(
+      [
+        [VIC_BOUNDS[0], VIC_BOUNDS[1]],
+        [VIC_BOUNDS[2], VIC_BOUNDS[3]],
+      ],
+      { padding: 24, duration },
+    );
+  }, []);
+
   return (
     <div className="relative overflow-hidden rounded-xl border border-border" style={{ height }}>
       <MapGL
@@ -117,25 +142,30 @@ export function PollChoroplethMap({
         transformRequest={transformRequest}
         onMouseMove={onMouseMove}
         onMouseLeave={() => setHover(null)}
-        onLoad={() => {
-          const map = mapRef.current?.getMap();
-          if (map) {
-            map.resize();
-            map.fitBounds(
-              [
-                [VIC_BOUNDS[0], VIC_BOUNDS[1]],
-                [VIC_BOUNDS[2], VIC_BOUNDS[3]],
-              ],
-              { padding: 24, duration: 0 },
-            );
-          }
-        }}
+        onLoad={() => recenter(0)}
       >
         <Source id="poll-regions" type="vector" tiles={[tileUrl]} minzoom={0} maxzoom={16}>
           <Layer id="poll-fill" source-layer="areas" type="fill" paint={{ "fill-color": fillColour, "fill-opacity": 0.75 }} />
-          <Layer id="poll-line" source-layer="areas" type="line" paint={{ "line-color": "#334155", "line-width": 0.8, "line-opacity": 0.6 }} />
+          <Layer
+            id="poll-line"
+            source-layer="areas"
+            type="line"
+            paint={{ "line-color": palette?.ink ?? "transparent", "line-width": 0.8, "line-opacity": 0.35 }}
+          />
         </Source>
       </MapGL>
+
+      {/* Recentre — re-fit the region extent after panning/zooming */}
+      <button
+        type="button"
+        onClick={() => recenter(500)}
+        title="Recentre the map"
+        aria-label="Recentre the map"
+        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg bg-surface/95 px-2 py-1 text-xs font-medium text-foreground shadow-card hover:bg-surface"
+      >
+        <LocateFixed className="h-3.5 w-3.5" />
+        Recentre
+      </button>
 
       {/* Hover readout */}
       {hover ? (
@@ -148,11 +178,16 @@ export function PollChoroplethMap({
       ) : null}
 
       {/* Sequential legend */}
-      {scale ? (
+      {scale && palette ? (
         <div className="absolute bottom-2 right-2 rounded-lg bg-surface/95 px-2 py-1.5 shadow-card">
           <div className="flex items-center gap-0.5">
-            {scale.legend.map((b) => (
-              <span key={b.colour} className="h-3 w-6" style={{ backgroundColor: b.colour }} title={`${b.lo}–${b.hi}%`} />
+            {scale.bands.map((b, i) => (
+              <span
+                key={b.lo}
+                className="h-3 w-6"
+                style={{ backgroundColor: palette.seq[i] }}
+                title={`${b.lo}–${b.hi}%`}
+              />
             ))}
           </div>
           <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-muted-foreground">

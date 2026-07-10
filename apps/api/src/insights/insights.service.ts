@@ -3,7 +3,7 @@ import type { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 import type { AuthUser } from "../auth/auth-user";
-import { groupQuestions, THEMES } from "./question-taxonomy";
+import { cleanTitle, evidenceOf, groupQuestions, THEMES } from "./question-taxonomy";
 
 /**
  * Read side of the Insights/Polling domain. Every query is scoped by
@@ -12,6 +12,28 @@ import { groupQuestions, THEMES } from "./question-taxonomy";
  * reference geo regions id-only by (geoKind, geoCode); this service never joins
  * PostGIS — it hands geo codes to the client/geo layer for rendering.
  */
+// Shared by the authed and the public poll-detail reads — the questions + their whole-sample
+// (Total/Total) toplines. Extracted so getPoll and getPublicPoll cannot drift apart.
+const POLL_DETAIL_INCLUDE = {
+  questions: {
+    orderBy: { ordinal: "asc" },
+    include: {
+      estimates: {
+        where: { breakdownGroup: "Total", breakdownValue: "Total" },
+        orderBy: { responseOrdinal: "asc" },
+        select: { responseLabel: true, percent: true, isNet: true, baseN: true, reportable: true },
+      },
+    },
+  },
+} satisfies Prisma.PollInclude;
+type PollDetailRow = Prisma.PollGetPayload<{ include: typeof POLL_DETAIL_INCLUDE }>;
+
+const QUESTION_DETAIL_INCLUDE = {
+  poll: { select: { id: true, title: true, attribution: true } },
+  estimates: { orderBy: [{ responseOrdinal: "asc" }, { breakdownOrdinal: "asc" }] },
+} satisfies Prisma.PollQuestionInclude;
+type QuestionDetailRow = Prisma.PollQuestionGetPayload<{ include: typeof QUESTION_DETAIL_INCLUDE }>;
+
 @Injectable()
 export class InsightsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -89,21 +111,28 @@ export class InsightsService {
   async getPoll(tenantId: string, id: string) {
     const poll = await this.prisma.poll.findFirst({
       where: { id, ...this.visibilityWhere(tenantId) },
-      include: {
-        questions: {
-          orderBy: { ordinal: "asc" },
-          include: {
-            estimates: {
-              where: { breakdownGroup: "Total", breakdownValue: "Total" },
-              orderBy: { responseOrdinal: "asc" },
-              select: { responseLabel: true, percent: true, isNet: true, baseN: true, reportable: true },
-            },
-          },
-        },
-      },
+      include: POLL_DETAIL_INCLUDE,
     });
     if (!poll) throw new ApiHttpException("POLL_NOT_FOUND", "Poll not found");
+    return this.mapPollDetail(poll, tenantId);
+  }
 
+  /**
+   * A poll for an UNAUTHENTICATED reader (the public `action` app). Only ever returns a poll
+   * an owner/organiser has explicitly made public (`isPublic`); a private or global-tier poll
+   * 404s exactly as a missing one would, so nothing leaks.
+   */
+  async getPublicPoll(id: string) {
+    const poll = await this.prisma.poll.findFirst({
+      where: { id, isPublic: true },
+      include: POLL_DETAIL_INCLUDE,
+    });
+    if (!poll) throw new ApiHttpException("POLL_NOT_FOUND", "Poll not found");
+    return this.mapPollDetail(poll, null);
+  }
+
+  /** Shape a loaded poll for the client. `actingTenantId` is null for public reads. */
+  private mapPollDetail(poll: PollDetailRow, actingTenantId: string | null) {
     const questions = groupQuestions(
       poll.slug,
       poll.questions.map((q) => ({
@@ -129,6 +158,14 @@ export class InsightsService {
     const used = new Set(questions.map((q) => q.theme));
     const themes = THEMES.filter((t) => used.has(t.key));
 
+    // Attach the crosstabs that back each finding. The client computes every figure from
+    // the estimates and compares it against the `claim` the write-up makes, so a number
+    // the poll's own prose gets wrong is shown as a disagreement, not silently corrected.
+    const keyFindings = ((poll.keyFindings ?? []) as Array<{ questionCode?: string }>).map((f) => ({
+      ...f,
+      evidence: evidenceOf(poll.slug, f.questionCode),
+    }));
+
     return {
       id: poll.id,
       slug: poll.slug,
@@ -143,13 +180,14 @@ export class InsightsService {
       weighted: poll.weighted,
       licence: poll.licence,
       attribution: poll.attribution,
-      keyFindings: (poll.keyFindings ?? []) as unknown,
+      keyFindings: keyFindings as unknown,
       status: poll.status,
       shared: poll.tenantId === null || poll.isPublic,
       isPublic: poll.isPublic,
       // Does the ACTING tenant own this poll? Drives whether the visibility toggle is offered
-      // (a super-admin may toggle any poll regardless; the client adds that check).
-      owned: poll.tenantId === tenantId,
+      // (a super-admin may toggle any poll regardless; the client adds that check). Always
+      // false for a public reader (no acting tenant).
+      owned: actingTenantId !== null && poll.tenantId === actingTenantId,
       themes,
       questions,
     };
@@ -159,13 +197,24 @@ export class InsightsService {
   async getPollQuestion(tenantId: string, pollId: string, code: string) {
     const question = await this.prisma.pollQuestion.findFirst({
       where: { pollId, code, poll: this.visibilityWhere(tenantId) },
-      include: {
-        poll: { select: { id: true, title: true, attribution: true } },
-        estimates: { orderBy: [{ responseOrdinal: "asc" }, { breakdownOrdinal: "asc" }] },
-      },
+      include: QUESTION_DETAIL_INCLUDE,
     });
     if (!question) throw new ApiHttpException("QUESTION_NOT_FOUND", "Question not found");
+    return this.mapCrosstab(question);
+  }
 
+  /** A question's crosstab for an UNAUTHENTICATED reader — the question's poll must be public. */
+  async getPublicPollQuestion(pollId: string, code: string) {
+    const question = await this.prisma.pollQuestion.findFirst({
+      where: { pollId, code, poll: { isPublic: true } },
+      include: QUESTION_DETAIL_INCLUDE,
+    });
+    if (!question) throw new ApiHttpException("QUESTION_NOT_FOUND", "Question not found");
+    return this.mapCrosstab(question);
+  }
+
+  /** Pivot a loaded question's estimates into ordered columns (grouped) + response rows. */
+  private mapCrosstab(question: QuestionDetailRow) {
     // Columns (unique by ordinal), preserving source order + group runs.
     const colByOrd = new Map<
       number,
@@ -202,7 +251,13 @@ export class InsightsService {
 
     return {
       poll: question.poll,
-      question: { code: question.code, title: question.title, category: question.category, hasNet: question.hasNet },
+      question: {
+        code: question.code,
+        // Present the human question, not the raw sheet header ("C5. … by BANNER COMMON THREADS").
+        title: cleanTitle(question.title, question.code),
+        category: question.category,
+        hasNet: question.hasNet,
+      },
       groups,
       responses,
     };
@@ -267,7 +322,7 @@ export class InsightsService {
       }
       let q = p.questions.get(r.question.code);
       if (!q) {
-        q = { code: r.question.code, title: r.question.title, ordinal: r.question.ordinal, rows: [] };
+        q = { code: r.question.code, title: cleanTitle(r.question.title, r.question.code), ordinal: r.question.ordinal, rows: [] };
         p.questions.set(r.question.code, q);
       }
       q.rows.push({

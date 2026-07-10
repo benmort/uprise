@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, BarChart3, Map as MapIcon, Target } from "lucide-react";
+import { ListChecks, Map as MapIcon, Target } from "lucide-react";
 import {
   getPollQuestion,
   resolvePollThreshold,
@@ -14,10 +13,12 @@ import {
 import { createTurfFromSources, type TurfDivisionType } from "@/lib/api/geo";
 import { useApi } from "@/lib/use-api";
 import { PageShell } from "@/components/shell/page-shell";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { StateRegion } from "@/components/shell/state-region";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { QuestionCharts } from "@/components/insights/question-charts";
 import { SectionCard } from "@uprise/field";
 import { cn } from "@/lib/utils";
 
@@ -38,15 +39,21 @@ export default function QuestionPage() {
   );
 
   return (
-    <PageShell icon={BarChart3} title={data ? `${data.question.code} · ${data.question.title}` : "Question"}>
-      <Link
-        href={`/insights/${pollId}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Back to poll
-      </Link>
-
+    <PageShell
+      icon={ListChecks}
+      title={data ? data.question.title : "Question"}
+      actions={
+        data ? (
+          <Breadcrumbs
+            items={[
+              { label: "Polling", href: "/insights" },
+              { label: data.poll.title, href: `/insights/${pollId}` },
+              { label: data.question.code },
+            ]}
+          />
+        ) : undefined
+      }
+    >
       <StateRegion
         loading={loading}
         error={error}
@@ -62,10 +69,10 @@ export default function QuestionPage() {
 
 function QuestionBody({ data, pollId, code }: { data: Crosstab; pollId: string; code: string }) {
   // Breakdown-group filter: Total is always shown; the rest are opt-in (there can
-  // be ~19 crossbreaks). Default to the geographic group when present, else Total.
+  // be ~19 crossbreaks). Open on the whole sample, which is what the chart draws first.
   const groupNames = data.groups.map((g) => g.group).filter((g) => g !== "Total");
   const geoGroupName = data.groups.find((g) => g.columns.some((c) => c.geoKind))?.group ?? null;
-  const [selectedGroup, setSelectedGroup] = useState<string>(geoGroupName ?? groupNames[0] ?? "Total");
+  const [selectedGroup, setSelectedGroup] = useState<string>("Total");
 
   const totalGroup = data.groups.find((g) => g.group === "Total");
   const activeGroup = data.groups.find((g) => g.group === selectedGroup && g.group !== "Total");
@@ -73,6 +80,10 @@ function QuestionBody({ data, pollId, code }: { data: Crosstab; pollId: string; 
 
   // Choropleth: the geo group's columns for the chosen response row.
   const geoGroup = geoGroupName ? data.groups.find((g) => g.group === geoGroupName) : undefined;
+  // Non-null only while the geographic group is the active breakdown — that is when the
+  // chart block yields, because the map above is already drawing exactly those numbers.
+  const geoGroupKind =
+    selectedGroup === geoGroupName ? (geoGroup?.columns.find((c) => c.geoKind)?.geoKind ?? null) : null;
   const [responseLabel, setResponseLabel] = useState<string>(
     data.responses.find((r) => r.isNet)?.label ?? data.responses[0]?.label ?? "",
   );
@@ -153,6 +164,49 @@ function QuestionBody({ data, pollId, code }: { data: Crosstab; pollId: string; 
         {data.poll.attribution ? ` · ${data.poll.attribution}` : ""}
       </p>
 
+      {/* One toolbar for the page: the chart, the map and the table all read from it. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="breakdown"
+            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+          >
+            Breakdown
+          </label>
+          <select
+            id="breakdown"
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+          >
+            <option value="Total">Whole sample</option>
+            {groupNames.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="response" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Response
+          </label>
+          <select
+            id="response"
+            value={responseLabel}
+            onChange={(e) => setResponseLabel(e.target.value)}
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+          >
+            {data.responses.map((r) => (
+              <option key={r.label} value={r.label}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* ── Regional choropleth (only for the geographic crossbreak) ── */}
       {geoGroup ? (
         <SectionCard
@@ -163,22 +217,6 @@ function QuestionBody({ data, pollId, code }: { data: Crosstab; pollId: string; 
             </span>
           }
         >
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Response
-            </label>
-            <select
-              value={responseLabel}
-              onChange={(e) => setResponseLabel(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
-            >
-              {data.responses.map((r) => (
-                <option key={r.label} value={r.label}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </div>
           <PollChoroplethMap cells={choroplethCells} geoKind={geoKind} />
           <p className="mt-2 text-xs text-muted-foreground">
             Regions shaded by “{responseLabel}”. Regions with a small base are shown as no-data.
@@ -222,25 +260,16 @@ function QuestionBody({ data, pollId, code }: { data: Crosstab; pollId: string; 
         </SectionCard>
       ) : null}
 
+      {/* ── The picture of the crosstab, above the crosstab ── */}
+      <SectionCard
+        title={selectedGroup === "Total" ? "Whole sample" : selectedGroup}
+        description="The chart follows the breakdown above. Its type is chosen from the shape of the data."
+      >
+        <QuestionCharts crosstab={data} group={selectedGroup} response={responseLabel} geoKind={geoGroupKind} />
+      </SectionCard>
+
       {/* ── Crosstab table (Total + one breakdown) ── */}
       <SectionCard title="Crosstab">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Breakdown
-          </label>
-          <select
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
-          >
-            {groupNames.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>

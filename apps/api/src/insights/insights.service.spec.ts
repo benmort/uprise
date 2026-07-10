@@ -93,6 +93,39 @@ describe("InsightsService", () => {
     await expect(svcWith(prisma).getPoll("t1", "x")).rejects.toBeInstanceOf(ApiHttpException);
   });
 
+  describe("public reads (unauthenticated) only ever serve isPublic polls", () => {
+    it("getPublicPoll filters by isPublic and never marks a poll owned", async () => {
+      const poll = {
+        id: "p1", slug: "vic-treaty-2026", title: "T", source: "YouGov", commissioner: null,
+        fieldworkStart: null, fieldworkEnd: null, sampleSize: 4003, methodology: null, geoScope: "VIC",
+        weighted: true, licence: null, attribution: "a", keyFindings: null, status: "PUBLISHED",
+        tenantId: "t1", isPublic: true, questions: [],
+      };
+      const findFirst = jest.fn(async () => poll);
+      const res = await svcWith({ poll: { findFirst } }).getPublicPoll("p1");
+      expect((findFirst as jest.Mock).mock.calls[0][0].where).toEqual({ id: "p1", isPublic: true });
+      expect(res).toMatchObject({ id: "p1", isPublic: true, shared: true, owned: false });
+    });
+
+    it("getPublicPoll 404s a private poll — nothing leaks", async () => {
+      await expect(
+        svcWith({ poll: { findFirst: jest.fn(async () => null) } }).getPublicPoll("private"),
+      ).rejects.toBeInstanceOf(ApiHttpException);
+    });
+
+    it("getPublicPollQuestion requires the poll to be public", async () => {
+      const findFirst = jest.fn(async () => null);
+      await expect(
+        svcWith({ pollQuestion: { findFirst } }).getPublicPollQuestion("p1", "C5"),
+      ).rejects.toBeInstanceOf(ApiHttpException);
+      expect((findFirst as jest.Mock).mock.calls[0][0].where).toEqual({
+        pollId: "p1",
+        code: "C5",
+        poll: { isPublic: true },
+      });
+    });
+  });
+
   describe("getPoll", () => {
     const Q = (over: Partial<Record<string, unknown>> = {}) => ({
       code: "C5",

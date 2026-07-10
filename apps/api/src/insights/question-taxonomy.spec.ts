@@ -1,6 +1,7 @@
 import {
   baseCode,
   cleanTitle,
+  evidenceOf,
   groupQuestions,
   rankLabel,
   themeOf,
@@ -128,6 +129,12 @@ describe("question taxonomy", () => {
       );
     });
 
+    it("restores the space in a run-on sentence (full stop glued to the next capital)", () => {
+      expect(cleanTitle("C5. Addresses injustices.It supports self-determination by BANNER X", "C5")).toBe(
+        "Addresses injustices. It supports self-determination",
+      );
+    });
+
     it("strips a bare NET block marker, which `hasNet` already records", () => {
       expect(cleanTitle("B1. Who would you vote for? NET by BANNER COMMON THREADS", "B1")).toBe(
         "Who would you vote for?",
@@ -212,6 +219,95 @@ describe("question taxonomy", () => {
 
     it("is a no-op on an empty list", () => {
       expect(groupQuestions(VIC_TREATY_SLUG, [])).toEqual([]);
+    });
+  });
+
+  describe("evidenceOf", () => {
+    /** The six findings the committed sidecar carries, by the code each is tagged with. */
+    const FINDINGS = ["C5", "D6", "E2", "E4", "B1", "C1"];
+
+    it("backs every key finding with at least one exhibit", () => {
+      for (const code of FINDINGS) {
+        const evidence = evidenceOf(VIC_TREATY_SLUG, code);
+        expect(evidence).not.toBeNull(); // every finding must have evidence
+        expect(evidence!.items.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("refuses to guess for another poll, or an unknown finding", () => {
+      expect(evidenceOf("some-other-poll", "C5")).toBeNull();
+      expect(evidenceOf(VIC_TREATY_SLUG, "Z9")).toBeNull();
+      expect(evidenceOf(VIC_TREATY_SLUG, null)).toBeNull();
+      expect(evidenceOf(null, "C5")).toBeNull();
+    });
+
+    it("only ever cites questions this instrument actually has", () => {
+      // Every code an exhibit names must resolve to a theme, which is only true of the
+      // 36 codes the sheet produced. A typo'd code would fetch a 404 on expand.
+      for (const code of FINDINGS) {
+        for (const item of evidenceOf(VIC_TREATY_SLUG, code)!.items) {
+          for (const cited of [item.code, ...(item.matrix ?? [])].filter(Boolean) as string[]) {
+            expect({ finding: code, cites: cited, theme: themeOf(VIC_TREATY_SLUG, cited) }.theme).not.toBeNull();
+          }
+        }
+      }
+    });
+
+    it("gives every exhibit either a chart to draw or a reason it cannot be drawn", () => {
+      for (const code of FINDINGS) {
+        for (const item of evidenceOf(VIC_TREATY_SLUG, code)!.items) {
+          expect(item.label.length).toBeGreaterThan(0);
+          const drawable = Boolean(item.code) || Boolean(item.matrix);
+          expect({ finding: code, label: item.label, ok: drawable || Boolean(item.unverifiable) }.ok).toBe(true);
+        }
+      }
+    });
+
+    it("addresses a claim by response name or by rank, never both", () => {
+      for (const code of FINDINGS) {
+        for (const { claim } of evidenceOf(VIC_TREATY_SLUG, code)!.items) {
+          if (!claim) continue;
+          // A claim addresses exactly one cell: by response name, or by rank.
+          expect(Boolean(claim.response) !== Boolean(claim.rank)).toBe(true);
+          expect(claim.percent).toBeGreaterThanOrEqual(0);
+          expect(claim.percent).toBeLessThanOrEqual(100);
+        }
+      }
+    });
+
+    it("records the two figures the write-up gets wrong, exactly as written", () => {
+      // These transcribe the prose. The client computes 64.6 and 25.8 respectively and
+      // shows the disagreement — so if either number is "helpfully" corrected here, the
+      // drift chip silently disappears and the reader is told the poll agrees with itself.
+      const e3 = evidenceOf(VIC_TREATY_SLUG, "E2")!.items.find(
+        (i) => i.code === "E3" && !i.group,
+      );
+      expect(e3!.claim).toEqual({ response: "Pauline Hanson's One Nation", percent: 63 });
+
+      const b1 = evidenceOf(VIC_TREATY_SLUG, "B1")!.items[0];
+      expect(b1.claim).toEqual({ response: "Coalition", percent: 27 });
+    });
+
+    it("marks the Kew clause unverifiable, with no question behind it", () => {
+      const kew = evidenceOf(VIC_TREATY_SLUG, "E2")!.items.find((i) => i.unverifiable);
+      expect(kew).toBeDefined();
+      expect(kew!.code).toBeUndefined(); // nothing to chart
+      expect(kew!.unverifiable).toMatch(/upper-house/i);
+    });
+
+    it("draws the party-competence matrix from the whole C3 battery", () => {
+      const matrix = evidenceOf(VIC_TREATY_SLUG, "C1")!.items.find((i) => i.matrix);
+      expect(matrix!.matrix).toHaveLength(12);
+      expect(matrix!.matrix).toEqual(Array.from({ length: 12 }, (_, i) => `C3_${i + 1}`));
+      for (const c of matrix!.matrix!) expect(themeOf(VIC_TREATY_SLUG, c)).toBe("issues_competence");
+    });
+
+    it("names a response whenever it charts a breakdown, so the chart has a row to follow", () => {
+      for (const code of FINDINGS) {
+        for (const item of evidenceOf(VIC_TREATY_SLUG, code)!.items) {
+          if (item.group) expect({ finding: code, label: item.label, response: item.response }.response).toBeTruthy();
+        }
+      }
     });
   });
 });

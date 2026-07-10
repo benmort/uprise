@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { KeyFindings } from "@/components/insights/key-findings";
 import { PollVisibility } from "@/components/insights/poll-visibility";
+import { CopyLinkButton } from "@/components/insights/copy-link-button";
 import { CrosstabLink, PersuasionShift, ShiftHeadline } from "@/components/insights/persuasion-shift";
 import { DivergingBar, DivergingLegend, DivergingNets, NominalBars } from "@/components/insights/diverging-bar";
 import { SectionCard } from "@uprise/field";
@@ -114,6 +115,15 @@ function PollBody({ poll, pollId, onChanged }: { poll: PollDetail; pollId: strin
         <StatusBadge status={poll.status} />
         <p className="text-sm text-muted-foreground">{provenanceLine(poll)}</p>
         <PollVisibility poll={poll} onChanged={onChanged} />
+        <CopyLinkButton
+          path={`/insights/${pollId}`}
+          url={
+            poll.isPublic && process.env.NEXT_PUBLIC_ACTION_URL
+              ? `${process.env.NEXT_PUBLIC_ACTION_URL}/insights/${pollId}`
+              : undefined
+          }
+          label={poll.isPublic ? "Copy public link" : "Copy share link"}
+        />
       </div>
 
       <Provenance poll={poll} />
@@ -139,7 +149,8 @@ function PollBody({ poll, pollId, onChanged }: { poll: PollDetail; pollId: strin
         </SectionCard>
       ) : null}
 
-      <KeyFindings findings={poll.keyFindings} pollId={pollId} />
+      {/* The questions carry their toplines, so most exhibits draw without a fetch. */}
+      <KeyFindings findings={poll.keyFindings} pollId={pollId} questions={poll.questions} />
 
       <section aria-labelledby="questions">
         <header className="border-t-2 border-poll-accent pt-4">
