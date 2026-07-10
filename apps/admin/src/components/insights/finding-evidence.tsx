@@ -91,17 +91,34 @@ function Unverifiable({ item }: { item: EvidenceItem }) {
   );
 }
 
+/** Derive a whole-sample topline from a fetched crosstab's Total column. */
+function toplineFromCrosstab(c: Crosstab | undefined): PollQuestionRef["topline"] | null {
+  if (!c) return null;
+  const totalOrd = c.groups.find((g) => g.group === "Total")?.columns[0]?.ordinal;
+  if (totalOrd === undefined) return null;
+  return c.responses.map((r) => ({ label: r.label, percent: r.cells[totalOrd] ?? null, isNet: r.isNet }));
+}
+
 /** The whole-sample column — a diverging bar, a donut, ranked bars, or one big number. */
 function ToplineExhibit({ item, pollId, questions }: { item: EvidenceItem; pollId: string; questions: PollQuestionRef[] }) {
   const palette = usePollPalette();
   const { theme } = useTheme();
   const ctx: ChartCtx = { theme };
 
-  const question = questions.find((q) => q.code === item.code);
-  if (!question) return null;
+  // A base question carries its topline on the page. A VARIANT code (e.g. D6-2) is collapsed into
+  // its base by groupQuestions, so it isn't in `questions` and its topline isn't on the page —
+  // fetch the crosstab and read the Total column instead (otherwise the exhibit renders blank).
+  const base = questions.find((q) => q.code === item.code);
+  const fetchKey = !base && item.code ? `/insights/polls/${pollId}/questions/${item.code}` : null;
+  const { data: crosstab } = useApi<Crosstab>(fetchKey, () => getPollQuestion(pollId, item.code!), {
+    ttlMs: 300_000,
+  });
+
+  const topline = base?.topline ?? toplineFromCrosstab(crosstab);
+  const title = base?.title ?? crosstab?.question.title ?? item.code ?? "";
+  if (!topline) return fetchKey ? <Skeleton className="h-40 w-full rounded-lg" /> : null;
   if (!palette) return <Skeleton className="h-40 w-full rounded-lg" />;
 
-  const topline = question.topline;
   const computed = item.claim ? claimValue(topline, item.claim) : null;
 
   const header = <ExhibitHeader item={item} code={item.code!} pollId={pollId} computed={computed} />;
@@ -113,9 +130,9 @@ function ToplineExhibit({ item, pollId, questions }: { item: EvidenceItem; pollI
     return (
       <section>
         {header}
-        <ChartFigure summary={`${item.response ?? question.title}: ${value.toFixed(1)}%`}>
+        <ChartFigure summary={`${item.response ?? title}: ${value.toFixed(1)}%`}>
           <ApexChart
-            bundle={radialGaugeOptions(value, item.response ?? question.title, palette, ctx)}
+            bundle={radialGaugeOptions(value, item.response ?? title, palette, ctx)}
             type="radialBar"
             height={200}
           />

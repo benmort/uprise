@@ -50,28 +50,32 @@ describe("InsightsService", () => {
       return { poll: { findUnique: jest.fn(async () => poll), update }, update };
     };
 
-    it("an owner of the poll's tenant can make it public", async () => {
-      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: false });
+    it("making a poll public also PUBLISHES it (badge tracks visibility) and stamps publishedAt", async () => {
+      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: false, status: "DRAFT", publishedAt: null });
       const res = await svcWith(p).setPollPublic(OWNER, "p1", true);
-      expect(res).toEqual({ id: "p1", isPublic: true, shared: true });
-      expect(p.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { isPublic: true } });
+      expect(res).toMatchObject({ id: "p1", isPublic: true, status: "PUBLISHED", shared: true });
+      expect(p.update).toHaveBeenCalledWith({
+        where: { id: "p1" },
+        data: { isPublic: true, status: "PUBLISHED", publishedAt: expect.any(Date) },
+      });
     });
 
-    it("an organiser of the poll's tenant can also toggle it (kept in the gate)", async () => {
-      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: true });
+    it("making it private again returns it to DRAFT (organiser is kept in the gate)", async () => {
+      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: true, status: "PUBLISHED", publishedAt: new Date(1) });
       const res = await svcWith(p).setPollPublic(ORGANISER, "p1", false);
-      expect(res).toMatchObject({ id: "p1", isPublic: false, shared: false });
+      expect(res).toMatchObject({ id: "p1", isPublic: false, status: "DRAFT", shared: false });
+      expect(p.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { isPublic: false, status: "DRAFT" } });
     });
 
     it("a super-admin can toggle any poll, including the null-tenant global tier", async () => {
-      const p = prismaWith({ id: "g1", tenantId: null, isPublic: false });
+      const p = prismaWith({ id: "g1", tenantId: null, isPublic: false, status: "DRAFT", publishedAt: null });
       const res = await svcWith(p).setPollPublic(SUPER, "g1", true);
       expect(res.isPublic).toBe(true);
       expect(p.update).toHaveBeenCalled();
     });
 
     it("refuses a non-super-admin changing another tenant's poll", async () => {
-      const p = prismaWith({ id: "p1", tenantId: "t2", isPublic: false });
+      const p = prismaWith({ id: "p1", tenantId: "t2", isPublic: false, status: "DRAFT", publishedAt: null });
       await expect(svcWith(p).setPollPublic(OWNER, "p1", true)).rejects.toBeInstanceOf(ApiHttpException);
       expect(p.update).not.toHaveBeenCalled();
     });
@@ -81,8 +85,8 @@ describe("InsightsService", () => {
       await expect(svcWith(p).setPollPublic(OWNER, "nope", true)).rejects.toBeInstanceOf(ApiHttpException);
     });
 
-    it("is idempotent — no write when already at the target visibility", async () => {
-      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: true });
+    it("is idempotent — no write when already public + published", async () => {
+      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: true, status: "PUBLISHED", publishedAt: new Date(1) });
       await svcWith(p).setPollPublic(OWNER, "p1", true);
       expect(p.update).not.toHaveBeenCalled();
     });

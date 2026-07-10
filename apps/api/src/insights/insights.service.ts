@@ -79,21 +79,33 @@ export class InsightsService {
    * The route's `@RequirePermission(manage insights.poll)` restricts the ROLE — owner or
    * organiser (both hold `manage insights.all`), plus super-admins (who bypass CASL). This
    * enforces the tenant SCOPE: a non-super-admin may only toggle their OWN tenant's poll, so
-   * one org can never publish another's (or flip the null-tenant global tier). Idempotent.
+   * one org can never publish another's (or flip the null-tenant global tier).
+   *
+   * `status` tracks visibility so the badge is truthful: public ⇒ PUBLISHED (stamping
+   * `publishedAt` once), private ⇒ DRAFT. `status` is otherwise never transitioned, so without
+   * this it would sit on the ingest default forever. Idempotent on the (isPublic, status) pair.
    */
   async setPollPublic(user: AuthUser, pollId: string, isPublic: boolean) {
     const poll = await this.prisma.poll.findUnique({
       where: { id: pollId },
-      select: { id: true, tenantId: true, isPublic: true },
+      select: { id: true, tenantId: true, isPublic: true, status: true, publishedAt: true },
     });
     if (!poll) throw new ApiHttpException("POLL_NOT_FOUND", "Poll not found");
     if (!user.isSuperAdmin && poll.tenantId !== user.tenantId) {
       throw new ApiHttpException("FORBIDDEN", "You can only change your own organisation's polls");
     }
-    if (poll.isPublic !== isPublic) {
-      await this.prisma.poll.update({ where: { id: pollId }, data: { isPublic } });
+    const status = isPublic ? "PUBLISHED" : "DRAFT";
+    if (poll.isPublic !== isPublic || poll.status !== status) {
+      await this.prisma.poll.update({
+        where: { id: pollId },
+        data: {
+          isPublic,
+          status,
+          ...(isPublic && !poll.publishedAt ? { publishedAt: new Date() } : {}),
+        },
+      });
     }
-    return { id: poll.id, isPublic, shared: poll.tenantId === null || isPublic };
+    return { id: poll.id, isPublic, status, shared: poll.tenantId === null || isPublic };
   }
 
   /**
