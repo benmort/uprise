@@ -26,22 +26,184 @@ describe("InsightsService", () => {
     const prisma = {
       poll: {
         findMany: jest.fn(async () => [
-          { id: "p1", slug: "s", title: "T", source: "YouGov", commissioner: "CT", sampleSize: 4003, fieldworkStart: null, fieldworkEnd: null, weighted: true, geoScope: "VIC", status: "PUBLISHED", attribution: "a", tenantId: "t1", lastIngestedAt: null, _count: { questions: 5 } },
-          { id: "p2", slug: "g", title: "G", source: "YouGov", commissioner: null, sampleSize: null, fieldworkStart: null, fieldworkEnd: null, weighted: true, geoScope: null, status: "PUBLISHED", attribution: null, tenantId: null, lastIngestedAt: null, _count: { questions: 2 } },
+          { id: "p1", slug: "s", title: "T", source: "YouGov", commissioner: "CT", sampleSize: 4003, fieldworkStart: null, fieldworkEnd: null, weighted: true, geoScope: "VIC", status: "PUBLISHED", attribution: "a", tenantId: "t1", isPublic: false, lastIngestedAt: null, _count: { questions: 5 } },
+          { id: "p2", slug: "g", title: "G", source: "YouGov", commissioner: null, sampleSize: null, fieldworkStart: null, fieldworkEnd: null, weighted: true, geoScope: null, status: "PUBLISHED", attribution: null, tenantId: null, isPublic: false, lastIngestedAt: null, _count: { questions: 2 } },
         ]),
       },
     };
     const res = await svcWith(prisma).listPolls("t1");
     expect(res).toHaveLength(2);
-    expect(res[0]).toMatchObject({ id: "p1", questionCount: 5, shared: false });
-    expect(res[1].shared).toBe(true);
-    // Visibility gate: own OR global.
-    expect((prisma.poll.findMany as jest.Mock).mock.calls[0][0].where).toEqual({ OR: [{ tenantId: "t1" }, { tenantId: null }] });
+    expect(res[0]).toMatchObject({ id: "p1", questionCount: 5, shared: false }); // own, private
+    expect(res[1].shared).toBe(true); // null-tenant global tier
+    // Visibility gate: own OR global-tier OR public.
+    expect((prisma.poll.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
+      OR: [{ tenantId: "t1" }, { tenantId: null }, { isPublic: true }],
+    });
+  });
+
+  describe("setPollPublic", () => {
+    const OWNER = { id: "u1", role: "OWNER", tenantId: "t1", roles: [], isSuperAdmin: false } as never;
+    const ORGANISER = { id: "u2", role: "ORGANISER", tenantId: "t1", roles: [], isSuperAdmin: false } as never;
+    const SUPER = { id: "u3", role: "OWNER", tenantId: "tx", roles: [], isSuperAdmin: true } as never;
+    const prismaWith = (poll: unknown) => {
+      const update = jest.fn(async () => ({}));
+      return { poll: { findUnique: jest.fn(async () => poll), update }, update };
+    };
+
+    it("an owner of the poll's tenant can make it public", async () => {
+      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: false });
+      const res = await svcWith(p).setPollPublic(OWNER, "p1", true);
+      expect(res).toEqual({ id: "p1", isPublic: true, shared: true });
+      expect(p.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { isPublic: true } });
+    });
+
+    it("an organiser of the poll's tenant can also toggle it (kept in the gate)", async () => {
+      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: true });
+      const res = await svcWith(p).setPollPublic(ORGANISER, "p1", false);
+      expect(res).toMatchObject({ id: "p1", isPublic: false, shared: false });
+    });
+
+    it("a super-admin can toggle any poll, including the null-tenant global tier", async () => {
+      const p = prismaWith({ id: "g1", tenantId: null, isPublic: false });
+      const res = await svcWith(p).setPollPublic(SUPER, "g1", true);
+      expect(res.isPublic).toBe(true);
+      expect(p.update).toHaveBeenCalled();
+    });
+
+    it("refuses a non-super-admin changing another tenant's poll", async () => {
+      const p = prismaWith({ id: "p1", tenantId: "t2", isPublic: false });
+      await expect(svcWith(p).setPollPublic(OWNER, "p1", true)).rejects.toBeInstanceOf(ApiHttpException);
+      expect(p.update).not.toHaveBeenCalled();
+    });
+
+    it("throws when the poll does not exist", async () => {
+      const p = prismaWith(null);
+      await expect(svcWith(p).setPollPublic(OWNER, "nope", true)).rejects.toBeInstanceOf(ApiHttpException);
+    });
+
+    it("is idempotent — no write when already at the target visibility", async () => {
+      const p = prismaWith({ id: "p1", tenantId: "t1", isPublic: true });
+      await svcWith(p).setPollPublic(OWNER, "p1", true);
+      expect(p.update).not.toHaveBeenCalled();
+    });
   });
 
   it("getPoll throws when not visible", async () => {
     const prisma = { poll: { findFirst: jest.fn(async () => null) } };
     await expect(svcWith(prisma).getPoll("t1", "x")).rejects.toBeInstanceOf(ApiHttpException);
+  });
+
+  describe("getPoll", () => {
+    const Q = (over: Partial<Record<string, unknown>> = {}) => ({
+      code: "C5",
+      title: "C5. Do you support a Treaty? by BANNER COMMON THREADS",
+      category: "treaty",
+      hasNet: true,
+      responseKind: "support_oppose",
+      estimates: [
+        { responseLabel: "Strongly support", percent: 21.51, isNet: false, baseN: 4003, reportable: true },
+        { responseLabel: "NET Support", percent: 39.84, isNet: true, baseN: 4003, reportable: true },
+      ],
+      ...over,
+    });
+    const pollWith = (questions: unknown[], slug = "vic-treaty-2026") => ({
+      id: "p1", slug, title: "T", source: "YouGov", commissioner: null, fieldworkStart: null,
+      fieldworkEnd: null, sampleSize: 4003, methodology: null, geoScope: "VIC", weighted: true,
+      licence: null, attribution: null, keyFindings: null, status: "PUBLISHED", tenantId: null,
+      questions,
+    });
+
+    it("asks only for the whole-sample column", async () => {
+      const findFirst = jest.fn(async () => pollWith([Q()]));
+      await svcWith({ poll: { findFirst } }).getPoll("t1", "p1");
+
+      const include = (findFirst.mock.calls[0] as never as [{ include: { questions: { include: { estimates: { where: unknown } } } } }])[0];
+      expect(include.include.questions.include.estimates.where).toEqual({
+        breakdownGroup: "Total",
+        breakdownValue: "Total",
+      });
+    });
+
+    it("attaches the topline, baseN and theme to each question", async () => {
+      const prisma = { poll: { findFirst: jest.fn(async () => pollWith([Q()])) } };
+      const res = await svcWith(prisma).getPoll("t1", "p1");
+
+      expect(res.questions).toHaveLength(1);
+      expect(res.questions[0]).toMatchObject({
+        code: "C5",
+        title: "Do you support a Treaty?", // banner suffix + code prefix stripped
+        theme: "treaty_support",
+        rank: null,
+        baseN: 4003,
+      });
+      expect(res.questions[0].topline).toEqual([
+        { label: "Strongly support", percent: 21.51, isNet: false },
+        { label: "NET Support", percent: 39.84, isNet: true },
+      ]);
+    });
+
+    it("nulls the percentage of an unreportable cell rather than drawing it as zero", async () => {
+      const q = Q({
+        estimates: [{ responseLabel: "Strongly support", percent: 21.51, isNet: false, baseN: 12, reportable: false }],
+      });
+      const prisma = { poll: { findFirst: jest.fn(async () => pollWith([q])) } };
+      const res = await svcWith(prisma).getPoll("t1", "p1");
+
+      expect(res.questions[0].topline[0].percent).toBeNull();
+    });
+
+    it("collapses a variant block onto its base question", async () => {
+      const questions = [
+        Q({ code: "C1", title: "C1. Most important issue? RANKED FIRST by BANNER COMMON THREADS", estimates: [] }),
+        Q({ code: "C1-2", title: "C1. Most important issue? RANKED TOP 3 by BANNER COMMON THREADS", estimates: [] }),
+      ];
+      const prisma = { poll: { findFirst: jest.fn(async () => pollWith(questions)) } };
+      const res = await svcWith(prisma).getPoll("t1", "p1");
+
+      expect(res.questions).toHaveLength(1);
+      expect(res.questions[0].variants).toEqual([
+        { code: "C1", rank: "Ranked first" },
+        { code: "C1-2", rank: "Ranked top 3" },
+      ]);
+    });
+
+    it("carries a question with no estimates through with an empty topline", async () => {
+      const prisma = { poll: { findFirst: jest.fn(async () => pollWith([Q({ estimates: [] })])) } };
+      const res = await svcWith(prisma).getPoll("t1", "p1");
+
+      expect(res.questions[0]).toMatchObject({ baseN: null, topline: [] });
+    });
+
+    it("leaves theme null for a poll whose code scheme is unknown", async () => {
+      const prisma = { poll: { findFirst: jest.fn(async () => pollWith([Q()], "some-other-poll")) } };
+      const res = await svcWith(prisma).getPoll("t1", "p1");
+
+      expect(res.questions[0].theme).toBeNull();
+      expect(res.questions[0].category).toBe("treaty"); // the fallback the UI groups on
+      expect(res.themes).toEqual([]); // …and no catalogue to render
+    });
+
+    it("ships the catalogue for exactly the themes present, in reading order", async () => {
+      const questions = [
+        Q({ code: "B1", title: "B1. First preference? by BANNER X", category: "polling_background", estimates: [] }),
+        Q({ code: "C5", estimates: [] }),
+      ];
+      const prisma = { poll: { findFirst: jest.fn(async () => pollWith(questions)) } };
+      const res = await svcWith(prisma).getPoll("t1", "p1");
+
+      // Declared order, not question order: treaty_support outranks party_voting.
+      expect(res.themes.map((t) => t.key)).toEqual(["treaty_support", "party_voting"]);
+      expect(res.themes[0]).toMatchObject({ label: "Support & opposition", category: "treaty" });
+    });
+
+    it("never emits a theme key the catalogue cannot label", async () => {
+      const questions = [Q({ code: "C5", estimates: [] }), Q({ code: "D6", estimates: [] }), Q({ code: "E4", estimates: [] })];
+      const prisma = { poll: { findFirst: jest.fn(async () => pollWith(questions)) } };
+      const res = await svcWith(prisma).getPoll("t1", "p1");
+
+      const labelled = new Set(res.themes.map((t) => t.key));
+      for (const q of res.questions) if (q.theme) expect(labelled.has(q.theme)).toBe(true);
+    });
   });
 
   it("getPollQuestion pivots estimates into ordered groups + response rows", async () => {

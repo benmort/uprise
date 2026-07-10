@@ -10,6 +10,7 @@ import {
   getPollQuestion,
   getPollChoropleth,
   resolvePollThreshold,
+  setPollPublic,
   provenanceLine,
   fieldworkWindow,
 } from "./insights";
@@ -36,6 +37,14 @@ describe("insights api client — wrappers", () => {
     const url = mockReq.mock.calls[1][0] as string;
     expect(url).toContain("/insights/polls/p1/questions/C5/choropleth?");
     expect(url).toContain("response=NET+Support");
+  });
+
+  it("setPollPublic PATCHes the visibility flag for the encoded poll id", async () => {
+    await setPollPublic("p 1", true);
+    const [path, init] = mockReq.mock.calls[0];
+    expect(path).toBe("/insights/polls/p%201/public");
+    expect(init).toMatchObject({ method: "PATCH" });
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ public: true });
   });
 
   it("resolvePollThreshold POSTs the threshold body as JSON", async () => {

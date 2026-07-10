@@ -2,6 +2,8 @@ import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
+import type { AuthUser } from "../auth/auth-user";
+import { groupQuestions, THEMES } from "./question-taxonomy";
 
 /**
  * Read side of the Insights/Polling domain. Every query is scoped by
@@ -14,9 +16,9 @@ import { ApiHttpException } from "../common/http/api-response";
 export class InsightsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Tenant-owned OR shared/global — the single visibility gate for every read. */
+  /** Tenant-owned OR public OR shared/global — the single visibility gate for every read. */
   private visibilityWhere(tenantId: string): Prisma.PollWhereInput {
-    return { OR: [{ tenantId }, { tenantId: null }] };
+    return { OR: [{ tenantId }, { tenantId: null }, { isPublic: true }] };
   }
 
   private pctNum(p: Prisma.Decimal | null): number | null {
@@ -43,19 +45,90 @@ export class InsightsService {
       geoScope: p.geoScope,
       status: p.status,
       attribution: p.attribution,
-      shared: p.tenantId === null,
+      shared: p.tenantId === null || p.isPublic,
       questionCount: p._count.questions,
       lastIngestedAt: p.lastIngestedAt,
     }));
   }
 
-  /** One poll + its provenance, key findings and question list (grouped by category). */
+  /**
+   * Make a tenant-owned poll public (readable by every tenant) or private again.
+   *
+   * The route's `@RequirePermission(manage insights.poll)` restricts the ROLE — owner or
+   * organiser (both hold `manage insights.all`), plus super-admins (who bypass CASL). This
+   * enforces the tenant SCOPE: a non-super-admin may only toggle their OWN tenant's poll, so
+   * one org can never publish another's (or flip the null-tenant global tier). Idempotent.
+   */
+  async setPollPublic(user: AuthUser, pollId: string, isPublic: boolean) {
+    const poll = await this.prisma.poll.findUnique({
+      where: { id: pollId },
+      select: { id: true, tenantId: true, isPublic: true },
+    });
+    if (!poll) throw new ApiHttpException("POLL_NOT_FOUND", "Poll not found");
+    if (!user.isSuperAdmin && poll.tenantId !== user.tenantId) {
+      throw new ApiHttpException("FORBIDDEN", "You can only change your own organisation's polls");
+    }
+    if (poll.isPublic !== isPublic) {
+      await this.prisma.poll.update({ where: { id: pollId }, data: { isPublic } });
+    }
+    return { id: poll.id, isPublic, shared: poll.tenantId === null || isPublic };
+  }
+
+  /**
+   * One poll + its provenance, key findings and question list.
+   *
+   * Each question carries its `topline` — the whole-sample column — so the overview can
+   * chart the poll without a request per question. That is the `Total`/`Total` cell of
+   * the crosstab, ~200 rows for a 36-question instrument; a breakdown (gender, region)
+   * still costs a trip to {@link getPollQuestion}.
+   *
+   * Questions are grouped by {@link groupQuestions}: sibling blocks of one question
+   * (`C1` "ranked first" + `C1-2` "ranked top 3") collapse to one row, and the sheet's
+   * duplicated blocks disappear.
+   */
   async getPoll(tenantId: string, id: string) {
     const poll = await this.prisma.poll.findFirst({
       where: { id, ...this.visibilityWhere(tenantId) },
-      include: { questions: { orderBy: { ordinal: "asc" } } },
+      include: {
+        questions: {
+          orderBy: { ordinal: "asc" },
+          include: {
+            estimates: {
+              where: { breakdownGroup: "Total", breakdownValue: "Total" },
+              orderBy: { responseOrdinal: "asc" },
+              select: { responseLabel: true, percent: true, isNet: true, baseN: true, reportable: true },
+            },
+          },
+        },
+      },
     });
     if (!poll) throw new ApiHttpException("POLL_NOT_FOUND", "Poll not found");
+
+    const questions = groupQuestions(
+      poll.slug,
+      poll.questions.map((q) => ({
+        code: q.code,
+        title: q.title,
+        category: q.category,
+        hasNet: q.hasNet,
+        responseKind: q.responseKind,
+        baseN: q.estimates[0]?.baseN ?? null,
+        // A suppressed cell (baseN under the reportability threshold) publishes no
+        // percentage — carry the null through rather than drawing it as zero.
+        topline: q.estimates.map((e) => ({
+          label: e.responseLabel,
+          percent: e.reportable ? this.pctNum(e.percent) : null,
+          isNet: e.isNet,
+        })),
+      })),
+    );
+
+    // Ship the theme catalogue with the keys it labels, in reading order, so the client
+    // never keeps a second copy of the taxonomy that can drift from this one. Only the
+    // themes actually present are sent; an unrecognised poll sends none.
+    const used = new Set(questions.map((q) => q.theme));
+    const themes = THEMES.filter((t) => used.has(t.key));
+
     return {
       id: poll.id,
       slug: poll.slug,
@@ -72,14 +145,13 @@ export class InsightsService {
       attribution: poll.attribution,
       keyFindings: (poll.keyFindings ?? []) as unknown,
       status: poll.status,
-      shared: poll.tenantId === null,
-      questions: poll.questions.map((q) => ({
-        code: q.code,
-        title: q.title,
-        category: q.category,
-        hasNet: q.hasNet,
-        responseKind: q.responseKind,
-      })),
+      shared: poll.tenantId === null || poll.isPublic,
+      isPublic: poll.isPublic,
+      // Does the ACTING tenant own this poll? Drives whether the visibility toggle is offered
+      // (a super-admin may toggle any poll regardless; the client adds that check).
+      owned: poll.tenantId === tenantId,
+      themes,
+      questions,
     };
   }
 

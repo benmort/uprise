@@ -21,12 +21,40 @@ export type PollSummary = {
 
 export type PollKeyFinding = { heading: string; body: string; questionCode?: string };
 
+/** One whole-sample response row. `percent` is null when the cell was suppressed. */
+export type ToplineRow = { label: string; percent: number | null; isNet: boolean };
+
+/** A sibling block of the same question — e.g. C1 "Ranked first" + C1-2 "Ranked top 3". */
+export type PollQuestionVariant = { code: string; rank: string | null };
+
 export type PollQuestionRef = {
   code: string;
   title: string;
   category: string | null;
+  /** Sub-category from the API's reading taxonomy; null when the poll is unrecognised. */
+  theme: string | null;
+  rank: string | null;
+  variants: PollQuestionVariant[];
   hasNet: boolean;
   responseKind: string | null;
+  baseN: number | null;
+  /** The `Total` column of the crosstab, so the overview charts without a fetch each. */
+  topline: ToplineRow[];
+};
+
+/** Two questions in a theme that are the same battery asked before and after something. */
+export type PollThemeCompare = { before: string; after: string; beforeLabel: string; afterLabel: string };
+
+/**
+ * A question sub-category. The API ships the catalogue with the keys it labels, in
+ * reading order, so the client keeps no second copy of the taxonomy.
+ */
+export type PollTheme = {
+  key: string;
+  label: string;
+  category: string;
+  blurb: string;
+  compare?: PollThemeCompare;
 };
 
 export type PollDetail = {
@@ -46,6 +74,11 @@ export type PollDetail = {
   keyFindings: PollKeyFinding[];
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   shared: boolean;
+  /** True once made public (every tenant can read it). */
+  isPublic: boolean;
+  /** The acting tenant owns this poll — so an owner/organiser here may toggle its visibility. */
+  owned: boolean;
+  themes: PollTheme[];
   questions: PollQuestionRef[];
 };
 
@@ -118,6 +151,14 @@ export async function listPolls() {
 }
 export async function getPoll(id: string) {
   return request<PollDetail>(`/insights/polls/${encodeURIComponent(id)}`);
+}
+/** Make a poll public (every tenant can read it) or private again. Owner/organiser of the
+ *  poll's tenant, or a super-admin. */
+export async function setPollPublic(id: string, isPublic: boolean) {
+  return request<{ id: string; isPublic: boolean; shared: boolean }>(
+    `/insights/polls/${encodeURIComponent(id)}/public`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ public: isPublic }) },
+  );
 }
 export async function getPollQuestion(id: string, code: string) {
   return request<Crosstab>(`/insights/polls/${encodeURIComponent(id)}/questions/${encodeURIComponent(code)}`);

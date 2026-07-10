@@ -2089,6 +2089,11 @@ model Poll {
   /// Curated key findings from the summary: [{ heading, body, questionCode? }].
   keyFindings    Json?
   status         PollStatus @default(DRAFT)
+  /// Cross-tenant visibility. A tenant-owned poll (tenantId set) is private to that tenant
+  /// until an OWNER/ORGANISER of that tenant (or a super-admin) makes it public; then every
+  /// tenant can read it. Kept separate from tenantId so ownership survives publishing and the
+  /// toggle is reversible. Null-tenant polls are the super-admin global tier and always shared.
+  isPublic       Boolean    @default(false)
   publishedAt    DateTime?
   // Ingest provenance (the tenant analogue of geo.dataset_meta, carried on the row).
   sourceFileName String?

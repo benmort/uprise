@@ -59,6 +59,26 @@
   --support-lean-oppose: 32 89% 37%;
   --support-strong-oppose: 0 72% 51%;
 
+  /* ---- Poll diverging ramp (insights charts) ----
+     A separate scale from `--support-*` on purpose. That one is a canvasser support
+     CODE, always rendered as a labelled chip; this one paints adjacent segments of a
+     stacked bar, where the eye must separate neighbouring fills unaided.
+     `--support-*` fails that job: red↔orange is ΔE 4.8 under deuteranopia.
+
+     Blue↔vermilion poles, neutral gray midpoint. Validated (dataviz validate_palette):
+     worst adjacent ΔE 14.0 light / 14.1 dark; poles 115.9 / 90.1 (protan).
+     Each arm is monotonic in OKLCH lightness, so the ramp survives greyscale + print.
+     The midpoint is deliberately low-contrast (1.27) – "neither" should recede – which
+     is why every chart using it ships direct labels and a table view. */
+  --poll-support-strong: 237.6 69% 50.6%;
+  --poll-support-soft: 233.1 100% 71%;
+  --poll-neutral: 240 5.9% 90%;
+  --poll-oppose-soft: 9.6 79.4% 60%;
+  --poll-oppose-strong: 8.4 74.8% 45.1%;
+  /* Editorial accent (upriselabs vermilion-deep). Ornament only – rules, eyebrows,
+     numerals – never a data mark. 5.24:1 on white, so it is legal for small text. */
+  --poll-accent: 8.4 74.8% 45.1%;
+
   /* ---- TailAdmin text/stroke constants (prog marketing) ---- */
   --title-color: #1e293b;
   --text-color: #475569;
@@ -118,6 +138,17 @@
   --support-undecided: 215 16% 60%;
   --support-lean-oppose: 32 80% 55%;
   --support-strong-oppose: 0 72% 60%;
+
+  /* ---- Poll diverging ramp (dark) ----
+     Selected against the dark surface, not an inversion of the light steps: the poles
+     brighten and the midpoint darkens, so each arm stays monotonic away from the
+     neutral. Re-validated at this surface (#18181b). */
+  --poll-support-strong: 233.3 100% 77.1%;
+  --poll-support-soft: 232.9 62.2% 57.5%;
+  --poll-neutral: 240 5.3% 26.1%;
+  --poll-oppose-soft: 10.7 58.8% 44.7%;
+  --poll-oppose-strong: 10.6 85% 58.2%;
+  --poll-accent: 10.6 85% 58.2%;
 
   /* ---- TailAdmin text/stroke constants (dark) ---- */
   --title-color: #f1f5f9;
@@ -234,6 +265,13 @@
   --color-support-undecided: hsl(var(--support-undecided));
   --color-support-lean-oppose: hsl(var(--support-lean-oppose));
   --color-support-strong-oppose: hsl(var(--support-strong-oppose));
+
+  --color-poll-support-strong: hsl(var(--poll-support-strong));
+  --color-poll-support-soft: hsl(var(--poll-support-soft));
+  --color-poll-neutral: hsl(var(--poll-neutral));
+  --color-poll-oppose-soft: hsl(var(--poll-oppose-soft));
+  --color-poll-oppose-strong: hsl(var(--poll-oppose-strong));
+  --color-poll-accent: hsl(var(--poll-accent));
 
   --font-headline: var(--font-outfit), sans-serif;
   --font-body: var(--font-outfit), sans-serif;
