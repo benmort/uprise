@@ -1,8 +1,7 @@
 /**
- * Where the public poll viewer lives. The viewer is the admin app's chrome-less `/p/*` route
- * (so it REUSES the exact PollBody/QuestionBody/charts/map), and we redirect the friendly
- * `action` `/insights/*` URLs onto it — a cross-app Next rewrite can't proxy admin's `_next`
- * assets, so a redirect is the only faithful option.
+ * The action app keeps its own public insights layout and IFRAMES the admin app's chrome-less
+ * `/embed/insights/*` route (so it REUSES the exact PollBody/QuestionBody/charts/map) into it.
+ * We expose the resolved admin origin as NEXT_PUBLIC_ADMIN_ORIGIN so the iframe src can be built.
  *
  * Resolution order: an explicit NEXT_PUBLIC_ADMIN_URL wins; otherwise derive the admin host from
  * the deployed API host (api.<env>.uprise.org.au → admin.<env>.uprise.org.au) so dev and prod
@@ -33,16 +32,8 @@ const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts"],
-  async redirects() {
-    return [
-      { source: "/insights/:pollId", destination: `${ADMIN_URL}/p/:pollId`, permanent: false },
-      {
-        source: "/insights/:pollId/questions/:code",
-        destination: `${ADMIN_URL}/p/:pollId/questions/:code`,
-        permanent: false,
-      },
-    ];
-  },
+  // The resolved admin origin, inlined so the client iframe can point at /embed/insights/*.
+  env: { NEXT_PUBLIC_ADMIN_ORIGIN: ADMIN_URL },
 };
 
 export default nextConfig;
