@@ -197,7 +197,12 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/health",
     ]);
     const candidates = this.requestPathCandidates(request);
-    return candidates.some((candidate) => allowedPaths.has(candidate));
+    return candidates.some(
+      (candidate) =>
+        allowedPaths.has(candidate) ||
+        // Public poll viewer for the `action` app (isPublic-only; enforced in the service).
+        /^(?:\/api\/v1)?\/insights\/public\//.test(candidate),
+    );
   }
 
   /**

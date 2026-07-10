@@ -28,6 +28,7 @@ const OPEN_CONTROLLERS = new Set<string>([
   "AuthFlowsController", // magic-link / reset / verify / 2fa / phone / invite / open-join — issuance
   "IamController", // sessions login/logout + my-sessions (self) + select-tenant (session self)
   "ProfileController", // self-scoped: operates only on the caller's own userId
+  "PublicInsightsController", // public poll viewer (action app): isPublic-only, basic-auth allowlisted
 ]);
 
 // Specific open routes on otherwise-gated controllers, keyed "ControllerClass#method".
