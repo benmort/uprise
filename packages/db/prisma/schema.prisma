@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "events", "email", "ops", "payment", "telephony"]
+  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "civic", "events", "email", "ops", "payment", "telephony"]
 }
 
 enum AudienceStatus {
@@ -2205,4 +2205,104 @@ model PollEstimate {
   @@index([questionId, breakdownGroup])
   @@index([tenantId])
   @@schema("insights")
+}
+
+// ── civic ─────────────────────────────────────────────────────────────────────
+// Politicians + policies synced from They Vote For You (OpenAustralia Foundation).
+// Global reference data (no tenantId — like geo.*). A politician references its
+// electorate id-only by (geoKind, geoCode) — geo.* is raw PostGIS, not a Prisma
+// schema, so there is no FK to a region (mirrors PollEstimate). House of Reps →
+// geoKind "ced" (AEC federal division); Senate → "chamber_electorate" (SENATE-<STATE>).
+
+enum House {
+  REPS
+  SENATE
+
+  @@schema("civic")
+}
+
+model Politician {
+  id            String    @id @default(cuid())
+  /// They Vote For You person id — the natural key sync upserts on.
+  tvfyId        Int       @unique
+  name          String
+  firstName     String?
+  lastName      String?
+  party         String?
+  house         House
+  /// Electorate name as given by TVFY (before geo resolution).
+  electorate    String?
+  /// Resolved electorate reference — "ced" (Reps) | "chamber_electorate" (Senate).
+  geoKind       String?
+  /// Resolved geo region code (id-only reference to geo.* — no FK); null if unmatched.
+  geoCode       String?
+  rebellions    Int?
+  votesAttended Int?
+  votesPossible Int?
+  /// Current ministerial / shadow-ministerial positions (TVFY `offices`).
+  offices       Json?
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  positions PolicyPosition[]
+
+  @@index([geoKind, geoCode])
+  @@index([house])
+  @@schema("civic")
+}
+
+model Policy {
+  id           String    @id @default(cuid())
+  /// They Vote For You policy id — the natural key sync upserts on.
+  tvfyId       Int       @unique
+  name         String
+  description  String?
+  /// A provisional policy isn't yet "complete" (hidden by default in TVFY comparisons).
+  provisional  Boolean   @default(false)
+  lastEditedAt DateTime?
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  positions PolicyPosition[]
+
+  @@schema("civic")
+}
+
+/// A politician's agreement with a policy (TVFY people_comparisons / policy_comparisons).
+model PolicyPosition {
+  id           String   @id @default(cuid())
+  politicianId String
+  policyId     String
+  /// Calculated agreement score, 0–100.
+  agreement    Decimal? @db.Decimal(5, 2)
+  /// Whether they ever voted on a division from this policy.
+  voted        Boolean  @default(false)
+  /// TVFY summary bucket: for3/for2/for1/mixture/against1/against2/against3/not_enough.
+  category     String?
+
+  politician Politician @relation(fields: [politicianId], references: [id], onDelete: Cascade)
+  policy     Policy     @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@unique([politicianId, policyId])
+  @@index([policyId])
+  @@schema("civic")
+}
+
+/// One row per sync run — provenance + observability (mirrors geo.dataset_meta).
+model CivicSyncRun {
+  id          String    @id @default(cuid())
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  /// running | succeeded | failed.
+  status      String    @default("running")
+  politicians Int       @default(0)
+  policies    Int       @default(0)
+  positions   Int       @default(0)
+  /// Politicians whose electorate name didn't resolve to a geo code (follow-up signal).
+  unmatched   Int       @default(0)
+  error       String?
+
+  @@schema("civic")
 }

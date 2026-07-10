@@ -45,6 +45,11 @@ export const UPRISE_RESOURCES = [
   "insights.poll",
   "insights.all",
 
+  // civic (politicians + policies synced from They Vote For You)
+  "civic.politician",
+  "civic.policy",
+  "civic.all",
+
   // messaging (SMS/WhatsApp blasts, inbox, consent)
   "messaging.blast",
   "messaging.inbound",
