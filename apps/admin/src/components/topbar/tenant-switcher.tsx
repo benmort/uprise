@@ -37,7 +37,7 @@ function PlanPill({ plan }: { plan: string }) {
 /**
  * Tenant switcher (Vercel-style) — the top-left brand element. Shows the current
  * tenant's gradient avatar + name + plan pill + a chevron; switches on click (reload)
- * and offers a gated "Create Tenant" action. `collapsed` renders the trigger avatar-only.
+ * and offers a gated "Create workspace" action. `collapsed` renders the trigger avatar-only.
  *
  * Super-admins have no memberships, so for them the list is a live search across ALL
  * tenants (`tenants.search`) — they can pick any tenant and act as a user of it. The
@@ -82,7 +82,7 @@ export function TenantSwitcher({
 
   const current = memberships.find((m) => m.tenantId === currentTenantId) ?? memberships[0];
   // Label/avatar fall back to the impersonated tenant (super-admin, no membership).
-  const currentName = current?.tenantName ?? activeTenant?.name ?? "Select tenant";
+  const currentName = current?.tenantName ?? activeTenant?.name ?? "Select workspace";
   const seedId = current?.tenantId ?? activeTenant?.id ?? currentTenantId ?? "uprise";
 
   // ── Name unfurl ──────────────────────────────────────────────────────────
@@ -308,7 +308,7 @@ export function TenantSwitcher({
             onClick={toggle}
             {...triggerHandlers}
             title={currentName}
-            aria-label="Switch tenant"
+            aria-label="Switch workspace"
             className={cn(
               "flex w-full min-w-0 items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-surface-variant",
               collapsed && "lg:justify-center lg:px-1",
@@ -324,7 +324,7 @@ export function TenantSwitcher({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={isSuperAdmin ? "Search all tenants…" : "Find Tenant…"}
+            placeholder={isSuperAdmin ? "Search all workspaces…" : "Find workspace…"}
             autoFocus
             className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
@@ -347,7 +347,7 @@ export function TenantSwitcher({
         <div className="max-h-72 overflow-y-auto p-1.5">
           {rows.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {isSuperAdmin && searching ? "Searching…" : "No tenants found"}
+              {isSuperAdmin && searching ? "Searching…" : "No workspaces found"}
             </p>
           ) : (
             rows.map((r) => {
@@ -402,7 +402,7 @@ function CreateFooter({ onCreate }: { onCreate: () => void }) {
         <Plus className="h-5 w-5" />
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-foreground">Create Tenant</span>
+        <span className="block text-sm font-semibold text-foreground">Create workspace</span>
         <span className="block truncate text-xs text-muted-foreground">
           Collaborate with others in a shared workspace
         </span>
