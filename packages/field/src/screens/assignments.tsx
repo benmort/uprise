@@ -5,12 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, CircleUser, DownloadCloud, Menu, PersonStanding } from "lucide-react";
 import { Button, EmptyState, Skeleton, TenantBrand, cn } from "@uprise/ui";
-import {
-  getCanvassAssignments,
-  getVolunteerMetrics,
-  type CanvassAssignment,
-  type VolunteerMetrics,
-} from "../api";
+import { useAssignments, useVolunteerMetrics } from "../hooks/use-canvass";
 import { getTenantBrand, getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { MapThumbnail } from "../components/map-thumbnail";
@@ -37,36 +32,20 @@ function greeting(): string {
 export function Assignments() {
   const router = useRouter();
   const online = useOnlineStatus();
-  const [assignments, setAssignments] = useState<CanvassAssignment[]>([]);
-  const [metrics, setMetrics] = useState<VolunteerMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  // Volunteer identity is device-local; read once. The shared cache means the
+  // assignments/metrics payload is fetched once across every screen and served
+  // instantly on revisit (revalidated in the background).
+  const [volunteerId] = useState(() => getVolunteerId());
+  const a = useAssignments(volunteerId ?? null);
+  const m = useVolunteerMetrics(volunteerId ?? null);
+  const assignments = a.data ?? [];
+  const metrics = m.data ?? null;
+  const loading = a.loading;
+  const error = !volunteerId
+    ? "No volunteer identity on this device. Log in as a volunteer."
+    : a.error ?? "";
   const name = getVolunteerName();
   const tenant = getTenantBrand();
-
-  useEffect(() => {
-    const volunteerId = getVolunteerId();
-    if (!volunteerId) {
-      setError("No volunteer identity on this device. Log in as a volunteer.");
-      setLoading(false);
-      return;
-    }
-    let alive = true;
-    void (async () => {
-      const [aRes, mRes] = await Promise.all([
-        getCanvassAssignments(volunteerId),
-        getVolunteerMetrics(volunteerId),
-      ]);
-      if (!alive) return;
-      if (!aRes.ok) setError(aRes.error);
-      else setAssignments(aRes.data);
-      if (mRes.ok) setMetrics(mRes.data);
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   // Today's tile values with the all-time total as the muted secondary line.
   const allTime = (n: number) => ({ value: `${n.toLocaleString()} all-time`, direction: "flat" as const });

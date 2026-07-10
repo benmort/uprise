@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Skeleton } from "@uprise/ui";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { getSession, goToLogin } from "../lib/session";
 import { setTenantBrand, setVolunteerId } from "../lib/volunteer";
@@ -39,7 +40,22 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  if (!ready) return null;
+  // Until the session resolves, paint the shell + a skeleton (not a blank screen).
+  // This component SSRs, so the skeleton is in the very first HTML — the app never
+  // shows nothing while `/auth/check` is in flight.
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <main className="flex-1 overflow-auto p-4">
+          <div className="space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-56 w-full" />
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

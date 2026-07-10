@@ -4,14 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ChevronLeft, MapPin, ShieldAlert, UserPlus } from "lucide-react";
 import { Card, Button, Skeleton, useToast } from "@uprise/ui";
-import {
-  createDoorContact,
-  getCanvassAssignments,
-  listDispositions,
-  uploadDoorPhoto,
-  type CanvassAssignment,
-  type DispositionDef,
-} from "../api";
+import { createDoorContact, uploadDoorPhoto, type CanvassAssignment } from "../api";
+import { useAssignments, useDispositions } from "../hooks/use-canvass";
 import { getContactProfile, type ContactProfile } from "../api/contacts";
 import { getSurvey, listSurveys } from "../api/engagement";
 import { getVolunteerId, newLocalId } from "../lib/volunteer";
@@ -31,11 +25,17 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   const { capture } = useGeolocation();
   const { enqueue } = useSyncQueue();
 
-  const [assignment, setAssignment] = useState<CanvassAssignment | null>(null);
-  const [dispositions, setDispositions] = useState<DispositionDef[]>([]);
+  // Assignment + dispositions come from the SHARED cache — arriving here from the walk
+  // view is instant (the turf is already cached), and the disposition catalogue is
+  // reference data cached across doors. Survey + profile are per-door (below).
+  const [volunteerId] = useState(() => getVolunteerId());
+  const a = useAssignments(volunteerId ?? null);
+  const d = useDispositions("DOOR");
+  const assignment: CanvassAssignment | null = a.data?.find((x) => x.turfId === turfId) ?? null;
+  const dispositions = d.data ?? [];
+  const loading = a.loading;
   const [survey, setSurvey] = useState<SurveySchema | null>(null);
   const [profile, setProfile] = useState<ContactProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [chosenCode, setChosenCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState("");
@@ -43,24 +43,6 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const submittingRef = useRef(false);
-
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const volunteerId = getVolunteerId();
-      const [aRes, dRes] = await Promise.all([
-        volunteerId ? getCanvassAssignments(volunteerId) : Promise.resolve({ ok: false as const, error: "no id" }),
-        listDispositions("DOOR"),
-      ]);
-      if (!alive) return;
-      if (aRes.ok) setAssignment(aRes.data.find((a) => a.turfId === turfId) ?? null);
-      if (dRes.ok) setDispositions(dRes.data);
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [turfId]);
 
   const stop = useMemo(() => {
     const items = assignment?.walkLists.flatMap((wl) => wl.items) ?? [];

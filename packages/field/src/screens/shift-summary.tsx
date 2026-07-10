@@ -5,13 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, PartyPopper } from "lucide-react";
 import { Button, ConfirmDialog, Skeleton, useToast } from "@uprise/ui";
-import {
-  getCanvassAssignments,
-  getVolunteerMetrics,
-  releaseTurf,
-  type CanvassAssignment,
-  type VolunteerMetrics,
-} from "../api";
+import { releaseTurf } from "../api";
+import { useAssignments, useVolunteerMetrics } from "../hooks/use-canvass";
+import { invalidateApi } from "../hooks/use-api";
 import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { SectionCard } from "../components/section-card";
@@ -25,30 +21,14 @@ export function ShiftSummary() {
   const router = useRouter();
   const { showToast } = useToast();
   const name = getVolunteerName();
-  const [metrics, setMetrics] = useState<VolunteerMetrics | null>(null);
-  const [assignments, setAssignments] = useState<CanvassAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [volunteerId] = useState(() => getVolunteerId());
+  const m = useVolunteerMetrics(volunteerId ?? null);
+  const a = useAssignments(volunteerId ?? null);
+  const metrics = m.data ?? null;
+  const assignments = a.data ?? [];
+  const loading = m.loading || a.loading;
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [releasing, setReleasing] = useState(false);
-
-  const load = useCallback(async () => {
-    const volunteerId = getVolunteerId();
-    if (!volunteerId) {
-      setLoading(false);
-      return;
-    }
-    const [mRes, aRes] = await Promise.all([
-      getVolunteerMetrics(volunteerId),
-      getCanvassAssignments(volunteerId),
-    ]);
-    if (mRes.ok) setMetrics(mRes.data);
-    if (aRes.ok) setAssignments(aRes.data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const releaseEverything = useCallback(async () => {
     setConfirmRelease(false);
@@ -63,12 +43,13 @@ export function ShiftSummary() {
         title: "Couldn't release every turf",
         description: "Try again from the sync centre.",
       });
-      await load();
+      invalidateApi("/canvass"); // refetch the shared assignments cache after a partial release
       return;
     }
+    invalidateApi("/canvass"); // all turfs released — clear them from every screen's cache
     showToast({ tone: "success", title: "Turf released — see you next shift" });
     router.push("/field");
-  }, [assignments, load, router, showToast]);
+  }, [assignments, router, showToast]);
 
   if (loading) return <Skeleton className="h-64 w-full" />;
 

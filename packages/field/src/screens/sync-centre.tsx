@@ -5,7 +5,9 @@ import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Bell, BellRing, CloudOff, DoorOpen, LogOut, RefreshCw } from "lucide-react";
 import { Button, Skeleton, ConfirmDialog, useToast } from "@uprise/ui";
 import { useFieldPush } from "../hooks/use-field-push";
-import { getCanvassAssignments, releaseTurf, type CanvassAssignment } from "../api";
+import { releaseTurf } from "../api";
+import { useAssignments } from "../hooks/use-canvass";
+import { invalidateApi } from "../hooks/use-api";
 import { getVolunteerId } from "../lib/volunteer";
 import { logout } from "../lib/session";
 import { useSyncQueue } from "../hooks/use-sync-queue";
@@ -24,25 +26,12 @@ export function SyncCentre() {
   const { counts, pending, conflicts, online, flush, retryConflict, discardConflict } = useSyncQueue();
   const { showToast } = useToast();
   const push = useFieldPush();
-  const [assignments, setAssignments] = useState<CanvassAssignment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [volunteerId] = useState(() => getVolunteerId());
+  const a = useAssignments(volunteerId ?? null);
+  const assignments = a.data ?? [];
+  const loading = a.loading;
   const [syncing, setSyncing] = useState(false);
   const [releaseId, setReleaseId] = useState<string | null>(null);
-
-  const loadAssignments = useCallback(async () => {
-    const volunteerId = getVolunteerId();
-    if (!volunteerId) {
-      setLoading(false);
-      return;
-    }
-    const res = await getCanvassAssignments(volunteerId);
-    if (res.ok) setAssignments(res.data);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void loadAssignments();
-  }, [loadAssignments]);
 
   const tally = useMemo(() => {
     const items = assignments.flatMap((a) => a.walkLists.flatMap((wl) => wl.items));
@@ -70,9 +59,9 @@ export function SyncCentre() {
       showToast({ tone: "error", title: "Couldn't release turf", description: res.error });
       return;
     }
-    await loadAssignments();
+    invalidateApi("/canvass"); // drop the released turf from every screen's shared cache
     showToast({ tone: "success", title: "Turf released" });
-  }, [releaseId, loadAssignments, showToast]);
+  }, [releaseId, showToast]);
 
   const unsynced = counts.PENDING + counts.SYNCING;
 

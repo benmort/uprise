@@ -31,13 +31,14 @@ const withPWA = withPWAInit({
       },
     },
     {
-      // API GETs (assignments, dispositions) — last-good fallback when offline.
+      // API GETs (assignments, dispositions) — serve the cached response instantly
+      // and revalidate in the background (pairs with the in-memory SWR cache), instead
+      // of blocking on the live network on every read. Still a last-good store offline.
       urlPattern: ({ url, request }) =>
         request.method === "GET" && /\/(canvass|engagement)\//.test(url.pathname),
-      handler: "NetworkFirst",
+      handler: "StaleWhileRevalidate",
       options: {
         cacheName: "canvass-api",
-        networkTimeoutSeconds: 5,
         expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
       },
     },

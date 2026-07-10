@@ -50,14 +50,14 @@ export type DoorKnockInput = {
   surveyAnswers?: DoorKnockSurveyAnswer[];
 };
 
-export async function listDispositions(channel?: "DOOR" | "SMS") {
+export async function listDispositions(channel?: "DOOR" | "SMS", signal?: AbortSignal) {
   const q = channel ? `?channel=${channel}` : "";
-  return request<DispositionDef[]>(`/engagement/dispositions${q}`);
+  return request<DispositionDef[]>(`/engagement/dispositions${q}`, signal ? { signal } : undefined);
 }
 
-export async function getCanvassAssignments(volunteerId: string) {
+export async function getCanvassAssignments(volunteerId: string, signal?: AbortSignal) {
   const q = new URLSearchParams({ volunteerId });
-  return request<CanvassAssignment[]>(`/canvass/assignments?${q}`);
+  return request<CanvassAssignment[]>(`/canvass/assignments?${q}`, signal ? { signal } : undefined);
 }
 
 export type VolunteerMetrics = {
@@ -70,9 +70,9 @@ export type VolunteerMetrics = {
 };
 
 /** Day + all-time tallies for the "My turf" header tiles. */
-export async function getVolunteerMetrics(volunteerId: string) {
+export async function getVolunteerMetrics(volunteerId: string, signal?: AbortSignal) {
   const q = new URLSearchParams({ volunteerId });
-  return request<VolunteerMetrics>(`/canvass/volunteer-metrics?${q}`);
+  return request<VolunteerMetrics>(`/canvass/volunteer-metrics?${q}`, signal ? { signal } : undefined);
 }
 
 export async function submitDoorKnock(input: DoorKnockInput) {

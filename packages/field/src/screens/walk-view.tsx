@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DoorOpen, DownloadCloud, Loader2, Navigation, Spline } from "lucide-react";
 import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
-import { getCanvassAssignments, type CanvassAssignment } from "../api";
+import { type CanvassAssignment } from "../api";
+import { useAssignments } from "../hooks/use-canvass";
 import { getVolunteerId } from "../lib/volunteer";
 import { optimiseRoute, type Stop } from "../lib/route";
 import { estimateWalk, trimToBudget, formatMinutes } from "../lib/walk-estimate";
@@ -48,34 +49,19 @@ export function WalkView({
 }) {
   const router = useRouter();
   const [mode, setMode] = useLocalStorage<WalkMode>("uprise.walkMode", "list");
-  const [assignment, setAssignment] = useState<CanvassAssignment | null>(assignmentProp ?? null);
-  const [loading, setLoading] = useState(!assignmentProp);
   const [showSteps, setShowSteps] = useState(false);
   const { fix, capture } = useGeolocation();
 
-  useEffect(() => {
-    // Organiser preview supplies the assignment directly — keep it in sync, no fetch.
-    if (assignmentProp !== undefined) {
-      setAssignment(assignmentProp);
-      setLoading(false);
-      return;
-    }
-    const volunteerId = getVolunteerId();
-    if (!volunteerId) {
-      setLoading(false);
-      return;
-    }
-    let alive = true;
-    void (async () => {
-      const res = await getCanvassAssignments(volunteerId);
-      if (!alive) return;
-      if (res.ok) setAssignment(res.data.find((a) => a.turfId === turfId) ?? null);
-      setLoading(false);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [turfId, assignmentProp]);
+  // Organiser preview (apps/admin) supplies the assignment directly; the volunteer app
+  // reads it from the SHARED assignments cache — so arriving from the dashboard is
+  // instant (no refetch), the turf just being found in the already-cached list.
+  const isPreview = assignmentProp !== undefined;
+  const [volunteerId] = useState(() => (isPreview ? null : getVolunteerId()));
+  const a = useAssignments(isPreview ? null : volunteerId);
+  const assignment: CanvassAssignment | null = isPreview
+    ? assignmentProp ?? null
+    : a.data?.find((x) => x.turfId === turfId) ?? null;
+  const loading = isPreview ? false : a.loading;
 
   // Locate the volunteer once when the map opens (battery: not a continuous watch).
   useEffect(() => {
