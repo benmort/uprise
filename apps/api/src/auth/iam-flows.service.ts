@@ -798,8 +798,14 @@ export class IamFlowsService {
   private async verifyPhoneChallenge(challengeId: string, code: string): Promise<string> {
     const invalid = () => new BadRequestException("Invalid or expired code");
     const record = await this.prisma.mobileVerification.findUnique({ where: { id: challengeId } });
-    if (!record || !record.mobile || record.verifiedAt || record.expiresAt.getTime() <= Date.now()) {
-      throw invalid();
+    if (!record || !record.mobile || record.expiresAt.getTime() <= Date.now()) throw invalid();
+    // Idempotent: the onboarding wizard verifies the code at the code step for immediate
+    // feedback (POST /iam/phone/check), then `accept` verifies again at the end. An
+    // already-verified challenge re-presented with the SAME code is still valid, so both
+    // succeed; a different code on a verified challenge is still rejected.
+    if (record.verifiedAt) {
+      if (record.code !== code) throw invalid();
+      return record.mobile;
     }
     if (record.attempts >= MAX_OTP_ATTEMPTS) throw invalid();
     if (record.code !== code) {
@@ -811,6 +817,17 @@ export class IamFlowsService {
     }
     await this.prisma.mobileVerification.update({ where: { id: record.id }, data: { verifiedAt: new Date() } });
     return record.mobile;
+  }
+
+  /**
+   * Verify a phone OTP WITHOUT issuing a session or creating anything — the onboarding wizard
+   * calls this the moment the sixth digit is typed, so a wrong code is caught at the code step
+   * instead of only failing at the very end. `accept` re-verifies (idempotently) as the source
+   * of truth. Throws on a bad/expired code.
+   */
+  async verifyPhoneCode(challengeId: string, code: string): Promise<{ ok: true }> {
+    await this.verifyPhoneChallenge(challengeId, code);
+    return { ok: true };
   }
 
   async acceptInvite(

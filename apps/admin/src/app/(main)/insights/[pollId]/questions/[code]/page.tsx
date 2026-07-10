@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ListChecks, Map as MapIcon, Target } from "lucide-react";
+import { MessageCircleQuestion, Map as MapIcon, Target } from "lucide-react";
 import {
   getPollQuestion,
   resolvePollThreshold,
@@ -40,8 +40,8 @@ export default function QuestionPage() {
 
   return (
     <PageShell
-      icon={ListChecks}
-      title={data ? data.question.title : "Question"}
+      icon={MessageCircleQuestion}
+      title={data ? `[${data.question.code}] ${data.question.title}` : "Question"}
       actions={
         data ? (
           <Breadcrumbs

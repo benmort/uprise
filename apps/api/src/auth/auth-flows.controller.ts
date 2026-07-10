@@ -134,6 +134,12 @@ export class AuthFlowsController {
     return this.grantResponse(req, res, await this.flows.verifyPhoneLogin(dto.challengeId, dto.code));
   }
 
+  /** Check an OTP mid-flow (onboarding wizard) — validates the code, issues NO session. */
+  @Post("phone/check")
+  checkPhoneCode(@Body() dto: PhoneVerifyDto) {
+    return this.flows.verifyPhoneCode(dto.challengeId, dto.code);
+  }
+
   @Get("invite/:token")
   previewInvite(@Param("token") token: string) {
     return this.flows.previewInvite(token);

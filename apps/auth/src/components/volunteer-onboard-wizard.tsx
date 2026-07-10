@@ -137,6 +137,7 @@ export function VolunteerOnboardWizard({
   const [sessionLen, setSessionLen] = useState<SessionLength | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false); // verifying the OTP at the code step
   const [error, setError] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
   const [memberships, setMemberships] = useState<Parameters<typeof completeAuth>[0]>(undefined);
@@ -227,15 +228,33 @@ export function VolunteerOnboardWizard({
   }, [step, challengeId]);
 
   /**
-   * Typing the sixth digit advances. Keyed on the code *growing* to six rather than
-   * being six, or stepping back to this screen with a full code would bounce straight
-   * forward again and the Back button would do nothing.
+   * Typing the sixth digit VERIFIES the code with the server, then advances — a wrong code is
+   * caught here with an error instead of sailing through the whole form to fail at submit.
+   * Keyed on the code *growing* to six (not merely being six), so stepping back with a full
+   * code doesn't bounce forward again and the Back button still works.
    */
   const codeLen = useRef(0);
   useEffect(() => {
-    if (step === "code" && codeLen.current < 6 && code.length === 6) goTo("name");
+    const grewToSix = step === "code" && codeLen.current < 6 && code.length === 6;
     codeLen.current = code.length;
-  }, [step, code, goTo]);
+    if (!grewToSix || !challengeId) return;
+    let cancelled = false;
+    setChecking(true);
+    setError(null);
+    void auth.phoneCheck(challengeId, code).then((res) => {
+      if (cancelled) return;
+      setChecking(false);
+      if (res.ok) {
+        goTo("name");
+      } else {
+        setError(res.error);
+        setCode(""); // clear so the six-digit input is ready for another try
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, code, challengeId, goTo]);
 
   async function sendCode() {
     setBusy(true);
@@ -412,6 +431,11 @@ export function VolunteerOnboardWizard({
             We texted a 6-digit code to <span className="font-bold text-foreground">+61 {formatAuMobile(phone)}</span>.
           </p>
           <OtpInput value={code} onChange={setCode} length={6} className="mt-7" />
+          {checking ? (
+            <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner /> Checking your code…
+            </p>
+          ) : null}
           <p className="mt-4 text-sm text-muted-foreground">
             Didn&apos;t get it?{" "}
             <button

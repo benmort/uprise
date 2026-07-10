@@ -54,6 +54,8 @@ export class BasicAuthGuard implements CanActivate {
       "/iam/phone/start",
       "/iam/phone/resend",
       "/iam/phone/verify",
+      "/iam/phone/check", // mid-flow OTP check (onboarding wizard) — no session issued
+
       "/auth/register", // self-service sign-up (meld doc 12) — issues the session
       "/auth/request-access", // self-signup → admin approval (issues NO session)
       "/auth/request-access/verify",

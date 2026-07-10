@@ -244,6 +244,40 @@ describe("IamFlowsService", () => {
       await expect(svc.verify2fa("mv1", "123456")).rejects.toThrow();
     });
 
+    // Mid-flow OTP check (onboarding wizard): validate the code at the code step, then let the
+    // final accept re-verify idempotently.
+    const mv = (over: Record<string, unknown>) => ({
+      id: "mv1", mobile: "+61400000000", code: "123456", attempts: 0, verifiedAt: null,
+      expiresAt: new Date(Date.now() + 60_000), ...over,
+    });
+
+    it("verifyPhoneCode returns ok on a correct code and marks the challenge verified", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce(mv({}));
+      await expect(svc.verifyPhoneCode("mv1", "123456")).resolves.toEqual({ ok: true });
+      expect(prisma.mobileVerification.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { verifiedAt: expect.any(Date) } }),
+      );
+    });
+
+    it("verifyPhoneCode rejects a wrong code", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce(mv({}));
+      await expect(svc.verifyPhoneCode("mv1", "000000")).rejects.toThrow();
+    });
+
+    it("an already-verified challenge re-checked with the SAME code still passes (accept works after the code-step check)", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce(mv({ verifiedAt: new Date() }));
+      await expect(svc.verifyPhoneCode("mv1", "123456")).resolves.toEqual({ ok: true });
+    });
+
+    it("a verified challenge presented with a DIFFERENT code is still rejected", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce(mv({ verifiedAt: new Date() }));
+      await expect(svc.verifyPhoneCode("mv1", "999999")).rejects.toThrow();
+    });
+
     it("start skips the SMS once over the per-user send cap", async () => {
       const { svc, prisma, dispatcher } = setup();
       prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", mobile: "+61400000000" });
