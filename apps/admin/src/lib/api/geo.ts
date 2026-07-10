@@ -1,4 +1,5 @@
 import { request } from "@/lib/api";
+import type { DensityScale } from "@/lib/canvass/density";
 
 /**
  * A division layer. `sed` is the raw ABS "State Electoral Division" layer; `sed_lower`
@@ -425,4 +426,13 @@ export async function listPollingPlacePoints(params: { jurisdiction?: string; st
 /** One booth's full detail (backs the selected-booth card). */
 export async function getPollingPlace(id: string) {
   return request<PollingPlaceDetail>(`/geo/polling-places/${encodeURIComponent(id)}`);
+}
+
+/**
+ * The colour breaks for a layer's address-density choropleth — four national quantiles.
+ * The density itself rides on each vector tile feature; this is only the scale to paint it
+ * with, fixed nationally so a colour means the same thing wherever the map is panned.
+ */
+export async function getDensityScale(kind: string) {
+  return request<DensityScale>(`/geo/density/scale?kind=${encodeURIComponent(kind)}`);
 }

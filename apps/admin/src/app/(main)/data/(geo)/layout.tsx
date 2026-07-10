@@ -72,6 +72,13 @@ const DESCRIPTION: Record<GeoExplorerKind, string> = {
   "first-nations": "ABS Indigenous Structure – Regions, Areas and Locations. Statistical geographies for reference, not cultural, language or nation boundaries, and not cuttable into turf.",
 };
 
+/**
+ * The kinds whose map draws boundary polygons, so a density shade has something to land on.
+ * `areas` is deliberately absent: its tiles have no address counts published yet, and
+ * `addresses`/`polling-places` draw points, not regions.
+ */
+const DENSITY_KINDS = new Set<GeoExplorerKind>(["divisions", "states", "first-nations"]);
+
 const VIEW_KEY: Record<GeoExplorerKind, string> = {
   divisions: "uprise.divisionsView",
   states: "uprise.statesView",
@@ -90,6 +97,7 @@ function GeoExplorerChrome() {
   const stateParam = searchParams.get("state") ?? "";
   const rawView = searchParams.get("view");
   const view: WalkMode = rawView === "list" ? "list" : "map";
+  const density = searchParams.get("density") === "1";
 
   // The input is local state (keystrokes must never wait on the URL); the ONE
   // debounce point writes ?q= after 250ms. lastWritten distinguishes our own URL
@@ -119,6 +127,7 @@ function GeoExplorerChrome() {
     const params = new URLSearchParams();
     if (input.trim()) params.set("q", input.trim());
     if (stateParam) params.set("state", stateParam);
+    if (density) params.set("density", "1");
     params.set("view", view);
     return `${base}?${params.toString()}`;
   };
@@ -192,6 +201,24 @@ function GeoExplorerChrome() {
           aria-label={`Search ${TITLE[kind].toLowerCase()}`}
           wrapperClassName="max-w-md flex-1"
         />
+        {/* Address density — only where boundaries are actually drawn, and only on the map. */}
+        {DENSITY_KINDS.has(kind) && view === "map" ? (
+          <button
+            type="button"
+            onClick={() => writeGeoParam("density", density ? null : "1")}
+            aria-pressed={density}
+            title="Shade each boundary by addresses per km²"
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors",
+              density
+                ? "border-primary bg-primary text-white"
+                : "border-border text-foreground hover:border-primary/40",
+            )}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Density
+          </button>
+        ) : null}
         {/* List/Map view toggle — pinned to the far right of the controls row. */}
         <div className="ml-auto">
           <WalkModeToggle value={view} onChange={setView} />

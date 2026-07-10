@@ -7,7 +7,14 @@ import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 
 /** Source table + code/name columns for a tileable geo layer (areas, divisions, state). */
-const TILE_SOURCE: Record<string, { table: string; codeCol: string; nameExpr: string }> = {
+/**
+ * Every region kind that has a geometry table, and how to read its code + name from it.
+ *
+ * Serves the vector tiles, and doubles as the kind → geometry map for `geo:density`
+ * (`ST_Area(geom::geography)`). Exported so that script cannot keep a second copy that
+ * drifts from this one.
+ */
+export const TILE_SOURCE: Record<string, { table: string; codeCol: string; nameExpr: string }> = {
   mb: { table: "geo.meshblock", codeCol: "mb_code", nameExpr: "COALESCE(name, mb_code)" },
   sa1: { table: "geo.sa1", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
@@ -346,29 +353,50 @@ export class GeoService {
     // re-simplifies in tile space, so this only trims payload for dense tiles.
     const tolerance = Math.min((e - w) / 2048, 0.02);
     const geomExpr =
-      tolerance > 0.00002 ? `ST_SimplifyPreserveTopology(geom, ${tolerance})` : "geom";
+      tolerance > 0.00002 ? `ST_SimplifyPreserveTopology(d.geom, ${tolerance})` : "d.geom";
     // No feature cap — a tile holds every feature in its bbox so nothing truncates in
     // view. "Batching" is the vector-tile grid itself: mapbox requests the covering
     // tiles at the current zoom and renders each as it arrives, so a dense level loads
     // progressively rather than in one blocking chunk. The one runaway case (a whole
     // level's worth of meshblocks in a single low-zoom tile, ~368k) is kept off the
     // wire by the client's per-level minzoom floor, so that tile is never requested.
+    //
+    // Address density rides along on the feature. The alternative — shipping the client a
+    // `["match", ["get","code"], …]` expression — would be 61,811 code/colour pairs at SA1
+    // before a single tile rendered. One number per feature, already clipped to the
+    // viewport, costs nothing. `NULLIF(area_km2, 0)` is what keeps a region with no
+    // measured area reading as no-data rather than as infinity.
+    //
+    // Every column is table-qualified: `geo.region_address_count` also has a `code`, and an
+    // unqualified one is the exact ambiguity that 500'd the First Nations browse. A spec
+    // guard (`expectNoAmbiguousColumns`) fails this file if it comes back.
     const rows = (await this.prisma.$queryRawUnsafe(
-      `SELECT ${src.codeCol} AS code, ${src.nameExpr} AS name, ST_AsGeoJSON(${geomExpr}) AS geojson
-       FROM ${src.table}
-       WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)`,
+      `SELECT d.${src.codeCol} AS code,
+              COALESCE(d.name, d.${src.codeCol}) AS name,
+              (rac.address_count / NULLIF(rac.area_km2, 0)) AS density,
+              ST_AsGeoJSON(${geomExpr}) AS geojson
+         FROM ${src.table} d
+         LEFT JOIN geo.region_address_count rac
+                ON rac.kind = $5 AND rac.code = d.${src.codeCol}
+        WHERE d.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)`,
       w,
       s,
       e,
       n,
-    )) as Array<{ code: string; name: string | null; geojson: string }>;
+      layer,
+    )) as Array<{ code: string; name: string | null; density: number | null; geojson: string }>;
     if (rows.length === 0) return Buffer.alloc(0);
     const fc: FeatureCollection = {
       type: "FeatureCollection",
       features: rows.map((r) => ({
         type: "Feature",
         geometry: JSON.parse(r.geojson) as Geometry,
-        properties: { code: r.code, name: r.name ?? r.code },
+        // `density` is omitted, not null: MVT cannot encode a null property, and a missing
+        // one already reads back as null from `["get","density"]` in a style expression.
+        properties:
+          r.density === null
+            ? { code: r.code, name: r.name ?? r.code }
+            : { code: r.code, name: r.name ?? r.code, density: r.density },
       })),
     };
     // Slice/clip to this tile in tile-space coordinates, then encode to MVT.
@@ -384,6 +412,51 @@ export class GeoService {
     const tile = index.getTile(z, x, y);
     if (!tile || tile.features.length === 0) return Buffer.alloc(0);
     return Buffer.from(fromGeojsonVt({ areas: tile }, { version: 2 }));
+  }
+
+  /**
+   * The colour breaks for a layer's density choropleth — four quantiles cutting five bands.
+   *
+   * Quantiles rather than equal-width bands, because address density is violently skewed:
+   * across Australia's 547 LGAs the 20th percentile is 0.4 addresses/km², the 80th is 242.9,
+   * and the maximum is 9,611. Five equal-width bands over that range would paint about
+   * ninety-nine percent of the country a single colour and tell the reader nothing.
+   *
+   * Computed nationally, not per viewport, so a colour means the same density wherever the
+   * map is panned. Regions with no measured area are excluded rather than counted as zero.
+   */
+  async densityScale(layer: string): Promise<{
+    kind: string;
+    regions: number;
+    min: number | null;
+    max: number | null;
+    breaks: number[];
+  }> {
+    this.tileSource(layer); // validates the layer, throws BAD_TILE_LAYER otherwise
+
+    const [row] = (await this.prisma.$queryRawUnsafe(
+      `WITH d AS (
+         SELECT address_count / NULLIF(area_km2, 0) AS v
+           FROM geo.region_address_count
+          WHERE kind = $1 AND area_km2 > 0
+       )
+       SELECT count(*)::int AS regions,
+              min(v) AS min,
+              max(v) AS max,
+              percentile_cont(ARRAY[0.2, 0.4, 0.6, 0.8]) WITHIN GROUP (ORDER BY v) AS breaks
+         FROM d`,
+      layer,
+    )) as Array<{ regions: number; min: number | null; max: number | null; breaks: number[] | null }>;
+
+    return {
+      kind: layer,
+      regions: row?.regions ?? 0,
+      min: row?.min ?? null,
+      max: row?.max ?? null,
+      // No areas measured yet (geo:density unrun) → no breaks, and the client paints
+      // every region as no-data rather than inventing a scale.
+      breaks: row?.breaks ?? [],
+    };
   }
 
   /** Type-ahead over a level's name/code for the area search box, optionally

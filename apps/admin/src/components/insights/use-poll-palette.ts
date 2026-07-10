@@ -36,3 +36,13 @@ export function usePollPalette(): PollPalette | null {
 
   return palette;
 }
+
+/**
+ * The same hook, under the name to use outside the insights section.
+ *
+ * The sequential ramp it returns (`--seq-*`) now paints address density on the geo explorer
+ * as well as poll choropleths and heatmaps, so "poll palette" stopped being true at every
+ * call site. The module still lives here because the insights chart builders are its main
+ * consumer — only the name has outgrown them.
+ */
+export const useChartPalette = usePollPalette;

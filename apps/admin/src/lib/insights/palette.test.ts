@@ -13,13 +13,13 @@ const LIGHT: Record<string, string> = {
   "--poll-neutral": "240 5.9% 90%",
   "--poll-oppose-soft": "9.6 79.4% 60%",
   "--poll-oppose-strong": "8.4 74.8% 45.1%",
-  "--poll-seq-1": "212.6 76.6% 73.1%",
-  "--poll-seq-2": "212.5 75.3% 62%",
-  "--poll-seq-3": "212.8 67.7% 50.2%",
-  "--poll-seq-4": "213.1 71.9% 39%",
-  "--poll-seq-5": "213.5 77.9% 28.4%",
+  "--seq-1": "212.6 76.6% 73.1%",
+  "--seq-2": "212.5 75.3% 62%",
+  "--seq-3": "212.8 67.7% 50.2%",
+  "--seq-4": "213.1 71.9% 39%",
+  "--seq-5": "213.5 77.9% 28.4%",
   "--poll-accent": "8.4 74.8% 45.1%",
-  "--poll-nodata": "240 5.9% 90%",
+  "--nodata": "240 5.9% 90%",
   "--foreground": "240 10% 3.9%",
   "--muted-foreground": "240 4% 46%",
   "--border": "240 6% 90%",
@@ -32,13 +32,13 @@ const DARK: Record<string, string> = {
   "--poll-neutral": "240 5.3% 26.1%",
   "--poll-oppose-soft": "10.7 58.8% 44.7%",
   "--poll-oppose-strong": "10.6 85% 58.2%",
-  "--poll-seq-1": "213.1 67.5% 44.7%",
-  "--poll-seq-2": "212.8 76.8% 56.1%",
-  "--poll-seq-3": "212.6 77% 67.6%",
-  "--poll-seq-4": "212.8 79.6% 78.8%",
-  "--poll-seq-5": "212.6 85.2% 89.4%",
+  "--seq-1": "213.1 67.5% 44.7%",
+  "--seq-2": "212.8 76.8% 56.1%",
+  "--seq-3": "212.6 77% 67.6%",
+  "--seq-4": "212.8 79.6% 78.8%",
+  "--seq-5": "212.6 85.2% 89.4%",
   "--poll-accent": "10.6 85% 58.2%",
-  "--poll-nodata": "240 5.3% 26.1%",
+  "--nodata": "240 5.3% 26.1%",
   "--foreground": "0 0% 98%",
   "--muted-foreground": "240 5% 65%",
   "--border": "240 4% 18%",
@@ -180,8 +180,8 @@ describe("buildPollPalette", () => {
 
   it("keeps the sequential ramp low → high", () => {
     const p = buildPollPalette(readerFor(LIGHT));
-    expect(p.seq[0]).toBe(hslToHex(parseHslTriple(LIGHT["--poll-seq-1"])!));
-    expect(p.seq[4]).toBe(hslToHex(parseHslTriple(LIGHT["--poll-seq-5"])!));
+    expect(p.seq[0]).toBe(hslToHex(parseHslTriple(LIGHT["--seq-1"])!));
+    expect(p.seq[4]).toBe(hslToHex(parseHslTriple(LIGHT["--seq-5"])!));
   });
 
   it("falls back to a readable colour when a token is missing, never NaN", () => {

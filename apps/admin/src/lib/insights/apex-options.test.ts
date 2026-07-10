@@ -280,8 +280,8 @@ describe("the real tokens flow through unchanged", () => {
       ({
         "--poll-support-strong": "237.6 69% 50.6%",
         "--poll-oppose-strong": "8.4 74.8% 45.1%",
-        "--poll-seq-1": "212.6 76.6% 73.1%",
-        "--poll-seq-5": "213.5 77.9% 28.4%",
+        "--seq-1": "212.6 76.6% 73.1%",
+        "--seq-5": "213.5 77.9% 28.4%",
       })[n] ?? "",
     );
     expect(rankedBarOptions(ROWS, real, LIGHT).options.colors).toEqual(["#2a31d8"]);

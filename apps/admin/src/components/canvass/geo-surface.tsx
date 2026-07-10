@@ -19,7 +19,10 @@ import { AddressesPanel } from "@/components/canvass/geo-panels/addresses-panel"
 import { PollingPlacesPanel } from "@/components/canvass/geo-panels/polling-places-panel";
 import { FirstNationsPanel } from "@/components/canvass/geo-panels/first-nations-panel";
 import { firstNationsSlug, resolveFirstNationsLevel } from "@/lib/canvass/first-nations";
-import { getFirstNations } from "@/lib/api/geo";
+import { getDensityScale, getFirstNations } from "@/lib/api/geo";
+import { densityBands, densityFill } from "@/lib/canvass/density";
+import { useChartPalette } from "@/components/insights/use-poll-palette";
+import { SequentialLegend } from "@/components/canvass/sequential-legend";
 import { useApi } from "@/lib/use-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -112,6 +115,27 @@ export function GeoSurface() {
   const fnDetail = useApi(fnKey, () => getFirstNations(fnLevel, code), { ttlMs: 300_000 });
   const fnCode = fnDetail.data?.code ?? "";
 
+  // ── Address density (?density=1) ────────────────────────────────────────────
+  // The tiles already carry a `density` per feature; all the client needs is the national
+  // scale to paint it with. Which layer's scale depends on which layer is drawn.
+  const densityOn = searchParams.get("density") === "1";
+  const densityKind =
+    kind === "divisions" ? resolveDivisionTab(tab) : kind === "states" ? "state" : kind === "first-nations" ? fnLevel : null;
+
+  const densityScale = useApi(
+    densityOn && densityKind ? `/geo/density/scale?kind=${densityKind}` : null,
+    () => getDensityScale(densityKind!),
+    { ttlMs: 600_000 },
+  );
+  const palette = useChartPalette();
+  // Null palette (pre-hydration) or no scale (geo:density unrun) → no fill expression, so
+  // the map keeps its plain boundary wash rather than painting everything one colour.
+  const boundaryFill =
+    densityOn && palette && densityScale.data
+      ? densityFill(densityScale.data, palette.seq, palette.nodata)
+      : undefined;
+  const densityLegend = palette ? densityBands(densityScale.data ?? null, palette.seq) : [];
+
   const mapProps = useMemo<GeoMapProps>(() => {
     const common = {
       focusBounds,
@@ -141,11 +165,12 @@ export function GeoSurface() {
         // `slice(code,0,1) == stateDigit` boundaryFilter and the framing below still hold.
         boundaryLayers: (overlay ? DIVISION_TABS : [type]).map((t) => ({
           id: t,
-          tilesUrl: `${getApiUrl()}/geo/tiles/${t}/{z}/{x}/{y}?v=3`,
+          tilesUrl: `${getApiUrl()}/geo/tiles/${t}/{z}/{x}/{y}?v=4`,
           color: TYPE_COLORS[t],
           interactive: t === type,
         })),
         boundaryFilter,
+        boundaryFill,
         selectedBoundaryCode: selectedCode,
         // "My turf" divisions of the active type — drawn green-dashed on the map.
         basketCodes: basket.divisions.filter((d) => d.type === type).map((d) => d.code),
@@ -161,8 +186,9 @@ export function GeoSurface() {
         // else the shared State Filter, else the whole country.
         focusBounds: OT_BOUNDS[code] ?? stateBounds(stateAsgsDigitToAbbrev(code) ?? stateParam),
         mode: "boundaries",
-        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=3`,
+        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=4`,
         boundaryFilter: stateDigit ? (["==", ["get", "code"], stateDigit] as FilterSpecification) : undefined,
+        boundaryFill,
         selectedBoundaryCode: code || undefined,
         // Whole states banked in "My turf" (stored as division type "ste") — green-dashed.
         basketCodes: basket.divisions.filter((d) => d.type === "ste").map((d) => d.code),
@@ -191,10 +217,11 @@ export function GeoSurface() {
           common.focusBounds ??
           AU_BOUNDS,
         mode: "boundaries",
-        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}?v=1`,
+        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/${level}/{z}/{x}/{y}?v=2`,
         boundaryFilter: stateDigit
           ? (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
           : undefined,
+        boundaryFill,
         selectedBoundaryCode: fnCode || undefined,
         // The tile carries no slug, so derive it from the boundary's name — exactly the way
         // the API derives it — rather than writing an opaque code into the URL.
@@ -256,7 +283,7 @@ export function GeoSurface() {
     divisionSelected, setDivisionSelected, selectedAreas, toggleSelectedArea, setViewportAreas,
     setDrawnPolygons, doors, activePid, setActivePid, picked, basket.divisions, basket.areas,
     pollingPlaces, pollingSelectedId, setPollingSelectedId,
-    fnCode,
+    fnCode, boundaryFill,
   ]);
 
   if (!kind) return null;
@@ -293,6 +320,11 @@ export function GeoSurface() {
         )}
       >
         <GeoMap {...mapProps} />
+        {densityOn && densityLegend.length > 0 && palette ? (
+          <div className="pointer-events-none absolute bottom-3 right-3 z-10">
+            <SequentialLegend bands={densityLegend} nodata={palette.nodata} unit="addresses / km²" />
+          </div>
+        ) : null}
         {showDrawCard ? (
           <div className="absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
             <div className="flex items-center gap-2 rounded-xl border border-border bg-surface/95 px-3 py-2 text-sm shadow-card backdrop-blur">

@@ -14,6 +14,7 @@ import {
   getRegionPolling,
   listFirstNations,
   getFirstNations,
+  getDensityScale,
 } from "./geo";
 
 const mockReq = request as unknown as ReturnType<typeof vi.fn>;
@@ -133,5 +134,22 @@ describe("geo api client — First Nations", () => {
       expect(url).not.toContain("/geo/divisions");
       expect(url).not.toContain("/canvass/turfs");
     }
+  });
+});
+
+describe("geo api client — density", () => {
+  beforeEach(() => {
+    mockReq.mockClear();
+    mockReq.mockResolvedValue({ ok: true, data: null });
+  });
+
+  it("asks for one layer's national scale", async () => {
+    await getDensityScale("lga");
+    expect(mockReq.mock.calls[0][0]).toBe("/geo/density/scale?kind=lga");
+  });
+
+  it("encodes the kind, so a layer name can never inject query params", async () => {
+    await getDensityScale("sa1&foo=bar");
+    expect(mockReq.mock.calls[0][0]).toBe("/geo/density/scale?kind=sa1%26foo%3Dbar");
   });
 });

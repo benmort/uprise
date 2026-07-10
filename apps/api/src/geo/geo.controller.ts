@@ -146,11 +146,22 @@ export class GeoController {
   }
 
   /**
+   * The five colour bands for a layer's density choropleth (four quantile breaks).
+   * The tiles already carry each region's `density`; this is the scale to paint it with,
+   * computed nationally so a colour means the same thing wherever the map is panned.
+   */
+  @Get("density/scale")
+  densityScale(@Query("kind") kind: string) {
+    return this.geo.densityScale(kind);
+  }
+
+  /**
    * One Mapbox Vector Tile of a geo layer's boundaries. The map source requests
    * only the tiles it needs at each zoom, so this is the fast, any-zoom replacement
    * for the per-viewport `GET /geo/areas` GeoJSON. Binary MVT via `@Res()`, which
    * bypasses the global `{ok,data}` interceptor (same as the analytics `@Sse`).
-   * Long-cacheable — boundaries are static reference data.
+   * Long-cacheable — boundaries are static reference data. Feature properties are
+   * `{ code, name, density? }`; `density` is absent where the area is unmeasured.
    */
   @Get("tiles/:layer/:z/:x/:y")
   async tile(

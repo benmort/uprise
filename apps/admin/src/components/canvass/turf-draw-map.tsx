@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Map, { Layer, Marker, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
-import type { FilterSpecification } from "mapbox-gl";
+import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Loader2, MapPin, Search, X } from "lucide-react";
@@ -138,6 +138,7 @@ export function TurfDrawMap({
   boundaryLayers,
   boundaryTilesUrl,
   boundaryFilter,
+  boundaryFill,
   selectedBoundaryCode,
   basketCodes,
   onBoundaryClick,
@@ -215,6 +216,13 @@ export function TurfDrawMap({
   /** boundaries mode — a single tile overlay (States). */
   boundaryTilesUrl?: string;
   boundaryFilter?: FilterSpecification;
+  /**
+   * boundaries mode — paint the fill from a data expression instead of the flat layer
+   * colour (the address-density choropleth). The tiles carry a `density` property per
+   * feature; see `lib/canvass/density.ts#densityFill`. Raises the fill opacity too — a
+   * 6% wash is a boundary hint, not a choropleth.
+   */
+  boundaryFill?: ExpressionSpecification | string;
   selectedBoundaryCode?: string;
   /** Codes already in the "My turf" basket for the active kind/level — drawn as a
    *  distinct green dashed overlay (vs the solid `selectedBoundaryCode` highlight)
@@ -865,7 +873,7 @@ export function TurfDrawMap({
         {/* boundaries mode — single overlay (States). */}
         {mode === "boundaries" && boundaryTilesUrl ? (
           <Source key={boundaryTilesUrl} id="boundaries" type="vector" tiles={[boundaryTilesUrl]} minzoom={0} maxzoom={16}>
-            <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": PRIMARY, "fill-opacity": 0.06 }} />
+            <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": boundaryFill ?? PRIMARY, "fill-opacity": boundaryFill ? 0.75 : 0.06 }} />
             <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": PRIMARY, "line-width": 1.2, "line-opacity": 0.7 }} />
             {basketFilter ? (
               <>
@@ -887,7 +895,7 @@ export function TurfDrawMap({
           ? boundaryLayers.map((bl) => (
               <Source key={bl.tilesUrl} id={`boundaries-${bl.id}`} type="vector" tiles={[bl.tilesUrl]} minzoom={0} maxzoom={16}>
                 {bl.interactive ? (
-                  <Layer id={`boundaries-${bl.id}-fill`} source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": bl.color, "fill-opacity": 0.05 }} />
+                  <Layer id={`boundaries-${bl.id}-fill`} source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": boundaryFill ?? bl.color, "fill-opacity": boundaryFill ? 0.75 : 0.05 }} />
                 ) : null}
                 <Layer id={`boundaries-${bl.id}-line`} source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": bl.color, "line-width": bl.interactive ? 1.4 : 1, "line-opacity": bl.interactive ? 1 : 0.6 }} />
                 {bl.interactive && basketFilter ? (

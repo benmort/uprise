@@ -49,7 +49,8 @@ describe("GeoService.tile", () => {
 
     const high = make([]);
     await high.svc.tile("sa2", 20, 0, 0);
-    expect(high.$queryRawUnsafe.mock.calls[0][0]).toContain("ST_AsGeoJSON(geom)");
+    // `d.geom`, not `geom` — the density join brought a second table into scope.
+    expect(high.$queryRawUnsafe.mock.calls[0][0]).toContain("ST_AsGeoJSON(d.geom)");
     expect(high.$queryRawUnsafe.mock.calls[0][0]).not.toContain("ST_SimplifyPreserveTopology");
   });
 
@@ -498,6 +499,85 @@ describe("GeoService — ambiguous-column regression guard", () => {
       }
     },
   );
+
+  // tile() gained a LEFT JOIN on geo.region_address_count to carry density, which puts a
+  // second `code` column in scope — exactly the shape that 500'd browseAreas.
+  it.each(["sa1", "mb", "lga", "iloc"] as const)("tile(%s) qualifies every column", async (layer) => {
+    const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+    await svcOf($queryRawUnsafe).tile(layer, 1, 0, 0);
+    expectNoAmbiguousColumns($queryRawUnsafe.mock.calls[0][0] as string);
+  });
+});
+
+describe("GeoService — density", () => {
+  const svcOf = ($queryRawUnsafe: jest.Mock) => new GeoService({ $queryRawUnsafe } as never);
+  const squarePoly = () =>
+    JSON.stringify({ type: "Polygon", coordinates: [[[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]]] });
+
+  describe("tile()", () => {
+    it("joins the count summary and derives density per feature", async () => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      await svcOf($queryRawUnsafe).tile("lga", 1, 0, 0);
+      const [sql, , , , , layer] = $queryRawUnsafe.mock.calls[0];
+
+      expect(sql).toContain("LEFT JOIN geo.region_address_count rac");
+      // NULLIF is what keeps an unmeasured region reading as no-data rather than infinity.
+      expect(sql).toContain("NULLIF(rac.area_km2, 0)");
+      expect(layer).toBe("lga"); // the kind is bound, never interpolated
+    });
+
+    it("encodes a feature that has a density", async () => {
+      const $queryRawUnsafe = jest
+        .fn()
+        .mockResolvedValue([{ code: "24600", name: "Melbourne", density: 8525.1, geojson: squarePoly() }]);
+      const buf = await svcOf($queryRawUnsafe).tile("lga", 1, 0, 0);
+      expect(buf.length).toBeGreaterThan(0);
+    });
+
+    it("encodes a feature whose area is unmeasured, omitting density rather than nulling it", async () => {
+      // vt-pbf cannot encode a null property value; the property has to be absent.
+      const $queryRawUnsafe = jest
+        .fn()
+        .mockResolvedValue([{ code: "DEMO-MB", name: "Demo", density: null, geojson: squarePoly() }]);
+      const buf = await svcOf($queryRawUnsafe).tile("mb", 1, 0, 0);
+      expect(buf.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("densityScale()", () => {
+    it("returns four quantile breaks, computed nationally", async () => {
+      const $queryRawUnsafe = jest
+        .fn()
+        .mockResolvedValue([{ regions: 547, min: 0.0004, max: 9611.2, breaks: [0.4, 1.7, 8.3, 242.9] }]);
+      const res = await svcOf($queryRawUnsafe).densityScale("lga");
+
+      expect(res).toEqual({ kind: "lga", regions: 547, min: 0.0004, max: 9611.2, breaks: [0.4, 1.7, 8.3, 242.9] });
+      const [sql, kind] = $queryRawUnsafe.mock.calls[0];
+      // Equal-width bands would put ~99% of LGAs in one colour: q20 = 0.4, q80 = 242.9.
+      expect(sql).toContain("percentile_cont(ARRAY[0.2, 0.4, 0.6, 0.8])");
+      expect(kind).toBe("lga");
+    });
+
+    it("excludes regions with no measured area rather than counting them as zero", async () => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([{ regions: 0, min: null, max: null, breaks: null }]);
+      await svcOf($queryRawUnsafe).densityScale("sa1");
+      expect($queryRawUnsafe.mock.calls[0][0]).toContain("area_km2 > 0");
+    });
+
+    it("offers no scale at all before geo:density has run", async () => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([{ regions: 0, min: null, max: null, breaks: null }]);
+      const res = await svcOf($queryRawUnsafe).densityScale("sa1");
+      // An empty breaks array makes the client paint every region no-data. It must never
+      // invent a scale out of nothing.
+      expect(res).toMatchObject({ regions: 0, min: null, max: null, breaks: [] });
+    });
+
+    it("rejects a layer that has no geometry table, before touching the database", async () => {
+      const $queryRawUnsafe = jest.fn();
+      await expect(svcOf($queryRawUnsafe).densityScale("bogus")).rejects.toThrow();
+      expect($queryRawUnsafe).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("GeoService — First Nations", () => {
