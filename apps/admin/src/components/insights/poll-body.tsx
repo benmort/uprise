@@ -176,13 +176,54 @@ function Provenance({ poll }: { poll: PollDetail }) {
   );
 }
 
+/** Longest common prefix of a list of strings. */
+function commonPrefix(strings: string[]): string {
+  if (strings.length === 0) return "";
+  return strings.reduce((p, s) => {
+    let i = 0;
+    while (i < p.length && i < s.length && p[i] === s[i]) i += 1;
+    return p.slice(0, i);
+  });
+}
+
+/**
+ * Readable row labels for a themed block. Drops the redundant code prefix (it's already shown
+ * as a badge) and, for a battery whose members share a long stem — e.g. the twelve "Which party
+ * is best at handling each of these issues? …" questions — drops that stem too, so each row reads
+ * as its distinguishing issue ("Managing the economy…") instead of the repeated question that
+ * pushed the issue off the end of the line.
+ */
+function shortLabels(questions: PollQuestionRef[]): Map<string, string> {
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const bodies = questions.map((q) =>
+    q.title
+      .replace(new RegExp(`^\\s*${esc(q.code)}[.:]?\\s*`, "i"), "") // redundant code prefix
+      .replace(/\s+by BANNER\b.*$/i, "") // the crossbreak-banner annotation from the export
+      .trim(),
+  );
+  let stem = "";
+  if (bodies.length > 1) {
+    stem = commonPrefix(bodies);
+    stem = stem.slice(0, stem.lastIndexOf(" ") + 1); // keep to a word boundary
+    if (stem.trim().length < 12) stem = ""; // ignore coincidental short overlaps
+  }
+  return new Map(
+    questions.map((q, i) => {
+      const body = bodies[i];
+      const rest = stem && body.startsWith(stem) ? body.slice(stem.length).trim() : body;
+      return [q.code, rest || body || q.title];
+    }),
+  );
+}
+
 function ThemeCard({ block, href }: { block: ThemeBlock; href: (code: string) => string }) {
   const firstBattery = block.questions.map((q) => diverging(q.topline)).find((d) => d !== null);
+  const labels = shortLabels(block.questions);
   return (
     <SectionCard title={block.theme?.label ?? "Questions"} description={block.theme?.blurb}>
       <ul className="divide-y divide-border">
         {block.questions.map((q) => (
-          <QuestionRow key={q.code} question={q} href={href} />
+          <QuestionRow key={q.code} question={q} label={labels.get(q.code) ?? q.title} href={href} />
         ))}
       </ul>
       {firstBattery ? (
@@ -194,7 +235,15 @@ function ThemeCard({ block, href }: { block: ThemeBlock; href: (code: string) =>
   );
 }
 
-function QuestionRow({ question, href }: { question: PollQuestionRef; href: (code: string) => string }) {
+function QuestionRow({
+  question,
+  label,
+  href,
+}: {
+  question: PollQuestionRef;
+  label: string;
+  href: (code: string) => string;
+}) {
   const kind = chartKind(question.topline);
   const bars = kind === "diverging" ? diverging(question.topline) : null;
   const nominal = kind === "nominal" ? topResponses(question.topline, 3) : [];
@@ -211,7 +260,7 @@ function QuestionRow({ question, href }: { question: PollQuestionRef; href: (cod
               href={href(question.code)}
               className="group min-w-0 flex-1 text-sm text-foreground hover:text-poll-accent"
             >
-              {question.title}
+              {label}
               <ChevronRight className="ml-0.5 inline h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
