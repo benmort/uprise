@@ -20,7 +20,7 @@ export type PageTab =
   | "flags"
   | "queue";
 
-// URL segment ↔ tab key. 1:1 except "flags" → "feature-flags" (because /settings/flags
+// URL segment ↔ tab key. 1:1 except "flags" → "feature-flags" (because /super/flags
 // is already a separate super-admin route). Drives the /settings/[section] routing so
 // every tab has a real, deep-linkable URL.
 export const TAB_SEGMENT: Record<PageTab, string> = {

@@ -103,7 +103,7 @@ export default function TenantMembersPage() {
   return (
     <section className="page-stack">
       <div className="space-y-6 max-w-2xl">
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/future/tenants/${tenantId}`)}>
+        <Button variant="ghost" size="sm" onClick={() => router.push(`/super/tenants/${tenantId}`)}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
         <div>

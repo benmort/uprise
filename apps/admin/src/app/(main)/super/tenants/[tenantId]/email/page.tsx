@@ -202,7 +202,7 @@ export default function TenantEmailPage() {
       <div className="space-y-6 p-6">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="sm">
-            <Link href={`/future/tenants/${tenantId}`}>
+            <Link href={`/super/tenants/${tenantId}`}>
               <ArrowLeft className="mr-1 h-4 w-4" />
               {tenant?.name ?? 'Workspace'}
             </Link>
@@ -263,7 +263,7 @@ export default function TenantEmailPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-3">
         <Button asChild variant="ghost" size="sm">
-          <Link href={`/future/tenants/${tenantId}`}>
+          <Link href={`/super/tenants/${tenantId}`}>
             <ArrowLeft className="mr-1 h-4 w-4" />
             {tenant?.name ?? 'Workspace'}
           </Link>

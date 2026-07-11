@@ -69,7 +69,7 @@ export default function TenantDetailPage() {
     setActionError(null);
     const res = await tenantsApi.remove(tenant.id);
     setSaving(false);
-    if (res.ok) router.push('/future/tenants');
+    if (res.ok) router.push('/super/tenants');
     else setActionError(res.error);
   };
 
@@ -87,7 +87,7 @@ export default function TenantDetailPage() {
     return (
       <section className="page-stack">
         <p className="text-red-600 dark:text-red-400">{error ?? 'Workspace not found.'}</p>
-        <Button variant="outline" className="mt-4" onClick={() => router.push('/future/tenants')}>
+        <Button variant="outline" className="mt-4" onClick={() => router.push('/super/tenants')}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to Workspaces
         </Button>
       </section>
@@ -97,7 +97,7 @@ export default function TenantDetailPage() {
   return (
     <section className="page-stack">
       <div className="space-y-6 max-w-2xl">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/future/tenants')}>
+        <Button variant="ghost" size="sm" onClick={() => router.push('/super/tenants')}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
         <div>
@@ -147,16 +147,16 @@ export default function TenantDetailPage() {
         </Card>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => router.push(`/future/tenants/${tenantId}/members`)}>
+          <Button onClick={() => router.push(`/super/tenants/${tenantId}/members`)}>
             <Users className="h-4 w-4 mr-2" /> Manage Members
           </Button>
           {isSuperAdmin ? (
-            <Button variant="outline" onClick={() => router.push(`/future/tenants/${tenantId}/telephony`)}>
+            <Button variant="outline" onClick={() => router.push(`/super/tenants/${tenantId}/telephony`)}>
               <Phone className="h-4 w-4 mr-2" /> Telephony
             </Button>
           ) : null}
           {isSuperAdmin ? (
-            <Button variant="outline" onClick={() => router.push(`/future/tenants/${tenantId}/email`)}>
+            <Button variant="outline" onClick={() => router.push(`/super/tenants/${tenantId}/email`)}>
               <AtSign className="h-4 w-4 mr-2" /> Email
             </Button>
           ) : null}

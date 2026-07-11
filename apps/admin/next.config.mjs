@@ -73,6 +73,12 @@ const nextConfig = {
       // The engagement library became the Content section (routes /content/*).
       { source: "/engagement", destination: "/content", permanent: false },
       { source: "/engagement/:path*", destination: "/content/:path*", permanent: false },
+      // The super-admin views consolidated under /super/* (tenants, plans, flags, queues).
+      { source: "/future/tenants", destination: "/super/tenants", permanent: false },
+      { source: "/future/tenants/:path*", destination: "/super/tenants/:path*", permanent: false },
+      { source: "/settings/plans", destination: "/super/plans", permanent: false },
+      { source: "/settings/flags", destination: "/super/flags", permanent: false },
+      { source: "/settings/queues", destination: "/super/queues", permanent: false },
     ];
   },
 };

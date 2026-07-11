@@ -83,26 +83,12 @@ export default function PolicyDetailPage() {
         {data ? (
           <div className="section-stack">
             <SectionCard title="Overview">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <Stat label="Members tracked" value={data.positions.length.toLocaleString()} />
                 <Stat label="Status" value={data.provisional ? "Provisional" : "Published"} />
                 <Stat
                   label="Last edited"
                   value={data.lastEditedAt ? new Date(data.lastEditedAt).toLocaleDateString() : "—"}
-                />
-                <Stat
-                  label="Source"
-                  value={
-                    <a
-                      href={`https://theyvoteforyou.org.au/policies/${data.tvfyId}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-primary hover:underline"
-                    >
-                      They Vote For You
-                      <ArrowUpRight className="h-4 w-4" />
-                    </a>
-                  }
                 />
               </div>
               {data.description ? (

@@ -1,21 +1,35 @@
 "use client";
 
-import { useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 /**
  * Client glue for an embedded insights view (iframed by the action app): syncs the
- * theme from `?theme=` so the charts/map match the host, and reports content height to
- * the parent frame (`postMessage`) so the host iframe can auto-size. Renders nothing.
+ * theme from `?theme=` so the charts/map match the host, reports content height to the
+ * parent frame (`postMessage`) so the host iframe can auto-size, and signals the host to
+ * scroll the frame back to its top on an in-iframe navigation (overview↔question) so the
+ * reader lands on the new content, not the whitespace under a now-shorter page. Renders nothing.
  */
 export function EmbedChrome() {
   const theme = useSearchParams().get("theme");
+  const pathname = usePathname();
 
   useEffect(() => {
     if (theme === "dark" || theme === "light") {
       document.documentElement.classList.toggle("dark", theme === "dark");
     }
   }, [theme]);
+
+  // On an in-iframe route change, ask the host to scroll the frame to the top. Skipped on the
+  // first render — the initial load must not yank the host page's scroll position.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    window.parent?.postMessage({ type: "uprise:insights-navigated" }, "*");
+  }, [pathname]);
 
   useEffect(() => {
     // Full document height (the largest of the two roots), so the host iframe is sized to the
@@ -50,7 +64,9 @@ export function EmbedChrome() {
       window.removeEventListener("resize", schedule);
       timers.forEach(clearTimeout);
     };
-  }, []);
+    // Keyed on pathname: a route change is a new document height and a fresh set of async
+    // charts to wait for, and `last` must reset so an identical height still re-posts.
+  }, [pathname]);
 
   return null;
 }

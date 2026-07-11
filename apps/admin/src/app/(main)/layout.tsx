@@ -75,6 +75,8 @@ type NavNode =
 function buildNav(isSuperAdmin: boolean): NavNode[] {
   // Prefix matcher for the parked future routes (all under /future/*).
   const px = (s: string): NavMatch => (p) => p.startsWith(`/future/${s}`);
+  // Prefix matcher for the super-admin routes (all under /super/*).
+  const sp = (s: string): NavMatch => (p) => p.startsWith(`/super/${s}`);
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
     // First-run organiser checklist — flag-gated (default on); the shell hides it
@@ -147,24 +149,19 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
     {
       type: "group", key: "settings", label: "Settings", icon: Settings,
       match: (p) =>
-        (p.startsWith("/settings") &&
-          !p.startsWith("/settings/flags") &&
-          !p.startsWith("/settings/plans")) ||
+        p.startsWith("/settings") ||
         p.startsWith("/compliance") ||
         px("tenant-settings")(p) || px("security")(p),
       children: [
         // General settings tabs are real /settings/<section> routes now; highlight for
-        // any of them (i.e. /settings and its sections, excluding the sibling settings
-        // items — team/flags/plans/queues — which have their own nav entries).
+        // any of them (i.e. /settings and its sections, excluding Team, which has its own
+        // nav entry). Plans/flags/queues moved out to the Super Admin group under /super.
         {
           label: "General",
           href: "/settings/tenant",
           match: (p) =>
             (p === "/settings" || p.startsWith("/settings/")) &&
-            !p.startsWith("/settings/team") &&
-            !p.startsWith("/settings/flags") &&
-            !p.startsWith("/settings/plans") &&
-            !p.startsWith("/settings/queues"),
+            !p.startsWith("/settings/team"),
         },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         // Integrations moved into Settings → General (the tenant-settings tab); the
@@ -176,8 +173,8 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
           ? ([
               {
                 label: "Brands",
-                href: "/future/tenants",
-                match: px("tenants"),
+                href: "/super/tenants",
+                match: sp("tenants"),
                 flag: "FEATURE_MULTIBRAND_ENABLED",
               },
             ] as NavEntry[])
@@ -199,18 +196,14 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
           { type: "section", key: "sec-superadmin", label: "Super Admin" },
           {
             type: "group", key: "super-admin", label: "Super Admin", icon: ShieldCheck,
-            match: (p) =>
-              p.startsWith("/settings/flags") ||
-              p.startsWith("/settings/plans") ||
-              p.startsWith("/settings/queues") ||
-              px("tenants")(p),
+            match: (p) => p.startsWith("/super/"),
             children: [
-              { label: "Workspaces", href: "/future/tenants", match: px("tenants") },
-              { label: "Plans", href: "/settings/plans", match: (p) => p.startsWith("/settings/plans") },
-              { label: "Feature flags", href: "/settings/flags", match: (p) => p === "/settings/flags" },
+              { label: "Tenants", href: "/super/tenants", match: sp("tenants") },
+              { label: "Plans", href: "/super/plans", match: sp("plans") },
+              { label: "Feature flags", href: "/super/flags", match: (p) => p === "/super/flags" },
               // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version
               // lives on /settings ("Tenant Queue & Redis Stats").
-              { label: "Queue & Redis Stats", href: "/settings/queues", match: (p) => p.startsWith("/settings/queues") },
+              { label: "Queue & Redis Stats", href: "/super/queues", match: sp("queues") },
             ],
           },
           {
@@ -581,7 +574,7 @@ export default function MainLayout({
   // access — ask an organisation owner"), which are misleading when the real problem is
   // that no workspace is active. The super-admin platform views stay reachable so a
   // tenant-less super-admin can still pick or create a workspace to escape the state.
-  const TENANTLESS_PREFIXES = ["/future/tenants", "/future/ops"];
+  const TENANTLESS_PREFIXES = ["/super/tenants", "/future/ops"];
   const showNoTenant =
     ready && !principal?.tenantId && !TENANTLESS_PREFIXES.some((r) => pathname.startsWith(r));
 
@@ -1120,8 +1113,8 @@ export default function MainLayout({
                         ? "You're not currently acting in a workspace. Pick or create one to continue."
                         : "You're not a member of any workspace yet. Ask an organiser to add you."
                     }
-                    ctaLabel={isSuperAdmin ? "Go to Workspaces" : undefined}
-                    onCta={isSuperAdmin ? () => router.push("/future/tenants") : undefined}
+                    ctaLabel={isSuperAdmin ? "Go to Tenants" : undefined}
+                    onCta={isSuperAdmin ? () => router.push("/super/tenants") : undefined}
                   />
                 </div>
               ) : (

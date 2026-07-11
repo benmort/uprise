@@ -166,18 +166,18 @@ export default function TenantsPage() {
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Workspaces</h1>
+            <h1 className="text-2xl font-extrabold">{isSuperAdmin ? 'Tenants' : 'Workspaces'}</h1>
           </div>
           <p className="text-gray-600 dark:text-gray-400">
             {isSuperAdmin
-              ? 'Manage every workspace on the platform.'
+              ? 'Manage every tenant on the platform.'
               : 'Manage the brands you own.'}
           </p>
         </div>
         {canCreate ? (
           <Button onClick={() => setCreateOpen(true)} disabled={!!pending}>
             <Plus className="h-4 w-4 mr-2" />
-            Create Workspace
+            {isSuperAdmin ? 'Create Tenant' : 'Create Workspace'}
           </Button>
         ) : null}
       </div>
@@ -185,7 +185,7 @@ export default function TenantsPage() {
       <SearchInput
         value={query}
         onValueChange={setQuery}
-        placeholder={isSuperAdmin ? 'Search all workspaces…' : 'Search your workspaces…'}
+        placeholder={isSuperAdmin ? 'Search all tenants…' : 'Search your workspaces…'}
         wrapperClassName="max-w-sm"
       />
 
@@ -275,14 +275,14 @@ export default function TenantsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => router.push(`/future/tenants/${t.id}`)}
+                        onClick={() => router.push(`/super/tenants/${t.id}`)}
                       >
                         <Settings className="h-4 w-4 mr-1" /> Manage
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => router.push(`/future/tenants/${t.id}/members`)}
+                        onClick={() => router.push(`/super/tenants/${t.id}/members`)}
                       >
                         <Users className="h-4 w-4 mr-1" /> Members
                       </Button>

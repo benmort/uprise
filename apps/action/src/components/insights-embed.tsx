@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const ADMIN_ORIGIN = process.env.NEXT_PUBLIC_ADMIN_ORIGIN ?? "";
 
@@ -20,6 +20,7 @@ export function InsightsEmbed({
   minHeight?: number;
 }) {
   const [height, setHeight] = useState(minHeight);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     let adminOrigin = "";
@@ -33,6 +34,10 @@ export function InsightsEmbed({
       const d = e.data as { type?: string; height?: number } | null;
       if (d?.type === "uprise:insights-height" && typeof d.height === "number") {
         setHeight(Math.max(minHeight, Math.ceil(d.height)));
+      } else if (d?.type === "uprise:insights-navigated") {
+        // The frame navigated (overview↔question). Bring its top back into view so the reader
+        // lands on the new content instead of the whitespace under a now-shorter frame.
+        iframeRef.current?.scrollIntoView({ block: "start" });
       }
     };
     window.addEventListener("message", onMsg);
@@ -42,6 +47,7 @@ export function InsightsEmbed({
   if (!ADMIN_ORIGIN) return null;
   return (
     <iframe
+      ref={iframeRef}
       src={`${ADMIN_ORIGIN}${path}`}
       title={title}
       sandbox="allow-scripts allow-same-origin"
@@ -50,7 +56,8 @@ export function InsightsEmbed({
       // show its own scrollbar — that's the double-scroll (iframe + page) we're fixing.
       scrolling="no"
       className="w-full border-0"
-      style={{ height }}
+      // A little top offset so scrollIntoView on navigation clears any sticky host header.
+      style={{ height, scrollMarginTop: "1rem" }}
     />
   );
 }

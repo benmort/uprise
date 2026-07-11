@@ -190,14 +190,14 @@ export default function FeatureFlagsPage() {
             Per-tenant and per-network overrides on top of each target&apos;s plan. Pick a
             workspace or network, then force a feature on or off, or leave it to inherit
             from the plan. Base entitlements live on the{" "}
-            <Link href="/settings/plans" className="text-primary hover:underline">
+            <Link href="/super/plans" className="text-primary hover:underline">
               Plans
             </Link>{" "}
             page.
           </p>
         </div>
         <Link
-          href="/settings/plans"
+          href="/super/plans"
           className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-surface-variant"
         >
           <SlidersHorizontal className="h-4 w-4" /> Plans

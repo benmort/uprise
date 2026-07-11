@@ -290,7 +290,7 @@ export default function PlansPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link
-            href="/settings/flags"
+            href="/super/flags"
             className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" /> Feature flags

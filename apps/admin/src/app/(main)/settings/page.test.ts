@@ -9,7 +9,7 @@ const settingsIndex = read("app/(main)/settings/page.tsx");
 const observability = read("components/settings/observability.tsx");
 const general = read("app/(main)/future/tenant-settings/general-settings.tsx");
 const sectionRoute = read("app/(main)/settings/[section]/page.tsx");
-const queues = read("app/(main)/settings/queues/page.tsx");
+const queues = read("app/(main)/super/queues/page.tsx");
 
 describe("settings consolidated into the tabbed General page", () => {
   it("/settings redirects to the first General tab", () => {
