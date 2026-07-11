@@ -101,7 +101,7 @@ export function DivisionsPanel({ view }: { view: WalkMode }) {
     });
 
   const tabPills = (
-    <div className="flex rounded-xl border border-border p-0.5">
+    <div className="flex flex-wrap gap-0.5 rounded-xl border border-border p-0.5">
       {TABS.map((t) => (
         <button
           key={t.type}
@@ -109,8 +109,8 @@ export function DivisionsPanel({ view }: { view: WalkMode }) {
           aria-pressed={type === t.type}
           onClick={() => setTab(t.type)}
           className={cn(
-            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-            type === t.type ? "bg-primary text-white" : "text-foreground",
+            "flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+            type === t.type ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
           )}
         >
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: TYPE_COLORS[t.type] }} />
