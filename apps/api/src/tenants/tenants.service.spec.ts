@@ -1,6 +1,11 @@
 import { AppUserRole } from "@uprise/db";
 import { TenantsService } from "./tenants.service";
 
+// Re-auth is delegated to the shared password helper; the tenant service just calls it.
+jest.mock("../auth/password.util", () => ({
+  verifyPassword: jest.fn(async (password: string) => password === "correct-password"),
+}));
+
 function setup() {
   const prisma: any = {
     tenant: {
@@ -17,6 +22,7 @@ function setup() {
       create: jest.fn(async ({ data }: any) => ({ id: "m1", ...data })),
       upsert: jest.fn(async ({ create }: any) => ({ id: "m1", ...create })),
       findUnique: jest.fn(async () => ({ tenantId: "t1", userId: "u1", role: "ORGANISER" })),
+      findFirst: jest.fn(async () => null),
       findMany: jest.fn(async () => []),
       count: jest.fn(async () => 2),
       update: jest.fn(async ({ data }: any) => ({ id: "m1", ...data })),
@@ -145,6 +151,57 @@ describe("TenantsService", () => {
     prisma.tenant.update = jest.fn(async () => ({ id: "t1" }));
     await svc.deleteTenant("t1");
     expect(prisma.tenant.update).toHaveBeenCalledWith({ where: { id: "t1" }, data: { deletedAt: expect.any(Date) } });
+  });
+
+  describe("selfServeDelete", () => {
+    it("soft-deletes the active tenant for an owner with the right password", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", passwordHash: "hash", deletedAt: null });
+      prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "OWNER" });
+      prisma.tenantMember.findFirst.mockResolvedValueOnce(null); // no other workspace
+      const res = await svc.selfServeDelete("u1", "t1", "correct-password");
+      expect(prisma.tenant.update).toHaveBeenCalledWith({ where: { id: "t1" }, data: { deletedAt: expect.any(Date) } });
+      expect(outbox.append).toHaveBeenCalled();
+      expect(res).toEqual({ ok: true, nextTenantId: null });
+    });
+
+    it("returns another administered workspace to switch into (no sign-out)", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", passwordHash: "hash", deletedAt: null });
+      prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "OWNER" });
+      prisma.tenantMember.findFirst.mockResolvedValueOnce({ tenantId: "t2" });
+      const res = await svc.selfServeDelete("u1", "t1", "correct-password");
+      expect(res).toEqual({ ok: true, nextTenantId: "t2" });
+      // The fallback only counts live workspaces the user administers (OWNER/ORGANISER).
+      const where = prisma.tenantMember.findFirst.mock.calls.at(-1)[0].where;
+      expect(where).toMatchObject({
+        userId: "u1",
+        tenantId: { not: "t1" },
+        role: { in: ["OWNER", "ORGANISER"] },
+        tenant: { deletedAt: null },
+      });
+    });
+
+    it("refuses with no active workspace", async () => {
+      const { svc, prisma } = setup();
+      await expect(svc.selfServeDelete("u1", null, "correct-password")).rejects.toThrow(/No active workspace/);
+      expect(prisma.tenant.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a wrong password before touching anything", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", passwordHash: "hash", deletedAt: null });
+      await expect(svc.selfServeDelete("u1", "t1", "wrong")).rejects.toThrow(/Password is incorrect/);
+      expect(prisma.tenant.update).not.toHaveBeenCalled();
+    });
+
+    it("forbids a non-owner of the active tenant, even with the right password", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", passwordHash: "hash", deletedAt: null });
+      prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "ORGANISER" });
+      await expect(svc.selfServeDelete("u1", "t1", "correct-password")).rejects.toThrow(/owner of this workspace/);
+      expect(prisma.tenant.update).not.toHaveBeenCalled();
+    });
   });
 
   it("isSlugAvailable reports availability (normalised)", async () => {

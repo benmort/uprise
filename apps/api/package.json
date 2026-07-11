@@ -31,6 +31,7 @@
     "geo:density": "ts-node src/scripts/geo/density.ts",
     "geo:load-boundaries": "ts-node src/scripts/geo/load-boundaries.ts",
     "geo:load-polling-places": "ts-node src/scripts/geo/load-polling-places.ts",
+    "geo:load-referendum": "ts-node src/scripts/geo/load-referendum.ts",
     "insights:load-vic-treaty-poll": "ts-node src/scripts/insights/load-vic-treaty-poll.ts",
     "civic:sync": "ts-node src/scripts/civic/sync-theyvoteforyou.ts",
     "civic:sync-states": "ts-node src/scripts/civic/sync-state-mps.ts",

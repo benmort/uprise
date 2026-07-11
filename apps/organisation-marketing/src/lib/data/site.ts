@@ -71,7 +71,7 @@ export const PROCESS: ProcessStep[] = [
 export const HERO_WORDS: string[] = ["campaigns.", "movements.", "causes.", "coalitions."];
 
 export const TEAM: TeamMember[] = [
-  { name: "Maya Okonkwo", role: "FOUNDER & PRINCIPAL" },
+  { name: "Benjamin Mort", role: "FOUNDER & PRINCIPAL", image: "/team/benjamin-mort.jpg" },
   { name: "Dev Ramírez", role: "ENGINEERING LEAD" },
   { name: "Sana Whitfield", role: "DESIGN DIRECTOR" },
   { name: "Theo Nakamura", role: "DATA & GROWTH" },
@@ -128,13 +128,18 @@ export const CONTACT = {
   // The platform contact address (matches the API's PLATFORM_CONTACT_EMAIL).
   email: "contact@upriselabs.org",
   phone: "+1 (202) 555-0148",
-  basedIn: "SYDNEY NSW\nMELBOURNE VIC\nBRISBANE QLD\n+ FULLY REMOTE",
+  basedIn: "SYDNEY NSW\n+ FULLY REMOTE",
 };
 
 export const LEGAL = {
   left: "© 2026 UPRISE LABS · A WORKER-OWNED COOPERATIVE STUDIO",
   right: "MADE WITH SOLIDARITY IN AUSTRALIA 🏴",
 };
+
+export const ACKNOWLEDGEMENT =
+  "Uprise Labs acknowledges the Traditional Owners of the lands and waters on which we live and work, " +
+  "who have cared for Country since time immemorial. We pay our respects to Elders past and present. " +
+  "Sovereignty was never ceded — always was, always will be, Aboriginal land.";
 
 export const FOOTER_BLURB =
   "The web development studio for progressive campaigns, causes, and coalitions.";

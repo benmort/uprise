@@ -1,20 +1,17 @@
 import Link from "next/link";
 import { Marquee } from "@/components/system/Marquee";
-import { PatternBackdrop } from "@/components/system/PatternBackdrop";
 import { NewsletterForm } from "@/components/forms/NewsletterForm";
 import { Wordmark } from "./SiteHeader";
-import { CONTACT, FOOTER_BLURB, LEGAL, SITEMAP, SOCIALS } from "@/lib/data/site";
+import { ACKNOWLEDGEMENT, CONTACT, FOOTER_BLURB, LEGAL, SITEMAP, SOCIALS } from "@/lib/data/site";
 
 /**
- * Dark footer: a faded-in Bauhaus pattern backdrop, the reverse "Let's build
- * power —" marquee band, four columns (blurb / sitemap / social / Dispatch
- * signup), and the mono legal bar. `isolate` scopes the backdrop's -z-10 so it
- * sits above the ink fill but behind all content.
+ * Dark footer: the reverse "Let's build power —" marquee band, four columns
+ * (blurb / sitemap / social / Dispatch signup), the Acknowledgement of Country,
+ * and the mono legal bar.
  */
 export function SiteFooter() {
   return (
-    <footer className="relative isolate overflow-hidden bg-ink text-cream">
-      <PatternBackdrop src="/bauhaus-pattern.jpg" />
+    <footer className="relative overflow-hidden bg-ink text-cream">
       <Marquee reverse durationS={30} className="border-b border-hairline-dark py-8">
         {Array.from({ length: 4 }).map((_, i) => (
           <span
@@ -68,6 +65,10 @@ export function SiteFooter() {
           <NewsletterForm />
           <p className="mt-6 font-mono text-xs text-cream/45">{CONTACT.email}</p>
         </div>
+      </div>
+
+      <div className="mx-auto max-w-[1360px] px-6 pb-10 lg:px-10">
+        <p className="max-w-3xl text-[13px] leading-relaxed text-cream/70">{ACKNOWLEDGEMENT}</p>
       </div>
 
       <div className="border-t border-hairline-dark">

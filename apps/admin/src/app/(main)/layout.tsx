@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BarChart3,
   Boxes,
   ChevronDown,
   ChevronLeft,
@@ -130,7 +131,7 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
     { type: "section", key: "sec-manage", label: "Manage" },
     {
       type: "group", key: "data-files", label: "Data", icon: Database,
-      match: (p) => p.startsWith("/data") || p.startsWith("/insights"),
+      match: (p) => p.startsWith("/data"),
       children: [
         { label: "Datasets", href: "/data/datasets", match: (p) => p.startsWith("/data/datasets") },
         { label: "Divisions", href: "/data/divisions", match: (p) => p.startsWith("/data/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
@@ -140,11 +141,12 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
         { label: "Polling places", href: "/data/polling-places", match: (p) => p.startsWith("/data/polling-places") },
         { label: "Politicians", href: "/data/politicians", match: (p) => p.startsWith("/data/politicians") },
         { label: "Policies", href: "/data/policies", match: (p) => p.startsWith("/data/policies") },
-        // Insights / Polling — public-opinion polls attached to geo regions (choropleth, targeting).
-        { label: "Polling", href: "/insights", match: (p) => p.startsWith("/insights"), flag: "FEATURE_NAV_INSIGHTS" },
         { label: "File Manager", href: "/data/file-manager", match: (p) => p.startsWith("/data/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
       ],
     },
+    // Polling — public-opinion polls attached to geo regions (choropleth, targeting). Its own
+    // top-level item directly under Data, not a Data child.
+    { type: "leaf", key: "polling", label: "Polling", href: "/insights", icon: BarChart3, match: (p) => p.startsWith("/insights"), flag: "FEATURE_NAV_INSIGHTS" },
 
     {
       type: "group", key: "settings", label: "Settings", icon: Settings,

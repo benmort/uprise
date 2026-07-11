@@ -20,7 +20,7 @@ export default async function PublicPollPage({ params }: { params: { pollId: str
   if (!poll) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-5xl px-1 py-8 sm:px-3 sm:py-12">
       <InsightsEmbed
         path={`/embed/insights/${params.pollId}?theme=light`}
         title={`${poll.title} — charts, findings and regional map`}

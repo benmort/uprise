@@ -124,45 +124,6 @@ export function QuestionBody({
         {data.poll.attribution ? ` · ${data.poll.attribution}` : ""}
       </p>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="flex items-center gap-2">
-          <label htmlFor="breakdown" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Breakdown
-          </label>
-          <select
-            id="breakdown"
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
-          >
-            <option value="Total">Whole sample</option>
-            {groupNames.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label htmlFor="response" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Response
-          </label>
-          <select
-            id="response"
-            value={responseLabel}
-            onChange={(e) => setResponseLabel(e.target.value)}
-            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
-          >
-            {data.responses.map((r) => (
-              <option key={r.label} value={r.label}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       {geoGroup ? (
         <SectionCard
           title={
@@ -210,6 +171,47 @@ export function QuestionBody({
           ) : null}
         </SectionCard>
       ) : null}
+
+      {/* Breakdown + Response controls sit under the map: you read the regional picture first,
+          then re-cut it. They drive the map's shading above and the chart + crosstab below. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          <label htmlFor="breakdown" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Breakdown
+          </label>
+          <select
+            id="breakdown"
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+          >
+            <option value="Total">Whole sample</option>
+            {groupNames.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="response" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Response
+          </label>
+          <select
+            id="response"
+            value={responseLabel}
+            onChange={(e) => setResponseLabel(e.target.value)}
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+          >
+            {data.responses.map((r) => (
+              <option key={r.label} value={r.label}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <SectionCard
         title={selectedGroup === "Total" ? "Whole sample" : selectedGroup}

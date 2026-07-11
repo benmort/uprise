@@ -71,7 +71,7 @@ export default function AboutPage() {
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {TEAM.map((m, i) => (
             <Reveal key={m.name} delay={(i % 3) * 100}>
-              <MediaPlaceholder caption="[ PORTRAIT ]" ratio="4/5" />
+              <MediaPlaceholder caption="[ PORTRAIT ]" ratio="4/5" src={m.image} alt={m.name} />
               <div className="mt-4 text-[19px] font-bold tracking-[-0.01em]">{m.name}</div>
               <div className="mt-1.5 font-mono text-xs uppercase text-ink/55">{m.role}</div>
             </Reveal>

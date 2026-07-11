@@ -15,7 +15,7 @@ export const POSTS: Post[] = [
     title: "The one-click recurring donation is still your biggest untapped lever",
     excerpt:
       "Most campaigns leave money on the table at the exact moment a donor is most motivated. Here is the flow we ship every time.",
-    author: { name: "Maya Okonkwo", role: "FOUNDER & PRINCIPAL" },
+    author: { name: "Benjamin Mort", role: "FOUNDER & PRINCIPAL" },
     // Body transcribed verbatim from the prototype's post view.
     body: [
       {

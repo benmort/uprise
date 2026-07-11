@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -17,6 +18,7 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { PlanLimitsService } from "../common/flags/plan-limits.service";
+import { verifyPassword } from "../auth/password.util";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -515,5 +517,46 @@ export class TenantsService {
       });
     });
     return { ok: true };
+  }
+
+  /**
+   * Self-serve soft-delete of the caller's ACTIVE workspace — the tenant twin of account deletion.
+   *
+   * Acts only on `tenantId` from the session, never an id from the request body, so an owner can
+   * delete the workspace they are in and no other. `@Roles(OWNER)` on the route already required
+   * ownership of the active tenant; we re-confirm the OWNER membership here (a stale token must not
+   * outlive a role change) and re-verify the password, exactly as account deletion does. The delete
+   * is soft (sets `deletedAt`, emits `tenant.tenant.deleted`) and therefore recoverable.
+   */
+  async selfServeDelete(
+    userId: string,
+    tenantId: string | null,
+    password: string,
+  ): Promise<{ ok: true; nextTenantId: string | null }> {
+    if (!tenantId) throw new BadRequestException("No active workspace to delete");
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt || !(await verifyPassword(password ?? "", user.passwordHash))) {
+      throw new BadRequestException("Password is incorrect");
+    }
+    const membership = await this.prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId } },
+    });
+    if (!membership || membership.role !== AppUserRole.OWNER) {
+      throw new ForbiddenException("Only an owner of this workspace can delete it");
+    }
+    await this.deleteTenant(tenantId);
+    // Where the owner goes next: another live workspace they administer, so the UI can switch them
+    // there rather than signing them out. Null → they administer nowhere else and must re-auth.
+    const other = await this.prisma.tenantMember.findFirst({
+      where: {
+        userId,
+        tenantId: { not: tenantId },
+        role: { in: [AppUserRole.OWNER, AppUserRole.ORGANISER] },
+        tenant: { deletedAt: null },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { tenantId: true },
+    });
+    return { ok: true, nextTenantId: other?.tenantId ?? null };
   }
 }

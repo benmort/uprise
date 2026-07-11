@@ -8,6 +8,11 @@ export class CreateTenantDto {
 }
 
 /** Self-serve tenant creation from the in-app switcher (owner-on-paid-plan or super-admin). */
+export class SelfDeleteTenantDto {
+  // Re-auth, exactly as account deletion does — the current user's password.
+  @IsString() @MinLength(8) @MaxLength(200) password!: string;
+}
+
 export class CreateSelfServeTenantDto {
   @IsString() @MaxLength(200) name!: string;
   @IsString() @MaxLength(64) slug!: string;

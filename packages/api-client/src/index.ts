@@ -434,6 +434,17 @@ export const tenants = {
   createSelfServe: (body: { name: string; slug: string }) =>
     request<CreatedTenant>("/tenants/self-serve", { method: "POST", body: JSON.stringify(body) }),
 
+  /**
+   * Self-serve SOFT-delete of the caller's active workspace (owner-gated, password re-auth; API
+   * enforces). `nextTenantId` is another live workspace the owner administers, so the UI can switch
+   * them there instead of signing out; null when they administer nowhere else.
+   */
+  deleteSelf: (body: { password: string }) =>
+    request<{ ok: true; nextTenantId: string | null }>("/tenants/self-serve/delete", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   /** Super-admin search across ALL tenants (API enforces isSuperAdmin). */
   search: (q?: string) =>
     request<TenantSearchRow[]>(`/tenants/search${q ? `?q=${encodeURIComponent(q)}` : ""}`),

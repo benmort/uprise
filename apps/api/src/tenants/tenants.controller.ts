@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
 import { AppUserRole } from "@uprise/db";
@@ -17,6 +18,8 @@ import { IamFlowsService } from "../auth/iam-flows.service";
 import type { AuthUser } from "../auth/auth-user";
 import { RequirePermission } from "../auth/require-permission.decorator";
 import { SuperAdmin } from "../auth/super-admin.decorator";
+import { RolesGuard } from "../auth/roles.guard";
+import { Roles } from "../auth/roles.decorator";
 import {
   AddMemberDto,
   ApproveJoinRequestDto,
@@ -24,6 +27,7 @@ import {
   CreateSelfServeTenantDto,
   CreateTenantDto,
   RejectJoinRequestDto,
+  SelfDeleteTenantDto,
   UpdateMemberRoleDto,
   UpdateOnboardingDto,
   UpdateTenantDto,
@@ -102,6 +106,21 @@ export class TenantsController {
       networkId,
       ownerUserId: user.id,
     });
+  }
+
+  /**
+   * Self-serve soft-delete of the caller's ACTIVE workspace — the tenant twin of account deletion.
+   * `@Roles(OWNER)` gates it to an owner of the active tenant (super-admin bypasses); the service
+   * re-verifies the password and the OWNER membership, and only ever touches the session's tenant,
+   * never an id from the body. Declared before `:id` so "self-serve" is never captured as a tenant id.
+   */
+  @Post("self-serve/delete")
+  @UseGuards(RolesGuard)
+  @Roles(AppUserRole.OWNER)
+  selfServeDelete(@Req() req: Request & { user?: AuthUser }, @Body() dto: SelfDeleteTenantDto) {
+    const user = req.user;
+    if (!user) throw new ForbiddenException("Not authenticated");
+    return this.tenants.selfServeDelete(user.id, user.tenantId, dto.password);
   }
 
   // Declared before :id so "availability" isn't captured as a tenant id. Public

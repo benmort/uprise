@@ -42,6 +42,7 @@ import {
   TenantQueueRedisPanel,
 } from "@/components/settings/observability";
 import { SecuritySettings } from "@/components/settings/security";
+import { DeleteWorkspaceCard } from "@/components/settings/delete-workspace";
 import { ComplianceSettings } from "@/components/settings/compliance";
 import { IntegrationsSettings } from "@/components/settings/integrations";
 import { getSession } from "@/lib/session";
@@ -194,6 +195,8 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
   const [loadError, setLoadError] = useState("");
   const [savingTab, setSavingTab] = useState<PageTab | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
 
   // Brand + org identity (Organisation + Branding tabs → orgProfile.update).
   const [name, setName] = useState("");
@@ -263,6 +266,8 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
     setLoading(true);
     const session = await getSession();
     setIsSuperAdmin(session?.isSuperAdmin === true);
+    setRole(session?.role ?? null);
+    setSessionLoaded(true);
     const tid = session?.activeTenant?.id ?? session?.tenantId ?? null;
     setTenantId(tid);
     const [profileRes, tenantRes] = await Promise.all([
@@ -506,6 +511,7 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
                 ) : (
                   <p className="text-sm text-muted-foreground">No active tenant to configure.</p>
                 )}
+                <DeleteWorkspaceCard role={role} isSuperAdmin={isSuperAdmin} sessionLoaded={sessionLoaded} />
               </>
             ) : null}
 

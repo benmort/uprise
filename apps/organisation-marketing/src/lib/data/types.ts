@@ -76,6 +76,8 @@ export interface Faq {
 export interface TeamMember {
   name: string;
   role: string;
+  /** Portrait in /public (e.g. "/team/name.jpg"); falls back to the placeholder slot when absent. */
+  image?: string;
 }
 
 export interface Testimonial {
