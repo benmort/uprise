@@ -376,7 +376,9 @@ export class InsightsIngestService {
         payload: { pollId: id, tenantId, questionCount: questions.length, estimateCount },
       });
       return id;
-    });
+      // A full poll (36 questions + thousands of estimates) exceeds Prisma's default 5s
+      // interactive-transaction budget against a remote DB, so widen it (still one atomic rewrite).
+    }, { timeout: 120000, maxWait: 15000 });
 
     return { pollId, questionCount: questions.length, estimateCount };
   }
