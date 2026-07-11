@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ArrowUpRight, Info } from "lucide-react";
 import type { Crosstab, EvidenceItem, PollQuestionRef } from "@/lib/api/insights";
 import { useApi } from "@/lib/use-api";
@@ -287,6 +288,9 @@ function ExhibitHeader({
 }) {
   const drift = item.claim ? driftFlag(item.claim.percent, computed) : null;
   const note = drift ? describeDrift(drift) : null;
+  // Relative to the current poll page so the crosstab link works in the public /p + /embed
+  // contexts too, not just the authed /insights route.
+  const pathname = usePathname();
 
   return (
     <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -303,7 +307,7 @@ function ExhibitHeader({
       ) : null}
 
       <Link
-        href={`/insights/${pollId}/questions/${encodeURIComponent(code)}`}
+        href={`${pathname}/questions/${encodeURIComponent(code)}`}
         className="ml-auto inline-flex shrink-0 items-center gap-1 font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:text-poll-accent"
       >
         {code}

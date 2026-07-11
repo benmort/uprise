@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import {
   fieldworkWindow,
@@ -59,7 +60,11 @@ export function PollBody({
 }) {
   const isPublic = mode === "public";
   const grouped = blocksOf(poll);
-  const href = (code: string) => `/insights/${pollId}/questions/${code}`;
+  // Question links are relative to the CURRENT poll page, so they resolve correctly in every
+  // context: authed /insights/[id], public /p/[id], and the iframed /embed/insights/[id]. A
+  // hardcoded /insights/… path would bounce to the auth wall inside the public embed.
+  const pathname = usePathname();
+  const href = (code: string) => `${pathname}/questions/${code}`;
 
   const compareTheme = poll.themes.find((t) => t.compare);
   const before = compareTheme && poll.questions.find((q) => q.code === compareTheme.compare!.before);

@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { getPublicPollQuestion } from "@/lib/api/insights";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
@@ -24,16 +26,30 @@ export default function EmbedQuestionPage() {
 
   return (
     <InsightsApiProvider mode="public">
-      <StateRegion
-        loading={loading}
-        error={error}
-        onRetry={() => void refetch()}
-        emptyTitle="Question not found"
-        empty={!loading && !error && !data}
-        skeleton={<Skeleton className="h-96 w-full" />}
-      >
-        {data ? <QuestionBody data={data} pollId={pollId} code={code} mode="public" /> : null}
-      </StateRegion>
+      <div className="space-y-4">
+        <Link
+          href={`/embed/insights/${pollId}`}
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to poll
+        </Link>
+        {data ? (
+          <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl">
+            [{data.question.code}] {data.question.title}
+          </h1>
+        ) : null}
+        <StateRegion
+          loading={loading}
+          error={error}
+          onRetry={() => void refetch()}
+          emptyTitle="Question not found"
+          empty={!loading && !error && !data}
+          skeleton={<Skeleton className="h-96 w-full" />}
+        >
+          {data ? <QuestionBody data={data} pollId={pollId} code={code} mode="public" /> : null}
+        </StateRegion>
+      </div>
     </InsightsApiProvider>
   );
 }
