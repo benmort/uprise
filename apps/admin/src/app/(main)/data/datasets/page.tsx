@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, BarChart3, Database, Landmark, RefreshCw, Scale } from "lucide-react";
+import { ArrowUpRight, BarChart3, Database, RefreshCw } from "lucide-react";
 import { useFlag } from "@/components/flags/flags-provider";
 import { getGeoStatus, triggerGeoIngest, type GeoDataset } from "@/lib/api/geo";
 import { getCivicStatus } from "@/lib/api/civic";
@@ -47,6 +47,8 @@ function datasetHref(key: string): string | null {
   if (AREA_LEVEL_LAYER[key]) return `/data/areas?tab=${AREA_LEVEL_LAYER[key]}`;
   if (key === "gnaf") return "/data/addresses";
   if (key === "polling_places") return "/data/polling-places";
+  if (key === "politicians") return "/data/politicians";
+  if (key === "policies") return "/data/policies";
   return null;
 }
 
@@ -70,6 +72,9 @@ const DATASET_DESCRIPTION: Record<string, string> = {
   sa3: "Statistical Area 3 — regional groupings of SA2s.",
   sa4: "Statistical Area 4 — the largest sub-state regions.",
   polling_places: "Polling booths — every federal (AEC) and state/territory (The Tally Room) voting location, geocoded.",
+  referendum_2023: "2023 Voice to Parliament referendum — the official Yes/No result by nation, state and division, plus turnout (votes counted by vote type). Source: AEC (CC BY 4.0).",
+  politicians: "Federal and state/territory members of parliament, each linked to their electorate.",
+  policies: "Policies tracked across parliamentary votes, with each member's recorded agreement. Federal parliament only at this stage.",
 };
 
 // Display order: electoral/council boundaries coarsest-first, then the ASGS
@@ -78,7 +83,8 @@ const DATASET_DESCRIPTION: Record<string, string> = {
 const DATASET_ORDER = [
   "state", "ced", "chamber_electorate", "sed_lower", "sed_upper", "sed", "lga", "ward",
   "ireg", "iare", "iloc",
-  "sa4", "sa3", "sa2", "sa1", "asgs_mb", "gnaf", "polling_places",
+  "sa4", "sa3", "sa2", "sa1", "asgs_mb", "gnaf", "polling_places", "referendum_2023",
+  "politicians", "policies",
 ];
 const datasetRank = (key: string) => {
   const i = DATASET_ORDER.indexOf(key);
@@ -95,11 +101,22 @@ export default function DataSettingsPage() {
     (signal) => getGeoStatus({ signal }),
     { ttlMs: 60_000 },
   );
-  const rows: GeoDataset[] = [...(data ?? [])].sort((a, b) => datasetRank(a.key) - datasetRank(b.key));
-
-  // Civic datasets (politicians + policies) live in their own schema, not the geo ETL, so they
-  // get their own counts + cards rather than a row in the ABS/AEC table.
+  // Civic datasets (politicians + policies) live in their own schema, not the geo ETL, but they
+  // list as rows in the same table — synthesised into GeoDataset shape and sorted to the bottom.
   const { data: civic } = useApi("/civic/status", (signal) => getCivicStatus({ signal }), { ttlMs: 60_000 });
+  const civicRows: GeoDataset[] = civic
+    ? [
+        {
+          key: "politicians", label: "Politicians", sourceUrl: null, releaseDate: null, licence: null,
+          rowCount: civic.politicians.count, status: "loaded", lastIngested: civic.politicians.lastSyncedAt,
+        },
+        {
+          key: "policies", label: "Policies", sourceUrl: null, releaseDate: null, licence: null,
+          rowCount: civic.policies.count, status: "loaded", lastIngested: civic.policies.lastSyncedAt,
+        },
+      ]
+    : [];
+  const rows: GeoDataset[] = [...(data ?? []), ...civicRows].sort((a, b) => datasetRank(a.key) - datasetRank(b.key));
 
   const reingest = useCallback(async () => {
     setBusy(true);
@@ -155,31 +172,6 @@ export default function DataSettingsPage() {
           </span>
         </Link>
       ) : null}
-
-      {/* Civic reference data — politicians (TVFY + Wikidata) and policies (TVFY). Its own schema,
-          not the geo ETL, so it sits above the ABS/AEC table as its own pair of cards. */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <CivicCard
-          href="/data/politicians"
-          icon={Landmark}
-          title="Politicians"
-          detail={
-            civic
-              ? `${civic.politicians.count.toLocaleString()} members · ${civic.politicians.withImage.toLocaleString()} with photo`
-              : "Federal and state/territory members of parliament."
-          }
-        />
-        <CivicCard
-          href="/data/policies"
-          icon={Scale}
-          title="Policies"
-          detail={
-            civic
-              ? `${civic.policies.count.toLocaleString()} policies · how each member votes`
-              : "They Vote For You policies and per-member agreement."
-          }
-        />
-      </div>
 
       {/* Error, empty and no-permission are DISTINCT states — a 500 no longer
           masquerades as "no datasets loaded yet". */}
@@ -242,36 +234,5 @@ export default function DataSettingsPage() {
         </div>
       </StateRegion>
     </PageShell>
-  );
-}
-
-/** A civic dataset link card (Politicians / Policies) — mirrors the Insights card's shape. */
-function CivicCard({
-  href,
-  icon: Icon,
-  title,
-  detail,
-}: {
-  href: string;
-  icon: typeof Landmark;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-center gap-3 rounded-2xl border border-border bg-surface p-4 hover:border-primary"
-    >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-variant">
-        <Icon className="h-5 w-5 text-primary" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1 font-semibold text-foreground group-hover:text-primary">
-          {title}
-          <ArrowUpRight className="h-3.5 w-3.5" />
-        </span>
-        <span className="block text-sm text-muted-foreground">{detail}</span>
-      </span>
-    </Link>
   );
 }

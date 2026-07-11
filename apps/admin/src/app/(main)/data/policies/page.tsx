@@ -53,6 +53,7 @@ export default function PoliciesPage() {
       <p className="text-sm text-muted-foreground">
         They Vote For You policies — positions the community tracks across parliamentary votes. Open one to
         see how every member has voted on it, or jump from a member to the policies they align with.
+        Federal parliament only at this stage — state parliaments have no published voting record.
       </p>
 
       <DataExplorerTabs active="policies" />
