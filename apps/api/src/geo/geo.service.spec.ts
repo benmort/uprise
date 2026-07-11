@@ -782,3 +782,32 @@ describe("GeoService — area names", () => {
     expect($queryRawUnsafe.mock.calls[0][0]).toContain("COALESCE(name, mb_code)");
   });
 });
+
+describe("GeoService.referendum", () => {
+  const rows = [
+    { level: "national", name: "National", stateAb: null, geoCode: null, turnoutPct: "89.95", yesPct: "39.94", noPct: "60.06", totalVotes: "15895231", ordinaryVotes: "1", absentVotes: null, provisionalVotes: null, prepollVotes: null, postalVotes: null, enrolment: null, yesVotes: null, noVotes: null, informalVotes: null, formalVotes: null },
+    { level: "state", name: "Australian Capital Territory", stateAb: "ACT", geoCode: "8", turnoutPct: "91.36", yesPct: "61.29", noPct: "38.71", totalVotes: "289451", ordinaryVotes: null, absentVotes: null, provisionalVotes: null, prepollVotes: null, postalVotes: null, enrolment: null, yesVotes: null, noVotes: null, informalVotes: null, formalVotes: null },
+    { level: "division", name: "Adelaide", stateAb: "SA", geoCode: "179", turnoutPct: "89.99", yesPct: "50.1", noPct: "49.9", totalVotes: "117211", ordinaryVotes: null, absentVotes: null, provisionalVotes: null, prepollVotes: null, postalVotes: null, enrolment: null, yesVotes: null, noVotes: null, informalVotes: null, formalVotes: null },
+  ];
+
+  it("partitions rows by level and coerces numeric strings to numbers", async () => {
+    const $queryRawUnsafe = jest.fn().mockResolvedValue(rows);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    const res = await svc.referendum();
+
+    expect(res.national?.name).toBe("National");
+    expect(res.national?.yesPct).toBe(39.94); // string → number
+    expect(typeof res.national?.totalVotes).toBe("number");
+    expect(res.states.map((s) => s.name)).toEqual(["Australian Capital Territory"]);
+    expect(res.states[0].geoCode).toBe("8"); // state_code drives the choropleth join
+    expect(res.divisions[0]).toMatchObject({ name: "Adelaide", geoCode: "179", yesPct: 50.1 });
+    // Only the 2023 event is queried.
+    expect($queryRawUnsafe.mock.calls[0][1]).toBe("29581");
+  });
+
+  it("returns null national when the table is empty", async () => {
+    const svc = new GeoService({ $queryRawUnsafe: jest.fn().mockResolvedValue([]) } as never);
+    const res = await svc.referendum();
+    expect(res).toEqual({ national: null, states: [], divisions: [] });
+  });
+});

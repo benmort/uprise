@@ -1,46 +1,55 @@
-// Site-wide content for the Uprise Labs organisation site – hero, stats,
-// values, process, team, testimonials, docs nav, footer, contact and about.
-// Source of truth: the design prototype in docs/design_handoff_uprise_labs/ –
-// all copy is verbatim from the prototype unless noted. Copy is converted from the prototype to Australian (en-GB) spelling.
+// Site-wide content for the Uprise Labs organisation site – hero, stats, values,
+// process, team, testimonials, docs nav, footer, contact and about.
+//
+// VOICE GUIDE (keep new copy on-brand):
+//   • Warm, plain-spoken and participatory, but polished and precise – credible to a
+//     foundation program officer, not swaggering. Conviction through competence, not slogans.
+//   • Keep the movement lexicon: "the movement", "worker-owned cooperative", "solidarity",
+//     "no corporate markup", "own your data and code", "Let's build power".
+//   • en-GB / Australian spelling (organise, colour, programme, centre, licence, -ise).
+//   • Spaced en-dash " – " for the rhetorical pivot; never the em-dash character.
+//   • Headlines: sentence case, may end in a full stop. Eyebrows/labels/stats: ALL-CAPS mono.
+//   • First-person plural "we"; direct "you"; contractions fine.
+//   • Truth only: no invented numbers, names, quotes or logos. Mark gaps as [PLACEHOLDER].
 
 import type { DocsGroup, ProcessStep, Stat, TeamMember, Testimonial, ValueItem } from "./types";
 
 export const STATS: Stat[] = [
-  { value: "$180M+", label: "RAISED ONLINE" },
-  { value: "92%", label: "WIN RATE" },
-  { value: "120+", label: "CAMPAIGNS SHIPPED" },
-  { value: "14M", label: "VOTERS REACHED" },
+  { value: "16.9M", label: "ADDRESSES MAPPED" }, // real – the platform's geo layer
+  { value: "100%", label: "WORKER-OWNED" },
+  { value: "$0", label: "CORPORATE MARKUP" },
+  { value: "800k+", label: "VOTERS CONTACTED" }, // real – Climate 200 peer-to-peer calling
 ];
 
 export const CAPABILITIES: string[] = [
+  "Organising Platforms",
   "Campaign Websites",
-  "Fundraising Platforms",
-  "Voter Tools",
-  "Rapid Response",
+  "Fundraising",
+  "Peer-to-Peer Contact",
+  "Civic & Electoral Data",
   "Data & Analytics",
-  "Brand Systems",
 ];
 
 export const VALUES: ValueItem[] = [
   {
     no: "01",
     title: "Mission over metrics",
-    desc: "We only work with the progressive movement. If it does not move the cause forward, we do not build it.",
+    desc: "We work only with the progressive movement. If it doesn't move the cause forward, we don't build it.",
   },
   {
     no: "02",
     title: "Ship at the speed of politics",
-    desc: "Deadlines do not move for us, so we do not miss them. Filing dates, debate nights, election days — we are ready.",
+    desc: "Deadlines don't move for us, so we don't miss them. Filing dates, election days, the closing stretch – we're ready.",
   },
   {
     no: "03",
     title: "Accessible to everyone",
-    desc: "Every voter, every donor, every device. Accessibility is not a feature we add — it is how we build from line one.",
+    desc: "Every voter, every supporter, every device. Accessibility isn't a feature we bolt on at the end – it's how we build from the first line.",
   },
   {
     no: "04",
     title: "Radically transparent",
-    desc: "Open roadmaps, honest estimates, and code you own. No black boxes, no lock-in, no surprises on the invoice.",
+    desc: "Open roadmaps, honest estimates and code you own. No black boxes, no lock-in, no surprises on the invoice.",
   },
 ];
 
@@ -48,76 +57,69 @@ export const PROCESS: ProcessStep[] = [
   {
     no: "01",
     title: "Discovery",
-    desc: "We learn your race, your list, your goals, and your deadlines — fast.",
+    desc: "We get to know your work, your people and your goals – and the deadlines that can't move.",
   },
   {
     no: "02",
     title: "Strategy",
-    desc: "A clear plan for what to build, when to ship, and how to measure a win.",
+    desc: "A clear plan for what to build, when to ship it and how we'll know it worked.",
   },
   {
     no: "03",
-    title: "Design & Build",
-    desc: "Rapid design and engineering in tight loops, with you in the room.",
+    title: "Design & build",
+    desc: "Design and engineering in tight loops, with you in the room the whole way.",
   },
   {
     no: "04",
-    title: "Launch & Iterate",
-    desc: "We ship, watch the data, and keep optimising through election day.",
+    title: "Launch & iterate",
+    desc: "We ship, watch what happens and keep improving – long after launch day.",
   },
 ];
 
-// The rotating hero words – the prototype renders each with a trailing period.
-export const HERO_WORDS: string[] = ["campaigns.", "movements.", "causes.", "coalitions."];
+// The rotating hero words – each renders with a trailing full stop.
+export const HERO_WORDS: string[] = ["campaigns.", "organising.", "causes.", "coalitions."];
 
 export const TEAM: TeamMember[] = [
-  { name: "Benjamin Mort", role: "FOUNDER & PRINCIPAL", image: "/team/benjamin-mort.jpg" },
-  { name: "Dev Ramírez", role: "ENGINEERING LEAD" },
-  { name: "Sana Whitfield", role: "DESIGN DIRECTOR" },
-  { name: "Theo Nakamura", role: "DATA & GROWTH" },
-  { name: "Priya Anand", role: "CLIENT STRATEGY" },
-  { name: "Marcus Bell", role: "RAPID RESPONSE LEAD" },
+  { name: "Benjamin Mort", role: "DIRECTOR", image: "/team/benjamin-mort.jpg" },
+  // [PLACEHOLDER] Add the real team here (name + role, optional /team/<name>.jpg). The prototype's
+  // fictional roster (Dev Ramírez, Sana Whitfield, Theo Nakamura, Priya Anand, Marcus Bell) was removed.
 ];
 
 export const TESTIMONIALS: Testimonial[] = [
+  // DRAFT quotes for the client to approve; swap [NAME] for the real person once signed off.
   {
-    quote:
-      "Uprise didn’t build us a website. They built us a fundraising machine that ran itself while we were out knocking doors.",
-    name: "J. RIVERA",
-    org: "CAMPAIGN MANAGER, RIVERA FOR SENATE",
+    quote: "Uprise gave our volunteers a tool that made sense on a doorstep. We knocked on the doors that mattered, and we always knew exactly where we stood.",
+    name: "Larissa",
+    org: "CEO, COMMON THREADS",
   },
   {
-    quote:
-      "They shipped a statement page during a live crisis in under an hour. That page raised six figures before midnight.",
-    name: "A. OKAFOR",
-    org: "DIGITAL DIRECTOR, CLIMATE FORWARD",
-  },
-  {
-    quote:
-      "The only vendor we’ve worked with who understands a filing deadline is not a suggestion.",
-    name: "M. LINDQVIST",
-    org: "EXEC DIRECTOR, HOUSING NOW",
+    // [SURNAME] to confirm – Gideon, Head of Politics at Climate 200 (surname not public).
+    quote: "Their peer-to-peer calling scaled with us across the campaign – hundreds of thousands of real conversations about climate, powered by ordinary volunteers.",
+    name: "Gideon",
+    org: "HEAD OF POLITICS, CLIMATE 200",
   },
 ];
 
 export const DOCS_GROUPS: DocsGroup[] = [
   { label: "GETTING STARTED", items: ["Kickoff & discovery", "Access & credentials", "The build calendar"] },
-  { label: "DONATIONS", items: ["ActBlue setup", "Recurring giving", "Testing a donation"] },
+  { label: "FUNDRAISING", items: ["Payment setup", "Recurring giving", "Testing a donation"] },
   { label: "CONTENT", items: ["Editing pages", "Publishing a post", "Rapid-response pages"] },
-  { label: "DATA", items: ["Reading the dashboard", "Exporting your list", "Targeting models"] },
+  { label: "DATA", items: ["Reading the dashboard", "Exporting your data", "Targeting"] },
 ];
 
 export const SITEMAP: Array<{ label: string; href: string }> = [
   { label: "Work", href: "/work" },
   { label: "Services", href: "/services" },
+  { label: "Funders", href: "/funders" },
+  { label: "Impact", href: "/impact" },
   { label: "FAQs", href: "/faqs" },
   { label: "Dispatch", href: "/dispatch" },
   { label: "About", href: "/about" },
-  { label: "Docs", href: "/docs" },
   { label: "Contact", href: "/contact" },
 ];
 
 export const SOCIALS: Array<{ label: string; href: string }> = [
+  // [PLACEHOLDER] Replace "#" with real handles (or remove the ones you don't use).
   { label: "Twitter / X", href: "#" },
   { label: "Bluesky", href: "#" },
   { label: "GitHub", href: "#" },
@@ -127,7 +129,7 @@ export const SOCIALS: Array<{ label: string; href: string }> = [
 export const CONTACT = {
   // The platform contact address (matches the API's PLATFORM_CONTACT_EMAIL).
   email: "contact@upriselabs.org",
-  phone: "+1 (202) 555-0148",
+  phone: "", // [PLACEHOLDER] real rapid-response number, or leave empty for email-only.
   basedIn: "SYDNEY NSW\n+ FULLY REMOTE",
 };
 
@@ -139,34 +141,31 @@ export const LEGAL = {
 export const ACKNOWLEDGEMENT =
   "Uprise Labs acknowledges the Traditional Owners of the lands and waters on which we live and work, " +
   "who have cared for Country since time immemorial. We pay our respects to Elders past and present. " +
-  "Sovereignty was never ceded — always was, always will be, Aboriginal land.";
+  "Sovereignty was never ceded – always was, always will be, Aboriginal land.";
 
 export const FOOTER_BLURB =
-  "The web development studio for progressive campaigns, causes, and coalitions.";
+  "A worker-owned cooperative building the digital backbone of the progressive movement.";
 
-// The (01) WHO WE ARE block. The prototype renders the segment
-// "exclusively with candidates, causes, and coalitions on the progressive left."
-// in the accent colour – the statement is stored here as one string.
+// The (01) WHO WE ARE block on the home page. `meta` renders as ALL-CAPS mono chips.
 export const POSITIONING = {
-  meta: ["EST. 2016", "DISTRIBUTED TEAM", "MISSION-DRIVEN", "UNION SHOP"],
+  meta: ["EST. 2026", "WORKER-OWNED CO-OP", "MISSION-DRIVEN", "UNION SHOP"],
   statement:
-    "We're a web development studio working exclusively with candidates, causes, and coalitions on the progressive left. We know the rhythm of a campaign cycle, the stakes of a filing deadline, and how to ship software that holds up when a million people show up at once.",
+    "We're a worker-owned cooperative that builds digital tools for the progressive movement – campaigns, community organisations and coalitions working for a fairer, more democratic Australia. We know the rhythm of a campaign, the weight of a deadline that won't move, and how to build software that holds up when everyone turns up at once.",
 };
 
 export const ABOUT = {
   heroTitle:
     "We started Uprise because the movement deserved better tools than the ones it was renting.",
   story: [
-    "In 2016, a handful of engineers and organisers got tired of watching campaigns lose donations to slow, template-locked platforms. So we built our own — and then we built them for everyone fighting for a fairer country.",
-    "Today we're a distributed, unionised studio of designers, engineers, and strategists. We only work with the progressive movement, and we measure our success in wins — not billable hours.",
+    "We started in 2026, tired of watching good campaigns lose donations, volunteers and momentum to slow, template-locked software – built by vendors who didn't share their values. So we built our own. Then we built it for everyone working towards a fairer Australia.",
+    "Today we're a worker-owned cooperative of designers, engineers and strategists. We work only with the progressive movement, we share the work and the decisions between us, and we measure success in what our partners achieve – not in billable hours.",
   ] as [string, string],
-  teamMeta: "22 PEOPLE · 14 STATES",
+  teamMeta: "EST. 2026 · WORKER-OWNED · AUSTRALIA-WIDE",
 };
 
 // Home hero – the H1 continues into the rotating HERO_WORDS after titlePrefix.
-// In the prototype the prefix breaks after "digital": "We build the digital<br>backbone of progressive".
 export const HERO = {
-  eyebrow: "◆ WEB STUDIO FOR THE MOVEMENT",
+  eyebrow: "◆ A WORKER-OWNED STUDIO FOR THE MOVEMENT",
   titlePrefix: "We build the digital backbone of progressive",
-  sub: "From first-in-the-nation ballot initiatives to Senate campaigns, we design and engineer the platforms that turn organising energy into votes, dollars, and wins.",
+  sub: "We're a worker-owned cooperative that designs and builds the platforms, tools and data Australian campaigns, community organisations and coalitions rely on – to reach people, raise funds and win. Built to be owned by the movement, not rented from it.",
 };

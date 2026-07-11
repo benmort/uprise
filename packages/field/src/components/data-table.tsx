@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cn } from "@uprise/ui";
+import { cn, PaginationControls } from "@uprise/ui";
 
 export type DataTableColumn<T> = {
   key: string;
@@ -18,9 +18,14 @@ export type DataTableProps<T> = {
   onRowClick?: (row: T) => void;
   empty?: React.ReactNode;
   className?: string;
+  /**
+   * Client-side rows per page. Defaults to 10 — the shared list default across the admin.
+   * Pass `0` to disable pagination (the caller already paginates its own data, e.g. server-side).
+   */
+  pageSize?: number;
 };
 
-/** Light, hairline-ruled table with tabular numerals on numeric columns. */
+/** Light, hairline-ruled table with tabular numerals, and built-in pagination (10 rows/page). */
 export function DataTable<T>({
   columns,
   rows,
@@ -28,9 +33,19 @@ export function DataTable<T>({
   onRowClick,
   empty,
   className,
+  pageSize = 10,
 }: DataTableProps<T>) {
+  const [page, setPage] = React.useState(0);
+  const paginated = pageSize > 0 && rows.length > pageSize;
+  const totalPages = paginated ? Math.ceil(rows.length / pageSize) : 1;
+  // A filter/search that changes the result count returns you to the first page.
+  React.useEffect(() => setPage(0), [rows.length]);
+  const safePage = Math.min(page, Math.max(0, totalPages - 1));
+  const pageRows = paginated ? rows.slice(safePage * pageSize, safePage * pageSize + pageSize) : rows;
+
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border bg-surface", className)}>
+    <div className={cn("space-y-3", className)}>
+      <div className="overflow-hidden rounded-xl border border-border bg-surface">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border">
@@ -56,7 +71,7 @@ export function DataTable<T>({
               </td>
             </tr>
           ) : (
-            rows.map((row) => (
+            pageRows.map((row) => (
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -82,6 +97,18 @@ export function DataTable<T>({
           )}
         </tbody>
       </table>
+      </div>
+      {paginated ? (
+        <div className="flex items-center justify-end">
+          <PaginationControls
+            page={safePage}
+            pageSize={pageSize}
+            total={rows.length}
+            onPrev={() => setPage((p) => Math.max(0, p - 1))}
+            onNext={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

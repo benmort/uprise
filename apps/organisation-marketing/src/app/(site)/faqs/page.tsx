@@ -72,7 +72,7 @@ export default function FaqsPage() {
                 className="font-extrabold leading-[1.02] tracking-[-0.02em]"
                 style={{ fontSize: "clamp(24px,2.6vw,34px)" }}
               >
-                Tell us the race. We'll scope it honestly.
+                Tell us the campaign. We'll scope it honestly.
               </p>
             </div>
             <Link

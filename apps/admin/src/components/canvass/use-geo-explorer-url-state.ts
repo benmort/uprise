@@ -25,7 +25,8 @@ export type GeoExplorerKind =
   | "areas"
   | "addresses"
   | "polling-places"
-  | "first-nations";
+  | "first-nations"
+  | "referendum";
 
 /** The layout's view toggle persists the per-kind default through this event so
  *  the page hook stays the ONE localStorage writer (a direct setItem from the
@@ -40,6 +41,7 @@ export function kindFromPathname(pathname: string | null): GeoExplorerKind | nul
   if (p === "/data/addresses") return "addresses";
   if (p === "/data/polling-places") return "polling-places";
   if (p === "/data/first-nations") return "first-nations";
+  if (p === "/data/referendum") return "referendum";
   return null;
 }
 

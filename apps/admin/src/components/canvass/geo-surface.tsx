@@ -18,9 +18,11 @@ import { AreasPanel } from "@/components/canvass/geo-panels/areas-panel";
 import { AddressesPanel } from "@/components/canvass/geo-panels/addresses-panel";
 import { PollingPlacesPanel } from "@/components/canvass/geo-panels/polling-places-panel";
 import { FirstNationsPanel } from "@/components/canvass/geo-panels/first-nations-panel";
+import { ReferendumPanel } from "@/components/canvass/geo-panels/referendum-panel";
 import { firstNationsSlug, resolveFirstNationsLevel } from "@/lib/canvass/first-nations";
-import { getDensityScale, getFirstNations } from "@/lib/api/geo";
+import { getDensityScale, getFirstNations, getReferendum } from "@/lib/api/geo";
 import { densityBands, densityFill } from "@/lib/canvass/density";
+import { referendumBands, referendumFill } from "@/lib/canvass/referendum-fill";
 import { useChartPalette } from "@/components/insights/use-poll-palette";
 import { SequentialLegend } from "@/components/canvass/sequential-legend";
 import { useApi } from "@/lib/use-api";
@@ -136,6 +138,17 @@ export function GeoSurface() {
       : undefined;
   const densityLegend = palette ? densityBands(densityScale.data ?? null, palette.seq) : [];
 
+  // ── 2023 referendum choropleth (the referendum kind) ────────────────────────
+  // Its Yes share isn't on the tile, so the fill is a client-side `match` built from the result
+  // rows. Divisions by default; ?tab=state shades the eight state boundaries instead.
+  const referendumOn = kind === "referendum";
+  const refLevel = tab === "state" ? "state" : "division";
+  const referendum = useApi(referendumOn ? "/geo/referendum" : null, () => getReferendum(), { ttlMs: 300_000 });
+  const refRows = refLevel === "state" ? (referendum.data?.states ?? []) : (referendum.data?.divisions ?? []);
+  const referendumFillExpr =
+    referendumOn && palette && refRows.length ? referendumFill(refRows, palette.diverging, palette.nodata) : undefined;
+  const referendumLegend = referendumOn && palette ? referendumBands(palette.diverging) : [];
+
   const mapProps = useMemo<GeoMapProps>(() => {
     const common = {
       focusBounds,
@@ -231,6 +244,28 @@ export function GeoSurface() {
         },
       };
     }
+    if (kind === "referendum") {
+      // Shade the division (ced) or state boundaries by their Yes share. Codes are state-digit
+      // prefixed at both levels, so the shared state filter and the code-first framing hold.
+      const layer = refLevel === "state" ? "state" : "ced";
+      const framingCode = layer === "state" ? code : code.slice(0, 1);
+      const selectionBounds = code ? stateBounds(stateAsgsDigitToAbbrev(framingCode) ?? "") : undefined;
+      return {
+        ...common,
+        focusBounds: selectionBounds ?? common.focusBounds ?? AU_BOUNDS,
+        mode: "boundaries",
+        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/${layer}/{z}/{x}/{y}?v=4`,
+        boundaryFilter: stateDigit
+          ? layer === "state"
+            ? (["==", ["get", "code"], stateDigit] as FilterSpecification)
+            : (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
+          : undefined,
+        boundaryFill: referendumFillExpr,
+        selectedBoundaryCode: code || undefined,
+        // Reference-only — never turf, so no basketCodes.
+        onBoundaryClick: (clicked: string) => writeGeoParam("code", code === clicked ? null : clicked),
+      };
+    }
     if (kind === "areas") {
       const level = (AREA_LEVELS.has(tab) ? tab : "sa2") as AreaLevel;
       return {
@@ -283,7 +318,7 @@ export function GeoSurface() {
     divisionSelected, setDivisionSelected, selectedAreas, toggleSelectedArea, setViewportAreas,
     setDrawnPolygons, doors, activePid, setActivePid, picked, basket.divisions, basket.areas,
     pollingPlaces, pollingSelectedId, setPollingSelectedId,
-    fnCode, boundaryFill,
+    fnCode, boundaryFill, refLevel, referendumFillExpr,
   ]);
 
   if (!kind) return null;
@@ -294,6 +329,7 @@ export function GeoSurface() {
     kind === "areas" ? <AreasPanel view={view} /> :
     kind === "polling-places" ? <PollingPlacesPanel view={view} /> :
     kind === "first-nations" ? <FirstNationsPanel view={view} /> :
+    kind === "referendum" ? <ReferendumPanel view={view} /> :
     <AddressesPanel view={view} />;
 
   // Freehand draw is on for every kind; the areas panel folds polygons into its
@@ -323,6 +359,19 @@ export function GeoSurface() {
         {densityOn && densityLegend.length > 0 && palette ? (
           <div className="pointer-events-none absolute bottom-3 right-3 z-10">
             <SequentialLegend bands={densityLegend} nodata={palette.nodata} unit="addresses / km²" />
+          </div>
+        ) : null}
+        {referendumOn && referendumLegend.length > 0 ? (
+          <div className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg border border-border bg-surface/95 p-2 text-xs shadow-card backdrop-blur">
+            <div className="mb-1 font-semibold text-foreground">Yes share</div>
+            <div className="space-y-0.5">
+              {referendumLegend.map((b) => (
+                <div key={b.label} className="flex items-center gap-1.5">
+                  <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: b.color }} />
+                  <span className="text-muted-foreground">{b.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
         {showDrawCard ? (

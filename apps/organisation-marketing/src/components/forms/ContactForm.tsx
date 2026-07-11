@@ -74,8 +74,8 @@ export function ContactForm() {
         <h2 className="text-3xl font-extrabold tracking-tight">Message received.</h2>
         <p className="mt-4 max-w-md text-[17px] leading-relaxed text-ink/65">
           Thanks for reaching out. Someone from our team will get back to you within one
-          business day. If it&apos;s urgent — like, election-urgent — call the number on the
-          right.
+          business day. If it&apos;s urgent – election-urgent – say so and we&apos;ll get
+          straight back to you.
         </p>
       </div>
     );
@@ -94,7 +94,7 @@ export function ContactForm() {
         </Field>
       </div>
       <Field label="Organisation" htmlFor="organisation">
-        <Input id="organisation" name="organisation" placeholder="Rivera for Senate" value={data.organisation ?? ""} onChange={set("organisation")} />
+        <Input id="organisation" name="organisation" placeholder="Your campaign or organisation" value={data.organisation ?? ""} onChange={set("organisation")} />
       </Field>
       <Field label="What are you building?" htmlFor="message">
         <Textarea id="message" name="message" rows={4} value={data.message} onChange={set("message")} required />
@@ -106,7 +106,7 @@ export function ContactForm() {
       </Button>
       {status === "error" ? (
         <p className="font-mono text-xs text-vermilion">
-          Something went wrong sending your message — please try again.
+          Something went wrong sending your message – please try again.
         </p>
       ) : null}
     </form>

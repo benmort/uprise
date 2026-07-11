@@ -47,6 +47,7 @@ function datasetHref(key: string): string | null {
   if (AREA_LEVEL_LAYER[key]) return `/data/areas?tab=${AREA_LEVEL_LAYER[key]}`;
   if (key === "gnaf") return "/data/addresses";
   if (key === "polling_places") return "/data/polling-places";
+  if (key === "referendum_2023") return "/data/referendum";
   if (key === "politicians") return "/data/politicians";
   if (key === "policies") return "/data/policies";
   return null;

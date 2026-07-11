@@ -8,8 +8,8 @@ import { Reveal } from "@/components/system/Reveal";
 import { PROJECTS } from "@/lib/data/projects";
 import type { ProjectTag } from "@/lib/data/types";
 
-// Filter pills in the prototype's order – "All" plus the four project tags.
-const FILTERS = ["All", "Platform", "Campaigns", "Fundraising", "Organising", "Advocacy"] as const;
+// Filter pills – "All" plus the tags actually used by real work.
+const FILTERS = ["All", "Platform", "Organising", "Campaigns"] as const;
 
 type Filter = (typeof FILTERS)[number];
 
@@ -29,11 +29,11 @@ export default function WorkPage() {
           className="max-w-[1100px] font-extrabold leading-[0.95] tracking-[-0.04em]"
           style={{ fontSize: "clamp(44px,7vw,104px)" }}
         >
-          The receipts.
+          Selected work.
         </h1>
         <p className="mt-7 max-w-[560px] text-[19px] leading-normal text-ink/60">
-          A decade of shipping for campaigns, PACs, unions, and advocacy organisations across all
-          fifty states.
+          The platforms, tools and campaigns we've built with and for the progressive movement across
+          Australia.
         </p>
       </section>
 

@@ -107,3 +107,10 @@ export interface ProcessStep {
   title: string;
   desc: string;
 }
+
+/** "What your support enables" on the Funders page. */
+export interface FundingUse {
+  label: string;
+  desc: string;
+  outcomes?: string[];
+}

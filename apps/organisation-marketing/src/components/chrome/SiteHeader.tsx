@@ -7,7 +7,8 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { label: "Work", href: "/work", activeOn: ["/work"] },
   { label: "Services", href: "/services", activeOn: ["/services"] },
-  { label: "FAQs", href: "/faqs", activeOn: ["/faqs"] },
+  { label: "Impact", href: "/impact", activeOn: ["/impact"] },
+  { label: "Funders", href: "/funders", activeOn: ["/funders"] },
   { label: "Dispatch", href: "/dispatch", activeOn: ["/dispatch"] },
   { label: "About", href: "/about", activeOn: ["/about"] },
 ];

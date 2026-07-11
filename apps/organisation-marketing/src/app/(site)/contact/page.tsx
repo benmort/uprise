@@ -56,9 +56,11 @@ export default function ContactPage() {
                 </a>
               </SidebarBlock>
 
-              <SidebarBlock label="Rapid response (24/7)">
-                <div className="text-[22px] font-semibold tracking-[-0.01em]">{CONTACT.phone}</div>
-              </SidebarBlock>
+              {CONTACT.phone ? (
+                <SidebarBlock label="Rapid response (24/7)">
+                  <div className="text-[22px] font-semibold tracking-[-0.01em]">{CONTACT.phone}</div>
+                </SidebarBlock>
+              ) : null}
 
               <SidebarBlock label="Based in">
                 <div className="whitespace-pre-line font-mono text-sm leading-[2] text-ink/70">

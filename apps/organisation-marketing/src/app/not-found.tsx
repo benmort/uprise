@@ -20,7 +20,7 @@ export default function NotFound() {
           This page went off the ballot.
         </h1>
         <p className="mx-auto mt-4 max-w-md text-[17px] leading-relaxed text-ink/65">
-          The link you followed does not exist — or it moved. Let us get you back to something
+          The link you followed doesn&apos;t exist – or it moved. Let us get you back to something
           that ships.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

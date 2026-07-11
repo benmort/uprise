@@ -17,9 +17,9 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://upriselabs.org"),
-  title: "Uprise Labs — the web development studio for the movement",
+  title: "Uprise Labs – the worker-owned studio for the movement",
   description:
-    "Uprise Labs designs and engineers the platforms that turn organising energy into votes, dollars, and wins — for progressive campaigns, causes, and coalitions.",
+    "A worker-owned cooperative building the digital backbone of the progressive movement – the platforms, tools and data Australian campaigns, community organisations and coalitions rely on to reach people, raise funds and win.",
   icons: {
     icon: [{ url: "/labs-icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/labs-icon.svg", type: "image/svg+xml" }],

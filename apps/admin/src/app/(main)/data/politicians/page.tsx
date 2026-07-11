@@ -28,6 +28,39 @@ const CHAMBERS: Array<{ key: ChamberFilter; label: string }> = [
   { key: "UPPER", label: "Upper" },
 ];
 
+// Coloured chips: one hue per jurisdiction + chamber. Medium-bright hues so the tinted chip
+// stays legible in light and dark mode (background = the colour at ~12%, text = the colour).
+const JURISDICTION_COLOURS: Record<string, string> = {
+  FEDERAL: "#4f46e5",
+  NSW: "#0891b2",
+  VIC: "#2563eb",
+  QLD: "#be123c",
+  SA: "#dc2626",
+  WA: "#d97706",
+  TAS: "#16a34a",
+  ACT: "#db2777",
+  NT: "#ea580c",
+};
+const CHAMBER_COLOURS: Record<string, string> = { LOWER: "#0d9488", UPPER: "#7c3aed" };
+
+function ColourChip({ label, colour }: { label: string; colour?: string }) {
+  if (!colour) {
+    return (
+      <span className="inline-flex rounded-full bg-surface-variant px-2 py-0.5 text-xs font-medium text-foreground">
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+      style={{ backgroundColor: `${colour}1f`, color: colour, border: `1px solid ${colour}3d` }}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Politicians — federal (They Vote For You) + state/territory (Wikidata). The whole set is a
  *  few hundred rows, so we fetch once and filter client-side (no per-keystroke refetch). */
 export default function PoliticiansPage() {
@@ -141,15 +174,18 @@ export default function PoliticiansPage() {
             {
               key: "jurisdiction",
               header: "Jurisdiction",
-              cell: (p: PoliticianSummary) => jurisdictionLabel(p.jurisdiction),
+              cell: (p: PoliticianSummary) => (
+                <ColourChip label={jurisdictionLabel(p.jurisdiction)} colour={JURISDICTION_COLOURS[p.jurisdiction]} />
+              ),
             },
             {
               key: "chamber",
               header: "Chamber",
               cell: (p: PoliticianSummary) => (
-                <span className="rounded-full bg-surface-variant px-2 py-0.5 text-xs font-medium text-foreground">
-                  {chamberLabel(p.jurisdiction, p.chamber)}
-                </span>
+                <ColourChip
+                  label={chamberLabel(p.jurisdiction, p.chamber)}
+                  colour={p.chamber ? CHAMBER_COLOURS[p.chamber] : undefined}
+                />
               ),
             },
             { key: "electorate", header: "Electorate", cell: (p: PoliticianSummary) => p.electorate ?? "—" },

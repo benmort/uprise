@@ -6,9 +6,9 @@ import { VISIBLE_SERVICES } from "@/lib/data/services";
 import { PROCESS } from "@/lib/data/site";
 
 export const metadata: Metadata = {
-  title: "Services — Uprise Labs",
+  title: "Services – Uprise Labs",
   description:
-    "One team for strategy, design, engineering, and rapid response — everything a progressive campaign needs to win online.",
+    "One team for strategy, design, engineering and rapid response – everything a progressive campaign needs to win online.",
 };
 
 export default function ServicesPage() {
@@ -27,7 +27,7 @@ export default function ServicesPage() {
             Everything you need to win online.
           </h1>
           <p className="mt-7 max-w-[600px] text-[19px] leading-normal text-ink/60">
-            One team for strategy, design, engineering, and rapid response — so nothing falls
+            One team for strategy, design, engineering and rapid response – so nothing falls
             between the cracks when it matters most.
           </p>
         </Reveal>

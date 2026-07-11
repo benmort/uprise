@@ -137,6 +137,39 @@ export async function getGeoStatus(opts?: { signal?: AbortSignal }) {
   return request<GeoDataset[]>("/geo/status", opts?.signal ? { signal: opts.signal } : undefined);
 }
 
+/** One 2023 referendum result row (national/state/division). Percentages are 0–100. */
+export type ReferendumRow = {
+  name: string;
+  stateAb: string | null;
+  /** state or ced code — what the choropleth joins to the boundary tile. Null when unmatched. */
+  geoCode: string | null;
+  enrolment: number | null;
+  ordinaryVotes: number | null;
+  absentVotes: number | null;
+  provisionalVotes: number | null;
+  prepollVotes: number | null;
+  postalVotes: number | null;
+  totalVotes: number | null;
+  turnoutPct: number | null;
+  yesVotes: number | null;
+  noVotes: number | null;
+  informalVotes: number | null;
+  formalVotes: number | null;
+  yesPct: number | null;
+  noPct: number | null;
+};
+
+export type ReferendumBundle = {
+  national: ReferendumRow | null;
+  states: ReferendumRow[];
+  divisions: ReferendumRow[];
+};
+
+/** 2023 Voice referendum results — national, 8 states, 151 divisions. */
+export async function getReferendum(opts?: { signal?: AbortSignal }) {
+  return request<ReferendumBundle>("/geo/referendum", opts?.signal ? { signal: opts.signal } : undefined);
+}
+
 export async function listDivisions(type: DivisionType) {
   return request<Division[]>(`/geo/divisions?type=${type}`);
 }

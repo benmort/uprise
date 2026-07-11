@@ -43,6 +43,7 @@ const PLACEHOLDER: Record<GeoExplorerKind, string> = {
   addresses: "Search an address, street or suburb…",
   "polling-places": "Search booths by name, venue or suburb…",
   "first-nations": "Search Indigenous regions, areas or locations…",
+  referendum: "Search a division or state…",
 };
 
 const TITLE: Record<GeoExplorerKind, string> = {
@@ -52,6 +53,7 @@ const TITLE: Record<GeoExplorerKind, string> = {
   addresses: "Addresses",
   "polling-places": "Polling places",
   "first-nations": "First Nations",
+  referendum: "2023 Voice referendum",
 };
 
 const DESCRIPTION: Record<GeoExplorerKind, string> = {
@@ -61,6 +63,7 @@ const DESCRIPTION: Record<GeoExplorerKind, string> = {
   addresses: "Search any address live, plot it, and see the real doors around it.",
   "polling-places": "Every federal and state/territory polling booth – search, filter by jurisdiction, and plot on the map.",
   "first-nations": "ABS Indigenous Structure – Regions, Areas and Locations. Statistical geographies for reference, not cultural, language or nation boundaries, and not cuttable into turf.",
+  referendum: "The 2023 Voice to Parliament referendum – the official Yes/No result by division and state, shaded on the map, plus turnout by vote type. Source: AEC (CC BY 4.0).",
 };
 
 /**
@@ -80,6 +83,7 @@ const VIEW_KEY: Record<GeoExplorerKind, string> = {
   addresses: "uprise.addressesView",
   "polling-places": "uprise.pollingPlacesView",
   "first-nations": "uprise.firstNationsView",
+  referendum: "uprise.referendumView",
 };
 
 function GeoExplorerChrome() {

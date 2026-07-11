@@ -185,6 +185,7 @@ export function FirstNationsPanel({ view }: { view: WalkMode }) {
               rows={rows}
               rowKey={(r) => r.code}
               empty="Nothing to show."
+              pageSize={0} /* server-paginated below via <PaginationControls> — no client pager */
               columns={[
                 {
                   key: "name",

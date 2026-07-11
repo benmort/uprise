@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { KpiTile, SectionCard, DataTable } from "@uprise/field";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 export function ComplianceSettings() {
   const [page, setPage] = useState(0);
@@ -48,6 +48,7 @@ export function ComplianceSettings() {
             <DataTable
               rows={data?.entries ?? []}
               rowKey={(e) => e.id}
+              pageSize={0} /* server-paginated below via <PaginationControls> — no client pager */
               columns={[
                 { key: "phone", header: "Phone", cell: (e) => <span className="tabular-nums">{e.phoneE164}</span> },
                 {

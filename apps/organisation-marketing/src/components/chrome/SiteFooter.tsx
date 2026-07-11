@@ -21,7 +21,7 @@ export function SiteFooter() {
           >
             <span className="text-cream">Let&apos;s build </span>
             <span className="text-vermilion">power</span>
-            <span className="text-cream"> — </span>
+            <span className="text-cream"> – </span>
           </span>
         ))}
       </Marquee>

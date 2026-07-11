@@ -12,8 +12,8 @@ const ACTIVE_ITEM = "Kickoff & discovery";
 
 const NEEDS = [
   "Domain registrar and DNS access",
-  "ActBlue (or processor) entity ID",
-  "Brand assets — logo, colors, typefaces",
+  "Payment processor entity ID",
+  "Brand assets – logo, colours, typefaces",
   "A single point of contact for approvals",
 ];
 
@@ -87,11 +87,11 @@ export default function DocsPage() {
               <p className="mb-6">
                 Welcome to your platform. This playbook walks your team through everything from
                 publishing a rapid-response page to reading the finance dashboard at 11pm on
-                election night. Bookmark it — and know the war-room line is always open.
+                election night. Bookmark it – and know we're on call when it counts.
               </p>
               <p className="mb-6">
-                Before the build begins, we run a discovery session to map your race, your list,
-                your processor, and your deadlines. The output is a shared build calendar every
+                Before the build begins, we run a discovery session to map your work, your list,
+                your processor and your deadlines. The output is a shared build calendar every
                 stakeholder can see.
               </p>
 

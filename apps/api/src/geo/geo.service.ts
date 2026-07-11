@@ -1651,4 +1651,85 @@ export class GeoService {
     ]);
     return { region, parents, childGroups };
   }
+
+  /**
+   * The 2023 Voice-to-Parliament referendum results (AEC), for the referendum explorer: the
+   * national total, the eight state/territory rows and the 151 division rows. `geoCode` on each
+   * row (a `state`/`ced` code) is what the choropleth joins to the boundary tiles. Turnout is
+   * broken down by vote type so the crosstab charts can stack it.
+   */
+  async referendum(): Promise<{
+    national: ReferendumRow | null;
+    states: ReferendumRow[];
+    divisions: ReferendumRow[];
+  }> {
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT level, name, state_ab AS "stateAb",
+              (CASE level WHEN 'state' THEN state_code WHEN 'division' THEN ced_code END) AS "geoCode",
+              enrolment, ordinary_votes AS "ordinaryVotes", absent_votes AS "absentVotes",
+              provisional_votes AS "provisionalVotes", prepoll_votes AS "prepollVotes",
+              postal_votes AS "postalVotes", total_votes AS "totalVotes", turnout_pct AS "turnoutPct",
+              yes_votes AS "yesVotes", no_votes AS "noVotes", informal_votes AS "informalVotes",
+              formal_votes AS "formalVotes", yes_pct AS "yesPct", no_pct AS "noPct"
+         FROM geo.referendum_result
+        WHERE event_id = $1
+        ORDER BY level, yes_pct DESC NULLS LAST, name`,
+      REFERENDUM_EVENT,
+    )) as Array<ReferendumRow & { level: string }>;
+    const num = (r: ReferendumRow & { level: string }): ReferendumRow => ({
+      name: r.name,
+      stateAb: r.stateAb,
+      geoCode: r.geoCode,
+      enrolment: n(r.enrolment),
+      ordinaryVotes: n(r.ordinaryVotes),
+      absentVotes: n(r.absentVotes),
+      provisionalVotes: n(r.provisionalVotes),
+      prepollVotes: n(r.prepollVotes),
+      postalVotes: n(r.postalVotes),
+      totalVotes: n(r.totalVotes),
+      turnoutPct: n(r.turnoutPct),
+      yesVotes: n(r.yesVotes),
+      noVotes: n(r.noVotes),
+      informalVotes: n(r.informalVotes),
+      formalVotes: n(r.formalVotes),
+      yesPct: n(r.yesPct),
+      noPct: n(r.noPct),
+    });
+    return {
+      national: rows.filter((r) => r.level === "national").map(num)[0] ?? null,
+      states: rows.filter((r) => r.level === "state").map(num),
+      divisions: rows.filter((r) => r.level === "division").map(num),
+    };
+  }
+}
+
+const REFERENDUM_EVENT = "29581";
+
+/** A referendum result row (national/state/division) as the API returns it. */
+export type ReferendumRow = {
+  name: string;
+  stateAb: string | null;
+  /** state or ced code — what the choropleth joins to the boundary tile. Null when unmatched. */
+  geoCode: string | null;
+  enrolment: number | null;
+  ordinaryVotes: number | null;
+  absentVotes: number | null;
+  provisionalVotes: number | null;
+  prepollVotes: number | null;
+  postalVotes: number | null;
+  totalVotes: number | null;
+  turnoutPct: number | null;
+  yesVotes: number | null;
+  noVotes: number | null;
+  informalVotes: number | null;
+  formalVotes: number | null;
+  yesPct: number | null;
+  noPct: number | null;
+};
+
+/** Postgres returns numeric/bigint columns as strings or bigint; coerce to a JS number or null. */
+function n(v: unknown): number | null {
+  if (v == null) return null;
+  const num = typeof v === "bigint" ? Number(v) : Number(v as number);
+  return Number.isFinite(num) ? num : null;
 }

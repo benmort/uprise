@@ -17,6 +17,12 @@ export class GeoController {
     return this.geo.status();
   }
 
+  // 2023 Voice referendum results (national + 8 states + 151 divisions) for the referendum explorer.
+  @Get("referendum")
+  referendum() {
+    return this.geo.referendum();
+  }
+
   @Get("divisions")
   listDivisions(@Query("type") type = "ced") {
     return this.geo.listDivisions(type);

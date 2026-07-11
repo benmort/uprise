@@ -15,6 +15,7 @@ import {
   listFirstNations,
   getFirstNations,
   getDensityScale,
+  getReferendum,
 } from "./geo";
 
 const mockReq = request as unknown as ReturnType<typeof vi.fn>;
@@ -151,5 +152,10 @@ describe("geo api client — density", () => {
   it("encodes the kind, so a layer name can never inject query params", async () => {
     await getDensityScale("sa1&foo=bar");
     expect(mockReq.mock.calls[0][0]).toBe("/geo/density/scale?kind=sa1%26foo%3Dbar");
+  });
+
+  it("getReferendum hits the referendum endpoint", async () => {
+    await getReferendum();
+    expect(mockReq.mock.calls[0][0]).toBe("/geo/referendum");
   });
 });

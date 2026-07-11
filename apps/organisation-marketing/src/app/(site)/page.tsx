@@ -22,9 +22,10 @@ const heroBreak = HERO.titlePrefix.indexOf(" backbone");
 const heroLine1 = heroBreak === -1 ? HERO.titlePrefix : HERO.titlePrefix.slice(0, heroBreak);
 const heroLine2 = heroBreak === -1 ? "" : HERO.titlePrefix.slice(heroBreak + 1);
 
-// The prototype renders this segment of the positioning statement in vermilion.
+// This segment of the positioning statement renders in vermilion – keep it an exact
+// substring of POSITIONING.statement (site.ts) or the accent is skipped.
 const POSITIONING_ACCENT =
-  "exclusively with candidates, causes, and coalitions on the progressive left.";
+  "campaigns, community organisations and coalitions working for a fairer, more democratic Australia.";
 const [positioningBefore, positioningAfter] = POSITIONING.statement.split(POSITIONING_ACCENT);
 
 export default function HomePage() {
@@ -165,7 +166,7 @@ export default function HomePage() {
                 className="font-extrabold tracking-[-0.03em]"
                 style={{ fontSize: "clamp(30px,4vw,52px)" }}
               >
-                Platforms that moved the needle
+                Work we're proud of
               </h2>
             </div>
             <Link

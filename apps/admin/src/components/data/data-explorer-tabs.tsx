@@ -19,6 +19,7 @@ export type DataTab =
   | "addresses"
   | "polling-places"
   | "first-nations"
+  | "referendum"
   | "politicians"
   | "policies";
 
@@ -29,11 +30,12 @@ const TABS: Array<{ key: DataTab; label: string; href: string }> = [
   { key: "addresses", label: "Addresses", href: "/data/addresses" },
   { key: "polling-places", label: "Polling places", href: "/data/polling-places" },
   { key: "first-nations", label: "First Nations", href: "/data/first-nations" },
+  { key: "referendum", label: "Referendum", href: "/data/referendum" },
   { key: "politicians", label: "Politicians", href: "/data/politicians" },
   { key: "policies", label: "Policies", href: "/data/policies" },
 ];
 
-/** The tabs that leave the geo route group — plain tables, not the shared-map shell. */
+/** The tabs that leave the geo route group — their own pages, not the shared-map shell. */
 export const NON_GEO_TABS: ReadonlySet<DataTab> = new Set(["politicians", "policies"]);
 
 /**

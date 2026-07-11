@@ -59,6 +59,7 @@ export function PollChoroplethMap({
   geoKind = "sed_upper",
   height = 380,
   isPublic = false,
+  bounds = VIC_BOUNDS,
 }: {
   cells: ChoroplethCell[];
   geoKind?: string;
@@ -66,6 +67,9 @@ export function PollChoroplethMap({
   /** Chrome-less public viewer: read the anonymous, layer-scoped tile endpoint
    *  (`/insights/public/tiles`) instead of the session-gated `/geo/tiles`. */
   isPublic?: boolean;
+  /** `[w,s,e,n]` the map frames on load and on recentre. Defaults to Victoria (the poll's
+   *  extent); a national dataset (e.g. the referendum) passes Australia-wide bounds. */
+  bounds?: [number, number, number, number];
 }) {
   const { theme } = useTheme();
   const palette = usePollPalette();
@@ -125,25 +129,28 @@ export function PollChoroplethMap({
 
   // Fit the map back to the region extent — used on load (instant) and by the recentre
   // button (animated) after the user pans/zooms away.
-  const recenter = useCallback((duration: number) => {
-    const map = mapRef.current?.getMap();
-    if (!map) return;
-    map.resize();
-    map.fitBounds(
-      [
-        [VIC_BOUNDS[0], VIC_BOUNDS[1]],
-        [VIC_BOUNDS[2], VIC_BOUNDS[3]],
-      ],
-      { padding: 24, duration },
-    );
-  }, []);
+  const recenter = useCallback(
+    (duration: number) => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+      map.resize();
+      map.fitBounds(
+        [
+          [bounds[0], bounds[1]],
+          [bounds[2], bounds[3]],
+        ],
+        { padding: 24, duration },
+      );
+    },
+    [bounds],
+  );
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-border" style={{ height }}>
       <MapGL
         ref={mapRef}
         mapboxAccessToken={TOKEN}
-        initialViewState={{ bounds: VIC_BOUNDS, fitBoundsOptions: { padding: 24 } }}
+        initialViewState={{ bounds, fitBoundsOptions: { padding: 24 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
         interactiveLayerIds={["poll-fill"]}
