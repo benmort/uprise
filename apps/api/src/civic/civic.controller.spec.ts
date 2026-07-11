@@ -5,8 +5,16 @@ const ctrlWith = (svc: Record<string, unknown>) => new CivicController(svc as ne
 describe("CivicController", () => {
   it("listPoliticians forwards the query filters", () => {
     const listPoliticians = jest.fn(() => "ok");
-    ctrlWith({ listPoliticians }).listPoliticians("REPS", "ALP", "ced", "c1", "ali");
-    expect(listPoliticians).toHaveBeenCalledWith({ house: "REPS", party: "ALP", geoKind: "ced", geoCode: "c1", q: "ali" });
+    ctrlWith({ listPoliticians }).listPoliticians("VIC", "LOWER", "REPS", "ALP", "ced", "c1", "ali");
+    expect(listPoliticians).toHaveBeenCalledWith({
+      jurisdiction: "VIC",
+      chamber: "LOWER",
+      house: "REPS",
+      party: "ALP",
+      geoKind: "ced",
+      geoCode: "c1",
+      q: "ali",
+    });
   });
 
   it("listPolicies converts the provisional query string to a boolean (undefined stays undefined)", () => {

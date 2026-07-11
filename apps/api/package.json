@@ -32,7 +32,8 @@
     "geo:load-boundaries": "ts-node src/scripts/geo/load-boundaries.ts",
     "geo:load-polling-places": "ts-node src/scripts/geo/load-polling-places.ts",
     "insights:load-vic-treaty-poll": "ts-node src/scripts/insights/load-vic-treaty-poll.ts",
-    "civic:sync": "ts-node src/scripts/civic/sync-theyvoteforyou.ts"
+    "civic:sync": "ts-node src/scripts/civic/sync-theyvoteforyou.ts",
+    "civic:sync-states": "ts-node src/scripts/civic/sync-state-mps.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

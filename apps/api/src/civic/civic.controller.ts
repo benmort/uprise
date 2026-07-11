@@ -18,13 +18,15 @@ export class CivicController {
   @Get("politicians")
   @RequirePermission(READ_POLITICIAN)
   listPoliticians(
+    @Query("jurisdiction") jurisdiction?: string,
+    @Query("chamber") chamber?: string,
     @Query("house") house?: string,
     @Query("party") party?: string,
     @Query("geoKind") geoKind?: string,
     @Query("geoCode") geoCode?: string,
     @Query("q") q?: string,
   ) {
-    return this.civic.listPoliticians({ house, party, geoKind, geoCode, q });
+    return this.civic.listPoliticians({ jurisdiction, chamber, house, party, geoKind, geoCode, q });
   }
 
   @Get("politicians/:id")

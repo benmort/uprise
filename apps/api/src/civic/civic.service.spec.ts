@@ -6,10 +6,13 @@ const svc = (prisma: Record<string, unknown>) => new CivicService(prisma as neve
 const POLITICIAN = {
   id: "p1",
   tvfyId: 1,
+  wikidataId: null,
   name: "Alice",
   firstName: "Alice",
   lastName: "A",
   party: "ALP",
+  jurisdiction: "FEDERAL",
+  chamber: "LOWER",
   house: "REPS",
   electorate: "Grayndler",
   geoKind: "ced",
@@ -24,14 +27,18 @@ describe("CivicService", () => {
     it("builds a filtered where (valid house, insensitive party/name, geo)", async () => {
       const findMany = jest.fn(async () => [POLITICIAN]);
       const res = await svc({ politician: { findMany } }).listPoliticians({
+        jurisdiction: "vic",
+        chamber: "LOWER",
         house: "REPS",
         party: "ALP",
         geoKind: "ced",
         geoCode: "c1",
         q: "ali",
       });
-      expect(res[0]).toMatchObject({ id: "p1", house: "REPS", geoCode: "c1" });
+      expect(res[0]).toMatchObject({ id: "p1", jurisdiction: "FEDERAL", chamber: "LOWER", house: "REPS", geoCode: "c1" });
       expect((findMany as jest.Mock).mock.calls[0][0].where).toEqual({
+        jurisdiction: "VIC", // upper-cased
+        chamber: "LOWER",
         house: "REPS",
         party: { equals: "ALP", mode: "insensitive" },
         geoKind: "ced",

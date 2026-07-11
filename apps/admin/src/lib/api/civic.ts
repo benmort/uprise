@@ -1,18 +1,45 @@
 import { request } from "@/lib/api";
 
-/** A politician synced from They Vote For You (civic domain). */
+/** A politician in the civic domain (federal from They Vote For You, state from Wikidata). */
 export type House = "REPS" | "SENATE";
+export type Chamber = "LOWER" | "UPPER";
+
+/** Jurisdictions in display order (Federal first, then states/territories). */
+export const JURISDICTIONS: Array<{ code: string; label: string }> = [
+  { code: "FEDERAL", label: "Federal" },
+  { code: "NSW", label: "New South Wales" },
+  { code: "VIC", label: "Victoria" },
+  { code: "QLD", label: "Queensland" },
+  { code: "SA", label: "South Australia" },
+  { code: "WA", label: "Western Australia" },
+  { code: "TAS", label: "Tasmania" },
+  { code: "ACT", label: "ACT" },
+  { code: "NT", label: "Northern Territory" },
+];
+const JURISDICTION_LABEL = new Map(JURISDICTIONS.map((j) => [j.code, j.label]));
+export const jurisdictionLabel = (code: string): string => JURISDICTION_LABEL.get(code) ?? code;
+
+/** The chamber's proper name, which depends on jurisdiction (federal vs state; SA/TAS lower). */
+export function chamberLabel(jurisdiction: string, chamber: Chamber | null): string {
+  if (!chamber) return "—";
+  if (jurisdiction === "FEDERAL") return chamber === "LOWER" ? "House of Representatives" : "Senate";
+  if (chamber === "UPPER") return "Legislative Council";
+  return jurisdiction === "SA" || jurisdiction === "TAS" ? "House of Assembly" : "Legislative Assembly";
+}
 
 export type PoliticianSummary = {
   id: string;
-  tvfyId: number;
+  tvfyId: number | null;
+  wikidataId: string | null;
   name: string;
   firstName: string | null;
   lastName: string | null;
   party: string | null;
-  house: House;
+  jurisdiction: string;
+  chamber: Chamber | null;
+  house: House | null;
   electorate: string | null;
-  /** id-only geo reference — "ced" (Reps) | "chamber_electorate" (Senate). */
+  /** id-only geo reference — "ced" | "sed_lower" | "sed_upper" | "chamber_electorate". */
   geoKind: string | null;
   geoCode: string | null;
   rebellions: number | null;
@@ -52,7 +79,7 @@ export type PolicyDetail = PolicySummary & {
     politicianTvfyId: number;
     politicianName: string;
     party: string | null;
-    house: House;
+    house: House | null;
     electorate: string | null;
     agreement: number | null;
     voted: boolean;
@@ -68,7 +95,15 @@ function qs(params: Record<string, string | undefined>): string {
 }
 
 export async function listPoliticians(
-  filters: { house?: string; party?: string; geoKind?: string; geoCode?: string; q?: string } = {},
+  filters: {
+    jurisdiction?: string;
+    chamber?: string;
+    house?: string;
+    party?: string;
+    geoKind?: string;
+    geoCode?: string;
+    q?: string;
+  } = {},
   init?: RequestInit,
 ) {
   return request<PoliticianSummary[]>(`/civic/politicians${qs(filters)}`, init);

@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Landmark } from "lucide-react";
-import { listPoliticians, attendancePct, type PoliticianSummary } from "@/lib/api/civic";
+import {
+  listPoliticians,
+  chamberLabel,
+  jurisdictionLabel,
+  JURISDICTIONS,
+  type PoliticianSummary,
+} from "@/lib/api/civic";
 import { useApi } from "@/lib/use-api";
 import { PageShell } from "@/components/shell/page-shell";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -13,16 +19,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@uprise/field";
 import { cn } from "@/lib/utils";
 
-type HouseFilter = "all" | "REPS" | "SENATE";
-const HOUSES: Array<{ key: HouseFilter; label: string }> = [
+type ChamberFilter = "all" | "LOWER" | "UPPER";
+const CHAMBERS: Array<{ key: ChamberFilter; label: string }> = [
   { key: "all", label: "All" },
-  { key: "REPS", label: "House of Reps" },
-  { key: "SENATE", label: "Senate" },
+  { key: "LOWER", label: "Lower" },
+  { key: "UPPER", label: "Upper" },
 ];
-const HOUSE_LABEL: Record<string, string> = { REPS: "Reps", SENATE: "Senate" };
 
-/** Politicians (They Vote For You) — a civic reference layer under /data. The whole set is
- *  ~226 rows, so we fetch once and filter client-side (no per-keystroke refetch). */
+/** Politicians — federal (They Vote For You) + state/territory (Wikidata). The whole set is a
+ *  few hundred rows, so we fetch once and filter client-side (no per-keystroke refetch). */
 export default function PoliticiansPage() {
   const { data, loading, error, noPermission, refetch } = useApi(
     "/civic/politicians",
@@ -30,51 +35,62 @@ export default function PoliticiansPage() {
     { ttlMs: 60_000 },
   );
 
-  const [house, setHouse] = useState<HouseFilter>("all");
+  const [jurisdiction, setJurisdiction] = useState("all");
+  const [chamber, setChamber] = useState<ChamberFilter>("all");
   const [q, setQ] = useState("");
 
   const rows = useMemo(() => {
     const all = data ?? [];
     const needle = q.trim().toLowerCase();
     return all.filter((p) => {
-      if (house !== "all" && p.house !== house) return false;
+      if (jurisdiction !== "all" && p.jurisdiction !== jurisdiction) return false;
+      if (chamber !== "all" && p.chamber !== chamber) return false;
       if (!needle) return true;
       return [p.name, p.party, p.electorate].some((f) => f?.toLowerCase().includes(needle));
     });
-  }, [data, house, q]);
+  }, [data, jurisdiction, chamber, q]);
 
   return (
     <PageShell
       icon={Landmark}
       title="Politicians"
-      actions={
-        <Breadcrumbs
-          items={[
-            { label: "Data Sets", href: "/data/datasets" },
-            { label: "Politicians" },
-          ]}
-        />
-      }
+      actions={<Breadcrumbs items={[{ label: "Data Sets", href: "/data/datasets" }, { label: "Politicians" }]} />}
     >
       <p className="text-sm text-muted-foreground">
-        Federal members of parliament and how they vote, from They Vote For You. Each member is
-        linked to their electorate, so you can jump straight to the boundary and cut turf.
+        Federal (They Vote For You) and state/territory (Wikidata) members of parliament, each linked to
+        their electorate so you can jump to the boundary and cut turf. State rosters are ~85–100% complete
+        and carry no voting record.
       </p>
 
       <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Jurisdiction
+          <select
+            value={jurisdiction}
+            onChange={(e) => setJurisdiction(e.target.value)}
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm font-semibold text-foreground"
+          >
+            <option value="all">All</option>
+            {JURISDICTIONS.map((j) => (
+              <option key={j.code} value={j.code}>
+                {j.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="flex rounded-xl border border-border p-0.5">
-          {HOUSES.map((h) => (
+          {CHAMBERS.map((c) => (
             <button
-              key={h.key}
+              key={c.key}
               type="button"
-              onClick={() => setHouse(h.key)}
-              aria-pressed={house === h.key}
+              onClick={() => setChamber(c.key)}
+              aria-pressed={chamber === c.key}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-                house === h.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
+                chamber === c.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
               )}
             >
-              {h.label}
+              {c.label}
             </button>
           ))}
         </div>
@@ -97,7 +113,7 @@ export default function PoliticiansPage() {
         onRetry={() => void refetch()}
         empty={!loading && rows.length === 0}
         emptyTitle="No politicians"
-        emptyDescription="Run `pnpm --filter api civic:sync` to backfill from They Vote For You."
+        emptyDescription="Run `pnpm --filter api civic:sync` (federal) and `civic:sync-states` (state)."
         skeleton={<Skeleton className="h-96 w-full" />}
       >
         <DataTable
@@ -116,30 +132,20 @@ export default function PoliticiansPage() {
             },
             { key: "party", header: "Party", cell: (p: PoliticianSummary) => p.party ?? "—" },
             {
-              key: "house",
-              header: "House",
+              key: "jurisdiction",
+              header: "Jurisdiction",
+              cell: (p: PoliticianSummary) => jurisdictionLabel(p.jurisdiction),
+            },
+            {
+              key: "chamber",
+              header: "Chamber",
               cell: (p: PoliticianSummary) => (
                 <span className="rounded-full bg-surface-variant px-2 py-0.5 text-xs font-medium text-foreground">
-                  {HOUSE_LABEL[p.house] ?? p.house}
+                  {chamberLabel(p.jurisdiction, p.chamber)}
                 </span>
               ),
             },
             { key: "electorate", header: "Electorate", cell: (p: PoliticianSummary) => p.electorate ?? "—" },
-            {
-              key: "attendance",
-              header: "Attendance",
-              numeric: true,
-              cell: (p: PoliticianSummary) => {
-                const pct = attendancePct(p);
-                return pct == null ? "—" : `${pct}%`;
-              },
-            },
-            {
-              key: "rebellions",
-              header: "Rebellions",
-              numeric: true,
-              cell: (p: PoliticianSummary) => (p.rebellions ?? "—"),
-            },
           ]}
         />
       </StateRegion>

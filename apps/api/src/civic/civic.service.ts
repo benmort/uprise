@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { House, Prisma } from "@uprise/db";
+import { Chamber, House, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 
@@ -35,6 +35,8 @@ export class CivicService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listPoliticians(filters: {
+    jurisdiction?: string;
+    chamber?: string;
     house?: string;
     party?: string;
     geoKind?: string;
@@ -42,6 +44,8 @@ export class CivicService {
     q?: string;
   }) {
     const where: Prisma.PoliticianWhereInput = {};
+    if (filters.jurisdiction) where.jurisdiction = filters.jurisdiction.toUpperCase();
+    if (filters.chamber === "LOWER" || filters.chamber === "UPPER") where.chamber = filters.chamber as Chamber;
     if (filters.house === "REPS" || filters.house === "SENATE") where.house = filters.house as House;
     if (filters.party) where.party = { equals: filters.party, mode: "insensitive" };
     if (filters.geoKind) where.geoKind = filters.geoKind;
@@ -95,10 +99,13 @@ export class CivicService {
     return {
       id: p.id,
       tvfyId: p.tvfyId,
+      wikidataId: p.wikidataId,
       name: p.name,
       firstName: p.firstName,
       lastName: p.lastName,
       party: p.party,
+      jurisdiction: p.jurisdiction,
+      chamber: p.chamber,
       house: p.house,
       electorate: p.electorate,
       geoKind: p.geoKind,

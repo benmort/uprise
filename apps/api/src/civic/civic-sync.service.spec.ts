@@ -1,4 +1,4 @@
-import { House } from "@uprise/db";
+import { Chamber, House } from "@uprise/db";
 import {
   CivicSyncService,
   buildPoliticianFields,
@@ -39,7 +39,7 @@ describe("civic-sync pure helpers", () => {
       { id: 1, latest_member: { name: { first: "A", last: "B" }, electorate: "Grayndler", house: "representatives", party: "ALP" } },
       resolveCed,
     );
-    expect(f).toMatchObject({ name: "A B", firstName: "A", lastName: "B", party: "ALP", house: House.REPS, geoKind: "ced", geoCode: "cedX" });
+    expect(f).toMatchObject({ name: "A B", party: "ALP", jurisdiction: "FEDERAL", chamber: Chamber.LOWER, house: House.REPS, geoKind: "ced", geoCode: "cedX" });
   });
 
   it("buildPoliticianFields leaves geoCode null for an unresolved Rep electorate", () => {

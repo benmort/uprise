@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowUpRight, Landmark } from "lucide-react";
-import { getPolitician, attendancePct, type PolicyPositionRow } from "@/lib/api/civic";
+import {
+  getPolitician,
+  attendancePct,
+  chamberLabel,
+  jurisdictionLabel,
+  type PolicyPositionRow,
+} from "@/lib/api/civic";
 import { useApi } from "@/lib/use-api";
 import { PageShell } from "@/components/shell/page-shell";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -12,9 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@uprise/field";
 import { DataTable } from "@uprise/field";
 
-const HOUSE_LABEL: Record<string, string> = { REPS: "House of Representatives", SENATE: "Senate" };
-
-/** They Vote For You agreement buckets → plain language. */
+/** They Vote For You agreement buckets → plain language (federal only). */
 const CATEGORY_LABEL: Record<string, string> = {
   for3: "Consistently for",
   for2: "Generally for",
@@ -25,6 +29,9 @@ const CATEGORY_LABEL: Record<string, string> = {
   against3: "Consistently against",
   not_enough: "Not enough info",
 };
+
+// geo layers that have a division-detail page to deep-link to.
+const LINKABLE_GEO = new Set(["ced", "sed_lower", "sed_upper"]);
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -43,9 +50,12 @@ export default function PoliticianDetailPage() {
     { ttlMs: 60_000 },
   );
 
+  const isFederal = data?.jurisdiction === "FEDERAL";
   const attendance = data ? attendancePct(data) : null;
-  // A Rep's electorate deep-links to its division-detail boundary; Senate seats are state-wide.
-  const electorateHref = data?.house === "REPS" && data.geoCode ? `/data/divisions/ced/${data.geoCode}` : null;
+  const electorateHref =
+    data && data.geoCode && data.geoKind && LINKABLE_GEO.has(data.geoKind)
+      ? `/data/divisions/${data.geoKind}/${data.geoCode}`
+      : null;
 
   return (
     <PageShell
@@ -75,7 +85,8 @@ export default function PoliticianDetailPage() {
             <SectionCard title="Overview">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <Stat label="Party" value={data.party ?? "—"} />
-                <Stat label="House" value={HOUSE_LABEL[data.house] ?? data.house} />
+                <Stat label="Jurisdiction" value={jurisdictionLabel(data.jurisdiction)} />
+                <Stat label="Chamber" value={chamberLabel(data.jurisdiction, data.chamber)} />
                 <Stat
                   label="Electorate"
                   value={
@@ -89,44 +100,58 @@ export default function PoliticianDetailPage() {
                     )
                   }
                 />
-                <Stat label="Attendance" value={attendance == null ? "—" : `${attendance}%`} />
-                <Stat
-                  label="Votes attended"
-                  value={
-                    data.votesAttended == null
-                      ? "—"
-                      : `${data.votesAttended.toLocaleString()}${data.votesPossible ? ` / ${data.votesPossible.toLocaleString()}` : ""}`
-                  }
-                />
-                <Stat label="Rebellions" value={data.rebellions ?? "—"} />
+                {isFederal ? (
+                  <>
+                    <Stat label="Attendance" value={attendance == null ? "—" : `${attendance}%`} />
+                    <Stat
+                      label="Votes attended"
+                      value={
+                        data.votesAttended == null
+                          ? "—"
+                          : `${data.votesAttended.toLocaleString()}${data.votesPossible ? ` / ${data.votesPossible.toLocaleString()}` : ""}`
+                      }
+                    />
+                    <Stat label="Rebellions" value={data.rebellions ?? "—"} />
+                  </>
+                ) : null}
               </div>
             </SectionCard>
 
-            <SectionCard
-              title="Policy positions"
-              description="How consistently this member has voted for or against each policy, from They Vote For You. Higher agreement = more consistently for."
-            >
-              <DataTable
-                rows={data.positions}
-                rowKey={(p: PolicyPositionRow) => p.policyId}
-                empty="No policy positions."
-                columns={[
-                  { key: "policy", header: "Policy", cell: (p: PolicyPositionRow) => p.policyName },
-                  {
-                    key: "agreement",
-                    header: "Agreement",
-                    numeric: true,
-                    cell: (p: PolicyPositionRow) => (p.agreement == null ? "—" : `${Math.round(p.agreement)}%`),
-                  },
-                  {
-                    key: "category",
-                    header: "Stance",
-                    cell: (p: PolicyPositionRow) => (p.category ? (CATEGORY_LABEL[p.category] ?? p.category) : "—"),
-                  },
-                  { key: "voted", header: "Voted", cell: (p: PolicyPositionRow) => (p.voted ? "Yes" : "No") },
-                ]}
-              />
-            </SectionCard>
+            {isFederal ? (
+              <SectionCard
+                title="Policy positions"
+                description="How consistently this member has voted for or against each policy, from They Vote For You. Higher agreement = more consistently for."
+              >
+                <DataTable
+                  rows={data.positions}
+                  rowKey={(p: PolicyPositionRow) => p.policyId}
+                  empty="No policy positions."
+                  columns={[
+                    { key: "policy", header: "Policy", cell: (p: PolicyPositionRow) => p.policyName },
+                    {
+                      key: "agreement",
+                      header: "Agreement",
+                      numeric: true,
+                      cell: (p: PolicyPositionRow) => (p.agreement == null ? "—" : `${Math.round(p.agreement)}%`),
+                    },
+                    {
+                      key: "category",
+                      header: "Stance",
+                      cell: (p: PolicyPositionRow) => (p.category ? (CATEGORY_LABEL[p.category] ?? p.category) : "—"),
+                    },
+                    { key: "voted", header: "Voted", cell: (p: PolicyPositionRow) => (p.voted ? "Yes" : "No") },
+                  ]}
+                />
+              </SectionCard>
+            ) : (
+              <SectionCard title="Voting record">
+                <p className="text-sm text-muted-foreground">
+                  Roster sourced from Wikidata. State and territory parliaments have no published,
+                  structured voting record (unlike the federal parliament via They Vote For You), so
+                  there are no policy positions to show.
+                </p>
+              </SectionCard>
+            )}
           </div>
         ) : null}
       </StateRegion>

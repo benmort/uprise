@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { House, Prisma } from "@uprise/db";
+import { Chamber, House, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   TheyVoteForYouClient,
@@ -20,6 +20,8 @@ export type PoliticianFields = {
   firstName: string | null;
   lastName: string | null;
   party: string | null;
+  jurisdiction: string;
+  chamber: Chamber;
   house: House;
   electorate: string | null;
   geoKind: string | null;
@@ -103,6 +105,8 @@ export function buildPoliticianFields(
     firstName: first,
     lastName: last,
     party: member.party?.trim() || null,
+    jurisdiction: "FEDERAL",
+    chamber: house === House.REPS ? Chamber.LOWER : Chamber.UPPER,
     house,
     electorate,
     geoKind,

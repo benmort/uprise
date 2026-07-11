@@ -2214,6 +2214,8 @@ model PollEstimate {
 // schema, so there is no FK to a region (mirrors PollEstimate). House of Reps →
 // geoKind "ced" (AEC federal division); Senate → "chamber_electorate" (SENATE-<STATE>).
 
+/// Federal-only sub-label (House of Reps / Senate). State members leave this null;
+/// use (jurisdiction, chamber) as the general axis.
 enum House {
   REPS
   SENATE
@@ -2221,21 +2223,37 @@ enum House {
   @@schema("civic")
 }
 
+/// The two tiers a parliamentary chamber can be: LOWER (House of Reps / Legislative
+/// Assembly / House of Assembly) or UPPER (Senate / Legislative Council).
+enum Chamber {
+  LOWER
+  UPPER
+
+  @@schema("civic")
+}
+
 model Politician {
   id            String    @id @default(cuid())
-  /// They Vote For You person id — the natural key sync upserts on.
-  tvfyId        Int       @unique
+  /// They Vote For You person id — the federal sync's natural key (null for state MPs).
+  tvfyId        Int?      @unique
+  /// Wikidata QID — the state sync's natural key (null for federal MPs).
+  wikidataId    String?   @unique
   name          String
   firstName     String?
   lastName      String?
   party         String?
-  house         House
-  /// Electorate name as given by TVFY (before geo resolution).
+  /// FEDERAL | VIC | NSW | QLD | SA | WA | TAS | ACT | NT.
+  jurisdiction  String    @default("FEDERAL")
+  chamber       Chamber?
+  /// Federal-only: REPS | SENATE (null for state members).
+  house         House?
+  /// Electorate name as given by the source (before geo resolution).
   electorate    String?
-  /// Resolved electorate reference — "ced" (Reps) | "chamber_electorate" (Senate).
+  /// Resolved electorate reference — geo layer: "ced" | "sed_lower" | "sed_upper" | "chamber_electorate".
   geoKind       String?
   /// Resolved geo region code (id-only reference to geo.* — no FK); null if unmatched.
   geoCode       String?
+  /// Federal-only voting stats (They Vote For You); null for state MPs.
   rebellions    Int?
   votesAttended Int?
   votesPossible Int?
@@ -2248,7 +2266,7 @@ model Politician {
   positions PolicyPosition[]
 
   @@index([geoKind, geoCode])
-  @@index([house])
+  @@index([jurisdiction, chamber])
   @@schema("civic")
 }
 
@@ -2297,6 +2315,8 @@ model CivicSyncRun {
   completedAt DateTime?
   /// running | succeeded | failed.
   status      String    @default("running")
+  /// Which sync produced this run: "tvfy" (federal) | "wikidata" (state).
+  source      String    @default("tvfy")
   politicians Int       @default(0)
   policies    Int       @default(0)
   positions   Int       @default(0)

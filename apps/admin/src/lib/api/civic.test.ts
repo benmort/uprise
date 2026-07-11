@@ -10,6 +10,8 @@ import {
   listPolicies,
   getPolicy,
   attendancePct,
+  chamberLabel,
+  jurisdictionLabel,
 } from "./civic";
 
 const mockReq = request as unknown as ReturnType<typeof vi.fn>;
@@ -23,9 +25,11 @@ describe("civic api client — wrappers", () => {
   it("listPoliticians encodes only the set filters into the query", async () => {
     await listPoliticians();
     expect(mockReq.mock.calls[0][0]).toBe("/civic/politicians");
-    await listPoliticians({ house: "SENATE", geoKind: "ced", geoCode: "204", q: "smith", party: "" });
+    await listPoliticians({ jurisdiction: "VIC", chamber: "LOWER", house: "SENATE", geoKind: "ced", geoCode: "204", q: "smith", party: "" });
     const url = mockReq.mock.calls[1][0] as string;
     expect(url).toContain("/civic/politicians?");
+    expect(url).toContain("jurisdiction=VIC");
+    expect(url).toContain("chamber=LOWER");
     expect(url).toContain("house=SENATE");
     expect(url).toContain("geoCode=204");
     expect(url).toContain("q=smith");
@@ -58,5 +62,22 @@ describe("attendancePct", () => {
     expect(attendancePct({ votesAttended: 1, votesPossible: 3 })).toBe(33);
     expect(attendancePct({ votesAttended: null, votesPossible: 100 })).toBeNull();
     expect(attendancePct({ votesAttended: 5, votesPossible: 0 })).toBeNull();
+  });
+});
+
+describe("labels", () => {
+  it("jurisdictionLabel maps codes to display names, else the code", () => {
+    expect(jurisdictionLabel("FEDERAL")).toBe("Federal");
+    expect(jurisdictionLabel("VIC")).toBe("Victoria");
+    expect(jurisdictionLabel("ZZ")).toBe("ZZ");
+  });
+
+  it("chamberLabel depends on jurisdiction (federal vs state; SA/TAS lower)", () => {
+    expect(chamberLabel("FEDERAL", "LOWER")).toBe("House of Representatives");
+    expect(chamberLabel("FEDERAL", "UPPER")).toBe("Senate");
+    expect(chamberLabel("VIC", "LOWER")).toBe("Legislative Assembly");
+    expect(chamberLabel("SA", "LOWER")).toBe("House of Assembly");
+    expect(chamberLabel("NSW", "UPPER")).toBe("Legislative Council");
+    expect(chamberLabel("VIC", null)).toBe("—");
   });
 });
