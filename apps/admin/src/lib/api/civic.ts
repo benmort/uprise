@@ -45,6 +45,10 @@ export type PoliticianSummary = {
   rebellions: number | null;
   votesAttended: number | null;
   votesPossible: number | null;
+  /** Re-hosted Commons headshot (null → show initials) + the attribution its licence needs. */
+  imageUrl: string | null;
+  imageCredit: string | null;
+  imageSourceUrl: string | null;
 };
 
 export type PolicyPositionRow = {
@@ -81,6 +85,8 @@ export type PolicyDetail = PolicySummary & {
     party: string | null;
     house: House | null;
     electorate: string | null;
+    imageUrl: string | null;
+    imageCredit: string | null;
     agreement: number | null;
     voted: boolean;
     category: string | null;
@@ -122,6 +128,16 @@ export async function listPolicies(filters: { q?: string; provisional?: boolean 
 
 export async function getPolicy(id: string, init?: RequestInit) {
   return request<PolicyDetail>(`/civic/policies/${encodeURIComponent(id)}`, init);
+}
+
+export type CivicStatus = {
+  politicians: { count: number; withImage: number; lastSyncedAt: string | null };
+  policies: { count: number; lastSyncedAt: string | null };
+};
+
+/** Dataset-level civic counts for the Datasets page. */
+export async function getCivicStatus(init?: RequestInit) {
+  return request<CivicStatus>("/civic/status", init);
 }
 
 /** Attendance as a whole-percent, or null when the base is unknown. */

@@ -14,7 +14,17 @@ const POLICY_DETAIL_INCLUDE = {
   positions: {
     include: {
       politician: {
-        select: { id: true, tvfyId: true, name: true, party: true, house: true, electorate: true },
+        select: {
+          id: true,
+          tvfyId: true,
+          name: true,
+          party: true,
+          house: true,
+          electorate: true,
+          imageUrl: true,
+          imageCredit: true,
+          imageSourceUrl: true,
+        },
       },
     },
   },
@@ -95,6 +105,21 @@ export class CivicService {
     return this.mapPolicyDetail(p);
   }
 
+  /** Dataset-level counts for the Datasets page — politicians (with photo coverage) + policies. */
+  async status() {
+    const [politicians, withImage, politicianSynced, policies, policySynced] = await Promise.all([
+      this.prisma.politician.count(),
+      this.prisma.politician.count({ where: { imageUrl: { not: null } } }),
+      this.prisma.politician.aggregate({ _max: { lastSyncedAt: true } }),
+      this.prisma.policy.count(),
+      this.prisma.policy.aggregate({ _max: { lastSyncedAt: true } }),
+    ]);
+    return {
+      politicians: { count: politicians, withImage, lastSyncedAt: politicianSynced._max.lastSyncedAt },
+      policies: { count: policies, lastSyncedAt: policySynced._max.lastSyncedAt },
+    };
+  }
+
   private mapPoliticianSummary(p: PoliticianRow) {
     return {
       id: p.id,
@@ -113,6 +138,11 @@ export class CivicService {
       rebellions: p.rebellions,
       votesAttended: p.votesAttended,
       votesPossible: p.votesPossible,
+      // Re-hosted Commons headshot + the attribution its licence requires (null → UI uses initials).
+      imageUrl: p.imageUrl,
+      imageCredit: p.imageCredit,
+      imageSourceUrl: p.imageSourceUrl,
+      imageLicence: p.imageLicence,
     };
   }
 
@@ -131,6 +161,8 @@ export class CivicService {
         party: pos.politician.party,
         house: pos.politician.house,
         electorate: pos.politician.electorate,
+        imageUrl: pos.politician.imageUrl,
+        imageCredit: pos.politician.imageCredit,
         agreement: num(pos.agreement),
         voted: pos.voted,
         category: pos.category,

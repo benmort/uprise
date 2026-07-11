@@ -15,6 +15,13 @@ const READ_POLICY = { action: "read", resource: "civic.policy" } as const;
 export class CivicController {
   constructor(private readonly civic: CivicService) {}
 
+  // Declared before the `:id` routes so "status" is never captured as a politician/policy id.
+  @Get("status")
+  @RequirePermission(READ_POLITICIAN)
+  status() {
+    return this.civic.status();
+  }
+
   @Get("politicians")
   @RequirePermission(READ_POLITICIAN)
   listPoliticians(

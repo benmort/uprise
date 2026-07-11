@@ -2259,6 +2259,17 @@ model Politician {
   votesPossible Int?
   /// Current ministerial / shadow-ministerial positions (TVFY `offices`).
   offices       Json?
+  /// Mirrored headshot in our Blob store (a Wikimedia Commons photo, re-hosted). Null when the
+  /// member has no free-licensed photo, or images have not been synced.
+  imageUrl      String?
+  /// The Wikimedia Commons file page — the attribution link shown beside the photo.
+  imageSourceUrl String?
+  /// Author/credit for the photo (Commons `Artist`), required by most Commons licences.
+  imageCredit   String?
+  /// Licence short name, e.g. "CC BY-SA 4.0".
+  imageLicence  String?
+  /// The source Commons filename — the idempotency key, so a re-sync skips an unchanged photo.
+  imageSourceRef String?
   lastSyncedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

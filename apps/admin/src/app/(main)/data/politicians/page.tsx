@@ -17,6 +17,8 @@ import { StateRegion } from "@/components/shell/state-region";
 import { SearchInput } from "@/components/ui/search-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@uprise/field";
+import { MemberAvatar } from "@/components/civic/member-avatar";
+import { DataExplorerTabs } from "@/components/data/data-explorer-tabs";
 import { cn } from "@/lib/utils";
 
 type ChamberFilter = "all" | "LOWER" | "UPPER";
@@ -61,6 +63,8 @@ export default function PoliticiansPage() {
         their electorate so you can jump to the boundary and cut turf. State rosters are ~85–100% complete
         and carry no voting record.
       </p>
+
+      <DataExplorerTabs active="politicians" />
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -125,9 +129,12 @@ export default function PoliticiansPage() {
               key: "name",
               header: "Member",
               cell: (p: PoliticianSummary) => (
-                <Link href={`/data/politicians/${p.id}`} className="font-medium text-primary hover:underline">
-                  {p.name}
-                </Link>
+                <div className="flex items-center gap-2.5">
+                  <MemberAvatar name={p.name} imageUrl={p.imageUrl} credit={p.imageCredit} size={32} />
+                  <Link href={`/data/politicians/${p.id}`} className="font-medium text-primary hover:underline">
+                    {p.name}
+                  </Link>
+                </div>
               ),
             },
             { key: "party", header: "Party", cell: (p: PoliticianSummary) => p.party ?? "—" },

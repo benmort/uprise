@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3,
   Boxes,
   ChevronDown,
   ChevronLeft,
@@ -44,6 +43,7 @@ import { UserDropdown } from "@/components/topbar/user-dropdown";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
 import { OnboardingLauncher } from "@/components/overview/onboarding-launcher";
@@ -123,15 +123,12 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
     },
 
     { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
-    // Insights / Polling — public-opinion polls attached to geo regions (choropleth,
-    // electorate detail, targeting). Flag-gated, default on.
-    { type: "leaf", key: "insights", label: "Polling", href: "/insights", icon: BarChart3, match: (p) => p.startsWith("/insights"), flag: "FEATURE_NAV_INSIGHTS" },
 
     // ── Manage: workspace admin — data, settings (incl. compliance), business, dev ──
     { type: "section", key: "sec-manage", label: "Manage" },
     {
       type: "group", key: "data-files", label: "Data", icon: Database,
-      match: (p) => p.startsWith("/data"),
+      match: (p) => p.startsWith("/data") || p.startsWith("/insights"),
       children: [
         { label: "Datasets", href: "/data/datasets", match: (p) => p.startsWith("/data/datasets") },
         { label: "Divisions", href: "/data/divisions", match: (p) => p.startsWith("/data/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
@@ -140,6 +137,9 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
         { label: "Addresses", href: "/data/addresses", match: (p) => p.startsWith("/data/addresses"), flag: "FEATURE_NAV_CANVASS_ADDRESSES" },
         { label: "Polling places", href: "/data/polling-places", match: (p) => p.startsWith("/data/polling-places") },
         { label: "Politicians", href: "/data/politicians", match: (p) => p.startsWith("/data/politicians") },
+        { label: "Policies", href: "/data/policies", match: (p) => p.startsWith("/data/policies") },
+        // Insights / Polling — public-opinion polls attached to geo regions (choropleth, targeting).
+        { label: "Polling", href: "/insights", match: (p) => p.startsWith("/insights"), flag: "FEATURE_NAV_INSIGHTS" },
         { label: "File Manager", href: "/data/file-manager", match: (p) => p.startsWith("/data/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
       ],
     },
@@ -574,6 +574,17 @@ export default function MainLayout({
   }, [router, handleCreateBlast]);
 
   const isSuperAdmin = principal?.isSuperAdmin === true;
+
+  // No active tenant (e.g. a super-admin with no membership, or a workspace not yet
+  // selected): show ONE clear "no tenant" state on every tenant-scoped page. It takes
+  // precedence over the per-page privilege errors ("Organisers only" / "You don't have
+  // access — ask an organisation owner"), which are misleading when the real problem is
+  // that no workspace is active. The super-admin platform views stay reachable so a
+  // tenant-less super-admin can still pick or create a workspace to escape the state.
+  const TENANTLESS_PREFIXES = ["/future/tenants", "/future/ops"];
+  const showNoTenant =
+    ready && !principal?.tenantId && !TENANTLESS_PREFIXES.some((r) => pathname.startsWith(r));
+
   // Whose plan the greyed sidebar items refer to — the "Acting as" tenant when a
   // super-admin is impersonating one, else "your current".
   const planContext = principal?.activeTenant?.name ? `${principal.activeTenant.name}’s` : "your current";
@@ -1092,17 +1103,6 @@ export default function MainLayout({
               </button>
               <TopbarSearch items={searchItems} />
             </div>
-            {/* Super-admin "acting as" — only when impersonating a tenant they're not a
-                member of (activeTenant is set by /auth/check exactly in that case). */}
-            {isSuperAdmin && principal?.activeTenant ? (
-              <div className="hidden items-center gap-2 rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 md:flex">
-                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                <span className="max-w-[220px] truncate">Active as {principal.activeTenant.name}</span>
-                <Link href="/future/tenants" className="underline underline-offset-2 hover:no-underline">
-                  Switch
-                </Link>
-              </div>
-            ) : null}
             <div className="flex items-center gap-2.5">
               <ThemeToggle />
               <NotificationsDropdown unreadCount={inboxUnreadCount} />
@@ -1110,7 +1110,24 @@ export default function MainLayout({
             </div>
           </header>
           <main className="flex-1 overflow-y-auto p-8">
-            <FlagsProvider>{children}</FlagsProvider>
+            <FlagsProvider>
+              {showNoTenant ? (
+                <div className="page-stack">
+                  <EmptyState
+                    title="Couldn't load — No active tenant"
+                    description={
+                      isSuperAdmin
+                        ? "You're not currently acting in a workspace. Pick or create one to continue."
+                        : "You're not a member of any workspace yet. Ask an organiser to add you."
+                    }
+                    ctaLabel={isSuperAdmin ? "Go to Workspaces" : undefined}
+                    onCta={isSuperAdmin ? () => router.push("/future/tenants") : undefined}
+                  />
+                </div>
+              ) : (
+                children
+              )}
+            </FlagsProvider>
           </main>
         </div>
       </div>

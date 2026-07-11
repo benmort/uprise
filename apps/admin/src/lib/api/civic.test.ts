@@ -9,6 +9,7 @@ import {
   getPolitician,
   listPolicies,
   getPolicy,
+  getCivicStatus,
   attendancePct,
   chamberLabel,
   jurisdictionLabel,
@@ -53,6 +54,11 @@ describe("civic api client — wrappers", () => {
   it("getPolicy encodes the id", async () => {
     await getPolicy("pc1");
     expect(mockReq.mock.calls[0][0]).toBe("/civic/policies/pc1");
+  });
+
+  it("getCivicStatus hits the status endpoint", async () => {
+    await getCivicStatus();
+    expect(mockReq.mock.calls[0][0]).toBe("/civic/status");
   });
 });
 

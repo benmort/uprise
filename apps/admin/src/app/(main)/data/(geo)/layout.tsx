@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Layers, Map as MapIcon } from "lucide-react";
 import { SearchInput } from "@/components/ui/search-input";
@@ -12,6 +11,7 @@ import { STATE_ABBREVS } from "@/lib/canvass/states";
 import { TurfBasketProvider, useTurfBasket } from "@/lib/canvass/turf-basket";
 import { GeoExplorerProvider } from "@/lib/canvass/geo-explorer-state";
 import { GeoSurface } from "@/components/canvass/geo-surface";
+import { DataExplorerTabs, NON_GEO_TABS } from "@/components/data/data-explorer-tabs";
 import {
   GEO_VIEW_PERSIST_EVENT,
   kindFromPathname,
@@ -35,15 +35,6 @@ import {
  *   ?tab=  the kind's sub-level (ced/sed/lga · mb/sa1–4) — written by the panels.
  *   ?state=/?code= the shared state filter + the selected state (deep-linkable).
  */
-
-const KINDS: Array<{ kind: GeoExplorerKind; label: string; href: string }> = [
-  { kind: "divisions", label: "Divisions", href: "/data/divisions" },
-  { kind: "states", label: "States", href: "/data/states" },
-  { kind: "areas", label: "Areas", href: "/data/areas" },
-  { kind: "addresses", label: "Addresses", href: "/data/addresses" },
-  { kind: "polling-places", label: "Polling places", href: "/data/polling-places" },
-  { kind: "first-nations", label: "First Nations", href: "/data/first-nations" },
-];
 
 const PLACEHOLDER: Record<GeoExplorerKind, string> = {
   divisions: "Search divisions by name…",
@@ -79,6 +70,9 @@ const DESCRIPTION: Record<GeoExplorerKind, string> = {
  */
 const DENSITY_KINDS = new Set<GeoExplorerKind>(["divisions", "states", "first-nations"]);
 
+/** Density shading is hidden for now — flip to true to bring back the toggle + the shade. */
+const DENSITY_ENABLED = false;
+
 const VIEW_KEY: Record<GeoExplorerKind, string> = {
   divisions: "uprise.divisionsView",
   states: "uprise.statesView",
@@ -97,7 +91,7 @@ function GeoExplorerChrome() {
   const stateParam = searchParams.get("state") ?? "";
   const rawView = searchParams.get("view");
   const view: WalkMode = rawView === "list" ? "list" : "map";
-  const density = searchParams.get("density") === "1";
+  const density = DENSITY_ENABLED && searchParams.get("density") === "1";
 
   // The input is local state (keystrokes must never wait on the URL); the ONE
   // debounce point writes ?q= after 250ms. lastWritten distinguishes our own URL
@@ -158,24 +152,13 @@ function GeoExplorerChrome() {
 
       <div className="flex flex-wrap items-center gap-2">
         {/* Segmented kind control – client navigation under the persistent layout:
-            the shell, the input and the map never remount. scroll={false} keeps the
-            viewport put on a kind switch. */}
-        <div className="flex rounded-xl border border-border p-0.5">
-          {KINDS.map((k) => (
-            <Link
-              key={k.kind}
-              href={kindHref(k.href)}
-              scroll={false}
-              aria-current={kind === k.kind ? "page" : undefined}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-                kind === k.kind ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
-              )}
-            >
-              {k.label}
-            </Link>
-          ))}
-        </div>
+            the shell, the input and the map never remount. The six geo tabs carry the
+            explorer state across a switch; Politicians/Policies leave the group (plain
+            tables), so they get the bare href. */}
+        <DataExplorerTabs
+          active={kind}
+          hrefFor={(tab, href) => (NON_GEO_TABS.has(tab) ? href : kindHref(href))}
+        />
         {/* Shared State Filter: narrows the list and frames the map to the chosen
             state on every kind. Round-trips ?state= (carried across kind switches). */}
         <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -201,8 +184,8 @@ function GeoExplorerChrome() {
           aria-label={`Search ${TITLE[kind].toLowerCase()}`}
           wrapperClassName="max-w-md flex-1"
         />
-        {/* Address density — only where boundaries are actually drawn, and only on the map. */}
-        {DENSITY_KINDS.has(kind) && view === "map" ? (
+        {/* Address density — hidden for now (DENSITY_ENABLED); only where boundaries are drawn, on the map. */}
+        {DENSITY_ENABLED && DENSITY_KINDS.has(kind) && view === "map" ? (
           <button
             type="button"
             onClick={() => writeGeoParam("density", density ? null : "1")}

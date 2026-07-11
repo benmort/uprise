@@ -111,4 +111,25 @@ describe("CivicService", () => {
       expect(res.positions[0]).toMatchObject({ politicianId: "p1", politicianName: "Alice", agreement: 100, voted: true });
     });
   });
+
+  describe("status", () => {
+    it("reports politician counts (with photo coverage) + policy counts and last-synced", async () => {
+      const synced = new Date("2026-07-11T00:00:00.000Z");
+      const prisma = {
+        politician: {
+          count: jest.fn(async ({ where }: { where?: { imageUrl?: unknown } } = {}) => (where?.imageUrl ? 180 : 685)),
+          aggregate: jest.fn(async () => ({ _max: { lastSyncedAt: synced } })),
+        },
+        policy: {
+          count: jest.fn(async () => 42),
+          aggregate: jest.fn(async () => ({ _max: { lastSyncedAt: null } })),
+        },
+      };
+      const res = await svc(prisma).status();
+      expect(res).toEqual({
+        politicians: { count: 685, withImage: 180, lastSyncedAt: synced },
+        policies: { count: 42, lastSyncedAt: null },
+      });
+    });
+  });
 });
