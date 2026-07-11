@@ -7,6 +7,8 @@
     "dev": "node ../../scripts/dev-supervisor.mjs --label worker -- TS_NODE_PROJECT=tsconfig.dev.json node --watch -r ts-node/register src/main.ts",
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "pnpm run typecheck",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
     "build": "tsc -p tsconfig.json",
     "queue:inspect-failed": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts inspect-failed",
     "queue:replay-failed": "ts-node --project tsconfig.dev.json src/admin/queue-admin.ts replay-failed",
@@ -43,6 +45,8 @@
     "@types/node": "^20.17.9",
     "ts-node": "^10.9.2",
     "tsx": "^4.20.6",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "2.1.9"
   }
 }

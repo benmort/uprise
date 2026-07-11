@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start -p 3005",
     "lint": "tsc --noEmit --pretty false",
-    "typecheck": "tsc --noEmit --pretty false"
+    "typecheck": "tsc --noEmit --pretty false",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage"
   },
   "dependencies": {
     "@turf/turf": "^7.3.5",
@@ -35,6 +37,8 @@
     "babel-loader": "^8.4.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.3.1",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "@vitest/coverage-v8": "2.1.9"
   }
 }

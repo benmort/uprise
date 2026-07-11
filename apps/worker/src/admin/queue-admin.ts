@@ -2,32 +2,12 @@ import "reflect-metadata";
 import { resolve } from "node:path";
 import { config as dotenvConfig } from "dotenv";
 import { Queue } from "bullmq";
-import { QUEUE_NAMES } from "../../../api/src/common/queue/queue.constants";
 import { QueueConfigService } from "../../../api/src/common/queue/queue-config.service";
 import { ConfigService } from "@nestjs/config";
+import { parseArgs } from "../lib/queue-admin-args";
 
 dotenvConfig({ path: resolve(process.cwd(), "../api/.env") });
 dotenvConfig();
-
-type Command = "inspect-failed" | "replay-failed" | "drain";
-
-function isQueueName(value: string): value is (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES] {
-  return Object.values(QUEUE_NAMES).includes(value as (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES]);
-}
-
-function parseArgs(argv: string[]): { command: Command; queueName: string } {
-  const command = (argv[2] || "").trim() as Command;
-  const queueName = (argv[3] || QUEUE_NAMES.BLAST_SEND).trim();
-  if (!["inspect-failed", "replay-failed", "drain"].includes(command)) {
-    throw new Error(
-      "Command must be one of: inspect-failed, replay-failed, drain. Example: pnpm --filter worker queue:inspect-failed blast-send",
-    );
-  }
-  if (!isQueueName(queueName)) {
-    throw new Error(`Unknown queue "${queueName}". Valid values: ${Object.values(QUEUE_NAMES).join(", ")}`);
-  }
-  return { command, queueName };
-}
 
 async function run(): Promise<void> {
   const { command, queueName } = parseArgs(process.argv);
