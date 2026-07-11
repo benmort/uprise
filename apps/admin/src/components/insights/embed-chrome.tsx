@@ -18,18 +18,37 @@ export function EmbedChrome() {
   }, [theme]);
 
   useEffect(() => {
-    const post = () =>
-      window.parent?.postMessage(
-        { type: "uprise:insights-height", height: Math.ceil(document.documentElement.scrollHeight) },
-        "*",
-      );
-    post();
-    const ro = new ResizeObserver(post);
-    ro.observe(document.body);
+    // Full document height (the largest of the two roots), so the host iframe is sized to the
+    // WHOLE content and never shows its own scrollbar (the double-scroll the host page suffered).
+    const measure = () =>
+      Math.ceil(Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
+    let last = 0;
+    let raf = 0;
+    const post = () => {
+      const height = measure();
+      if (height === last) return;
+      last = height;
+      window.parent?.postMessage({ type: "uprise:insights-height", height }, "*");
+    };
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(post);
+    };
+    schedule();
+    // documentElement catches every layout change; body alone missed fixed-height children.
+    const ro = new ResizeObserver(schedule);
+    ro.observe(document.documentElement);
     window.addEventListener("load", post);
+    window.addEventListener("resize", schedule);
+    // Charts (ApexCharts), the choropleth (mapbox) and images settle asynchronously after the
+    // first paint — re-measure across a short window so the frame grows to fit them.
+    const timers = [150, 400, 800, 1500, 2500].map((ms) => window.setTimeout(post, ms));
     return () => {
+      cancelAnimationFrame(raf);
       ro.disconnect();
       window.removeEventListener("load", post);
+      window.removeEventListener("resize", schedule);
+      timers.forEach(clearTimeout);
     };
   }, []);
 

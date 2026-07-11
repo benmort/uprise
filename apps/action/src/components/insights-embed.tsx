@@ -46,6 +46,9 @@ export function InsightsEmbed({
       title={title}
       sandbox="allow-scripts allow-same-origin"
       loading="lazy"
+      // scrolling="no": the frame is auto-sized to its content height (below), so it must never
+      // show its own scrollbar — that's the double-scroll (iframe + page) we're fixing.
+      scrolling="no"
       className="w-full border-0"
       style={{ height }}
     />

@@ -31,7 +31,14 @@ export default function EmbedPollPage() {
         empty={!loading && !error && !data}
         skeleton={<Skeleton className="h-64 w-full" />}
       >
-        {data ? <PollBody poll={data} pollId={pollId} mode="public" /> : null}
+        {data ? (
+          <>
+            <h1 className="mb-4 text-2xl font-extrabold leading-tight tracking-tight text-foreground sm:text-3xl">
+              {data.title}
+            </h1>
+            <PollBody poll={data} pollId={pollId} mode="public" />
+          </>
+        ) : null}
       </StateRegion>
     </InsightsApiProvider>
   );
