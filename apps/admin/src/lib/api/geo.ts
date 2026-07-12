@@ -140,7 +140,10 @@ export async function getGeoStatus(opts?: { signal?: AbortSignal }) {
 /** Total address count across a set of selected ASGS areas — for the pre-cut turf estimate. */
 export async function getAreaAddressCount(areas: Array<{ level: string; code: string }>) {
   const codes = areas.map((a) => `${a.level}:${a.code}`).join(",");
-  return request<{ addresses: number }>(`/geo/area-address-count?codes=${encodeURIComponent(codes)}`);
+  // `byArea` is keyed "<level>:<code>" so a caller can label each area's own count.
+  return request<{ addresses: number; byArea: Record<string, number> }>(
+    `/geo/area-address-count?codes=${encodeURIComponent(codes)}`,
+  );
 }
 
 /** One 2023 referendum result row (national/state/division). Percentages are 0–100. */

@@ -311,6 +311,21 @@ export class CampaignsService {
     return this.prisma.canvassCampaign.update({ where: { id }, data });
   }
 
+  /** Hard-delete a campaign. Its turf, walk lists and shifts survive with `campaignId`
+   *  set null (schema `onDelete: SetNull`), so no fieldwork data is destroyed – the rows
+   *  are simply unlinked. Tenant-scoped, like every other mutation here. */
+  async remove(tenantId: string, id: string) {
+    const existing = await this.prisma.canvassCampaign.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+    if (!existing) {
+      throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
+    }
+    await this.prisma.canvassCampaign.delete({ where: { id } });
+    return { id };
+  }
+
   /** Campaign boundary (cached GeoJSON) + its re-editable source list. `describedSources`
    *  resolves each source's code to a human name, so the turf page can list WHAT the
    *  campaign is bounded to; `sources` stays raw for the boundary editor's round-trip. */
@@ -349,5 +364,15 @@ export class CampaignsService {
     });
     if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
     return this.geo.areasInBoundary(layer, c.boundary ?? null);
+  }
+
+  /** Total addresses inside the campaign's saved boundary (level-independent). */
+  async boundaryAddressCount(tenantId: string, id: string) {
+    const c = await this.prisma.canvassCampaign.findFirst({
+      where: { id, tenantId },
+      select: { boundary: true },
+    });
+    if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
+    return this.geo.boundaryAddressCount(c.boundary ?? null);
   }
 }

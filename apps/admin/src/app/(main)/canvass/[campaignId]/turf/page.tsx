@@ -17,8 +17,13 @@ import {
   type TurfSummary,
 } from "@/lib/api";
 import { Select, SelectItem } from "@/components/ui/select";
-import { createTurfFromAreas, type AreaLevel } from "@/lib/api/geo";
-import { getCampaignBoundary, getCampaignAreas, type DescribedSource } from "@/lib/api/campaigns";
+import { createTurfFromAreas, getAreaAddressCount, type AreaLevel } from "@/lib/api/geo";
+import {
+  getCampaignBoundary,
+  getCampaignAreas,
+  getCampaignBoundaryAddressCount,
+  type DescribedSource,
+} from "@/lib/api/campaigns";
 import { Spinner } from "@uprise/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -126,6 +131,14 @@ export default function TurfCuttingPage() {
     { ttlMs: 300_000 },
   );
   const boundaryAreas = campaignBoundary ? (boundaryAreasData ?? null) : null;
+  // Total addresses inside the boundary — a spatial count, so it's level-independent
+  // (unlike summing the intersecting areas, which over-counts at coarse levels).
+  const { data: boundaryAddr } = useApi(
+    campaignBoundary ? `/canvass/campaigns/${campaignId}/boundary/address-count` : null,
+    () => getCampaignBoundaryAddressCount(campaignId),
+    { ttlMs: 300_000 },
+  );
+  const boundaryAddresses = boundaryAddr?.addresses ?? null;
   const [hovered, setHovered] = useState<AreaHoverInfo | null>(null);
 
   const [name, setName] = useState("");
@@ -135,6 +148,15 @@ export default function TurfCuttingPage() {
   const [universe, setUniverse] = useState<Universe>("hybrid");
   const [polygons, setPolygons] = useState<GeoJSON.Polygon[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<SelectedArea[]>([]);
+  // Per-area address counts for the selected list. Shares the cache key with the
+  // SelectedAreasEstimate below (same URL), so it's one request, not two.
+  const selectedCodes = selectedAreas.map((a) => `${a.level}:${a.code}`).join(",");
+  const { data: selectedAddr } = useApi(
+    selectedAreas.length ? `/geo/area-address-count?codes=${selectedCodes}` : null,
+    () => getAreaAddressCount(selectedAreas.map((a) => ({ level: a.level, code: a.code }))),
+    { ttlMs: 60_000 },
+  );
+  const addressByArea = selectedAddr?.byArea ?? {};
   // Optional inline assignment: assign the new turf to a canvasser on save.
   const [assigneeId, setAssigneeId] = useState("");
   const { data: volunteersData } = useApi("/canvass/volunteers", listVolunteers, { ttlMs: 300_000 });
@@ -319,6 +341,14 @@ export default function TurfCuttingPage() {
                     } inside — click to claim, or draw within the shaded zone.`
                   : `Loading ${level.toUpperCase()} areas inside the boundary…`}
               </p>
+              {boundaryAddresses != null ? (
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  <span className="font-semibold tabular-nums text-foreground">
+                    {boundaryAddresses.toLocaleString()}
+                  </span>{" "}
+                  address{boundaryAddresses === 1 ? "" : "es"} inside the boundary.
+                </p>
+              ) : null}
               <Button
                 variant="outline"
                 className="mt-3 w-full"
@@ -403,22 +433,28 @@ export default function TurfCuttingPage() {
           {selectedAreas.length > 0 ? (
             <SectionCard title={`Selected areas (${selectedAreas.length})`}>
               <ul className="space-y-1.5">
-                {selectedAreas.map((a) => (
-                  <li key={`${a.level}:${a.code}`} className="flex items-center gap-2 text-sm">
-                    <span className="rounded bg-surface-variant px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
-                      {a.level}
-                    </span>
-                    <span className="truncate font-medium text-foreground">{a.name}</span>
-                    <button
-                      type="button"
-                      aria-label={`Remove ${a.name}`}
-                      onClick={() => toggleArea(a)}
-                      className="ml-auto text-muted-foreground hover:text-error"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
+                {selectedAreas.map((a) => {
+                  const addr = addressByArea[`${a.level}:${a.code}`];
+                  return (
+                    <li key={`${a.level}:${a.code}`} className="flex items-center gap-2 text-sm">
+                      <span className="rounded bg-surface-variant px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+                        {a.level}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{a.name}</span>
+                      <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                        {addr != null ? `${addr.toLocaleString()} addr` : "…"}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${a.name}`}
+                        onClick={() => toggleArea(a)}
+                        className="shrink-0 text-muted-foreground hover:text-error"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
               <SelectedAreasEstimate areas={selectedAreas.map((a) => ({ level: a.level, code: a.code }))} />
             </SectionCard>

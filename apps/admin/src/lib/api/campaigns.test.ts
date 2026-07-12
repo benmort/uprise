@@ -4,7 +4,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 vi.mock("@/lib/api", () => ({ request: vi.fn(async () => ({ ok: true, data: null })) }));
 
 import { request } from "@/lib/api";
-import { getCampaignBoundary, setCampaignBoundary, getCampaignAreas, type BoundarySource } from "./campaigns";
+import {
+  getCampaignBoundary,
+  setCampaignBoundary,
+  getCampaignAreas,
+  getCampaignBoundaryAddressCount,
+  deleteCampaign,
+  type BoundarySource,
+} from "./campaigns";
 
 const mockReq = request as unknown as ReturnType<typeof vi.fn>;
 
@@ -34,5 +41,19 @@ describe("campaigns api client — boundary", () => {
   it("getCampaignAreas encodes the layer into the path", async () => {
     await getCampaignAreas("c1", "sa2");
     expect(mockReq.mock.calls[0][0]).toBe("/canvass/campaigns/c1/areas/sa2");
+  });
+
+  it("deleteCampaign DELETEs the encoded campaign endpoint", async () => {
+    await deleteCampaign("c/1");
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c%2F1");
+    expect(opts?.method).toBe("DELETE");
+  });
+
+  it("getCampaignBoundaryAddressCount GETs the encoded boundary address-count endpoint", async () => {
+    await getCampaignBoundaryAddressCount("c/1");
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c%2F1/boundary/address-count");
+    expect(opts).toBeUndefined(); // a bare GET
   });
 });

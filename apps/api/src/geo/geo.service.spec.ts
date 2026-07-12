@@ -864,40 +864,64 @@ describe("GeoService.describeSources", () => {
 });
 
 describe("GeoService.areaAddressCount", () => {
-  const make = (rows: Array<{ n: number }>) => {
+  const make = (rows: Array<{ code?: string; n: number }>) => {
     const $queryRawUnsafe = jest.fn().mockResolvedValue(rows);
     return { svc: new GeoService({ $queryRawUnsafe } as never), $queryRawUnsafe };
   };
 
-  it("returns 0 without querying when no area has a mapped level", async () => {
-    const { svc, $queryRawUnsafe } = make([{ n: 999 }]);
-    expect(await svc.areaAddressCount([{ level: "bogus", code: "x" }])).toEqual({ addresses: 0 });
+  it("returns 0 + empty byArea without querying when no area has a mapped level", async () => {
+    const { svc, $queryRawUnsafe } = make([{ code: "x", n: 999 }]);
+    expect(await svc.areaAddressCount([{ level: "bogus", code: "x" }])).toEqual({ addresses: 0, byArea: {} });
     expect($queryRawUnsafe).not.toHaveBeenCalled();
   });
 
-  it("routes SA levels through geo.meshblock and drops unknown levels", async () => {
-    const { svc, $queryRawUnsafe } = make([{ n: 4200 }]);
+  it("routes SA levels through geo.meshblock, groups per area, and drops unknown levels", async () => {
+    const { svc, $queryRawUnsafe } = make([
+      { code: "201011001", n: 4000 },
+      { code: "201011002", n: 200 },
+    ]);
     const res = await svc.areaAddressCount([
       { level: "sa2", code: "201011001" },
       { level: "sa2", code: "201011002" },
       { level: "bogus", code: "x" }, // dropped — no mapped column
     ]);
-    expect(res).toEqual({ addresses: 4200 });
+    expect(res).toEqual({
+      addresses: 4200,
+      byArea: { "sa2:201011001": 4000, "sa2:201011002": 200 },
+    });
     expect($queryRawUnsafe).toHaveBeenCalledTimes(1);
     const [sql, ...params] = $queryRawUnsafe.mock.calls[0];
     expect(sql).toContain("geo.address_region");
     expect(sql).toContain("geo.meshblock");
     expect(sql).toContain("sa2_code IN");
+    expect(sql).toContain("GROUP BY");
     expect(params).toEqual(["201011001", "201011002"]);
   });
 
   it("counts the meshblock level directly on address_region (no meshblock join)", async () => {
-    const { svc, $queryRawUnsafe } = make([{ n: 7 }]);
+    const { svc, $queryRawUnsafe } = make([{ code: "20604112700", n: 7 }]);
     const res = await svc.areaAddressCount([{ level: "mb", code: "20604112700" }]);
-    expect(res).toEqual({ addresses: 7 });
+    expect(res).toEqual({ addresses: 7, byArea: { "mb:20604112700": 7 } });
     const [sql, ...params] = $queryRawUnsafe.mock.calls[0];
     expect(sql).toContain("mb_code IN");
     expect(sql).not.toContain("geo.meshblock");
     expect(params).toEqual(["20604112700"]);
+  });
+
+  it("boundaryAddressCount returns 0 for a null boundary without querying", async () => {
+    const { svc, $queryRawUnsafe } = make([{ n: 5 }]);
+    expect(await svc.boundaryAddressCount(null)).toEqual({ addresses: 0 });
+    expect($queryRawUnsafe).not.toHaveBeenCalled();
+  });
+
+  it("boundaryAddressCount counts addresses in meshblocks whose centroid is inside the boundary", async () => {
+    const { svc, $queryRawUnsafe } = make([{ n: 3120 }]);
+    const boundary = { type: "Polygon", coordinates: [] };
+    expect(await svc.boundaryAddressCount(boundary)).toEqual({ addresses: 3120 });
+    const [sql, geojson] = $queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("ST_GeomFromGeoJSON");
+    expect(sql).toContain("ST_Centroid");
+    expect(sql).toContain("geo.meshblock");
+    expect(geojson).toBe(JSON.stringify(boundary));
   });
 });

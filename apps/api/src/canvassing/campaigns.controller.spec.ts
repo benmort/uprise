@@ -10,7 +10,9 @@ describe("CampaignsController", () => {
     getResults: jest.fn().mockResolvedValue({}),
     getLive: jest.fn().mockResolvedValue({}),
     update: jest.fn().mockResolvedValue({}),
+    remove: jest.fn().mockResolvedValue({ id: "c1" }),
     getBoundary: jest.fn().mockResolvedValue({}),
+    boundaryAddressCount: jest.fn().mockResolvedValue({ addresses: 0 }),
     setBoundary: jest.fn().mockResolvedValue({}),
   } as any;
   const c = new CampaignsController(svc);
@@ -50,6 +52,16 @@ describe("CampaignsController", () => {
   it("update delegates with tenantId + id", async () => {
     await c.update("c1", { name: "N" } as any, "t1");
     expect(svc.update).toHaveBeenCalledWith("t1", "c1", { name: "N" });
+  });
+
+  it("remove delegates with tenantId + id", async () => {
+    await c.remove("c1", "t1");
+    expect(svc.remove).toHaveBeenCalledWith("t1", "c1");
+  });
+
+  it("boundaryAddressCount delegates with tenantId + id", async () => {
+    await c.boundaryAddressCount("c1", "t1");
+    expect(svc.boundaryAddressCount).toHaveBeenCalledWith("t1", "c1");
   });
 
   it("getBoundary delegates with tenantId + id", async () => {

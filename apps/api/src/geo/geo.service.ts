@@ -572,7 +572,9 @@ export class GeoService {
    *  (geo.address_region.mb_code, indexed); geo.meshblock carries each ASGS level's code, so SA
    *  counts route address → meshblock → sa<n>_code — the SA columns on address_region itself
    *  aren't populated. `mb` is counted directly. Powers the pre-cut "Selected areas" estimate. */
-  async areaAddressCount(areas: Array<{ level: string; code: string }>): Promise<{ addresses: number }> {
+  async areaAddressCount(
+    areas: Array<{ level: string; code: string }>,
+  ): Promise<{ addresses: number; byArea: Record<string, number> }> {
     // Group codes by level; only mb / sa1–sa4 (the AREA_REGION_COL keys) are counted.
     const byLevel = new Map<AreaLevel, string[]>();
     for (const a of areas) {
@@ -583,21 +585,50 @@ export class GeoService {
       else byLevel.set(level, [a.code]);
     }
     let total = 0;
+    const byArea: Record<string, number> = {}; // keyed "<level>:<code>", so callers can label each row
     for (const [level, codes] of byLevel) {
       const col = AREA_REGION_COL[level]; // validated → a fixed column name (mb_code / sa1_code / …)
       const params: string[] = [];
       const ph = codes.map((c) => { params.push(c); return `$${params.length}`; }).join(",");
-      // mb: address_region carries mb_code directly. sa1–sa4: the meshblock carries the level code,
-      // so find the meshblocks in the areas, then count addresses in those meshblocks (mb_code indexed).
+      // GROUP BY the level's code to get each area's own count as well as the sum. mb:
+      // address_region carries mb_code directly. sa1–sa4: the meshblock carries the level
+      // code, so join address_region → meshblock (mb_code indexed) and group by it.
       const sql =
         level === "mb"
-          ? `SELECT COUNT(*)::bigint AS n FROM geo.address_region WHERE ${col} IN (${ph})`
-          : `SELECT COUNT(*)::bigint AS n FROM geo.address_region
-               WHERE mb_code IN (SELECT mb_code FROM geo.meshblock WHERE ${col} IN (${ph}))`;
-      const rows = (await this.prisma.$queryRawUnsafe(sql, ...params)) as Array<{ n: bigint | number }>;
-      total += Number(rows[0]?.n ?? 0);
+          ? `SELECT ${col} AS code, COUNT(*)::bigint AS n FROM geo.address_region WHERE ${col} IN (${ph}) GROUP BY ${col}`
+          : `SELECT m.${col} AS code, COUNT(*)::bigint AS n FROM geo.address_region a
+               JOIN geo.meshblock m ON a.mb_code = m.mb_code
+               WHERE m.${col} IN (${ph}) GROUP BY m.${col}`;
+      const rows = (await this.prisma.$queryRawUnsafe(sql, ...params)) as Array<{ code: string; n: bigint | number }>;
+      for (const r of rows) {
+        const n = Number(r.n ?? 0);
+        byArea[`${level}:${r.code}`] = n;
+        total += n;
+      }
     }
-    return { addresses: total };
+    return { addresses: total, byArea };
+  }
+
+  /**
+   * Addresses inside an arbitrary boundary (a campaign's saved extent). Level-independent
+   * and exact: count the addresses in every meshblock whose centroid falls inside the
+   * boundary (each meshblock is tiny, so centroid-in is a clean "inside" test and never
+   * double-counts). Summing whole intersecting SA areas would over-count at coarse levels;
+   * this does not. Null boundary → 0.
+   */
+  async boundaryAddressCount(boundary: unknown): Promise<{ addresses: number }> {
+    if (boundary == null) return { addresses: 0 };
+    const geojson = JSON.stringify(boundary);
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `WITH b AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON($1::text), 4326) AS g)
+       SELECT COUNT(*)::bigint AS n FROM geo.address_region ar
+       WHERE ar.mb_code IN (
+         SELECT m.mb_code FROM geo.meshblock m, b
+         WHERE m.geom && b.g AND ST_Contains(b.g, ST_Centroid(m.geom))
+       )`,
+      geojson,
+    )) as Array<{ n: bigint | number }>;
+    return { addresses: Number(rows[0]?.n ?? 0) };
   }
 
   /**

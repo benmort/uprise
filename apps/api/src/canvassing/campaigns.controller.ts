@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, UseGuards } from "@nestjs/common";
 import { AppUserRole } from "@uprise/db";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
@@ -53,10 +53,22 @@ export class CampaignsController {
     return this.campaigns.update(tenantId, id, dto);
   }
 
+  @Delete(":id")
+  @Roles(AppUserRole.ORGANISER)
+  async remove(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.campaigns.remove(tenantId, id);
+  }
+
   @Get(":id/boundary")
   @Roles(AppUserRole.ORGANISER)
   async getBoundary(@Param("id") id: string, @TenantId() tenantId: string) {
     return this.campaigns.getBoundary(tenantId, id);
+  }
+
+  @Get(":id/boundary/address-count")
+  @Roles(AppUserRole.ORGANISER)
+  async boundaryAddressCount(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.campaigns.boundaryAddressCount(tenantId, id);
   }
 
   @Put(":id/boundary")

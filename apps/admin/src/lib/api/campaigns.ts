@@ -72,6 +72,13 @@ export async function getCampaignAreas(id: string, layer: string) {
   );
 }
 
+/** Total addresses inside the campaign's saved boundary (level-independent, spatial). */
+export async function getCampaignBoundaryAddressCount(id: string) {
+  return request<{ addresses: number }>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/boundary/address-count`,
+  );
+}
+
 export async function listCampaigns() {
   return request<CampaignSummary[]>("/canvass/campaigns");
 }
@@ -93,6 +100,12 @@ export async function updateCampaign(id: string, input: CampaignInput) {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCampaign(id: string) {
+  return request<{ id: string }>(`/canvass/campaigns/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 

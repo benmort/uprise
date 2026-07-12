@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
+  deleteCampaign,
   getCampaignSummary,
   listCampaigns,
   updateCampaign,
@@ -21,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -41,6 +43,8 @@ export default function CanvassPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Campaign create/edit dialog.
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -131,6 +135,25 @@ export default function CanvassPage() {
       selfClaim: c.volunteerCanSelfClaimTurf ?? false,
     });
     setDialogOpen(true);
+  };
+
+  // Delete the active campaign. Its turf/walk lists survive (schema SetNull); we just
+  // drop it from the list and fall back to the next campaign (or the empty state).
+  const onDeleteCampaign = async () => {
+    const c = campaigns.find((x) => x.id === activeId);
+    if (!c) return;
+    setDeleting(true);
+    const res = await deleteCampaign(c.id);
+    setDeleting(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't delete campaign", description: res.error });
+      return;
+    }
+    setConfirmDelete(false);
+    const remaining = campaigns.filter((x) => x.id !== c.id);
+    setCampaigns(remaining);
+    setActiveId(remaining[0]?.id ?? "");
+    showToast({ tone: "success", title: "Campaign deleted", description: c.name });
   };
 
   const submitCampaign = useCallback(async () => {
@@ -227,6 +250,16 @@ export default function CanvassPage() {
           {activeId ? (
             <Button variant="ghost" size="icon" aria-label="Edit campaign" onClick={openEdit}>
               <Pencil className="h-4 w-4" />
+            </Button>
+          ) : null}
+          {activeId ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Delete campaign"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="h-4 w-4 text-error" />
             </Button>
           ) : null}
           {activeId ? (
@@ -457,6 +490,16 @@ export default function CanvassPage() {
           </Field>
         </div>
       </FormDialog>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete campaign"
+        description={`Permanently delete "${campaigns.find((c) => c.id === activeId)?.name ?? "this campaign"}"? This can't be undone. Its turf and walk lists are kept but will no longer belong to a campaign.`}
+        confirmLabel="Delete campaign"
+        onConfirm={() => void onDeleteCampaign()}
+        onCancel={() => setConfirmDelete(false)}
+        busy={deleting}
+      />
     </div>
   );
 }

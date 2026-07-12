@@ -13,6 +13,7 @@ describe("CampaignsService", () => {
         findFirst: jest.fn(),
         create: jest.fn(async ({ data }: any) => ({ id: "c1", ...data })),
         update: jest.fn(async ({ data }: any) => ({ id: "c1", ...data })),
+        delete: jest.fn(async () => ({ id: "c1" })),
       },
       turf: { findMany: jest.fn() },
       doorKnock: { count: jest.fn() },
@@ -22,6 +23,7 @@ describe("CampaignsService", () => {
     geo = {
       unionSources: jest.fn(async () => null),
       describeSources: jest.fn(async () => []),
+      boundaryAddressCount: jest.fn(async () => ({ addresses: 42 })),
     } as any;
     service = new CampaignsService(prisma, geo);
   });
@@ -66,6 +68,27 @@ describe("CampaignsService", () => {
       where: { id: "c1" },
       data: { name: "Renamed" },
     });
+  });
+
+  it("remove deletes a tenant-owned campaign and rejects unknown ones", async () => {
+    prisma.canvassCampaign.findFirst.mockResolvedValue(null);
+    await expect(service.remove("org1", "missing")).rejects.toThrow();
+    expect(prisma.canvassCampaign.delete).not.toHaveBeenCalled();
+
+    prisma.canvassCampaign.findFirst.mockResolvedValue({ id: "c1" });
+    const res = await service.remove("org1", "c1");
+    expect(prisma.canvassCampaign.delete).toHaveBeenCalledWith({ where: { id: "c1" } });
+    expect(res).toEqual({ id: "c1" });
+  });
+
+  it("boundaryAddressCount rejects unknown campaigns and delegates the boundary otherwise", async () => {
+    prisma.canvassCampaign.findFirst.mockResolvedValue(null);
+    await expect(service.boundaryAddressCount("org1", "missing")).rejects.toThrow();
+
+    prisma.canvassCampaign.findFirst.mockResolvedValue({ boundary: { type: "Polygon" } });
+    const res = await service.boundaryAddressCount("org1", "c1");
+    expect(geo.boundaryAddressCount).toHaveBeenCalledWith({ type: "Polygon" });
+    expect(res).toEqual({ addresses: 42 });
   });
 
   describe("getSummary", () => {
