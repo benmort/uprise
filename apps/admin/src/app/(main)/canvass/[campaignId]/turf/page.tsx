@@ -18,7 +18,7 @@ import {
 } from "@/lib/api";
 import { Select, SelectItem } from "@/components/ui/select";
 import { createTurfFromAreas, type AreaLevel } from "@/lib/api/geo";
-import { getCampaignBoundary, getCampaignAreas } from "@/lib/api/campaigns";
+import { getCampaignBoundary, getCampaignAreas, type DescribedSource } from "@/lib/api/campaigns";
 import { Spinner } from "@uprise/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,7 @@ import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { Pencil, Trash2 } from "lucide-react";
 import type { AreaHoverInfo, ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
+import { SelectedAreasEstimate } from "@/components/canvass/selected-areas-estimate";
 import { cn } from "@/lib/utils";
 import {
   describeBuildings,
@@ -56,6 +57,25 @@ const UNIVERSE_OPTIONS: Array<{ id: Universe; label: string; desc: string }> = [
   { id: "none", label: "Addresses without contacts", desc: "Cold doors with no prior record." },
   { id: "hybrid", label: "Hybrid — recommended", desc: "Existing contacts plus cold addresses." },
 ];
+
+// Human label for each boundary-source layer key — what a bounded campaign is cut from.
+// Keyed on the API's DescribedSource.key (a division's `ste` arrives as `state`).
+const SOURCE_LABEL: Record<string, string> = {
+  ced: "Federal electorate",
+  sed: "State electorate",
+  sed_lower: "State lower house",
+  sed_upper: "State upper house",
+  lga: "Local government area",
+  ward: "Ward",
+  state: "State / territory",
+  chamber_electorate: "Chamber electorate",
+  mb: "Mesh block",
+  sa1: "SA1",
+  sa2: "SA2",
+  sa3: "SA3",
+  sa4: "SA4",
+  polygon: "Drawn area",
+};
 
 /**
  * A turf name derived from what's selected, so organisers don't have to type one.
@@ -92,6 +112,9 @@ export default function TurfCuttingPage() {
     { ttlMs: 300_000 },
   );
   const campaignBoundary = (boundaryData?.boundary ?? null) as GeoJSON.Geometry | null;
+  // What the boundary is built from (divisions/areas/drawn), resolved to human names —
+  // listed in the boundary card so organisers see WHAT the campaign is bounded to.
+  const describedSources: DescribedSource[] = boundaryData?.describedSources ?? [];
 
   // Bounded campaign: the area level to cut at (SA4→Meshblock), lifted here so we
   // fetch just the areas inside the boundary for the chosen level. Switching the
@@ -276,6 +299,19 @@ export default function TurfCuttingPage() {
               title="Campaign boundary"
               description="Turf here is cut against this campaign's saved extent (shaded on the map)."
             >
+              {/* What the campaign is bounded to — its source divisions/areas by name. */}
+              {describedSources.length > 0 ? (
+                <ul className="mb-3 space-y-1.5">
+                  {describedSources.map((s, i) => (
+                    <li key={`${s.key}:${s.kind === "polygon" ? i : s.code}`} className="flex items-center gap-2 text-sm">
+                      <span className="rounded bg-surface-variant px-1.5 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">
+                        {SOURCE_LABEL[s.key] ?? s.key}
+                      </span>
+                      <span className="truncate font-medium text-foreground">{s.name ?? "Drawn area"}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <p className="text-sm text-muted-foreground">
                 {boundaryAreas
                   ? `${boundaryAreas.features.length.toLocaleString()} ${level.toUpperCase()} area${
@@ -384,6 +420,7 @@ export default function TurfCuttingPage() {
                   </li>
                 ))}
               </ul>
+              <SelectedAreasEstimate areas={selectedAreas.map((a) => ({ level: a.level, code: a.code }))} />
             </SectionCard>
           ) : null}
 

@@ -17,6 +17,7 @@ import { useCutTurf } from "@/lib/canvass/use-cut-turf";
 import { useTurfBasket } from "@/lib/canvass/turf-basket";
 import { useGeoExplorer } from "@/lib/canvass/geo-explorer-state";
 import { MyTurfPanel } from "@/components/canvass/my-turf-panel";
+import { SelectedAreasEstimate } from "@/components/canvass/selected-areas-estimate";
 import { STATE_ABBREVS, stateAbbrevToAsgsDigit } from "@/lib/canvass/states";
 import { UniverseCards, UniverseSelect } from "@/components/canvass/universe-select";
 import { useGeoExplorerUrlState } from "@/components/canvass/use-geo-explorer-url-state";
@@ -355,6 +356,7 @@ export function AreasPanel({ view }: { view: WalkMode }) {
                 </li>
               ))}
             </ul>
+            <SelectedAreasEstimate areas={selectedAreas.map((a) => ({ level: a.level, code: a.code }))} />
           </SectionCard>
         ) : null}
 

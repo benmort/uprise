@@ -159,7 +159,9 @@ async function main(): Promise<void> {
           await tx.tenant.update({ where: { id }, data: { slug: `reset-tmp-${id}` } });
         }
         for (const { id, desired } of plan.keep) {
-          await tx.tenant.update({ where: { id }, data: { slug: desired.slug, name: desired.name } });
+          // deletedAt: null revives a kept tenant that was soft-deleted — otherwise it
+          // survives the reset but stays hidden from the workspace switcher.
+          await tx.tenant.update({ where: { id }, data: { slug: desired.slug, name: desired.name, deletedAt: null } });
           keepIds.push(id);
         }
         for (const desired of plan.missing) {

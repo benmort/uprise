@@ -41,6 +41,8 @@ export type PublicPoll = {
   attribution: string | null;
   keyFindings: PublicKeyFinding[];
   questions: PublicQuestionRef[];
+  /** The owning tenant — brands the public page (no logo field on Tenant, so an initials avatar). */
+  tenant: { name: string; slug: string } | null;
 };
 
 export type PublicCrosstabColumn = {

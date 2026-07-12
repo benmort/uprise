@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Alert, LogoMark, Spinner } from "@uprise/ui";
+import { Alert, Spinner } from "@uprise/ui";
 import { auth } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { useQueryParams } from "@/lib/use-query";
@@ -53,8 +53,9 @@ export default function VolunteerBoardPage() {
     <div className="flex flex-1 flex-col">
       {/* Hero — identical style to the per-campaign page, generic copy. */}
       <section className="rounded-b-[1.625rem] bg-primary px-[1.625rem] pb-7 pt-8 text-white">
-        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
-          <LogoMark className="h-8 w-8 text-white" />
+        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/uprise-icon.svg" alt="Uprise" className="h-11 w-11 rounded-xl" />
         </span>
         <p className="mt-6 text-sm font-bold uppercase tracking-[0.08em] text-white/80">Join the team</p>
         <h1 className="mt-2 text-[2rem] font-extrabold leading-[1.1]">Become a volunteer</h1>

@@ -63,6 +63,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "tenant.member" },
     { action: "manage", resource: "tenant.invitation" },
     { action: "manage", resource: "tenant.org-profile" },
+    { action: "manage", resource: "tenant.files" },
     { action: "read", resource: "tenant.tenant" },
     { action: "read", resource: "analytics.all" },
     { action: "read", resource: "audit.log" },

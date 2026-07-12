@@ -6,7 +6,7 @@ import Map, { Layer, Marker, Source, useControl, type MapProps, type MapRef } fr
 import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
-import { Loader2, MapPin, Search, X } from "lucide-react";
+import { Crosshair, Loader2, MapPin, Search, X } from "lucide-react";
 import { AU_BOUNDS } from "@uprise/field";
 import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
 import { getApiUrl } from "@/lib/api";
@@ -387,6 +387,15 @@ export function TurfDrawMap({
       ?.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32, duration: 600 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recenterToken]);
+
+  // The on-map "Recentre" button: re-fit to the campaign boundary (or the picked
+  // state / country fallback) after panning or zooming away.
+  const recenter = useCallback(() => {
+    const frame = boundaryBounds ?? focusBounds ?? AU_BOUNDS;
+    mapRef.current
+      ?.getMap()
+      ?.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32, duration: 600 });
+  }, [boundaryBounds, focusBounds]);
 
   // Vector-tile boundary source for the active level. mapbox requests only the
   // tiles visible at the current zoom, so this is what makes boundaries fast at any
@@ -945,6 +954,17 @@ export function TurfDrawMap({
           </>
         ) : null}
       </Map>
+
+      {/* On-map recentre — snaps back to the campaign boundary (or picked state / country). */}
+      <button
+        type="button"
+        onClick={recenter}
+        title="Recentre the map"
+        className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur transition hover:bg-surface-variant"
+      >
+        <Crosshair className="h-3.5 w-3.5" />
+        Recentre
+      </button>
 
       {/* Level toggle + search panel (areas mode only): portaled toolbar or on-map
           overlay. Boundaries/points modes render no in-map controls. */}

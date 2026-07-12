@@ -16,6 +16,7 @@ import {
   getFirstNations,
   getDensityScale,
   getReferendum,
+  getAreaAddressCount,
 } from "./geo";
 
 const mockReq = request as unknown as ReturnType<typeof vi.fn>;
@@ -157,5 +158,15 @@ describe("geo api client — density", () => {
   it("getReferendum hits the referendum endpoint", async () => {
     await getReferendum();
     expect(mockReq.mock.calls[0][0]).toBe("/geo/referendum");
+  });
+
+  it("getAreaAddressCount joins level:code pairs into the codes query", async () => {
+    await getAreaAddressCount([
+      { level: "sa2", code: "201011001" },
+      { level: "sa3", code: "20101" },
+    ]);
+    const url = mockReq.mock.calls[0][0] as string;
+    expect(url).toContain("/geo/area-address-count?codes=");
+    expect(decodeURIComponent(url)).toContain("sa2:201011001,sa3:20101");
   });
 });

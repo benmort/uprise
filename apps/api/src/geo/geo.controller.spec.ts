@@ -15,6 +15,7 @@ describe("GeoController", () => {
       area: jest.fn().mockResolvedValue({}),
       areaDetail: jest.fn().mockResolvedValue({}),
       areas: jest.fn().mockResolvedValue([]),
+      areaAddressCount: jest.fn().mockResolvedValue(0),
       tile: jest.fn().mockResolvedValue(Buffer.alloc(0)),
       nearbyAddresses: jest.fn().mockResolvedValue([]),
       addresses: jest.fn().mockResolvedValue([]),
@@ -166,6 +167,24 @@ describe("GeoController", () => {
       withoutContacts: true,
       limit: 25,
     });
+  });
+
+  it("areaAddressCount parses the codes string into {level,code} pairs, dropping blanks", async () => {
+    const svc = makeSvc();
+    const c = new GeoController(svc);
+    await c.areaAddressCount("sa2:101,sa1:2020,,badformat");
+    expect(svc.areaAddressCount).toHaveBeenCalledWith([
+      { level: "sa2", code: "101" },
+      { level: "sa1", code: "2020" },
+      // no ":" separator → both parts empty (the service ignores it)
+      { level: "", code: "" },
+    ]);
+  });
+
+  it("areaAddressCount defaults to an empty set when no codes are given", async () => {
+    const svc = makeSvc();
+    await new GeoController(svc).areaAddressCount();
+    expect(svc.areaAddressCount).toHaveBeenCalledWith([]);
   });
 
   it("ingest returns queued intent (ignores tenantId)", async () => {

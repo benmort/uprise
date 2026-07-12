@@ -47,6 +47,20 @@ export class GeoController {
     return this.geo.stateDetail(tenantId, code);
   }
 
+  // Total address count across a set of ASGS areas ("<level>:<code>,…") — powers the
+  // pre-cut "Selected areas" estimate on the turf-cutting surfaces.
+  @Get("area-address-count")
+  areaAddressCount(@Query("codes") codes = "") {
+    const areas = codes
+      .split(",")
+      .filter(Boolean)
+      .map((c) => {
+        const i = c.indexOf(":");
+        return i < 0 ? { level: "", code: "" } : { level: c.slice(0, i), code: c.slice(i + 1) };
+      });
+    return this.geo.areaAddressCount(areas);
+  }
+
   /** The chamber catalogue — including the chambers that do NOT exist (Queensland, the
    *  ACT and the NT have no upper house; councils are unicameral), so the explorer can say
    *  so rather than render an empty tab. */
