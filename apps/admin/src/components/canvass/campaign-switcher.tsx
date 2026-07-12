@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown, Search, X } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
 import { cn } from "@/lib/utils";
-import { TenantAvatar } from "@/components/topbar/tenant-avatar";
 import type { CampaignStatus, CampaignSummary } from "@/lib/api/campaigns";
 
 const STATUS_LABEL: Record<CampaignStatus, string> = {
@@ -49,8 +48,6 @@ function CampaignRow({
       }}
       className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-variant"
     >
-      {/* Same deterministic gradient disc the tenant switcher uses, seeded by campaign id. */}
-      <TenantAvatar tenantId={campaign.id} name={campaign.name} className="h-7 w-7" />
       <span className="block min-w-0 flex-1 truncate text-sm font-medium text-foreground">{campaign.name}</span>
       <StatusPill status={campaign.status} />
       {active ? <Check className="h-4 w-4 shrink-0 text-success" /> : null}
@@ -60,8 +57,8 @@ function CampaignRow({
 
 /**
  * Campaign selector — the tenant switcher's dropdown re-skinned for campaigns: a trigger
- * (gradient disc + name + chevron) opening a portalled, searchable list with a check on
- * the active row. Deliberately WITHOUT the switcher's "create" footer — new campaigns are
+ * (campaign name + chevron) opening a portalled, searchable list with a status pill and a
+ * check on the active row. Deliberately WITHOUT the switcher's "create" footer — new campaigns are
  * made from the header button beside it. Selecting a campaign just calls `onSelect` (the
  * page reflects it in the URL), so there's no reload.
  */
@@ -102,7 +99,6 @@ export function CampaignSwitcher({
           aria-label="Select campaign"
           className="flex h-9 min-w-0 max-w-[16rem] items-center gap-2 rounded-[11px] border border-border bg-surface px-2.5 text-left transition-colors hover:bg-surface-variant"
         >
-          <TenantAvatar tenantId={active?.id ?? "campaign"} name={activeName} className="h-6 w-6" />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{activeName}</span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>

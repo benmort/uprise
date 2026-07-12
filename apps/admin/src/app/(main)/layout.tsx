@@ -104,10 +104,11 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
       match: (p) => p.startsWith("/canvass") && !p.startsWith("/canvass/volunteers"),
       flag: "FEATURE_NAV_CANVASS",
       // Turf map / Walk lists / Live / Results are campaign-scoped routes — reachable
-      // from the campaign dashboard cards, not the global sidebar. Only Campaigns
-      // remains, so the single-child rule collapses this into a direct "Canvass" link.
+      // from the campaign dashboard cards, not the global sidebar. Campaigns + the
+      // (campaign-independent) Turf planner are the global entries.
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
+        { label: "Turf planner", href: "/canvass/planner", match: (p) => p.startsWith("/canvass/planner") },
       ],
     },
     { type: "leaf", key: "volunteers", label: "Volunteers", href: "/canvass/volunteers", icon: Megaphone, match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },

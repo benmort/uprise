@@ -24,7 +24,7 @@ export function CampaignNavCards({ campaignId, className, id }: { campaignId: st
     { href: `/canvass/${campaignId}/goals`, label: "Goals", desc: "Targets & progress", icon: Target },
     { href: `/canvass/${campaignId}/shifts`, label: "Shifts", desc: "Schedule & sign-ups", icon: CalendarClock },
     { href: `/canvass/${campaignId}/qa`, label: "QA", desc: "Flagged knocks to review", icon: ClipboardCheck },
-    { href: "/canvass/volunteers", label: "Volunteers", desc: "Team & assignments", icon: Users },
+    { href: `/canvass/${campaignId}/volunteers`, label: "Volunteers", desc: "Team & assignments", icon: Users },
     { href: `/canvass/${campaignId}/walklists`, label: "Walk lists", desc: "Build & assign door routes", icon: ListChecks },
   ];
   return (

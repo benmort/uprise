@@ -103,10 +103,10 @@ export default function PoliticianDetailPage() {
         {data ? (
           <div className="section-stack">
             <SectionCard title="Overview">
-              <div className="mb-4 flex items-center gap-3">
-                <MemberAvatar name={data.name} imageUrl={data.imageUrl} credit={data.imageCredit} size={56} />
+              <div className="mb-4 flex items-center gap-5">
+                <MemberAvatar name={data.name} imageUrl={data.imageUrl} credit={data.imageCredit} size={140} />
                 <div className="min-w-0">
-                  <div className="truncate text-lg font-semibold text-foreground">{data.name}</div>
+                  <div className="truncate text-2xl font-semibold text-foreground">{data.name}</div>
                   {data.imageUrl && data.imageCredit ? (
                     <a
                       href={data.imageSourceUrl ?? "#"}
