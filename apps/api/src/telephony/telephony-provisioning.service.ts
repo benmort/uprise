@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { put } from "@vercel/blob";
+import { ImageUploadService } from "../common/storage/image-upload.service";
 import {
   Prisma,
   TelephonyAccountMode,
@@ -81,6 +81,7 @@ export class TelephonyProvisioningService {
     private readonly outbox: OutboxService,
     private readonly logger: DomainLogger,
     private readonly senderResolver: TelephonySenderResolver,
+    private readonly images: ImageUploadService,
   ) {}
 
   // ── URLs ────────────────────────────────────────────────────────────
@@ -268,16 +269,14 @@ export class TelephonyProvisioningService {
   ) {
     const run = await this.getRunOrThrow(runId);
     if (!file?.buffer) throw new ApiHttpException("NO_FILE", "No document provided");
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token && !process.env.BLOB_STORE_ID) {
+    if (!this.images.enabled) {
       throw new ApiHttpException("DOCUMENT_STORAGE_NOT_CONFIGURED", "Document storage is not configured");
     }
-    const ext = (file.originalname?.split(".").pop() || "pdf").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const key = `telephony-compliance/${runId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "pdf"}`;
-    const { url } = await put(key, file.buffer, {
-      access: "public",
+    const ext = this.images.extFrom(file.originalname, "pdf");
+    // Namespaced (was not, previously — dev docs leaked to the store root).
+    const { url, key } = await this.images.put(file.buffer, {
+      key: `telephony-compliance/${runId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`,
       contentType: file.mimetype,
-      ...(token ? { token } : {}),
     });
     const documents: RunDocument[] = [
       ...this.documentsOf(run),

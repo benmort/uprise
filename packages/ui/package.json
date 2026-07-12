@@ -13,7 +13,8 @@
     "./globals.css": "./globals.css"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.17",
@@ -43,6 +44,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "react": "^18.3.1",
     "storybook": "^8.6.18",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
   }
 }

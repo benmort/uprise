@@ -3,9 +3,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import {
   AppUserRole,
   Network,
@@ -18,7 +20,12 @@ import {
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { PlanLimitsService } from "../common/flags/plan-limits.service";
+import {
+  TRANSACTIONAL_DISPATCHER,
+  type TransactionalDispatcher,
+} from "../messaging/transactional-dispatcher";
 import { verifyPassword } from "../auth/password.util";
+import { BRAND_SELECT, brandFields, type TenantBrandFields } from "../common/brand";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -44,6 +51,7 @@ const ONBOARDING_STEP_KEYS = [
   "firstCampaign",
 ] as const;
 type OnboardingStep = (typeof ONBOARDING_STEP_KEYS)[number];
+
 export interface TenantOnboardingState {
   version: number;
   dismissed: boolean;
@@ -68,10 +76,12 @@ export interface CreateInvitationInput {
 
 /**
  * Tenant provisioning + membership/invitation admin (meld doc 12 / prog tenant domain).
- * Each write commits the row(s) + an outbox event in one transaction (doc 05), so the
- * cross-domain reactions (welcome/invitation email, network→Stripe customer) fire off the
- * event, not an inline call. uprise' TenantMember.role is AppUserRole (OWNER/ORGANISER/VOLUNTEER);
- * a tenant's creator is the OWNER (full tenant + billing role).
+ * Each write commits the row(s) + an outbox event in one transaction (doc 05), so most
+ * cross-domain reactions (welcome email, network→Stripe customer) fire off the event.
+ * The invitation email/SMS is the exception: it's sent INLINE here (doc-14 pattern, like
+ * magic-link/reset), because it's a critical onboarding message that must not depend on
+ * the worker's reaction path being healthy. uprise' TenantMember.role is AppUserRole
+ * (OWNER/ORGANISER/VOLUNTEER); a tenant's creator is the OWNER (full tenant + billing role).
  */
 @Injectable()
 export class TenantsService {
@@ -79,6 +89,8 @@ export class TenantsService {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     private readonly planLimits: PlanLimitsService,
+    @Inject(TRANSACTIONAL_DISPATCHER) private readonly dispatcher: TransactionalDispatcher,
+    private readonly config: ConfigService,
   ) {}
 
   private normaliseSlug(raw: string): string {
@@ -345,13 +357,20 @@ export class TenantsService {
    * (the id seeds the same avatar gradient the admin tenant switcher uses). Returns null
    * for an unknown/blank slug; slugs are public (subdomains), so this reveals nothing new.
    */
-  async tenantBrandBySlug(slug: string): Promise<{ id: string; name: string } | null> {
+  async tenantBrandBySlug(slug: string): Promise<({ id: string; name: string } & TenantBrandFields) | null> {
     const norm = this.normaliseSlug(slug);
     if (!norm) return null;
-    return this.prisma.tenant.findFirst({
+    const tenant = await this.prisma.tenant.findFirst({
       where: { slug: norm, deletedAt: null },
       select: { id: true, name: true },
     });
+    if (!tenant) return null;
+    // Brand lives on OrgProfile (a separate tenantId-keyed row) — the openJoinPreview pattern.
+    const profile = await this.prisma.orgProfile.findFirst({
+      where: { tenantId: tenant.id },
+      select: BRAND_SELECT,
+    });
+    return { id: tenant.id, name: tenant.name, ...brandFields(profile) };
   }
 
   // ── Invitations (issuing; accept/preview live in IamFlowsService) ─────
@@ -359,7 +378,7 @@ export class TenantsService {
     tenantId: string,
     input: CreateInvitationInput,
   ): Promise<{ id: string; token: string }> {
-    await this.getTenant(tenantId);
+    const tenant = await this.getTenant(tenantId);
     const email = input.email?.trim().toLowerCase() || undefined;
     const phone = input.phone?.trim() || undefined;
     if ((email && phone) || (!email && !phone)) {
@@ -375,7 +394,7 @@ export class TenantsService {
       ? { tenantId_email: { tenantId, email } }
       : { tenantId_phone: { tenantId, phone: phone as string } };
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const invitation = await tx.tenantInvitation.upsert({
         where,
         create: {
@@ -390,7 +409,7 @@ export class TenantsService {
         },
         update: { role: input.role, status: "pending", token, expiresAt, invitedBy: input.invitedBy ?? null },
       });
-      // Reuse the existing catalogue event; the invitation reaction branches email/SMS.
+      // Kept for audit/observability (doc 05); delivery is the inline send below, not a reaction.
       await this.outbox.append(tx, {
         tenantId,
         eventType: "tenant.invitation.sent",
@@ -399,6 +418,35 @@ export class TenantsService {
       });
       return { id: invitation.id, token };
     });
+
+    // Deliver the invite INLINE (doc-14), so it doesn't depend on the worker's reaction path
+    // being healthy. Best-effort: a send failure leaves a FAILED Email row (audit) and
+    // re-inviting re-issues the token & retries — it must not fail the request that already
+    // created the invitation. Link shapes: email → /invite/<token>, SMS → /v/invite/<token>.
+    const authAppUrl = this.config
+      .get<string>("AUTH_APP_URL", "http://localhost:3002")
+      .replace(/\/+$/, "");
+    try {
+      if (phone && !email) {
+        await this.dispatcher.sendSms({
+          tenantId,
+          toPhone: phone,
+          body: `You're invited to join ${tenant.name} — tap to accept: ${authAppUrl}/v/invite/${result.token}`,
+          purpose: "invitation",
+        });
+      } else if (email) {
+        await this.dispatcher.sendEmail({
+          tenantId,
+          toAddress: email,
+          templateKey: "invitation",
+          vars: { link: `${authAppUrl}/invite/${result.token}`, tenant: tenant.name },
+          purpose: "invitation",
+        });
+      }
+    } catch {
+      // Swallow: EmailService/dispatcher already records the failed send; the invite row stands.
+    }
+    return result;
   }
 
   async listInvitations(tenantId: string): Promise<TenantInvitation[]> {
@@ -457,10 +505,10 @@ export class TenantsService {
     return this.prisma.tenant.findMany({ where: { networkId, deletedAt: null }, orderBy: { createdAt: "asc" } });
   }
 
-  /** Super-admin search across ALL tenants (for the feature-flag override editor). */
+  /** Super-admin search across ALL tenants (for the feature-flag override editor + switcher list). */
   async searchTenants(q?: string) {
     const term = q?.trim();
-    return this.prisma.tenant.findMany({
+    const tenants = await this.prisma.tenant.findMany({
       where: {
         deletedAt: null,
         ...(term
@@ -475,6 +523,16 @@ export class TenantsService {
       select: { id: true, slug: true, name: true, networkId: true },
       orderBy: { name: "asc" },
       take: 50,
+    });
+    // Batch the logos in one query (the openJoinList pattern) so the switcher list can render them.
+    const profiles = await this.prisma.orgProfile.findMany({
+      where: { tenantId: { in: tenants.map((t) => t.id) } },
+      select: { tenantId: true, logoLandscapeUrl: true, logoBlockUrl: true },
+    });
+    const logoByTenant = new Map(profiles.map((p) => [p.tenantId, p]));
+    return tenants.map((t) => {
+      const p = logoByTenant.get(t.id);
+      return { ...t, logoLandscapeUrl: p?.logoLandscapeUrl ?? null, logoBlockUrl: p?.logoBlockUrl ?? null };
     });
   }
 

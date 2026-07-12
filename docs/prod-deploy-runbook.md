@@ -48,6 +48,30 @@ Only if you want the national address↔division universe in prod. The local run
 
 ---
 
+## 2b. Politician + organisation imagery (optional, heavy)
+
+Fills the real photos/logos the app renders (politician headshots on the data pages; tenant logos on the switcher, auth volunteer flow, field PWA and public insights). All steps need the prod `DATABASE_URL` **and** `BLOB_READ_WRITE_TOKEN` in the environment, and `NODE_ENV=production` so blobs write to the store root (dev writes under `development/`). Idempotent — safe to re-run; stable keys overwrite in place.
+
+1. Roster (skip if the politician roster is already loaded) — federal then state:
+   ```
+   cd apps/api && DATABASE_URL="<neon>" pnpm --filter api civic:sync
+   cd apps/api && DATABASE_URL="<neon>" pnpm --filter api civic:sync-states
+   ```
+2. Politician headshots — mirror Wikidata P18 → Wikimedia Commons → Blob (long; hundreds of fetches):
+   ```
+   cd apps/api && NODE_ENV=production DATABASE_URL="<neon>" BLOB_READ_WRITE_TOKEN="<token>" pnpm --filter api civic:images
+   ```
+   Run **detached** (`nohup … &`). **Verify:** `GET /civic/status` — `withImage` climbs from 0.
+3. Organisation logos — set `OrgProfile.{logoLandscapeUrl,logoBlockUrl}` for the kept tenants. `getup` + `climate-200` ship as repo assets; drop a **white-background-legible** mark for each remaining slug at `apps/api/src/scripts/civic/org-logos/<slug>.{png,svg,jpg}` (respect the source's robots; no user-agent spoofing) before running. A slug with no source is skipped, not failed:
+   ```
+   cd apps/api && NODE_ENV=production DATABASE_URL="<neon>" BLOB_READ_WRITE_TOKEN="<token>" pnpm --filter api seed:org-logos
+   ```
+   **Verify:** the tenant switcher, auth `/volunteer/<campaign>` and a public `/p/<poll>` show real logos (landscape where present, block otherwise), legible on white.
+
+> Custom brand colours + CSS are self-serve (tenant settings) — no deploy step. They inject only on the tenant's own public surfaces, sanitised.
+
+---
+
 ## 3. API environment variables (Vercel → API project)
 
 **Required**

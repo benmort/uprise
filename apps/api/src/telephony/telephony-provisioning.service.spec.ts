@@ -5,6 +5,7 @@ import {
 } from "@uprise/db";
 import { put } from "@vercel/blob";
 import { TelephonyProvisioningService } from "./telephony-provisioning.service";
+import { ImageUploadService } from "../common/storage/image-upload.service";
 
 // addDocument writes to Vercel Blob — mock the SDK so the unit spec never
 // touches the network.
@@ -129,6 +130,7 @@ function setup() {
     outbox as any,
     logger as any,
     senderResolver as any,
+    new ImageUploadService(),
   );
   return { prisma, config, crypto, twilio, outbox, logger, senderResolver, service };
 }

@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQueryParams } from "@/lib/use-query";
-import { LogoMark, TenantAvatar } from "@uprise/ui";
-import { auth, tenants } from "@uprise/api-client";
+import { BrandStyle, LogoMark, TenantAvatar, type BrandStyleFields } from "@uprise/ui";
+import { auth, tenants, tenantLogoUrl } from "@uprise/api-client";
 import { GridShape } from "./grid-shape";
 
-type Brand = { name: string; seed: string };
+type Brand = { name: string; seed: string; logoUrl: string | null } & BrandStyleFields;
 
 // App subdomains that are NOT tenants (so we don't treat field/auth/etc. as a tenant slug).
 const APP_SUBDOMAINS = new Set(["field", "auth", "admin", "www", "api", "action", "app", "marketing"]);
@@ -50,16 +50,23 @@ export function VolunteerBrandSidebar() {
       if (slug) {
         const res = await tenants.brandBySlug(slug);
         if (alive && res.ok && res.data) {
-          setBrand({ name: res.data.name, seed: res.data.id });
+          setBrand({
+            name: res.data.name,
+            seed: res.data.id,
+            logoUrl: tenantLogoUrl(res.data),
+            primaryColour: res.data.primaryColour,
+            secondaryColour: res.data.secondaryColour,
+            customCss: res.data.customCss,
+          });
           return;
         }
       }
-      // 2. invite token in the path → tenant name (preview has no id, so seed on the name).
+      // 2. invite token in the path → tenant name + logo (no id, so seed the gradient on the name).
       const m = pathname?.match(/\/v\/invite\/([^/]+)/);
       if (m) {
         const res = await auth.previewInvite(decodeURIComponent(m[1]));
         if (alive && res.ok && res.data.tenantName) {
-          setBrand({ name: res.data.tenantName, seed: res.data.tenantName });
+          setBrand({ name: res.data.tenantName, seed: res.data.tenantName, logoUrl: res.data.logoUrl });
           return;
         }
       }
@@ -71,12 +78,16 @@ export function VolunteerBrandSidebar() {
   }, [params, pathname]);
 
   return (
-    <div className="relative hidden w-1/2 items-center justify-center overflow-hidden bg-brand-950 lg:flex">
+    <>
+      {/* Brand colours + custom CSS apply to the whole volunteer flow (all viewports), so this
+          lives OUTSIDE the desktop-only panel below. */}
+      <BrandStyle brand={brand} />
+      <div className="relative hidden w-1/2 items-center justify-center overflow-hidden bg-brand-950 lg:flex">
       <GridShape />
       <div className="relative z-10 flex max-w-xs flex-col items-start gap-4 text-left">
         {brand ? (
           <>
-            <TenantAvatar seed={brand.seed} className="h-20 w-20" />
+            <TenantAvatar seed={brand.seed} logoUrl={brand.logoUrl} name={brand.name} className="h-20 w-20" />
             <span className="text-2xl font-bold text-white">{brand.name}</span>
             <p className="font-medium text-gray-300">
               Join your neighbours — knock, talk, and log every door.
@@ -92,6 +103,7 @@ export function VolunteerBrandSidebar() {
           </>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

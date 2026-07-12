@@ -21,8 +21,12 @@ function setup() {
     },
     $transaction: jest.fn(async (ops: any[]) => Promise.all(ops)),
   };
-  const svc = new ProfileService(prisma);
-  return { svc, prisma };
+  const images: any = {
+    extFrom: (_n: string, f = "jpg") => f,
+    put: jest.fn(async () => ({ url: "https://blob.example/avatars/x.jpg", key: "avatars/x.jpg" })),
+  };
+  const svc = new ProfileService(prisma, images);
+  return { svc, prisma, images };
 }
 
 describe("ProfileService", () => {

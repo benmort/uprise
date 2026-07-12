@@ -40,7 +40,7 @@ function setup() {
 describe("domain reactions", () => {
   it("are loop-safe (no reaction emits its own trigger)", () => {
     const { reactions } = setup();
-    expect(reactions).toHaveLength(9);
+    expect(reactions).toHaveLength(8);
     expect(() => assertReactionsLoopSafe(reactions)).not.toThrow();
   });
 
@@ -127,31 +127,6 @@ describe("domain reactions", () => {
     expect(email.sendTransactional).toHaveBeenCalledWith(
       expect.objectContaining({ toAddress: "a@b.c", templateKey: "welcome", tenantId: "t1" }),
     );
-  });
-
-  it("tenant.invitation.sent → invitation email with the token link", async () => {
-    const { byTrigger, ev, email } = setup();
-    await byTrigger("tenant.invitation.sent").handle(ev({ invitationId: "inv1", tenantId: "t1", email: "new@x.y" }));
-    const call = email.sendTransactional.mock.calls[0][0];
-    expect(call.templateKey).toBe("invitation");
-    expect(call.vars.link).toBe("https://auth.test/invite/tok123");
-  });
-
-  it("tenant.invitation.sent → SMS for a phone-only invite (not email)", async () => {
-    const { byTrigger, ev, email, sms, prisma } = setup();
-    prisma.tenantInvitation.findUnique.mockResolvedValueOnce({ id: "inv1", email: null, phone: "+61400000000", token: "tok123" });
-    await byTrigger("tenant.invitation.sent").handle(ev({ invitationId: "inv1", tenantId: "t1", phone: "+61400000000" }));
-    expect(email.sendTransactional).not.toHaveBeenCalled();
-    const call = sms.sendSms.mock.calls[0][0];
-    expect(call.toPhone).toBe("+61400000000");
-    expect(call.body).toContain("https://auth.test/v/invite/tok123");
-  });
-
-  it("invitation reaction no-ops when the invite has no token", async () => {
-    const { byTrigger, ev, email, prisma } = setup();
-    prisma.tenantInvitation.findUnique.mockResolvedValueOnce({ id: "inv1", email: "x@y.z", token: null });
-    await byTrigger("tenant.invitation.sent").handle(ev({ invitationId: "inv1", tenantId: "t1", email: "x@y.z" }));
-    expect(email.sendTransactional).not.toHaveBeenCalled();
   });
 
   it("tenant.network.created → Stripe customer + projection (when configured)", async () => {

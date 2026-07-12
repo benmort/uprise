@@ -8,6 +8,7 @@ import {
 } from '@/components/prog/shared/forms';
 import { OrganisationProfileFormValues } from '../types';
 import { Globe, Image, Palette, Code, Lock } from 'lucide-react';
+import { sanitizeBrandCss } from '@uprise/ui';
 import { useFlag } from '@/components/flags/flags-provider';
 
 export interface OrganisationProfileFormProps {
@@ -163,6 +164,7 @@ export function OrganisationProfileForm({ values, onChange, errors = {}, disable
           disabled={disabled}
           className="font-mono text-sm"
         />
+        <CustomCssPreview css={values.customCss ?? ''} />
       </FormSectionCard>
         </>
       ) : (
@@ -178,5 +180,32 @@ export function OrganisationProfileForm({ values, onChange, errors = {}, disable
         </FormSectionCard>
       )}
     </>
+  );
+}
+
+/**
+ * Live preview of what actually reaches the public page: the tenant's custom CSS run through the
+ * SAME `sanitizeBrandCss` used at injection. Renders read-only so operators see exactly what
+ * survives — and, when the sanitiser strips something (an `@import`, a `url()` beacon, a
+ * `</style>` breakout), a note that some rules were removed for security.
+ */
+function CustomCssPreview({ css }: { css: string }) {
+  const sanitized = sanitizeBrandCss(css);
+  const stripped = css.trim().length > 0 && sanitized !== css.trim();
+  if (!css.trim()) return null;
+  return (
+    <div className="mt-3">
+      <p className="mb-1 text-xs font-medium text-gray-700 dark:text-gray-300">
+        Injected CSS (sanitised)
+      </p>
+      <pre className="max-h-40 overflow-auto rounded border border-gray-200 bg-gray-50 p-2 font-mono text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+        {sanitized || '/* nothing to inject */'}
+      </pre>
+      {stripped ? (
+        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+          Some rules were removed for security (e.g. @import, external url(), or unsafe values).
+        </p>
+      ) : null}
+    </div>
   );
 }

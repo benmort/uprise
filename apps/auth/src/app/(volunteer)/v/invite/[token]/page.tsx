@@ -19,6 +19,7 @@ export default function VolunteerInvitePage() {
   const returnTo = useQueryParams().get("return_to");
   const { step, goTo, canGoBack } = useWizardStep();
   const [tenantName, setTenantName] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [invitedPhone, setInvitedPhone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +33,7 @@ export default function VolunteerInvitePage() {
         return;
       }
       setTenantName(res.data.tenantName);
+      setLogoUrl(res.data.logoUrl);
       setInvitedPhone(res.data.phone ?? null);
     })();
   }, [token]);
@@ -58,6 +60,7 @@ export default function VolunteerInvitePage() {
         <VolunteerOnboardWizard
           token={token}
           tenantName={tenantName ?? ""}
+          tenantLogoUrl={logoUrl}
           invitedPhone={invitedPhone}
           returnTo={returnTo}
           step={step}
@@ -72,9 +75,22 @@ export default function VolunteerInvitePage() {
     <div className="flex flex-1 flex-col">
       {/* Hero */}
       <section className="rounded-b-[2.25rem] bg-primary px-6 pb-10 pt-14 text-white">
-        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
-          <LogoMark className="h-8 w-8 text-white" />
-        </span>
+        {logoUrl ? (
+          // The inviting org's own logo, on a white chip so a white-background mark reads
+          // against the coloured hero.
+          <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white p-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoUrl}
+              alt={tenantName ? `${tenantName} logo` : "Organisation logo"}
+              className="h-full w-full object-contain"
+            />
+          </span>
+        ) : (
+          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15">
+            <LogoMark className="h-8 w-8 text-white" />
+          </span>
+        )}
         <p className="mt-7 text-sm font-bold uppercase tracking-[0.08em] text-white/80">
           You&apos;re invited
         </p>

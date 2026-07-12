@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { del, put } from "@vercel/blob";
+import { del } from "@vercel/blob";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
-import { namespacedBlobKey } from "../common/utils/blob";
+import { ImageUploadService } from "../common/storage/image-upload.service";
 
 type UploadedFile = {
   buffer?: Buffer;
@@ -46,6 +46,7 @@ export class FilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    private readonly images: ImageUploadService,
   ) {}
 
   /** Trim + validate an optional folder name; empty/absent → null. */
@@ -133,17 +134,10 @@ export class FilesService {
     if (!file?.buffer) throw new BadRequestException("No file provided");
     // Validate the folder before the blob put so a bad name fails fast without a stranded blob.
     const safeFolder = this.normaliseFolder(folder);
-    // Blob credentials resolve from the env: a static BLOB_READ_WRITE_TOKEN (local/dev) or,
-    // in the Vercel runtime, OIDC (VERCEL_OIDC_TOKEN + BLOB_STORE_ID). Require at least one.
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token && !process.env.BLOB_STORE_ID) throw new BadRequestException("File storage is not configured");
-
     const safeName = (file.originalname || "file").replace(/[^a-zA-Z0-9._-]/g, "_");
-    const key = namespacedBlobKey(`files/${tenantId}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`);
-    const { url } = await put(key, file.buffer, {
-      access: "public",
+    const { url, key } = await this.images.put(file.buffer, {
+      key: `files/${tenantId}/${Date.now()}-${Math.random().toString(36).slice(2)}-${safeName}`,
       contentType: file.mimetype || "application/octet-stream",
-      ...(token ? { token } : {}),
     });
 
     return this.prisma.$transaction(async (tx) => {

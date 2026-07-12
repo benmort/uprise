@@ -155,6 +155,7 @@ export default function TeamPage() {
   const [inviteRole, setInviteRole] = useState<AppUserRole>("VOLUNTEER");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [revoking, setRevoking] = useState<TenantInvitationSummary | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   // ── Section 3: Members ──
   const [members, setMembers] = useState<TenantMemberSummary[] | null>(null);
@@ -283,6 +284,25 @@ export default function TeamPage() {
     }
     showToast({ tone: "info", title: "Invitation revoked" });
     setRevoking(null);
+    void loadInvitations(tenantId);
+  };
+
+  const doResend = async (invite: TenantInvitationSummary) => {
+    if (!tenantId) return;
+    setResendingId(invite.id);
+    // Resend = re-issue: createInvitation upserts on (tenant, email), resetting the
+    // token + expiry and re-emitting tenant.invitation.sent (the email/SMS reaction).
+    const res = await tenants.createInvitation(tenantId, { email: invite.email, role: invite.role });
+    setResendingId(null);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't resend", description: res.error });
+      return;
+    }
+    showToast({
+      tone: "success",
+      title: "Invitation resent",
+      description: `A fresh invite link is on its way to ${invite.email}.`,
+    });
     void loadInvitations(tenantId);
   };
 
@@ -545,7 +565,15 @@ export default function TeamPage() {
                               </Button>
                             </div>
                           ) : r.invitation!.status.toLowerCase() === "pending" ? (
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={resendingId === r.invitation!.id}
+                                onClick={() => void doResend(r.invitation!)}
+                              >
+                                {resendingId === r.invitation!.id ? "Resending…" : "Resend"}
+                              </Button>
                               <Button size="sm" variant="outline" onClick={() => setRevoking(r.invitation!)}>
                                 Revoke
                               </Button>

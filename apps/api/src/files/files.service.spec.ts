@@ -1,5 +1,4 @@
 import { BadRequestException } from "@nestjs/common";
-import { put } from "@vercel/blob";
 import { FilesService, categoriseContentType } from "./files.service";
 
 jest.mock("@vercel/blob", () => ({
@@ -21,8 +20,12 @@ function setup() {
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const outbox = { append: jest.fn() } as any;
-  const svc = new FilesService(prisma, outbox);
-  return { svc, prisma, outbox };
+  const images: any = {
+    extFrom: (_n: string, f = "jpg") => f,
+    put: jest.fn(async ({ key }: { key: string }) => ({ url: "https://blob.example/dev/files/x", key })),
+  };
+  const svc = new FilesService(prisma, outbox, images);
+  return { svc, prisma, outbox, images };
 }
 
 const pngUpload = { buffer: Buffer.from("png-bytes"), originalname: "logo.png", mimetype: "image/png", size: 9 };
@@ -169,7 +172,7 @@ describe("FilesService", () => {
 
   describe("upload folder handling", () => {
     it("stores a trimmed folder on the row and emits the uploaded event in the transaction", async () => {
-      const { svc, prisma, outbox } = setup();
+      const { svc, prisma, outbox, images } = setup();
 
       const row = await svc.upload("t1", pngUpload, "  Campaign Assets ");
 
@@ -180,7 +183,7 @@ describe("FilesService", () => {
         expect.anything(),
         expect.objectContaining({ eventType: "tenant.file.uploaded", aggregateId: row.id }),
       );
-      expect(put).toHaveBeenCalled();
+      expect(images.put).toHaveBeenCalled();
     });
 
     it("stores null when the folder is absent or blank", async () => {
@@ -195,20 +198,20 @@ describe("FilesService", () => {
     });
 
     it("rejects a folder longer than 64 characters without touching blob storage", async () => {
-      const { svc, prisma } = setup();
+      const { svc, prisma, images } = setup();
 
       await expect(svc.upload("t1", pngUpload, "a".repeat(65))).rejects.toThrow(BadRequestException);
-      expect(put).not.toHaveBeenCalled();
+      expect(images.put).not.toHaveBeenCalled();
       expect(prisma.storedFile.create).not.toHaveBeenCalled();
     });
 
     it("rejects folder names with disallowed characters", async () => {
-      const { svc } = setup();
+      const { svc, images } = setup();
 
       await expect(svc.upload("t1", pngUpload, "bad/section")).rejects.toThrow(BadRequestException);
       await expect(svc.upload("t1", pngUpload, "emoji 🎉")).rejects.toThrow(BadRequestException);
       await expect(svc.upload("t1", pngUpload, "dots.are.out")).rejects.toThrow(BadRequestException);
-      expect(put).not.toHaveBeenCalled();
+      expect(images.put).not.toHaveBeenCalled();
     });
 
     it("accepts letters, numbers, spaces, dashes and underscores up to 64 chars", async () => {

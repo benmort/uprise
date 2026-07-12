@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
-import { auth, orgProfile, tenants, type Membership, type TenantSearchRow } from "@uprise/api-client";
+import { auth, orgProfile, tenants, tenantLogoUrl, type Membership, type TenantSearchRow } from "@uprise/api-client";
 import { cn } from "@/lib/utils";
 import { TenantAvatar } from "./tenant-avatar";
 import { CreateTenantDialog } from "./create-tenant-dialog";
@@ -17,7 +17,7 @@ import { CreateTenantDialog } from "./create-tenant-dialog";
 const TENANT_CREATE_PLANS_UI = ["starter", "growth", "scale"];
 
 /** A row the dropdown can render + switch into (from a membership or an all-tenants search). */
-type SwitchRow = { tenantId: string; tenantName: string; tenantSlug?: string; planName?: string | null };
+type SwitchRow = { tenantId: string; tenantName: string; tenantSlug?: string; planName?: string | null; logoUrl?: string | null };
 
 function PlanPill({ plan }: { plan: string }) {
   const label = plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -186,12 +186,13 @@ export function TenantSwitcher({
   }, [memberships, query]);
 
   const rows: SwitchRow[] = isSuperAdmin
-    ? allTenants.map((t) => ({ tenantId: t.id, tenantName: t.name, tenantSlug: t.slug }))
+    ? allTenants.map((t) => ({ tenantId: t.id, tenantName: t.name, tenantSlug: t.slug, logoUrl: tenantLogoUrl(t) }))
     : filtered.map((m) => ({
         tenantId: m.tenantId,
         tenantName: m.tenantName,
         tenantSlug: m.tenantSlug,
         planName: m.planName,
+        logoUrl: m.logoUrl ?? null,
       }));
 
   const switchTo = async (tenantId: string) => {
@@ -360,7 +361,7 @@ export function TenantSwitcher({
                   onClick={() => void switchTo(r.tenantId)}
                   className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <TenantAvatar tenantId={r.tenantId} className="h-7 w-7" />
+                  <TenantAvatar tenantId={r.tenantId} logoUrl={r.logoUrl} name={r.tenantName} className="h-7 w-7" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium text-foreground">{r.tenantName}</span>
                     {isSuperAdmin && r.tenantSlug ? (

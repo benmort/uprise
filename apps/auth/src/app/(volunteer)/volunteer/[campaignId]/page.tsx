@@ -98,6 +98,7 @@ export default function OpenJoinPage() {
         <VolunteerOnboardWizard
           campaignId={campaignId}
           tenantName={tenantName ?? undefined}
+          tenantLogoUrl={logoUrl}
           invitedPhone={null}
           returnTo={returnTo}
           step={step}

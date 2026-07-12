@@ -12,6 +12,7 @@ import { AuthController } from "./auth/auth.controller";
 import { AuthScopeService } from "./auth/auth-scope.service";
 import { IamModule } from "./auth/iam.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { StorageModule } from "./common/storage/storage.module";
 import { TwilioModule } from "./twilio/twilio.module";
 import { MessagingModule } from "./messaging/messaging.module";
 import { WhatsappModule } from "./whatsapp/whatsapp.module";
@@ -59,6 +60,7 @@ import { QueueModule } from "./common/queue/queue.module";
       validate: validateEnv,
     }),
     PrismaModule,
+    StorageModule,
     IamModule,
     LoggingModule,
     FlagsModule,

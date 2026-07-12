@@ -9,8 +9,7 @@ import {
   WalkListItemListType,
   WalkListItemStatus,
 } from "@uprise/db";
-import { put } from "@vercel/blob";
-import { namespacedBlobKey } from "../common/utils/blob";
+import { ImageUploadService } from "../common/storage/image-upload.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
@@ -79,6 +78,7 @@ export class CanvassingService {
     private readonly engagement: EngagementService,
     private readonly geo: GeoService,
     @Inject(DISPATCH_QUEUE_TOKEN) private readonly queue: DispatchQueue,
+    private readonly images: ImageUploadService,
   ) {}
 
   /**
@@ -248,18 +248,12 @@ export class CanvassingService {
    */
   async uploadDoorPhoto(file?: { buffer?: Buffer; originalname?: string; mimetype?: string }) {
     if (!file?.buffer) throw new ApiHttpException("NO_FILE", "No photo provided");
-    // Blob credentials resolve from the env: a static BLOB_READ_WRITE_TOKEN (local/dev) or,
-    // in the Vercel runtime, OIDC (VERCEL_OIDC_TOKEN + BLOB_STORE_ID). Require at least one.
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token && !process.env.BLOB_STORE_ID) {
+    if (!this.images.enabled) {
       throw new ApiHttpException("PHOTO_STORAGE_NOT_CONFIGURED", "Photo storage is not configured");
     }
-    const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const key = namespacedBlobKey(`door-knocks/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`);
-    const { url } = await put(key, file.buffer, {
-      access: "public",
+    const { url } = await this.images.put(file.buffer, {
+      key: this.images.randomKey("door-knocks", this.images.extFrom(file.originalname, "jpg")),
       contentType: file.mimetype,
-      ...(token ? { token } : {}),
     });
     return { url };
   }

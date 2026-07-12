@@ -1,6 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { put } from "@vercel/blob";
-import { namespacedBlobKey } from "../common/utils/blob";
+import { ImageUploadService } from "../common/storage/image-upload.service";
 
 /**
  * Re-hosts a Wikimedia Commons photo into our own Blob store.
@@ -77,49 +76,41 @@ export function stripHtml(html: string): string {
 export class CommonsImageService {
   private readonly logger = new Logger(CommonsImageService.name);
 
+  constructor(private readonly images: ImageUploadService) {}
+
   /** True when a Blob write is possible; otherwise mirroring is skipped, not attempted. */
   get enabled(): boolean {
-    return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
+    return this.images.enabled;
   }
 
   /**
    * Fetch, re-host and attribute a Commons photo. `ref` is a P18 value; `destBase` keys the blob
    * (the politician id). Returns null — never throws — when disabled, unresolvable or unreachable,
-   * so one bad photo never fails a sync of hundreds.
+   * so one bad photo never fails a sync of hundreds. The fetch + re-host goes through the shared
+   * {@link ImageUploadService.mirror}; only the Commons-specific licence lookup lives here.
    */
   async mirror(ref: string, destBase: string): Promise<MirroredImage | null> {
     if (!this.enabled) return null;
     const filename = commonsFilename(ref);
     if (!filename) return null;
 
-    try {
-      const meta = await this.licence(filename); // best-effort; null on failure
-      const res = await fetch(commonsThumbUrl(filename), { headers: { "User-Agent": USER_AGENT } });
-      if (!res.ok) {
-        this.logger.warn(`Commons thumb ${res.status} for ${filename}`);
-        return null;
-      }
-      const contentType = res.headers.get("content-type") || "image/jpeg";
-      const buffer = Buffer.from(await res.arrayBuffer());
-      const key = namespacedBlobKey(`civic/politicians/${destBase}.${imageExtension(filename)}`);
-      const token = process.env.BLOB_READ_WRITE_TOKEN;
-      const { url } = await put(key, buffer, {
-        access: "public",
-        contentType,
-        allowOverwrite: true, // a re-sync of the same politician overwrites their headshot in place
-        ...(token ? { token } : {}),
-      });
-      return {
-        imageUrl: url,
-        imageSourceUrl: commonsFilePageUrl(filename),
-        imageCredit: meta?.credit ?? null,
-        imageLicence: meta?.licence ?? null,
-        imageSourceRef: filename,
-      };
-    } catch (error) {
-      this.logger.warn(`Failed to mirror Commons image ${filename}: ${String(error)}`);
+    const meta = await this.licence(filename); // best-effort; null on failure
+    const mirrored = await this.images.mirror(commonsThumbUrl(filename), {
+      key: `civic/politicians/${destBase}.${imageExtension(filename)}`,
+      userAgent: USER_AGENT,
+      allowOverwrite: true, // a re-sync of the same politician overwrites their headshot in place
+    });
+    if (!mirrored) {
+      this.logger.warn(`Could not mirror the Commons photo for ${filename}`);
       return null;
     }
+    return {
+      imageUrl: mirrored.url,
+      imageSourceUrl: commonsFilePageUrl(filename),
+      imageCredit: meta?.credit ?? null,
+      imageLicence: meta?.licence ?? null,
+      imageSourceRef: filename,
+    };
   }
 
   /** Author + licence from the Commons imageinfo extmetadata. Best-effort; null on any failure. */

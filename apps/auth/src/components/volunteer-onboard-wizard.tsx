@@ -101,6 +101,7 @@ export function VolunteerOnboardWizard({
   token,
   campaignId,
   tenantName,
+  tenantLogoUrl,
   invitedPhone,
   returnTo,
   step,
@@ -112,6 +113,8 @@ export function VolunteerOnboardWizard({
   token?: string;
   campaignId?: string;
   tenantName?: string;
+  /** The tenant's logo (landscape preferred, block fallback); gradient disc when absent. */
+  tenantLogoUrl?: string | null;
   invitedPhone: string | null;
   returnTo: string | null;
   /** The step named in the URL. */
@@ -367,7 +370,7 @@ export function VolunteerOnboardWizard({
 
   return (
     <div className="flex min-h-[80vh] w-full flex-col">
-      {tenantName ? <TenantBrand name={tenantName} className="mb-5" /> : null}
+      {tenantName ? <TenantBrand name={tenantName} logoUrl={tenantLogoUrl} className="mb-5" /> : null}
       <div className="mb-7 flex items-center gap-3">
         <button
           type="button"

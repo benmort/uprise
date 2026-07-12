@@ -64,7 +64,7 @@ export function Assignments() {
   return (
     <div className="space-y-5">
       {/* Tenant brand (top-left) — the campaign this volunteer is canvassing for */}
-      {tenant ? <TenantBrand name={tenant.name} seed={tenant.id} /> : null}
+      {tenant ? <TenantBrand name={tenant.name} seed={tenant.id} logoUrl={tenant.logoUrl} /> : null}
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3">

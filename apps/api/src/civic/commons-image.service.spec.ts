@@ -7,6 +7,9 @@ import {
   imageExtension,
   stripHtml,
 } from "./commons-image.service";
+import { ImageUploadService } from "../common/storage/image-upload.service";
+
+const newSvc = () => new CommonsImageService(new ImageUploadService());
 
 jest.mock("@vercel/blob", () => ({
   put: jest.fn(async () => ({ url: "https://blob.example/development/civic/politicians/p1.jpg" })),
@@ -108,7 +111,7 @@ describe("CommonsImageService.mirror", () => {
       return new Response(Buffer.from([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
     }) as unknown as typeof fetch;
 
-    const svc = new CommonsImageService();
+    const svc = newSvc();
     const out = await svc.mirror("Special:FilePath/Chris_Bowen.jpg", "p1");
 
     expect(out).toEqual({
@@ -130,7 +133,7 @@ describe("CommonsImageService.mirror", () => {
       return new Response(Buffer.from([1]), { status: 200, headers: { "content-type": "image/jpeg" } });
     }) as unknown as typeof fetch;
 
-    const out = await new CommonsImageService().mirror("Penny_Wong.jpg", "p2");
+    const out = await newSvc().mirror("Penny_Wong.jpg", "p2");
     expect(out?.imageUrl).toContain("blob.example");
     expect(out?.imageCredit).toBeNull();
     expect(out?.imageLicence).toBeNull();
@@ -142,14 +145,14 @@ describe("CommonsImageService.mirror", () => {
       return new Response("gone", { status: 404 });
     }) as unknown as typeof fetch;
 
-    expect(await new CommonsImageService().mirror("Gone.jpg", "p3")).toBeNull();
+    expect(await newSvc().mirror("Gone.jpg", "p3")).toBeNull();
     expect(putMock).not.toHaveBeenCalled();
   });
 
   it("skips entirely when Blob storage is not configured", async () => {
     delete process.env.BLOB_READ_WRITE_TOKEN;
     delete process.env.BLOB_STORE_ID;
-    const svc = new CommonsImageService();
+    const svc = newSvc();
     expect(svc.enabled).toBe(false);
     expect(await svc.mirror("Anything.jpg", "p4")).toBeNull();
     expect(putMock).not.toHaveBeenCalled();
@@ -158,7 +161,7 @@ describe("CommonsImageService.mirror", () => {
   it("returns null for an unresolvable ref without touching the network", async () => {
     const fetchSpy = jest.fn();
     global.fetch = fetchSpy as unknown as typeof fetch;
-    expect(await new CommonsImageService().mirror("", "p5")).toBeNull();
+    expect(await newSvc().mirror("", "p5")).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

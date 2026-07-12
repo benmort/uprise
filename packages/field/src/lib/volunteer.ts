@@ -32,19 +32,19 @@ export function setVolunteerName(name: string): void {
 
 const TENANT_KEY = "uprise.volunteerTenant";
 
-/** The current tenant the volunteer is canvassing for ({id,name}) — for the brand badge. */
-export function getTenantBrand(): { id: string; name: string } | null {
+/** The current tenant the volunteer is canvassing for ({id,name,logoUrl}) — for the brand badge. */
+export function getTenantBrand(): { id: string; name: string; logoUrl?: string | null } | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(TENANT_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as { id: string; name: string };
+    return JSON.parse(raw) as { id: string; name: string; logoUrl?: string | null };
   } catch {
     return null;
   }
 }
 
-export function setTenantBrand(tenant: { id: string; name: string }): void {
+export function setTenantBrand(tenant: { id: string; name: string; logoUrl?: string | null }): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(TENANT_KEY, JSON.stringify(tenant));
 }

@@ -11,6 +11,7 @@ function setup() {
     tenant: {
       findUnique: jest.fn(async () => null),
       findFirst: jest.fn(async () => ({ id: "t1", slug: "acme", name: "Acme", deletedAt: null })),
+      findMany: jest.fn(async () => []),
       create: jest.fn(async ({ data }: any) => ({ id: "t1", ...data })),
       update: jest.fn(async ({ data }: any) => ({ id: "t1", ...data })),
     },
@@ -35,12 +36,19 @@ function setup() {
       update: jest.fn(async () => ({})),
     },
     user: { findUnique: jest.fn(async () => ({ id: "u1", email: "a@b.c" })) },
+    orgProfile: {
+      findFirst: jest.fn(async () => null),
+      findMany: jest.fn(async () => []),
+    },
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
   };
   const outbox = { append: jest.fn() } as any;
   const planLimits = { assertCanAddTeamMember: jest.fn(async () => undefined) } as any;
-  const svc = new TenantsService(prisma, outbox, planLimits);
-  return { svc, prisma, outbox, planLimits };
+  // Inline invitation delivery (doc-14) goes through the transactional dispatcher.
+  const dispatcher = { sendEmail: jest.fn(async () => undefined), sendSms: jest.fn(async () => undefined) } as any;
+  const config = { get: jest.fn((_k: string, fb?: string) => fb ?? "http://localhost:3002") } as any;
+  const svc = new TenantsService(prisma, outbox, planLimits, dispatcher, config);
+  return { svc, prisma, outbox, planLimits, dispatcher, config };
 }
 
 describe("TenantsService", () => {
@@ -69,8 +77,8 @@ describe("TenantsService", () => {
     await expect(svc.createTenant({ slug: "acme", name: "Acme", networkId: "missing" })).rejects.toThrow();
   });
 
-  it("createInvitation issues a token and emits tenant.invitation.sent", async () => {
-    const { svc, outbox } = setup();
+  it("createInvitation issues a token, emits the event, and sends the invite email inline", async () => {
+    const { svc, outbox, dispatcher } = setup();
     const res = await svc.createInvitation("t1", { email: "New@X.Y", role: AppUserRole.VOLUNTEER });
     expect(res.token).toEqual(expect.any(String));
     expect(res.token.length).toBeGreaterThan(20);
@@ -78,6 +86,37 @@ describe("TenantsService", () => {
       expect.anything(),
       expect.objectContaining({ eventType: "tenant.invitation.sent" }),
     );
+    // Delivered inline (doc-14), not left to the worker reaction. Email is lowercased.
+    expect(dispatcher.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toAddress: "new@x.y",
+        templateKey: "invitation",
+        purpose: "invitation",
+        vars: expect.objectContaining({ link: `http://localhost:3002/invite/${res.token}` }),
+      }),
+    );
+    expect(dispatcher.sendSms).not.toHaveBeenCalled();
+  });
+
+  it("createInvitation sends an SMS for a phone-only invite (not email)", async () => {
+    const { svc, dispatcher } = setup();
+    const res = await svc.createInvitation("t1", { phone: "+61400000000", role: AppUserRole.VOLUNTEER });
+    expect(dispatcher.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toPhone: "+61400000000",
+        purpose: "invitation",
+        body: expect.stringContaining(`http://localhost:3002/v/invite/${res.token}`),
+      }),
+    );
+    expect(dispatcher.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("createInvitation still succeeds when the inline send throws (best-effort)", async () => {
+    const { svc, dispatcher } = setup();
+    dispatcher.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
+    const res = await svc.createInvitation("t1", { email: "x@y.z", role: AppUserRole.VOLUNTEER });
+    expect(res.token).toEqual(expect.any(String));
+    expect(dispatcher.sendEmail).toHaveBeenCalled();
   });
 
   it("addMember resolves the user by email and creates the membership", async () => {
@@ -253,5 +292,57 @@ describe("TenantsService", () => {
       expect.anything(),
       expect.objectContaining({ eventType: "tenant.invitation.revoked" }),
     );
+  });
+});
+
+describe("TenantsService brand payloads", () => {
+  it("tenantBrandBySlug joins the OrgProfile logo, colours and custom CSS", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenant.findFirst.mockResolvedValueOnce({ id: "t1", name: "Common Threads" });
+    prisma.orgProfile.findFirst.mockResolvedValueOnce({
+      logoLandscapeUrl: "https://b/land.png",
+      logoBlockUrl: "https://b/block.png",
+      primaryColour: "#123456",
+      secondaryColour: null,
+      customCss: ".x{color:red}",
+    });
+    const brand = await svc.tenantBrandBySlug("common-threads");
+    expect(brand).toEqual({
+      id: "t1",
+      name: "Common Threads",
+      logoLandscapeUrl: "https://b/land.png",
+      logoBlockUrl: "https://b/block.png",
+      primaryColour: "#123456",
+      secondaryColour: null,
+      customCss: ".x{color:red}",
+    });
+  });
+
+  it("tenantBrandBySlug returns null brand fields when the org has no profile", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenant.findFirst.mockResolvedValueOnce({ id: "t1", name: "No Brand" });
+    prisma.orgProfile.findFirst.mockResolvedValueOnce(null);
+    const brand = await svc.tenantBrandBySlug("no-brand");
+    expect(brand).toMatchObject({ id: "t1", name: "No Brand", logoBlockUrl: null, primaryColour: null });
+  });
+
+  it("tenantBrandBySlug returns null for an unknown slug", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenant.findFirst.mockResolvedValueOnce(null);
+    expect(await svc.tenantBrandBySlug("nope")).toBeNull();
+  });
+
+  it("searchTenants batches each tenant's logo onto its row", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenant.findMany.mockResolvedValueOnce([
+      { id: "t1", slug: "a", name: "A", networkId: null },
+      { id: "t2", slug: "b", name: "B", networkId: null },
+    ]);
+    prisma.orgProfile.findMany.mockResolvedValueOnce([
+      { tenantId: "t1", logoLandscapeUrl: null, logoBlockUrl: "https://b/a.png" },
+    ]);
+    const rows = await svc.searchTenants();
+    expect(rows[0]).toMatchObject({ id: "t1", logoBlockUrl: "https://b/a.png", logoLandscapeUrl: null });
+    expect(rows[1]).toMatchObject({ id: "t2", logoBlockUrl: null, logoLandscapeUrl: null });
   });
 });

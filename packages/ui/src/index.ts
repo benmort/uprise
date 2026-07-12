@@ -36,6 +36,8 @@ export * from "./components/pagination-controls";
 export * from "./components/select";
 export * from "./components/step-progress";
 export * from "./components/tenant-brand";
+export * from "./components/brand-style";
+export * from "./lib/brand-css";
 export * from "./components/skeleton";
 export * from "./components/spinner";
 export * from "./components/status-badge";

@@ -78,7 +78,15 @@ describe("insights — provenance formatting", () => {
     geoScope: null,
     licence: null,
     attribution: null,
-    tenant: { name: "Common Threads", slug: "common-threads" },
+    tenant: {
+      name: "Common Threads",
+      slug: "common-threads",
+      logoLandscapeUrl: null,
+      logoBlockUrl: null,
+      primaryColour: null,
+      secondaryColour: null,
+      customCss: null,
+    },
     keyFindings: [],
     questions: [],
   };

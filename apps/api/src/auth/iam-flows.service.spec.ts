@@ -36,6 +36,11 @@ function setup() {
     canvassCampaign: {
       findUnique: jest.fn(async () => null),
     },
+    // membershipsFor batches logos; previewInvite/open-join look one up. Default: no logos.
+    orgProfile: {
+      findMany: jest.fn(async () => []),
+      findFirst: jest.fn(async () => null),
+    },
     magicLink: {
       create: jest.fn(async () => ({ id: "ml1" })),
       findUnique: jest.fn(async () => null),
@@ -123,11 +128,13 @@ describe("IamFlowsService", () => {
         consumedAt: null,
         expiresAt: new Date(Date.now() + 60_000),
       });
+      prisma.orgProfile.findMany.mockResolvedValueOnce([{ tenantId: "t1", logoLandscapeUrl: "wide.png", logoBlockUrl: null }]);
       const grant = await svc.consumeMagicLink("tok");
       expect(prisma.magicLink.update).toHaveBeenCalledWith({ where: { id: "ml1" }, data: { consumedAt: expect.any(Date) } });
       expect(sessions.create).toHaveBeenCalledWith("u1", { tenantId: "t1" });
       expect(grant.token).toBe("sess-token");
       expect(grant.memberships).toHaveLength(1);
+      expect(grant.memberships?.[0].logoUrl).toBe("wide.png");
     });
 
     it("consume rejects an expired link", async () => {
@@ -765,6 +772,24 @@ describe("IamFlowsService", () => {
       const { svc, prisma } = setup();
       prisma.tenantInvitation.findUnique.mockResolvedValue({ ...validInvite, status: "accepted" });
       await expect(svc.previewInvite("tok")).rejects.toThrow();
+    });
+
+    it("preview returns the tenant name and its logo (landscape preferred)", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.tenant.findUnique.mockResolvedValue({ id: "t1", name: "Org One" });
+      prisma.orgProfile.findFirst.mockResolvedValue({ logoLandscapeUrl: "wide.png", logoBlockUrl: "block.png" });
+      const preview = await svc.previewInvite("tok");
+      expect(preview).toMatchObject({ tenantName: "Org One", logoUrl: "wide.png", role: "ORGANISER" });
+    });
+
+    it("preview falls back to the block logo, else null", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.orgProfile.findFirst.mockResolvedValueOnce({ logoLandscapeUrl: null, logoBlockUrl: "block.png" });
+      expect((await svc.previewInvite("tok")).logoUrl).toBe("block.png");
+      prisma.orgProfile.findFirst.mockResolvedValueOnce(null);
+      expect((await svc.previewInvite("tok")).logoUrl).toBeNull();
     });
   });
 

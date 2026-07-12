@@ -19,6 +19,8 @@ export interface Membership {
   role: AppRole;
   /** Tenant URL slug (subdomain). Optional — older callers may omit. */
   tenantSlug?: string;
+  /** The tenant's logo (landscape preferred, block fallback) for switcher/field brand marks. */
+  logoUrl?: string | null;
   /** Plan key of the tenant's owning network ("grassroots"|"starter"|"growth"|"scale"), null when network-less. */
   planName?: string | null;
 }
@@ -262,6 +264,8 @@ export interface InvitePreview {
   email: string;
   phone: string | null;
   tenantName: string;
+  /** The tenant's logo (landscape preferred, block fallback); null when the org has none. */
+  logoUrl: string | null;
   role: AppRole;
 }
 

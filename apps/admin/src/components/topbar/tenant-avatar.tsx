@@ -30,7 +30,7 @@ export function TenantAvatar({
       <img
         src={logoUrl}
         alt={name ? `${name} logo` : "Tenant logo"}
-        className={cn("inline-block shrink-0 rounded-md bg-surface object-contain", className)}
+        className={cn("inline-block shrink-0 rounded-md bg-white object-contain p-0.5", className)}
       />
     );
   }

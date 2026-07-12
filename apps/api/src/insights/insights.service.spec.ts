@@ -117,6 +117,31 @@ describe("InsightsService", () => {
       ).rejects.toBeInstanceOf(ApiHttpException);
     });
 
+    it("getPublicPoll joins the owning tenant's brand (logo, colours, custom CSS)", async () => {
+      const poll = {
+        id: "p1", slug: "s", title: "T", source: "YouGov", commissioner: null, fieldworkStart: null,
+        fieldworkEnd: null, sampleSize: 1, methodology: null, geoScope: "VIC", weighted: true,
+        licence: null, attribution: "a", keyFindings: null, status: "PUBLISHED", isPublic: true,
+        questions: [], tenantId: "t1",
+        tenant: { id: "t1", name: "Common Threads", slug: "common-threads" },
+      };
+      const orgProfile = { findFirst: jest.fn(async () => ({
+        logoLandscapeUrl: "https://b/land.png", logoBlockUrl: "https://b/block.png",
+        primaryColour: "#123456", secondaryColour: null, customCss: ".x{}",
+      })) };
+      const res = await svcWith({ poll: { findFirst: jest.fn(async () => poll) }, orgProfile }).getPublicPoll("p1");
+      expect(res.tenant).toEqual({
+        name: "Common Threads",
+        slug: "common-threads",
+        logoLandscapeUrl: "https://b/land.png",
+        logoBlockUrl: "https://b/block.png",
+        primaryColour: "#123456",
+        secondaryColour: null,
+        customCss: ".x{}",
+      });
+      expect(orgProfile.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { tenantId: "t1" } }));
+    });
+
     it("getPublicPollQuestion requires the poll to be public", async () => {
       const findFirst = jest.fn(async () => null);
       await expect(

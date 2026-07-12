@@ -105,8 +105,16 @@ export type PollDetail = {
   isPublic: boolean;
   /** The acting tenant owns this poll — so an owner/organiser here may toggle its visibility. */
   owned: boolean;
-  /** The owning tenant — brands the public viewer (name + slug for an initials avatar). Public reads only. */
-  tenant?: { name: string; slug: string } | null;
+  /** The owning tenant — brands the public viewer (logo landscape→block, colours, custom CSS). Public reads only. */
+  tenant?: {
+    name: string;
+    slug: string;
+    logoLandscapeUrl: string | null;
+    logoBlockUrl: string | null;
+    primaryColour: string | null;
+    secondaryColour: string | null;
+    customCss: string | null;
+  } | null;
   themes: PollTheme[];
   questions: PollQuestionRef[];
 };

@@ -396,11 +396,30 @@ export interface CreatedTenant {
 }
 
 /** A tenant row from the super-admin all-tenants search. */
+/** A tenant's public brand — logo (landscape preferred, block fallback), colours, custom CSS. */
+export interface TenantBrandFields {
+  logoLandscapeUrl: string | null;
+  logoBlockUrl: string | null;
+  primaryColour: string | null;
+  secondaryColour: string | null;
+  customCss: string | null;
+}
+export type TenantBrand = { id: string; name: string } & TenantBrandFields;
+
+/** The logo to render for a tenant: landscape preferred, block as fallback, null if neither. */
+export function tenantLogoUrl(
+  b: { logoLandscapeUrl?: string | null; logoBlockUrl?: string | null } | null | undefined,
+): string | null {
+  return b?.logoLandscapeUrl ?? b?.logoBlockUrl ?? null;
+}
+
 export interface TenantSearchRow {
   id: string;
   slug: string;
   name: string;
   networkId: string | null;
+  logoLandscapeUrl: string | null;
+  logoBlockUrl: string | null;
 }
 
 /** Full tenant record returned by GET /tenants/:id. */
@@ -422,9 +441,9 @@ export const tenants = {
       redirectOn401: false,
     }),
 
-  /** Public tenant brand (id + name) by slug for the volunteer auth panel (null if unknown). */
+  /** Public tenant brand (id, name, logo, colours, custom CSS) by slug for the volunteer auth panel. */
   brandBySlug: (slug: string) =>
-    request<{ id: string; name: string } | null>(
+    request<TenantBrand | null>(
       `/tenants/brand?slug=${encodeURIComponent(slug)}`,
       undefined,
       { redirectOn401: false },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { BrandStyle } from "@uprise/ui";
 import { getPublicPoll } from "@/lib/api/insights";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
@@ -24,6 +25,7 @@ export default function PublicPollPage() {
 
   return (
     <InsightsApiProvider mode="public">
+      <BrandStyle brand={data?.tenant ?? null} />
       <PublicHeader tenant={data?.tenant ?? null} />
       <div className="mt-6">
         <StateRegion

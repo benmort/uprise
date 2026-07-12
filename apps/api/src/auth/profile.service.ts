@@ -1,8 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { put } from "@vercel/blob";
 import { UserAvatar, UserProfile } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
-import { namespacedBlobKey } from "../common/utils/blob";
+import { ImageUploadService } from "../common/storage/image-upload.service";
 
 export interface UserProfileInput {
   displayName?: string | null;
@@ -26,7 +25,10 @@ export interface UserProfileInput {
  */
 @Injectable()
 export class ProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly images: ImageUploadService,
+  ) {}
 
   async getProfile(userId: string): Promise<UserProfile> {
     const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
@@ -81,16 +83,10 @@ export class ProfileService {
     file?: { buffer?: Buffer; originalname?: string; mimetype?: string },
   ): Promise<UserAvatar> {
     if (!file?.buffer) throw new BadRequestException("No image provided");
-    // Blob credentials resolve from the env: a static BLOB_READ_WRITE_TOKEN (local/dev) or,
-    // in the Vercel runtime, OIDC (VERCEL_OIDC_TOKEN + BLOB_STORE_ID). Require at least one.
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
-    if (!token && !process.env.BLOB_STORE_ID) throw new BadRequestException("Image storage is not configured");
-    const ext = (file.originalname?.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const key = namespacedBlobKey(`avatars/${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext || "jpg"}`);
-    const { url } = await put(key, file.buffer, {
-      access: "public",
+    const ext = this.images.extFrom(file.originalname, "jpg");
+    const { url } = await this.images.put(file.buffer, {
+      key: `avatars/${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`,
       contentType: file.mimetype || "image/jpeg",
-      ...(token ? { token } : {}),
     });
     const avatar = await this.addAvatar(userId, url);
     return avatar.isSelected ? avatar : this.selectAvatar(userId, avatar.id);

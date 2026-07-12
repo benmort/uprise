@@ -7,6 +7,7 @@ import {
   NAV_FLAGS,
   isFeatureFlagKey,
   flagControllableBy,
+  type FeatureFlagKey,
 } from "./index";
 
 describe("FLAGS catalogue", () => {
@@ -53,13 +54,13 @@ describe("FLAG_META / FLAG_DEFAULTS consistency", () => {
 
   it("maps each meta entry back to its own FlagDef by key", () => {
     for (const f of FLAGS) {
-      expect(FLAG_META[f.key]).toBe(f);
+      expect(FLAG_META[f.key as FeatureFlagKey]).toBe(f);
     }
   });
 
   it("mirrors each FlagDef.default into FLAG_DEFAULTS", () => {
     for (const f of FLAGS) {
-      expect(FLAG_DEFAULTS[f.key]).toBe(f.default);
+      expect(FLAG_DEFAULTS[f.key as FeatureFlagKey]).toBe(f.default);
     }
   });
 
@@ -114,7 +115,7 @@ describe("flagControllableBy", () => {
 
   it("never lists 'network' in any flag's controllableBy (resolution-only layer)", () => {
     for (const f of FLAGS) {
-      expect(flagControllableBy(f.key, "network")).toBe(false);
+      expect(flagControllableBy(f.key as FeatureFlagKey, "network")).toBe(false);
     }
   });
 });

@@ -58,6 +58,8 @@ export interface Membership {
   tenantName: string;
   tenantSlug: string;
   role: AppUserRole;
+  /** The tenant's logo (landscape preferred, block fallback) for switcher/field brand marks. */
+  logoUrl: string | null;
   /** Plan key of the owning network, flattened for the client (null when network-less). */
   planName: string | null;
   /** Billing context from the owning network (null for network-less tenants). */
@@ -186,11 +188,18 @@ export class IamFlowsService {
         },
       },
     });
+    // Batch each tenant's logo in one query (openJoinList pattern) for the switcher/field marks.
+    const profiles = await this.prisma.orgProfile.findMany({
+      where: { tenantId: { in: rows.map((m) => m.tenantId) } },
+      select: { tenantId: true, logoLandscapeUrl: true, logoBlockUrl: true },
+    });
+    const logoByTenant = new Map(profiles.map((p) => [p.tenantId, p.logoLandscapeUrl ?? p.logoBlockUrl ?? null]));
     return rows.map((m) => ({
       tenantId: m.tenantId,
       tenantName: m.tenant.name,
       tenantSlug: m.tenant.slug,
       role: m.role,
+      logoUrl: logoByTenant.get(m.tenantId) ?? null,
       planName: m.tenant.network?.planName ?? null,
       network: m.tenant.network
         ? {
@@ -757,10 +766,28 @@ export class IamFlowsService {
   // ── Invitation ──────────────────────────────────────────────────────
   async previewInvite(
     token: string,
-  ): Promise<{ email: string; phone: string | null; tenantName: string; role: AppUserRole }> {
+  ): Promise<{
+    email: string;
+    phone: string | null;
+    tenantName: string;
+    logoUrl: string | null;
+    role: AppUserRole;
+  }> {
     const invite = await this.loadValidInvite(token);
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: invite.tenantId } });
-    return { email: invite.email ?? "", phone: invite.phone ?? null, tenantName: tenant?.name ?? "", role: invite.role };
+    const [tenant, profile] = await Promise.all([
+      this.prisma.tenant.findUnique({ where: { id: invite.tenantId } }),
+      this.prisma.orgProfile.findFirst({
+        where: { tenantId: invite.tenantId },
+        select: { logoLandscapeUrl: true, logoBlockUrl: true },
+      }),
+    ]);
+    return {
+      email: invite.email ?? "",
+      phone: invite.phone ?? null,
+      tenantName: tenant?.name ?? "",
+      logoUrl: profile?.logoLandscapeUrl ?? profile?.logoBlockUrl ?? null,
+      role: invite.role,
+    };
   }
 
   /**

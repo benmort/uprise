@@ -14,6 +14,7 @@ import {
   plans,
   telephony,
   emailProvisioning,
+  tenantLogoUrl,
 } from "./index";
 
 const BASE = "http://localhost:3001/api/v1";
@@ -146,6 +147,20 @@ describe("auth flows", () => {
     const [url, init] = call();
     expect(url).toBe(`${BASE}/iam/reset-password`);
     expect(bodyOf(init)).toEqual({ token: "rtok", password: "newpass" });
+  });
+
+  it("tenants.brandBySlug GETs the public brand endpoint with an encoded slug", async () => {
+    await tenants.brandBySlug("common threads");
+    const [url] = call();
+    expect(url).toBe(`${BASE}/tenants/brand?slug=common%20threads`);
+  });
+
+  it("tenantLogoUrl prefers landscape, falls back to block, else null", () => {
+    expect(tenantLogoUrl({ logoLandscapeUrl: "wide.png", logoBlockUrl: "block.png" })).toBe("wide.png");
+    expect(tenantLogoUrl({ logoLandscapeUrl: null, logoBlockUrl: "block.png" })).toBe("block.png");
+    expect(tenantLogoUrl({ logoLandscapeUrl: null, logoBlockUrl: null })).toBeNull();
+    expect(tenantLogoUrl(null)).toBeNull();
+    expect(tenantLogoUrl(undefined)).toBeNull();
   });
 
   it("phoneVerify POSTs challenge + code to /iam/phone/verify", async () => {

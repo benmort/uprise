@@ -1,5 +1,6 @@
 import { AppUserRole, Prisma, TurfAssignmentStatus } from "@uprise/db";
 import { CanvassingService } from "./canvassing.service";
+import { ImageUploadService } from "../common/storage/image-upload.service";
 
 // uploadDoorPhoto's happy path calls into @vercel/blob; mock the SDK so it never
 // touches the network and returns a deterministic public URL.
@@ -106,7 +107,7 @@ describe("CanvassingService", () => {
     put.mockClear();
     // The estimate is queued, never awaited: a cut must not fail because Redis hiccuped.
     queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "j1", queued: true }) };
-    service = new CanvassingService(prisma, engagement, geo, queue as never);
+    service = new CanvassingService(prisma, engagement, geo, queue as never, new ImageUploadService());
   });
 
   describe("assignTurf", () => {

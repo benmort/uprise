@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import type { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
+import { BRAND_SELECT, brandFields } from "../common/brand";
 import type { AuthUser } from "../auth/auth-user";
 import { cleanTitle, evidenceOf, groupQuestions, THEMES } from "./question-taxonomy";
 
@@ -137,11 +138,18 @@ export class InsightsService {
   async getPublicPoll(id: string) {
     const poll = await this.prisma.poll.findFirst({
       where: { id, isPublic: true },
-      include: { ...POLL_DETAIL_INCLUDE, tenant: { select: { name: true, slug: true } } },
+      include: { ...POLL_DETAIL_INCLUDE, tenant: { select: { id: true, name: true, slug: true } } },
     });
     if (!poll) throw new ApiHttpException("POLL_NOT_FOUND", "Poll not found");
-    // The owning tenant brands the public page (name + slug for an initials avatar).
-    return { ...this.mapPollDetail(poll, null), tenant: poll.tenant };
+    // The owning tenant brands the public page — logo + colours + custom CSS live on OrgProfile
+    // (a separate tenantId-keyed row), so join it like tenantBrandBySlug does.
+    const profile = poll.tenant
+      ? await this.prisma.orgProfile.findFirst({ where: { tenantId: poll.tenant.id }, select: BRAND_SELECT })
+      : null;
+    const tenant = poll.tenant
+      ? { name: poll.tenant.name, slug: poll.tenant.slug, ...brandFields(profile) }
+      : null;
+    return { ...this.mapPollDetail(poll, null), tenant };
   }
 
   /** The choropleth cells for a public poll's question — unauthenticated, isPublic-only. */

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Skeleton } from "@uprise/ui";
+import { BrandStyle, Skeleton, type BrandStyleFields } from "@uprise/ui";
+import { tenants } from "@uprise/api-client";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { getSession, goToLogin } from "../lib/session";
 import { setTenantBrand, setVolunteerId } from "../lib/volunteer";
@@ -16,6 +17,7 @@ import { OfflineBanner } from "../components/offline-banner";
 export function FieldShell({ children }: { children: React.ReactNode }) {
   const { counts } = useSyncQueue();
   const [ready, setReady] = useState(false);
+  const [brandStyle, setBrandStyle] = useState<BrandStyleFields | null>(null);
 
   // The httpOnly session cookie is the proof of auth (meld doc 14). Resolve the
   // principal to seed the volunteer id the field pages read from localStorage.
@@ -32,8 +34,15 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
       // Stash the current tenant so My turf can show the campaign brand badge.
       const current =
         session.memberships?.find((m) => m.tenantId === session.tenantId) ?? session.memberships?.[0];
-      if (current) setTenantBrand({ id: current.tenantId, name: current.tenantName });
+      if (current)
+        setTenantBrand({ id: current.tenantId, name: current.tenantName, logoUrl: current.logoUrl ?? null });
       setReady(true);
+      // The membership carries only the logo; fetch the tenant's colours + custom CSS so the
+      // whole field PWA wears the campaign brand. Best-effort — a miss just leaves defaults.
+      if (current?.tenantSlug) {
+        const res = await tenants.brandBySlug(current.tenantSlug);
+        if (alive && res.ok && res.data) setBrandStyle(res.data);
+      }
     })();
     return () => {
       alive = false;
@@ -59,6 +68,7 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <BrandStyle brand={brandStyle} />
       <OfflineBanner pending={counts.PENDING ?? 0} />
       <main className="flex-1 overflow-auto p-4">{children}</main>
     </div>
