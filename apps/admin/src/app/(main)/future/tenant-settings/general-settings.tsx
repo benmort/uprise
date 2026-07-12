@@ -35,6 +35,7 @@ import type {
   OrganisationAddressFormValues,
 } from "./types";
 import { TAB_SEGMENT, type PageTab } from "./sections";
+import { SettingsTabSkeleton } from "./settings-tab-skeleton";
 import {
   ResponderAlertsSettings,
   TenantFeatureFlagsEditor,
@@ -70,6 +71,10 @@ const SUPERADMIN_TABS = [
   { key: "flags", label: "Feature Flags" },
   { key: "queue", label: "Queue & Redis" },
 ] as const;
+// Tabs that fetch their own data and own their loading state (their content components
+// render their own skeletons). They render straight away rather than waiting behind the
+// settings skeleton, which reflects the orgProfile / tenant fetch only.
+const SELF_CONTAINED_TABS: readonly PageTab[] = ["security", "compliance", "integrations", "alerts"];
 // PageTab + the segment↔tab mapping live in ./sections (a non-client module) so the
 // server route /settings/[section]/page.tsx can call sectionToTab without hitting the
 // "use client" client-reference boundary. PRIMARY_TABS/SUPERADMIN_TABS keys must stay
@@ -496,10 +501,8 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
           </div>
         ) : null}
 
-        {loading ? (
-          <div className="flex items-center gap-2 py-16 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-          </div>
+        {loading && !SELF_CONTAINED_TABS.includes(tab) ? (
+          <SettingsTabSkeleton tab={tab} />
         ) : (
           <div className="space-y-6">
             {tab === "tenant" ? (
