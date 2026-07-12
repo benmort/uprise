@@ -117,6 +117,9 @@ export class TelephonyProvisioningController {
    * permission is required), so the session gate lives here: any session-authed
    * caller must be super-admin.
    */
+  // GET for the Vercel cron (crons issue GET), POST for a manual operator trigger —
+  // same dual-decorator pattern the blasts/audiences/journeys crons use.
+  @Get("provisioning/poll")
   @Post("provisioning/poll")
   async poll(@Req() req: Request & { user?: AuthUser }) {
     if (req.user && !req.user.isSuperAdmin) {

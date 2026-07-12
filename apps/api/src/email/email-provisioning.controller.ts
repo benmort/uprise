@@ -104,6 +104,9 @@ export class EmailProvisioningController {
    * would break the cron path (AbilityGuard denies user-less requests when a
    * permission is required), so the session gate lives here.
    */
+  // GET for the Vercel cron (crons issue GET), POST for a manual operator trigger —
+  // same dual-decorator pattern the blasts/audiences/journeys crons use.
+  @Get("poll")
   @Post("poll")
   async poll(@Req() req: Request & { user?: AuthUser }) {
     if (req.user && !req.user.isSuperAdmin) {
