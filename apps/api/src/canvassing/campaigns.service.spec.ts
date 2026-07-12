@@ -3,6 +3,7 @@ import { CampaignsService } from "./campaigns.service";
 
 describe("CampaignsService", () => {
   let prisma: any;
+  let geo: any;
   let service: CampaignsService;
 
   beforeEach(() => {
@@ -18,7 +19,10 @@ describe("CampaignsService", () => {
       walkListItem: { count: jest.fn() },
       turfAssignment: { findMany: jest.fn() },
     };
-    const geo = { unionSources: jest.fn(async () => null) } as any;
+    geo = {
+      unionSources: jest.fn(async () => null),
+      describeSources: jest.fn(async () => []),
+    } as any;
     service = new CampaignsService(prisma, geo);
   });
 
@@ -101,6 +105,39 @@ describe("CampaignsService", () => {
     it("throws for an unknown campaign", async () => {
       prisma.canvassCampaign.findFirst.mockResolvedValue(null);
       await expect(service.getSummary("org1", "missing")).rejects.toThrow();
+    });
+  });
+
+  describe("getBoundary", () => {
+    it("returns the cached geometry, the raw sources, and their resolved names", async () => {
+      const sources = [{ kind: "division", type: "ced", code: "201" }];
+      prisma.canvassCampaign.findFirst.mockResolvedValue({
+        boundary: { type: "MultiPolygon", coordinates: [] },
+        boundarySources: sources,
+      });
+      geo.describeSources.mockResolvedValue([
+        { kind: "division", key: "ced", code: "201", name: "Melbourne" },
+      ]);
+      const res = await service.getBoundary("org1", "c1");
+      // Raw sources kept for the boundary editor's round-trip; described names for display.
+      expect(res.sources).toBe(sources);
+      expect(geo.describeSources).toHaveBeenCalledWith(sources);
+      expect(res.describedSources).toEqual([
+        { kind: "division", key: "ced", code: "201", name: "Melbourne" },
+      ]);
+    });
+
+    it("describes an empty list when the campaign has no boundary", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue({ boundary: null, boundarySources: null });
+      const res = await service.getBoundary("org1", "c1");
+      expect(res.boundary).toBeNull();
+      expect(geo.describeSources).toHaveBeenCalledWith([]); // null sources → []
+      expect(res.describedSources).toEqual([]);
+    });
+
+    it("throws for an unknown campaign", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue(null);
+      await expect(service.getBoundary("org1", "missing")).rejects.toThrow();
     });
   });
 });

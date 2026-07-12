@@ -16,6 +16,7 @@ import {
   type CampaignSummary,
 } from "@/lib/api/campaigns";
 import { Button } from "@/components/ui/button";
+import { CampaignSwitcher } from "@/components/canvass/campaign-switcher";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
@@ -218,18 +219,7 @@ export default function CanvassPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <select
-            value={activeId}
-            onChange={(e) => setActiveId(e.target.value)}
-            className="h-9 rounded-[11px] border border-border bg-surface px-3 text-sm font-semibold text-foreground"
-            aria-label="Campaign"
-          >
-            {campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <CampaignSwitcher campaigns={campaigns} activeId={activeId} onSelect={setActiveId} />
           <Button variant="outline" onClick={() => void onNewCampaign()} disabled={creating}>
             <PlusCircle className="mr-1.5 h-4 w-4" />
             New campaign

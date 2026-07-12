@@ -104,6 +104,13 @@ export type BoundarySource =
   | { kind: "area"; layer: AreaLevel; code: string }
   | { kind: "polygon"; geometry: unknown };
 
+/** A {@link BoundarySource} resolved to its human name for display — `key` is the
+ *  {@link TILE_SOURCE} layer key (a division's `ste` maps to `state`); a drawn polygon
+ *  has no code or name. See {@link GeoService.describeSources}. */
+export type DescribedSource =
+  | { kind: "division" | "area"; key: string; code: string; name: string }
+  | { kind: "polygon"; key: "polygon"; name: null };
+
 /**
  * Every layer a boundary source can union from, declared once so the CTE branches and
  * their positional params can never drift apart (they used to be hand-numbered $1..$11).
@@ -561,6 +568,38 @@ export class GeoService {
     };
   }
 
+  /** Total address count across a set of statistical areas. Addresses map to meshblocks
+   *  (geo.address_region.mb_code, indexed); geo.meshblock carries each ASGS level's code, so SA
+   *  counts route address → meshblock → sa<n>_code — the SA columns on address_region itself
+   *  aren't populated. `mb` is counted directly. Powers the pre-cut "Selected areas" estimate. */
+  async areaAddressCount(areas: Array<{ level: string; code: string }>): Promise<{ addresses: number }> {
+    // Group codes by level; only mb / sa1–sa4 (the AREA_REGION_COL keys) are counted.
+    const byLevel = new Map<AreaLevel, string[]>();
+    for (const a of areas) {
+      const level = a.level as AreaLevel;
+      if (!a.code || !AREA_REGION_COL[level]) continue; // unknown level → skip (never interpolate an unvalidated column)
+      const list = byLevel.get(level);
+      if (list) list.push(a.code);
+      else byLevel.set(level, [a.code]);
+    }
+    let total = 0;
+    for (const [level, codes] of byLevel) {
+      const col = AREA_REGION_COL[level]; // validated → a fixed column name (mb_code / sa1_code / …)
+      const params: string[] = [];
+      const ph = codes.map((c) => { params.push(c); return `$${params.length}`; }).join(",");
+      // mb: address_region carries mb_code directly. sa1–sa4: the meshblock carries the level code,
+      // so find the meshblocks in the areas, then count addresses in those meshblocks (mb_code indexed).
+      const sql =
+        level === "mb"
+          ? `SELECT COUNT(*)::bigint AS n FROM geo.address_region WHERE ${col} IN (${ph})`
+          : `SELECT COUNT(*)::bigint AS n FROM geo.address_region
+               WHERE mb_code IN (SELECT mb_code FROM geo.meshblock WHERE ${col} IN (${ph}))`;
+      const rows = (await this.prisma.$queryRawUnsafe(sql, ...params)) as Array<{ n: bigint | number }>;
+      total += Number(rows[0]?.n ?? 0);
+    }
+    return { addresses: total };
+  }
+
   /**
    * One statistical area: boundary GeoJSON + total/contact/without-contact counts
    * for an org — the area equivalent of {@link divisionDetail}. Column refs are
@@ -604,6 +643,53 @@ export class GeoService {
       contactCount,
       withoutContacts: Math.max(0, addressCount - contactCount),
     };
+  }
+
+  /**
+   * Resolve each boundary source to its human name for display — so a bounded campaign can
+   * say WHAT it's cut from ("Melbourne · Federal electorate", "Fitzroy · SA2") rather than a
+   * bare code. Divisions/areas are looked up by code in their layer table via {@link TILE_SOURCE};
+   * a drawn polygon has no name. Input order is preserved.
+   *
+   * One query per distinct layer, not per source: a "3 divisions + 2 SA2s" boundary costs two
+   * round-trips. Identifiers come only from the constant TILE_SOURCE map (never user input) and
+   * codes bind as positional params, so the built-in IN-list carries no injection surface.
+   */
+  async describeSources(sources: BoundarySource[]): Promise<DescribedSource[]> {
+    // TILE_SOURCE key for a source: an area's `layer` is already a key; a division's `type`
+    // maps straight through except `ste`, whose geometry table is `state`.
+    const keyOf = (s: BoundarySource): string | null =>
+      s.kind === "area" ? s.layer : s.kind === "division" ? (s.type === "ste" ? "state" : s.type) : null;
+
+    // Batch the codes to look up per layer key.
+    const codesByKey = new Map<string, Set<string>>();
+    for (const s of sources) {
+      if (s.kind === "polygon") continue;
+      const k = keyOf(s);
+      if (!k || !TILE_SOURCE[k]) continue;
+      if (!codesByKey.has(k)) codesByKey.set(k, new Set());
+      codesByKey.get(k)!.add(s.code);
+    }
+
+    // `${key}:${code}` → resolved name. One IN-list query per layer.
+    const names = new Map<string, string>();
+    for (const [k, set] of codesByKey) {
+      const { table, codeCol, nameExpr } = TILE_SOURCE[k];
+      const codes = [...set];
+      const placeholders = codes.map((_, i) => `$${i + 1}`).join(", ");
+      const rows = (await this.prisma.$queryRawUnsafe(
+        `SELECT ${codeCol} AS code, ${nameExpr} AS name FROM ${table} WHERE ${codeCol} IN (${placeholders})`,
+        ...codes,
+      )) as Array<{ code: string; name: string | null }>;
+      for (const r of rows) names.set(`${k}:${r.code}`, r.name ?? r.code);
+    }
+
+    return sources.map((s) => {
+      if (s.kind === "polygon") return { kind: "polygon", key: "polygon", name: null };
+      const k = keyOf(s) ?? (s.kind === "division" ? s.type : s.layer);
+      const code = s.code;
+      return { kind: s.kind, key: k, code, name: names.get(`${k}:${code}`) ?? code };
+    });
   }
 
   /**

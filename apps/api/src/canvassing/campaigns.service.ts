@@ -311,14 +311,17 @@ export class CampaignsService {
     return this.prisma.canvassCampaign.update({ where: { id }, data });
   }
 
-  /** Campaign boundary (cached GeoJSON) + its re-editable source list. */
+  /** Campaign boundary (cached GeoJSON) + its re-editable source list. `describedSources`
+   *  resolves each source's code to a human name, so the turf page can list WHAT the
+   *  campaign is bounded to; `sources` stays raw for the boundary editor's round-trip. */
   async getBoundary(tenantId: string, id: string) {
     const c = await this.prisma.canvassCampaign.findFirst({
       where: { id, tenantId },
       select: { boundary: true, boundarySources: true },
     });
     if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
-    return { boundary: c.boundary, sources: c.boundarySources };
+    const sources = (c.boundarySources ?? []) as unknown as BoundarySource[];
+    return { boundary: c.boundary, sources: c.boundarySources, describedSources: await this.geo.describeSources(sources) };
   }
 
   /** Rebuild the campaign boundary from a union of sources (divisions/areas/polygons) + cache it. */

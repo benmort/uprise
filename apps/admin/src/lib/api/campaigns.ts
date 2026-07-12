@@ -42,10 +42,19 @@ export type BoundarySource =
   | { kind: "area"; layer: "mb" | "sa1" | "sa2" | "sa3" | "sa4"; code: string }
   | { kind: "polygon"; geometry: unknown };
 
+/** A {@link BoundarySource} resolved to a human name (mirrors the API's DescribedSource).
+ *  `key` is the geo layer key — `state`/`chamber_electorate` for the whole-jurisdiction
+ *  divisions, `polygon` for a drawn area (which has no code or name). */
+export type DescribedSource =
+  | { kind: "division" | "area"; key: string; code: string; name: string }
+  | { kind: "polygon"; key: "polygon"; name: null };
+
 export async function getCampaignBoundary(id: string) {
-  return request<{ boundary: unknown | null; sources: BoundarySource[] | null }>(
-    `/canvass/campaigns/${encodeURIComponent(id)}/boundary`,
-  );
+  return request<{
+    boundary: unknown | null;
+    sources: BoundarySource[] | null;
+    describedSources: DescribedSource[];
+  }>(`/canvass/campaigns/${encodeURIComponent(id)}/boundary`);
 }
 
 export async function setCampaignBoundary(id: string, sources: BoundarySource[]) {
