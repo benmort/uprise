@@ -4,9 +4,14 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  schemas  = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "civic", "events", "email", "ops", "payment", "telephony"]
+  provider  = "postgresql"
+  // App runtime uses the pooled endpoint; migrations use the DIRECT (unpooled) one.
+  // Advisory locks (pg_advisory_lock) — which `prisma migrate deploy` needs — are
+  // unreliable through Neon's transaction-mode pooler, which was timing out prod
+  // deploys with P1002. directUrl routes migrate/introspect over the direct connection.
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+  schemas   = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "civic", "events", "email", "ops", "payment", "telephony"]
 }
 
 enum AudienceStatus {
