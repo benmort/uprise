@@ -47,6 +47,32 @@ function formatDate(iso: string | null): string {
   return new Date(t).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Invitations expire this long after they're (re)sent — mirrors INVITATION_TTL_MS in the
+// API (apps/api/src/tenants/tenants.service.ts). A resend re-issues the invite and resets
+// `expiresAt`, so `expiresAt - TTL` is the time it was LAST sent (and moves when resent).
+const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** When an invitation was last (re)sent, derived from its reset expiry; null if unknown. */
+function lastSentAt(expiresAtIso: string | null): string | null {
+  if (!expiresAtIso) return null;
+  const t = Date.parse(expiresAtIso);
+  return Number.isFinite(t) ? new Date(t - INVITATION_TTL_MS).toISOString() : null;
+}
+
+/** Relative countdown to a future instant: "in 6d" / "in 14h" / "in 45m" / "expired". */
+function relativeUntil(iso: string | null): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const ms = t - Date.now();
+  if (ms <= 0) return "expired";
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `in ${hrs}h`;
+  return `in ${Math.round(hrs / 24)}d`;
+}
+
 const ROLE_LABELS: Record<AppUserRole, string> = {
   OWNER: "Owner",
   ORGANISER: "Organiser",
@@ -532,16 +558,29 @@ export default function TeamPage() {
                       {
                         key: "when",
                         header: "When",
-                        cell: (r) => (
-                          <div className="leading-tight">
-                            <div>{relativeTime(r.createdAt)}</div>
-                            {r.kind === "invitation" && r.expiresAt ? (
-                              <div className="text-xs text-muted-foreground">
-                                expires {formatDate(r.expiresAt)}
+                        cell: (r) => {
+                          // Invitations: show when it was LAST sent (a resend resets the
+                          // expiry, so derive it from there) + a live countdown to expiry.
+                          // Requests: just when the person asked to join.
+                          const sent =
+                            r.kind === "invitation" ? lastSentAt(r.expiresAt) ?? r.createdAt : r.createdAt;
+                          return (
+                            <div className="leading-tight">
+                              <div>
+                                {r.kind === "invitation" ? "sent " : ""}
+                                {relativeTime(sent)}
                               </div>
-                            ) : null}
-                          </div>
-                        ),
+                              {r.kind === "invitation" && r.expiresAt ? (
+                                <div
+                                  className="text-xs text-muted-foreground"
+                                  title={`Expires ${formatDate(r.expiresAt)}`}
+                                >
+                                  expires {relativeUntil(r.expiresAt)}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        },
                       },
                       {
                         key: "actions",
