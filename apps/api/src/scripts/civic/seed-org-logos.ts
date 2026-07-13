@@ -49,6 +49,7 @@ const SOURCES: LogoSource[] = [
   { slug: "australian-progress", kind: "landscape" },
   { slug: "democracy-in-colour", kind: "landscape" },
   { slug: "victoria-trades-hall", kind: "landscape" },
+  { slug: "gellung-warl", kind: "landscape" },
 ];
 
 const CONTENT_TYPE: Record<string, string> = {
