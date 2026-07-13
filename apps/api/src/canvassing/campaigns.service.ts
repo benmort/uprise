@@ -14,6 +14,24 @@ import { GeoService, type BoundarySource } from "../geo/geo.service";
 // Disposition codes where the volunteer reached a human (see engagement-defaults).
 const CONTACT_CODES = ["spoke_to_target", "spoke_to_other"];
 
+// ABS ASGS state digit (the first digit of every SED/CED/SA code) → abbreviation.
+const STATE_BY_DIGIT: Record<string, string> = {
+  "1": "NSW", "2": "VIC", "3": "QLD", "4": "SA", "5": "WA", "6": "TAS", "7": "NT", "8": "ACT",
+};
+/** A campaign's geographic state, read from the first division boundary source's ABS state-digit
+ *  code. Null when the boundary is a drawn polygon or the code is unrecognised. */
+function campaignState(boundarySources: unknown): string | null {
+  if (!Array.isArray(boundarySources)) return null;
+  for (const s of boundarySources) {
+    const src = s as { kind?: string; code?: string };
+    if (src?.kind === "division" && typeof src.code === "string" && src.code.length > 0) {
+      const abbrev = STATE_BY_DIGIT[src.code[0]!];
+      if (abbrev) return abbrev;
+    }
+  }
+  return null;
+}
+
 function startOfToday(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -60,6 +78,7 @@ export class CampaignsService {
       volunteerCanSelfClaimTurf: c.volunteerCanSelfClaimTurf,
       selfClaimModes: c.selfClaimModes,
       priority: c.priority,
+      state: campaignState(c.boundarySources),
       hasBoundary: c.boundary != null,
       turfCount: c._count.turfs,
       walkListCount: c._count.walkLists,
@@ -88,6 +107,7 @@ export class CampaignsService {
       volunteerCanSelfClaimTurf: campaign.volunteerCanSelfClaimTurf,
       selfClaimModes: campaign.selfClaimModes,
       priority: campaign.priority,
+      state: campaignState(campaign.boundarySources),
       hasBoundary: campaign.boundary != null,
       turfCount: campaign._count.turfs,
       walkListCount: campaign._count.walkLists,

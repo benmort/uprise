@@ -28,15 +28,17 @@ describe("CampaignsService", () => {
     service = new CampaignsService(prisma, geo);
   });
 
-  it("lists campaigns with turf + walk-list counts", async () => {
+  it("lists campaigns with turf + walk-list counts, priority + derived state", async () => {
     prisma.canvassCampaign.findMany.mockResolvedValue([
       {
         id: "c1",
-        name: "Spring",
+        name: "Richmond",
         status: "ACTIVE",
         surveyId: null,
         scriptId: null,
         goals: null,
+        priority: 2,
+        boundarySources: [{ kind: "division", type: "sed_lower", code: "27103" }],
         createdAt: new Date(),
         updatedAt: new Date(),
         _count: { turfs: 3, walkLists: 2 },
@@ -45,6 +47,19 @@ describe("CampaignsService", () => {
     const rows = await service.list("org1");
     expect(rows[0].turfCount).toBe(3);
     expect(rows[0].walkListCount).toBe(2);
+    expect(rows[0].priority).toBe(2);
+    expect(rows[0].state).toBe("VIC"); // ABS code 2xxxx → Victoria
+  });
+
+  it("derives no state from a drawn (non-division) boundary", async () => {
+    prisma.canvassCampaign.findMany.mockResolvedValue([
+      {
+        id: "c2", name: "Drawn", status: "DRAFT", surveyId: null, scriptId: null, goals: null,
+        priority: 0, boundarySources: [{ kind: "polygon", geometry: {} }],
+        createdAt: new Date(), updatedAt: new Date(), _count: { turfs: 0, walkLists: 0 },
+      },
+    ]);
+    expect((await service.list("org1"))[0].state).toBeNull();
   });
 
   it("get throws when the campaign is missing", async () => {

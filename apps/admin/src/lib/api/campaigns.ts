@@ -18,6 +18,8 @@ export type CampaignSummary = {
   selfClaimModes?: string[] | null;
   /** Organiser-set rank; lower = higher priority (1 = top). 0 = unset. */
   priority: number;
+  /** Geographic state (VIC/NSW/…), derived from the boundary. Null for drawn boundaries. */
+  state: string | null;
   hasBoundary?: boolean;
   turfCount: number;
   walkListCount: number;

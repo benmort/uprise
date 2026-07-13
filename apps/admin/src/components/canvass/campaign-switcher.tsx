@@ -72,13 +72,30 @@ export function CampaignSwitcher({
   onSelect: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [stateFilter, setStateFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
   const active = campaigns.find((c) => c.id === activeId) ?? null;
   const activeName = active?.name ?? "Select campaign";
 
+  // Distinct geographic states + priorities present, for the filter dropdowns.
+  const states = useMemo(
+    () => Array.from(new Set(campaigns.map((c) => c.state).filter((s): s is string => !!s))).sort(),
+    [campaigns],
+  );
+  const priorities = useMemo(
+    () => Array.from(new Set(campaigns.map((c) => c.priority))).sort((a, b) => a - b),
+    [campaigns],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? campaigns.filter((c) => c.name.toLowerCase().includes(q)) : campaigns;
-  }, [campaigns, query]);
+    return campaigns.filter((c) => {
+      if (stateFilter !== "all" && c.state !== stateFilter) return false;
+      if (priorityFilter !== "all" && String(c.priority) !== priorityFilter) return false;
+      if (q && !c.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [campaigns, query, stateFilter, priorityFilter]);
 
   const handleSelect = (id: string) => {
     onSelect(id);
@@ -125,6 +142,36 @@ export function CampaignSwitcher({
           </button>
         ) : null}
         <kbd className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">Esc</kbd>
+      </div>
+
+      {/* State + priority filters */}
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <select
+          value={stateFilter}
+          onChange={(e) => setStateFilter(e.target.value)}
+          aria-label="Filter by state"
+          className="h-8 flex-1 rounded-lg border border-border bg-surface px-2 text-xs font-semibold text-foreground"
+        >
+          <option value="all">All states</option>
+          {states.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value)}
+          aria-label="Filter by priority"
+          className="h-8 flex-1 rounded-lg border border-border bg-surface px-2 text-xs font-semibold text-foreground"
+        >
+          <option value="all">All priorities</option>
+          {priorities.map((p) => (
+            <option key={p} value={String(p)}>
+              {p === 0 ? "Unset" : `Priority ${p}`}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Campaign list */}
