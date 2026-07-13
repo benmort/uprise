@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEnum, IsObject, IsOptional, IsString } from "class-validator";
+import { IsArray, IsBoolean, IsEnum, IsInt, IsObject, IsOptional, IsString } from "class-validator";
 import { CanvassCampaignStatus, EngagementChannel } from "@uprise/db";
 import type { BoundarySource } from "../../geo/geo.service";
 
@@ -39,6 +39,11 @@ export class CreateCampaignDto {
   @IsArray()
   @IsString({ each: true })
   selfClaimModes?: string[];
+
+  /** Organiser-set rank; lower = higher priority (1 = top). */
+  @IsOptional()
+  @IsInt()
+  priority?: number;
 }
 
 export class UpdateCampaignDto {
@@ -78,6 +83,10 @@ export class UpdateCampaignDto {
   @IsArray()
   @IsString({ each: true })
   selfClaimModes?: string[];
+
+  @IsOptional()
+  @IsInt()
+  priority?: number;
 }
 
 /** Set a campaign's boundary from a union of divisions / ASGS areas / drawn polygons. */

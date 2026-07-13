@@ -36,7 +36,9 @@
     "civic:sync": "ts-node src/scripts/civic/sync-theyvoteforyou.ts",
     "civic:sync-states": "ts-node src/scripts/civic/sync-state-mps.ts",
     "civic:images": "ts-node src/scripts/civic/sync-images.ts",
-    "seed:org-logos": "ts-node src/scripts/civic/seed-org-logos.ts"
+    "seed:org-logos": "ts-node src/scripts/civic/seed-org-logos.ts",
+    "canvass:cut-turf": "ts-node src/scripts/canvass/cut-turf.ts",
+    "canvass:vic-campaigns": "ts-node src/scripts/canvass/vic-campaigns.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.15",

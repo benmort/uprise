@@ -16,6 +16,8 @@ export type CampaignSummary = {
   openJoinEnabled: boolean;
   volunteerCanSelfClaimTurf?: boolean;
   selfClaimModes?: string[] | null;
+  /** Organiser-set rank; lower = higher priority (1 = top). 0 = unset. */
+  priority: number;
   hasBoundary?: boolean;
   turfCount: number;
   walkListCount: number;
@@ -33,6 +35,7 @@ export type CampaignInput = {
   openJoinEnabled?: boolean;
   volunteerCanSelfClaimTurf?: boolean;
   selfClaimModes?: string[] | null;
+  priority?: number;
 };
 
 /** Mirrors the API's BoundarySource. `type` spans every division layer plus the two

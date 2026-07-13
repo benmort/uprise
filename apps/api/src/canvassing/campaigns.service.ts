@@ -30,6 +30,7 @@ export type CreateCampaignInput = {
   openJoinEnabled?: boolean;
   volunteerCanSelfClaimTurf?: boolean;
   selfClaimModes?: string[] | null;
+  priority?: number;
 };
 
 export type UpdateCampaignInput = Partial<CreateCampaignInput>;
@@ -58,6 +59,7 @@ export class CampaignsService {
       openJoinEnabled: c.openJoinEnabled,
       volunteerCanSelfClaimTurf: c.volunteerCanSelfClaimTurf,
       selfClaimModes: c.selfClaimModes,
+      priority: c.priority,
       hasBoundary: c.boundary != null,
       turfCount: c._count.turfs,
       walkListCount: c._count.walkLists,
@@ -85,6 +87,7 @@ export class CampaignsService {
       openJoinEnabled: campaign.openJoinEnabled,
       volunteerCanSelfClaimTurf: campaign.volunteerCanSelfClaimTurf,
       selfClaimModes: campaign.selfClaimModes,
+      priority: campaign.priority,
       hasBoundary: campaign.boundary != null,
       turfCount: campaign._count.turfs,
       walkListCount: campaign._count.walkLists,
@@ -280,6 +283,7 @@ export class CampaignsService {
         openJoinEnabled: input.openJoinEnabled ?? false,
         volunteerCanSelfClaimTurf: input.volunteerCanSelfClaimTurf ?? false,
         selfClaimModes: (input.selfClaimModes ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        priority: input.priority ?? 0,
       },
     });
   }
@@ -308,6 +312,7 @@ export class CampaignsService {
     if (input.selfClaimModes !== undefined) {
       data.selfClaimModes = (input.selfClaimModes ?? Prisma.DbNull) as Prisma.InputJsonValue;
     }
+    if (input.priority !== undefined) data.priority = input.priority;
     return this.prisma.canvassCampaign.update({ where: { id }, data });
   }
 

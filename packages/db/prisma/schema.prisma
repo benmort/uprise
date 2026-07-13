@@ -1037,6 +1037,7 @@ model CanvassCampaign {
   // When self-claim is on: true ⇒ a volunteer's claim lands as a REQUESTED assignment
   // an organiser must approve; false ⇒ instant ASSIGNED (the default, existing path).
   turfClaimRequiresApproval Boolean    @default(false)
+  priority       Int                   @default(0) // organiser-set rank; lower = higher priority (1 = top)
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
