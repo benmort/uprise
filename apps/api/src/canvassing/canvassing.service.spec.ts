@@ -636,6 +636,54 @@ describe("CanvassingService", () => {
         },
       ]);
     });
+
+    it("materialises a walk-list from the turf's contacts when an assigned turf has none", async () => {
+      const bare = {
+        turfId: "t1",
+        lockedUntil: null,
+        turf: { id: "t1", name: "Turf 1", tenantId: "org1", geometry: {}, campaignId: "c1", walkLists: [] },
+      };
+      const healed = {
+        ...bare,
+        turf: { ...bare.turf, walkLists: [{ id: "wl_turf_t1", items: [{ id: "i1" }, { id: "i2" }] }] },
+      };
+      prisma.turfAssignment.findMany.mockResolvedValueOnce([bare]).mockResolvedValueOnce([healed]);
+      prisma.contact.findMany.mockResolvedValue([{ id: "c1" }, { id: "c2" }]);
+
+      const res = await service.listAssignments("org1", "u1");
+
+      expect(prisma.contact.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "org1", turfId: "t1" } }),
+      );
+      expect(prisma.walkList.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            id: "wl_turf_t1",
+            turfId: "t1",
+            items: { create: [{ contactId: "c1", orderIndex: 0 }, { contactId: "c2", orderIndex: 1 }] },
+          }),
+        }),
+      );
+      expect(res[0].walkLists[0].items).toHaveLength(2);
+    });
+
+    it("does not build a walk-list for a turf with no contacts", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([
+        { turfId: "t1", lockedUntil: null, turf: { id: "t1", name: "T", tenantId: "org1", geometry: {}, campaignId: null, walkLists: [] } },
+      ]);
+      prisma.contact.findMany.mockResolvedValue([]);
+      await service.listAssignments("org1", "u1");
+      expect(prisma.walkList.create).not.toHaveBeenCalled();
+    });
+
+    it("tolerates a concurrent generate — deterministic id makes it a PK conflict, not a duplicate", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([
+        { turfId: "t1", lockedUntil: null, turf: { id: "t1", name: "T", tenantId: "org1", geometry: {}, campaignId: null, walkLists: [] } },
+      ]);
+      prisma.contact.findMany.mockResolvedValue([{ id: "c1" }]);
+      prisma.walkList.create.mockRejectedValueOnce(p2002());
+      await expect(service.listAssignments("org1", "u1")).resolves.toBeDefined();
+    });
   });
 
   describe("getVolunteerMetrics", () => {

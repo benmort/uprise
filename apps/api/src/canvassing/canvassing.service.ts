@@ -150,26 +150,23 @@ export class CanvassingService {
    *  full Contact row (esp. the `metadata` JSON blob) times up to ~2000 doors/turf was
    *  the dominant payload cost on the canvasser's hot path. */
   async listAssignments(tenantId: string, volunteerId: string) {
-    const assignments = await this.prisma.turfAssignment.findMany({
-      where: { volunteerId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
-      include: {
-        turf: {
-          include: {
-            walkLists: {
-              include: {
-                items: {
-                  orderBy: { orderIndex: "asc" },
-                  include: {
-                    contact: {
-                      select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        address: true,
-                        lat: true,
-                        lng: true,
-                        phoneE164: true,
-                      },
+    const include = {
+      turf: {
+        include: {
+          walkLists: {
+            include: {
+              items: {
+                orderBy: { orderIndex: "asc" as const },
+                include: {
+                  contact: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      address: true,
+                      lat: true,
+                      lng: true,
+                      phoneE164: true,
                     },
                   },
                 },
@@ -178,13 +175,65 @@ export class CanvassingService {
           },
         },
       },
-    });
+    };
+    const load = () =>
+      this.prisma.turfAssignment.findMany({
+        where: { volunteerId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
+        include,
+      });
+    let assignments = await load();
+
+    // Self-heal: a turf can be assigned before anyone built a walk-list from its bucketed contacts,
+    // which would show the canvasser "0 doors · 0 min" and give them nothing to walk. Materialise a
+    // default walk-list from the turf's contacts on first fetch, then reload so the payload carries it.
+    const missing = assignments.filter((a) => a.turf.walkLists.length === 0);
+    if (missing.length > 0) {
+      await Promise.all(missing.map((a) => this.ensureTurfWalkList(a.turf)));
+      assignments = await load();
+    }
+
     return assignments.map((a) => ({
       turfId: a.turfId,
       lockedUntil: a.lockedUntil,
       turf: { id: a.turf.id, name: a.turf.name, geometry: a.turf.geometry, campaignId: a.turf.campaignId },
       walkLists: a.turf.walkLists,
     }));
+  }
+
+  /**
+   * Ensure a turf has a walk-list, building a default one from its bucketed contacts when it has
+   * none. The walk-list id is derived from the turf id so concurrent field fetches can't double-create
+   * (the second create collides on the primary key and is ignored). No-op when the turf has no
+   * contacts. Contacts are ordered by lat/lng as a coarse route; the field re-optimises on device.
+   */
+  private async ensureTurfWalkList(turf: {
+    id: string;
+    name: string;
+    tenantId: string;
+    campaignId: string | null;
+  }): Promise<void> {
+    const contacts = await this.prisma.contact.findMany({
+      where: { tenantId: turf.tenantId, turfId: turf.id },
+      select: { id: true },
+      orderBy: [{ lat: "asc" }, { lng: "asc" }],
+    });
+    if (contacts.length === 0) return;
+    try {
+      await this.prisma.walkList.create({
+        data: {
+          id: `wl_turf_${turf.id}`,
+          tenantId: turf.tenantId,
+          name: turf.name,
+          turfId: turf.id,
+          campaignId: turf.campaignId,
+          listType: WalkListItemListType.STATIC,
+          items: { create: contacts.map((c, orderIndex) => ({ contactId: c.id, orderIndex })) },
+        },
+      });
+    } catch (error) {
+      // A concurrent fetch already generated it — the deterministic id makes that a PK conflict.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+    }
   }
 
   /**
