@@ -6,7 +6,10 @@ import { openDB, type IDBPDatabase } from "idb";
 // "mapbox" cache (see map-cache.ts); this just records what's been downloaded so
 // the field UI can show status across reloads and resume a partial download.
 
-export type TileManifestStatus = "idle" | "running" | "done" | "error" | "cancelled";
+// "incomplete" = the download finished but a post-download integrity check found tiles missing
+// from Cache Storage (opaque-fetch failure or mid-download eviction) — so it's NOT safe to
+// promise offline; the UI prompts a retry rather than a false "saved".
+export type TileManifestStatus = "idle" | "running" | "done" | "incomplete" | "error" | "cancelled";
 
 export type TileManifest = {
   turfId: string;

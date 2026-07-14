@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __clearApiCache,
   entryFor,
+  hydrateFromStore,
   invalidateApi,
   isFresh,
   peekEntry,
@@ -9,12 +10,24 @@ import {
   subscribeKey,
   writeEntry,
 } from "./use-api-cache";
+import { apiCacheGet, apiCacheSet } from "./api-cache-store";
+
+// The durable IndexedDB layer is exercised in its own test; here we just assert use-api-cache
+// writes through to it and hydrates from it, without a real IndexedDB.
+vi.mock("./api-cache-store", () => ({
+  apiCacheGet: vi.fn(async () => undefined),
+  apiCacheSet: vi.fn(async () => undefined),
+}));
+const mockGet = apiCacheGet as unknown as ReturnType<typeof vi.fn>;
+const mockSet = apiCacheSet as unknown as ReturnType<typeof vi.fn>;
 
 const ok = <T,>(data: T) => ({ ok: true as const, data });
 const fail = (error: string, status?: number) => ({ ok: false as const, error, status });
 
 afterEach(() => {
   __clearApiCache();
+  mockGet.mockReset().mockResolvedValue(undefined);
+  mockSet.mockReset().mockResolvedValue(undefined);
   vi.useRealTimers();
 });
 
@@ -101,5 +114,41 @@ describe("use-api cache engine", () => {
     writeEntry("/k", { n: 1 });
     expect(peekEntry("/k")?.data).toEqual({ n: 1 });
     expect(listener).toHaveBeenCalled();
+  });
+});
+
+describe("durable persistence (IndexedDB write-through + hydrate)", () => {
+  it("writes a successful fetch and an optimistic mutate through to the durable store", async () => {
+    await revalidate("/k", async () => ok(["a", "b"]));
+    expect(mockSet).toHaveBeenCalledWith("/k", ["a", "b"]);
+    writeEntry("/k2", { n: 1 });
+    expect(mockSet).toHaveBeenCalledWith("/k2", { n: 1 });
+  });
+
+  it("does NOT persist a failed fetch", async () => {
+    await revalidate("/k", async () => fail("nope", 500));
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it("hydrates last-good data from the store when the entry was never written this session", async () => {
+    mockGet.mockResolvedValueOnce(["stored-stops"]);
+    await hydrateFromStore("/k");
+    expect(peekEntry("/k")?.data).toEqual(["stored-stops"]);
+    // at = 1 marks it stale-but-present so a live fetch still supersedes it.
+    expect(peekEntry("/k")?.at).toBe(1);
+    expect(isFresh("/k", 60_000)).toBe(false);
+  });
+
+  it("never clobbers live data with a stored copy", async () => {
+    await revalidate("/k", async () => ok(["fresh"]));
+    mockGet.mockResolvedValueOnce(["stale-stored"]);
+    await hydrateFromStore("/k");
+    expect(peekEntry("/k")?.data).toEqual(["fresh"]); // live wins
+  });
+
+  it("is a no-op when the store has nothing for the key", async () => {
+    mockGet.mockResolvedValueOnce(undefined);
+    await hydrateFromStore("/missing");
+    expect(peekEntry("/missing")?.data).toBeUndefined();
   });
 });

@@ -6,6 +6,7 @@ import {
   DEFAULT_ZOOM,
   downloadRegion,
   planRegionDownload,
+  verifyRegionCached,
   type ZoomRange,
 } from "../lib/map-cache";
 import { getManifest, putManifest, type TileManifestStatus } from "../lib/tile-cache-store";
@@ -111,8 +112,22 @@ export function useTilePreCache(
             }
           },
         });
-        setStatus("done");
+        // Don't trust the progress counter alone — fetches can succeed opaquely without
+        // caching, or get LRU-evicted mid-download. Verify the pack is really in Cache
+        // Storage before promising offline; otherwise flag it so the UI offers a retry.
+        const verified = await verifyRegionCached(plan.assets, plan.tileUrls);
+        const finalStatus: TileManifestStatus = verified ? "done" : "incomplete";
+        setStatus(finalStatus);
         setDone(result.done);
+        void putManifest({
+          turfId,
+          total: liveTotal,
+          done: result.done,
+          status: finalStatus,
+          zoomMin: zoom.min,
+          zoomMax: zoom.max,
+          updatedAt: new Date().toISOString(),
+        });
       } catch (error) {
         const aborted = error instanceof DOMException && error.name === "AbortError";
         setStatus(aborted ? "cancelled" : "error");

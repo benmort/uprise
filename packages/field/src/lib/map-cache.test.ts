@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bboxOfGeometry,
   fillTemplate,
   latToTileY,
   lngToTileX,
+  planRegionDownload,
   tilesForBbox,
+  verifyRegionCached,
   type Bbox,
 } from "./map-cache";
 
@@ -74,5 +76,93 @@ describe("fillTemplate", () => {
     expect(fillTemplate("https://t/{z}/{x}/{y}.pbf", { z: 14, x: 1, y: 2 })).toBe(
       "https://t/14/1/2.pbf",
     );
+  });
+});
+
+// ── Networked helpers (mocked fetch + Cache Storage) ──────────────────────────
+
+const jsonRes = (body: unknown) => ({ json: async () => body }) as unknown as Response;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  // @ts-expect-error test cleanup
+  delete globalThis.caches;
+});
+
+describe("planRegionDownload — both themes", () => {
+  it("resolves both styles, de-dupes the shared tiles, and keeps both styles' assets", async () => {
+    // Both styles share one vector source (same tile template) but differ in sprite.
+    global.fetch = vi.fn(async (url: unknown) => {
+      const u = String(url);
+      const sprite = u.includes("dark-v11") ? "mapbox://sprites/mapbox/dark-v11" : "mapbox://sprites/mapbox/streets-v12";
+      return jsonRes({
+        sources: { composite: { tiles: ["https://tiles/{z}/{x}/{y}.mvt"] } },
+        sprite,
+        glyphs: "mapbox://fonts/mapbox/{fontstack}/{range}.pbf",
+        layers: [],
+      });
+    }) as unknown as typeof fetch;
+
+    const geometry: GeoJSON.Geometry = {
+      type: "Polygon",
+      coordinates: [[[151.2, -33.87], [151.21, -33.87], [151.21, -33.86], [151.2, -33.86], [151.2, -33.87]]],
+    };
+    const plan = await planRegionDownload(geometry, "tok", { min: 14, max: 14 });
+
+    // Two style JSONs fetched (one per theme).
+    const styleAssets = plan.assets.filter((a) => a.includes("/styles/v1/"));
+    expect(styleAssets.some((a) => a.includes("streets-v12"))).toBe(true);
+    expect(styleAssets.some((a) => a.includes("dark-v11"))).toBe(true);
+    // Both sprites present (they differ per theme).
+    expect(plan.assets.some((a) => a.includes("streets-v12/sprite"))).toBe(true);
+    expect(plan.assets.some((a) => a.includes("dark-v11/sprite"))).toBe(true);
+    // The shared tile template is expanded ONCE despite both styles listing it.
+    expect(plan.tileUrls.length).toBe(plan.tileCount);
+    expect(new Set(plan.tileUrls).size).toBe(plan.tileUrls.length);
+    expect(plan.urls.length).toBe(plan.assets.length + plan.tileUrls.length);
+  });
+
+  it("returns an empty plan with no token or geometry", async () => {
+    expect(await planRegionDownload(null, "tok")).toMatchObject({ urls: [], tileUrls: [], assets: [] });
+  });
+});
+
+describe("verifyRegionCached", () => {
+  // A fake Cache Storage holding an exact set of URLs.
+  const withCache = (present: Set<string>) => {
+    globalThis.caches = {
+      open: async () => ({ match: async (url: string) => (present.has(url) ? new Response("x") : undefined) }),
+    } as unknown as CacheStorage;
+  };
+
+  it("passes only when every asset + the tile sample are present", async () => {
+    const assets = ["style.json", "sprite.png"];
+    const tiles = Array.from({ length: 100 }, (_v, i) => `tile/${i}`);
+    withCache(new Set([...assets, ...tiles]));
+    expect(await verifyRegionCached(assets, tiles, 40)).toBe(true);
+  });
+
+  it("fails when an asset is missing (assets are always fully checked)", async () => {
+    const assets = ["style.json", "sprite.png"];
+    const tiles = Array.from({ length: 100 }, (_v, i) => `tile/${i}`);
+    withCache(new Set([assets[0], ...tiles])); // sprite.png missing
+    expect(await verifyRegionCached(assets, tiles, 40)).toBe(false);
+  });
+
+  it("samples tiles — a gap OUTSIDE the stride doesn't fail the check", async () => {
+    const assets = ["style.json"];
+    const tiles = Array.from({ length: 100 }, (_v, i) => `tile/${i}`);
+    // stride = floor(100/40) = 2 → sampled indices 0,2,4,…; index 1 is never checked.
+    const present = new Set([...assets, ...tiles.filter((_t, i) => i !== 1)]);
+    withCache(present);
+    expect(await verifyRegionCached(assets, tiles, 40)).toBe(true);
+  });
+
+  it("fails when a SAMPLED tile is missing", async () => {
+    const assets = ["style.json"];
+    const tiles = Array.from({ length: 100 }, (_v, i) => `tile/${i}`);
+    const present = new Set([...assets, ...tiles.filter((_t, i) => i !== 0)]); // index 0 is sampled
+    withCache(present);
+    expect(await verifyRegionCached(assets, tiles, 40)).toBe(false);
   });
 });

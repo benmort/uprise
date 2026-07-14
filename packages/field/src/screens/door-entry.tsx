@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ChevronLeft, MapPin, ShieldAlert, UserPlus } from "lucide-react";
 import { Card, Button, Skeleton, useToast } from "@uprise/ui";
 import { createDoorContact, uploadDoorPhoto, type CanvassAssignment } from "../api";
-import { useAssignments, useDispositions } from "../hooks/use-canvass";
-import { getContactProfile, type ContactProfile } from "../api/contacts";
-import { getSurvey, listSurveys } from "../api/engagement";
+import {
+  useAssignments,
+  useContactProfile,
+  useDispositions,
+  useSurvey,
+  useSurveys,
+} from "../hooks/use-canvass";
 import { getVolunteerId, newLocalId } from "../lib/volunteer";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useSyncQueue } from "../hooks/use-sync-queue";
@@ -34,8 +38,6 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   const assignment: CanvassAssignment | null = a.data?.find((x) => x.turfId === turfId) ?? null;
   const dispositions = d.data ?? [];
   const loading = a.loading;
-  const [survey, setSurvey] = useState<SurveySchema | null>(null);
-  const [profile, setProfile] = useState<ContactProfile | null>(null);
   const [chosenCode, setChosenCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState("");
@@ -49,70 +51,45 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
     return items.find((it) => it.id === stopId) ?? null;
   }, [assignment, stopId]);
 
-  // Load the campaign's survey (real question/option ids) so answers persist as
-  // QuestionResponses. No survey on the campaign → door is disposition-only.
+  // The campaign's survey (real question/option ids) so answers persist as QuestionResponses.
+  // Routed through the cached hooks (not a raw per-door fetch) so the schema lands in the
+  // durable cache and a door opened offline still shows its questions. No survey on the
+  // campaign → door is disposition-only.
   const campaignId = assignment?.turf.campaignId ?? null;
-  useEffect(() => {
-    if (!campaignId) {
-      setSurvey(null);
-      return;
-    }
-    let alive = true;
-    void (async () => {
-      const list = await listSurveys();
-      if (!alive || !list.ok) return;
-      const match = list.data.find((s) => s.campaignId === campaignId);
-      if (!match) {
-        setSurvey(null);
-        return;
-      }
-      const full = await getSurvey(match.id);
-      if (!alive || !full.ok) return;
-      setSurvey({
-        category: (match as { name?: string }).name ?? "Survey",
-        questions: full.data.questions
-          .filter((q) => q.id)
-          .map((q) => ({
-            id: String(q.id),
-            prompt: q.prompt,
-            type: q.type,
-            required: q.required,
-            scaleMin: q.scaleMin ?? undefined,
-            scaleMax: q.scaleMax ?? undefined,
-            options: q.options
-              ?.filter((o) => o.id)
-              .map((o) => ({
-                id: String(o.id),
-                value: o.value,
-                label: o.label,
-                // "Author once, use everywhere": surface the option's dual-channel
-                // mapping under each choice — the door-button label and the SMS
-                // canned reply it logs — so the canvasser sees both at the door.
-                hint: o.cannedReplyText
-                  ? `Door: "${o.label}" · SMS: "${o.cannedReplyText}"`
-                  : `Door: "${o.label}"`,
-              })),
-          })),
-      });
-    })();
-    return () => {
-      alive = false;
+  const surveyList = useSurveys();
+  const surveyMatch = campaignId ? (surveyList.data ?? []).find((s) => s.campaignId === campaignId) ?? null : null;
+  const surveyFull = useSurvey(surveyMatch?.id ?? null);
+  const survey = useMemo<SurveySchema | null>(() => {
+    if (!surveyMatch || !surveyFull.data) return null;
+    return {
+      category: surveyMatch.name ?? "Survey",
+      questions: surveyFull.data.questions
+        .filter((q) => q.id)
+        .map((q) => ({
+          id: String(q.id),
+          prompt: q.prompt,
+          type: q.type,
+          required: q.required,
+          scaleMin: q.scaleMin ?? undefined,
+          scaleMax: q.scaleMax ?? undefined,
+          options: q.options
+            ?.filter((o) => o.id)
+            .map((o) => ({
+              id: String(o.id),
+              value: o.value,
+              label: o.label,
+              // "Author once, use everywhere": surface the option's dual-channel mapping under
+              // each choice — the door-button label and the SMS canned reply it logs.
+              hint: o.cannedReplyText ? `Door: "${o.label}" · SMS: "${o.cannedReplyText}"` : `Door: "${o.label}"`,
+            })),
+        })),
     };
-  }, [campaignId]);
+  }, [surveyMatch, surveyFull.data]);
 
-  // The informed knock: pull this resident's recent contact history.
+  // The informed knock: this resident's recent contact history — cached + durable so it
+  // survives going offline.
   const contactId = stop?.contact.id as string | undefined;
-  useEffect(() => {
-    if (!contactId) return;
-    let alive = true;
-    void (async () => {
-      const res = await getContactProfile(contactId);
-      if (alive && res.ok) setProfile(res.data);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [contactId]);
+  const profile = useContactProfile(contactId ?? null).data ?? null;
 
   async function record(code: string, answers?: SurveyAnswer[]) {
     if (!stop) return;

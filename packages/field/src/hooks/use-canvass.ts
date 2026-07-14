@@ -8,6 +8,8 @@ import {
   type DispositionDef,
   type VolunteerMetrics,
 } from "../api/canvass";
+import { listSurveys, getSurvey, type SurveyListItem, type Survey } from "../api/engagement";
+import { getContactProfile, type ContactProfile } from "../api/contacts";
 import { useApi } from "./use-api";
 
 /**
@@ -39,5 +41,32 @@ export function useDispositions(channel: "DOOR" | "SMS" = "DOOR") {
     `/engagement/dispositions?channel=${channel}`,
     (signal) => listDispositions(channel, signal),
     { ttlMs: 300_000 },
+  );
+}
+
+/**
+ * Survey catalogue + one survey's full schema — routed through useApi (not a raw per-door
+ * fetch) so the schema lands in the durable cache and a door opened offline still shows its
+ * questions. Cached 5 min; `useSurvey(null)` skips (disposition-only campaigns).
+ */
+export function useSurveys() {
+  return useApi<SurveyListItem[]>("/engagement/surveys", () => listSurveys(), { ttlMs: 300_000 });
+}
+
+export function useSurvey(id: string | null) {
+  return useApi<Survey>(
+    id ? `/engagement/surveys/${encodeURIComponent(id)}` : null,
+    () => getSurvey(id as string),
+    { ttlMs: 300_000 },
+  );
+}
+
+/** This resident's recent contact history for the informed knock — cached + durable so the
+ *  prior-contact context survives going offline. */
+export function useContactProfile(id: string | null) {
+  return useApi<ContactProfile>(
+    id ? `/contacts/${encodeURIComponent(id)}` : null,
+    () => getContactProfile(id as string),
+    { ttlMs: 60_000 },
   );
 }

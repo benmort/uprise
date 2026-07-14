@@ -1,4 +1,5 @@
 import type { ApiResult } from "@uprise/api-client";
+import { apiCacheGet, apiCacheSet } from "./api-cache-store";
 
 /**
  * Framework-free engine behind useApi: an in-memory TTL cache with in-flight
@@ -69,6 +70,25 @@ export function writeEntry(key: string, data: unknown): void {
   entry.error = undefined;
   entry.status = undefined;
   notify(entry);
+  void apiCacheSet(key, data); // durable last-good copy (best-effort)
+}
+
+/**
+ * Populate an entry from the durable IndexedDB store when it has never been written this
+ * session (`at === 0`) — so a cold offline start shows last-good data (the walk-list stops)
+ * instead of an empty/"not found" screen. `at = 1` marks it as stale-but-present, older than
+ * any TTL, so it still revalidates the moment the network returns. Never clobbers live data.
+ */
+export async function hydrateFromStore(key: string): Promise<void> {
+  const entry = entryFor(key);
+  if (entry.at !== 0 || entry.data !== undefined) return; // already have fresher/live data
+  const stored = await apiCacheGet(key);
+  if (stored === undefined) return;
+  if (entry.at !== 0 || entry.data !== undefined) return; // re-check: a fetch may have landed
+  entry.data = stored;
+  entry.at = 1;
+  entry.error = undefined;
+  notify(entry);
 }
 
 /**
@@ -96,6 +116,7 @@ export function revalidate(key: string, fn?: Fetcher): Promise<void> {
         entry.error = undefined;
         entry.status = undefined;
         entry.at = Date.now();
+        void apiCacheSet(key, result.data); // durable last-good copy (best-effort)
       } else {
         entry.error = result.error;
         entry.status = result.status;

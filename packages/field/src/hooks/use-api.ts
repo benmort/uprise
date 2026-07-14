@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "r
 import type { ApiResult } from "@uprise/api-client";
 import {
   entryFor,
+  hydrateFromStore,
   invalidateApi,
   isFresh,
   peekEntry,
@@ -79,9 +80,13 @@ export function useApi<T>(
   }, [key]);
   useSyncExternalStore(subscribe, getSnapshot, () => null);
 
-  // Fetch on mount / key change (respecting TTL).
+  // Fetch on mount / key change (respecting TTL). Also hydrate from the durable IndexedDB
+  // store: on a cold offline start the revalidate fails, and hydrateFromStore fills in the
+  // last-good data (e.g. the walk-list stops) so the screen isn't empty. No-ops if a live
+  // fetch has already populated the entry.
   useEffect(() => {
     if (key === null) return;
+    void hydrateFromStore(key);
     if (!isFresh(key, ttlMs)) void revalidate(key, (signal) => fnRef.current(signal));
   }, [key, ttlMs]);
 

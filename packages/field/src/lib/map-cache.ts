@@ -17,11 +17,15 @@ export type Bbox = [number, number, number, number]; // [minLng, minLat, maxLng,
 /** Walking-canvass default: street block (13) down to building level (16). */
 export const DEFAULT_ZOOM: ZoomRange = { min: 13, max: 16 };
 
-/** Safety cap so a huge turf can't enqueue an unbounded download. */
+/** Safety cap so a huge turf can't enqueue an unbounded download. Keep this <= the mapbox
+ *  SW cache `maxEntries` (next.config.mjs), or the pack self-evicts during download. */
 export const MAX_TILES = 20000;
 
 export const MAPBOX_CACHE_NAME = "mapbox";
-const STYLE = "mapbox/streets-v12"; // must match TurfMap's mapStyle
+// Both themes' styles — MUST match TurfMap's mapStyle (turf-map.tsx: light streets-v12,
+// dark dark-v11). We cache both so the offline map renders in whichever theme the volunteer
+// is in; the vector-tile sources overlap, so only the extra style JSON / sprite / glyphs cost.
+const STYLES = ["mapbox/streets-v12", "mapbox/dark-v11"];
 const API = "https://api.mapbox.com";
 
 // ─── Pure geometry / tile math ───────────────────────────────────────────────
@@ -96,9 +100,21 @@ function tokenQ(token: string): string {
   return `access_token=${encodeURIComponent(token)}`;
 }
 
-/** Resolve a Mapbox style into the concrete URLs GL JS will request for it. */
+/** Resolve every configured style (both themes), merging + de-duping their resources. */
 async function resolveStyleResources(token: string, signal?: AbortSignal): Promise<StyleResources> {
-  const styleUrl = `${API}/styles/v1/${STYLE}?${tokenQ(token)}`;
+  const tileTemplates = new Set<string>();
+  const assets = new Set<string>();
+  for (const styleId of STYLES) {
+    const one = await resolveOneStyle(styleId, token, signal);
+    for (const t of one.tileTemplates) tileTemplates.add(t);
+    for (const a of one.assets) assets.add(a);
+  }
+  return { tileTemplates: [...tileTemplates], assets: [...assets] };
+}
+
+/** Resolve one Mapbox style into the concrete URLs GL JS will request for it. */
+async function resolveOneStyle(styleId: string, token: string, signal?: AbortSignal): Promise<StyleResources> {
+  const styleUrl = `${API}/styles/v1/${styleId}?${tokenQ(token)}`;
   const style = (await (await fetch(styleUrl, { signal })).json()) as {
     sources?: Record<string, { url?: string; tiles?: string[] }>;
     sprite?: string;
@@ -162,7 +178,16 @@ async function resolveStyleResources(token: string, signal?: AbortSignal): Promi
 
 // ─── Download orchestration ──────────────────────────────────────────────────
 
-export type DownloadPlan = { urls: string[]; tileCount: number; capped: boolean };
+export type DownloadPlan = {
+  /** Everything to fetch (assets + tiles), de-duped — the download list. */
+  urls: string[];
+  /** Style JSON / sprite / glyphs — verified in full (few, fatal to miss). */
+  assets: string[];
+  /** The expanded vector-tile URLs — verified by sampling. */
+  tileUrls: string[];
+  tileCount: number;
+  capped: boolean;
+};
 
 /** Build the full list of URLs to fetch for a turf region. */
 export async function planRegionDownload(
@@ -172,30 +197,53 @@ export async function planRegionDownload(
   signal?: AbortSignal,
 ): Promise<DownloadPlan> {
   const bbox = bboxOfGeometry(turfGeometry);
-  if (!bbox || !token) return { urls: [], tileCount: 0, capped: false };
+  if (!bbox || !token) return { urls: [], assets: [], tileUrls: [], tileCount: 0, capped: false };
 
   let tiles = tilesForBbox(bbox, zoom);
   const capped = tiles.length > MAX_TILES;
   if (capped) tiles = tiles.slice(0, MAX_TILES);
 
   const { tileTemplates, assets } = await resolveStyleResources(token, signal);
-  const tileUrls: string[] = [];
+  const tileUrlSet = new Set<string>();
   for (const template of tileTemplates) {
-    for (const t of tiles) tileUrls.push(fillTemplate(template, t));
+    for (const t of tiles) tileUrlSet.add(fillTemplate(template, t));
   }
-  // De-dupe (multiple templates rarely overlap, but be safe).
+  const tileUrls = [...tileUrlSet];
   const urls = Array.from(new Set([...assets, ...tileUrls]));
-  return { urls, tileCount: tiles.length, capped };
+  return { urls, assets, tileUrls, tileCount: tiles.length, capped };
 }
+
+// ignoreSearch mirrors the service-worker match (next.config.mjs): the stored key may carry
+// `?access_token=` while a live GL JS request carries `?sku=…`, so we compare by path.
+const MATCH: CacheQueryOptions = { ignoreSearch: true };
 
 /** True if every URL is already in the mapbox cache (region fully downloaded). */
 export async function isRegionCached(urls: string[]): Promise<boolean> {
   if (typeof caches === "undefined" || urls.length === 0) return false;
   const cache = await caches.open(MAPBOX_CACHE_NAME);
   for (const url of urls) {
-    if (!(await cache.match(url))) return false;
+    if (!(await cache.match(url, MATCH))) return false;
   }
   return true;
+}
+
+/**
+ * Cheap post-download integrity check so "Maps saved" isn't a false positive. Verifies EVERY
+ * asset (style JSON, sprite, glyphs — few, and fatal to miss) plus a strided sample of tiles
+ * (checking all 20k would be slow). Returns true only if every checked URL is really in Cache
+ * Storage — catching opaque-fetch failures and mid-download eviction that the progress counter
+ * can't see. `sampleSize` tiles are spread evenly across the pack.
+ */
+export async function verifyRegionCached(
+  assets: string[],
+  tileUrls: string[],
+  sampleSize = 40,
+): Promise<boolean> {
+  if (typeof caches === "undefined") return false;
+  const stride = tileUrls.length > sampleSize ? Math.floor(tileUrls.length / sampleSize) : 1;
+  const sampled: string[] = [];
+  for (let i = 0; i < tileUrls.length; i += stride) sampled.push(tileUrls[i]);
+  return isRegionCached([...assets, ...sampled]);
 }
 
 /**
@@ -221,7 +269,7 @@ export async function downloadRegion(
       try {
         // Skip if the SW cache already holds it (resume). Otherwise fetch — the
         // SW's CacheFirst rule stores the response (opaque responses included).
-        if (!cache || !(await cache.match(url))) {
+        if (!cache || !(await cache.match(url, MATCH))) {
           await fetch(url, { signal: opts.signal, mode: "cors" }).catch(() =>
             fetch(url, { signal: opts.signal, mode: "no-cors" }),
           );
