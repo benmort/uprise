@@ -41,6 +41,17 @@ describe("MarketingService", () => {
     expect(call.body).toContain("ada@x.y");
   });
 
+  it("also sends a branded HTML part, framing each submission line as a paragraph", async () => {
+    const { svc, sendgrid } = setup();
+    await svc.submitContact({ name: "Ada", email: "ada@x.y", company: "Acme", message: "hi there" });
+    const call = sendgrid.send.mock.calls[0][0];
+    expect(call.html).toContain("<!doctype html>"); // branded shell
+    expect(call.html).toContain("Uprise"); // platform-branded (no tenant)
+    expect(call.html).toContain("Name: Ada");
+    expect(call.html).toContain("hi there");
+    expect(call.html).toContain(call.subject); // heading = subject
+  });
+
   it("degrades to success (no throw) when notify email delivery fails", async () => {
     const { svc, sendgrid } = setup();
     sendgrid.send.mockRejectedValueOnce(new Error("SendGrid is not configured"));

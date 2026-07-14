@@ -6,7 +6,8 @@ import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { SendGridService } from "./sendgrid.service";
 import { EmailSenderResolver, type EmailSendPurpose } from "./email-sender.resolver";
-import { DEFAULT_EMAIL_TEMPLATES } from "./email-templates";
+import { DEFAULT_EMAIL_TEMPLATES, type EmailTemplateDef } from "./email-templates";
+import { renderBrandedEmail, type BrandedEmailContent } from "./email-layout";
 import { assertValidEmailTransition, canTransitionEmail } from "./email-state.machine";
 
 export interface SendTransactionalEmailInput {
@@ -74,12 +75,75 @@ export class EmailService implements OnModuleInit {
     return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => vars?.[key] ?? "");
   }
 
-  private async resolveTemplate(tenantId: string, key: string): Promise<{ subject: string; body: string }> {
+  private async resolveTemplate(tenantId: string, key: string): Promise<EmailTemplateDef> {
     const db = await this.prisma.emailTemplate.findUnique({ where: { tenantId_key: { tenantId, key } } });
+    // A tenant override is subject/body only (no structured layout) — it takes the plain-framed path.
     if (db && db.isActive) return { subject: db.subject, body: db.body };
     const def = DEFAULT_EMAIL_TEMPLATES[key];
     if (!def) throw new BadRequestException(`Unknown email template: ${key}`);
     return def;
+  }
+
+  /**
+   * Render a template's branded HTML. A template with a `layout` block becomes a card with a
+   * call-to-action button; one without (tenant overrides, internal notices) has its plain body
+   * framed in the same shell — so every transactional email arrives looking like a product, and
+   * the raw (tracking-wrapped) URL never shows as naked text.
+   */
+  private renderHtml(
+    template: EmailTemplateDef,
+    vars: Record<string, string> | undefined,
+    brand: { brandName: string; logoUrl?: string; accentColour?: string },
+  ): string {
+    const sub = (s: string) => this.render(s, vars);
+    const frame = { brandName: brand.brandName, logoUrl: brand.logoUrl, accentColour: brand.accentColour };
+    let content: BrandedEmailContent;
+    if (template.layout) {
+      const L = template.layout;
+      const cta = L.cta ? { label: L.cta.label, url: vars?.[L.cta.hrefVar] ?? "" } : undefined;
+      content = {
+        ...frame,
+        preheader: L.preheader ? sub(L.preheader) : undefined,
+        heading: sub(L.heading),
+        intro: L.intro.map(sub).filter((p) => p.trim().length > 0),
+        // Drop the button if its URL var didn't resolve, rather than link to nowhere.
+        cta: cta && cta.url ? cta : undefined,
+        outro: (L.outro ?? []).map(sub).filter((p) => p.trim().length > 0),
+      };
+    } else {
+      const bodyText = this.render(template.body, vars);
+      const intro = bodyText
+        .split(/\n{2,}/)
+        .map((p) => p.replace(/\n/g, " ").trim())
+        .filter(Boolean);
+      content = { ...frame, heading: this.render(template.subject, vars), intro };
+    }
+    return renderBrandedEmail(content);
+  }
+
+  /**
+   * The sending tenant's brand for the email frame — name, logo and accent colour from its
+   * OrgProfile. Read directly (never via OrgProfileService, whose ensureProfile writes a row) and
+   * best-effort: a lookup failure or an unbranded tenant just falls back to the Uprise default, it
+   * must never fail the send. Logos must be absolute https URLs for email clients to load them.
+   */
+  private async resolveBrand(
+    tenantId: string,
+    vars: Record<string, string> | undefined,
+  ): Promise<{ brandName: string; logoUrl?: string; accentColour?: string }> {
+    let profile: { name: string; logoLandscapeUrl: string | null; logoBlockUrl: string | null; primaryColour: string | null } | null =
+      null;
+    try {
+      profile = await this.prisma.orgProfile.findFirst({
+        where: { tenantId },
+        select: { name: true, logoLandscapeUrl: true, logoBlockUrl: true, primaryColour: true },
+      });
+    } catch {
+      profile = null; // never let a branding lookup fail the send
+    }
+    const brandName = profile?.name || vars?.tenant || vars?.appName || "Uprise";
+    const logo = [profile?.logoLandscapeUrl, profile?.logoBlockUrl].find((u) => u && /^https:\/\//i.test(u));
+    return { brandName, logoUrl: logo ?? undefined, accentColour: profile?.primaryColour ?? undefined };
   }
 
   /** Transactional email (verification, magic-link, receipts), sent inline. */
@@ -87,6 +151,9 @@ export class EmailService implements OnModuleInit {
     const template = await this.resolveTemplate(input.tenantId, input.templateKey);
     const subject = this.render(template.subject, input.vars);
     const body = this.render(template.body, input.vars);
+    // Frame the email in the sending tenant's brand (logo + colour), falling back to Uprise.
+    const brand = await this.resolveBrand(input.tenantId, input.vars);
+    const html = this.renderHtml(template, input.vars, brand);
     return this.runEmailSend(
       {
         tenantId: input.tenantId,
@@ -99,7 +166,7 @@ export class EmailService implements OnModuleInit {
         sendPurpose: input.sendPurpose,
       },
       (emailId, sender) =>
-        this.sendgrid.send({ to: input.toAddress, subject, body, customArgs: { emailId } }, sender),
+        this.sendgrid.send({ to: input.toAddress, subject, body, html, customArgs: { emailId } }, sender),
     );
   }
 

@@ -15,6 +15,16 @@ export type DomainAuthResult = {
   dns: DomainAuthDnsRecord[];
 };
 
+/** A SendGrid Link Branding (click-tracking) entry — the account-level branded-links host. */
+export type LinkBranding = {
+  id: string;
+  domain: string;
+  subdomain: string;
+  valid: boolean;
+  default: boolean;
+  dns: DomainAuthDnsRecord[];
+};
+
 const BASE = "https://api.sendgrid.com";
 
 /** SendGrid's domain-auth `dns` ships as an object keyed by record name, but
@@ -215,5 +225,71 @@ export class SendGridProvisioningClient {
 
   async deleteDomainAuth(creds: SendGridCreds, sendgridDomainId: string): Promise<void> {
     await this.request(creds, "DELETE", `/v3/whitelabel/domains/${sendgridDomainId}`);
+  }
+
+  // ── Link Branding (click-tracking host, e.g. email.uprise.org.au) ──────────
+  // Account-level, not per-tenant: the branded host every send's tracked links use.
+  // `dns` ships keyed `domain_cname` / `owner_cname`; normaliseDns handles the object.
+
+  private toLinkBranding(row: {
+    id: number | string;
+    domain: string;
+    subdomain?: string;
+    valid?: boolean;
+    default?: boolean;
+    dns?: unknown;
+  }): LinkBranding {
+    return {
+      id: String(row.id),
+      domain: row.domain,
+      subdomain: String(row.subdomain ?? ""),
+      valid: Boolean(row.valid),
+      default: Boolean(row.default),
+      dns: normaliseDns(row.dns),
+    };
+  }
+
+  async listLinkBrandings(creds: SendGridCreds): Promise<LinkBranding[]> {
+    const rows = await this.request<Array<Parameters<typeof this.toLinkBranding>[0]>>(
+      creds,
+      "GET",
+      "/v3/whitelabel/links",
+    );
+    return (rows ?? []).map((r) => this.toLinkBranding(r));
+  }
+
+  /** Create a branded link host `${subdomain}.${domain}` (automatic security = managed CNAMEs). */
+  async createLinkBranding(
+    creds: SendGridCreds,
+    input: { domain: string; subdomain: string; default?: boolean },
+  ): Promise<LinkBranding> {
+    const created = await this.request<Parameters<typeof this.toLinkBranding>[0]>(
+      creds,
+      "POST",
+      "/v3/whitelabel/links",
+      { domain: input.domain, subdomain: input.subdomain, default: input.default ?? true, automatic_security: true },
+    );
+    return this.toLinkBranding(created);
+  }
+
+  async validateLinkBranding(
+    creds: SendGridCreds,
+    id: string,
+  ): Promise<{ valid: boolean; results: Record<string, unknown> }> {
+    const res = await this.request<{ valid?: boolean; validation_results?: Record<string, unknown> }>(
+      creds,
+      "POST",
+      `/v3/whitelabel/links/${id}/validate`,
+    );
+    return { valid: Boolean(res?.valid), results: res?.validation_results ?? {} };
+  }
+
+  /** Make this link branding the account default (so all sends' tracked links use it). */
+  async setDefaultLinkBranding(creds: SendGridCreds, id: string): Promise<void> {
+    await this.request(creds, "PATCH", `/v3/whitelabel/links/${id}`, { default: true });
+  }
+
+  async deleteLinkBranding(creds: SendGridCreds, id: string): Promise<void> {
+    await this.request(creds, "DELETE", `/v3/whitelabel/links/${id}`);
   }
 }

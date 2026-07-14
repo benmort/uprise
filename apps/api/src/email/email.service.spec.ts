@@ -3,6 +3,7 @@ import { EmailService, type SendGridEvent } from "./email.service";
 function setup() {
   const prisma: any = {
     emailTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
+    orgProfile: { findFirst: jest.fn().mockResolvedValue(null) },
     email: {
       create: jest.fn(async ({ data }: any) => ({ id: "em1", openedAt: null, clickedAt: null, ...data })),
       update: jest.fn(async () => ({})),
@@ -58,6 +59,108 @@ describe("EmailService", () => {
     expect(prisma.email.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "SENT", providerMessageId: "sg1" }) }),
     );
+  });
+
+  it("renders a template's layout into a branded HTML body with a CTA button", async () => {
+    const { svc, sendgrid } = setup();
+    await svc.sendTransactional({
+      tenantId: "t1",
+      toAddress: "invitee@b.c",
+      templateKey: "invitation",
+      vars: { link: "https://auth.example/invite/tok", tenant: "Common Threads", roleSuffix: " as a Volunteer", expiryNote: "Expires Friday." },
+      purpose: "invitation",
+    });
+    const arg = sendgrid.send.mock.calls[0][0];
+    expect(arg.subject).toBe("You've been invited to Common Threads");
+    // Branded HTML: framed card, the org wordmark, the CTA button + the link behind it.
+    expect(arg.html).toContain("<!doctype html>");
+    expect(arg.html).toContain("You're invited to Common Threads");
+    expect(arg.html).toContain("Accept invitation");
+    expect(arg.html).toContain('href="https://auth.example/invite/tok"');
+    expect(arg.html).toContain("Common Threads"); // brand = the tenant var
+    expect(arg.html).toContain("Expires Friday.");
+    // The plain-text alternative still carries the link for text-only clients.
+    expect(arg.body).toContain("https://auth.example/invite/tok");
+  });
+
+  it("frames a layout-less template's plain body in the same branded shell", async () => {
+    const { svc, sendgrid } = setup();
+    await svc.sendTransactional({
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      templateKey: "receipt",
+      vars: { appName: "Uprise", amount: "$40.00" },
+      purpose: "receipt",
+    });
+    const arg = sendgrid.send.mock.calls[0][0];
+    expect(arg.html).toContain("<!doctype html>");
+    expect(arg.html).toContain("We received your payment of $40.00");
+    expect(arg.html).not.toContain("paste this link into your browser"); // no CTA
+  });
+
+  it("frames a tenant's DB override (subject/body only) in the branded shell", async () => {
+    const { svc, prisma, sendgrid } = setup();
+    prisma.emailTemplate.findUnique.mockResolvedValue({
+      subject: "Custom subject",
+      body: "Custom body line.",
+      isActive: true,
+    });
+    await svc.sendTransactional({ tenantId: "t1", toAddress: "a@b.c", templateKey: "invitation", vars: {}, purpose: "invitation" });
+    const arg = sendgrid.send.mock.calls[0][0];
+    expect(arg.subject).toBe("Custom subject");
+    expect(arg.html).toContain("Custom body line.");
+    expect(arg.html).toContain("<!doctype html>");
+  });
+
+  it("styles the email with the sending tenant's brand (name, logo, accent colour)", async () => {
+    const { svc, prisma, sendgrid } = setup();
+    prisma.orgProfile.findFirst.mockResolvedValue({
+      name: "Common Threads",
+      logoLandscapeUrl: "https://blob.example/ct-landscape.png",
+      logoBlockUrl: "https://blob.example/ct-block.png",
+      primaryColour: "#16A34A",
+    });
+    await svc.sendTransactional({
+      tenantId: "t1",
+      toAddress: "invitee@b.c",
+      templateKey: "invitation",
+      vars: { link: "https://auth.example/invite/tok", tenant: "ignored-by-profile-name" },
+      purpose: "invitation",
+    });
+    const arg = sendgrid.send.mock.calls[0][0];
+    expect(arg.html).toContain('<img src="https://blob.example/ct-landscape.png"'); // landscape preferred
+    expect(arg.html).toContain('alt="Common Threads"'); // OrgProfile.name wins over vars.tenant
+    expect(arg.html).toContain("background:#16A34A"); // brand colour on the button
+  });
+
+  it("falls back to the Uprise default frame when the tenant has no OrgProfile", async () => {
+    const { svc, sendgrid } = setup(); // orgProfile.findFirst → null by default
+    await svc.sendTransactional({
+      tenantId: "t1",
+      toAddress: "a@b.c",
+      templateKey: "invitation",
+      vars: { link: "https://auth.example/invite/tok", tenant: "Common Threads" },
+      purpose: "invitation",
+    });
+    const arg = sendgrid.send.mock.calls[0][0];
+    expect(arg.html).not.toContain("<img"); // no logo
+    expect(arg.html).toContain("background:#2f5bd6"); // default accent
+    expect(arg.html).toContain("Common Threads"); // brand = vars.tenant fallback
+  });
+
+  it("drops an invalid brand colour and does not fail when the brand lookup throws", async () => {
+    const { svc, prisma, sendgrid } = setup();
+    prisma.orgProfile.findFirst
+      .mockResolvedValueOnce({ name: "T", logoLandscapeUrl: null, logoBlockUrl: null, primaryColour: "not-a-hex" })
+      .mockRejectedValueOnce(new Error("db down"));
+    // 1) invalid hex → default accent, still sends
+    await svc.sendTransactional({ tenantId: "t1", toAddress: "a@b.c", templateKey: "invitation", vars: { link: "https://x/y" }, purpose: "invitation" });
+    expect(sendgrid.send.mock.calls[0][0].html).toContain("background:#2f5bd6");
+    // 2) lookup throws → swallowed, send still succeeds on the Uprise fallback
+    await expect(
+      svc.sendTransactional({ tenantId: "t1", toAddress: "a@b.c", templateKey: "invitation", vars: { link: "https://x/y", tenant: "Fallback Org" }, purpose: "invitation" }),
+    ).resolves.toEqual({ id: "em1" });
+    expect(sendgrid.send.mock.calls[1][0].html).toContain("Fallback Org");
   });
 
   it("emits sending + sent lifecycle events on a successful send", async () => {

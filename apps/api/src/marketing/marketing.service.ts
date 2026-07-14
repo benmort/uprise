@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { SendGridService } from "../email/sendgrid.service";
+import { renderBrandedEmail } from "../email/email-layout";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 
 export interface ContactInput {
@@ -42,8 +43,15 @@ export class MarketingService {
   }
 
   private async notify(purpose: string, subject: string, message: string): Promise<{ ok: true }> {
+    // Frame the plain-text notification in the same branded shell the transactional emails use
+    // (platform-addressed, so Uprise-branded — no tenant). Each message line becomes a paragraph.
+    const html = renderBrandedEmail({
+      brandName: "Uprise",
+      heading: subject,
+      intro: message.split("\n").map((l) => l.trim()).filter(Boolean),
+    });
     try {
-      await this.sendgrid.send({ to: this.notifyAddress(), subject, body: message });
+      await this.sendgrid.send({ to: this.notifyAddress(), subject, body: message, html });
     } catch (err) {
       // Public marketing forms must not surface infra errors to the visitor. SendGrid may
       // be unconfigured; log and degrade to success rather than 500 the form.

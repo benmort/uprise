@@ -435,11 +435,31 @@ export class TenantsService {
           purpose: "invitation",
         });
       } else if (email) {
+        // Pre-format the role + expiry into the {{vars}} the template interpolates (the engine is
+        // a plain {{key}} substitution with no conditionals, so the suffixes are built here).
+        const roleLabel = input.role.charAt(0) + input.role.slice(1).toLowerCase(); // VOLUNTEER → Volunteer
+        const roleSuffix = ` as ${/^[aeiou]/i.test(roleLabel) ? "an" : "a"} ${roleLabel}`;
+        const expiryHuman = expiresAt.toLocaleString("en-AU", {
+          timeZone: "Australia/Sydney",
+          weekday: "long",
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          timeZoneName: "short",
+        });
         await this.dispatcher.sendEmail({
           tenantId,
           toAddress: email,
           templateKey: "invitation",
-          vars: { link: `${authAppUrl}/invite/${result.token}`, tenant: tenant.name },
+          vars: {
+            link: `${authAppUrl}/invite/${result.token}`,
+            tenant: tenant.name,
+            roleSuffix,
+            expiryNote: `This invitation expires on ${expiryHuman}.`,
+            expirySuffix: `\n\nThis invitation expires on ${expiryHuman}.`,
+          },
           purpose: "invitation",
         });
       }
