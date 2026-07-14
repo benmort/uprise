@@ -19,10 +19,13 @@ import { AddressesPanel } from "@/components/canvass/geo-panels/addresses-panel"
 import { PollingPlacesPanel } from "@/components/canvass/geo-panels/polling-places-panel";
 import { FirstNationsPanel } from "@/components/canvass/geo-panels/first-nations-panel";
 import { ReferendumPanel } from "@/components/canvass/geo-panels/referendum-panel";
+import { DemographicsPanel } from "@/components/canvass/geo-panels/demographics-panel";
 import { firstNationsSlug, resolveFirstNationsLevel } from "@/lib/canvass/first-nations";
 import { getDensityScale, getFirstNations, getReferendum } from "@/lib/api/geo";
+import { getChoropleth } from "@/lib/api/demographics";
 import { densityBands, densityFill } from "@/lib/canvass/density";
 import { referendumBands, referendumFill } from "@/lib/canvass/referendum-fill";
+import { matchFill, stepFill, choroplethBands, rampFor, formatIndicator } from "@/lib/canvass/demographics-fill";
 import { useChartPalette } from "@/components/insights/use-poll-palette";
 import { SequentialLegend } from "@/components/canvass/sequential-legend";
 import { useApi } from "@/lib/use-api";
@@ -67,7 +70,7 @@ export function GeoSurface() {
 
   const rawView = searchParams.get("view");
   const view: WalkMode = rawView === "list" ? "list" : "map";
-  const tab = searchParams.get("tab") ?? searchParams.get("layer") ?? "";
+  const tab = searchParams.get("type") ?? searchParams.get("tab") ?? searchParams.get("layer") ?? "";
   const stateParam = searchParams.get("state") ?? "";
   const q = searchParams.get("q") ?? "";
   const code = searchParams.get("code") ?? "";
@@ -148,6 +151,30 @@ export function GeoSurface() {
   const referendumFillExpr =
     referendumOn && palette && refRows.length ? referendumFill(refRows, palette.diverging, palette.nodata) : undefined;
   const referendumLegend = referendumOn && palette ? referendumBands(palette.diverging) : [];
+
+  // ── ABS demographics choropleth (the demographics kind) ─────────────────────
+  // The value reaches the map two ways by level: SA2+ join client-side by code (`rows` in hand),
+  // SA1/meshblock read a `value` baked onto the tile (?metric=). The indicator rides ?ind=; the
+  // panel seeds a default. Both paths bucket against the same national quantile breaks.
+  const demographicsOn = kind === "demographics";
+  const demoLevel = (["mb", "sa1", "sa2", "sa3", "sa4"].includes(tab) ? tab : "sa2") as AreaLevel;
+  const demoClientJoin = demoLevel === "sa2" || demoLevel === "sa3" || demoLevel === "sa4";
+  const indicatorKey = searchParams.get("ind") ?? "";
+  const demographics = useApi(
+    demographicsOn && indicatorKey ? `/demographics/choropleth?level=${demoLevel}&indicator=${indicatorKey}` : null,
+    () => getChoropleth(demoLevel, indicatorKey),
+    { ttlMs: 300_000 },
+  );
+  const demoData = demographics.data;
+  const demoRamp = palette && demoData ? rampFor(demoData.indicator.polarity, palette) : [];
+  const demographicsFillExpr =
+    demographicsOn && palette && demoData
+      ? demoClientJoin
+        ? matchFill(demoData.rows ?? [], demoData.breaks, demoRamp, palette.nodata)
+        : stepFill(demoData.breaks, demoRamp, palette.nodata)
+      : undefined;
+  const demographicsLegend =
+    demographicsOn && palette && demoData ? choroplethBands(demoData.breaks, demoData.min, demoRamp) : [];
 
   const mapProps = useMemo<GeoMapProps>(() => {
     const common = {
@@ -266,13 +293,36 @@ export function GeoSurface() {
         onBoundaryClick: (clicked: string) => writeGeoParam("code", code === clicked ? null : clicked),
       };
     }
+    if (kind === "demographics") {
+      // Shade the chosen ASGS level by the chosen indicator. SA2+ paint from client rows; SA1/mb
+      // bake the value on the tile (?metric=) and floor the source zoom so a whole-country
+      // meshblock tile is never requested. Codes are state-prefixed, so the shared state filter
+      // + code-first framing hold at every level.
+      const baked = !demoClientJoin && Boolean(indicatorKey);
+      const selectionBounds = code ? stateBounds(stateAsgsDigitToAbbrev(code.slice(0, 1)) ?? "") : undefined;
+      return {
+        ...common,
+        focusBounds: selectionBounds ?? common.focusBounds ?? AU_BOUNDS,
+        mode: "boundaries",
+        boundaryTilesUrl: `${getApiUrl()}/geo/tiles/${demoLevel}/{z}/{x}/{y}?v=4${
+          baked ? `&metric=${encodeURIComponent(indicatorKey)}` : ""
+        }`,
+        boundaryMinZoom: demoLevel === "mb" ? 9 : 0,
+        boundaryFilter: stateDigit
+          ? (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
+          : undefined,
+        boundaryFill: demographicsFillExpr,
+        selectedBoundaryCode: code || undefined,
+        onBoundaryClick: (clicked: string) => writeGeoParam("code", code === clicked ? null : clicked),
+      };
+    }
     if (kind === "areas") {
       const level = (AREA_LEVELS.has(tab) ? tab : "sa2") as AreaLevel;
       return {
         ...common,
         mode: "areas",
         level,
-        onLevelChange: (l: AreaLevel) => writeGeoParam("tab", l),
+        onLevelChange: (l: AreaLevel) => writeGeoParam("type", l),
         stateDigit: stateDigit || undefined,
         selectedAreas,
         // Areas banked in "My turf" at the active level — green-dashed on the map.
@@ -319,6 +369,7 @@ export function GeoSurface() {
     setDrawnPolygons, doors, activePid, setActivePid, picked, basket.divisions, basket.areas,
     pollingPlaces, pollingSelectedId, setPollingSelectedId,
     fnCode, boundaryFill, refLevel, referendumFillExpr,
+    demoLevel, demoClientJoin, indicatorKey, demographicsFillExpr,
   ]);
 
   if (!kind) return null;
@@ -330,6 +381,7 @@ export function GeoSurface() {
     kind === "polling-places" ? <PollingPlacesPanel view={view} /> :
     kind === "first-nations" ? <FirstNationsPanel view={view} /> :
     kind === "referendum" ? <ReferendumPanel view={view} /> :
+    kind === "demographics" ? <DemographicsPanel view={view} /> :
     <AddressesPanel view={view} />;
 
   // Freehand draw is on for every kind; the areas panel folds polygons into its
@@ -372,6 +424,16 @@ export function GeoSurface() {
                 </div>
               ))}
             </div>
+          </div>
+        ) : null}
+        {demographicsOn && demographicsLegend.length > 0 && palette && demoData ? (
+          <div className="pointer-events-none absolute bottom-3 right-3 z-10">
+            <SequentialLegend
+              bands={demographicsLegend}
+              nodata={palette.nodata}
+              unit={demoData.indicator.name}
+              format={(n) => formatIndicator(n, demoData.indicator.unit)}
+            />
           </div>
         ) : null}
         {showDrawCard ? (

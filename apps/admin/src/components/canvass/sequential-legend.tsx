@@ -16,6 +16,7 @@ export function SequentialLegend({
   unit,
   nodata,
   className,
+  format = formatDensity,
 }: {
   bands: DensityBand[];
   /** e.g. "addresses/km²" — the axis label a bare number cannot carry. */
@@ -23,6 +24,8 @@ export function SequentialLegend({
   /** The no-data colour; when given, an "unmeasured" swatch is appended. */
   nodata?: string;
   className?: string;
+  /** Band-boundary formatter (default = density). Demographics passes a unit-aware one. */
+  format?: (n: number) => string;
 }) {
   if (bands.length === 0) return null;
   const top = bands[bands.length - 1];
@@ -35,7 +38,7 @@ export function SequentialLegend({
             key={b.lo}
             className="h-3 w-6 first:rounded-l-sm last:rounded-r-sm"
             style={{ backgroundColor: b.colour }}
-            title={b.hi === null ? `${formatDensity(b.lo)}+` : `${formatDensity(b.lo)}–${formatDensity(b.hi)}`}
+            title={b.hi === null ? `${format(b.lo)}+` : `${format(b.lo)}–${format(b.hi)}`}
           />
         ))}
         {nodata ? (
@@ -48,8 +51,8 @@ export function SequentialLegend({
       </div>
 
       <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-muted-foreground">
-        <span>{formatDensity(bands[0].lo)}</span>
-        <span>{formatDensity(top.lo)}+</span>
+        <span>{format(bands[0].lo)}</span>
+        <span>{format(top.lo)}+</span>
       </div>
 
       {unit ? <p className="text-[10px] leading-tight text-muted-foreground">{unit}</p> : null}

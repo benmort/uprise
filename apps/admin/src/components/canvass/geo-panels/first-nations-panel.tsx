@@ -73,7 +73,7 @@ export function FirstNationsPanel({ view }: { view: WalkMode }) {
   const setLevel = (next: FirstNationsLevel) => {
     setPage(0);
     writeGeoParam("code", null); // a selection from one level is meaningless at another
-    writeGeoParam("tab", firstNationsTab(next));
+    writeGeoParam("type", firstNationsTab(next));
   };
 
   const pills = (

@@ -41,7 +41,7 @@ function voteTypeRows(r: ReferendumRow): Array<{ label: string; percent: number 
  */
 export function ReferendumPanel({ view }: { view: WalkMode }) {
   const searchParams = useSearchParams();
-  const level: Level = searchParams.get("tab") === "state" ? "state" : "division";
+  const level: Level = (searchParams.get("type") ?? searchParams.get("tab")) === "state" ? "state" : "division";
   const q = searchParams.get("q") ?? "";
   const stateParam = searchParams.get("state") ?? "";
   const code = searchParams.get("code") ?? "";
@@ -74,7 +74,7 @@ export function ReferendumPanel({ view }: { view: WalkMode }) {
           <button
             key={l}
             type="button"
-            onClick={() => writeGeoParam("tab", l === "division" ? null : "state")}
+            onClick={() => writeGeoParam("type", l === "division" ? null : "state")}
             aria-pressed={level === l}
             className={cn(
               "flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition",

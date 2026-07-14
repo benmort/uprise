@@ -40,6 +40,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "analytics.all" },
     { action: "manage", resource: "insights.all" },
     { action: "manage", resource: "civic.all" },
+    { action: "manage", resource: "demographics.all" },
     { action: "manage", resource: "compliance.all" },
     { action: "manage", resource: "contacts.contact" },
     { action: "manage", resource: "payment.all" },
@@ -59,6 +60,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "compliance.all" },
     { action: "manage", resource: "insights.all" },
     { action: "manage", resource: "civic.all" },
+    { action: "manage", resource: "demographics.all" },
     { action: "manage", resource: "contacts.contact" },
     { action: "manage", resource: "tenant.member" },
     { action: "manage", resource: "tenant.invitation" },
@@ -92,6 +94,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "read", resource: "analytics.all" },
     { action: "read", resource: "insights.all" },
     { action: "read", resource: "civic.all" },
+    { action: "read", resource: "demographics.all" },
   ],
 };
 

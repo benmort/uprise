@@ -34,6 +34,7 @@ export const NAV_FLAGS = [
   { key: "FEATURE_NAV_CANVASS_DIVISIONS", label: "Divisions", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_AREAS", label: "Areas", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_ADDRESSES", label: "Addresses", section: "Canvass", level: 2 },
+  { key: "FEATURE_NAV_CANVASS_DEMOGRAPHICS", label: "Demographics", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_RESULTS", label: "Results", section: "Canvass", level: 2 },
 
   // ── Second level: Engagement ──────────────────────────────────────────

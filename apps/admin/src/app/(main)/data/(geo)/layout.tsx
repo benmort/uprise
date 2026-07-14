@@ -44,6 +44,7 @@ const PLACEHOLDER: Record<GeoExplorerKind, string> = {
   "polling-places": "Search booths by name, venue or suburb…",
   "first-nations": "Search Indigenous regions, areas or locations…",
   referendum: "Search a division or state…",
+  demographics: "Search an SA2, SA3 or SA4…",
 };
 
 const TITLE: Record<GeoExplorerKind, string> = {
@@ -54,6 +55,7 @@ const TITLE: Record<GeoExplorerKind, string> = {
   "polling-places": "Polling places",
   "first-nations": "First Nations",
   referendum: "2023 Voice referendum",
+  demographics: "Demographics",
 };
 
 const DESCRIPTION: Record<GeoExplorerKind, string> = {
@@ -64,6 +66,7 @@ const DESCRIPTION: Record<GeoExplorerKind, string> = {
   "polling-places": "Every federal and state/territory polling booth – search, filter by jurisdiction, and plot on the map.",
   "first-nations": "ABS Indigenous Structure – Regions, Areas and Locations. Statistical geographies for reference, not cultural, language or nation boundaries, and not cuttable into turf.",
   referendum: "The 2023 Voice to Parliament referendum – the official Yes/No result by division and state, shaded on the map, plus turnout by vote type. Source: AEC (CC BY 4.0).",
+  demographics: "ABS Census 2021 + SEIFA – demographic, socioeconomic, education, cultural and housing indicators by statistical area, shaded on the map. Pick an indicator and level, click a region for its full profile. Source: ABS (CC BY 4.0).",
 };
 
 /**
@@ -84,6 +87,7 @@ const VIEW_KEY: Record<GeoExplorerKind, string> = {
   "polling-places": "uprise.pollingPlacesView",
   "first-nations": "uprise.firstNationsView",
   referendum: "uprise.referendumView",
+  demographics: "uprise.demographicsView",
 };
 
 function GeoExplorerChrome() {

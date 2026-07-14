@@ -26,7 +26,8 @@ export type GeoExplorerKind =
   | "addresses"
   | "polling-places"
   | "first-nations"
-  | "referendum";
+  | "referendum"
+  | "demographics";
 
 /** The layout's view toggle persists the per-kind default through this event so
  *  the page hook stays the ONE localStorage writer (a direct setItem from the
@@ -42,6 +43,7 @@ export function kindFromPathname(pathname: string | null): GeoExplorerKind | nul
   if (p === "/data/polling-places") return "polling-places";
   if (p === "/data/first-nations") return "first-nations";
   if (p === "/data/referendum") return "referendum";
+  if (p === "/data/demographics") return "demographics";
   return null;
 }
 
@@ -75,7 +77,10 @@ export function useGeoExplorerUrlState(opts?: {
   const rawView = searchParams.get("view");
   const view: WalkMode =
     rawView === "map" || rawView === "list" ? rawView : opts?.viewStorageKey ? storedView : "map";
-  const tab = searchParams.get("tab") ?? (opts?.legacyTabParam ? searchParams.get(opts.legacyTabParam) : null);
+  const tab =
+    searchParams.get("type") ??
+    searchParams.get("tab") ?? // legacy: this param was `?tab=` before
+    (opts?.legacyTabParam ? searchParams.get(opts.legacyTabParam) : null);
   // Shared state filter (abbreviation, e.g. "NSW") + the areas "Places" search
   // toggle — both round-trip the URL so the filter carries across kinds/reload.
   const state = searchParams.get("state") ?? "";
@@ -96,9 +101,9 @@ export function useGeoExplorerUrlState(opts?: {
     const aliases = opts?.legacyHashToTab;
     if (!aliases) return;
     const hash = window.location.hash.replace(/^#/, "");
-    if (hash && aliases[hash] && !searchParams.get("tab")) {
+    if (hash && aliases[hash] && !searchParams.get("type") && !searchParams.get("tab")) {
       const url = new URL(window.location.href);
-      url.searchParams.set("tab", aliases[hash]);
+      url.searchParams.set("type", aliases[hash]);
       url.hash = "";
       window.history.replaceState(null, "", url.pathname + url.search);
     }
@@ -120,7 +125,7 @@ export function useGeoExplorerUrlState(opts?: {
   }, [opts?.viewStorageKey, setStoredView]);
 
   const setQ = useCallback((value: string) => writeGeoParam("q", value || null), []);
-  const setTab = useCallback((value: string) => writeGeoParam("tab", value), []);
+  const setTab = useCallback((value: string) => writeGeoParam("type", value), []);
   const setState = useCallback((value: string) => writeGeoParam("state", value || null), []);
   const setPlaces = useCallback((value: boolean) => writeGeoParam("places", value ? "1" : null), []);
   const setView = useCallback(

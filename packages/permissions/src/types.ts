@@ -50,6 +50,10 @@ export const UPRISE_RESOURCES = [
   "civic.policy",
   "civic.all",
 
+  // demographics (ABS Census + SEIFA indicators attached to geo regions)
+  "demographics.indicator",
+  "demographics.all",
+
   // messaging (SMS/WhatsApp blasts, inbox, consent)
   "messaging.blast",
   "messaging.inbound",

@@ -20,6 +20,7 @@ export type DataTab =
   | "polling-places"
   | "first-nations"
   | "referendum"
+  | "demographics"
   | "politicians"
   | "policies";
 
@@ -31,6 +32,7 @@ const TABS: Array<{ key: DataTab; label: string; href: string }> = [
   { key: "polling-places", label: "Polling places", href: "/data/polling-places" },
   { key: "first-nations", label: "First Nations", href: "/data/first-nations" },
   { key: "referendum", label: "Referendum", href: "/data/referendum" },
+  { key: "demographics", label: "Demographics", href: "/data/demographics" },
   { key: "politicians", label: "Politicians", href: "/data/politicians" },
   { key: "policies", label: "Policies", href: "/data/policies" },
 ];
