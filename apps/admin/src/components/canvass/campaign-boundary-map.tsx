@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import MapGL, { FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import { bbox } from "@turf/turf";
 import { LocateFixed } from "lucide-react";
@@ -31,6 +31,7 @@ export function CampaignBoundaryMap({
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
+  const loadedRef = useRef(false);
 
   const feature = useMemo<GeoJSON.Feature | null>(
     () => (boundary ? { type: "Feature", geometry: boundary, properties: {} } : null),
@@ -64,6 +65,14 @@ export function CampaignBoundaryMap({
     [bounds],
   );
 
+  // After the first load, re-fit whenever the boundary changes — e.g. switching campaigns. The map
+  // instance persists across prop changes (the component doesn't remount), so onLoad won't fire
+  // again; `recenter`'s identity changes with `bounds`, so this runs on each new boundary.
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    recenter(500);
+  }, [recenter]);
+
   if (!feature) return null;
 
   return (
@@ -74,7 +83,10 @@ export function CampaignBoundaryMap({
         initialViewState={{ bounds, fitBoundsOptions: { padding: 28 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
-        onLoad={() => recenter(0)}
+        onLoad={() => {
+          loadedRef.current = true;
+          recenter(0);
+        }}
       >
         <Source id="campaign-boundary" type="geojson" data={feature}>
           <Layer id="campaign-boundary-fill" type="fill" paint={{ "fill-color": PRIMARY, "fill-opacity": 0.12 }} />

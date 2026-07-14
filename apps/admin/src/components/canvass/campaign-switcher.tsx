@@ -114,8 +114,11 @@ export function CampaignSwitcher({
           onClick={toggle}
           title={activeName}
           aria-label="Select campaign"
-          className="flex h-9 min-w-0 max-w-[16rem] items-center gap-2 rounded-[11px] border border-border bg-surface px-2.5 text-left transition-colors hover:bg-surface-variant"
+          className="flex h-9 min-w-0 max-w-[20rem] items-center gap-2 rounded-[11px] border border-border bg-surface px-2.5 text-left transition-colors hover:bg-surface-variant"
         >
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Campaign
+          </span>
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{activeName}</span>
           <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>

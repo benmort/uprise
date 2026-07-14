@@ -42,7 +42,6 @@ export function CampaignPageHeader({
 
   return (
     <>
-      <Breadcrumbs items={[{ label: "Canvassing", href: "/canvass" }, { label: title }]} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
@@ -53,7 +52,14 @@ export function CampaignPageHeader({
             <CampaignSwitcher campaigns={campaigns} activeId={campaignId} onSelect={switchTo} />
           ) : null}
         </div>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+        {/* Actions, then the breadcrumb trail pinned to the far right of the title line. */}
+        <div className="flex flex-wrap items-center gap-3">
+          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+          <Breadcrumbs
+            className="ml-auto"
+            items={[{ label: "Canvassing", href: "/canvass" }, { label: title }]}
+          />
+        </div>
       </div>
       {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
     </>

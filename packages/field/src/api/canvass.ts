@@ -122,6 +122,23 @@ export async function getSelfServeAvailable(campaignId: string) {
   return request<SelfServeAvailable>(`/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/available`);
 }
 
+/** Ready-made unassigned turf recommended for this volunteer across their tenant's self-serve
+ *  campaigns — powers the "Recommended turf" section on an empty My turf. Each carries its own
+ *  campaignId so claiming still routes per-campaign. */
+export type RecommendedTurf = {
+  id: string;
+  name: string;
+  geometry: unknown;
+  contactCount: number;
+  campaignId: string;
+  campaignName: string;
+};
+
+export async function getRecommendedTurf(volunteerId: string, signal?: AbortSignal) {
+  const q = new URLSearchParams({ volunteerId });
+  return request<RecommendedTurf[]>(`/canvass/recommended-turf?${q}`, signal ? { signal } : undefined);
+}
+
 export async function claimArea(campaignId: string, areas: Array<{ layer: string; code: string }>) {
   return request<{ id: string; name: string }>(
     `/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/claim-area`,

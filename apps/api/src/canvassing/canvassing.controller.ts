@@ -268,6 +268,12 @@ export class CanvassingController {
     return this.canvassing.getVolunteerMetrics(tenantId, volunteerId);
   }
 
+  @Get("recommended-turf")
+  @RequirePermission(CANVASS_READ)
+  async recommendedTurf(@Query("volunteerId") volunteerId: string, @TenantId() tenantId: string) {
+    return this.canvassing.recommendedTurf(tenantId, volunteerId);
+  }
+
   @Post("turfs/:id/release")
   @RequirePermission(CANVASS_READ)
   async releaseTurf(@Param("id") id: string, @Body() dto: ReleaseTurfDto, @TenantId() tenantId: string) {

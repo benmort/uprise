@@ -2,10 +2,12 @@
 
 import {
   getCanvassAssignments,
+  getRecommendedTurf,
   getVolunteerMetrics,
   listDispositions,
   type CanvassAssignment,
   type DispositionDef,
+  type RecommendedTurf,
   type VolunteerMetrics,
 } from "../api/canvass";
 import { listSurveys, getSurvey, type SurveyListItem, type Survey } from "../api/engagement";
@@ -31,6 +33,15 @@ export function useVolunteerMetrics(volunteerId: string | null) {
   return useApi<VolunteerMetrics>(
     volunteerId ? `/canvass/volunteer-metrics?volunteerId=${volunteerId}` : null,
     (signal) => getVolunteerMetrics(volunteerId as string, signal),
+    { ttlMs: 30_000 },
+  );
+}
+
+/** Recommended ready-made turf for the volunteer — shown on My turf when nothing is assigned. */
+export function useRecommendedTurf(volunteerId: string | null) {
+  return useApi<RecommendedTurf[]>(
+    volunteerId ? `/canvass/recommended-turf?volunteerId=${volunteerId}` : null,
+    (signal) => getRecommendedTurf(volunteerId as string, signal),
     { ttlMs: 30_000 },
   );
 }

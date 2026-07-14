@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, CircleUser, DownloadCloud, Menu, PersonStanding } from "lucide-react";
+import { ArrowRight, Check, CircleUser, DownloadCloud, Loader2, Menu, PersonStanding } from "lucide-react";
 import { Button, EmptyState, Skeleton, TenantBrand, cn } from "@uprise/ui";
-import { useAssignments, useVolunteerMetrics } from "../hooks/use-canvass";
+import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hooks/use-canvass";
+import { claimExistingTurf } from "../api/canvass";
 import { getTenantBrand, getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { MapThumbnail } from "../components/map-thumbnail";
@@ -38,6 +39,8 @@ export function Assignments() {
   const [volunteerId] = useState(() => getVolunteerId());
   const a = useAssignments(volunteerId ?? null);
   const m = useVolunteerMetrics(volunteerId ?? null);
+  const rec = useRecommendedTurf(volunteerId ?? null);
+  const [claiming, setClaiming] = useState<string | null>(null);
   const assignments = a.data ?? [];
   const metrics = m.data ?? null;
   const loading = a.loading;
@@ -49,6 +52,16 @@ export function Assignments() {
 
   // Today's tile values with the all-time total as the muted secondary line.
   const allTime = (n: number) => ({ value: `${n.toLocaleString()} all-time`, direction: "flat" as const });
+
+  // One-tap claim of a recommended turf, then straight into the walk view. Mirrors get-turf.
+  const claimRecommended = async (campaignId: string, turfId: string) => {
+    setClaiming(turfId);
+    const res = await claimExistingTurf(campaignId, turfId);
+    setClaiming(null);
+    if (res.ok) router.push(`/field/${turfId}`);
+  };
+
+  const recommended = rec.data ?? [];
 
   if (loading) {
     return (
@@ -112,10 +125,48 @@ export function Assignments() {
       </div>
 
       {assignments.length === 0 ? (
-        <EmptyState
-          title="No turf assigned yet"
-          description="An organiser needs to assign you a turf before you can start knocking."
-        />
+        <div className="space-y-4">
+          <EmptyState
+            title="No turf assigned yet"
+            description="An organiser can assign you a turf — or claim a recommended one below to start knocking."
+          />
+          {recommended.length > 0 ? (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-extrabold text-foreground">Recommended turf</h2>
+                <Link
+                  href={`/field/get-turf?campaignId=${recommended[0].campaignId}`}
+                  className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary"
+                >
+                  See all turf
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {recommended.slice(0, 3).map((t) => (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-card"
+                  >
+                    <MapThumbnail polygon={outerRing(t.geometry)} className="h-14 w-14 shrink-0 rounded-xl" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold text-foreground">{t.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">{t.campaignName}</p>
+                      <p className="text-xs text-muted-foreground tabular-nums">{t.contactCount} doors</p>
+                    </div>
+                    <Button
+                      className="h-11 shrink-0"
+                      disabled={claiming === t.id}
+                      onClick={() => claimRecommended(t.campaignId, t.id)}
+                    >
+                      {claiming === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Claim"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
       ) : (
         <div className="space-y-5">
           {assignments.map((a, i) => {

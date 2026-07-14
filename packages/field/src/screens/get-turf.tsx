@@ -78,25 +78,29 @@ export function GetTurf() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-label="Back"
-          onClick={() => router.push("/field")}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <h1 className="text-lg font-extrabold">Get turf</h1>
+      {/* Pinned header + boundary map — only the turf list below scrolls. */}
+      <div className="shrink-0 space-y-4">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={() => router.push("/field")}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <h1 className="text-lg font-extrabold">Get turf</h1>
+        </div>
+
+        {data?.boundary ? (
+          <div className="h-40 overflow-hidden rounded-xl border border-border">
+            <TurfMap mode="edit" turfGeometry={data.boundary as GeoJSON.Geometry} stops={[]} />
+          </div>
+        ) : null}
       </div>
 
-      {data?.boundary ? (
-        <div className="h-40 overflow-hidden rounded-xl border border-border">
-          <TurfMap mode="edit" turfGeometry={data.boundary as GeoJSON.Geometry} stops={[]} />
-        </div>
-      ) : null}
-
-      {/* Mode C — ready-made turf */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        {/* Mode C — ready-made turf */}
       {modes.has("existing") ? (
         <section className="space-y-2">
           <h2 className="text-sm font-bold text-foreground">Claim a ready turf</h2>
@@ -148,6 +152,7 @@ export function GetTurf() {
           </div>
         </section>
       )}
+      </div>
     </div>
   );
 }

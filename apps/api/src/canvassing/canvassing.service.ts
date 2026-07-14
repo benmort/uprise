@@ -23,6 +23,7 @@ import {
   type TurfDivisionType,
 } from "../geo/geo.service";
 import { assertTurfAssignmentTransition } from "./turf-assignment-state.machine";
+import { rankTurfsByPrefs, type CanvassPrefs } from "./recommend-turf";
 import { MapboxDirectionsClient } from "./mapbox-directions.client";
 import { optimiseRoute, haversineM, type Stop } from "./route-math";
 import { DispatchQueue } from "../common/queue/dispatch-queue";
@@ -996,6 +997,57 @@ export class CanvassingService {
         contactCount: t._count.contacts,
       })),
     };
+  }
+
+  /** Recommended ready-made turf for a volunteer across the tenant's self-serve campaigns —
+   *  the field homepage surfaces these when the volunteer has no assignment yet. Unassigned
+   *  turfs only, each carrying its own campaign (the empty state has no campaign context),
+   *  ranked by the volunteer's advisory canvass prefs (walk wants + session length). */
+  async recommendedTurf(tenantId: string, volunteerId: string, limit = 6) {
+    const [member, campaigns] = await Promise.all([
+      this.prisma.tenantMember.findFirst({
+        where: { tenantId, userId: volunteerId },
+        select: { canvassPrefs: true },
+      }),
+      this.prisma.canvassCampaign.findMany({
+        where: { tenantId, volunteerCanSelfClaimTurf: true },
+        select: { id: true, name: true, selfClaimModes: true },
+      }),
+    ]);
+    // Mode C (claim a ready-made turf) must be allowed — an empty selfClaimModes means all modes.
+    const eligible = campaigns.filter((c) => {
+      const modes = Array.isArray(c.selfClaimModes) ? (c.selfClaimModes as string[]) : null;
+      return !modes || modes.length === 0 || modes.includes("existing");
+    });
+    if (eligible.length === 0) return [];
+    const nameById = new Map(eligible.map((c) => [c.id, c.name]));
+    const turfs = await this.prisma.turf.findMany({
+      where: {
+        tenantId,
+        campaignId: { in: eligible.map((c) => c.id) },
+        assignments: { none: { status: TurfAssignmentStatus.ASSIGNED } },
+      },
+      select: {
+        id: true,
+        name: true,
+        geometry: true,
+        campaignId: true,
+        _count: { select: { contacts: true } },
+      },
+      take: 100,
+    });
+    const mapped = turfs
+      .filter((t): t is typeof t & { campaignId: string } => !!t.campaignId && nameById.has(t.campaignId))
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        geometry: t.geometry,
+        contactCount: t._count.contacts,
+        campaignId: t.campaignId,
+        campaignName: nameById.get(t.campaignId) ?? "",
+      }));
+    const prefs = (member?.canvassPrefs ?? null) as CanvassPrefs | null;
+    return rankTurfsByPrefs(mapped, prefs).slice(0, limit);
   }
 
   /** Mode A: claim unclaimed ASGS areas within the campaign boundary. */

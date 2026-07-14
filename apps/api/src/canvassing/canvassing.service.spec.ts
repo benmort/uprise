@@ -55,7 +55,7 @@ describe("CanvassingService", () => {
         count: jest.fn(),
       },
       questionResponse: { groupBy: jest.fn() },
-      canvassCampaign: { findFirst: jest.fn() },
+      canvassCampaign: { findFirst: jest.fn(), findMany: jest.fn() },
       walkListItem: { updateMany: jest.fn() },
       walkList: {
         findMany: jest.fn(),
@@ -158,6 +158,49 @@ describe("CanvassingService", () => {
     it("throws for an unknown turf", async () => {
       prisma.turf.findFirst.mockResolvedValue(null);
       await expect(service.releaseTurf("org1", "missing", "u1")).rejects.toThrow();
+    });
+  });
+
+  describe("recommendedTurf", () => {
+    it("returns unassigned turf from self-serve campaigns, ranked by the volunteer's prefs", async () => {
+      prisma.tenantMember.findFirst.mockResolvedValue({ canvassPrefs: { sessionLength: "standard" } }); // target 40
+      prisma.canvassCampaign.findMany.mockResolvedValue([
+        { id: "camp1", name: "Northcote", selfClaimModes: [] }, // empty ⇒ all modes allowed
+        { id: "camp2", name: "Brunswick", selfClaimModes: ["existing"] },
+        { id: "camp3", name: "Richmond", selfClaimModes: ["area"] }, // mode C off ⇒ excluded
+      ]);
+      prisma.turf.findMany.mockResolvedValue([
+        { id: "t_big", name: "Big", geometry: {}, campaignId: "camp1", _count: { contacts: 90 } },
+        { id: "t_mid", name: "Mid", geometry: {}, campaignId: "camp2", _count: { contacts: 45 } },
+        { id: "t_small", name: "Small", geometry: {}, campaignId: "camp1", _count: { contacts: 10 } },
+      ]);
+
+      const res = await service.recommendedTurf("org1", "u1");
+
+      expect(prisma.turf.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: "org1",
+            campaignId: { in: ["camp1", "camp2"] },
+            assignments: { none: { status: TurfAssignmentStatus.ASSIGNED } },
+          }),
+        }),
+      );
+      // target 40 → 45 closest, then 10, then 90; campaign name resolved from the eligible map.
+      expect(res.map((t) => t.id)).toEqual(["t_mid", "t_small", "t_big"]);
+      expect(res[0]).toMatchObject({ campaignId: "camp2", campaignName: "Brunswick", contactCount: 45 });
+    });
+
+    it("returns [] (without querying turf) when no campaign allows claiming a ready turf", async () => {
+      prisma.tenantMember.findFirst.mockResolvedValue(null);
+      prisma.canvassCampaign.findMany.mockResolvedValue([
+        { id: "camp3", name: "Richmond", selfClaimModes: ["area", "draw"] },
+      ]);
+
+      const res = await service.recommendedTurf("org1", "u1");
+
+      expect(res).toEqual([]);
+      expect(prisma.turf.findMany).not.toHaveBeenCalled();
     });
   });
 
