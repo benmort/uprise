@@ -23,6 +23,8 @@ import {
   type TurfDivisionType,
 } from "../geo/geo.service";
 import { assertTurfAssignmentTransition } from "./turf-assignment-state.machine";
+import { MapboxDirectionsClient } from "./mapbox-directions.client";
+import { optimiseRoute, haversineM, type Stop } from "./route-math";
 import { DispatchQueue } from "../common/queue/dispatch-queue";
 import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES, getTurfEstimateJobId } from "../common/queue/queue.constants";
@@ -79,6 +81,7 @@ export class CanvassingService {
     private readonly geo: GeoService,
     @Inject(DISPATCH_QUEUE_TOKEN) private readonly queue: DispatchQueue,
     private readonly images: ImageUploadService,
+    private readonly directions: MapboxDirectionsClient,
   ) {}
 
   /**
@@ -540,13 +543,89 @@ export class CanvassingService {
     }
   }
 
-  /** Contacts that fall in a turf, route-orderable for a walk list. */
+  /**
+   * Contacts that fall in a turf, route-orderable for a walk list. Left-joins the G-NAF address
+   * universe (raw `geo.gnaf_address`, no Prisma relation) by `gnafPid` so each stop carries its
+   * real street + suburb + postcode for a complete address and street grouping — the enriched
+   * `address_label` overrides the stored `Contact.address` ("96 · 3121"); we fall back to the
+   * stored value when there's no gnafPid (non-cold contacts). Cross-schema, hence `$queryRaw`.
+   */
   async listTurfContacts(tenantId: string, turfId: string) {
-    return this.prisma.contact.findMany({
-      where: { tenantId, turfId },
-      orderBy: { createdAt: "asc" },
-      select: { id: true, firstName: true, lastName: true, address: true, lat: true, lng: true },
-    });
+    return this.prisma.$queryRaw`
+      SELECT c.id,
+             c."firstName" AS "firstName",
+             c."lastName"  AS "lastName",
+             COALESCE(a.address_label, c.address) AS address,
+             a.street   AS street,
+             a.locality AS locality,
+             a.postcode AS postcode,
+             c.lat, c.lng
+        FROM "public"."Contact" c
+        LEFT JOIN geo.gnaf_address a ON a.gnaf_pid = c."gnafPid"
+       WHERE c."tenantId" = ${tenantId} AND c."turfId" = ${turfId}
+       ORDER BY c."createdAt" ASC
+    ` as Promise<
+      Array<{
+        id: string;
+        firstName: string | null;
+        lastName: string | null;
+        address: string | null;
+        street: string | null;
+        locality: string | null;
+        postcode: string | null;
+        lat: number | null;
+        lng: number | null;
+      }>
+    >;
+  }
+
+  /**
+   * The optimised walk order for a turf + the walking leg between each consecutive located stop.
+   * Orders with the same nearest-neighbour + 2-opt used to price a turf, then asks Mapbox for the
+   * real per-leg walking distance/time (batched in 25-coord windows, server token). Falls back to
+   * straight-line legs (haversine ÷ 1.25 m/s) when Mapbox is unconfigured, flagged in `source` so
+   * the UI can say so. Unlocated contacts (no coords) sort to the end and get no leg.
+   */
+  async turfRoute(tenantId: string, turfId: string) {
+    const contacts = (await this.listTurfContacts(tenantId, turfId)) as Array<{
+      id: string;
+      lat: number | null;
+      lng: number | null;
+    }>;
+    const stops: Stop[] = contacts.map((c) => ({
+      id: c.id,
+      lat: typeof c.lat === "number" ? c.lat : Number.NaN,
+      lng: typeof c.lng === "number" ? c.lng : Number.NaN,
+    }));
+    const ordered = optimiseRoute(stops);
+    const orderedIds = ordered.map((s) => s.id);
+    const located = ordered.filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng));
+
+    type Leg = { fromId: string; toId: string; distanceM: number; durationS: number };
+    let legs: Leg[] = [];
+    let source: "directions" | "crowflies" = "crowflies";
+
+    const priced =
+      located.length >= 2 ? await this.directions.routeLegs(located.map((s) => ({ lat: s.lat, lng: s.lng }))) : null;
+    if (priced && priced.legs.length === located.length - 1) {
+      source = "directions";
+      legs = priced.legs.map((leg, i) => ({
+        fromId: located[i].id,
+        toId: located[i + 1].id,
+        distanceM: leg.distance,
+        durationS: leg.duration,
+      }));
+    } else {
+      // Straight-line fallback at the model's walking pace (1.25 m/s), so the list still shows a leg.
+      for (let i = 1; i < located.length; i += 1) {
+        const distanceM = haversineM(located[i - 1], located[i]);
+        legs.push({ fromId: located[i - 1].id, toId: located[i].id, distanceM, durationS: distanceM / 1.25 });
+      }
+    }
+
+    const totalM = legs.reduce((sum, l) => sum + l.distanceM, 0);
+    const totalS = legs.reduce((sum, l) => sum + l.durationS, 0);
+    return { ordered: orderedIds, legs, totalM, totalS, source };
   }
 
   // ── Authoring (organiser) ───────────────────────────────────────

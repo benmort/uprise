@@ -844,12 +844,32 @@ export type TurfContact = {
   firstName: string | null;
   lastName: string | null;
   address: string | null;
+  /** G-NAF street/suburb/postcode (null when the contact has no gnafPid) — drive street grouping. */
+  street: string | null;
+  locality: string | null;
+  postcode: string | null;
   lat: number | null;
   lng: number | null;
 };
 
 export async function listTurfContacts(turfId: string) {
   return request<TurfContact[]>(`/canvass/turfs/${encodeURIComponent(turfId)}/contacts`);
+}
+
+/** A walking leg between two consecutive stops on the optimised route. */
+export type RouteLeg = { fromId: string; toId: string; distanceM: number; durationS: number };
+export type TurfRoute = {
+  /** Contact ids in shortest-walking order (unlocated contacts sort to the end). */
+  ordered: string[];
+  legs: RouteLeg[];
+  totalM: number;
+  totalS: number;
+  /** "directions" = real Mapbox walking; "crowflies" = straight-line fallback (no token). */
+  source: "directions" | "crowflies";
+};
+
+export async function getTurfRoute(turfId: string) {
+  return request<TurfRoute>(`/canvass/turfs/${encodeURIComponent(turfId)}/route`);
 }
 
 export async function listVolunteers() {

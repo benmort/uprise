@@ -30,6 +30,7 @@ describe("CanvassingService", () => {
   let geo: any;
   let service: CanvassingService;
   let queue: { enqueue: jest.Mock };
+  let directions: { routeLegs: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -92,6 +93,7 @@ describe("CanvassingService", () => {
         update: jest.fn(async ({ data }: any) => ({ tenantId: "org1", userId: "u1", role: data.role })),
       },
       $transaction: jest.fn(async (cb: any) => cb(prisma)),
+      $queryRaw: jest.fn(),
       $queryRawUnsafe: jest.fn(),
       $executeRawUnsafe: jest.fn(),
     };
@@ -107,7 +109,15 @@ describe("CanvassingService", () => {
     put.mockClear();
     // The estimate is queued, never awaited: a cut must not fail because Redis hiccuped.
     queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "j1", queued: true }) };
-    service = new CanvassingService(prisma, engagement, geo, queue as never, new ImageUploadService());
+    directions = { routeLegs: jest.fn().mockResolvedValue(null) };
+    service = new CanvassingService(
+      prisma,
+      engagement,
+      geo,
+      queue as never,
+      new ImageUploadService(),
+      directions as never,
+    );
   });
 
   describe("assignTurf", () => {
@@ -794,14 +804,65 @@ describe("CanvassingService", () => {
   });
 
   describe("listTurfContacts", () => {
-    it("returns the turf's contacts ordered for a walk list", async () => {
-      const contacts = [{ id: "c1", firstName: "A", lastName: "B", address: "1 St", lat: 1, lng: 2 }];
-      prisma.contact.findMany.mockResolvedValue(contacts);
+    it("returns the turf's contacts joined to the G-NAF address detail, tenant+turf scoped", async () => {
+      const contacts = [
+        { id: "c1", firstName: "A", lastName: "B", address: "96 Smith Street, Richmond VIC 3121", street: "Smith Street", locality: "Richmond", postcode: "3121", lat: 1, lng: 2 },
+      ];
+      prisma.$queryRaw.mockResolvedValue(contacts);
       const res = await service.listTurfContacts("org1", "t1");
-      expect(prisma.contact.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { tenantId: "org1", turfId: "t1" }, orderBy: { createdAt: "asc" } }),
-      );
+      // Tagged-template call: params carry the tenant + turf; the SQL joins geo.gnaf_address.
+      const [strings, tenantId, turfId] = prisma.$queryRaw.mock.calls[0];
+      expect(strings.join("?")).toContain("geo.gnaf_address");
+      expect(strings.join("?")).toContain('c."gnafPid"');
+      expect(tenantId).toBe("org1");
+      expect(turfId).toBe("t1");
       expect(res).toBe(contacts);
+    });
+  });
+
+  describe("turfRoute", () => {
+    const threeContacts = [
+      { id: "a", lat: 0, lng: 0 },
+      { id: "b", lat: 0, lng: 0.001 },
+      { id: "c", lat: 0, lng: 0.002 },
+    ];
+
+    it("uses real Mapbox legs when available, mapping each to its from/to stop", async () => {
+      prisma.$queryRaw.mockResolvedValue(threeContacts);
+      directions.routeLegs.mockResolvedValue({
+        legs: [
+          { distance: 100, duration: 80 },
+          { distance: 120, duration: 96 },
+        ],
+        requests: 1,
+      });
+      const res = await service.turfRoute("org1", "t1");
+      expect(res.source).toBe("directions");
+      expect(res.ordered).toHaveLength(3);
+      expect(res.legs).toHaveLength(2);
+      expect(res.legs[0]).toMatchObject({ distanceM: 100, durationS: 80 });
+      // from/to are consecutive located stop ids in the optimised order.
+      expect(res.legs[0].fromId).toBe(res.ordered[0]);
+      expect(res.legs[0].toId).toBe(res.ordered[1]);
+      expect(res.totalM).toBe(220);
+      expect(res.totalS).toBe(176);
+    });
+
+    it("falls back to straight-line legs when directions are unavailable", async () => {
+      prisma.$queryRaw.mockResolvedValue(threeContacts);
+      directions.routeLegs.mockResolvedValue(null); // no server token
+      const res = await service.turfRoute("org1", "t1");
+      expect(res.source).toBe("crowflies");
+      expect(res.legs).toHaveLength(2);
+      expect(res.legs.every((l) => l.distanceM > 0 && l.durationS > 0)).toBe(true);
+    });
+
+    it("gives no legs for a turf with fewer than two located stops", async () => {
+      prisma.$queryRaw.mockResolvedValue([{ id: "a", lat: null, lng: null }]);
+      const res = await service.turfRoute("org1", "t1");
+      expect(res.legs).toEqual([]);
+      expect(res.ordered).toEqual(["a"]); // unlocated stop still listed, sorted to the end
+      expect(directions.routeLegs).not.toHaveBeenCalled();
     });
   });
 

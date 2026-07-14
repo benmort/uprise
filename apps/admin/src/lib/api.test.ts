@@ -24,6 +24,7 @@ import { request as apiClientRequest } from "@uprise/api-client";
 import {
   deleteIntegrationConnection,
   deleteTurf,
+  getTurfRoute,
   getQaReview,
   reassignTurf,
   resolveQaFlag,
@@ -57,6 +58,11 @@ describe("canvass turf wrappers", () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ volunteerId: "v9" }),
     });
+  });
+
+  it("getTurfRoute GETs the encoded turf route path", async () => {
+    await getTurfRoute("t 1");
+    expect(mockRequest).toHaveBeenCalledWith("/canvass/turfs/t%201/route", undefined);
   });
 });
 

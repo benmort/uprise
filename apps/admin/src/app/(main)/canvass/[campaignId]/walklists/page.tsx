@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, ListOrdered, Lock, RefreshCw, UserMinus, UserPlus } from "lucide-react";
+import { ListOrdered, Lock, Navigation, RefreshCw, UserMinus, UserPlus } from "lucide-react";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import {
   assignTurf,
   createWalkList,
+  getTurfRoute,
   listVolunteers,
   listTurfContacts,
   listTurfs,
@@ -15,10 +17,12 @@ import {
   unassignTurf,
   updateWalkList,
   type TurfContact,
+  type TurfRoute,
   type TurfSummary,
   type WalkListSummary,
 } from "@/lib/api";
-import { optimiseRoute, type Stop, WalkView, type CanvassAssignment } from "@uprise/field";
+import { optimiseRoute, formatDistance, formatDuration, type Stop, WalkView, type CanvassAssignment } from "@uprise/field";
+import { buildWalkGroups, doorNumber, stopLabel } from "@/lib/canvass/walk-list";
 import { FormSelect } from "@uprise/ui";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,13 +41,9 @@ import { useToast } from "@/components/ui/toast";
 type Volunteer = { id: string; displayName: string; email: string | null; role: string };
 type ListType = "STATIC" | "DYNAMIC";
 
-// A turf can hold thousands of doors; render the route a page at a time so a big
-// list doesn't stall the page (the whole route is still optimised + saved).
-const STOPS_PER_PAGE = 25;
-
-function contactName(c: TurfContact): string {
-  return [c.firstName, c.lastName].filter(Boolean).join(" ") || c.address || "Unknown resident";
-}
+// A turf can hold thousands of doors; the route is grouped by street, and we render a page of
+// street GROUPS at a time so a big list doesn't stall the page (the whole route is optimised + saved).
+const GROUPS_PER_PAGE = 20;
 
 export default function WalkListBuilderPage() {
   const params = useParams<{ campaignId: string }>();
@@ -55,6 +55,7 @@ export default function WalkListBuilderPage() {
   const [turfId, setTurfId] = useState<string>(search.get("turfId") ?? "");
   const [contacts, setContacts] = useState<TurfContact[]>([]);
   const [order, setOrder] = useState<string[]>([]);
+  const [route, setRoute] = useState<TurfRoute | null>(null);
   const [walkLists, setWalkLists] = useState<WalkListSummary[]>([]);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [listType, setListType] = useState<ListType>("STATIC");
@@ -67,7 +68,7 @@ export default function WalkListBuilderPage() {
   const [error, setError] = useState<string | null>(null);
   const [noPermission, setNoPermission] = useState(false);
 
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
   const [editingWl, setEditingWl] = useState<WalkListSummary | null>(null);
   const [wlForm, setWlForm] = useState<{ name: string; listType: ListType }>({ name: "", listType: "STATIC" });
   const [wlBusy, setWlBusy] = useState(false);
@@ -97,12 +98,29 @@ export default function WalkListBuilderPage() {
     void bootstrap();
   }, [bootstrap]);
 
+  // Client-side fallback ordering (no legs) — used only if the server route endpoint fails.
   const optimise = useCallback((cs: TurfContact[]) => {
     const stops: Stop[] = cs.map((c) => ({ id: c.id, lat: c.lat ?? NaN, lng: c.lng ?? NaN }));
     setOrder(optimiseRoute(stops).map((s) => s.id));
   }, []);
 
-  // Load the selected turf's contacts + existing walk lists.
+  // The optimised order + per-leg walking metrics come from the server (real Mapbox walking,
+  // batched). Falls back to client-side ordering (no legs) if the endpoint is unavailable.
+  const loadRoute = useCallback(
+    async (cs: TurfContact[]) => {
+      const r = await getTurfRoute(turfId);
+      if (r.ok) {
+        setRoute(r.data);
+        setOrder(r.data.ordered);
+      } else {
+        setRoute(null);
+        optimise(cs);
+      }
+    },
+    [turfId, optimise],
+  );
+
+  // Load the selected turf's contacts + existing walk lists + the optimised route.
   const loadTurf = useCallback(async () => {
     if (!turfId) return;
     setTurfLoading(true);
@@ -110,13 +128,22 @@ export default function WalkListBuilderPage() {
       const [cs, wls] = await Promise.all([listTurfContacts(turfId), listWalkLists(turfId)]);
       if (cs.ok) {
         setContacts(cs.data);
-        optimise(cs.data);
+        await loadRoute(cs.data);
       }
       if (wls.ok) setWalkLists(wls.data);
     } finally {
       setTurfLoading(false);
     }
-  }, [turfId, optimise]);
+  }, [turfId, loadRoute]);
+
+  const reoptimise = useCallback(async () => {
+    setTurfLoading(true);
+    try {
+      await loadRoute(contacts);
+    } finally {
+      setTurfLoading(false);
+    }
+  }, [loadRoute, contacts]);
 
   useEffect(() => {
     void loadTurf();
@@ -127,10 +154,16 @@ export default function WalkListBuilderPage() {
     return order.map((id) => byId.get(id)).filter((c): c is TurfContact => Boolean(c));
   }, [order, contacts]);
 
-  // Render one page of the route at a time (a big turf can hold thousands of stops).
-  const pagedContacts = useMemo(
-    () => orderedContacts.slice(page * STOPS_PER_PAGE, page * STOPS_PER_PAGE + STOPS_PER_PAGE),
-    [orderedContacts, page],
+  // Group consecutive stops on the same street (fallback suburb), in walking order, with the
+  // leaving-leg attached to each group. The classic walk-list shape.
+  const groups = useMemo(
+    () => buildWalkGroups(contacts, order, route?.legs ?? []).groups,
+    [contacts, order, route],
+  );
+  // Render a page of street groups at a time (a big turf can hold thousands of stops).
+  const pagedGroups = useMemo(
+    () => groups.slice(page * GROUPS_PER_PAGE, page * GROUPS_PER_PAGE + GROUPS_PER_PAGE),
+    [groups, page],
   );
   // Back to the first page when the turf or the route order changes.
   useEffect(() => setPage(0), [turfId, order]);
@@ -264,27 +297,19 @@ export default function WalkListBuilderPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Walk lists</h1>
-        <Select
-          value={turfId}
-          onValueChange={setTurfId}
-          className="ml-auto max-w-xs font-semibold"
-          aria-label="Turf"
-        >
-          {turfs.map((t) => (
-            <SelectItem key={t.id} value={t.id}>
-              {t.name}
-            </SelectItem>
-          ))}
-        </Select>
-      </div>
+      <CampaignPageHeader
+        title="Walk lists"
+        icon={ListOrdered}
+        actions={
+          <Select value={turfId} onValueChange={setTurfId} className="max-w-xs font-semibold" aria-label="Turf">
+            {turfs.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </Select>
+        }
+      />
 
       <StateRegion error={error} noPermission={noPermission} onRetry={() => void bootstrap()}>
       {turfs.length === 0 ? (
@@ -300,10 +325,14 @@ export default function WalkListBuilderPage() {
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <SectionCard
             title="Optimised route"
-            description={`${orderedContacts.length} stops · shortest walking path`}
+            description={
+              route
+                ? `${orderedContacts.length} stops · ${groups.length} street${groups.length === 1 ? "" : "s"} · ${formatDistance(route.totalM)} · ${formatDuration(route.totalS)}${route.source === "crowflies" ? " (estimated)" : ""}`
+                : `${orderedContacts.length} stops · shortest walking path`
+            }
             action={
-              <Button variant="outline" size="sm" onClick={() => optimise(contacts)}>
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              <Button variant="outline" size="sm" onClick={() => void reoptimise()} disabled={turfLoading}>
+                <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${turfLoading ? "animate-spin" : ""}`} />
                 Re-optimise
               </Button>
             }
@@ -320,37 +349,65 @@ export default function WalkListBuilderPage() {
               </p>
             ) : (
               <>
-                <ol className="space-y-1.5">
-                  {pagedContacts.map((c, i) => {
-                    const name = [c.firstName, c.lastName].filter(Boolean).join(" ");
-                    return (
-                      <li
-                        key={c.id}
-                        className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-2"
-                      >
-                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20 text-xs font-bold tabular-nums text-primary">
-                          {page * STOPS_PER_PAGE + i + 1}
+                <ol className="space-y-2.5">
+                  {pagedGroups.map((g) => (
+                    <li key={g.key + g.stops[0].id}>
+                      {/* Street header */}
+                      <div className="flex items-baseline gap-2 px-1">
+                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 px-1 text-[11px] font-bold tabular-nums text-primary dark:bg-primary/20">
+                          {g.stops[0].seq}
                         </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-foreground">{contactName(c)}</p>
-                          {name && c.address ? (
-                            <p className="text-xs text-muted-foreground">{c.address}</p>
+                        <h3 className="truncate text-sm font-extrabold text-foreground">
+                          {g.street ?? g.locality ?? "Unknown street"}
+                          {g.street && g.locality ? (
+                            <span className="ml-1.5 text-xs font-medium text-muted-foreground">{g.locality}</span>
                           ) : null}
+                        </h3>
+                        <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                          {g.stops.length} door{g.stops.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      {/* Doors on this street, in walking order */}
+                      <ul className="mt-1 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+                        {g.stops.map((s) => {
+                          const name = [s.firstName, s.lastName].filter(Boolean).join(" ");
+                          return (
+                            <li key={s.id} className="flex items-center gap-3 px-3 py-1.5">
+                              <span className="w-10 shrink-0 text-sm font-bold tabular-nums text-foreground">
+                                {doorNumber(s)}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                                {name || <span className="text-muted-foreground">{stopLabel(s)}</span>}
+                              </span>
+                              {name ? (
+                                <span className="shrink-0 rounded-full bg-surface-variant px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+                                  Known
+                                </span>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {/* Walking leg to the next street group */}
+                      {g.legToNext ? (
+                        <div className="flex items-center gap-1.5 py-1 pl-3 text-[11px] font-medium text-muted-foreground">
+                          <Navigation className="h-3 w-3 shrink-0 text-primary" aria-hidden />
+                          {formatDistance(g.legToNext.distanceM)} · {formatDuration(g.legToNext.durationS)} to the next street
                         </div>
-                      </li>
-                    );
-                  })}
+                      ) : null}
+                    </li>
+                  ))}
                 </ol>
-                {orderedContacts.length > STOPS_PER_PAGE ? (
+                {groups.length > GROUPS_PER_PAGE ? (
                   <div className="mt-3 flex items-center justify-between gap-2">
                     <p className="text-xs tabular-nums text-muted-foreground">
-                      {page * STOPS_PER_PAGE + 1}–{Math.min((page + 1) * STOPS_PER_PAGE, orderedContacts.length)} of{" "}
-                      {orderedContacts.length}
+                      Streets {page * GROUPS_PER_PAGE + 1}–{Math.min((page + 1) * GROUPS_PER_PAGE, groups.length)} of{" "}
+                      {groups.length}
                     </p>
                     <PaginationControls
                       page={page}
-                      pageSize={STOPS_PER_PAGE}
-                      total={orderedContacts.length}
+                      pageSize={GROUPS_PER_PAGE}
+                      total={groups.length}
                       onPrev={() => setPage((p) => Math.max(0, p - 1))}
                       onNext={() => setPage((p) => p + 1)}
                     />

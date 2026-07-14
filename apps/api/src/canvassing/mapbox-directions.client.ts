@@ -89,6 +89,28 @@ export class MapboxDirectionsClient {
     return { seconds, metres, requests: windows.length };
   }
 
+  /**
+   * The per-leg walking metrics along an ordered route (one entry per consecutive pair). Same
+   * 25-waypoint windowing as {@link priceRoute}, but KEEPS each leg instead of summing — the
+   * walk-list shows "→ 120 m · 2 min" between stops. Windows overlap by one waypoint, so every
+   * leg lands in exactly one window; concatenating them in order rebuilds all N-1 legs. Null if
+   * any window fails (a partial route would mis-label the distances).
+   */
+  async routeLegs(ordered: LngLat[]): Promise<{ legs: Array<{ distance: number; duration: number }>; requests: number } | null> {
+    if (!this.enabled || ordered.length < 2) return null;
+    const windows = directionsWindows(ordered, MAX_WAYPOINTS);
+    const legs: Array<{ distance: number; duration: number }> = [];
+    for (const window of windows) {
+      const windowLegs = await this.legs(window);
+      if (!windowLegs) {
+        this.logger.warn(`Directions failed for a window of ${window.length}; abandoning the route`);
+        return null;
+      }
+      for (const leg of windowLegs) legs.push({ distance: leg.distance, duration: leg.duration });
+    }
+    return { legs, requests: windows.length };
+  }
+
   /** One request: the legs between consecutive waypoints. Null on any failure. */
   async legs(waypoints: LngLat[]): Promise<Array<{ duration: number; distance: number }> | null> {
     if (!this.enabled || waypoints.length < 2 || waypoints.length > MAX_WAYPOINTS) return null;

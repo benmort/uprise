@@ -119,6 +119,12 @@ export class CanvassingController {
     return this.canvassing.listTurfContacts(tenantId, turfId);
   }
 
+  @Get("turfs/:turfId/route")
+  @Roles(AppUserRole.ORGANISER)
+  async turfRoute(@Param("turfId") turfId: string, @TenantId() tenantId: string) {
+    return this.canvassing.turfRoute(tenantId, turfId);
+  }
+
   @Post("turfs")
   @Roles(AppUserRole.ORGANISER)
   async createTurf(@Body() dto: CreateTurfDto, @TenantId() tenantId: string) {

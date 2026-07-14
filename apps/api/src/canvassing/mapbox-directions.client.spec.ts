@@ -60,6 +60,25 @@ describe("MapboxDirectionsClient", () => {
       expect(priced).toEqual({ seconds: 50, metres: 65, requests: 1 });
     });
 
+    it("routeLegs keeps every per-leg metric across windows (not just the sum)", async () => {
+      fetchMock.mockResolvedValue(okResponse([{ duration: 30, distance: 40 }, { duration: 20, distance: 25 }]));
+      const res = await client.routeLegs(route(3)); // 2 legs, one window
+      expect(res).toEqual({
+        legs: [
+          { distance: 40, duration: 30 },
+          { distance: 25, duration: 20 },
+        ],
+        requests: 1,
+      });
+    });
+
+    it("routeLegs abandons the route (null) when a window fails", async () => {
+      fetchMock
+        .mockResolvedValueOnce(okResponse([{ duration: 1, distance: 1 }]))
+        .mockResolvedValueOnce({ ok: false, status: 422, headers: new Headers(), json: async () => ({}) });
+      expect(await client.routeLegs(route(49))).toBeNull();
+    });
+
     it("windows a long route so no leg is ever stitched with a straight line", async () => {
       fetchMock.mockResolvedValue(okResponse([{ duration: 1, distance: 1 }]));
       const priced = await client.priceRoute(route(49)); // 48 legs → 2 windows of 25

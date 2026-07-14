@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import Map, { Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { FullscreenControl, Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification } from "mapbox-gl";
 import { bbox } from "@turf/turf";
 import { Crosshair, Globe } from "lucide-react";
@@ -439,6 +439,7 @@ export function TurfMap({
           </button>
         )}
       </div>
+      <FullscreenControl position="top-left" />
     </Map>
   );
 }

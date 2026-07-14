@@ -317,10 +317,12 @@ function OfflineMapsControl({ turfId, geometry }: { turfId: string; geometry: Ge
     <div className="flex items-center justify-between gap-2">
       <Button variant="outline" className="h-9 gap-1.5 text-sm" onClick={start}>
         <DownloadCloud className="h-4 w-4" />
-        Download maps for offline
+        {status === "incomplete" ? "Retry offline download" : "Download maps for offline"}
       </Button>
       {status === "error" ? (
         <span className="text-xs text-error">Download failed — retry</span>
+      ) : status === "incomplete" ? (
+        <span className="text-xs text-error">Some tiles didn&apos;t save — retry before going offline</span>
       ) : status === "cancelled" ? (
         <span className="text-xs text-muted-foreground">Download cancelled</span>
       ) : null}
