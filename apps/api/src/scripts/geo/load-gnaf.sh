@@ -27,8 +27,17 @@ set -euo pipefail
 : "${DATABASE_URL:?set DATABASE_URL (point it at the target DB deliberately)}"
 : "${GNAF_DIR:?set GNAF_DIR to the release dir containing 'Standard' and 'Authority Code'}"
 
-# psql rejects Prisma's ?schema= query param — strip any query string.
-PGURL="${DATABASE_URL%%\?*}"
+# psql rejects Prisma's ?schema= query param, so drop just that one — but KEEP the rest of the
+# query (Neon needs sslmode=require). Split base?query, filter out schema=, rejoin.
+PGURL_BASE="${DATABASE_URL%%\?*}"
+PGURL_QUERY="${DATABASE_URL#*\?}"
+[ "$PGURL_QUERY" = "$DATABASE_URL" ] && PGURL_QUERY=""   # no '?' present
+PGURL_NEWQ=""
+IFS='&' read -ra _params <<< "$PGURL_QUERY"
+for _p in "${_params[@]}"; do
+  case "$_p" in schema=*|"") ;; *) PGURL_NEWQ="${PGURL_NEWQ:+$PGURL_NEWQ&}$_p" ;; esac
+done
+PGURL="$PGURL_BASE${PGURL_NEWQ:+?$PGURL_NEWQ}"
 STD="$GNAF_DIR/Standard"
 AUT="$GNAF_DIR/Authority Code"
 STATES=(ACT NSW NT OT QLD SA TAS VIC WA)
