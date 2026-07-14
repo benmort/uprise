@@ -37,10 +37,15 @@ IFS='&' read -ra _params <<< "$PGURL_QUERY"
 for _p in "${_params[@]}"; do
   case "$_p" in schema=*|"") ;; *) PGURL_NEWQ="${PGURL_NEWQ:+$PGURL_NEWQ&}$_p" ;; esac
 done
-PGURL="$PGURL_BASE${PGURL_NEWQ:+?$PGURL_NEWQ}"
+# TCP keepalives so a long server-side INSERT (millions of rows, no wire traffic) doesn't have its
+# idle socket dropped by the OS/a middlebox — the cause of "SSL SYSCALL error: Operation timed out"
+# on the big states over the network. Harmless locally.
+PGURL_NEWQ="${PGURL_NEWQ:+$PGURL_NEWQ&}keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=5"
+PGURL="$PGURL_BASE?$PGURL_NEWQ"
 STD="$GNAF_DIR/Standard"
 AUT="$GNAF_DIR/Authority Code"
-STATES=(ACT NSW NT OT QLD SA TAS VIC WA)
+# All states by default; GNAF_STATES overrides (space-separated) to resume a subset after a failure.
+read -ra STATES <<< "${GNAF_STATES:-ACT NSW NT OT QLD SA TAS VIC WA}"
 
 [ -d "$STD" ] || { echo "No Standard/ dir under $GNAF_DIR" >&2; exit 1; }
 [ -d "$AUT" ] || { echo "No 'Authority Code/' dir under $GNAF_DIR" >&2; exit 1; }
