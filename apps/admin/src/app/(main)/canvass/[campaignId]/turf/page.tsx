@@ -2,9 +2,9 @@
 
 import { useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Crosshair, MapPin, Save } from "lucide-react";
+import { AlertTriangle, Crosshair, MapPin, Save } from "lucide-react";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import {
   assignTurf,
   createTurf,
@@ -286,15 +286,7 @@ export default function TurfCuttingPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Cut turf</h1>
-      </div>
+      <CampaignPageHeader title="Cut turf" icon={MapPin} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="h-[60vh] overflow-hidden rounded-2xl border border-border">
@@ -479,8 +471,11 @@ export default function TurfCuttingPage() {
               ))}
             </div>
           </SectionCard>
+        </div>
+      </div>
 
-          <SectionCard title={`Turfs (${turfs.length})`}>
+      {/* Turfs — full-width below the map, styled like the geo areas list. */}
+      <SectionCard title={`Turfs (${turfs.length})`}>
             <StateRegion
               loading={loading}
               error={error}
@@ -562,8 +557,6 @@ export default function TurfCuttingPage() {
               </ul>
             </StateRegion>
           </SectionCard>
-        </div>
-      </div>
 
       <FormDialog
         open={!!editingTurf}

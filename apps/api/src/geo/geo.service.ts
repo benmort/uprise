@@ -346,7 +346,7 @@ export class GeoService {
    * before geojson-vt re-simplifies into tile space. Returns empty bytes for a
    * tile with no features (the controller answers 204).
    */
-  async tile(layer: string, z: number, x: number, y: number): Promise<Buffer> {
+  async tile(layer: string, z: number, x: number, y: number, metric?: string): Promise<Buffer> {
     const src = this.tileSource(layer);
     if (![z, x, y].every((v) => Number.isInteger(v)) || z < 0 || z > 24) {
       throw new ApiHttpException("BAD_TILE", "z, x, y must be integers and 0 <= z <= 24");
@@ -377,34 +377,38 @@ export class GeoService {
     // Every column is table-qualified: `geo.region_address_count` also has a `code`, and an
     // unqualified one is the exact ambiguity that 500'd the First Nations browse. A spec
     // guard (`expectNoAmbiguousColumns`) fails this file if it comes back.
+    // Optional ABS indicator value baked onto each feature (`value`) so SA1/meshblock choropleths
+    // paint from the tile — a client `["match", code, …]` can't carry 60k/360k pairs. `av.value`
+    // is table-qualified (abs_value also has `code`) to satisfy the no-ambiguous-column guard.
+    const metricSelect = metric ? `, av.value AS value` : "";
+    const metricJoin = metric
+      ? `LEFT JOIN geo.abs_value av ON av.level = $5 AND av.code = d.${src.codeCol} AND av.indicator_key = $6`
+      : "";
+    const params: unknown[] = [w, s, e, n, layer];
+    if (metric) params.push(metric);
     const rows = (await this.prisma.$queryRawUnsafe(
       `SELECT d.${src.codeCol} AS code,
               COALESCE(d.name, d.${src.codeCol}) AS name,
-              (rac.address_count / NULLIF(rac.area_km2, 0)) AS density,
+              (rac.address_count / NULLIF(rac.area_km2, 0)) AS density${metricSelect},
               ST_AsGeoJSON(${geomExpr}) AS geojson
          FROM ${src.table} d
          LEFT JOIN geo.region_address_count rac
                 ON rac.kind = $5 AND rac.code = d.${src.codeCol}
+         ${metricJoin}
         WHERE d.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)`,
-      w,
-      s,
-      e,
-      n,
-      layer,
-    )) as Array<{ code: string; name: string | null; density: number | null; geojson: string }>;
+      ...params,
+    )) as Array<{ code: string; name: string | null; density: number | null; value?: number | null; geojson: string }>;
     if (rows.length === 0) return Buffer.alloc(0);
     const fc: FeatureCollection = {
       type: "FeatureCollection",
-      features: rows.map((r) => ({
-        type: "Feature",
-        geometry: JSON.parse(r.geojson) as Geometry,
-        // `density` is omitted, not null: MVT cannot encode a null property, and a missing
-        // one already reads back as null from `["get","density"]` in a style expression.
-        properties:
-          r.density === null
-            ? { code: r.code, name: r.name ?? r.code }
-            : { code: r.code, name: r.name ?? r.code, density: r.density },
-      })),
+      features: rows.map((r) => {
+        // Omit null props, don't encode them: MVT can't hold null, and a missing property already
+        // reads back as null from `["get", …]` in a style expression.
+        const properties: Record<string, unknown> = { code: r.code, name: r.name ?? r.code };
+        if (r.density !== null && r.density !== undefined) properties.density = r.density;
+        if (metric && r.value !== null && r.value !== undefined) properties.value = r.value;
+        return { type: "Feature" as const, geometry: JSON.parse(r.geojson) as Geometry, properties };
+      }),
     };
     // Slice/clip to this tile in tile-space coordinates, then encode to MVT.
     const index = geojsonvt(fc, {

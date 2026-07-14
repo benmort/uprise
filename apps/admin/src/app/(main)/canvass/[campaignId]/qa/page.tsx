@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { AlertTriangle, ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { getQaReview, resolveQaFlag, type QaFlag } from "@/lib/api";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard } from "@uprise/field";
@@ -43,15 +43,7 @@ export default function QaPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Data quality</h1>
-      </div>
+      <CampaignPageHeader title="Data quality" icon={ShieldCheck} />
 
       <StateRegion
         loading={loading}

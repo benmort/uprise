@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Save, Target } from "lucide-react";
+import { Save, Target } from "lucide-react";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import {
   getCampaign,
   getCampaignResults,
@@ -82,15 +82,7 @@ export default function GoalsPage() {
 
   return (
     <div className="page-stack max-w-xl">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Goals &amp; pace</h1>
-      </div>
+      <CampaignPageHeader title="Goals & pace" icon={Target} />
 
       <StateRegion error={error} noPermission={noPermission} onRetry={() => void load()}>
         <SectionCard title="Targets">

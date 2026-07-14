@@ -67,6 +67,20 @@ describe("GeoService.tile", () => {
     }
   });
 
+  it("bakes an ABS ?metric onto the tile via an abs_value join, and omits it otherwise", async () => {
+    const withMetric = make([{ code: "20604112700", name: "MB", geojson: squarePoly(0, 0) } as never]);
+    await withMetric.svc.tile("sa1", 1, 0, 0, "median_age");
+    const [sql, , , , , layer, metric] = withMetric.$queryRawUnsafe.mock.calls[0];
+    expect(sql).toContain("LEFT JOIN geo.abs_value av");
+    expect(sql).toContain("av.value AS value");
+    expect(layer).toBe("sa1");
+    expect(metric).toBe("median_age");
+
+    const plain = make([]);
+    await plain.svc.tile("sa1", 1, 0, 0);
+    expect(plain.$queryRawUnsafe.mock.calls[0][0]).not.toContain("geo.abs_value");
+  });
+
   it("rejects an unknown layer", async () => {
     const { svc } = make();
     await expect(svc.tile("bogus", 0, 0, 0)).rejects.toThrow();

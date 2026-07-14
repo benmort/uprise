@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Megaphone, Pencil, UserPlus } from "lucide-react";
+import { Megaphone, Pencil, UserPlus } from "lucide-react";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import {
   createVolunteer,
   listTurfs,
@@ -140,25 +140,17 @@ export default function CampaignVolunteersPage() {
 
   return (
     <div className="page-stack">
-      <div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link href={`/canvass?campaign=${campaignId}`}>
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Campaign
-            </Link>
-          </Button>
-          <div className="flex items-center gap-2">
-            <Megaphone className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Volunteers</h1>
-          </div>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Who&apos;s knocking doors for{" "}
-          <span className="font-semibold text-foreground">{campaign?.name ?? "this campaign"}</span> — plus the
-          team roster you invite from and assign turf to.
-        </p>
-      </div>
+      <CampaignPageHeader
+        title="Volunteers"
+        icon={Megaphone}
+        description={
+          <>
+            Who&apos;s knocking doors for{" "}
+            <span className="font-semibold text-foreground">{campaign?.name ?? "this campaign"}</span> — plus
+            the team roster you invite from and assign turf to.
+          </>
+        }
+      />
 
       {/* ── On this campaign: assignments folded from turf ── */}
       <SectionCard

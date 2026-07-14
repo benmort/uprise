@@ -212,7 +212,7 @@ describe("GeoController", () => {
     const c = new GeoController(svc);
     const res = makeRes();
     await c.tile("sa2", "9", "462", "314", res);
-    expect(svc.tile).toHaveBeenCalledWith("sa2", 9, 462, 314);
+    expect(svc.tile).toHaveBeenCalledWith("sa2", 9, 462, 314, undefined);
     expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "application/x-protobuf");
     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "public, max-age=86400");
     expect(res.send).toHaveBeenCalledWith(Buffer.from([1, 2, 3]));
@@ -228,5 +228,13 @@ describe("GeoController", () => {
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.end).toHaveBeenCalled();
     expect(res.send).not.toHaveBeenCalled();
+  });
+
+  it("tile forwards a ?metric to the service (ABS value baked on the tile)", async () => {
+    const svc = makeSvc();
+    (svc.tile as jest.Mock).mockResolvedValue(Buffer.from([9]));
+    const c = new GeoController(svc);
+    await c.tile("sa1", "12", "1", "2", makeRes(), "median_age");
+    expect(svc.tile).toHaveBeenCalledWith("sa1", 12, 1, 2, "median_age");
   });
 });

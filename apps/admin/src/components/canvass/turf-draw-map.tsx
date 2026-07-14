@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Map, { Layer, Marker, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { FullscreenControl, Layer, Marker, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
@@ -137,6 +137,7 @@ export function TurfDrawMap({
   mode = "areas",
   boundaryLayers,
   boundaryTilesUrl,
+  boundaryMinZoom = 0,
   boundaryFilter,
   boundaryFill,
   selectedBoundaryCode,
@@ -215,6 +216,9 @@ export function TurfDrawMap({
   boundaryLayers?: Array<{ id: string; tilesUrl: string; color: string; interactive: boolean }>;
   /** boundaries mode — a single tile overlay (States). */
   boundaryTilesUrl?: string;
+  /** boundaries mode — minzoom floor for the single-tile source (default 0). Set for dense levels
+   *  (meshblock/SA1) so a low-zoom whole-country tile is never requested. */
+  boundaryMinZoom?: number;
   boundaryFilter?: FilterSpecification;
   /**
    * boundaries mode — paint the fill from a data expression instead of the flat layer
@@ -881,7 +885,7 @@ export function TurfDrawMap({
 
         {/* boundaries mode — single overlay (States). */}
         {mode === "boundaries" && boundaryTilesUrl ? (
-          <Source key={boundaryTilesUrl} id="boundaries" type="vector" tiles={[boundaryTilesUrl]} minzoom={0} maxzoom={16}>
+          <Source key={boundaryTilesUrl} id="boundaries" type="vector" tiles={[boundaryTilesUrl]} minzoom={boundaryMinZoom} maxzoom={16}>
             <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": boundaryFill ?? PRIMARY, "fill-opacity": boundaryFill ? 0.75 : 0.06 }} />
             <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": PRIMARY, "line-width": 1.2, "line-opacity": 0.7 }} />
             {basketFilter ? (
@@ -953,6 +957,7 @@ export function TurfDrawMap({
             {userPosition ? <Marker latitude={userPosition.lat} longitude={userPosition.lng} color="#0ea5e9" /> : null}
           </>
         ) : null}
+        <FullscreenControl position="top-right" />
       </Map>
 
       {/* On-map recentre — snaps back to the campaign boundary (or picked state / country). */}

@@ -190,8 +190,11 @@ export class GeoController {
     @Param("x") x: string,
     @Param("y") y: string,
     @Res() res: Response,
+    // Optional ABS indicator baked onto each feature as `value` — how SA1/meshblock choropleths
+    // paint (client `["match"]` can't scale to 60k/360k features). Absent = the plain boundary tile.
+    @Query("metric") metric?: string,
   ) {
-    const buf = await this.geo.tile(layer, Number(z), Number(x), Number(y));
+    const buf = await this.geo.tile(layer, Number(z), Number(x), Number(y), metric || undefined);
     res.setHeader("Content-Type", "application/x-protobuf");
     res.setHeader("Cache-Control", "public, max-age=86400");
     if (!buf.length) {

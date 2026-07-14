@@ -332,6 +332,19 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
     else fail(res.error);
   };
 
+  // Images persist the moment they're uploaded/removed — no manual Save. The file is
+  // already in blob storage by the time onChange fires (ImageCropUpload uploaded it), so
+  // this just writes the URL onto the org profile. updateProfile is a partial PATCH, so
+  // saving one field leaves colours/CSS (and the other images) untouched.
+  const autoSaveImage =
+    (field: "logoBlockUrl" | "logoLandscapeUrl" | "faviconUrl" | "heroImageUrl", setLocal: (v: string | null) => void) =>
+    async (url: string | null) => {
+      setLocal(url);
+      const res = await orgProfile.update({ [field]: url });
+      if (res.ok) done(url ? "Image saved" : "Image removed", false);
+      else fail(res.error);
+    };
+
   const saveBusiness = async () => {
     setSavingTab("business");
     const res = await orgProfile.setCredential({
@@ -541,12 +554,12 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
 
             {tab === "branding" ? (
               <>
-                <FormSectionCard title="Logos & images" description="Upload and crop. Logos keep transparency (PNG).">
+                <FormSectionCard title="Logos & images" description="Upload and crop — saved automatically. Logos keep transparency (PNG).">
                   <div className="grid gap-6 sm:grid-cols-2">
-                    <ImageCropUpload label="Block logo" helpText="Square, for tight spaces." value={logoBlockUrl} onChange={setLogoBlockUrl} aspect={1} boxClassName="h-40" />
-                    <ImageCropUpload label="Landscape logo" helpText="Wide, for headers and email." value={logoLandscapeUrl} onChange={setLogoLandscapeUrl} aspect={3} boxClassName="h-24" />
-                    <ImageCropUpload label="Favicon" helpText="Square, browser tab icon." value={faviconUrl} onChange={setFaviconUrl} aspect={1} boxClassName="h-28" />
-                    <ImageCropUpload label="Hero image" helpText="Wide banner (JPEG)." value={heroImageUrl} onChange={setHeroImageUrl} aspect={16 / 9} mimeType="image/jpeg" boxClassName="h-40" />
+                    <ImageCropUpload label="Block logo" helpText="Square, for tight spaces." value={logoBlockUrl} onChange={autoSaveImage("logoBlockUrl", setLogoBlockUrl)} aspect={1} boxClassName="h-40" />
+                    <ImageCropUpload label="Landscape logo" helpText="Wide, for headers and email." value={logoLandscapeUrl} onChange={autoSaveImage("logoLandscapeUrl", setLogoLandscapeUrl)} aspect={3} boxClassName="h-24" />
+                    <ImageCropUpload label="Favicon" helpText="Square, browser tab icon." value={faviconUrl} onChange={autoSaveImage("faviconUrl", setFaviconUrl)} aspect={1} boxClassName="h-28" />
+                    <ImageCropUpload label="Hero image" helpText="Wide banner (JPEG)." value={heroImageUrl} onChange={autoSaveImage("heroImageUrl", setHeroImageUrl)} aspect={16 / 9} mimeType="image/jpeg" boxClassName="h-40" />
                   </div>
                 </FormSectionCard>
 

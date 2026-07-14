@@ -35,19 +35,20 @@ const AREA_LEVEL_LAYER: Record<string, string> = {
 };
 function datasetHref(key: string): string | null {
   if (key === "state") return "/data/states";
-  if (key === "ced") return "/data/divisions?tab=ced";
-  if (key === "sed") return "/data/divisions?tab=sed_lower";
-  if (key === "sed_lower") return "/data/divisions?tab=sed_lower";
-  if (key === "sed_upper") return "/data/divisions?tab=sed_upper";
-  if (key === "lga") return "/data/divisions?tab=lga";
-  if (key === "ward") return "/data/divisions?tab=ward";
-  if (key === "ireg") return "/data/first-nations?tab=regions";
-  if (key === "iare") return "/data/first-nations?tab=areas";
-  if (key === "iloc") return "/data/first-nations?tab=locations";
-  if (AREA_LEVEL_LAYER[key]) return `/data/areas?tab=${AREA_LEVEL_LAYER[key]}`;
+  if (key === "ced") return "/data/divisions?type=ced";
+  if (key === "sed") return "/data/divisions?type=sed_lower";
+  if (key === "sed_lower") return "/data/divisions?type=sed_lower";
+  if (key === "sed_upper") return "/data/divisions?type=sed_upper";
+  if (key === "lga") return "/data/divisions?type=lga";
+  if (key === "ward") return "/data/divisions?type=ward";
+  if (key === "ireg") return "/data/first-nations?type=regions";
+  if (key === "iare") return "/data/first-nations?type=areas";
+  if (key === "iloc") return "/data/first-nations?type=locations";
+  if (AREA_LEVEL_LAYER[key]) return `/data/areas?type=${AREA_LEVEL_LAYER[key]}`;
   if (key === "gnaf") return "/data/addresses";
   if (key === "polling_places") return "/data/polling-places";
   if (key === "referendum_2023") return "/data/referendum";
+  if (key === "abs_census_2021" || key === "seifa_2021") return "/data/demographics";
   if (key === "politicians") return "/data/politicians";
   if (key === "policies") return "/data/policies";
   return null;
@@ -74,6 +75,8 @@ const DATASET_DESCRIPTION: Record<string, string> = {
   sa4: "Statistical Area 4 — the largest sub-state regions.",
   polling_places: "Polling booths — every federal (AEC) and state/territory (The Tally Room) voting location, geocoded.",
   referendum_2023: "2023 Voice to Parliament referendum — the official Yes/No result by nation, state and division, plus turnout (votes counted by vote type). Source: AEC (CC BY 4.0).",
+  abs_census_2021: "ABS Census 2021 — demographic, education, cultural and housing indicators by statistical area (SA1–SA4, mesh block counts), shaded on the map. Source: ABS (CC BY 4.0).",
+  seifa_2021: "ABS SEIFA 2021 — the four socioeconomic indexes (advantage/disadvantage, economic resources, education & occupation) as deciles by statistical area. Source: ABS (CC BY 4.0).",
   politicians: "Federal and state/territory members of parliament, each linked to their electorate.",
   policies: "Policies tracked across parliamentary votes, with each member's recorded agreement. Federal parliament only at this stage.",
 };
@@ -85,6 +88,7 @@ const DATASET_ORDER = [
   "state", "ced", "chamber_electorate", "sed_lower", "sed_upper", "sed", "lga", "ward",
   "ireg", "iare", "iloc",
   "sa4", "sa3", "sa2", "sa1", "asgs_mb", "gnaf", "polling_places", "referendum_2023",
+  "abs_census_2021", "seifa_2021",
   "politicians", "policies",
 ];
 const datasetRank = (key: string) => {

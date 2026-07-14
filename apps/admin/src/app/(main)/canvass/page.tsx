@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ArrowRight, DoorOpen, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
   deleteCampaign,
+  getCampaignBoundary,
   getCampaignSummary,
   listCampaigns,
   updateCampaign,
@@ -33,6 +35,12 @@ import { CampaignNavCards } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { outerRing } from "@/lib/geometry";
 
+// mapbox-gl in the boundary map — keep it out of SSR.
+const CampaignBoundaryMap = dynamic(
+  () => import("@/components/canvass/campaign-boundary-map").then((m) => m.CampaignBoundaryMap),
+  { ssr: false, loading: () => <Skeleton className="h-[260px] w-full rounded-2xl" /> },
+);
+
 export default function CanvassPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -40,6 +48,7 @@ export default function CanvassPage() {
   const [activeId, setActiveId] = useState<string>("");
   const [kpis, setKpis] = useState<CampaignKpis | null>(null);
   const [turfs, setTurfs] = useState<TurfSummary[]>([]);
+  const [boundary, setBoundary] = useState<GeoJSON.Geometry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -90,14 +99,20 @@ export default function CanvassPage() {
     if (!activeId) {
       setKpis(null);
       setTurfs([]);
+      setBoundary(null);
       return;
     }
     let alive = true;
     void (async () => {
-      const [s, t] = await Promise.all([getCampaignSummary(activeId), listTurfs(activeId)]);
+      const [s, t, b] = await Promise.all([
+        getCampaignSummary(activeId),
+        listTurfs(activeId),
+        getCampaignBoundary(activeId),
+      ]);
       if (!alive) return;
       if (s.ok) setKpis(s.data);
       if (t.ok) setTurfs(t.data);
+      setBoundary(b.ok ? ((b.data.boundary ?? null) as GeoJSON.Geometry | null) : null);
     })();
     return () => {
       alive = false;
@@ -274,6 +289,16 @@ export default function CanvassPage() {
       </div>
 
       {activeId ? <CampaignNavCards campaignId={activeId} id="tour-canvass-ops" /> : null}
+
+      {boundary ? (
+        <div>
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <MapPinned className="h-4 w-4 text-primary" />
+            Campaign area
+          </p>
+          <CampaignBoundaryMap boundary={boundary} />
+        </div>
+      ) : null}
 
       <div id="tour-canvass-kpis" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiTile

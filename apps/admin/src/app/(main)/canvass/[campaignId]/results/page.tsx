@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { getCampaignResults, type CampaignResults } from "@/lib/api/campaigns";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
@@ -75,19 +75,15 @@ export default function ResultsPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Results</h1>
-        <Button variant="outline" size="sm" className="ml-auto" onClick={exportCsv}>
-          <Download className="mr-1.5 h-3.5 w-3.5" />
-          Export CSV
-        </Button>
-      </div>
+      <CampaignPageHeader
+        title="Results"
+        actions={
+          <Button variant="outline" size="sm" onClick={exportCsv}>
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            Export CSV
+          </Button>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <SectionCard title="Disposition breakdown">

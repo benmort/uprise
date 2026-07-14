@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { AlertTriangle, ArrowLeft, Bell, DoorOpen, Radio, Users } from "lucide-react";
+import { AlertTriangle, Bell, DoorOpen, Radio, Users } from "lucide-react";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import { getCampaignLive } from "@/lib/api/campaigns";
 import { broadcastPush } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
@@ -60,15 +60,7 @@ export default function LiveWarRoomPage() {
   if (!live) {
     return (
       <div className="page-stack">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/canvass">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Canvass
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-extrabold">Live</h1>
-        </div>
+        <CampaignPageHeader title="Live" icon={Radio} />
         <StateRegion
           loading={loading}
           error={error}
@@ -88,23 +80,22 @@ export default function LiveWarRoomPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Live</h1>
-        <span className="ml-1 inline-flex items-center gap-1.5 rounded-full bg-success-container px-2.5 py-1 text-xs font-semibold text-success">
-          <Radio className="h-3.5 w-3.5 animate-pulse" />
-          Live · {out} out
-        </span>
-        <Button size="sm" variant="outline" className="ml-auto" onClick={() => setBroadcastOpen(true)}>
-          <Bell className="mr-1.5 h-3.5 w-3.5" />
-          Notify field
-        </Button>
-      </div>
+      <CampaignPageHeader
+        title="Live"
+        icon={Radio}
+        actions={
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success-container px-2.5 py-1 text-xs font-semibold text-success">
+              <Radio className="h-3.5 w-3.5 animate-pulse" />
+              Live · {out} out
+            </span>
+            <Button size="sm" variant="outline" onClick={() => setBroadcastOpen(true)}>
+              <Bell className="mr-1.5 h-3.5 w-3.5" />
+              Notify field
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <KpiTile label="Volunteers out" value={out} icon={<Users className="h-4 w-4" />} />

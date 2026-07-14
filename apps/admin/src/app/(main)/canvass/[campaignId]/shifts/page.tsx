@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, CalendarPlus, MapPin, Pencil, Trash2 } from "lucide-react";
+import { CalendarPlus, MapPin, Pencil, Trash2 } from "lucide-react";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import { createShift, deleteShift, listShifts, updateShift, type Shift } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
@@ -109,15 +109,7 @@ export default function ShiftsPage() {
 
   return (
     <div className="page-stack">
-      <div className="flex items-center gap-2">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/canvass">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Canvass
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-extrabold">Shifts</h1>
-      </div>
+      <CampaignPageHeader title="Shifts" icon={CalendarPlus} />
 
       <SectionCard title="Schedule a shift">
         <div className="grid gap-3 sm:grid-cols-2">
