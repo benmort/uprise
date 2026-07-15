@@ -15,6 +15,16 @@ const okResponse = (legs: Array<{ duration: number; distance: number }>) => ({
   json: async () => ({ code: "Ok", routes: [{ legs }] }),
 });
 
+const okRouteResponse = (
+  legs: Array<{ duration: number; distance: number }>,
+  coordinates: [number, number][],
+) => ({
+  ok: true,
+  status: 200,
+  headers: new Headers(),
+  json: async () => ({ code: "Ok", routes: [{ legs, geometry: { type: "LineString", coordinates } }] }),
+});
+
 describe("MapboxDirectionsClient", () => {
   const realFetch = global.fetch;
   let fetchMock: jest.Mock;
@@ -70,6 +80,41 @@ describe("MapboxDirectionsClient", () => {
         ],
         requests: 1,
       });
+    });
+
+    it("routeLegsAndGeometry asks for the full geojson line and returns it with the legs", async () => {
+      fetchMock.mockResolvedValue(
+        okRouteResponse([{ duration: 30, distance: 40 }, { duration: 20, distance: 25 }], [[0, 0], [0, 1], [0, 2]]),
+      );
+      const res = await client.routeLegsAndGeometry(route(3));
+      const url = fetchMock.mock.calls[0][0] as string;
+      expect(url).toContain("overview=full"); // the real path to draw, not a beeline
+      expect(url).toContain("geometries=geojson");
+      expect(res).toEqual({
+        legs: [
+          { distance: 40, duration: 30 },
+          { distance: 25, duration: 20 },
+        ],
+        geometry: { type: "LineString", coordinates: [[0, 0], [0, 1], [0, 2]] },
+        requests: 1,
+      });
+    });
+
+    it("routeLegsAndGeometry stitches window geometries, dropping the duplicated seam coord", async () => {
+      fetchMock
+        .mockResolvedValueOnce(okRouteResponse([{ duration: 1, distance: 1 }], [[0, 0], [0, 1]]))
+        .mockResolvedValueOnce(okRouteResponse([{ duration: 1, distance: 1 }], [[0, 1], [0, 2]]));
+      const res = await client.routeLegsAndGeometry(route(26)); // 2 windows of 25, overlap by one
+      expect(res!.requests).toBe(2);
+      // Window 2's first coord ([0,1]) duplicates window 1's last and is dropped on stitch.
+      expect(res!.geometry).toEqual({ type: "LineString", coordinates: [[0, 0], [0, 1], [0, 2]] });
+    });
+
+    it("routeLegsAndGeometry abandons the route (null) when a window fails", async () => {
+      fetchMock
+        .mockResolvedValueOnce(okRouteResponse([{ duration: 1, distance: 1 }], [[0, 0], [0, 1]]))
+        .mockResolvedValueOnce({ ok: false, status: 422, headers: new Headers(), json: async () => ({}) });
+      expect(await client.routeLegsAndGeometry(route(49))).toBeNull();
     });
 
     it("routeLegs abandons the route (null) when a window fails", async () => {

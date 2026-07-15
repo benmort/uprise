@@ -30,7 +30,7 @@ describe("CanvassingService", () => {
   let geo: any;
   let service: CanvassingService;
   let queue: { enqueue: jest.Mock };
-  let directions: { routeLegs: jest.Mock };
+  let directions: { routeLegs: jest.Mock; routeLegsAndGeometry: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -116,7 +116,10 @@ describe("CanvassingService", () => {
     put.mockClear();
     // The estimate is queued, never awaited: a cut must not fail because Redis hiccuped.
     queue = { enqueue: jest.fn().mockResolvedValue({ jobId: "j1", queued: true }) };
-    directions = { routeLegs: jest.fn().mockResolvedValue(null) };
+    directions = {
+      routeLegs: jest.fn().mockResolvedValue(null),
+      routeLegsAndGeometry: jest.fn().mockResolvedValue(null),
+    };
     service = new CanvassingService(
       prisma,
       engagement,
@@ -1034,11 +1037,13 @@ describe("CanvassingService", () => {
 
     it("uses real Mapbox legs when available, mapping each to its from/to stop", async () => {
       prisma.$queryRaw.mockResolvedValue(threeContacts);
-      directions.routeLegs.mockResolvedValue({
+      const line: GeoJSON.LineString = { type: "LineString", coordinates: [[0, 0], [0, 0.001], [0, 0.002]] };
+      directions.routeLegsAndGeometry.mockResolvedValue({
         legs: [
           { distance: 100, duration: 80 },
           { distance: 120, duration: 96 },
         ],
+        geometry: line,
         requests: 1,
       });
       const res = await service.turfRoute("org1", "t1");
@@ -1051,15 +1056,18 @@ describe("CanvassingService", () => {
       expect(res.legs[0].toId).toBe(res.ordered[1]);
       expect(res.totalM).toBe(220);
       expect(res.totalS).toBe(176);
+      // The real street-following line is passed through for the map to draw.
+      expect(res.geometry).toEqual(line);
     });
 
-    it("falls back to straight-line legs when directions are unavailable", async () => {
+    it("falls back to straight-line legs (and no geometry) when directions are unavailable", async () => {
       prisma.$queryRaw.mockResolvedValue(threeContacts);
-      directions.routeLegs.mockResolvedValue(null); // no server token
+      directions.routeLegsAndGeometry.mockResolvedValue(null); // no server token
       const res = await service.turfRoute("org1", "t1");
       expect(res.source).toBe("crowflies");
       expect(res.legs).toHaveLength(2);
       expect(res.legs.every((l) => l.distanceM > 0 && l.durationS > 0)).toBe(true);
+      expect(res.geometry).toBeNull();
     });
 
     it("gives no legs for a turf with fewer than two located stops", async () => {
@@ -1067,7 +1075,7 @@ describe("CanvassingService", () => {
       const res = await service.turfRoute("org1", "t1");
       expect(res.legs).toEqual([]);
       expect(res.ordered).toEqual(["a"]); // unlocated stop still listed, sorted to the end
-      expect(directions.routeLegs).not.toHaveBeenCalled();
+      expect(directions.routeLegsAndGeometry).not.toHaveBeenCalled();
     });
   });
 

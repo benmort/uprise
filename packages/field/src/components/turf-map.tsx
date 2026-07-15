@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Map, { AttributionControl, FullscreenControl, Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification } from "mapbox-gl";
 import { bbox } from "@turf/turf";
-import { Crosshair, Globe } from "lucide-react";
+import { Crosshair, Globe, Loader2, LocateFixed } from "lucide-react";
 import { useTheme } from "../lib/use-theme";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -200,6 +200,27 @@ export function TurfMap({
       });
     }
   }, [defaultBounds]);
+
+  // "My location" — centre the map on the viewer's current GPS position + drop the marker.
+  // Works standalone (doesn't need the parent's `userPosition` prop), so it also locates the
+  // organiser previewing in the admin. Held locally; the marker renders it (or the prop).
+  const [locatedPos, setLocatedPos] = useState<LngLat | null>(null);
+  const [locating, setLocating] = useState(false);
+  const locateMe = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const p = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setLocatedPos(p);
+        setLocating(false);
+        mapRef.current?.getMap()?.flyTo({ center: [p.lng, p.lat], zoom: 15, duration: 700 });
+      },
+      () => setLocating(false), // denied/timeout — no-op (the button just stops spinning)
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
+    );
+  }, []);
+  const gpsPosition = userPosition ?? locatedPos;
 
   const active = stops.find((s) => s.id === activeStopId);
 
@@ -437,8 +458,8 @@ export function TurfMap({
           <StopPin color={stopColor(active.status)} active />
         </Marker>
       )}
-      {userPosition && (
-        <Marker latitude={userPosition.lat} longitude={userPosition.lng} anchor="center">
+      {gpsPosition && (
+        <Marker latitude={gpsPosition.lat} longitude={gpsPosition.lng} anchor="center">
           {/* Live GPS position: solid brand dot + white ring, soft primary glow. */}
           <div className="relative flex h-6 w-6 items-center justify-center">
             <span className="absolute inset-0 rounded-full bg-primary/25" />
@@ -448,7 +469,7 @@ export function TurfMap({
       )}
 
       {/* Corner controls: recenter to what's focused (turf / searched address /
-          state), and a globe to zoom back out to the whole country. */}
+          state), my-location, and a globe to zoom back out to the whole country. */}
       <div className="absolute right-2 top-2 z-10 flex gap-1.5">
         {(bounds || focusPoint || focusBounds) && (
           <button
@@ -461,6 +482,17 @@ export function TurfMap({
             Recenter
           </button>
         )}
+        {/* Centre on the viewer's current location + drop the GPS marker. */}
+        <button
+          type="button"
+          onClick={locateMe}
+          disabled={locating}
+          title="Centre on my location"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant disabled:opacity-60"
+        >
+          {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LocateFixed className="h-3.5 w-3.5" />}
+          My location
+        </button>
         {defaultBounds && (
           <button
             type="button"

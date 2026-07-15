@@ -192,10 +192,9 @@ export function WalkView({
               </p>
               <div className="mt-1.5 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate font-bold text-foreground">{nextStop.name || "Resident"}</p>
-                  {nextStop.address ? (
-                    <p className="truncate text-sm text-muted-foreground">{nextStop.address}</p>
-                  ) : null}
+                  {/* Address first — cold doors have no contact, so the address is the identifier. */}
+                  <p className="truncate font-bold text-foreground">{nextStop.address || "No address"}</p>
+                  <p className="truncate text-sm text-muted-foreground">{nextStop.name || "Resident"}</p>
                 </div>
                 {!readOnly ? (
                   <Button className="h-11 shrink-0 gap-2 px-5 text-base" onClick={() => openDoor(nextStop.id)}>

@@ -27,7 +27,12 @@ const ENDPOINT = "https://api.mapbox.com/directions/v5/mapbox/walking";
 type DirectionsResponse = {
   code?: string;
   message?: string;
-  routes?: Array<{ legs?: Array<{ duration?: number; distance?: number }> }>;
+  routes?: Array<{
+    legs?: Array<{ duration?: number; distance?: number }>;
+    // Present only when requested with `overview=full&geometries=geojson` — the real
+    // street-following path (used to draw the walk line, not a beeline between stops).
+    geometry?: { type?: string; coordinates?: [number, number][] };
+  }>;
 };
 
 export type RoutePricing = { seconds: number; metres: number; requests: number };
@@ -109,6 +114,57 @@ export class MapboxDirectionsClient {
       for (const leg of windowLegs) legs.push({ distance: leg.distance, duration: leg.duration });
     }
     return { legs, requests: windows.length };
+  }
+
+  /**
+   * The per-leg metrics AND the full street-following geometry along an ordered route — one
+   * windowed pass (`overview=full&geometries=geojson`). Windows overlap by one waypoint, so
+   * each window's geometry shares its first point with the previous window's last; we drop that
+   * duplicate seam point when stitching. `geometry` is null only when no window returned a line
+   * (the caller then falls back to a straight beeline). Null overall if any window fails.
+   */
+  async routeLegsAndGeometry(ordered: LngLat[]): Promise<{
+    legs: Array<{ distance: number; duration: number }>;
+    geometry: GeoJSON.LineString | null;
+    requests: number;
+  } | null> {
+    if (!this.enabled || ordered.length < 2) return null;
+    const windows = directionsWindows(ordered, MAX_WAYPOINTS);
+    const legs: Array<{ distance: number; duration: number }> = [];
+    const coordinates: [number, number][] = [];
+    for (const window of windows) {
+      const win = await this.windowRoute(window);
+      if (!win) {
+        this.logger.warn(`Directions failed for a window of ${window.length}; abandoning the route`);
+        return null;
+      }
+      for (const leg of win.legs) legs.push(leg);
+      // Drop each window's first coord after the first window — it duplicates the shared seam.
+      const pts = coordinates.length ? win.coordinates.slice(1) : win.coordinates;
+      coordinates.push(...pts);
+    }
+    return {
+      legs,
+      geometry: coordinates.length >= 2 ? { type: "LineString", coordinates } : null,
+      requests: windows.length,
+    };
+  }
+
+  /** One request: legs + the GeoJSON line for consecutive waypoints. Null on any failure. */
+  private async windowRoute(
+    waypoints: LngLat[],
+  ): Promise<{ legs: Array<{ distance: number; duration: number }>; coordinates: [number, number][] } | null> {
+    if (!this.enabled || waypoints.length < 2 || waypoints.length > MAX_WAYPOINTS) return null;
+    const coords = waypoints.map((p) => `${p.lng},${p.lat}`).join(";");
+    const url = `${ENDPOINT}/${coords}?overview=full&geometries=geojson&access_token=${encodeURIComponent(this.token)}`;
+    const json = await this.request(url);
+    const route = json?.routes?.[0];
+    if (!route?.legs) return null;
+    const legs = route.legs.map((leg) => ({ duration: Number(leg.duration ?? 0), distance: Number(leg.distance ?? 0) }));
+    const geom = route.geometry;
+    const coordinates =
+      geom?.type === "LineString" && Array.isArray(geom.coordinates) ? geom.coordinates : [];
+    return { legs, coordinates };
   }
 
   /** One request: the legs between consecutive waypoints. Null on any failure. */

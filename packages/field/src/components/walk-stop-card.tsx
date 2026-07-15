@@ -62,8 +62,10 @@ export function WalkStopCard({
           {stop.orderIndex + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-bold text-foreground">{stop.name || "Resident"}</p>
-          <p className="truncate text-sm text-muted-foreground">{stop.address || "No address"}</p>
+          {/* Address is the primary line — most doors are cold (no contact), so the address
+              identifies the household; the name (else "Resident") sits under it. */}
+          <p className="truncate font-bold text-foreground">{stop.address || "No address"}</p>
+          <p className="truncate text-sm text-muted-foreground">{stop.name || "Resident"}</p>
         </div>
         <StopStatusPill status={stop.status} />
       </div>

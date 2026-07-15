@@ -892,6 +892,9 @@ export type TurfRoute = {
   totalS: number;
   /** "directions" = real Mapbox walking; "crowflies" = straight-line fallback (no token). */
   source: "directions" | "crowflies";
+  /** The street-following walk line through the located stops (Mapbox walking geometry).
+   *  Null when Mapbox is unconfigured/failed — draw a straight beeline instead. */
+  geometry?: GeoJSON.LineString | null;
 };
 
 export async function getTurfRoute(turfId: string) {

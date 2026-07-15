@@ -693,11 +693,17 @@ export class CanvassingService {
     type Leg = { fromId: string; toId: string; distanceM: number; durationS: number };
     let legs: Leg[] = [];
     let source: "directions" | "crowflies" = "crowflies";
+    // The street-following walk line through the located stops (Mapbox walking geometry). Null
+    // when Mapbox is unconfigured/failed → the map falls back to a straight beeline.
+    let geometry: GeoJSON.LineString | null = null;
 
     const priced =
-      located.length >= 2 ? await this.directions.routeLegs(located.map((s) => ({ lat: s.lat, lng: s.lng }))) : null;
+      located.length >= 2
+        ? await this.directions.routeLegsAndGeometry(located.map((s) => ({ lat: s.lat, lng: s.lng })))
+        : null;
     if (priced && priced.legs.length === located.length - 1) {
       source = "directions";
+      geometry = priced.geometry;
       legs = priced.legs.map((leg, i) => ({
         fromId: located[i].id,
         toId: located[i + 1].id,
@@ -714,7 +720,7 @@ export class CanvassingService {
 
     const totalM = legs.reduce((sum, l) => sum + l.distanceM, 0);
     const totalS = legs.reduce((sum, l) => sum + l.durationS, 0);
-    return { ordered: orderedIds, legs, totalM, totalS, source };
+    return { ordered: orderedIds, legs, totalM, totalS, source, geometry };
   }
 
   // ── Authoring (organiser) ───────────────────────────────────────
