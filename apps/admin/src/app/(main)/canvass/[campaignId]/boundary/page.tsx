@@ -14,8 +14,8 @@ import { StateRegion } from "@/components/shell/state-region";
 import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { listDivisions, type AreaLevel, type Division, type DivisionType, type TurfDivisionType } from "@/lib/api/geo";
-import { getCampaignBoundary, setCampaignBoundary, type BoundarySource } from "@/lib/api/campaigns";
-import type { ExistingTurf, SelectedArea } from "@/components/canvass/turf-draw-map";
+import { getCampaignBoundary, previewCampaignBoundary, setCampaignBoundary, type BoundarySource } from "@/lib/api/campaigns";
+import type { SelectedArea } from "@/components/canvass/turf-draw-map";
 
 // mapbox-gl + draw touch window: keep them out of SSR.
 const TurfDrawMap = dynamic(
@@ -44,7 +44,11 @@ export default function CampaignBoundaryPage() {
   const [polygons, setPolygons] = useState<GeoJSON.Polygon[]>([]);
   const [divisions, setDivisions] = useState<DivPick[]>([]);
   const [clearToken, setClearToken] = useState(0);
-  const [boundary, setBoundary] = useState<GeoJSON.Geometry | null>(null);
+  // The LIVE unioned boundary drawn on the map as the organiser builds it (debounced server-side
+  // union of the current parts, before Save). Seeded from the saved boundary on load. This is the
+  // ONLY boundary the map draws — it equals the saved shape on load and updates as parts change.
+  const [previewBoundary, setPreviewBoundary] = useState<GeoJSON.Geometry | null>(null);
+  const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -65,7 +69,7 @@ export default function CampaignBoundaryPage() {
     void getCampaignBoundary(campaignId).then((res) => {
       if (!alive) return;
       if (res.ok) {
-        setBoundary((res.data.boundary ?? null) as GeoJSON.Geometry | null);
+        setPreviewBoundary((res.data.boundary ?? null) as GeoJSON.Geometry | null); // draw the saved shape immediately
         const src = (res.data.sources ?? []) as BoundarySource[];
         setAreaSources(
           src.filter((s): s is Extract<BoundarySource, { kind: "area" }> => s.kind === "area").map((s) => ({ layer: s.layer, code: s.code })),
@@ -130,6 +134,30 @@ export default function CampaignBoundaryPage() {
     [divisions, areaSources, selectedAreas, polygons],
   );
 
+  // Live-preview the unioned boundary as the parts change: debounced server-side union (no save),
+  // drawn on the map (which also re-frames + enables Recentre). Latest-wins via AbortController.
+  useEffect(() => {
+    if (loading) return;
+    if (sources.length === 0) {
+      setPreviewBoundary(null);
+      setPreviewing(false);
+      return;
+    }
+    const ac = new AbortController();
+    setPreviewing(true);
+    const t = setTimeout(() => {
+      void previewCampaignBoundary(campaignId, sources, ac.signal).then((res) => {
+        if (ac.signal.aborted) return;
+        if (res.ok) setPreviewBoundary((res.data.boundary ?? null) as GeoJSON.Geometry | null);
+        setPreviewing(false);
+      });
+    }, 400);
+    return () => {
+      clearTimeout(t);
+      ac.abort();
+    };
+  }, [campaignId, sources, loading]);
+
   const save = useCallback(async () => {
     setSaving(true);
     const res = await setCampaignBoundary(campaignId, sources);
@@ -138,13 +166,9 @@ export default function CampaignBoundaryPage() {
       showToast({ tone: "error", title: "Couldn't save boundary", description: res.error });
       return;
     }
-    setBoundary((res.data.boundary ?? null) as GeoJSON.Geometry | null);
+    setPreviewBoundary((res.data.boundary ?? null) as GeoJSON.Geometry | null);
     showToast({ tone: "success", title: sources.length ? "Boundary saved" : "Boundary cleared" });
   }, [campaignId, sources, showToast]);
-
-  const existing: ExistingTurf[] = boundary
-    ? [{ id: "boundary", name: "Campaign boundary", geometry: boundary, color: "#465fff" }]
-    : [];
 
   if (noPermission || loadError) {
     return (
@@ -180,12 +204,18 @@ export default function CampaignBoundaryPage() {
           </Link>
         </Button>
         <h1 className="text-2xl font-extrabold">Campaign boundary</h1>
+        {previewing ? (
+          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Spinner className="h-3.5 w-3.5" />
+            Updating boundary…
+          </span>
+        ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="h-[60vh] overflow-hidden rounded-2xl border border-border">
           <TurfDrawMap
-            existing={existing}
+            campaignBoundary={previewBoundary}
             selectedAreas={selectedAreas}
             onToggleArea={toggleArea}
             onPolygonsChange={setPolygons}

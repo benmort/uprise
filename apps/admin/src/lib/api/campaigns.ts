@@ -69,6 +69,14 @@ export async function setCampaignBoundary(id: string, sources: BoundarySource[])
   );
 }
 
+/** Union the sources into a boundary WITHOUT saving — the live preview drawn as the editor builds. */
+export async function previewCampaignBoundary(id: string, sources: BoundarySource[], signal?: AbortSignal) {
+  return request<{ boundary: unknown | null }>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/boundary/preview`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sources }), ...(signal ? { signal } : {}) },
+  );
+}
+
 /** Areas (at `layer`: sa4/sa3/sa2/sa1/mb) intersecting the campaign boundary — the
  *  selectable layer for cutting turf inside a bounded campaign. */
 export async function getCampaignAreas(id: string, layer: string) {

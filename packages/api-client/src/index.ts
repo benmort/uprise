@@ -522,7 +522,9 @@ export const tenants = {
   // Invitations — manage tenant.invitation.
   listInvitations: (tenantId: string) =>
     request<TenantInvitationSummary[]>(`/tenants/${encodeURIComponent(tenantId)}/invitations`),
-  createInvitation: (tenantId: string, body: { email: string; role: AppUserRole }) =>
+  // Exactly one of email / phone. Phone invites are delivered by SMS and accepted
+  // via the volunteer phone-first flow (the invite link runs the phone signup).
+  createInvitation: (tenantId: string, body: { email?: string; phone?: string; role: AppUserRole }) =>
     request<{ id: string; token: string }>(
       `/tenants/${encodeURIComponent(tenantId)}/invitations`,
       { method: "POST", body: JSON.stringify(body) },

@@ -77,6 +77,13 @@ export class CampaignsController {
     return this.campaigns.setBoundary(tenantId, id, dto.sources);
   }
 
+  // Live boundary preview — unions the sources without saving (drawn as the organiser builds it).
+  @Post(":id/boundary/preview")
+  @Roles(AppUserRole.ORGANISER)
+  async previewBoundary(@Param("id") id: string, @Body() dto: SetBoundaryDto, @TenantId() tenantId: string) {
+    return this.campaigns.previewBoundary(tenantId, id, dto.sources);
+  }
+
   // Areas at `layer` (sa4/sa3/sa2/sa1/mb) intersecting the campaign boundary — the
   // selectable layer for cutting turf inside a bounded campaign.
   @Get(":id/areas/:layer")

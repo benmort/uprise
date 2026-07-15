@@ -364,6 +364,15 @@ export class CampaignsService {
     return { boundary: c.boundary, sources: c.boundarySources, describedSources: await this.geo.describeSources(sources) };
   }
 
+  /** Union the sources into a boundary WITHOUT persisting — powers the live boundary preview on the
+   *  editor (drawn + framed as the organiser adds divisions/areas/polygons, before Save). */
+  async previewBoundary(tenantId: string, id: string, sources: BoundarySource[]) {
+    const c = await this.prisma.canvassCampaign.findFirst({ where: { id, tenantId }, select: { id: true } });
+    if (!c) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
+    const boundary = sources.length ? await this.geo.unionSources(sources) : null;
+    return { boundary };
+  }
+
   /** Rebuild the campaign boundary from a union of sources (divisions/areas/polygons) + cache it. */
   async setBoundary(tenantId: string, id: string, sources: BoundarySource[]) {
     const c = await this.prisma.canvassCampaign.findFirst({ where: { id, tenantId }, select: { id: true } });

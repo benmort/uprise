@@ -2,11 +2,11 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Megaphone, Pencil, Phone, UserPlus } from "lucide-react";
+import { Megaphone, Pencil, Phone } from "lucide-react";
 import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import { useSoftphone } from "@/components/softphone/softphone-provider";
+import { InviteVolunteerCard } from "@/components/canvass/invite-volunteer-card";
 import {
-  createVolunteer,
   listTurfs,
   listVolunteers,
   updateVolunteer,
@@ -80,12 +80,6 @@ export default function CampaignVolunteersPage() {
   );
   const rows: Volunteer[] = data ?? [];
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("VOLUNTEER");
-  const [busy, setBusy] = useState(false);
-
   const [editing, setEditing] = useState<Volunteer | null>(null);
   const [editForm, setEditForm] = useState<{ displayName: string; role: Role; password: string }>({
     displayName: "",
@@ -93,25 +87,6 @@ export default function CampaignVolunteersPage() {
     password: "",
   });
   const [editBusy, setEditBusy] = useState(false);
-
-  const handleInvite = useCallback(async () => {
-    if (!name.trim() || !email.trim() || password.length < 8) {
-      showToast({ tone: "warning", title: "Fill all fields", description: "Password must be 8+ characters." });
-      return;
-    }
-    setBusy(true);
-    const res = await createVolunteer({ displayName: name.trim(), email: email.trim(), password, role });
-    setBusy(false);
-    if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't create login", description: res.error });
-      return;
-    }
-    setName("");
-    setEmail("");
-    setPassword("");
-    void refetch();
-    showToast({ tone: "success", title: "Field login created", description: res.data.email ?? "" });
-  }, [name, email, password, role, refetch, showToast]);
 
   const openEdit = (c: Volunteer) => {
     setEditing(c);
@@ -198,30 +173,8 @@ export default function CampaignVolunteersPage() {
         </StateRegion>
       </SectionCard>
 
-      {/* ── Team roster: invite + manage (tenant-wide field logins) ── */}
-      <SectionCard title="Invite a volunteer" description="Issues a field login (email + password) for your team.">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Full name" htmlFor="cv-name" required>
-            <Input id="cv-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
-          </Field>
-          <Field label="Email" htmlFor="cv-email" required>
-            <Input id="cv-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@org.au" type="email" />
-          </Field>
-          <Field label="Temporary password" htmlFor="cv-pw" required hint="8+ characters.">
-            <Input id="cv-pw" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" type="password" />
-          </Field>
-          <Field label="Role" htmlFor="cv-role">
-            <Select id="cv-role" value={role} onValueChange={(v) => setRole(v as Role)}>
-              <SelectItem value="VOLUNTEER">Volunteer</SelectItem>
-              <SelectItem value="ORGANISER">Organiser</SelectItem>
-            </Select>
-          </Field>
-        </div>
-        <Button className="mt-3" onClick={handleInvite} disabled={busy}>
-          <UserPlus className="mr-1.5 h-4 w-4" />
-          Invite
-        </Button>
-      </SectionCard>
+      {/* ── Team roster: invite (email login or SMS invite) + manage ── */}
+      <InviteVolunteerCard onInvited={() => void refetch()} />
 
       <StateRegion
         loading={loading}

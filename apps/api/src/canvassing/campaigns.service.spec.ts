@@ -178,4 +178,28 @@ describe("CampaignsService", () => {
       await expect(service.getBoundary("org1", "missing")).rejects.toThrow();
     });
   });
+
+  describe("previewBoundary", () => {
+    it("unions the sources WITHOUT persisting", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue({ id: "c1" });
+      geo.unionSources.mockResolvedValue({ type: "MultiPolygon", coordinates: [[[]]] });
+      const sources = [{ kind: "division" as const, type: "sed_lower", code: "27103" }];
+      const res = await service.previewBoundary("org1", "c1", sources as never);
+      expect(geo.unionSources).toHaveBeenCalledWith(sources);
+      expect(res.boundary).toEqual({ type: "MultiPolygon", coordinates: [[[]]] });
+      expect(prisma.canvassCampaign.update).not.toHaveBeenCalled(); // preview never writes
+    });
+
+    it("returns a null boundary for no sources (no union call)", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue({ id: "c1" });
+      const res = await service.previewBoundary("org1", "c1", []);
+      expect(res.boundary).toBeNull();
+      expect(geo.unionSources).not.toHaveBeenCalled();
+    });
+
+    it("throws for an unknown campaign", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue(null);
+      await expect(service.previewBoundary("org1", "missing", [])).rejects.toThrow();
+    });
+  });
 });

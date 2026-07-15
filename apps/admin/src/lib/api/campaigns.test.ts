@@ -7,6 +7,7 @@ import { request } from "@/lib/api";
 import {
   getCampaignBoundary,
   setCampaignBoundary,
+  previewCampaignBoundary,
   getCampaignAreas,
   getCampaignBoundaryAddressCount,
   deleteCampaign,
@@ -35,6 +36,15 @@ describe("campaigns api client — boundary", () => {
     const [url, opts] = mockReq.mock.calls[0];
     expect(url).toBe("/canvass/campaigns/c1/boundary");
     expect(opts?.method).toBe("PUT");
+    expect(JSON.parse(opts?.body as string)).toEqual({ sources });
+  });
+
+  it("previewCampaignBoundary POSTs the sources to the preview endpoint (no save)", async () => {
+    const sources: BoundarySource[] = [{ kind: "division", type: "sed_lower", code: "27103" }];
+    await previewCampaignBoundary("c1", sources);
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c1/boundary/preview");
+    expect(opts?.method).toBe("POST");
     expect(JSON.parse(opts?.body as string)).toEqual({ sources });
   });
 
