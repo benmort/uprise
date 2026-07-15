@@ -6,6 +6,7 @@
   "packages/events": 10,
   "packages/permissions": 10,
   "packages/flags": 10,
+  "packages/domains": 10,
   "packages/api-client": 10,
   "apps/auth": 10,
   "apps/action": 10,

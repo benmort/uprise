@@ -7,7 +7,13 @@ vi.mock("@uprise/api-client", () => ({
 }));
 
 import { request as cookieRequest } from "@uprise/api-client";
-import { getSyncJobs, getAudienceSegments, syncIntegrationList } from "./api";
+import {
+  getSyncJobs,
+  getAudienceSegments,
+  syncIntegrationList,
+  rebuildTurfWalkList,
+  rebuildWalkLists,
+} from "./api";
 
 const mockReq = cookieRequest as unknown as ReturnType<typeof vi.fn>;
 
@@ -52,5 +58,28 @@ describe("integration/segment api wrappers", () => {
       }),
     );
     expect(res.ok && res.data.audienceId).toBe("a1");
+  });
+});
+
+describe("walk-list rebuild api wrappers", () => {
+  beforeEach(() => mockReq.mockClear());
+
+  it("rebuildTurfWalkList POSTs to the turf rebuild endpoint (id encoded)", async () => {
+    mockReq.mockResolvedValueOnce({ ok: true, data: { turfId: "t/1", items: 3 } });
+    await rebuildTurfWalkList("t/1");
+    expect(mockReq).toHaveBeenCalledWith("/canvass/turfs/t%2F1/rebuild-walk-list", { method: "POST" });
+  });
+
+  it("rebuildWalkLists POSTs the selected turfIds as JSON", async () => {
+    mockReq.mockResolvedValueOnce({ ok: true, data: { results: [] } });
+    await rebuildWalkLists(["t1", "t2"]);
+    expect(mockReq).toHaveBeenCalledWith(
+      "/canvass/walk-lists/rebuild",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ turfIds: ["t1", "t2"] }),
+      }),
+    );
   });
 });

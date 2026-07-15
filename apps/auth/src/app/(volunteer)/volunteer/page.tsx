@@ -7,6 +7,7 @@ import { auth } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { useQueryParams } from "@/lib/use-query";
 import { withReturnTo } from "@/lib/return-to";
+import { VolunteerFlowShell } from "@/components/volunteer-flow-shell";
 
 /**
  * Generic volunteer landing (`/volunteer`, no campaign) – the same chrome + hero as
@@ -50,6 +51,7 @@ export default function VolunteerBoardPage() {
   }, []);
 
   return (
+    <VolunteerFlowShell>
     <div className="flex flex-1 flex-col">
       {/* Hero — identical style to the per-campaign page, generic copy. */}
       <section className="rounded-b-[1.625rem] bg-primary px-[1.625rem] pb-7 pt-8 text-white">
@@ -121,11 +123,12 @@ export default function VolunteerBoardPage() {
       {/* Sign in */}
       <div className="px-[1.625rem] pb-5 pt-5">
         <p className="text-center text-base">
-          <Link href={withReturnTo("/v", returnTo)} className="font-bold text-primary hover:underline">
+          <Link href={withReturnTo("/volunteer/sign-in", returnTo)} className="font-bold text-primary hover:underline">
             Already a volunteer? Sign in
           </Link>
         </p>
       </div>
     </div>
+    </VolunteerFlowShell>
   );
 }

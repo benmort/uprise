@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ChevronLeft, MapPin, ShieldAlert, UserPlus } from "lucide-react";
-import { Card, Button, Skeleton, useToast } from "@uprise/ui";
+import { Card, Button, Skeleton, cn, useToast } from "@uprise/ui";
 import { createDoorContact, uploadDoorPhoto, type CanvassAssignment } from "../api";
 import {
   useAssignments,
@@ -17,11 +17,21 @@ import { useGeolocation } from "../hooks/use-geolocation";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { DispositionPad } from "../components/disposition-pad";
 import { PriorContactStrip } from "../components/prior-contact-strip";
-import { SupportPill } from "../components/support-pill";
+import type { SupportLevel } from "../components/support-level";
 import { SurveyRunner, type SurveyAnswer, type SurveySchema } from "../components/survey-runner";
 
 // "Spoke to someone" codes reveal the survey; everything else is a 1-tap knock.
 const SURVEY_TRIGGER_CODES = new Set(["spoke_to_target", "spoke_to_other"]);
+
+// Header support chip — soft green for supporters, soft red for opposers, neutral
+// for undecided. Label carries a +/– polarity marker (e.g. "Lean +").
+const SUPPORT_PILL: Record<SupportLevel, { label: string; className: string }> = {
+  STRONG_SUPPORT: { label: "Strong +", className: "bg-success-container text-success" },
+  LEAN_SUPPORT: { label: "Lean +", className: "bg-success-container text-success" },
+  UNDECIDED: { label: "Undecided", className: "bg-surface-variant text-muted-foreground" },
+  LEAN_OPPOSE: { label: "Lean –", className: "bg-[hsl(var(--error)/0.12)] text-error" },
+  STRONG_OPPOSE: { label: "Strong –", className: "bg-[hsl(var(--error)/0.12)] text-error" },
+};
 
 export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }) {
   const router = useRouter();
@@ -181,24 +191,31 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
           type="button"
           aria-label="Back"
           onClick={() => router.push(`/field/${turfId}`)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-extrabold">{name}</h1>
-          <p className="text-sm text-muted-foreground">{(contact.address as string) ?? "No address"}</p>
+          <h1 className="truncate text-xl font-extrabold text-foreground">{name}</h1>
+          <p className="truncate text-sm text-muted-foreground">{(contact.address as string) ?? "No address"}</p>
         </div>
         {profile?.contact.supportLevel ? (
-          <SupportPill level={profile.contact.supportLevel} />
+          <span
+            className={cn(
+              "mt-0.5 inline-flex shrink-0 items-center rounded-full px-3 py-1 text-sm font-semibold",
+              SUPPORT_PILL[profile.contact.supportLevel].className,
+            )}
+          >
+            {SUPPORT_PILL[profile.contact.supportLevel].label}
+          </span>
         ) : null}
       </div>
 
       {profile ? <PriorContactStrip timeline={profile.timeline} /> : null}
 
       {!showSurvey ? (
-        <div className="space-y-3">
-          <h2 className="text-lg font-bold text-foreground">What happened at the door?</h2>
+        <div className="space-y-4">
+          <h2 className="text-lg font-extrabold text-foreground">What happened at the door?</h2>
           <DispositionPad
             options={dispositions}
             disabled={saving}
@@ -209,8 +226,8 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
               else void record(code);
             }}
           />
-          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5" />
+          <p className="flex items-center justify-center gap-1.5 pt-1 text-xs text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
             GPS captured automatically · one tap logs &amp; advances
           </p>
         </div>

@@ -3,17 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ListOrdered, Lock, Navigation, RefreshCw, UserMinus, UserPlus } from "lucide-react";
+import { ListOrdered, Loader2, Lock, Navigation, RefreshCw, UserMinus, UserPlus } from "lucide-react";
 import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import {
   assignTurf,
-  createWalkList,
   getTurfRoute,
   listVolunteers,
   listTurfContacts,
   listTurfs,
   listWalkLists,
   reassignTurf,
+  rebuildTurfWalkList,
+  rebuildWalkLists,
   unassignTurf,
   updateWalkList,
   type TurfContact,
@@ -21,6 +22,7 @@ import {
   type TurfSummary,
   type WalkListSummary,
 } from "@/lib/api";
+import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { optimiseRoute, formatDistance, formatDuration, type Stop, WalkView, type CanvassAssignment } from "@uprise/field";
 import { buildWalkGroups, doorNumber, stopLabel } from "@/lib/canvass/walk-list";
 import { FormSelect } from "@uprise/ui";
@@ -58,9 +60,12 @@ export default function WalkListBuilderPage() {
   const [route, setRoute] = useState<TurfRoute | null>(null);
   const [walkLists, setWalkLists] = useState<WalkListSummary[]>([]);
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
-  const [listType, setListType] = useState<ListType>("STATIC");
-  const [name, setName] = useState("");
   const [selectedVolunteer, setSelectedVolunteer] = useState("");
+  // Rebuild walk lists (single + batch). Batch chunks the selection so the progress bar advances.
+  const [rebuildingSingle, setRebuildingSingle] = useState(false);
+  const [batchSelected, setBatchSelected] = useState<string[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [turfLoading, setTurfLoading] = useState(false);
   const [page, setPage] = useState(0);
@@ -203,26 +208,59 @@ export default function WalkListBuilderPage() {
     };
   }, [activeTurf, orderedContacts, campaignId]);
 
-  const handleCreate = useCallback(async () => {
-    if (!turfId || orderedContacts.length === 0) return;
-    const listName = name.trim() || `${activeTurf?.name ?? "Turf"} walk list`;
-    setBusy(true);
-    const res = await createWalkList(
-      listName,
-      orderedContacts.map((c) => c.id),
-      turfId,
-      campaignId,
-      listType,
-    );
-    setBusy(false);
+  // Turf names can collide (self-serve turfs are all "My turf · <date>"), so give the batch multiselect
+  // UNIQUE labels and map each back to its turf id — keying on the raw name would merge/skip turfs.
+  const turfLabelToId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of turfs) {
+      // Bump the suffix until the label is unique — guards against a turf literally named "X (2)"
+      // colliding with another "X"'s disambiguation and silently dropping one from the batch.
+      let label = t.name;
+      let n = 1;
+      while (m.has(label)) label = `${t.name} (${++n})`;
+      m.set(label, t.id);
+    }
+    return m;
+  }, [turfs]);
+  const turfLabels = useMemo(() => [...turfLabelToId.keys()], [turfLabelToId]);
+
+  // Rebuild the CURRENT turf's canonical walk list (optimised route over its addresses).
+  const rebuildSingle = useCallback(async () => {
+    if (!turfId) return;
+    setRebuildingSingle(true);
+    const res = await rebuildTurfWalkList(turfId);
+    setRebuildingSingle(false);
     if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't build walk list", description: res.error });
+      showToast({ tone: "error", title: "Couldn't rebuild walk list", description: res.error });
       return;
     }
-    setName("");
     await loadTurf();
-    showToast({ tone: "success", title: `Built “${listName}”`, description: `${orderedContacts.length} stops.` });
-  }, [turfId, orderedContacts, name, activeTurf, campaignId, listType, loadTurf, showToast]);
+    showToast({ tone: "success", title: "Walk list rebuilt", description: `${res.data.items ?? 0} stops, optimised.` });
+  }, [turfId, loadTurf, showToast]);
+
+  // Batch-rebuild the selected turfs, chunked so the progress bar advances as each chunk lands.
+  const rebuildBatch = useCallback(async () => {
+    const ids = batchSelected.map((label) => turfLabelToId.get(label)).filter((x): x is string => Boolean(x));
+    if (ids.length === 0) return;
+    const CHUNK = 20;
+    setBatchBusy(true);
+    setBatchProgress({ done: 0, total: ids.length });
+    let done = 0;
+    let failed = 0;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const res = await rebuildWalkLists(chunk);
+      failed += res.ok ? res.data.results.filter((r) => r.error).length : chunk.length;
+      done += chunk.length;
+      setBatchProgress({ done, total: ids.length });
+    }
+    setBatchBusy(false);
+    await loadTurf();
+    showToast({
+      tone: failed ? "error" : "success",
+      title: failed ? `Rebuilt ${done - failed} of ${done} — ${failed} failed` : `Rebuilt ${done} walk lists`,
+    });
+  }, [batchSelected, turfLabelToId, loadTurf, showToast]);
 
   const openEditWl = (w: WalkListSummary) => {
     setEditingWl(w);
@@ -301,7 +339,13 @@ export default function WalkListBuilderPage() {
         title="Walk lists"
         icon={ListOrdered}
         actions={
-          <Select value={turfId} onValueChange={setTurfId} className="max-w-xs font-semibold" aria-label="Turf">
+          <Select
+            value={turfId}
+            onValueChange={setTurfId}
+            label="Turf"
+            className="h-9 max-w-xs rounded-[11px] font-semibold"
+            aria-label="Turf"
+          >
             {turfs.map((t) => (
               <SelectItem key={t.id} value={t.id}>
                 {t.name}
@@ -418,47 +462,72 @@ export default function WalkListBuilderPage() {
           </SectionCard>
 
           <div className="space-y-4">
-            <SectionCard title="Build walk list">
-              <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
-                Name
-              </label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={`${activeTurf?.name ?? "Turf"} walk list`}
-              />
-              <div className="mt-3">
-                <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
-                  List type
-                </span>
-                <div className="flex rounded-xl border border-border p-0.5">
-                  {(["STATIC", "DYNAMIC"] as ListType[]).map((lt) => (
-                    <button
-                      key={lt}
-                      type="button"
-                      onClick={() => setListType(lt)}
-                      className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                        listType === lt ? "bg-primary text-white" : "text-foreground"
-                      }`}
-                    >
-                      {lt === "STATIC" ? "Static" : "Dynamic"}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {listType === "DYNAMIC"
-                    ? "Dynamic — auto-refreshes as the turf changes."
-                    : "Static — a fixed snapshot of these stops."}
-                </p>
-              </div>
+            <SectionCard
+              title="Rebuild walk lists"
+              description="Rebuild the optimised walking route from a turf's current addresses. Adds new doors, drops removed ones, and keeps knock progress."
+            >
               <Button
-                className="mt-3 w-full"
-                onClick={handleCreate}
-                disabled={busy || orderedContacts.length === 0}
+                className="w-full"
+                onClick={() => void rebuildSingle()}
+                disabled={rebuildingSingle || batchBusy || !turfId}
               >
-                <ListOrdered className="mr-1.5 h-4 w-4" />
-                Build walk list
+                {rebuildingSingle ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1.5 h-4 w-4" />
+                )}
+                Rebuild {activeTurf?.name ?? "this turf"}
               </Button>
+
+              <div className="mt-4 border-t border-border pt-4">
+                <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+                  Batch rebuild
+                </span>
+                <MultiSelectFilter
+                  label="Turfs"
+                  options={turfLabels}
+                  selected={batchSelected}
+                  onChange={setBatchSelected}
+                  placeholder="Select turfs…"
+                  className="w-full"
+                />
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBatchSelected(batchSelected.length === turfLabels.length ? [] : turfLabels)}
+                  >
+                    {batchSelected.length === turfLabels.length && turfLabels.length > 0 ? "Clear" : "Select all"}
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={() => void rebuildBatch()}
+                    disabled={batchBusy || rebuildingSingle || batchSelected.length === 0}
+                  >
+                    {batchBusy ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1.5 h-4 w-4" />
+                    )}
+                    Rebuild {batchSelected.length || ""}
+                  </Button>
+                </div>
+                {batchProgress ? (
+                  <div className="mt-3">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-surface-variant">
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width] duration-300"
+                        style={{
+                          width: `${batchProgress.total ? (batchProgress.done / batchProgress.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                      {batchProgress.done} / {batchProgress.total} rebuilt
+                    </p>
+                  </div>
+                ) : null}
+              </div>
             </SectionCard>
 
             <SectionCard title="Assignment">

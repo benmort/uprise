@@ -84,7 +84,7 @@ export default function VolunteerCodePage() {
     } else setError(res.error);
   }
 
-  const back = `/v${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`;
+  const back = `/volunteer/sign-in${returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : ""}`;
   if (!paramsReady) {
     return (
       <div className="flex flex-1 items-center justify-center py-10">

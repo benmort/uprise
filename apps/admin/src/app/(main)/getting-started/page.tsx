@@ -8,6 +8,7 @@ import { Button, EmptyState, StepProgress } from "@uprise/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@uprise/field";
+import { TelephonyStatusCard } from "@/components/telephony/telephony-status-card";
 import { tenants } from "@uprise/api-client";
 import { getSession } from "@/lib/session";
 import {
@@ -112,6 +113,7 @@ export default function GettingStartedPage() {
           />
         </SectionCard>
       ) : (
+        <>
         <SectionCard
           title="Your setup"
           description={allDone ? "You're all set up." : `${completedCount} of ${total} done`}
@@ -161,6 +163,8 @@ export default function GettingStartedPage() {
             )}
           </div>
         </SectionCard>
+        <TelephonyStatusCard onboarding />
+        </>
       )}
     </div>
   );

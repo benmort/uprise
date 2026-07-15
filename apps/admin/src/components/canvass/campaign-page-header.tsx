@@ -49,7 +49,12 @@ export function CampaignPageHeader({
             <h1 className="text-2xl font-extrabold">{title}</h1>
           </div>
           {campaigns.length > 0 ? (
-            <CampaignSwitcher campaigns={campaigns} activeId={campaignId} onSelect={switchTo} />
+            <CampaignSwitcher
+              campaigns={campaigns}
+              activeId={campaignId}
+              onSelect={switchTo}
+              onSelectAll={() => router.push("/canvass")}
+            />
           ) : null}
         </div>
         {/* Actions, then the breadcrumb trail pinned to the far right of the title line. */}

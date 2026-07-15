@@ -34,6 +34,9 @@ import type { TurfEstimateRunJobPayload } from "../common/queue/queue.payloads";
 /** Which addresses a turf should be populated with when it's cut. */
 export type TurfUniverse = "existing" | "none" | "hybrid";
 
+/** Outcome of (re)building a turf's canonical walk list. */
+type ReconcileResult = { turfId: string; walkListId: string | null; items: number; added: number; removed: number };
+
 const SUPPORT_LEVELS: SupportLevel[] = [
   SupportLevel.STRONG_SUPPORT,
   SupportLevel.LEAN_SUPPORT,
@@ -192,7 +195,7 @@ export class CanvassingService {
     // default walk-list from the turf's contacts on first fetch, then reload so the payload carries it.
     const missing = assignments.filter((a) => a.turf.walkLists.length === 0);
     if (missing.length > 0) {
-      await Promise.all(missing.map((a) => this.ensureTurfWalkList(a.turf)));
+      await Promise.all(missing.map((a) => this.rebuildTurfWalkList(tenantId, a.turf.id).catch(() => undefined)));
       assignments = await load();
     }
 
@@ -204,40 +207,120 @@ export class CanvassingService {
     }));
   }
 
+  /** Contacts of a turf ordered as a walking route — server nearest-neighbour + 2-opt via
+   *  route-math.optimiseRoute (NO external calls). Unlocated contacts (no lat/lng) sort to the end. */
+  private async orderedTurfContactIds(tenantId: string, turfId: string): Promise<string[]> {
+    const contacts =
+      (await this.prisma.contact.findMany({
+        where: { tenantId, turfId },
+        select: { id: true, lat: true, lng: true },
+      })) ?? [];
+    const stops: Stop[] = contacts.map((c) => ({
+      id: c.id,
+      lat: typeof c.lat === "number" ? c.lat : Number.NaN,
+      lng: typeof c.lng === "number" ? c.lng : Number.NaN,
+    }));
+    return optimiseRoute(stops).map((s) => s.id);
+  }
+
   /**
-   * Ensure a turf has a walk-list, building a default one from its bucketed contacts when it has
-   * none. The walk-list id is derived from the turf id so concurrent field fetches can't double-create
-   * (the second create collides on the primary key and is ignored). No-op when the turf has no
-   * contacts. Contacts are ordered by lat/lng as a coarse route; the field re-optimises on device.
+   * (Re)build a turf's ONE canonical walk list as the OPTIMISED route over its current addresses —
+   * the walk-lists page is where route optimisation is applied + persisted. Looks the list up BY TURF
+   * (not by a hardcoded id) so a turf that already has a list — whatever its id — is reconciled in
+   * place, never duplicated (duplicating it would double-count doors in the field). Reconcile preserves
+   * each door's status + knocks: re-index kept items, add newly-bucketed contacts, drop departed ones.
+   * Creates a fresh `wl_turf_<id>` list only when the turf has none; no-op when it has no contacts.
+   * Concurrent CREATE races are handled (deterministic-id collision → re-find + reconcile). Concurrent
+   * RECONCILE of the SAME turf is NOT fully serialised: the contact snapshot is read outside the write
+   * transaction, so a rare interleave (two population steps racing) could drop a just-added door —
+   * recoverable by re-running rebuild. Fast-follow if it matters: front the reconcile with a per-turf
+   * `pg_advisory_xact_lock` inside one interactive transaction (see claimTurfInCampaign).
    */
-  private async ensureTurfWalkList(turf: {
-    id: string;
-    name: string;
-    tenantId: string;
-    campaignId: string | null;
-  }): Promise<void> {
-    const contacts = await this.prisma.contact.findMany({
-      where: { tenantId: turf.tenantId, turfId: turf.id },
-      select: { id: true },
-      orderBy: [{ lat: "asc" }, { lng: "asc" }],
+  async rebuildTurfWalkList(tenantId: string, turfId: string): Promise<ReconcileResult> {
+    const turf = await this.prisma.turf.findFirst({
+      where: { id: turfId, tenantId },
+      select: { id: true, name: true, tenantId: true, campaignId: true },
     });
-    if (contacts.length === 0) return;
+    if (!turf) throw new ApiHttpException("TURF_NOT_FOUND", "Turf not found");
+
+    const orderedIds = await this.orderedTurfContactIds(tenantId, turfId);
+    const findList = () =>
+      this.prisma.walkList.findFirst({
+        where: { turfId, tenantId },
+        select: { id: true, items: { select: { id: true, contactId: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+
+    const existing = await findList();
+    if (existing) return this.reconcileWalkListItems(existing, orderedIds, turfId);
+
+    if (orderedIds.length === 0) return { turfId, walkListId: null, items: 0, added: 0, removed: 0 };
     try {
       await this.prisma.walkList.create({
         data: {
-          id: `wl_turf_${turf.id}`,
-          tenantId: turf.tenantId,
+          id: `wl_turf_${turfId}`,
+          tenantId,
           name: turf.name,
-          turfId: turf.id,
+          turfId,
           campaignId: turf.campaignId,
           listType: WalkListItemListType.STATIC,
-          items: { create: contacts.map((c, orderIndex) => ({ contactId: c.id, orderIndex })) },
+          items: { create: orderedIds.map((contactId, orderIndex) => ({ contactId, orderIndex })) },
         },
       });
+      return { turfId, walkListId: `wl_turf_${turfId}`, items: orderedIds.length, added: orderedIds.length, removed: 0 };
     } catch (error) {
-      // A concurrent fetch already generated it — the deterministic id makes that a PK conflict.
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+      // A concurrent rebuild (or the field self-heal) created the list first — reconcile it instead of
+      // 500ing on the deterministic-id collision.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const now = await findList();
+        if (now) return this.reconcileWalkListItems(now, orderedIds, turfId);
+      }
+      throw error;
     }
+  }
+
+  /** Sync a walk list's items to `orderedIds` IN PLACE: re-index kept items (preserving status +
+   *  knocks), create newly-present contacts, delete departed ones. Keyed on the list's OWN id. */
+  private async reconcileWalkListItems(
+    list: { id: string; items: Array<{ id: string; contactId: string }> },
+    orderedIds: string[],
+    turfId: string,
+  ): Promise<ReconcileResult> {
+    const itemIdByContact = new Map(list.items.map((i) => [i.contactId, i.id]));
+    const wanted = new Set(orderedIds);
+    const removeIds = list.items.filter((i) => !wanted.has(i.contactId)).map((i) => i.id);
+    const addIds = orderedIds.filter((cid) => !itemIdByContact.has(cid));
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
+    const addRows: Array<{ walkListId: string; contactId: string; orderIndex: number }> = [];
+    orderedIds.forEach((cid, orderIndex) => {
+      const existingItemId = itemIdByContact.get(cid);
+      if (existingItemId) ops.push(this.prisma.walkListItem.update({ where: { id: existingItemId }, data: { orderIndex } }));
+      else addRows.push({ walkListId: list.id, contactId: cid, orderIndex });
+    });
+    // Bulk-insert new doors with skipDuplicates so a concurrent add of the same contact no-ops on the
+    // @@unique([walkListId, contactId]) rather than throwing (which would 500 the rebuild endpoint).
+    if (addRows.length) ops.push(this.prisma.walkListItem.createMany({ data: addRows, skipDuplicates: true }));
+    if (removeIds.length) ops.push(this.prisma.walkListItem.deleteMany({ where: { id: { in: removeIds } } }));
+    await this.prisma.$transaction(ops);
+    return { turfId, walkListId: list.id, items: orderedIds.length, added: addIds.length, removed: removeIds.length };
+  }
+
+  /** Batch wrapper for the walk-lists rebuild tool — rebuilds each turf, isolating per-turf failures so
+   *  one bad turf doesn't sink the batch. The caller chunks a large selection for progress feedback. */
+  async rebuildWalkLists(
+    tenantId: string,
+    turfIds: string[],
+  ): Promise<{ results: Array<{ turfId: string; walkListId?: string | null; items?: number; error?: string }> }> {
+    const results: Array<{ turfId: string; walkListId?: string | null; items?: number; error?: string }> = [];
+    for (const id of turfIds) {
+      try {
+        results.push(await this.rebuildTurfWalkList(tenantId, id));
+      } catch (e) {
+        results.push({ turfId: id, error: e instanceof Error ? e.message : "Rebuild failed" });
+      }
+    }
+    return { results };
   }
 
   /**
@@ -461,7 +544,9 @@ export class CanvassingService {
     const users = await this.prisma.user.findMany({
       where: { id: { in: members.map((m) => m.userId) } },
       orderBy: { displayName: "asc" },
-      select: { id: true, displayName: true, email: true },
+      // mobile powers the click-to-call button on the Volunteers roster (phone-first
+      // volunteers sign up with it); null for email/password field logins.
+      select: { id: true, displayName: true, email: true, mobile: true },
     });
     const roleByUser = new Map(members.map((m) => [m.userId, m.role]));
     return users.map((u) => ({ ...u, role: roleByUser.get(u.id) ?? AppUserRole.VOLUNTEER }));
@@ -863,6 +948,13 @@ export class CanvassingService {
     const total = await this.prisma.contact.count({ where: { tenantId, turfId } });
     // The doors just changed, so last cut's price is stale even though the polygon is not.
     await this.queueTurfEstimate(tenantId, turfId);
+    // The turf now has its addresses — (re)build the default walk list so it's canvassable
+    // immediately. RECONCILES the wl_turf list (not create-once), so when a turf is populated in two
+    // steps (cold doors here + existing contacts via rebucket) the second step's doors are ADDED, not
+    // dropped. Best-effort: never fail the cut on a walk-list hiccup.
+    await this.rebuildTurfWalkList(tenantId, turfId).catch((e) =>
+      this.logger.warn(`Auto walk-list build failed for turf ${turfId}: ${e instanceof Error ? e.message : e}`),
+    );
     return { materialised, total };
   }
 
@@ -1418,6 +1510,11 @@ export class CanvassingService {
     }
 
     const total = await this.prisma.contact.count({ where: { tenantId, turfId } });
+    // Existing contacts are now bucketed — reconcile the default walk list (add the newly-bucketed
+    // doors, drop any released) so it stays complete after this second population step. Best-effort.
+    await this.rebuildTurfWalkList(tenantId, turfId).catch((e) =>
+      this.logger.warn(`Auto walk-list build failed for turf ${turfId}: ${e instanceof Error ? e.message : e}`),
+    );
     return { added: toAdd.length, removed: toRemove.length, total };
   }
 

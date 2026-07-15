@@ -3,26 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Alert, Button, PrinciplesList, Spinner } from "@uprise/ui";
+import { Alert, Spinner } from "@uprise/ui";
 import { auth, getActionAppUrl } from "@uprise/api-client";
+import type { OpenJoinPreview } from "@uprise/contracts";
 import { completeAuth } from "@/lib/session";
 import { useQueryParams } from "@/lib/use-query";
 import { withReturnTo } from "@/lib/return-to";
 import { useWizardStep } from "@/lib/wizard-step";
 import { VolunteerOnboardWizard } from "@/components/volunteer-onboard-wizard";
-
-/** The tenant selector's deterministic fallback: a colourful gradient disc keyed on the
- *  tenant id (mirrors admin's TenantAvatar) when the org hasn't uploaded a logo. */
-function hashHue(seed: string): number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-function tenantGradient(id: string): string {
-  const h1 = hashHue(id);
-  const h2 = (h1 + 48) % 360;
-  return `linear-gradient(135deg, hsl(${h1} 72% 56%), hsl(${h2} 76% 46%))`;
-}
+import { VolunteerFlowShell } from "@/components/volunteer-flow-shell";
+import { VolunteerJoinHero } from "@/components/volunteer-join-hero";
 
 /**
  * Tokenless open-join entry – a per-campaign public link (`/volunteer/[campaignId]`).
@@ -38,12 +28,12 @@ export default function OpenJoinPage() {
   // middleware does). It wins over the action-app landing below.
   const returnTo = useQueryParams().get("return_to");
   const { step, goTo, canGoBack } = useWizardStep();
-  const [campaignName, setCampaignName] = useState<string | null>(null);
-  const [tenantName, setTenantName] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [tenantId, setTenantId] = useState<string>("");
+  const [preview, setPreview] = useState<OpenJoinPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const campaignName = preview?.campaignName ?? null;
+  const tenantName = preview?.tenantName ?? null;
+  const logoUrl = preview?.logoUrl ?? null;
 
   useEffect(() => {
     void (async () => {
@@ -53,10 +43,7 @@ export default function OpenJoinPage() {
         setError(res.error);
         return;
       }
-      setCampaignName(res.data.campaignName);
-      setTenantName(res.data.tenantName);
-      setLogoUrl(res.data.logoUrl);
-      setTenantId(res.data.tenantId);
+      setPreview(res.data);
     })();
   }, [campaignId]);
 
@@ -77,16 +64,20 @@ export default function OpenJoinPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-1 items-center justify-center py-10">
-        <Spinner />
-      </div>
+      <VolunteerFlowShell>
+        <div className="flex flex-1 items-center justify-center py-10">
+          <Spinner />
+        </div>
+      </VolunteerFlowShell>
     );
   }
   if (error && campaignName === null) {
     return (
-      <div className="px-5 py-8">
-        <Alert variant="error" title={error} />
-      </div>
+      <VolunteerFlowShell>
+        <div className="px-5 py-8">
+          <Alert variant="error" title={error} />
+        </div>
+      </VolunteerFlowShell>
     );
   }
 
@@ -94,78 +85,46 @@ export default function OpenJoinPage() {
   // Back gesture leaves the flow and lands here rather than off the site.
   if (step) {
     return (
-      <div className="px-5 py-6">
-        <VolunteerOnboardWizard
-          campaignId={campaignId}
-          tenantName={tenantName ?? undefined}
-          tenantLogoUrl={logoUrl}
-          invitedPhone={null}
-          returnTo={returnTo}
-          step={step}
-          goTo={goTo}
-          canGoBack={canGoBack}
-          // Someone sent here by the field app goes back to the field app; everyone else
-          // lands on the action app carrying the campaign they just joined.
-          onComplete={returnTo ? undefined : onComplete}
-          completeLabel={returnTo ? "Start canvassing" : "Start volunteering"}
-        />
-      </div>
+      <VolunteerFlowShell>
+        <div className="px-5 py-6">
+          <VolunteerOnboardWizard
+            campaignId={campaignId}
+            tenantName={tenantName ?? undefined}
+            tenantLogoUrl={logoUrl}
+            invitedPhone={null}
+            returnTo={returnTo}
+            step={step}
+            goTo={goTo}
+            canGoBack={canGoBack}
+            // Someone sent here by the field app goes back to the field app; everyone else
+            // lands on the action app carrying the campaign they just joined.
+            onComplete={returnTo ? undefined : onComplete}
+            completeLabel={returnTo ? "Start canvassing" : "Start volunteering"}
+          />
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Don&apos;t have access yet?{" "}
+            <Link href={withReturnTo("/volunteer/join", returnTo)} className="font-medium text-primary hover:underline">
+              Request to join
+            </Link>
+          </p>
+        </div>
+      </VolunteerFlowShell>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      {/* Hero */}
-      <section className="rounded-b-[1.625rem] bg-primary px-[1.625rem] pb-7 pt-8 text-white">
-        <div className="flex items-center gap-3">
-          {logoUrl ? (
-            // The tenant's own logo — the same one the tenant selector renders.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoUrl}
-              alt={tenantName ? `${tenantName} logo` : "Organisation logo"}
-              className="h-14 w-14 shrink-0 rounded-2xl bg-white/15 object-cover"
-            />
-          ) : (
-            // No logo → the tenant selector's coloured disc, keyed on the tenant id.
-            <span
-              aria-hidden
-              className="h-14 w-14 shrink-0 rounded-full"
-              style={{ backgroundImage: tenantGradient(tenantId) }}
-            />
-          )}
-          {tenantName ? (
-            <span className="min-w-0 flex-1 text-left text-lg font-extrabold leading-tight text-white">
-              {tenantName}
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-6 text-sm font-bold uppercase tracking-[0.08em] text-white/80">Join the team</p>
-        <h1 className="mt-2 text-[2rem] font-extrabold leading-[1.1]">
-          Become a volunteer{campaignName ? ` for ${campaignName}` : ""}
-        </h1>
-        <p className="mt-3 text-base leading-snug text-white/85">
-          Join your neighbours knocking on doors and talking to voters. Takes two minutes to set up
-          – no app store needed.
-        </p>
-      </section>
-
-      {/* Principles */}
-      <div className="px-[1.625rem] pt-5">
-        <PrinciplesList className="space-y-2" />
-      </div>
-
-      {/* Actions */}
-      <div className="mt-auto space-y-3 px-[1.625rem] pb-5 pt-5">
-        <Button className="h-14 w-full rounded-[0.75rem] text-base" onClick={() => goTo("phone")}>
-          Get started
-        </Button>
-        <p className="text-center text-base">
-          <Link href={withReturnTo("/v", returnTo)} className="font-bold text-primary hover:underline">
-            Already a volunteer? Sign in
-          </Link>
-        </p>
-      </div>
-    </div>
+    <VolunteerJoinHero
+      campaignName={campaignName}
+      tenantName={tenantName}
+      logoUrl={logoUrl}
+      tenantId={preview?.tenantId}
+      primaryColour={preview?.primaryColour}
+      secondaryColour={preview?.secondaryColour}
+      customCss={preview?.customCss}
+      volunteerCount={preview?.volunteerCount ?? 0}
+      doorsThisWeek={preview?.doorsThisWeek ?? 0}
+      onGetStarted={() => goTo("phone")}
+      signInHref={withReturnTo("/volunteer/sign-in", returnTo)}
+    />
   );
 }

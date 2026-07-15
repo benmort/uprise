@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { parentDomain } from "@uprise/domains";
 import { FormDialog, Field, Input } from "@uprise/ui";
 import { auth, tenants } from "@uprise/api-client";
 
@@ -29,10 +30,7 @@ function normaliseSubdomainInput(s: string): string {
 function useBaseDomain(): string {
   return useMemo(() => {
     if (typeof window === "undefined") return "uprise.org.au";
-    const host = window.location.hostname;
-    if (host === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(host)) return "uprise.org.au";
-    const parts = host.split(".");
-    return parts.length > 2 ? parts.slice(1).join(".") : host;
+    return parentDomain(window.location.hostname) ?? "uprise.org.au";
   }, []);
 }
 

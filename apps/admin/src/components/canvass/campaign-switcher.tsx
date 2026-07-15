@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, LayoutGrid, Search, X } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
 import { cn } from "@/lib/utils";
 import type { CampaignStatus, CampaignSummary } from "@/lib/api/campaigns";
@@ -55,21 +55,43 @@ function CampaignRow({
   );
 }
 
+/** "All campaigns" — leaves the per-campaign view for the canvass overview. Pinned atop the list. */
+function AllCampaignsRow({ onSelect }: { onSelect: () => void }) {
+  const close = useDropdownClose();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelect();
+        close();
+      }}
+      className="mb-1 flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-b border-border px-2.5 py-2 text-left transition-colors hover:bg-surface-variant"
+    >
+      <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="block flex-1 truncate text-sm font-semibold text-foreground">All campaigns</span>
+    </button>
+  );
+}
+
 /**
  * Campaign selector — the tenant switcher's dropdown re-skinned for campaigns: a trigger
  * (campaign name + chevron) opening a portalled, searchable list with a status pill and a
- * check on the active row. Deliberately WITHOUT the switcher's "create" footer — new campaigns are
- * made from the header button beside it. Selecting a campaign just calls `onSelect` (the
- * page reflects it in the URL), so there's no reload.
+ * check on the active row. An "All campaigns" row atop the list leaves the per-campaign view for
+ * the canvass overview (via `onSelectAll`). Deliberately WITHOUT the switcher's "create" footer —
+ * new campaigns are made from the header button beside it. Selecting a campaign just calls
+ * `onSelect` (the page reflects it in the URL), so there's no reload.
  */
 export function CampaignSwitcher({
   campaigns,
   activeId,
   onSelect,
+  onSelectAll,
 }: {
   campaigns: CampaignSummary[];
   activeId: string;
   onSelect: (id: string) => void;
+  /** Navigate to the all-campaigns overview (drops the per-campaign scope). Row hidden when unset. */
+  onSelectAll?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
@@ -179,6 +201,7 @@ export function CampaignSwitcher({
 
       {/* Campaign list */}
       <div className="max-h-72 overflow-y-auto p-1.5">
+        {onSelectAll ? <AllCampaignsRow onSelect={onSelectAll} /> : null}
         {filtered.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">No campaigns found</p>
         ) : (

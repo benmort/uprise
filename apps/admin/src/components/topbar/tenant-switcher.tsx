@@ -50,6 +50,7 @@ export function TenantSwitcher({
   isSuperAdmin = false,
   activeTenant = null,
   collapsed = false,
+  locked = false,
   onSlideChange,
 }: {
   memberships: Membership[];
@@ -57,6 +58,9 @@ export function TenantSwitcher({
   isSuperAdmin?: boolean;
   activeTenant?: { id: string; name: string; slug: string } | null;
   collapsed?: boolean;
+  /** On a tenant-subdomain / white-label host the tenant is fixed by the URL, so switching
+   *  is meaningless (the host re-forces it on the next request). Render brand-only. */
+  locked?: boolean;
   /** Reports how far (px) the top-bar's left group should slide right so the
    *  hover-unfurled full-name pill doesn't cover it. 0 when not expanded. */
   onSlideChange?: (px: number) => void;
@@ -158,12 +162,13 @@ export function TenantSwitcher({
   // The tenant selector only makes sense for users who can act across tenants: a
   // super-admin (acts as any tenant) or a network on the Scale plan (multi-brand).
   // Everyone else sees a static brand mark instead of a switcher (planName is the
-  // owning network's plan, flattened onto the membership).
-  const canSwitch = isSuperAdmin || current?.planName === "scale";
+  // owning network's plan, flattened onto the membership). A host-locked surface
+  // (tenant subdomain / white-label) also gets the static brand — the URL fixes the tenant.
+  const canSwitch = !locked && (isSuperAdmin || current?.planName === "scale");
 
   // Super-admin: debounced search across ALL tenants (empty query → first 50).
   useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!isSuperAdmin || locked) return;
     let active = true;
     setSearching(true);
     const timer = setTimeout(() => {
@@ -177,7 +182,7 @@ export function TenantSwitcher({
       active = false;
       clearTimeout(timer);
     };
-  }, [isSuperAdmin, query]);
+  }, [isSuperAdmin, query, locked]);
 
   // Ordinary users: filter their own memberships client-side.
   const filtered = useMemo(() => {

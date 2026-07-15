@@ -24,6 +24,7 @@ import {
   TRANSACTIONAL_DISPATCHER,
   type TransactionalDispatcher,
 } from "../messaging/transactional-dispatcher";
+import { RESERVED_APP_SUBDOMAINS } from "@uprise/domains";
 import { verifyPassword } from "../auth/password.util";
 import { BRAND_SELECT, brandFields, type TenantBrandFields } from "../common/brand";
 
@@ -102,6 +103,9 @@ export class TenantsService {
     const slug = this.normaliseSlug(input.slug);
     if (!slug) throw new BadRequestException("slug is required");
     if (!SLUG_RE.test(slug)) throw new BadRequestException("invalid_slug");
+    // A slug becomes a routable `<slug>.<platform>` subdomain, so it must not collide
+    // with a reserved app label (admin/auth/api/…) or the tenant host would be unreachable.
+    if (RESERVED_APP_SUBDOMAINS.has(slug)) throw new BadRequestException("slug_reserved");
     const name = input.name.trim();
     if (!name) throw new BadRequestException("name is required");
     if (await this.prisma.tenant.findUnique({ where: { slug } })) {
@@ -172,6 +176,7 @@ export class TenantsService {
     if (input.slug !== undefined) {
       const slug = this.normaliseSlug(input.slug);
       if (!SLUG_RE.test(slug)) throw new BadRequestException("invalid_slug");
+      if (RESERVED_APP_SUBDOMAINS.has(slug)) throw new BadRequestException("slug_reserved");
       if (slug !== current.slug) {
         if (await this.prisma.tenant.findUnique({ where: { slug } })) {
           throw new ConflictException("slug_already_taken");
@@ -348,6 +353,8 @@ export class TenantsService {
   async isSlugAvailable(slug: string): Promise<{ slug: string; available: boolean }> {
     const norm = this.normaliseSlug(slug);
     if (!norm) return { slug: norm, available: false };
+    // Reserved app labels can never be a tenant subdomain — report them as taken.
+    if (RESERVED_APP_SUBDOMAINS.has(norm)) return { slug: norm, available: false };
     const existing = await this.prisma.tenant.findUnique({ where: { slug: norm } });
     return { slug: norm, available: !existing };
   }
@@ -422,7 +429,7 @@ export class TenantsService {
     // Deliver the invite INLINE (doc-14), so it doesn't depend on the worker's reaction path
     // being healthy. Best-effort: a send failure leaves a FAILED Email row (audit) and
     // re-inviting re-issues the token & retries — it must not fail the request that already
-    // created the invitation. Link shapes: email → /invite/<token>, SMS → /v/invite/<token>.
+    // created the invitation. Link shapes: email → /invite/<token>, SMS → /volunteer/invite/<token>.
     const authAppUrl = this.config
       .get<string>("AUTH_APP_URL", "http://localhost:3002")
       .replace(/\/+$/, "");
@@ -431,7 +438,7 @@ export class TenantsService {
         await this.dispatcher.sendSms({
           tenantId,
           toPhone: phone,
-          body: `You're invited to join ${tenant.name} — tap to accept: ${authAppUrl}/v/invite/${result.token}`,
+          body: `You're invited to join ${tenant.name} — tap to accept: ${authAppUrl}/volunteer/invite/${result.token}`,
           purpose: "invitation",
         });
       } else if (email) {

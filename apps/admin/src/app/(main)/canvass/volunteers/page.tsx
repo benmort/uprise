@@ -2,8 +2,9 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Megaphone, Pencil, UserPlus } from "lucide-react";
+import { ArrowLeft, Megaphone, Pencil, Phone, UserPlus } from "lucide-react";
 import { createVolunteer, listVolunteers, updateVolunteer } from "@/lib/api";
+import { useSoftphone } from "@/components/softphone/softphone-provider";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
 import { Button } from "@/components/ui/button";
@@ -18,10 +19,11 @@ import { RoleChip } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 
 type Role = "VOLUNTEER" | "ORGANISER";
-type Volunteer = { id: string; displayName: string; email: string | null; role: string };
+type Volunteer = { id: string; displayName: string; email: string | null; role: string; mobile: string | null };
 
 export default function VolunteersPage() {
   const { showToast } = useToast();
+  const { startCall } = useSoftphone();
   const { data, loading, error, noPermission, refetch } = useApi(
     "/canvass/volunteers",
     () => listVolunteers(),
@@ -149,6 +151,12 @@ export default function VolunteersPage() {
             { key: "name", header: "Name", cell: (r) => r.displayName },
             { key: "email", header: "Email", cell: (r) => r.email ?? "—" },
             {
+              key: "mobile",
+              header: "Mobile",
+              cell: (r) =>
+                r.mobile ? <span className="font-mono text-sm">{r.mobile}</span> : <span className="text-muted-foreground">—</span>,
+            },
+            {
               key: "role",
               header: "Role",
               cell: (r) => <RoleChip role={r.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER"} />,
@@ -157,10 +165,22 @@ export default function VolunteersPage() {
               key: "actions",
               header: "",
               cell: (r) => (
-                <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                  Edit
-                </Button>
+                <div className="flex items-center justify-end gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!r.mobile}
+                    title={r.mobile ? `Call ${r.displayName}` : "No mobile number on file"}
+                    onClick={() => r.mobile && void startCall({ toNumber: r.mobile, label: r.displayName })}
+                  >
+                    <Phone className="mr-1.5 h-3.5 w-3.5" />
+                    Call
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                </div>
               ),
             },
           ]}

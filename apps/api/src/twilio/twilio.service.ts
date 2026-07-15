@@ -269,6 +269,91 @@ export class TwilioService {
     return `${apiBaseUrl.replace(/\/+$/, "")}/api/v1/voice-status-callback`;
   }
 
+  private getVoiceRecordingCallbackUrl(): string | null {
+    const explicit = this.config.get<string>("TWILIO_VOICE_RECORDING_CALLBACK_URL", "").trim();
+    if (explicit) return explicit;
+    const apiBaseUrl = this.config.get<string>("API_BASE_URL", "").trim();
+    if (!apiBaseUrl) return null;
+    return `${apiBaseUrl.replace(/\/+$/, "")}/api/v1/voice-recording-callback`;
+  }
+
+  // ── Browser voice (WebRTC softphone) ──────────────────────────────────────
+
+  /**
+   * Mint a short-lived Twilio Voice access token for the browser softphone. Signed
+   * with the placing account's API key; the VoiceGrant points at that account's
+   * TwiML App (outbound only). `identity` ties the token to the session.
+   */
+  mintVoiceToken(params: {
+    accountSid: string;
+    apiKeySid: string;
+    apiKeySecret: string;
+    twimlAppSid: string;
+    identity: string;
+    ttlSeconds?: number;
+  }): string {
+    const { AccessToken } = Twilio.jwt;
+    const token = new AccessToken(params.accountSid, params.apiKeySid, params.apiKeySecret, {
+      identity: params.identity,
+      ttl: params.ttlSeconds ?? 3600,
+    });
+    token.addGrant(
+      new AccessToken.VoiceGrant({ outgoingApplicationSid: params.twimlAppSid, incomingAllow: false }),
+    );
+    return token.toJwt();
+  }
+
+  /**
+   * Create a Voice API key + TwiML App under an account (platform or subaccount) so
+   * the browser softphone can place calls from that account's number. Returns the
+   * SIDs + the API-key secret (only available at creation — the caller persists it,
+   * encrypted). The account is chosen by `sender.accountSid` (platform when it matches).
+   */
+  async createVoiceApp(
+    sender: ResolvedSender,
+    voiceUrl: string,
+  ): Promise<{ apiKeySid: string; apiKeySecret: string; twimlAppSid: string }> {
+    const client = this.getClient(sender);
+    const key = await client.newKeys.create({ friendlyName: "uprise-voice" });
+    const app = await client.applications.create({
+      friendlyName: "uprise-voice",
+      voiceUrl,
+      voiceMethod: "POST",
+    });
+    return { apiKeySid: key.sid, apiKeySecret: key.secret ?? "", twimlAppSid: app.sid };
+  }
+
+  /**
+   * TwiML for a browser-originated outbound call: bridge the softphone leg to the
+   * PSTN callee, recording the answered call, threading our Call `callId` through
+   * the status + recording callbacks so the existing handlers bind it.
+   */
+  buildDialTwiml(params: {
+    to: string;
+    callerId: string;
+    callId: string;
+    statusCallbackBase: string;
+    recordingCallbackBase: string;
+  }): string {
+    const response = new Twilio.twiml.VoiceResponse();
+    const q = `callId=${encodeURIComponent(params.callId)}`;
+    const dial = response.dial({
+      callerId: params.callerId,
+      record: "record-from-answer-dual",
+      recordingStatusCallback: `${params.recordingCallbackBase}?${q}`,
+      recordingStatusCallbackEvent: ["completed"],
+    });
+    dial.number(
+      {
+        statusCallback: `${params.statusCallbackBase}?${q}`,
+        statusCallbackMethod: "POST",
+        statusCallbackEvent: ["initiated", "ringing", "answered", "completed"],
+      },
+      params.to,
+    );
+    return response.toString();
+  }
+
   private async sleep(ms: number): Promise<void> {
     if (ms <= 0) return;
     await new Promise((resolve) => setTimeout(resolve, ms));
@@ -608,10 +693,17 @@ export class TwilioService {
     }
 
     const statusCallback = this.getVoiceStatusCallbackUrl();
+    const recordingCallback = this.getVoiceRecordingCallbackUrl();
     const params: Record<string, unknown> = {
       to,
       from,
       ...(url ? { url } : { twiml }),
+      // Record the call (transactional calls are logged for playback). The recording
+      // completes after the call, so bind it via the dedicated recording callback.
+      record: true,
+      ...(recordingCallback
+        ? { recordingStatusCallback: recordingCallback, recordingStatusCallbackEvent: ["completed"] }
+        : {}),
       ...(statusCallback
         ? {
             statusCallback,

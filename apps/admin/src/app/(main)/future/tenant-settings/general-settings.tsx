@@ -46,6 +46,7 @@ import { SecuritySettings } from "@/components/settings/security";
 import { DeleteWorkspaceCard } from "@/components/settings/delete-workspace";
 import { ComplianceSettings } from "@/components/settings/compliance";
 import { IntegrationsSettings } from "@/components/settings/integrations";
+import { DomainsSettings } from "@/components/settings/domains-settings";
 import { getSession } from "@/lib/session";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ const PRIMARY_TABS = [
   { key: "contacts", label: "Contacts" },
   { key: "addresses", label: "Addresses" },
   { key: "access", label: "Access" },
+  { key: "domains", label: "Domains" },
   { key: "integrations", label: "Integrations" },
   { key: "security", label: "Security" },
   { key: "compliance", label: "Compliance" },
@@ -74,7 +76,7 @@ const SUPERADMIN_TABS = [
 // Tabs that fetch their own data and own their loading state (their content components
 // render their own skeletons). They render straight away rather than waiting behind the
 // settings skeleton, which reflects the orgProfile / tenant fetch only.
-const SELF_CONTAINED_TABS: readonly PageTab[] = ["security", "compliance", "integrations", "alerts"];
+const SELF_CONTAINED_TABS: readonly PageTab[] = ["security", "compliance", "integrations", "alerts", "domains"];
 // PageTab + the segment↔tab mapping live in ./sections (a non-client module) so the
 // server route /settings/[section]/page.tsx can call sectionToTab without hitting the
 // "use client" client-reference boundary. PRIMARY_TABS/SUPERADMIN_TABS keys must stay
@@ -615,6 +617,8 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
                 )}
               </>
             ) : null}
+
+            {tab === "domains" ? <DomainsSettings /> : null}
 
             {tab === "security" ? <SecuritySettings /> : null}
 

@@ -95,8 +95,12 @@ describe("tenant isolation (post default-org removal)", () => {
     it("scopes listCalls + getCall to the caller's tenant", async () => {
       const findMany = jest.fn().mockResolvedValue([]);
       const findFirst = jest.fn().mockResolvedValue(null);
-      const prisma = { call: { findMany, findFirst } } as any;
-      const svc = new CallsService(prisma, config, {} as any, {} as any, {} as any, {} as any);
+      const count = jest.fn().mockResolvedValue(0);
+      const prisma = {
+        call: { findMany, findFirst, count },
+        $transaction: jest.fn(async (arg: any) => (Array.isArray(arg) ? Promise.all(arg) : arg(prisma))),
+      } as any;
+      const svc = new CallsService(prisma, config, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
 
       await svc.listCalls("tenant-a");
       expect(findMany.mock.calls[0][0].where.tenantId).toBe("tenant-a");

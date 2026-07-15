@@ -3,14 +3,25 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, CircleUser, DownloadCloud, Loader2, Menu, PersonStanding } from "lucide-react";
-import { Button, EmptyState, Skeleton, TenantBrand, cn } from "@uprise/ui";
+import {
+  ArrowRight,
+  Check,
+  CircleUser,
+  Download,
+  DownloadCloud,
+  Loader2,
+  LocateFixed,
+  MapPin,
+  Menu,
+  PersonStanding,
+} from "lucide-react";
+import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
 import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hooks/use-canvass";
 import { claimExistingTurf } from "../api/canvass";
-import { getTenantBrand, getVolunteerId, getVolunteerName } from "../lib/volunteer";
-import { KpiTile } from "../components/kpi-tile";
+import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { MapThumbnail } from "../components/map-thumbnail";
 import { estimateWalk, formatMinutes } from "../lib/walk-estimate";
+import { useGeolocation } from "../hooks/use-geolocation";
 import { useOnlineStatus } from "../hooks/use-online-status";
 
 /** Outer ring [lng,lat][] from a GeoJSON Polygon/MultiPolygon for the thumbnail. */
@@ -30,6 +41,19 @@ function greeting(): string {
   return "Good evening";
 }
 
+/** Per-turf swatch — the map thumbnail's outline/tint, cycled by position (blue, purple, …). */
+const TURF_SWATCHES = ["#2f5bd6", "#7c3aed", "#0e9488", "#b45309", "#dc2626", "#16a34a"];
+
+/** A day-stat tile: big headline count, muted label beneath (the "My turf" header row). */
+function StatCard({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4 shadow-card">
+      <div className="text-3xl font-extrabold leading-none tabular-nums text-foreground">{value}</div>
+      <div className="mt-2 text-sm text-muted-foreground">{label}</div>
+    </div>
+  );
+}
+
 export function Assignments() {
   const router = useRouter();
   const online = useOnlineStatus();
@@ -40,6 +64,9 @@ export function Assignments() {
   const a = useAssignments(volunteerId ?? null);
   const m = useVolunteerMetrics(volunteerId ?? null);
   const rec = useRecommendedTurf(volunteerId ?? null);
+  // Acquire the volunteer's position as soon as My turf loads (post-login) so turf
+  // features can use it. Best-effort — a denial just leaves the chip in its retry state.
+  const { fix, locating, capture: locate } = useGeolocation({ auto: true });
   const [claiming, setClaiming] = useState<string | null>(null);
   const assignments = a.data ?? [];
   const metrics = m.data ?? null;
@@ -48,10 +75,6 @@ export function Assignments() {
     ? "No volunteer identity on this device. Log in as a volunteer."
     : a.error ?? "";
   const name = getVolunteerName();
-  const tenant = getTenantBrand();
-
-  // Today's tile values with the all-time total as the muted secondary line.
-  const allTime = (n: number) => ({ value: `${n.toLocaleString()} all-time`, direction: "flat" as const });
 
   // One-tap claim of a recommended turf, then straight into the walk view. Mirrors get-turf.
   const claimRecommended = async (campaignId: string, turfId: string) => {
@@ -76,9 +99,6 @@ export function Assignments() {
 
   return (
     <div className="space-y-5">
-      {/* Tenant brand (top-left) — the campaign this volunteer is canvassing for */}
-      {tenant ? <TenantBrand name={tenant.name} seed={tenant.id} logoUrl={tenant.logoUrl} /> : null}
-
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <button
@@ -105,23 +125,35 @@ export function Assignments() {
         </Link>
       </div>
 
-      {/* Day tiles — today's value big, all-time total beneath */}
+      {/* Location — acquired on entry so nearest-turf features can use the volunteer's position */}
+      <div className="flex items-center gap-1.5 text-xs">
+        {locating ? (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Finding your location…
+          </span>
+        ) : fix ? (
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <LocateFixed className="h-3.5 w-3.5 text-[hsl(var(--success))]" />
+            Location on{fix.accuracy ? ` · ±${Math.round(fix.accuracy)} m` : ""}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void locate()}
+            className="inline-flex items-center gap-1.5 font-semibold text-primary"
+          >
+            <MapPin className="h-3.5 w-3.5" />
+            Enable location
+          </button>
+        )}
+      </div>
+
+      {/* Day tiles — today's headline count + label */}
       <div className="grid grid-cols-3 gap-2.5">
-        <KpiTile
-          label="doors today"
-          value={metrics?.doorsToday ?? 0}
-          delta={metrics ? allTime(metrics.doorsTotal) : undefined}
-        />
-        <KpiTile
-          label="conversations"
-          value={metrics?.conversationsToday ?? 0}
-          delta={metrics ? allTime(metrics.conversationsTotal) : undefined}
-        />
-        <KpiTile
-          label="surveys"
-          value={metrics?.surveysToday ?? 0}
-          delta={metrics ? allTime(metrics.surveysTotal) : undefined}
-        />
+        <StatCard label="doors today" value={metrics?.doorsToday ?? 0} />
+        <StatCard label="conversations" value={metrics?.conversationsToday ?? 0} />
+        <StatCard label="surveys" value={metrics?.surveysToday ?? 0} />
       </div>
 
       {assignments.length === 0 ? (
@@ -182,7 +214,11 @@ export function Assignments() {
             return (
               <div key={a.turfId} className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
                 <div className="relative">
-                  <MapThumbnail polygon={outerRing(a.turf.geometry)} className="h-40 w-full" />
+                  <MapThumbnail
+                    polygon={outerRing(a.turf.geometry)}
+                    color={TURF_SWATCHES[i % TURF_SWATCHES.length]}
+                    className="h-40 w-full"
+                  />
                   <span
                     className={cn(
                       "absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-card",
@@ -197,7 +233,7 @@ export function Assignments() {
                   <div>
                     <h2 className="text-xl font-extrabold text-foreground">{a.turf.name}</h2>
                     <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-                      {onList} doors · ~{formatMinutes(walkMin)} walk
+                      {onList} on your walk list · ~{formatMinutes(walkMin)} walk
                     </p>
                   </div>
                   <div className="flex gap-3">
@@ -214,7 +250,7 @@ export function Assignments() {
                       onClick={() => router.push(`/field/${a.turfId}`)}
                       className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
                     >
-                      <DownloadCloud className="h-5 w-5" />
+                      <Download className="h-5 w-5" />
                     </button>
                   </div>
                 </div>

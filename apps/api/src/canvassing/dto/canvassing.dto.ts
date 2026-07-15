@@ -1,4 +1,6 @@
 import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
   IsArray,
   IsBoolean,
   IsIn,
@@ -60,6 +62,15 @@ export class CreateWalkListDto {
   @IsOptional()
   @IsIn(["STATIC", "DYNAMIC"])
   listType?: "STATIC" | "DYNAMIC";
+}
+
+/** Batch walk-list rebuild — the client chunks a large selection into requests for progress feedback. */
+export class RebuildWalkListsDto {
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  turfIds!: string[];
 }
 
 export class UpdateTurfDto {

@@ -8,7 +8,7 @@ import {
   type TelephonyProvisioningRun,
   type TelephonyProvisioningStep,
 } from "@uprise/api-client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/prog/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFeatureFlags } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import { ProvisioningTimeline } from "./provisioning-timeline";
@@ -16,12 +16,21 @@ import { ProvisioningTimeline } from "./provisioning-timeline";
 type RunWithSteps = TelephonyProvisioningRun & { steps: TelephonyProvisioningStep[] };
 
 /**
- * Owner-facing (read-only) telephony status for the tenant-settings page: the
- * organisation's numbers + the live provisioning timeline. Provisioning itself
- * is driven by the platform team; this keeps the owner in the loop. Resolves
- * the tenant from the session when not given one.
+ * Owner-facing (read-only) telephony status: the organisation's numbers + the live
+ * provisioning timeline. Provisioning itself is driven by the platform team; this
+ * keeps the owner in the loop. Resolves the tenant from the session when not given one.
+ *
+ * By default it self-hides when there is nothing to show (flag off / no history). Pass
+ * `onboarding` to instead render a "set up a number" prompt in that case, so it works
+ * as a getting-started card.
  */
-export function TelephonyStatusCard({ tenantId: tenantIdProp }: { tenantId?: string }) {
+export function TelephonyStatusCard({
+  tenantId: tenantIdProp,
+  onboarding = false,
+}: {
+  tenantId?: string;
+  onboarding?: boolean;
+}) {
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +48,7 @@ export function TelephonyStatusCard({ tenantId: tenantIdProp }: { tenantId?: str
         setLoading(false);
         return;
       }
-      const tenantId = tenantIdProp ?? (await getSession())?.activeTenant?.id;
+      const tenantId = tenantIdProp ?? (await getSession())?.tenantId ?? undefined;
       if (!tenantId) {
         if (alive) setLoading(false);
         return;
@@ -64,8 +73,30 @@ export function TelephonyStatusCard({ tenantId: tenantIdProp }: { tenantId?: str
     };
   }, [tenantIdProp]);
 
-  // Nothing to show: feature off, or no telephony history for this tenant.
-  if (!visible || (!loading && !error && numbers.length === 0 && !latestRun)) return null;
+  // Something meaningful to render (loading spinner, an error, numbers, or a run) — but
+  // only when the feature is on for this tenant.
+  const showReal = visible && (loading || Boolean(error) || numbers.length > 0 || Boolean(latestRun));
+
+  if (!showReal) {
+    // Nothing to show: onboarding placement prompts setup; elsewhere it self-hides.
+    if (!onboarding) return null;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-4 w-4" />
+            Set up your calling &amp; text number
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Get a dedicated mobile number so your calls and texts come from your organisation. Your
+            platform team provisions this — get in touch to start setup.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

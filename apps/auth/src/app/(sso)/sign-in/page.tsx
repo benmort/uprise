@@ -12,7 +12,7 @@ import { completeAuth } from "@/lib/session";
 function roleVerb(p: AuthPrincipal): string {
   if (p.role === "VOLUNTEER") return "canvassing";
   if (p.role === "ORGANISER") return "organising";
-  return "managing"; // OWNER + super-admin
+  return "campaigning"; // OWNER + super-admin
 }
 
 export default function LoginPage() {

@@ -38,14 +38,11 @@ function allComplete() {
 beforeEach(() => vi.clearAllMocks());
 
 describe("ONBOARDING_STEPS", () => {
-  it("declares the five steps in display order with unique keys", () => {
-    expect(ONBOARDING_STEPS.map((s) => s.key)).toEqual([
-      "verifyEmail",
-      "orgProfile",
-      "inviteTeammate",
-      "connectAudience",
-      "firstCampaign",
-    ]);
+  // The invite-teammate / connect-audience / first-campaign cards were replaced on the
+  // getting-started page by the telephony provisioning card; their completion is still
+  // derived + persisted (see deriveOnboardingSteps below), just not shown as a step.
+  it("declares the remaining setup steps in display order with unique keys", () => {
+    expect(ONBOARDING_STEPS.map((s) => s.key)).toEqual(["verifyEmail", "orgProfile"]);
     for (const step of ONBOARDING_STEPS) {
       expect(step.title).toBeTruthy();
       expect(step.href).toMatch(/^\//);

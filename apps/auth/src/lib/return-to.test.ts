@@ -86,5 +86,24 @@ describe("return-to", () => {
     it("rejects a different port on an otherwise allowed host", () => {
       expect(validateReturnTo("http://localhost:9999/x")).toBe("http://localhost:3000");
     });
+
+    it("accepts a tenant subdomain under a platform root (not in the env allowlist)", () => {
+      expect(validateReturnTo("https://common-threads.uprise.org.au/dashboard")).toBe(
+        "https://common-threads.uprise.org.au/dashboard",
+      );
+      expect(validateReturnTo("https://acme.dev.uprise.org.au/x")).toBe(
+        "https://acme.dev.uprise.org.au/x",
+      );
+    });
+
+    it("still rejects a look-alike host outside the platform roots", () => {
+      expect(validateReturnTo("https://common-threads.uprise.evil.com/x")).toBe(
+        "http://localhost:3000",
+      );
+    });
+
+    it("rejects a non-http(s) scheme", () => {
+      expect(validateReturnTo("javascript:alert(1)")).toBe("http://localhost:3000");
+    });
   });
 });

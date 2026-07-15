@@ -196,6 +196,66 @@ describe("SessionService", () => {
     expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { userId: "u1", token: { not: "cur" } } });
   });
 
+  it("resolve() forces a host tenant the user is a member of (over the pinned tenant)", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      tenantId: "t1", // pinned
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    prisma.tenantMember.findMany.mockResolvedValue([
+      { tenantId: "t1", role: "ORGANISER" },
+      { tenantId: "t2", role: "VOLUNTEER" },
+    ]);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t", undefined, { forcedTenantId: "t2" })).resolves.toEqual({
+      userId: "u1",
+      email: "a@b.c",
+      tenantId: "t2",
+      role: "VOLUNTEER",
+      isSuperAdmin: false,
+    });
+  });
+
+  it("resolve() denies the host tenant for a non-member (session stays valid)", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      tenantId: "t1",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c" });
+    prisma.tenantMember.findMany.mockResolvedValue([{ tenantId: "t1", role: "ORGANISER" }]);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t", undefined, { forcedTenantId: "other" })).resolves.toMatchObject({
+      tenantId: null,
+      hostTenantDenied: true,
+    });
+  });
+
+  it("resolve() lets a super-admin act-as a host tenant they don't belong to", async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      userId: "u1",
+      token: "t",
+      tenantId: null,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", email: "a@b.c", isSuperAdmin: true });
+    prisma.tenantMember.findMany.mockResolvedValue([]);
+    const svc = new SessionService(prisma);
+    await expect(svc.resolve("t", undefined, { forcedTenantId: "cust" })).resolves.toEqual({
+      userId: "u1",
+      email: "a@b.c",
+      tenantId: "cust",
+      role: "OWNER",
+      isSuperAdmin: true,
+    });
+  });
+
   it("resolve() returns null for a soft-deleted user", async () => {
     const prisma = makePrisma();
     prisma.session.findUnique.mockResolvedValue({

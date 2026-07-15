@@ -1,4 +1,4 @@
-import { ExecutionContext, UnauthorizedException } from "@nestjs/common";
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request } from "express";
 import { BasicAuthGuard } from "./basic-auth.guard";
@@ -84,6 +84,24 @@ describe("BasicAuthGuard", () => {
     const guard = createGuard();
     const context = executionContextWithRequest({
       path: "/api/v1/twilio-status-callback",
+      headers: {},
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it("allows voice recording callback webhook without auth", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/voice-recording-callback",
+      headers: {},
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it("allows the browser-voice TwiML app webhook (/voice-outbound) without auth", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/voice-outbound",
       headers: {},
     });
     expect(guard.canActivate(context)).toBe(true);
@@ -322,7 +340,9 @@ describe("BasicAuthGuard session auth", () => {
         isSuperAdmin: false,
       }),
     );
-    expect(sessions.resolve).toHaveBeenCalledWith("sess_token", expect.any(Object));
+    expect(sessions.resolve).toHaveBeenCalledWith("sess_token", expect.any(Object), {
+      forcedTenantId: null,
+    });
   });
 
   it("reads the session token from the auth_token cookie", async () => {
@@ -332,7 +352,9 @@ describe("BasicAuthGuard session auth", () => {
     const guard = new BasicAuthGuard(config, undefined, sessions);
     const request: any = { path: "/api/v1/inbox", headers: { cookie: "foo=bar; auth_token=cookie_tok" } };
     await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
-    expect(sessions.resolve).toHaveBeenCalledWith("cookie_tok", expect.any(Object));
+    expect(sessions.resolve).toHaveBeenCalledWith("cookie_tok", expect.any(Object), {
+      forcedTenantId: null,
+    });
     expect(request.user.roles).toEqual(["volunteer"]);
   });
 
@@ -343,5 +365,101 @@ describe("BasicAuthGuard session auth", () => {
     await expect(guard.canActivate(ctx(request))).rejects.toThrow(
       UnauthorizedException,
     );
+  });
+
+  it("records the resolved token on request.user.sessionToken", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u2", email: "c@d.e", tenantId: "t1", role: "VOLUNTEER" }),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    const request: any = { path: "/api/v1/inbox", headers: { cookie: "auth_token=cookie_tok" } };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(request.user.sessionToken).toBe("cookie_tok");
+  });
+
+  it("pins sessionToken to the token that RESOLVES when a stale duplicate auth_token shadows it", async () => {
+    const sessions = {
+      resolve: jest.fn(async (token: string) =>
+        token === "valid_tok" ? { userId: "u3", email: "e@f.g", tenantId: "t2", role: "OWNER" } : null,
+      ),
+    } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions);
+    // First cookie is stale (resolves null); the second is the live session.
+    const request: any = {
+      path: "/api/v1/inbox",
+      headers: { cookie: "auth_token=stale_tok; auth_token=valid_tok" },
+    };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(request.user.id).toBe("u3");
+    // The recorded token is the one that authenticated, NOT the first (stale) cookie —
+    // so a later select-tenant pins the SAME session that /auth/check reads.
+    expect(request.user.sessionToken).toBe("valid_tok");
+  });
+
+  it("forces the host's tenant onto the session on a tenant-subdomain host", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u1", email: "a@b.c", tenantId: "t-acme", role: "ORGANISER" }),
+    } as any;
+    const tenantRouting = { resolve: jest.fn().mockResolvedValue({ tenantId: "t-acme" }) } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions, tenantRouting);
+    // The tenant rides in Origin (the calling app); Host is the API's own sibling host.
+    const request: any = {
+      path: "/api/v1/inbox",
+      headers: { origin: "https://acme.uprise.org.au", host: "api.uprise.org.au", cookie: "auth_token=tok" },
+    };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(sessions.resolve).toHaveBeenCalledWith("tok", expect.any(Object), { forcedTenantId: "t-acme" });
+    expect(request.user.tenantId).toBe("t-acme");
+  });
+
+  it("403s a valid session that is not a member of the host's tenant (not 401)", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u1", email: "a@b.c", tenantId: null, hostTenantDenied: true }),
+    } as any;
+    const tenantRouting = { resolve: jest.fn().mockResolvedValue({ tenantId: "t-acme" }) } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions, tenantRouting);
+    const request: any = {
+      path: "/api/v1/inbox",
+      headers: { origin: "https://acme.uprise.org.au", host: "api.uprise.org.au", cookie: "auth_token=tok" },
+    };
+    await expect(guard.canActivate(ctx(request))).rejects.toThrow(ForbiddenException);
+  });
+
+  it("a member token beats a denied duplicate cookie on a subdomain host", async () => {
+    const sessions = {
+      resolve: jest.fn(async (token: string) =>
+        token === "member_tok"
+          ? { userId: "u9", email: "m@n.o", tenantId: "t-acme", role: "OWNER" }
+          : { userId: "u9", email: "m@n.o", tenantId: null, hostTenantDenied: true },
+      ),
+    } as any;
+    const tenantRouting = { resolve: jest.fn().mockResolvedValue({ tenantId: "t-acme" }) } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions, tenantRouting);
+    const request: any = {
+      path: "/api/v1/inbox",
+      headers: {
+        origin: "https://acme.uprise.org.au",
+        host: "api.uprise.org.au",
+        cookie: "auth_token=denied_tok; auth_token=member_tok",
+      },
+    };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(request.user.tenantId).toBe("t-acme");
+    expect(request.user.sessionToken).toBe("member_tok");
+  });
+
+  it("does not force a tenant on a platform app host (resolver returns null)", async () => {
+    const sessions = {
+      resolve: jest.fn().mockResolvedValue({ userId: "u1", email: "a@b.c", tenantId: "t-session", role: "ORGANISER" }),
+    } as any;
+    const tenantRouting = { resolve: jest.fn().mockResolvedValue(null) } as any;
+    const guard = new BasicAuthGuard(config, undefined, sessions, tenantRouting);
+    const request: any = {
+      path: "/api/v1/inbox",
+      headers: { origin: "https://admin.uprise.org.au", host: "api.uprise.org.au", cookie: "auth_token=tok" },
+    };
+    await expect(guard.canActivate(ctx(request))).resolves.toBe(true);
+    expect(sessions.resolve).toHaveBeenCalledWith("tok", expect.any(Object), { forcedTenantId: null });
+    expect(request.user.tenantId).toBe("t-session");
   });
 });

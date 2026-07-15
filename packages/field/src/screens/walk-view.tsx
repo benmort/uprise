@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DoorOpen, DownloadCloud, Loader2, Navigation, Spline } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DownloadCloud, Home, Loader2, Navigation, Route } from "lucide-react";
 import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
 import { type CanvassAssignment } from "../api";
 import { useAssignments } from "../hooks/use-canvass";
 import { getVolunteerId } from "../lib/volunteer";
 import { optimiseRoute, type Stop } from "../lib/route";
-import { estimateWalk, trimToBudget, formatMinutes } from "../lib/walk-estimate";
-import { formatDistance, formatDuration, type LatLng } from "../lib/directions";
+import { estimateWalk, trimToBudget } from "../lib/walk-estimate";
+import { formatDistance, type LatLng } from "../lib/directions";
 import { useLocalStorage } from "../hooks/use-local-storage";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useTilePreCache } from "../hooks/use-tile-pre-cache";
@@ -130,15 +130,15 @@ export function WalkView({
             type="button"
             aria-label="Back"
             onClick={() => router.push("/field")}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-extrabold">{assignment.turf.name}</h1>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {doneCount} of {stops.length} stops done · ~{formatMinutes(walk.minutes)}
+          <h1 className="truncate text-lg font-extrabold text-foreground">{assignment.turf.name}</h1>
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {doneCount} of {stops.length} stops done
           </p>
         </div>
         <WalkModeToggle value={mode} onChange={setMode} />
@@ -162,22 +162,23 @@ export function WalkView({
             routeGeometry={directions?.geometry ?? null}
           />
           {nextStop ? (
-            <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-3 shadow-float">
-              <div className="flex items-start justify-between gap-2">
+            <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-4 shadow-float">
+              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--success))]">
+                <Route className="h-3.5 w-3.5" />
+                Next stop{directions ? ` · ${formatDistance(directions.distanceM)} away` : ""}
+              </p>
+              <div className="mt-1.5 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
-                    Next stop
-                  </p>
-                  <p className="truncate font-semibold text-foreground">{nextStop.name || "Resident"}</p>
+                  <p className="truncate font-bold text-foreground">{nextStop.name || "Resident"}</p>
                   {nextStop.address ? (
-                    <p className="truncate text-xs text-muted-foreground">{nextStop.address}</p>
+                    <p className="truncate text-sm text-muted-foreground">{nextStop.address}</p>
                   ) : null}
                 </div>
-                {directions ? (
-                  <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold tabular-nums text-primary">
-                    <Navigation className="h-3 w-3" />
-                    {formatDistance(directions.distanceM)} · {formatDuration(directions.durationS)}
-                  </span>
+                {!readOnly ? (
+                  <Button className="h-11 shrink-0 gap-2 px-5 text-base" onClick={() => openDoor(nextStop.id)}>
+                    <Home className="h-5 w-5" />
+                    Knock
+                  </Button>
                 ) : null}
               </div>
 
@@ -213,20 +214,13 @@ export function WalkView({
                   Directions need a connection — pins and the address work offline.
                 </p>
               ) : null}
-
-              {!readOnly ? (
-                <Button className="mt-2 w-full" onClick={() => openDoor(nextStop.id)}>
-                  <DoorOpen className="mr-1.5 h-4 w-4" />
-                  Knock — next stop
-                </Button>
-              ) : null}
             </div>
           ) : null}
         </div>
       ) : (
         <div className="space-y-3">
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
-            <Spline className="h-4 w-4" />
+            <Route className="h-4 w-4" />
             Route-optimised · shortest path
           </p>
           {!readOnly ? (

@@ -36,6 +36,13 @@ function setup() {
     canvassCampaign: {
       findUnique: jest.fn(async () => null),
     },
+    // Join-hero recruitment stats (openJoinPreview). Default: none.
+    turfAssignment: {
+      findMany: jest.fn(async () => []),
+    },
+    doorKnock: {
+      count: jest.fn(async () => 0),
+    },
     // membershipsFor batches logos; previewInvite/open-join look one up. Default: no logos.
     orgProfile: {
       findMany: jest.fn(async () => []),
@@ -833,12 +840,36 @@ describe("IamFlowsService", () => {
         { id: "t2", name: "Org Two" },
       ]);
       (prisma as any).orgProfile = {
-        findMany: jest.fn(async () => [{ tenantId: "t1", logoBlockUrl: "logo1.png" }]),
+        findMany: jest.fn(async () => [
+          { tenantId: "t1", logoBlockUrl: "logo1.png", primaryColour: "#123", secondaryColour: null },
+        ]),
       };
       const res = await svc.openJoinList();
       expect(res).toEqual([
-        { campaignId: "c1", tenantId: "t1", campaignName: "Spring Doorknock", tenantName: "Org One", logoUrl: "logo1.png" },
-        { campaignId: "c2", tenantId: "t2", campaignName: "Autumn Blitz", tenantName: "Org Two", logoUrl: null },
+        {
+          campaignId: "c1",
+          tenantId: "t1",
+          campaignName: "Spring Doorknock",
+          tenantName: "Org One",
+          logoUrl: "logo1.png",
+          primaryColour: "#123",
+          secondaryColour: null,
+          customCss: null,
+          volunteerCount: 0,
+          doorsThisWeek: 0,
+        },
+        {
+          campaignId: "c2",
+          tenantId: "t2",
+          campaignName: "Autumn Blitz",
+          tenantName: "Org Two",
+          logoUrl: null,
+          primaryColour: null,
+          secondaryColour: null,
+          customCss: null,
+          volunteerCount: 0,
+          doorsThisWeek: 0,
+        },
       ]);
       // Only open + active campaigns are listed.
       expect((prisma.canvassCampaign as any).findMany.mock.calls[0][0].where).toMatchObject({
@@ -860,7 +891,14 @@ describe("IamFlowsService", () => {
       const { svc, prisma } = setup();
       prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
       prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
-      (prisma as any).orgProfile = { findFirst: jest.fn(async () => ({ logoBlockUrl: "logo1.png" })) };
+      (prisma as any).orgProfile = {
+        findFirst: jest.fn(async () => ({
+          logoBlockUrl: "logo1.png",
+          primaryColour: "#a23",
+          secondaryColour: null,
+          customCss: null,
+        })),
+      };
       const res = await svc.openJoinPreview("c1");
       expect(res).toEqual({
         campaignId: "c1",
@@ -868,7 +906,37 @@ describe("IamFlowsService", () => {
         campaignName: "Spring Doorknock",
         tenantName: "Org One",
         logoUrl: "logo1.png",
+        primaryColour: "#a23",
+        secondaryColour: null,
+        customCss: null,
+        volunteerCount: 0,
+        doorsThisWeek: 0,
       });
+    });
+
+    it("openJoinPreview surfaces recruitment stats (distinct volunteers + doors this week)", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
+      (prisma as any).turfAssignment = {
+        findMany: jest.fn(async () => [{ volunteerId: "v1" }, { volunteerId: "v2" }, { volunteerId: "v3" }]),
+      };
+      (prisma as any).doorKnock = { count: jest.fn(async () => 128) };
+      const res = await svc.openJoinPreview("c1");
+      expect(res).toMatchObject({ volunteerCount: 3, doorsThisWeek: 128 });
+    });
+
+    it("openJoinPreview degrades stats to 0 when the stat query fails (never breaks the preview)", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
+      (prisma as any).turfAssignment = {
+        findMany: jest.fn(async () => {
+          throw new Error("db down");
+        }),
+      };
+      const res = await svc.openJoinPreview("c1");
+      expect(res).toMatchObject({ campaignId: "c1", volunteerCount: 0, doorsThisWeek: 0 });
     });
 
     it("accept verifies the OTP, then creates a VOLUNTEER membership + session immediately (no approval)", async () => {

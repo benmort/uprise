@@ -11,6 +11,10 @@ export type OnboardingStepMeta = {
   cta: string;
 };
 
+// Getting-started checklist. The invite-teammate / connect-audience / first-campaign
+// steps have been replaced on the page by the telephony provisioning card (see
+// getting-started/page.tsx); their completion is still derived + persisted below so no
+// history regresses. deriveOnboardingSteps returns every OnboardingStep key regardless.
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
   {
     key: "verifyEmail",
@@ -25,27 +29,6 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
     blurb: "Add your name, logo and brand colour so your messages look like you.",
     href: "/settings/organisation",
     cta: "Open settings",
-  },
-  {
-    key: "inviteTeammate",
-    title: "Invite a teammate",
-    blurb: "Bring an organiser or staffer into the workspace.",
-    href: "/settings/team",
-    cta: "Invite",
-  },
-  {
-    key: "connectAudience",
-    title: "Connect an audience",
-    blurb: "Import a list or sync from Action Network to start reaching people.",
-    href: "/audience",
-    cta: "Add audience",
-  },
-  {
-    key: "firstCampaign",
-    title: "Send your first campaign",
-    blurb: "Draft and send a text blast to your audience.",
-    href: "/channels/text",
-    cta: "Create blast",
   },
 ];
 

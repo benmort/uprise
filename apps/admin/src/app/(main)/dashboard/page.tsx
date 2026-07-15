@@ -229,6 +229,7 @@ export default function DashboardPage() {
         onClose={() => setComposeOpen(false)}
         onPick={(ch) => {
           if (ch === "sms") void newBlast("SMS");
+          else if (ch === "call") router.push("/channels/calls");
         }}
       />
 

@@ -45,6 +45,11 @@ export type ValidatedEnv = {
   // First-class here so it isn't silently dropped through validation and so the
   // bootstrap SSO guard reads a validated value (see bootstrap.assertCookieDomainForSso).
   SESSION_COOKIE_DOMAIN: string;
+  // The platform's base domain for host-based tenant routing: a `<slug>.<this>` host
+  // serves the admin app scoped to that tenant. e.g. "uprise.org.au" (prod) /
+  // "dev.uprise.org.au" (staging). Platform app hosts (admin./auth./api. …) and the apex
+  // are excluded (session-based, unchanged).
+  PLATFORM_BASE_DOMAIN: string;
   AUTH_APP_URL: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
@@ -82,6 +87,12 @@ export type ValidatedEnv = {
   TWILIO_AUTH_TOKEN: string;
   TWILIO_PHONE_NUMBER: string;
   TWILIO_STATUS_CALLBACK_URL: string;
+  // Browser Voice (WebRTC softphone): API key/secret sign the Voice access token,
+  // the TwiML App's Voice URL points at /voice-outbound. Platform-account path;
+  // per-subaccount voice apps are created lazily. Blank ⇒ platform voice inert.
+  TWILIO_API_KEY_SID: string;
+  TWILIO_API_KEY_SECRET: string;
+  TWILIO_TWIML_APP_SID: string;
   TWILIO_SEND_RATE_PER_SECOND: number;
   TWILIO_SEND_MAX_CONCURRENT: number;
   TWILIO_SUBACCOUNT_SEND_RATE_PER_SECOND: number;
@@ -128,6 +139,7 @@ export function validateEnv(config: Env): ValidatedEnv {
     API_BASE_URL: required(config, "API_BASE_URL", errors),
     CORS_ALLOWED_ORIGINS: config.CORS_ALLOWED_ORIGINS?.trim() || "",
     SESSION_COOKIE_DOMAIN: config.SESSION_COOKIE_DOMAIN?.trim() || "",
+    PLATFORM_BASE_DOMAIN: config.PLATFORM_BASE_DOMAIN?.trim() || "uprise.org.au",
     AUTH_APP_URL: config.AUTH_APP_URL?.trim() || "",
     RATE_LIMIT_WINDOW_MS: numberInRange(config, "RATE_LIMIT_WINDOW_MS", 1000, 3600000, 60000, errors),
     RATE_LIMIT_MAX_REQUESTS: numberInRange(config, "RATE_LIMIT_MAX_REQUESTS", 10, 10000, 300, errors),
@@ -233,6 +245,9 @@ export function validateEnv(config: Env): ValidatedEnv {
     TWILIO_AUTH_TOKEN: required(config, "TWILIO_AUTH_TOKEN", errors),
     TWILIO_PHONE_NUMBER: required(config, "TWILIO_PHONE_NUMBER", errors),
     TWILIO_STATUS_CALLBACK_URL: config.TWILIO_STATUS_CALLBACK_URL?.trim() || "",
+    TWILIO_API_KEY_SID: config.TWILIO_API_KEY_SID?.trim() || "",
+    TWILIO_API_KEY_SECRET: config.TWILIO_API_KEY_SECRET?.trim() || "",
+    TWILIO_TWIML_APP_SID: config.TWILIO_TWIML_APP_SID?.trim() || "",
     TWILIO_SEND_RATE_PER_SECOND: numberInRange(config, "TWILIO_SEND_RATE_PER_SECOND", 1, 500, 475, errors),
     TWILIO_SEND_MAX_CONCURRENT: numberInRange(config, "TWILIO_SEND_MAX_CONCURRENT", 1, 50, 47, errors),
     // Per-subaccount defaults — an AU mobile long code sustains ~1 msg/sec.

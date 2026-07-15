@@ -2,8 +2,9 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Megaphone, Pencil, UserPlus } from "lucide-react";
+import { Megaphone, Pencil, Phone, UserPlus } from "lucide-react";
 import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
+import { useSoftphone } from "@/components/softphone/softphone-provider";
 import {
   createVolunteer,
   listTurfs,
@@ -24,7 +25,7 @@ import { SectionCard, DataTable, RoleChip, ProgressBar } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 
 type Role = "VOLUNTEER" | "ORGANISER";
-type Volunteer = { id: string; displayName: string; email: string | null; role: string };
+type Volunteer = { id: string; displayName: string; email: string | null; role: string; mobile: string | null };
 
 /** One volunteer's load on this campaign, folded up from their assigned turf. */
 type CampaignVolunteer = {
@@ -54,6 +55,7 @@ function foldAssignments(turfs: TurfSummary[]): CampaignVolunteer[] {
 export default function CampaignVolunteersPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const { showToast } = useToast();
+  const { startCall } = useSoftphone();
 
   // Campaign name for the header (chrome — the page still works if it hasn't loaded).
   const { data: campaign } = useApi(
@@ -238,6 +240,12 @@ export default function CampaignVolunteersPage() {
             { key: "name", header: "Name", cell: (r) => r.displayName },
             { key: "email", header: "Email", cell: (r) => r.email ?? "—" },
             {
+              key: "mobile",
+              header: "Mobile",
+              cell: (r) =>
+                r.mobile ? <span className="font-mono text-sm">{r.mobile}</span> : <span className="text-muted-foreground">—</span>,
+            },
+            {
               key: "role",
               header: "Role",
               cell: (r) => <RoleChip role={r.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER"} />,
@@ -246,10 +254,22 @@ export default function CampaignVolunteersPage() {
               key: "actions",
               header: "",
               cell: (r) => (
-                <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
-                  <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                  Edit
-                </Button>
+                <div className="flex items-center justify-end gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!r.mobile}
+                    title={r.mobile ? `Call ${r.displayName}` : "No mobile number on file"}
+                    onClick={() => r.mobile && void startCall({ toNumber: r.mobile, label: r.displayName })}
+                  >
+                    <Phone className="mr-1.5 h-3.5 w-3.5" />
+                    Call
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(r)}>
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                </div>
               ),
             },
           ]}

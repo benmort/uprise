@@ -66,8 +66,8 @@ export class IamController {
   }
 
   @Delete("sessions")
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.sessions.revoke(readSessionToken(req) ?? "");
+  async logout(@Req() req: Request & { user?: AuthUser }, @Res({ passthrough: true }) res: Response) {
+    await this.sessions.revoke(this.currentToken(req));
     clearSessionCookie(res, this.config);
     return { ok: true };
   }
@@ -80,9 +80,16 @@ export class IamController {
     return id;
   }
 
+  /** The token of the session THIS request authenticated with (AuthUser.sessionToken) —
+   *  falls back to the first auth_token cookie only when the guard recorded none. Using the
+   *  resolved token keeps "current session" correct when a stale duplicate cookie is present. */
+  private currentToken(req: Request & { user?: AuthUser }): string {
+    return req.user?.sessionToken ?? readSessionToken(req) ?? "";
+  }
+
   @Get("my-sessions")
   listSessions(@Req() req: Request & { user?: AuthUser }) {
-    return this.sessions.listForUser(this.userId(req), readSessionToken(req) ?? "");
+    return this.sessions.listForUser(this.userId(req), this.currentToken(req));
   }
 
   @Delete("my-sessions/:id")
@@ -93,7 +100,7 @@ export class IamController {
 
   @Post("my-sessions/revoke-others")
   async revokeOtherSessions(@Req() req: Request & { user?: AuthUser }) {
-    await this.sessions.revokeOthers(this.userId(req), readSessionToken(req) ?? "");
+    await this.sessions.revokeOthers(this.userId(req), this.currentToken(req));
     return { ok: true };
   }
 }

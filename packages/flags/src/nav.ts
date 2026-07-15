@@ -30,7 +30,6 @@ export const NAV_FLAGS = [
   { key: "FEATURE_NAV_CANVASS_TURF", label: "Turf map", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_WALKLISTS", label: "Walk lists", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_LIVE", label: "Live", section: "Canvass", level: 2 },
-  { key: "FEATURE_NAV_CANVASS_VOLUNTEERS", label: "Volunteers", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_DIVISIONS", label: "Divisions", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_AREAS", label: "Areas", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_ADDRESSES", label: "Addresses", section: "Canvass", level: 2 },

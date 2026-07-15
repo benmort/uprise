@@ -819,6 +819,32 @@ export async function rebucketTurf(turfId: string) {
   );
 }
 
+export type RebuildWalkListResult = {
+  turfId: string;
+  walkListId?: string | null;
+  items?: number;
+  added?: number;
+  removed?: number;
+  error?: string;
+};
+
+/** (Re)build a turf's default walk list as the optimised route over its current addresses. */
+export async function rebuildTurfWalkList(turfId: string) {
+  return request<RebuildWalkListResult>(
+    `/canvass/turfs/${encodeURIComponent(turfId)}/rebuild-walk-list`,
+    { method: "POST" },
+  );
+}
+
+/** Batch-rebuild many turfs' walk lists. The caller chunks a large selection for progress feedback. */
+export async function rebuildWalkLists(turfIds: string[]) {
+  return request<{ results: RebuildWalkListResult[] }>(`/canvass/walk-lists/rebuild`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ turfIds }),
+  });
+}
+
 /**
  * Materialise the "addresses without contacts" universe into a turf: creates
  * cold-door contacts inside the boundary so they become walk-list stops.
@@ -873,9 +899,9 @@ export async function getTurfRoute(turfId: string) {
 }
 
 export async function listVolunteers() {
-  return request<Array<{ id: string; displayName: string; email: string | null; role: string }>>(
-    "/canvass/volunteers",
-  );
+  return request<
+    Array<{ id: string; displayName: string; email: string | null; role: string; mobile: string | null }>
+  >("/canvass/volunteers");
 }
 
 export async function createVolunteer(input: {

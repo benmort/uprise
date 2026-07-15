@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "crypto";
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AppUserRole, CanvassCampaignStatus, Prisma } from "@uprise/db";
+import { AppUserRole, CanvassCampaignStatus, Prisma, TurfAssignmentStatus } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { SessionService } from "./session.service";
@@ -40,6 +40,16 @@ function assertE164(raw: string): string {
  */
 function phonePlaceholderEmail(mobile: string): string {
   return `${mobile.replace(/\D/g, "")}@phone.uprise.invalid`;
+}
+
+/** Start of the current week (Monday 00:00 UTC) — the window for the join hero's "doors this week". */
+function startOfWeekUtc(): Date {
+  const d = new Date();
+  const day = d.getUTCDay(); // 0=Sun..6=Sat
+  const daysSinceMonday = (day + 6) % 7;
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - daysSinceMonday);
+  return d;
 }
 
 /** Assemble advisory doorknocker onboarding prefs into a JSON bag (undefined if none set). */
@@ -1053,23 +1063,27 @@ export class IamFlowsService {
   }
 
   /** Public preview for the `/volunteer/[campaignId]` landing – campaign + org name, gated. */
-  async openJoinPreview(
-    campaignId: string,
-  ): Promise<{
+  async openJoinPreview(campaignId: string): Promise<{
     campaignId: string;
     tenantId: string;
     campaignName: string;
     tenantName: string;
     logoUrl: string | null;
+    primaryColour: string | null;
+    secondaryColour: string | null;
+    customCss: string | null;
+    volunteerCount: number;
+    doorsThisWeek: number;
   }> {
     const campaign = await this.loadOpenCampaign(campaignId);
-    const [tenant, profile] = await Promise.all([
+    const [tenant, profile, stats] = await Promise.all([
       this.prisma.tenant.findUnique({ where: { id: campaign.tenantId }, select: { name: true } }),
-      // The org's block/avatar logo — the same one the tenant selector renders.
+      // The org's block/avatar logo + brand colours — so the join hero wears the tenant's brand.
       this.prisma.orgProfile.findFirst({
         where: { tenantId: campaign.tenantId },
-        select: { logoBlockUrl: true },
+        select: { logoBlockUrl: true, primaryColour: true, secondaryColour: true, customCss: true },
       }),
+      this.campaignJoinStats(campaign.tenantId, campaign.id),
     ]);
     return {
       campaignId: campaign.id,
@@ -1077,7 +1091,38 @@ export class IamFlowsService {
       campaignName: campaign.name,
       tenantName: tenant?.name ?? "",
       logoUrl: profile?.logoBlockUrl ?? null,
+      primaryColour: profile?.primaryColour ?? null,
+      secondaryColour: profile?.secondaryColour ?? null,
+      customCss: profile?.customCss ?? null,
+      ...stats,
     };
+  }
+
+  /**
+   * Recruitment social-proof for the join hero. Real + best-effort: a stat query failure returns 0
+   * (the hero hides zero stats) so it can never break the critical open-join preview.
+   * `volunteerCount` = distinct volunteers holding a turf in the campaign; `doorsThisWeek` = door
+   * knocks since the start of the week (Mon 00:00 UTC) on the campaign's turfs.
+   */
+  private async campaignJoinStats(
+    tenantId: string,
+    campaignId: string,
+  ): Promise<{ volunteerCount: number; doorsThisWeek: number }> {
+    try {
+      const [volunteers, doorsThisWeek] = await Promise.all([
+        this.prisma.turfAssignment.findMany({
+          where: { status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId, campaignId } },
+          select: { volunteerId: true },
+          distinct: ["volunteerId"],
+        }),
+        this.prisma.doorKnock.count({
+          where: { tenantId, createdAt: { gte: startOfWeekUtc() }, contact: { turf: { campaignId } } },
+        }),
+      ]);
+      return { volunteerCount: volunteers.length, doorsThisWeek };
+    } catch {
+      return { volunteerCount: 0, doorsThisWeek: 0 };
+    }
   }
 
   /**
@@ -1093,6 +1138,11 @@ export class IamFlowsService {
       campaignName: string;
       tenantName: string;
       logoUrl: string | null;
+      primaryColour: string | null;
+      secondaryColour: string | null;
+      customCss: string | null;
+      volunteerCount: number;
+      doorsThisWeek: number;
     }>
   > {
     const campaigns = await this.prisma.canvassCampaign.findMany({
@@ -1107,18 +1157,28 @@ export class IamFlowsService {
       this.prisma.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true } }),
       this.prisma.orgProfile.findMany({
         where: { tenantId: { in: tenantIds } },
-        select: { tenantId: true, logoBlockUrl: true },
+        select: { tenantId: true, logoBlockUrl: true, primaryColour: true, secondaryColour: true },
       }),
     ]);
     const nameById = new Map(tenants.map((t) => [t.id, t.name]));
-    const logoById = new Map(profiles.map((p) => [p.tenantId, p.logoBlockUrl]));
-    return campaigns.map((c) => ({
-      campaignId: c.id,
-      tenantId: c.tenantId,
-      campaignName: c.name,
-      tenantName: nameById.get(c.tenantId) ?? "",
-      logoUrl: logoById.get(c.tenantId) ?? null,
-    }));
+    const profileById = new Map(profiles.map((p) => [p.tenantId, p]));
+    // The board is a card list, not the branded hero — so it carries logo + colour for each card but
+    // NOT the per-campaign stats (kept cheap; the hero fetches those on select) or customCss.
+    return campaigns.map((c) => {
+      const p = profileById.get(c.tenantId);
+      return {
+        campaignId: c.id,
+        tenantId: c.tenantId,
+        campaignName: c.name,
+        tenantName: nameById.get(c.tenantId) ?? "",
+        logoUrl: p?.logoBlockUrl ?? null,
+        primaryColour: p?.primaryColour ?? null,
+        secondaryColour: p?.secondaryColour ?? null,
+        customCss: null,
+        volunteerCount: 0,
+        doorsThisWeek: 0,
+      };
+    });
   }
 
   /**

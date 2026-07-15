@@ -52,6 +52,7 @@ import { MarketingModule } from "./marketing/marketing.module";
 import { RequestIdMiddleware } from "./common/http/request-id.middleware";
 import { BasicRateLimitMiddleware } from "./common/http/basic-rate-limit.middleware";
 import { QueueModule } from "./common/queue/queue.module";
+import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { QueueModule } from "./common/queue/queue.module";
       validate: validateEnv,
     }),
     PrismaModule,
+    TenantRoutingModule,
     StorageModule,
     IamModule,
     LoggingModule,

@@ -16,7 +16,6 @@ import {
   Lock,
   LogOut,
   MapPin,
-  Megaphone,
   Menu,
   MessageSquareText,
   Rocket,
@@ -33,8 +32,9 @@ import {
   type MessageChannel,
 } from "@/lib/api";
 import { tenants, type AuthPrincipal } from "@uprise/api-client";
+import { tenantSlugFromPlatformHost } from "@uprise/domains";
 import { createBlastAndOpen } from "@/lib/blasts";
-import { getSession, goToLogin, logout } from "@/lib/session";
+import { getSession, getSessionOutcome, goToLogin, logout } from "@/lib/session";
 import { ONBOARDING_STEPS, deriveOnboardingSteps } from "@/lib/onboarding";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search";
@@ -49,7 +49,11 @@ import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
 import { OnboardingLauncher } from "@/components/overview/onboarding-launcher";
 import { FlagsProvider } from "@/components/flags/flags-provider";
+import { SoftphoneProvider } from "@/components/softphone/softphone-provider";
+import { CallBar } from "@/components/softphone/call-bar";
 import { listFlags } from "@/lib/api/flags";
+import { listCampaigns } from "@/lib/api/campaigns";
+import { useApi } from "@/lib/use-api";
 import { FLAG_DEFAULTS, FLAG_META, type FeatureFlagKey, type FeatureFlagMap } from "@uprise/flags";
 
 
@@ -73,7 +77,26 @@ type NavNode =
 
 // Cascade sidebar model (matches the design prototype): leaf items + expandable
 // groups whose children appear on an indented rail.
-function buildNav(isSuperAdmin: boolean): NavNode[] {
+/** The campaign-scoped canvass ops sub-pages, rendered as Canvass nav children pointed at the
+ *  campaign the user is working on (`campaignId`, from the URL / last visited). When none is known
+ *  yet they fall back to the canvass dashboard, which resolves a default. `match` highlights on the
+ *  sub-path for ANY campaign, so the item stays active as the campaign switches. */
+function canvassOps(campaignId: string | null): NavLeaf[] {
+  const href = (sub: string) => (campaignId ? `/canvass/${campaignId}/${sub}` : "/canvass");
+  const onSub = (sub: string): NavMatch => (p) => new RegExp(`^/canvass/[^/]+/${sub}(?:/|$)`).test(p);
+  return [
+    { label: "Cut turf", href: href("turf"), match: onSub("turf") },
+    { label: "Live action room", href: href("live"), match: onSub("live") },
+    { label: "Results", href: href("results"), match: onSub("results") },
+    { label: "Goals", href: href("goals"), match: onSub("goals") },
+    { label: "Shifts", href: href("shifts"), match: onSub("shifts") },
+    { label: "QA", href: href("qa"), match: onSub("qa") },
+    { label: "Volunteers", href: href("volunteers"), match: onSub("volunteers") },
+    { label: "Walk lists", href: href("walklists"), match: onSub("walklists") },
+  ];
+}
+
+function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavNode[] {
   // Prefix matcher for the parked future routes (all under /future/*).
   const px = (s: string): NavMatch => (p) => p.startsWith(`/future/${s}`);
   // Prefix matcher for the super-admin routes (all under /super/*).
@@ -91,27 +114,28 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
     { type: "section", key: "sec-engage", label: "Engage" },
     {
       type: "group", key: "channels", label: "Channels", icon: MessageSquareText,
-      // Text only. WhatsApp, Email, Calls and Social Media are parked under Future → Channels.
-      match: (p) => p.startsWith("/channels/text"),
+      // Text + Calls are live. WhatsApp, Email and Social Media are parked under Future → Channels.
+      match: (p) => p.startsWith("/channels/text") || p.startsWith("/channels/calls"),
       flag: "FEATURE_NAV_CHANNELS",
       children: [
         { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text"), flag: "FEATURE_NAV_CHANNELS_TEXT" },
+        { label: "Calls", href: "/channels/calls", match: (p) => p.startsWith("/channels/calls") },
       ],
     },
     {
       type: "group", key: "canvass", label: "Canvass", icon: MapPin,
-      // The geo explorers moved to /data/*; only volunteers still shares /canvass.
-      match: (p) => p.startsWith("/canvass") && !p.startsWith("/canvass/volunteers"),
+      match: (p) => p.startsWith("/canvass"),
       flag: "FEATURE_NAV_CANVASS",
-      // Turf map / Walk lists / Live / Results are campaign-scoped routes — reachable
-      // from the campaign dashboard cards, not the global sidebar. Campaigns + the
-      // (campaign-independent) Turf planner are the global entries.
+      // Campaigns is the overview/default; the ops sub-pages (turf/live/results/…) are
+      // campaign-scoped, pointed at the campaign the user is working on (canvassCampaignId,
+      // from the URL / last visited). Volunteers is the campaign roster here — the old org-wide
+      // top-level "Volunteers" leaf folded in. Turf planner stays (campaign-independent).
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
+        ...canvassOps(canvassCampaignId),
         { label: "Turf planner", href: "/canvass/planner", match: (p) => p.startsWith("/canvass/planner") },
       ],
     },
-    { type: "leaf", key: "volunteers", label: "Volunteers", href: "/canvass/volunteers", icon: Megaphone, match: (p) => p.startsWith("/canvass/volunteers"), flag: "FEATURE_NAV_CANVASS_VOLUNTEERS" },
     {
       // "Content" section (routes /content/*). Flag keys keep their FEATURE_NAV_ENGAGEMENT_*
       // names — they're internal identifiers wired to plans/overrides, not user-visible.
@@ -220,7 +244,7 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
               px("support-tickets")(p) || px("checkout")(p) || px("api-keys")(p) ||
               px("chats")(p) || px("tasks")(p) ||
               px("ai-assistant")(p) || px("form-elements")(p) ||
-              px("calls")(p) || px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
+              px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
             flag: "FEATURE_NAV_PROG",
             children: [
               { label: "Calendar", href: "/future/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
@@ -229,11 +253,10 @@ function buildNav(isSuperAdmin: boolean): NavNode[] {
               // Deferred channel stubs, parked here until they ship (consolidation doc Part B).
               {
                 label: "Channels", flag: "FEATURE_NAV_PROG_CHANNELS",
-                match: (p) => px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social") || px("calls")(p),
+                match: (p) => px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
                 children: [
                   { label: "WhatsApp", href: "/future/whatsapp", match: px("whatsapp"), flag: "FEATURE_WHATSAPP_ENABLED" },
                   { label: "Email", href: "/channels/email", match: (p) => p.startsWith("/channels/email") },
-                  { label: "Calls", href: "/future/calls", match: px("calls") },
                   { label: "Social Media", href: "/channels/social", match: (p) => p.startsWith("/channels/social") },
                 ],
               },
@@ -295,6 +318,47 @@ export default function MainLayout({
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
+  // The campaign the sidebar's campaign-scoped Canvass items point at. The URL wins on a scoped
+  // sub-page; otherwise the last campaign visited IN THIS TENANT, persisted under a TENANT-NAMESPACED
+  // key so a workspace switch (a full page reload) never surfaces another tenant's campaign id in the
+  // sidebar's deep links. Falls back to the /canvass dashboard when none is known yet.
+  const canvassTenantId = principal?.activeTenant?.id ?? principal?.tenantId ?? null;
+  const canvassStoreKey = canvassTenantId ? `uprise.canvass.lastCampaignId:${canvassTenantId}` : null;
+  const urlCanvassCampaignId = useMemo(() => {
+    const m = pathname?.match(
+      /^\/canvass\/([^/]+)\/(?:turf|live|results|goals|shifts|qa|volunteers|walklists|boundary)(?:\/|$)/,
+    );
+    return m?.[1] ?? null;
+  }, [pathname]);
+  const [storedCanvassCampaignId, setStoredCanvassCampaignId] = useState<string | null>(null);
+  // Seed the remembered id from the per-tenant key once the tenant resolves.
+  useEffect(() => {
+    if (!canvassStoreKey) return;
+    try {
+      setStoredCanvassCampaignId(window.localStorage.getItem(canvassStoreKey));
+    } catch {
+      /* storage unavailable — the ops fall back to the /canvass dashboard */
+    }
+  }, [canvassStoreKey]);
+  // On a scoped page the URL id is authoritative — remember it (per tenant) for later navigations.
+  useEffect(() => {
+    if (!urlCanvassCampaignId || !canvassStoreKey) return;
+    setStoredCanvassCampaignId(urlCanvassCampaignId);
+    try {
+      window.localStorage.setItem(canvassStoreKey, urlCanvassCampaignId);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [urlCanvassCampaignId, canvassStoreKey]);
+  // A valid session that is not a member of this host's forced tenant (a tenant
+  // subdomain / white-label host) → show an access-denied screen, not a login loop.
+  const [deniedWorkspace, setDeniedWorkspace] = useState(false);
+  // The tenant slug this host is scoped to (bare `<slug>.<platform>` subdomain), or null
+  // on a platform app host. When set, the switcher is locked (the URL fixes the tenant).
+  const hostScopedTenant = useMemo(
+    () => (typeof window === "undefined" ? null : tenantSlugFromPlatformHost(window.location.host)),
+    [],
+  );
   // True once every getting-started step is done — hides the "Getting started" nav
   // item. Same signal the dashboard nudge uses (persisted OR live-derived), so the
   // two stay consistent.
@@ -319,10 +383,16 @@ export default function MainLayout({
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const session = await getSession();
+      const { user: session, deniedWorkspace: denied } = await getSessionOutcome();
       if (!alive) return;
-      // Middleware gates on the cookie; this resolves the principal. A present
-      // cookie that no longer resolves (expired/revoked) → back to the auth app.
+      // Middleware gates on the cookie; this resolves the principal. A 403 means the
+      // session is valid but has no access to THIS host's tenant (a subdomain / white-label
+      // host) — show an access-denied screen rather than looping through login.
+      if (denied) {
+        setDeniedWorkspace(true);
+        return;
+      }
+      // A present cookie that no longer resolves (expired/revoked) → back to the auth app.
       if (!session) {
         goToLogin();
         return;
@@ -602,6 +672,22 @@ export default function MainLayout({
     (flag?: FeatureFlagKey) => !flag || isSuperAdmin || navFlags[flag] !== false,
     [isSuperAdmin, navFlags],
   );
+  // Resolve the campaign the sidebar's canvass ops link to. Fetched (cached, shared with the
+  // campaign header's cache key) only when the Canvass nav is relevant. URL id wins on a scoped page;
+  // else the remembered id IF it's still a real campaign in this tenant; else the tenant's first
+  // campaign — so fresh sessions get scoped ops immediately and a stale/deleted id never dead-links.
+  const { data: canvassCampaignList } = useApi(
+    flagOn("FEATURE_NAV_CANVASS") ? "/canvass/campaigns" : null,
+    () => listCampaigns(),
+    { ttlMs: 60_000 },
+  );
+  const canvassCampaignId = useMemo(() => {
+    if (urlCanvassCampaignId) return urlCanvassCampaignId;
+    if (!canvassCampaignList) return storedCanvassCampaignId; // list not loaded yet — keep last known
+    const ids = new Set(canvassCampaignList.map((c) => c.id));
+    if (storedCanvassCampaignId && ids.has(storedCanvassCampaignId)) return storedCanvassCampaignId;
+    return canvassCampaignList[0]?.id ?? null;
+  }, [urlCanvassCampaignId, storedCanvassCampaignId, canvassCampaignList]);
   // A nav item the current tenant's PLAN doesn't include: a plan-driven flag that
   // resolves off for this tenant. Non-super-admins have these filtered out
   // entirely; super-admins keep them in the sidebar rendered greyed + still
@@ -628,7 +714,7 @@ export default function MainLayout({
         (e, i) => !("subheading" in e) || (i + 1 < kept.length && !("subheading" in kept[i + 1])),
       );
     };
-    const built = buildNav(isSuperAdmin)
+    const built = buildNav(isSuperAdmin, canvassCampaignId)
       .filter((n) => flagOn(n.flag))
       .filter((n) => !(onboardingDone && n.key === "getting-started"))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
@@ -648,7 +734,7 @@ export default function MainLayout({
       if (!("href" in only)) return n; // sole child isn't a direct link → keep the group
       return { type: "leaf", key: n.key, label: n.label, icon: n.icon, href: only.href, match: n.match, flag: n.flag };
     });
-  }, [isSuperAdmin, flagOn, onboardingDone]);
+  }, [isSuperAdmin, flagOn, onboardingDone, canvassCampaignId]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
@@ -675,8 +761,8 @@ export default function MainLayout({
         if (ge.flag && !flagOn(ge.flag) && ge.match(p)) return true;
         return ge.children ? blocked(ge.children) : false;
       });
-    if (blocked(buildNav(isSuperAdmin))) router.replace("/dashboard");
-  }, [ready, isSuperAdmin, p, flagOn, router]);
+    if (blocked(buildNav(isSuperAdmin, canvassCampaignId))) router.replace("/dashboard");
+  }, [ready, isSuperAdmin, p, flagOn, router, canvassCampaignId]);
   // Groups toggle independently (prototype: openGroups array). Default-open is the
   // active group only; an explicit user toggle overrides the default.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
@@ -887,6 +973,36 @@ export default function MainLayout({
     </div>
   );
 
+  if (deniedWorkspace) {
+    // Signed in, but not a member of the tenant this host is scoped to. Offer a way in
+    // with a different account rather than a login loop (the API 403s this workspace).
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <h1 className="text-xl font-semibold text-foreground">No access to this workspace</h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          You’re signed in, but your account isn’t a member of this organisation. Sign in with an
+          account that has access, or contact a workspace owner for an invitation.
+        </p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => goToLogin()}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+          >
+            Sign in with a different account
+          </button>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-surface-variant"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!ready) {
     // Loading a workspace (initial load / after a tenant switch reload) shows the
     // app's normal page-loading skeleton, not a bare spinner.
@@ -899,6 +1015,7 @@ export default function MainLayout({
 
   return (
     <TourRoot>
+    <SoftphoneProvider>
     <div className="h-screen overflow-hidden bg-background">
       {/* Mobile drawer backdrop — fades with the drawer */}
       <div
@@ -933,6 +1050,7 @@ export default function MainLayout({
                   isSuperAdmin={principal.isSuperAdmin}
                   activeTenant={principal.activeTenant}
                   collapsed={collapsed}
+                  locked={Boolean(hostScopedTenant)}
                   onSlideChange={setBrandSlidePx}
                 />
               ) : (
@@ -1132,6 +1250,8 @@ export default function MainLayout({
       {/* Global onboarding launcher — hovers bottom-right across the shell (hidden on
           the dashboard + getting-started, which own their own onboarding UI). */}
       <OnboardingLauncher />
+      {/* Global in-call widget for the browser softphone (shown only during a call). */}
+      <CallBar />
       {flyout ? (
         <div
           className="fixed z-[95] flex max-h-[70vh] min-w-[184px] max-w-[264px] flex-col overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-theme-lg"
@@ -1149,6 +1269,7 @@ export default function MainLayout({
         </div>
       ) : null}
     </div>
+    </SoftphoneProvider>
     </TourRoot>
   );
 }

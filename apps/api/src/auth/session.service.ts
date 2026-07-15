@@ -11,6 +11,12 @@ export interface ResolvedSession {
   tenantId: string | null;
   role: string; // AppUserRole value from the membership (effective OWNER for a membership-less super-admin)
   isSuperAdmin: boolean;
+  /**
+   * Set when a host-forced tenant (a tenant subdomain / white-label host) was requested
+   * but this user is neither a member nor a super-admin. The session itself is valid — the
+   * caller just has no access to THIS workspace — so the guard turns it into a 403, not a 401.
+   */
+  hostTenantDenied?: boolean;
 }
 
 export interface SessionSummary {
@@ -76,6 +82,7 @@ export class SessionService {
   async resolve(
     token: string,
     meta?: { userAgent?: string | null; ipAddress?: string | null },
+    opts?: { forcedTenantId?: string | null },
   ): Promise<ResolvedSession | null> {
     if (!token) return null;
     const session = await this.prisma.session.findUnique({ where: { token } });
@@ -102,6 +109,37 @@ export class SessionService {
     // A super-admin may have zero memberships (break-glass) and may operate inside a
     // tenant they're not a member of — so they resolve even when a normal user wouldn't.
     if (memberships.length === 0 && !user.isSuperAdmin) return null;
+    const isSuperAdmin = user.isSuperAdmin === true;
+
+    // Host-forced tenant (subdomain / white-label host) — takes precedence over the
+    // session's pinned tenant so the URL's tenant is what a request acts on. A member
+    // uses their real role; a super-admin acts-as (effective OWNER); anyone else is
+    // denied THIS workspace (the guard 403s) without invalidating their session.
+    const forcedTenantId = opts?.forcedTenantId ?? null;
+    if (forcedTenantId) {
+      const forcedMembership = memberships.find((m) => m.tenantId === forcedTenantId);
+      if (forcedMembership) {
+        return {
+          userId: user.id,
+          email: user.email,
+          tenantId: forcedTenantId,
+          role: forcedMembership.role,
+          isSuperAdmin,
+        };
+      }
+      if (isSuperAdmin) {
+        return { userId: user.id, email: user.email, tenantId: forcedTenantId, role: "OWNER", isSuperAdmin };
+      }
+      return {
+        userId: user.id,
+        email: user.email,
+        tenantId: null,
+        role: memberships[0]?.role ?? "member",
+        isSuperAdmin,
+        hostTenantDenied: true,
+      };
+    }
+
     const pinned = session.tenantId
       ? memberships.find((m) => m.tenantId === session.tenantId)
       : undefined;

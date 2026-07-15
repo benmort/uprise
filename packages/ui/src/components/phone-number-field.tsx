@@ -10,6 +10,12 @@ export function formatAuMobile(digits: string): string {
   return parts.join(" ");
 }
 
+/** National AU digits → E.164 (drop a leading 0, prefix +61). */
+export function toE164(national: string): string {
+  const d = national.replace(/\D/g, "");
+  return "+61" + (d.startsWith("0") ? d.slice(1) : d);
+}
+
 export interface PhoneNumberFieldProps {
   /** Raw national digits (e.g. "0481565866"); driven by the Keypad. */
   value: string;

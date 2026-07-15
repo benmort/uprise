@@ -76,7 +76,7 @@ export default function VolunteerJoinPage() {
         <p className="text-sm text-muted-foreground">
           An organiser will review it. We&apos;ll text you when you&apos;re approved.
         </p>
-        <Link href="/v" className="mt-6 inline-block font-medium text-primary hover:underline">
+        <Link href="/volunteer/sign-in" className="mt-6 inline-block font-medium text-primary hover:underline">
           Back to sign in
         </Link>
       </div>
@@ -86,7 +86,7 @@ export default function VolunteerJoinPage() {
   return (
     <div className="flex flex-1 flex-col justify-center px-5 py-8">
       <div className="mb-5">
-        <Link href="/v" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/volunteer/sign-in" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground">
           <ChevronLeft className="h-4 w-4" />
           Back
         </Link>

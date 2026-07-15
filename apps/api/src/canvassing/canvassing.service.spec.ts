@@ -56,10 +56,17 @@ describe("CanvassingService", () => {
       },
       questionResponse: { groupBy: jest.fn() },
       canvassCampaign: { findFirst: jest.fn(), findMany: jest.fn() },
-      walkListItem: { updateMany: jest.fn() },
+      walkListItem: {
+        updateMany: jest.fn(),
+        update: jest.fn(async ({ where, data }: any) => ({ id: where.id, ...data })),
+        create: jest.fn(async ({ data }: any) => ({ id: "wli_new", ...data })),
+        createMany: jest.fn(async ({ data }: any) => ({ count: data.length })),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       walkList: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
         create: jest.fn(async ({ data }: any) => ({ id: "w_new", ...data })),
         update: jest.fn(async ({ data }: any) => ({ id: "w1", ...data })),
       },
@@ -92,7 +99,7 @@ describe("CanvassingService", () => {
         findFirst: jest.fn(),
         update: jest.fn(async ({ data }: any) => ({ tenantId: "org1", userId: "u1", role: data.role })),
       },
-      $transaction: jest.fn(async (cb: any) => cb(prisma)),
+      $transaction: jest.fn(async (arg: any) => (Array.isArray(arg) ? Promise.all(arg) : arg(prisma))),
       $queryRaw: jest.fn(),
       $queryRawUnsafe: jest.fn(),
       $executeRawUnsafe: jest.fn(),
@@ -201,6 +208,153 @@ describe("CanvassingService", () => {
 
       expect(res).toEqual([]);
       expect(prisma.turf.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("auto walk list on turf population (reconciling)", () => {
+    // contactIds in the created walk list (order-agnostic — order is optimiseRoute's job, tested elsewhere).
+    const createdContactIds = () => {
+      const arg = prisma.walkList.create.mock.calls[0]?.[0];
+      return (arg?.data?.items?.create ?? []).map((i: any) => i.contactId).sort();
+    };
+    const cs = (ids: string[]) => ids.map((id, i) => ({ id, lat: -37.8 - i * 0.01, lng: 144.9 + i * 0.01 }));
+
+    it("builds a default wl_turf list of every address after loadUniverseIntoTurf", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", name: "Brunswick 01", tenantId: "org1", campaignId: "camp1" });
+      geo.addresses.mockResolvedValue([]); // no cold doors to materialise — exercise the walk-list build
+      prisma.walkList.findFirst.mockResolvedValue(null); // no existing list → create path
+      prisma.contact.findMany.mockResolvedValue(cs(["c1", "c2", "c3"]));
+      prisma.contact.count.mockResolvedValue(3);
+
+      await service.loadUniverseIntoTurf("org1", "t1", { universe: "none" });
+
+      expect(prisma.walkList.create.mock.calls[0][0].data).toMatchObject({
+        id: "wl_turf_t1",
+        turfId: "t1",
+        tenantId: "org1",
+        campaignId: "camp1",
+      });
+      expect(createdContactIds()).toEqual(["c1", "c2", "c3"]);
+    });
+
+    it("builds a default wl_turf list after rebucketTurf buckets existing contacts", async () => {
+      prisma.turf.findFirst.mockResolvedValue({
+        id: "t1",
+        name: "Brunswick 01",
+        tenantId: "org1",
+        campaignId: "camp1",
+        geometry: { type: "Polygon", coordinates: [] },
+      });
+      prisma.walkList.findFirst.mockResolvedValue(null);
+      prisma.contact.findMany
+        .mockResolvedValueOnce([]) // rebucket candidate scan — nothing to move
+        .mockResolvedValueOnce(cs(["c1", "c2"])); // orderedTurfContactIds read inside the rebuild
+      prisma.contact.count.mockResolvedValue(2);
+
+      await service.rebucketTurf("org1", "t1");
+
+      expect(prisma.walkList.create.mock.calls[0][0].data).toMatchObject({ id: "wl_turf_t1", turfId: "t1" });
+      expect(createdContactIds()).toEqual(["c1", "c2"]);
+    });
+
+    it("does not build a walk list when the turf has no addresses", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", name: "Empty", tenantId: "org1", campaignId: null });
+      geo.addresses.mockResolvedValue([]);
+      prisma.walkList.findFirst.mockResolvedValue(null);
+      prisma.contact.findMany.mockResolvedValue([]); // no bucketed contacts
+      prisma.contact.count.mockResolvedValue(0);
+
+      await service.loadUniverseIntoTurf("org1", "t1", { universe: "none" });
+
+      expect(prisma.walkList.create).not.toHaveBeenCalled();
+    });
+
+    // The regression the review caught: a turf is populated in TWO steps (e.g. cold doors, then
+    // rebucketed voters). The second step must ADD its doors to the existing wl_turf list, never drop them.
+    it("reconcile: ADDS a second population step's new contact to an existing list, preserving the rest", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", name: "T", tenantId: "org1", campaignId: "camp1" });
+      prisma.contact.findMany.mockResolvedValue(cs(["c1", "c2", "c3"])); // c3 newly bucketed by step 2
+      prisma.walkList.findFirst.mockResolvedValue({
+        id: "wl_turf_t1",
+        items: [
+          { id: "i1", contactId: "c1" },
+          { id: "i2", contactId: "c2" },
+        ], // list built by step 1
+      });
+
+      const res = await service.rebuildTurfWalkList("org1", "t1");
+
+      const added = (prisma.walkListItem.createMany.mock.calls[0]?.[0]?.data ?? []).map((r: any) => r.contactId);
+      expect(added).toEqual(["c3"]); // the second step's door is added
+      expect(prisma.walkListItem.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.walkList.create).not.toHaveBeenCalled(); // reconciled in place, not re-created
+      expect(res).toMatchObject({ items: 3, added: 1, removed: 0 });
+    });
+
+    it("reconcile: REMOVES an item whose contact left the turf, keeping the rest", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", name: "T", tenantId: "org1", campaignId: null });
+      prisma.contact.findMany.mockResolvedValue(cs(["c1"])); // only c1 remains in the turf
+      prisma.walkList.findFirst.mockResolvedValue({
+        id: "wl_turf_t1",
+        items: [
+          { id: "i1", contactId: "c1" },
+          { id: "i2", contactId: "c2" },
+        ],
+      });
+
+      const res = await service.rebuildTurfWalkList("org1", "t1");
+
+      expect(prisma.walkListItem.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["i2"] } } });
+      expect(res).toMatchObject({ items: 1, added: 0, removed: 1 });
+    });
+
+    it("rebuildWalkLists isolates a failing turf so the batch keeps going", async () => {
+      prisma.turf.findFirst
+        .mockResolvedValueOnce({ id: "t1", name: "T", tenantId: "org1", campaignId: null })
+        .mockResolvedValueOnce(null); // t2 not found → per-turf error, not a batch failure
+      prisma.walkList.findFirst.mockResolvedValue(null);
+      prisma.contact.findMany.mockResolvedValue(cs(["c1"]));
+
+      const { results } = await service.rebuildWalkLists("org1", ["t1", "t2"]);
+
+      expect(results).toHaveLength(2);
+      expect(results[0]).toMatchObject({ turfId: "t1", items: 1 });
+      expect(results[1]).toMatchObject({ turfId: "t2" });
+      expect(results[1].error).toBeDefined();
+    });
+
+    // The residual M2 the re-review caught: a turf that already has a list with a NON-deterministic
+    // (cuid) id — e.g. the seed's "Demo walk list" — must be reconciled, never duplicated.
+    it("reuses a turf's existing non-wl_turf list instead of creating a second (M2 guard)", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", name: "T", tenantId: "org1", campaignId: null });
+      prisma.contact.findMany.mockResolvedValue(cs(["c1", "c2"]));
+      prisma.walkList.findFirst.mockResolvedValue({
+        id: "cuid_demo_list", // a legacy/seed list, NOT wl_turf_t1
+        items: [
+          { id: "i1", contactId: "c1" },
+          { id: "i2", contactId: "c2" },
+        ],
+      });
+
+      const res = await service.rebuildTurfWalkList("org1", "t1");
+
+      expect(prisma.walkList.create).not.toHaveBeenCalled(); // no second parallel list
+      expect(res.walkListId).toBe("cuid_demo_list"); // reconciled the turf's existing list in place
+    });
+
+    it("recovers from a concurrent create (P2002) by reconciling the race winner's list, not 500ing", async () => {
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", name: "T", tenantId: "org1", campaignId: null });
+      prisma.contact.findMany.mockResolvedValue(cs(["c1", "c2"]));
+      prisma.walkList.findFirst
+        .mockResolvedValueOnce(null) // first look — no list yet, take the create branch
+        .mockResolvedValueOnce({ id: "wl_turf_t1", items: [{ id: "i1", contactId: "c1" }] }); // racer's list
+      prisma.walkList.create.mockRejectedValueOnce(p2002());
+
+      const res = await service.rebuildTurfWalkList("org1", "t1");
+
+      expect(res.walkListId).toBe("wl_turf_t1"); // reconciled instead of throwing
+      const added = (prisma.walkListItem.createMany.mock.calls[0]?.[0]?.data ?? []).map((r: any) => r.contactId);
+      expect(added).toContain("c2"); // the missing door was added during recovery
     });
   });
 
@@ -835,13 +989,17 @@ describe("CanvassingService", () => {
         { userId: "u2", role: "VOLUNTEER" },
       ]);
       prisma.user.findMany = jest.fn().mockResolvedValue([
-        { id: "u1", displayName: "Ada", email: "ada@x.com" },
-        { id: "u3", displayName: "Ghost", email: "ghost@x.com" }, // no membership → default role
+        { id: "u1", displayName: "Ada", email: "ada@x.com", mobile: "+61400000001" },
+        { id: "u3", displayName: "Ghost", email: "ghost@x.com", mobile: null }, // no membership → default role
       ]);
       const res = await service.listVolunteers("org1");
+      // mobile is surfaced for the click-to-call button (null for email-login volunteers).
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ select: expect.objectContaining({ mobile: true }) }),
+      );
       expect(res).toEqual([
-        { id: "u1", displayName: "Ada", email: "ada@x.com", role: "ORGANISER" },
-        { id: "u3", displayName: "Ghost", email: "ghost@x.com", role: AppUserRole.VOLUNTEER },
+        { id: "u1", displayName: "Ada", email: "ada@x.com", mobile: "+61400000001", role: "ORGANISER" },
+        { id: "u3", displayName: "Ghost", email: "ghost@x.com", mobile: null, role: AppUserRole.VOLUNTEER },
       ]);
     });
   });

@@ -1,3 +1,5 @@
+import { DEFAULT_PLATFORM_ROOTS, parentDomain } from "@uprise/domains";
+
 /**
  * return_to validation (meld doc 14). A successful login may only redirect back
  * to an origin on the configured allowlist — never an arbitrary URL (open-redirect
@@ -30,8 +32,17 @@ export function validateReturnTo(raw: string | null | undefined): string {
   if (!raw) return fallback;
   try {
     const url = new URL(raw, fallback);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return fallback;
     const origin = `${url.protocol}//${url.host}`.toLowerCase();
     if (allowedOrigins().map((o) => o.toLowerCase()).includes(origin)) {
+      return url.toString();
+    }
+    // Tenant subdomains (e.g. common-threads.uprise.org.au) aren't in the static env
+    // allowlist, so also accept any host whose registrable parent is a platform root.
+    // Still an open-redirect guard: only the platform's own domains pass, never an
+    // arbitrary external host.
+    const parent = parentDomain(url.hostname);
+    if (parent && DEFAULT_PLATFORM_ROOTS.includes(parent)) {
       return url.toString();
     }
   } catch {

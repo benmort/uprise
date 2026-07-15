@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, LayoutGrid, List, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
@@ -32,6 +32,7 @@ import { KpiTile } from "@uprise/field";
 import { MapThumbnail } from "@uprise/field";
 import { ProgressBar } from "@uprise/field";
 import { CampaignNavCards } from "@uprise/field";
+import { DataTable } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { outerRing } from "@/lib/geometry";
 
@@ -41,6 +42,12 @@ const CampaignBoundaryMap = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-[260px] w-full rounded-2xl" /> },
 );
 
+// Turf status + knocked-% derived the same way for both the card and list views.
+type TurfViewStatus = "COMPLETED" | "IN_PROGRESS" | "UNASSIGNED";
+const turfStatus = (t: TurfSummary): TurfViewStatus =>
+  t.totalStops > 0 && t.visitedStops >= t.totalStops ? "COMPLETED" : t.assignedTo ? "IN_PROGRESS" : "UNASSIGNED";
+const turfPct = (t: TurfSummary) => (t.totalStops > 0 ? Math.round((t.visitedStops / t.totalStops) * 100) : 0);
+
 export default function CanvassPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -49,6 +56,7 @@ export default function CanvassPage() {
   const [kpis, setKpis] = useState<CampaignKpis | null>(null);
   const [turfs, setTurfs] = useState<TurfSummary[]>([]);
   const [boundary, setBoundary] = useState<GeoJSON.Geometry | null>(null);
+  const [turfView, setTurfView] = useState<"cards" | "list">("cards");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -323,6 +331,40 @@ export default function CanvassPage() {
         />
       </div>
 
+      {turfs.length > 0 ? (
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+            <MapPinned className="h-4 w-4 text-primary" />
+            Turf ({turfs.length})
+          </h2>
+          {/* Cards / list view toggle — cards is the default; list is the standard DataTable. */}
+          <div className="inline-flex overflow-hidden rounded-lg border border-border">
+            <button
+              type="button"
+              aria-pressed={turfView === "cards"}
+              onClick={() => setTurfView("cards")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
+                turfView === "cards" ? "bg-surface-variant text-foreground" : "text-muted-foreground hover:bg-surface-variant"
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Cards
+            </button>
+            <button
+              type="button"
+              aria-pressed={turfView === "list"}
+              onClick={() => setTurfView("list")}
+              className={`flex items-center gap-1.5 border-l border-border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                turfView === "list" ? "bg-surface-variant text-foreground" : "text-muted-foreground hover:bg-surface-variant"
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              List
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {turfs.length === 0 ? (
         <EmptyState
           title="No turf in this campaign"
@@ -330,17 +372,47 @@ export default function CanvassPage() {
           ctaLabel={activeId ? "Cut new turf" : undefined}
           onCta={activeId ? () => router.push(`/canvass/${activeId}/turf`) : undefined}
         />
+      ) : turfView === "list" ? (
+        <DataTable
+          rows={turfs}
+          rowKey={(t) => t.id}
+          columns={[
+            { key: "name", header: "Turf", cell: (t) => <span className="font-semibold text-foreground">{t.name}</span> },
+            { key: "status", header: "Status", cell: (t) => <StatusBadge status={turfStatus(t)} /> },
+            {
+              key: "assignee",
+              header: "Assigned to",
+              cell: (t) => t.assignedTo?.name ?? <span className="text-muted-foreground">Unassigned</span>,
+            },
+            { key: "doors", header: "Doors", numeric: true, cell: (t) => t.contactCount },
+            { key: "walklists", header: "Walk lists", numeric: true, cell: (t) => t.walkListCount },
+            {
+              key: "knocked",
+              header: "Knocked",
+              numeric: true,
+              cell: (t) => `${t.visitedStops}/${t.totalStops} · ${turfPct(t)}%`,
+            },
+            {
+              key: "actions",
+              header: "",
+              cell: (t) => (
+                <div className="flex justify-end">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href={`/canvass/${t.campaignId ?? activeId}/walklists?turfId=${t.id}`}>
+                      Manage
+                      <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {turfs.map((t) => {
-            const pct =
-              t.totalStops > 0 ? Math.round((t.visitedStops / t.totalStops) * 100) : 0;
-            const status =
-              t.totalStops > 0 && t.visitedStops >= t.totalStops
-                ? "COMPLETED"
-                : t.assignedTo
-                  ? "IN_PROGRESS"
-                  : "UNASSIGNED";
+            const pct = turfPct(t);
+            const status = turfStatus(t);
             return (
               <div key={t.id} className="rounded-2xl border border-border bg-surface p-3 shadow-sm">
                 <MapThumbnail polygon={outerRing(t.geometry)} className="h-24 w-full" />

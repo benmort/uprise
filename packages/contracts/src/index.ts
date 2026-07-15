@@ -143,7 +143,15 @@ export const openJoinAcceptSchema = z.object({
 });
 export type OpenJoinAcceptRequest = z.infer<typeof openJoinAcceptSchema>;
 
-export type OpenJoinPreview = {
+/** Tenant brand fields carried on a public join preview so the join hero can wear the org's
+ *  brand (BrandStyle maps `primaryColour` → `--primary`). All null → the Uprise default brand. */
+export interface JoinBrand {
+  primaryColour: string | null;
+  secondaryColour: string | null;
+  customCss: string | null;
+}
+
+export type OpenJoinPreview = JoinBrand & {
   campaignId: string;
   /** The campaign's tenant id — keys the deterministic fallback avatar gradient when
    *  the org has no logo (same as the tenant selector). */
@@ -153,6 +161,10 @@ export type OpenJoinPreview = {
   /** The tenant's block/avatar logo (OrgProfile.logoBlockUrl) — the one the tenant
    *  selector shows. Null when the org hasn't set a logo. */
   logoUrl: string | null;
+  /** Recruitment social-proof for the hero (real, best-effort; 0 when unavailable — the hero
+   *  hides zero stats). */
+  volunteerCount: number;
+  doorsThisWeek: number;
 };
 
 export const selectTenantSchema = z.object({ tenantId: z.string().min(1) });

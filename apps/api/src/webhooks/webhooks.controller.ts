@@ -4,6 +4,7 @@ import {
   Header,
   Logger,
   Post,
+  Query,
   Req,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -259,24 +260,96 @@ export class WebhooksController {
       AccountSid?: string;
     },
     @Req() req: Request,
+    @Query("callId") callId?: string,
   ): Promise<string> {
     const token = await this.telephonyAuth.tokenForAccountSid(body?.AccountSid);
     this.validateTwilioSignature(req, body as Record<string, unknown>, token);
     const status = String(body?.CallStatus || "");
     const durationRaw = body?.CallDuration ? Number(body.CallDuration) : undefined;
     const priceRaw = body?.Price ? Number(body.Price) : undefined;
-    await this.calls.processStatusCallback({
-      callSid: String(body?.CallSid || ""),
-      status,
-      durationSeconds: Number.isFinite(durationRaw) ? durationRaw : undefined,
-      recordingUrl: body?.RecordingUrl || undefined,
-      priceCents:
-        priceRaw !== undefined && Number.isFinite(priceRaw)
-          ? Math.round(Math.abs(priceRaw) * 100)
-          : undefined,
-      currency: body?.PriceUnit || undefined,
-      startedAt: status === "in-progress" ? new Date() : undefined,
-    });
+    await this.calls.processStatusCallback(
+      {
+        callSid: String(body?.CallSid || ""),
+        status,
+        durationSeconds: Number.isFinite(durationRaw) ? durationRaw : undefined,
+        recordingUrl: body?.RecordingUrl || undefined,
+        priceCents:
+          priceRaw !== undefined && Number.isFinite(priceRaw)
+            ? Math.round(Math.abs(priceRaw) * 100)
+            : undefined,
+        currency: body?.PriceUnit || undefined,
+        startedAt: status === "in-progress" ? new Date() : undefined,
+      },
+      callId,
+    );
     return TWIML_EMPTY;
   }
+
+  /**
+   * TwiML App voice handler for a browser (WebRTC) softphone call. The Voice SDK's
+   * `device.connect({ params: { To, contactId } })` lands here; we create the Call
+   * row and return `<Dial>` bridging the browser to the callee, from the tenant's
+   * provisioned number. Tenant is derived from the signed client identity (`From`),
+   * never a client param. An invalid request returns a spoken apology, not a bridge.
+   */
+  @Post("voice-outbound")
+  @Header("Content-Type", "application/xml")
+  async voiceOutbound(
+    @Body() body: { To?: string; From?: string; AccountSid?: string; contactId?: string },
+    @Req() req: Request,
+  ): Promise<string> {
+    const token = await this.telephonyAuth.tokenForAccountSid(body?.AccountSid);
+    this.validateTwilioSignature(req, body as Record<string, unknown>, token);
+    const tenantId = tenantFromClientIdentity(body?.From);
+    const to = String(body?.To || "").trim();
+    if (!tenantId || !/^\+[1-9]\d{6,14}$/.test(to)) {
+      return '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, we could not place this call.</Say></Response>';
+    }
+    const { twiml } = await this.calls.startBrowserCall({
+      tenantId,
+      toNumber: to,
+      contactId: body?.contactId || null,
+      accountSid: body?.AccountSid,
+    });
+    return twiml;
+  }
+
+  /**
+   * Twilio recording status callback (meld doc 09). A call's recording finalises
+   * after the call ends, so it arrives separately from the status callback; this
+   * binds the RecordingUrl to its Call. Idempotency + the claim live in CallsService.
+   */
+  @Post("voice-recording-callback")
+  @Header("Content-Type", "application/xml")
+  async voiceRecordingCallback(
+    @Body()
+    body: {
+      CallSid?: string;
+      RecordingUrl?: string;
+      RecordingStatus?: string;
+      AccountSid?: string;
+    },
+    @Req() req: Request,
+    @Query("callId") callId?: string,
+  ): Promise<string> {
+    const token = await this.telephonyAuth.tokenForAccountSid(body?.AccountSid);
+    this.validateTwilioSignature(req, body as Record<string, unknown>, token);
+    await this.calls.processRecordingCallback(
+      {
+        callSid: String(body?.CallSid || ""),
+        recordingUrl: body?.RecordingUrl || undefined,
+      },
+      callId,
+    );
+    return TWIML_EMPTY;
+  }
+}
+
+/**
+ * The tenant id from a browser Voice client identity. The access token identity is
+ * `u{userId}.t{tenantId}`; Twilio delivers it as `From: client:u{userId}.t{tenantId}`.
+ */
+function tenantFromClientIdentity(from?: string): string | null {
+  const match = /\.t([A-Za-z0-9]+)$/.exec(String(from || ""));
+  return match ? match[1] : null;
 }

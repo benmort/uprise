@@ -568,7 +568,7 @@ export const canvassingTourSteps: TourStep[] = [
   },
   {
     icon: Radio,
-    title: "Live war-room",
+    title: "Live action room",
     content: "Watch the doors land in real time while volunteers are out.",
     detail: "Who's out, doors today, idle alerts and a feed of recent knocks — polled live.",
     selector: "#tour-canvass-ops",

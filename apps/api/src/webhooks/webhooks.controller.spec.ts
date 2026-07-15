@@ -64,3 +64,93 @@ describe("WebhooksController.inboundTextMessage — tenant fail-closed", () => {
     );
   });
 });
+
+describe("WebhooksController.voiceOutbound", () => {
+  const calls = {
+    startBrowserCall: jest.fn().mockResolvedValue({ twiml: "<Response><Dial>+61400000999</Dial></Response>" }),
+  } as any;
+  const telephonyAuth = { tokenForAccountSid: jest.fn().mockResolvedValue("tok") } as any;
+  const req = { headers: {}, protocol: "https", get: () => "example.com", originalUrl: "/hook" } as any;
+
+  function makeController() {
+    const c = new WebhooksController(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      calls,
+      telephonyAuth,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    (c as any).validateTwilioSignature = jest.fn();
+    return c;
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("derives the tenant from the client identity and returns the dial TwiML", async () => {
+    const out = await makeController().voiceOutbound(
+      { To: "+61400000999", From: "client:uUSER1.tTEN1", AccountSid: "AC1", contactId: "ct1" },
+      req,
+    );
+    expect(calls.startBrowserCall).toHaveBeenCalledWith({
+      tenantId: "TEN1",
+      toNumber: "+61400000999",
+      contactId: "ct1",
+      accountSid: "AC1",
+    });
+    expect(out).toContain("<Dial");
+  });
+
+  it("returns a spoken apology (no bridge) for an invalid To", async () => {
+    const out = await makeController().voiceOutbound({ To: "not-a-number", From: "client:uU.tTEN1" }, req);
+    expect(calls.startBrowserCall).not.toHaveBeenCalled();
+    expect(out).toContain("could not place this call");
+  });
+});
+
+describe("WebhooksController.voiceRecordingCallback", () => {
+  const calls = { processRecordingCallback: jest.fn().mockResolvedValue(undefined) } as any;
+  const telephonyAuth = { tokenForAccountSid: jest.fn().mockResolvedValue("tok") } as any;
+  const req = { headers: {}, protocol: "https", get: () => "example.com", originalUrl: "/hook" } as any;
+
+  function makeController() {
+    const c = new WebhooksController(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      calls,
+      telephonyAuth,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    (c as any).validateTwilioSignature = jest.fn();
+    return c;
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("validates the account-signed request and binds the recording URL", async () => {
+    const out = await makeController().voiceRecordingCallback(
+      { CallSid: "CA1", RecordingUrl: "https://rec/1", RecordingStatus: "completed", AccountSid: "AC1" },
+      req,
+    );
+
+    expect(out).toBe(TWIML_EMPTY);
+    expect(telephonyAuth.tokenForAccountSid).toHaveBeenCalledWith("AC1");
+    expect(calls.processRecordingCallback).toHaveBeenCalledWith(
+      { callSid: "CA1", recordingUrl: "https://rec/1" },
+      undefined,
+    );
+  });
+});

@@ -13,6 +13,7 @@ export type PageTab =
   | "contacts"
   | "addresses"
   | "access"
+  | "domains"
   | "integrations"
   | "security"
   | "compliance"
@@ -31,6 +32,7 @@ export const TAB_SEGMENT: Record<PageTab, string> = {
   contacts: "contacts",
   addresses: "addresses",
   access: "access",
+  domains: "domains",
   integrations: "integrations",
   security: "security",
   compliance: "compliance",

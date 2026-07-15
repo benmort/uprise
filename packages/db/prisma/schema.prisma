@@ -1849,6 +1849,7 @@ model Call {
   updatedAt       DateTime   @updatedAt
 
   @@index([tenantId, status])
+  @@index([tenantId, createdAt])
   @@schema("telephony")
 }
 
@@ -1913,6 +1914,21 @@ model TelephonyAccount {
   updatedAt          DateTime               @updatedAt
 
   @@index([tenantId, status])
+  @@schema("telephony")
+}
+
+// Platform-account browser-voice app: the Twilio API key + TwiML App used to sign
+// Voice access tokens for tenants WITHOUT their own provisioned subaccount. Created
+// lazily from the platform TWILIO_ACCOUNT_SID/AUTH_TOKEN (already set for SMS/2FA) so
+// browser calling needs no extra console setup. Singleton keyed by the platform SID.
+model PlatformVoiceApp {
+  accountSid            String   @id
+  apiKeySid             String
+  encryptedApiKeySecret String
+  twimlAppSid           String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
   @@schema("telephony")
 }
 

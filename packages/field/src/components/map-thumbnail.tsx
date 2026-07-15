@@ -7,6 +7,9 @@ export type MapThumbnailProps = {
   className?: string;
   /** When provided (e.g. a dynamically-imported TurfMap), renders instead of the SVG grid. */
   children?: React.ReactNode;
+  /** Per-turf swatch (CSS hex). Given → solid outline + faint tint in that colour; omitted →
+   *  the brand primary with a dashed outline (the default placeholder look). */
+  color?: string;
 };
 
 const STOCK_POLYGON = "20,30 70,18 110,40 96,82 40,90 14,62";
@@ -15,28 +18,37 @@ const STOCK_POLYGON = "20,30 70,18 110,40 96,82 40,90 14,62";
  * Lightweight map placeholder: an SVG polygon on a faint grid. Used on turf cards
  * where loading mapbox would be wasteful. Pass `children` to wrap a real TurfMap.
  */
-export function MapThumbnail({ polygon, className, children }: MapThumbnailProps) {
+export function MapThumbnail({ polygon, className, children, color }: MapThumbnailProps) {
   if (children) {
     return <div className={cn("overflow-hidden rounded-xl bg-surface", className)}>{children}</div>;
   }
 
   const points = polygon && polygon.length >= 3 ? toViewBoxPoints(polygon) : STOCK_POLYGON;
+  const stroke = color ?? "hsl(var(--primary))";
+  // Unique pattern id per colour: SVG `url(#id)` resolves the FIRST match in the document,
+  // so a shared id would make every thumbnail borrow the first card's grid colour.
+  const gridId = color ? `mt-grid-${color.replace(/[^a-z0-9]/gi, "")}` : "mt-grid";
 
   return (
-    <div className={cn("relative overflow-hidden rounded-xl bg-primary/10 dark:bg-primary/20", className)}>
+    <div
+      className={cn("relative overflow-hidden rounded-xl", !color && "bg-primary/10 dark:bg-primary/20", className)}
+      style={color ? { backgroundColor: `${color}14` } : undefined}
+    >
       <svg viewBox="0 0 128 96" className="h-full w-full" preserveAspectRatio="xMidYMid slice">
         <defs>
-          <pattern id="mt-grid" width="16" height="16" patternUnits="userSpaceOnUse">
-            <path d="M16 0H0V16" fill="none" stroke="hsl(var(--primary) / 0.22)" strokeWidth="1" />
+          <pattern id={gridId} width="16" height="16" patternUnits="userSpaceOnUse">
+            <path d="M16 0H0V16" fill="none" stroke={stroke} strokeOpacity={0.22} strokeWidth="1" />
           </pattern>
         </defs>
-        <rect width="128" height="96" fill="url(#mt-grid)" />
+        <rect width="128" height="96" fill={`url(#${gridId})`} />
         <polygon
           points={points}
-          fill="hsl(var(--primary) / 0.18)"
-          stroke="hsl(var(--primary))"
-          strokeWidth="1.5"
-          strokeDasharray="4 3"
+          fill={stroke}
+          fillOpacity={0.16}
+          stroke={stroke}
+          strokeWidth={1.75}
+          strokeLinejoin="round"
+          strokeDasharray={color ? undefined : "4 3"}
         />
       </svg>
     </div>

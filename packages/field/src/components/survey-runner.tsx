@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronLeft } from "lucide-react";
+import { Check, ChevronLeft, Circle } from "lucide-react";
 import { Button, Input, cn } from "@uprise/ui";
 
 export type SurveyOption = { id: string; value: string; label: string; hint?: string };
@@ -65,45 +65,45 @@ export function SurveyRunner({
 
   return (
     <div className="space-y-5">
-      {/* Progress */}
-      <div className="flex items-center gap-3">
+      {/* Progress — thin bar on the left, right-aligned counter */}
+      <div className="flex items-center gap-4">
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-variant">
           <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
-        <span className="shrink-0 text-sm font-bold text-muted-foreground tabular-nums">
+        <span className="shrink-0 text-sm font-bold tabular-nums text-muted-foreground">
           Question {index + 1} of {total}
         </span>
       </div>
 
       {/* Question card */}
-      <div className="rounded-2xl border border-border bg-surface p-6 shadow-card">
-        <p className="text-sm font-bold uppercase tracking-[0.05em] text-primary">
+      <div className="rounded-3xl border border-border bg-surface p-6 shadow-card">
+        <p className="text-sm font-bold uppercase tracking-[0.08em] text-primary">
           {category} · Question {index + 1}
         </p>
-        <h2 className="mt-2 text-2xl font-extrabold leading-tight text-foreground">{question.prompt}</h2>
+        <h2 className="mt-2 text-[26px] font-extrabold leading-tight text-foreground">{question.prompt}</h2>
 
         {question.type === "text" ? (
           <Input
-            className="mt-5"
+            className="mt-6"
             value={current?.valueText ?? ""}
             onChange={(e) => setAnswers((p) => ({ ...p, [question.id]: { questionId: question.id, valueText: e.target.value } }))}
             placeholder="Type a response"
           />
         ) : question.type === "scale" ? (
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-6 flex flex-wrap gap-2.5">
             {scaleRange(question).map((n) => (
               <button
                 key={n}
                 type="button"
                 onClick={() => commit({ questionId: question.id, valueText: String(n) })}
-                className="flex h-12 w-12 items-center justify-center rounded-xl border border-border text-base font-bold text-foreground hover:border-primary/40"
+                className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border text-lg font-bold text-foreground transition-colors hover:border-primary/40"
               >
                 {n}
               </button>
             ))}
           </div>
         ) : (
-          <div className="mt-5 space-y-3">
+          <div className="mt-6 space-y-3">
             {choiceOptions.map((opt) => {
               const selected = current?.optionId === opt.id;
               return (
@@ -112,22 +112,23 @@ export function SurveyRunner({
                   type="button"
                   onClick={() => commit({ questionId: question.id, optionId: opt.id })}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-colors",
-                    selected ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+                    "flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-colors",
+                    selected ? "border-primary bg-primary/5" : "border-border bg-surface hover:border-primary/40",
                   )}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block font-bold text-foreground">{opt.label}</span>
-                    {opt.hint ? <span className="mt-0.5 block text-sm text-muted-foreground">{opt.hint}</span> : null}
+                    <span className="block text-base font-bold text-foreground">{opt.label}</span>
+                    {opt.hint ? (
+                      <span className="mt-1 block text-sm leading-snug text-muted-foreground">{opt.hint}</span>
+                    ) : null}
                   </span>
-                  <span
-                    className={cn(
-                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                      selected ? "border-primary bg-primary text-white" : "border-muted-foreground/40",
-                    )}
-                  >
-                    {selected ? <Check className="h-3.5 w-3.5" /> : null}
-                  </span>
+                  {selected ? (
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                      <Check className="h-4 w-4" strokeWidth={3} />
+                    </span>
+                  ) : (
+                    <Circle className="h-6 w-6 shrink-0 text-muted-foreground/40" strokeWidth={1.75} />
+                  )}
                 </button>
               );
             })}
@@ -135,25 +136,25 @@ export function SurveyRunner({
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer — back chevron + wide skip (or confirm on text questions) */}
       <div className="flex items-center gap-3">
         <button
           type="button"
           onClick={back}
           aria-label="Back"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
         {question.type === "text" ? (
-          <Button className="h-12 flex-1 text-base" onClick={() => commit(current ?? null)}>
+          <Button className="h-14 flex-1 text-base" onClick={() => commit(current ?? null)}>
             {isLast ? "Done" : "Next"}
           </Button>
         ) : (
           <button
             type="button"
             onClick={() => commit(null)}
-            className="h-12 flex-1 rounded-xl border border-dashed border-border text-base font-bold text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            className="h-14 flex-1 rounded-2xl border border-dashed border-border text-base font-bold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
           >
             Skip question
           </button>

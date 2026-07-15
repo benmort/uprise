@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
   Optional,
@@ -15,6 +16,8 @@ import { AuthUser } from "./auth-user";
 import { SessionService } from "./session.service";
 import { verifyPassword } from "./password.util";
 import { requestMeta } from "./request-meta";
+import { TenantSubdomainResolver } from "../tenant-routing/tenant-subdomain.resolver";
+import { readTenantHost } from "../tenant-routing/request-host";
 import { resolveStreamTokenSecret } from "./stream-token-secret";
 import { verifyStreamTokenDetailed } from "./stream-token";
 
@@ -33,6 +36,7 @@ export class BasicAuthGuard implements CanActivate {
     private readonly config: ConfigService,
     @Optional() private readonly prisma?: PrismaService,
     @Optional() private readonly sessions?: SessionService,
+    @Optional() private readonly tenantRouting?: TenantSubdomainResolver,
   ) {}
 
   /** Auth endpoints that issue/clear sessions — reachable without a session. */
@@ -169,12 +173,16 @@ export class BasicAuthGuard implements CanActivate {
       "/inbound-text-message-hook",
       "/twilio-status-callback",
       "/voice-status-callback",
+      "/voice-recording-callback",
+      "/voice-outbound",
       "/email-webhook",
       "/payment-webhook",
       "/telephony/bundle-status-callback",
       "/api/v1/inbound-text-message-hook",
       "/api/v1/twilio-status-callback",
       "/api/v1/voice-status-callback",
+      "/api/v1/voice-recording-callback",
+      "/api/v1/voice-outbound",
       "/api/v1/email-webhook",
       "/api/v1/payment-webhook",
       "/api/v1/telephony/bundle-status-callback",
@@ -343,12 +351,32 @@ export class BasicAuthGuard implements CanActivate {
     // Real client IP behind ngrok/Vercel (x-forwarded-for) — request.ip is just
     // the proxy loopback without `trust proxy`.
     const meta = requestMeta(request);
+    // Host-based tenant scoping (tenant subdomain / white-label host). The tenant rides in
+    // the caller's Origin (the API is a sibling `api.<root>` host, so its own Host never
+    // names the tenant). A `<slug>.<root>` origin forces its tenant onto the session for this
+    // request; a platform app origin resolves to null and leaves the session's own tenant
+    // untouched (today's behaviour).
+    const forcedTenantId = (await this.tenantRouting?.resolve(readTenantHost(request)))?.tenantId ?? null;
     let resolved = null;
+    let resolvedToken: string | undefined;
+    let hostTenantDenied = false;
     for (const token of tokens) {
-      resolved = await this.sessions!.resolve(token, meta);
-      if (resolved) break;
+      const candidate = await this.sessions!.resolve(token, meta, { forcedTenantId });
+      if (!candidate) continue; // token invalid/expired — try the next auth_token cookie
+      if (candidate.hostTenantDenied) {
+        hostTenantDenied = true; // valid session, but not a member of the host's tenant
+        continue;
+      }
+      resolved = candidate;
+      resolvedToken = token;
+      break;
     }
-    if (!resolved) throw new UnauthorizedException("Invalid or expired session");
+    if (!resolved) {
+      // A member token beats a denied one; if EVERY valid session is denied the host's
+      // tenant it's a 403 (you're signed in, just not here), else a plain 401.
+      if (hostTenantDenied) throw new ForbiddenException("You are not a member of this organisation");
+      throw new UnauthorizedException("Invalid or expired session");
+    }
     const isSuper = resolved.isSuperAdmin === true;
     const baseRoles = rolesFor(resolved.role as AppUserRole);
     request.user = {
@@ -358,6 +386,10 @@ export class BasicAuthGuard implements CanActivate {
       email: resolved.email,
       roles: isSuper ? [...baseRoles, "super-admin"] : baseRoles,
       isSuperAdmin: isSuper,
+      // The exact token that resolved — so session-mutating endpoints pin the SAME
+      // session this request authenticated with, not whichever auth_token cookie
+      // happens to be first (a stale duplicate would otherwise be written instead).
+      sessionToken: resolvedToken,
     };
     return true;
   }

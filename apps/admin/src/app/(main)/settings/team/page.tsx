@@ -827,6 +827,6 @@ const SCOPES = [
   { label: "Cut turf, build & assign walk lists", owner: true, organiser: true, volunteer: false },
   { label: "Author surveys, scripts, dispositions, journeys", owner: true, organiser: true, volunteer: false },
   { label: "Invite members & manage the team", owner: true, organiser: true, volunteer: false },
-  { label: "View results, live war-room, QA", owner: true, organiser: true, volunteer: false },
+  { label: "View results, live action room, QA", owner: true, organiser: true, volunteer: false },
   { label: "Manage workspace settings & billing", owner: true, organiser: false, volunteer: false },
 ];

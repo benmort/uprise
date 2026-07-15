@@ -6,6 +6,9 @@ import {
   Clock3,
   CloudOff,
   MessageCircleMore,
+  PhoneCall,
+  PhoneMissed,
+  PhoneOff,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -43,6 +46,11 @@ const STATUS_STYLES: Record<string, string> = {
   // Turf assignment states
   UNASSIGNED: "bg-secondary-container text-secondary-foreground",
   IN_PROGRESS: "bg-primary-container text-foreground",
+  // Transactional call states (COMPLETED/FAILED/IN_PROGRESS reuse the above)
+  INITIATED: "bg-secondary-container text-secondary-foreground",
+  RINGING: "bg-primary-container text-foreground",
+  BUSY: "bg-warning-container text-warning-foreground",
+  NO_ANSWER: "bg-surface-variant text-foreground",
 };
 
 const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -73,6 +81,10 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   SKIPPED: CircleDashed,
   UNASSIGNED: CircleDashed,
   IN_PROGRESS: Clock3,
+  INITIATED: CircleDashed,
+  RINGING: PhoneCall,
+  BUSY: PhoneOff,
+  NO_ANSWER: PhoneMissed,
 };
 
 export function StatusBadge({

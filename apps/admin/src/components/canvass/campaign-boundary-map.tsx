@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapGL, { FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import { bbox } from "@turf/turf";
-import { LocateFixed } from "lucide-react";
+import { Loader2, LocateFixed } from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useTheme } from "@/components/theme/theme-provider";
 
@@ -32,6 +32,9 @@ export function CampaignBoundaryMap({
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
   const loadedRef = useRef(false);
+  // Shows the "Loading boundaries…" pill while a campaign switch re-frames the map
+  // (mirrors the turf-draw map's tile-loading pill). Cleared when the recentre settles.
+  const [loadingBoundaries, setLoadingBoundaries] = useState(false);
 
   const feature = useMemo<GeoJSON.Feature | null>(
     () => (boundary ? { type: "Feature", geometry: boundary, properties: {} } : null),
@@ -68,9 +71,36 @@ export function CampaignBoundaryMap({
   // After the first load, re-fit whenever the boundary changes — e.g. switching campaigns. The map
   // instance persists across prop changes (the component doesn't remount), so onLoad won't fire
   // again; `recenter`'s identity changes with `bounds`, so this runs on each new boundary.
+  // Flag "loading boundaries" for the transition and clear it once the map settles (`idle` =
+  // move done + the new boundary rendered), with a timeout backstop so the pill can't stick.
   useEffect(() => {
     if (!loadedRef.current) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    setLoadingBoundaries(true);
     recenter(500);
+    const clear = () => setLoadingBoundaries(false);
+    map.once("idle", clear);
+    const timer = setTimeout(clear, 1200);
+    return () => {
+      map.off("idle", clear);
+      clearTimeout(timer);
+    };
+  }, [recenter]);
+
+  // Re-fit when the map enters or exits fullscreen: the container resizes to/from the whole screen,
+  // so without this the boundary sits off-centre at the old zoom. Wait a frame for the fullscreen
+  // layout to settle before recentring.
+  useEffect(() => {
+    let raf = 0;
+    const onFullscreenChange = () => {
+      raf = requestAnimationFrame(() => recenter(300));
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      cancelAnimationFrame(raf);
+    };
   }, [recenter]);
 
   if (!feature) return null;
@@ -98,6 +128,13 @@ export function CampaignBoundaryMap({
         </Source>
         <FullscreenControl position="top-left" />
       </MapGL>
+
+      {loadingBoundaries ? (
+        <p className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface-variant px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-card">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Loading boundaries…
+        </p>
+      ) : null}
 
       <button
         type="button"

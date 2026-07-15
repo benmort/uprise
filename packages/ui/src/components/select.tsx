@@ -24,6 +24,9 @@ type SelectProps = {
   required?: boolean;
   className?: string;
   title?: string;
+  /** Optional capitalised label rendered INSIDE the trigger, before the value — mirrors
+   *  the canvass campaign switcher's "Campaign" title so a bare selector reads as "Label value ⌄". */
+  label?: string;
   "aria-label"?: string;
   children: React.ReactNode;
 };
@@ -41,6 +44,7 @@ const Select = React.forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger>
       required,
       className,
       title,
+      label,
       "aria-label": ariaLabel,
       children,
     },
@@ -64,7 +68,16 @@ const Select = React.forwardRef<React.ElementRef<typeof SelectPrimitive.Trigger>
           className,
         )}
       >
-        <SelectPrimitive.Value placeholder={placeholder} />
+        {label ? (
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {label}
+            </span>
+            <SelectPrimitive.Value placeholder={placeholder} />
+          </span>
+        ) : (
+          <SelectPrimitive.Value placeholder={placeholder} />
+        )}
         <SelectPrimitive.Icon asChild>
           <ChevronDown className="h-4 w-4 opacity-60" />
         </SelectPrimitive.Icon>

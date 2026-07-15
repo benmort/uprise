@@ -38,6 +38,7 @@ import {
   CreateWalkListDto,
   LoadUniverseDto,
   ReassignTurfDto,
+  RebuildWalkListsDto,
   RecordDoorKnockDto,
   ReleaseTurfDto,
   ResolveQaFlagDto,
@@ -183,6 +184,18 @@ export class CanvassingController {
   @Roles(AppUserRole.ORGANISER)
   async loadUniverse(@Param("id") id: string, @Body() dto: LoadUniverseDto, @TenantId() tenantId: string) {
     return this.canvassing.loadUniverseIntoTurf(tenantId, id, dto);
+  }
+
+  @Post("turfs/:id/rebuild-walk-list")
+  @Roles(AppUserRole.ORGANISER)
+  async rebuildTurfWalkList(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.canvassing.rebuildTurfWalkList(tenantId, id);
+  }
+
+  @Post("walk-lists/rebuild")
+  @Roles(AppUserRole.ORGANISER)
+  async rebuildWalkLists(@Body() dto: RebuildWalkListsDto, @TenantId() tenantId: string) {
+    return this.canvassing.rebuildWalkLists(tenantId, dto.turfIds);
   }
 
   @Get("walk-lists")

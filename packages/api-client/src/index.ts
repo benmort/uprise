@@ -708,6 +708,86 @@ export const telephony = {
     request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}/release`, { method: "POST" }),
 };
 
+// ── Transactional calls (one-to-one, event-driven outbound voice; meld doc 09) ──
+// Distinct from a future predictive-dialling domain (bulk phone-banking).
+export type TransactionalCallStatus =
+  | "INITIATED"
+  | "RINGING"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "BUSY"
+  | "NO_ANSWER"
+  | "FAILED";
+
+export interface TransactionalCall {
+  id: string;
+  tenantId: string;
+  contactId: string | null;
+  toNumber: string;
+  fromNumber: string;
+  status: TransactionalCallStatus;
+  providerCallId: string | null;
+  durationSeconds: number | null;
+  recordingUrl: string | null;
+  priceCents: number | null;
+  currency: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListTransactionalCallsParams {
+  status?: TransactionalCallStatus[];
+  contactId?: string;
+  search?: string;
+  /** ISO-8601 bounds on createdAt. */
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface ListTransactionalCallsResponse {
+  items: TransactionalCall[];
+  total: number;
+}
+
+export interface TransactionalCallStats {
+  total: number;
+  byStatus: Record<string, number>;
+  totalDurationSeconds: number;
+}
+
+function transactionalCallsQuery(params: ListTransactionalCallsParams): string {
+  const qs = new URLSearchParams();
+  if (params.status?.length) qs.set("status", params.status.join(","));
+  if (params.contactId) qs.set("contactId", params.contactId);
+  if (params.search) qs.set("search", params.search);
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  const q = qs.toString();
+  return q ? `?${q}` : "";
+}
+
+export const transactionalCalls = {
+  list: (params: ListTransactionalCallsParams = {}) =>
+    request<ListTransactionalCallsResponse>(`/calls${transactionalCallsQuery(params)}`),
+  /** KPI aggregates over the same filter (pagination params are ignored server-side). */
+  stats: (params: ListTransactionalCallsParams = {}) =>
+    request<TransactionalCallStats>(`/calls/stats${transactionalCallsQuery(params)}`),
+  get: (id: string) => request<TransactionalCall>(`/calls/${encodeURIComponent(id)}`),
+  /** Absolute URL for an <audio> element — the recording proxy loads with the SSO cookie. */
+  recordingUrl: (id: string) => `${getApiUrl()}/calls/${encodeURIComponent(id)}/recording`,
+  /** Browser (WebRTC) voice access token for the softphone; `fromNumber` is the caller ID. */
+  voiceToken: () =>
+    request<{ token: string; identity: string; fromNumber: string; expiresAt: string }>("/calls/voice-token"),
+  initiate: (body: { toNumber: string; fromNumber?: string; contactId?: string; url?: string; twiml?: string }) =>
+    request<TransactionalCall>("/calls", { method: "POST", body: JSON.stringify(body) }),
+};
+
 // ── Email identities (per-tenant SendGrid subusers + domain auth) ────
 export type EmailProvisioningStatus =
   | "REQUESTED"

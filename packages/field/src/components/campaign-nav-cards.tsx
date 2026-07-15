@@ -19,7 +19,7 @@ type NavItem = { href: string; label: string; desc: string; icon: LucideIcon };
 export function CampaignNavCards({ campaignId, className, id }: { campaignId: string; className?: string; id?: string }) {
   const items: NavItem[] = [
     { href: `/canvass/${campaignId}/turf`, label: "Cut turf", desc: "Claim areas & boundaries", icon: MapIcon },
-    { href: `/canvass/${campaignId}/live`, label: "Live war-room", desc: "Real-time door activity", icon: Activity },
+    { href: `/canvass/${campaignId}/live`, label: "Live action room", desc: "Real-time door activity", icon: Activity },
     { href: `/canvass/${campaignId}/results`, label: "Results", desc: "Support & contact rates", icon: BarChart3 },
     { href: `/canvass/${campaignId}/goals`, label: "Goals", desc: "Targets & progress", icon: Target },
     { href: `/canvass/${campaignId}/shifts`, label: "Shifts", desc: "Schedule & sign-ups", icon: CalendarClock },

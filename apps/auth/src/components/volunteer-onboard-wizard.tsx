@@ -31,6 +31,7 @@ import {
   TenantBrand,
   TurnstileWidget,
   formatAuMobile,
+  toE164,
   type RoleOption,
   type TurnstileHandle,
 } from "@uprise/ui";
@@ -65,12 +66,6 @@ const SESSION_OPTIONS: { value: SessionLength; label: string }[] = [
 ];
 
 const isDev = process.env.NODE_ENV !== "production";
-
-/** National AU digits → E.164 (drop a leading 0, prefix +61). */
-function toE164(national: string): string {
-  const d = national.replace(/\D/g, "");
-  return "+61" + (d.startsWith("0") ? d.slice(1) : d);
-}
 
 type Step = "phone" | "code" | "name" | "role" | "doorknock" | "conduct" | "done";
 
@@ -215,7 +210,7 @@ export function VolunteerOnboardWizard({
   /**
    * Dev: no SMS goes out locally, so fetch the code and show it. It is NOT typed into the
    * boxes for you — filling it used to trip the auto-advance below, and the code screen
-   * flashed past before anyone could read it. Mirrors `/v/code`.
+   * flashed past before anyone could read it. Mirrors `/volunteer/code`.
    */
   useEffect(() => {
     if (step !== "code" || !isDev || !challengeId) return;

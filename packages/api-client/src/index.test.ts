@@ -13,6 +13,7 @@ import {
   marketing,
   plans,
   telephony,
+  transactionalCalls,
   emailProvisioning,
   tenantLogoUrl,
 } from "./index";
@@ -394,5 +395,54 @@ describe("telephony + email provisioning", () => {
     const [url, init] = call();
     expect(url).toBe(`${BASE}/email-provisioning/identities/id%203/revoke`);
     expect(init.method).toBe("POST");
+  });
+});
+
+describe("transactionalCalls", () => {
+  it("list builds the filter query (status joined, dates encoded) and GETs /calls", async () => {
+    await transactionalCalls.list({
+      status: ["COMPLETED", "FAILED"],
+      contactId: "c1",
+      search: "0400",
+      from: "2026-01-01T00:00:00.000Z",
+      to: "2026-02-01T00:00:00.000Z",
+      limit: 25,
+      offset: 50,
+    });
+    expect(call()[0]).toBe(
+      `${BASE}/calls?status=COMPLETED%2CFAILED&contactId=c1&search=0400&from=2026-01-01T00%3A00%3A00.000Z&to=2026-02-01T00%3A00%3A00.000Z&limit=25&offset=50`,
+    );
+  });
+
+  it("list with no params GETs /calls without a query string", async () => {
+    await transactionalCalls.list();
+    expect(call()[0]).toBe(`${BASE}/calls`);
+  });
+
+  it("stats GETs /calls/stats with the same filter builder", async () => {
+    await transactionalCalls.stats({ status: ["BUSY"] });
+    expect(call()[0]).toBe(`${BASE}/calls/stats?status=BUSY`);
+  });
+
+  it("get encodes the call id into the path", async () => {
+    await transactionalCalls.get("call/1");
+    expect(call()[0]).toBe(`${BASE}/calls/call%2F1`);
+  });
+
+  it("recordingUrl builds an absolute proxy URL for an <audio> element", () => {
+    expect(transactionalCalls.recordingUrl("call 2")).toBe(`${BASE}/calls/call%202/recording`);
+  });
+
+  it("voiceToken GETs the browser-voice access token endpoint", async () => {
+    await transactionalCalls.voiceToken();
+    expect(call()[0]).toBe(`${BASE}/calls/voice-token`);
+  });
+
+  it("initiate POSTs the call body to /calls", async () => {
+    await transactionalCalls.initiate({ toNumber: "+61400000000", contactId: "c1" });
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/calls`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual({ toNumber: "+61400000000", contactId: "c1" });
   });
 });

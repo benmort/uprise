@@ -13,6 +13,11 @@ const nextConfig = {
       { source: "/login", destination: "/sign-in", permanent: false },
       { source: "/2fa", destination: "/two-factor-auth", permanent: false },
       { source: "/magic-link", destination: "/sign-in/magic-link", permanent: false },
+      // Volunteer flow moved from /v/* to /volunteer/* — keep SMS invite links
+      // (/v/invite/…) and old bookmarks working. Exact /v first so it lands on sign-in
+      // rather than /volunteer/ from the wildcard.
+      { source: "/v", destination: "/volunteer/sign-in", permanent: false },
+      { source: "/v/:path*", destination: "/volunteer/:path*", permanent: false },
     ];
   },
 };

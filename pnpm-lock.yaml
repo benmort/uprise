@@ -99,12 +99,18 @@ importers:
       '@turf/turf':
         specifier: ^7.3.5
         version: 7.3.5
+      '@twilio/voice-sdk':
+        specifier: ^2.18.3
+        version: 2.18.3
       '@uprise/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
       '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../../packages/domains
       '@uprise/field':
         specifier: workspace:*
         version: link:../../packages/field
@@ -226,6 +232,9 @@ importers:
       '@uprise/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../../packages/domains
       '@uprise/events':
         specifier: workspace:*
         version: link:../../packages/events
@@ -344,6 +353,9 @@ importers:
       '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../../packages/domains
       '@uprise/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -718,6 +730,18 @@ importers:
       prisma:
         specifier: ^6.19.3
         version: 6.19.3(magicast@0.3.5)(typescript@5.9.3)
+
+  packages/domains:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(vitest@2.1.9(@edge-runtime/vm@3.2.0)(@types/node@20.19.28)(lightningcss@1.32.0)(terser@5.46.0))
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@edge-runtime/vm@3.2.0)(@types/node@20.19.28)(lightningcss@1.32.0)(terser@5.46.0)
 
   packages/events:
     devDependencies:
@@ -3986,6 +4010,13 @@ packages:
   '@turf/voronoi@7.3.5':
     resolution: {integrity: sha512-v51D9H+er/K5lP+rBs7jIBEXTFhl0FQOZn4mfhb7brN5sGGDmnfEFOaxIYOiJN4Qco1GtFD2Tq0NgZ8+dmJmEA==}
 
+  '@twilio/voice-errors@1.7.0':
+    resolution: {integrity: sha512-9TvniWpzU0iy6SYFAcDP+HG+/mNz2yAHSs7+m0DZk86lE+LoTB6J/ZONTPuxXrXWi4tso/DulSHuA0w7nIQtGg==}
+
+  '@twilio/voice-sdk@2.18.3':
+    resolution: {integrity: sha512-sBa9Tw+aXVIqDVnFQXIoY+yZM8GI8v/fwt34EMElSUfvlb8kquDOwLv6wXrBOwSYrnlyJoUqjlAOWdFPizEBnw==}
+    engines: {node: '>= 12'}
+
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
 
@@ -4123,6 +4154,9 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
+
+  '@types/events@3.0.3':
+    resolution: {integrity: sha512-trOc4AAUThEz9hapPtSd7wf5tiQKvTtu5b371UxXdTuqzIh0ArcRspRP0i0Viu+LXstIQ1z96t1nsPxT9ol01g==}
 
   '@types/express-serve-static-core@4.19.8':
     resolution: {integrity: sha512-02S5fmqeoKzVZCHPZid4b8JH2eM5HzQLZWN2FohQEy/0eXTq8VXZfSN6Pcr3F6N9R/vNrj7cpgbhjie6m/1tCA==}
@@ -6751,6 +6785,10 @@ packages:
   log-symbols@4.1.0:
     resolution: {integrity: sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg==}
     engines: {node: '>=10'}
+
+  loglevel@1.9.2:
+    resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
+    engines: {node: '>= 0.6.0'}
 
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
@@ -12978,6 +13016,16 @@ snapshots:
       d3-voronoi: 1.1.2
       tslib: 2.8.1
 
+  '@twilio/voice-errors@1.7.0': {}
+
+  '@twilio/voice-sdk@2.18.3':
+    dependencies:
+      '@twilio/voice-errors': 1.7.0
+      '@types/events': 3.0.3
+      events: 3.3.0
+      loglevel: 1.9.2
+      tslib: 2.8.1
+
   '@types/babel__core@7.20.5':
     dependencies:
       '@babel/parser': 7.29.7
@@ -13152,6 +13200,8 @@ snapshots:
   '@types/estree@0.0.39': {}
 
   '@types/estree@1.0.8': {}
+
+  '@types/events@3.0.3': {}
 
   '@types/express-serve-static-core@4.19.8':
     dependencies:
@@ -16315,6 +16365,8 @@ snapshots:
     dependencies:
       chalk: 4.1.2
       is-unicode-supported: 0.1.0
+
+  loglevel@1.9.2: {}
 
   longest-streak@3.1.0: {}
 

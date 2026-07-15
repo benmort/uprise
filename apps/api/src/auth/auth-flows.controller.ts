@@ -215,7 +215,10 @@ export class AuthFlowsController {
     @Req() req: Request & { user?: AuthUser },
   ) {
     const userId = req.user?.id;
-    const token = readSessionToken(req);
+    // Pin the SAME session the guard authenticated (req.user.sessionToken), not the
+    // first auth_token cookie — a stale duplicate cookie would otherwise get the pin
+    // while /auth/check keeps reading the real session (tenant switch never sticks).
+    const token = req.user?.sessionToken ?? readSessionToken(req);
     if (!userId || !token) throw new UnauthorizedException("Authentication required");
     return this.flows.selectTenant(userId, token, dto.tenantId);
   }

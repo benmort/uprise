@@ -105,7 +105,7 @@ describe("TenantsService", () => {
       expect.objectContaining({
         toPhone: "+61400000000",
         purpose: "invitation",
-        body: expect.stringContaining(`http://localhost:3002/v/invite/${res.token}`),
+        body: expect.stringContaining(`http://localhost:3002/volunteer/invite/${res.token}`),
       }),
     );
     expect(dispatcher.sendEmail).not.toHaveBeenCalled();
@@ -253,6 +253,17 @@ describe("TenantsService", () => {
   it("createTenant rejects a malformed slug", async () => {
     const { svc } = setup();
     await expect(svc.createTenant({ slug: "Bad Slug!", name: "X" })).rejects.toThrow("invalid_slug");
+  });
+
+  it("createTenant rejects a reserved app-label slug", async () => {
+    const { svc } = setup();
+    await expect(svc.createTenant({ slug: "admin", name: "X" })).rejects.toThrow("slug_reserved");
+    await expect(svc.createTenant({ slug: "API", name: "X" })).rejects.toThrow("slug_reserved");
+  });
+
+  it("isSlugAvailable reports reserved app labels as unavailable", async () => {
+    const { svc } = setup();
+    await expect(svc.isSlugAvailable("auth")).resolves.toEqual({ slug: "auth", available: false });
   });
 
   it("updateTenant emits tenant.tenant.renamed when the name changes", async () => {

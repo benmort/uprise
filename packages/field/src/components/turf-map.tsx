@@ -17,6 +17,11 @@ export const AU_BOUNDS: [number, number, number, number] = [112.92, -43.74, 153.
 // Brand primary (= --primary / brand-500), mirrored here because Mapbox paint
 // props need a literal hex and can't read the CSS token. Matches the admin blue.
 const PRIMARY = "#465fff";
+// Stop-pin palette. Visited/spoke = brand success green; "another state" (skipped /
+// not home) = amber; pending / next = brand primary. Literal hexes so the SVG pin
+// markers match the Mapbox paint layers, which can't read the CSS tokens.
+const SUCCESS = "#2e7d6a";
+const AMBER = "#c9781a";
 // Close, street-level zoom for a searched-address focus point — high enough to
 // read the individual doors around the pin (vs the coarser stop/GPS focus at 14).
 const POINT_ZOOM = 16.5;
@@ -188,20 +193,6 @@ export function TurfMap({
     }
   }, [defaultBounds]);
 
-  const stopsGeoJson = useMemo(
-    () => ({
-      type: "FeatureCollection" as const,
-      features: stops
-        .filter((s) => s.id !== activeStopId)
-        .map((s) => ({
-          type: "Feature" as const,
-          geometry: { type: "Point" as const, coordinates: [s.lng, s.lat] },
-          properties: { id: s.id, status: s.status ?? "PENDING" },
-        })),
-    }),
-    [stops, activeStopId],
-  );
-
   const active = stops.find((s) => s.id === activeStopId);
 
   // Our boundary vector tiles come from the ORGANISER-gated API on a (same-site)
@@ -283,7 +274,6 @@ export function TurfMap({
         if (id && onStopTap) onStopTap(String(id));
       }}
       interactiveLayerIds={[
-        "stops-circles",
         ...(boundaryTilesUrl ? ["boundaries-fill"] : []),
         ...(boundaryLayers?.filter((bl) => bl.interactive).map((bl) => `boundaries-${bl.id}-fill`) ?? []),
       ]}
@@ -359,58 +349,85 @@ export function TurfMap({
           <Layer
             id="turf-fill"
             type="fill"
-            paint={{ "fill-color": PRIMARY, "fill-opacity": 0.12 }}
+            paint={{ "fill-color": PRIMARY, "fill-opacity": mode === "view" ? 0.06 : 0.12 }}
           />
-          <Layer id="turf-line" type="line" paint={{ "line-color": PRIMARY, "line-width": 2 }} />
-        </Source>
-      )}
-
-      {mode === "view" && (
-        <Source id="stops" type="geojson" data={stopsGeoJson} cluster clusterRadius={40}>
+          {/* The walk turf reads as a dashed blue boundary (the offline-walk look); the
+              geo explorer (edit) keeps its solid selection outline. */}
           <Layer
-            id="stops-clusters"
-            type="circle"
-            filter={["has", "point_count"]}
-            paint={{ "circle-color": "#94a3b8", "circle-radius": 16 }}
-          />
-          <Layer
-            id="stops-circles"
-            type="circle"
-            filter={["!", ["has", "point_count"]]}
-            paint={{
-              "circle-radius": 7,
-              "circle-color": [
-                "match",
-                ["get", "status"],
-                "VISITED",
-                "#16a34a",
-                "SKIPPED",
-                "#94a3b8",
-                PRIMARY,
-              ],
-              "circle-stroke-width": 1.5,
-              "circle-stroke-color": "#ffffff",
-            }}
+            id="turf-line"
+            type="line"
+            layout={{ "line-cap": "round", "line-join": "round" }}
+            paint={
+              mode === "view"
+                ? { "line-color": PRIMARY, "line-width": 2.5, "line-dasharray": [2, 2] }
+                : { "line-color": PRIMARY, "line-width": 2 }
+            }
           />
         </Source>
       )}
 
+      {/* Smooth translucent-blue route threading the stops in order (drawn under the
+          pins). Solid + round-joined for the soft curved look, not a dashed trail. */}
       {routeGeometry && (
         <Source id="walk-route" type="geojson" data={{ type: "Feature", geometry: routeGeometry, properties: {} }}>
           <Layer
             id="walk-route-line"
             type="line"
             layout={{ "line-cap": "round", "line-join": "round" }}
-            paint={{ "line-color": PRIMARY, "line-width": 4, "line-opacity": 0.85, "line-dasharray": [1, 1.6] }}
+            paint={{ "line-color": PRIMARY, "line-width": 4.5, "line-opacity": 0.4 }}
           />
         </Source>
       )}
 
+      {/* Stops as coloured teardrop pins (DOM markers, so they sit above the route +
+          boundary). The active/next stop gets its own emphasised pin below. */}
+      {mode === "view" &&
+        stops
+          .filter((s) => s.id !== activeStopId)
+          .map((s) => (
+            <Marker
+              key={s.id}
+              latitude={s.lat}
+              longitude={s.lng}
+              anchor="bottom"
+              onClick={
+                onStopTap
+                  ? (e) => {
+                      e.originalEvent.stopPropagation();
+                      onStopTap(s.id);
+                    }
+                  : undefined
+              }
+            >
+              <StopPin color={stopColor(s.status)} />
+            </Marker>
+          ))}
+
       {active && (
-        <Marker latitude={active.lat} longitude={active.lng} color="#dc2626" />
+        <Marker
+          latitude={active.lat}
+          longitude={active.lng}
+          anchor="bottom"
+          onClick={
+            onStopTap
+              ? (e) => {
+                  e.originalEvent.stopPropagation();
+                  onStopTap(active.id);
+                }
+              : undefined
+          }
+        >
+          <StopPin color={stopColor(active.status)} active />
+        </Marker>
       )}
       {userPosition && (
-        <Marker latitude={userPosition.lat} longitude={userPosition.lng} color="#0ea5e9" />
+        <Marker latitude={userPosition.lat} longitude={userPosition.lng} anchor="center">
+          {/* Live GPS position: solid brand dot + white ring, soft primary glow. */}
+          <div className="relative flex h-6 w-6 items-center justify-center">
+            <span className="absolute inset-0 rounded-full bg-primary/25" />
+            <span className="h-4 w-4 rounded-full border-[3px] border-white bg-primary shadow-[0_1px_4px_rgba(0,0,0,0.35)]" />
+          </div>
+        </Marker>
       )}
 
       {/* Corner controls: recenter to what's focused (turf / searched address /
@@ -441,5 +458,40 @@ export function TurfMap({
       </div>
       <FullscreenControl position="top-left" />
     </Map>
+  );
+}
+
+/** Pending / next = brand primary, visited/spoke = success green, skipped/not-home = amber. */
+function stopColor(status?: string): string {
+  if (status === "VISITED") return SUCCESS;
+  if (status === "SKIPPED") return AMBER;
+  return PRIMARY;
+}
+
+/**
+ * Stylised teardrop map-pin (the offline-walk look): a solid status-coloured balloon
+ * with a white outline and a small white centre dot, its tip anchored on the stop.
+ * `active` renders the next stop a touch larger with a stronger drop shadow.
+ */
+function StopPin({ color, active = false }: { color: string; active?: boolean }) {
+  const w = active ? 32 : 26;
+  const h = active ? 40 : 34;
+  return (
+    <svg
+      width={w}
+      height={h}
+      viewBox="0 0 26 34"
+      className="cursor-pointer"
+      style={{ filter: `drop-shadow(0 2px 3px rgba(15,23,42,${active ? 0.32 : 0.22}))` }}
+      aria-hidden
+    >
+      <path
+        d="M13 1.2C6.65 1.2 1.5 6.35 1.5 12.7c0 8.4 11.5 19.8 11.5 19.8s11.5-11.4 11.5-19.8C24.5 6.35 19.35 1.2 13 1.2Z"
+        fill={color}
+        stroke="#ffffff"
+        strokeWidth={active ? 2.4 : 2}
+      />
+      <circle cx="13" cy="12.7" r={active ? 4.6 : 4.1} fill="#ffffff" />
+    </svg>
   );
 }

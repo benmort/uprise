@@ -3,6 +3,7 @@ import { FlagsModule } from "../common/flags/flags.module";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";
 import { TelephonySenderResolver } from "./telephony-sender.resolver";
 import { TelephonyWebhookAuthService } from "./telephony-webhook-auth.service";
+import { VoiceAccountResolver } from "./voice-account.resolver";
 import { TwilioProvisioningClient } from "./twilio-provisioning.client";
 import { TelephonyProvisioningService } from "./telephony-provisioning.service";
 import { TelephonyProvisioningController } from "./telephony-provisioning.controller";
@@ -20,10 +21,16 @@ import { TelephonyProvisioningController } from "./telephony-provisioning.contro
   providers: [
     TelephonySenderResolver,
     TelephonyWebhookAuthService,
+    VoiceAccountResolver,
     TwilioProvisioningClient,
     TelephonyProvisioningService,
     CredentialCryptoService,
   ],
-  exports: [TelephonySenderResolver, TelephonyWebhookAuthService, TelephonyProvisioningService],
+  exports: [
+    TelephonySenderResolver,
+    TelephonyWebhookAuthService,
+    VoiceAccountResolver,
+    TelephonyProvisioningService,
+  ],
 })
 export class TelephonyModule {}

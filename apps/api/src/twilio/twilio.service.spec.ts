@@ -1,7 +1,14 @@
 import { TwilioService, toWhatsappAddress, type ResolvedSender } from "./twilio.service";
 
 // One fake client per accountSid so per-account isolation is observable.
-const clients = new Map<string, { messages: { create: jest.Mock } }>();
+const clients = new Map<
+  string,
+  {
+    messages: { create: jest.Mock };
+    newKeys?: { create: jest.Mock };
+    applications?: { create: jest.Mock };
+  }
+>();
 const constructorCalls: string[] = [];
 
 jest.mock("twilio", () => ({
@@ -9,7 +16,11 @@ jest.mock("twilio", () => ({
   default: jest.fn((sid: string) => {
     constructorCalls.push(sid);
     if (!clients.has(sid)) {
-      clients.set(sid, { messages: { create: jest.fn() } });
+      clients.set(sid, {
+        messages: { create: jest.fn() },
+        newKeys: { create: jest.fn(async () => ({ sid: "SK" + "1".repeat(32), secret: "key-secret" })) },
+        applications: { create: jest.fn(async () => ({ sid: "AP" + "1".repeat(32) })) },
+      });
     }
     return clients.get(sid);
   }),
@@ -595,6 +606,10 @@ describe("TwilioService placeCall", () => {
     });
     expect(params.statusCallbackEvent).toEqual(["initiated", "ringing", "answered", "completed"]);
     expect(params.twiml).toBeUndefined();
+    // Transactional calls are recorded for playback, bound via the recording callback.
+    expect(params.record).toBe(true);
+    expect(params.recordingStatusCallback).toBe("https://api.test/api/v1/voice-recording-callback");
+    expect(params.recordingStatusCallbackEvent).toEqual(["completed"]);
     expect(res).toEqual({ sid: "CA1", status: "ringing" });
   });
 
@@ -909,5 +924,30 @@ describe("TwilioService SMS addressing guards", () => {
     await expect(service.sendMessage("+61400000000", "hi")).rejects.toThrow(
       /TWILIO_PHONE_NUMBER is not set/,
     );
+  });
+});
+
+describe("TwilioService createVoiceApp", () => {
+  beforeEach(() => {
+    clients.clear();
+    constructorCalls.length = 0;
+  });
+
+  it("creates an API key + TwiML App on the account and returns their SIDs + secret", async () => {
+    const service = new TwilioService(config);
+    const result = await service.createVoiceApp(
+      sender(SUB_SID),
+      "https://api.test/api/v1/voice-outbound",
+    );
+    const client = clients.get(SUB_SID)!;
+    expect(client.newKeys!.create).toHaveBeenCalledWith({ friendlyName: "uprise-voice" });
+    expect(client.applications!.create).toHaveBeenCalledWith(
+      expect.objectContaining({ voiceUrl: "https://api.test/api/v1/voice-outbound", voiceMethod: "POST" }),
+    );
+    expect(result).toEqual({
+      apiKeySid: "SK" + "1".repeat(32),
+      apiKeySecret: "key-secret",
+      twimlAppSid: "AP" + "1".repeat(32),
+    });
   });
 });
