@@ -104,17 +104,11 @@ export function VolunteerJoinHero({
   const brandLabel = tenantName || "uprise";
   const hasStats = volunteerCount > 0 || doorsThisWeek > 0;
 
-  // Associated with a tenant/campaign → wear the brand: primary-fill the whole hero
-  // (both columns) and use the SECONDARY colour for the CTA. With no tenant/campaign
-  // context (the generic board), keep the default white feature column + primary CTA.
+  // Brand split: the LEFT hero wears the tenant PRIMARY (bg-primary); the RIGHT feature column is
+  // always OFF-WHITE with dark ink + brand-tinted accents (the "Change happens…" section reads as a
+  // clean light panel, not another primary block). The CTA wears the tenant SECONDARY colour.
   const branded = Boolean(campaignName || tenantName || tenantId);
-  const featureBg = branded ? "bg-primary" : "bg-white";
-  const heading = branded ? "text-white" : "text-ink";
-  const bodyText = branded ? "text-white/80" : "text-ink/60";
-  const iconTile = branded ? "bg-white/15 text-white" : "bg-primary/10 text-primary";
-  const rule = branded ? "border-white/25" : "border-ink/10";
-  const captionText = branded ? "text-white/80" : "text-ink/60";
-  const linkClass = branded ? "font-bold text-white underline" : "font-bold text-primary hover:underline";
+  const iconTile = "bg-primary/10 text-primary";
   // The CTA wears the tenant's SECONDARY colour (inline, so it beats the DS `bg-secondary`
   // neutral without remapping that token globally). No brand secondary → the DS secondary.
   const ctaStyle =
@@ -187,14 +181,15 @@ export function VolunteerJoinHero({
         </div>
       </section>
 
-      {/* Feature column — right on desktop, below on mobile. Primary-filled + white text
-          when branded (the tenant's colour carries the whole hero); white otherwise. */}
-      <section className={`flex flex-1 flex-col ${featureBg} px-7 pb-8 pt-8 lg:w-1/2 lg:justify-center lg:px-14 lg:py-16`}>
+      {/* Feature column — right on desktop, below on mobile. Always off-white with dark ink so the
+          "Change happens…" section reads as a clean light panel; brand-tinted icon tiles + a
+          secondary-coloured CTA carry the brand. */}
+      <section className="flex flex-1 flex-col bg-[#faf8f5] px-7 pb-8 pt-8 lg:w-1/2 lg:justify-center lg:px-14 lg:py-16">
         <div className="lg:max-w-xl">
-          <h2 className={`text-[1.6rem] font-extrabold leading-tight lg:text-4xl ${heading}`}>
+          <h2 className="text-[1.6rem] font-extrabold leading-tight text-ink lg:text-4xl">
             Change happens one conversation at a time
           </h2>
-          <p className={`mt-3 text-base leading-relaxed lg:mt-4 lg:text-lg ${bodyText}`}>
+          <p className="mt-3 text-base leading-relaxed text-ink/60 lg:mt-4 lg:text-lg">
             You don&apos;t need experience or a script. uprise walks you through every door and does the
             admin for you.
           </p>
@@ -206,14 +201,14 @@ export function VolunteerJoinHero({
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className={`font-bold ${heading}`}>{title}</p>
-                  <p className={`mt-0.5 text-sm leading-snug ${bodyText}`}>{body}</p>
+                  <p className="font-bold text-ink">{title}</p>
+                  <p className="mt-0.5 text-sm leading-snug text-ink/60">{body}</p>
                 </div>
               </li>
             ))}
           </ul>
 
-          <hr className={`mt-8 lg:mt-10 ${rule}`} />
+          <hr className="mt-8 border-ink/10 lg:mt-10" />
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Button
@@ -224,9 +219,9 @@ export function VolunteerJoinHero({
             >
               Get started
             </Button>
-            <p className={`text-center text-base sm:text-left ${captionText}`}>
+            <p className="text-center text-base text-ink/60 sm:text-left">
               Already a canvasser?{" "}
-              <Link href={signInHref} className={linkClass}>
+              <Link href={signInHref} className="font-bold text-primary hover:underline">
                 Sign in
               </Link>
             </p>

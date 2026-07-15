@@ -176,8 +176,12 @@ export const auth = {
   openJoinPreview: (campaignId: string) =>
     request<OpenJoinPreview>(`/iam/open-join/${encodeURIComponent(campaignId)}`, undefined, { redirectOn401: false }),
   // The generic /volunteer board – every open-join opportunity (same item shape).
-  openJoinList: () =>
-    request<OpenJoinPreview[]>("/iam/open-join/opportunities", undefined, { redirectOn401: false }),
+  openJoinList: (tenantSlug?: string) =>
+    request<OpenJoinPreview[]>(
+      `/iam/open-join/opportunities${tenantSlug ? `?tenant=${encodeURIComponent(tenantSlug)}` : ""}`,
+      undefined,
+      { redirectOn401: false },
+    ),
   openJoinStartPhone: (body: OpenJoinStartPhoneRequest, captchaToken?: string) =>
     post<{ challengeId: string }>("/iam/open-join/phone/start", body, captchaToken),
   openJoinAccept: (body: OpenJoinAcceptRequest) => post<SessionGrantResponse>("/iam/open-join/accept", body),

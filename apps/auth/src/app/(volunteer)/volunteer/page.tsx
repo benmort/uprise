@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Alert, Spinner } from "@uprise/ui";
-import { auth } from "@uprise/api-client";
+import { Alert, BrandStyle, LogoMark, Spinner } from "@uprise/ui";
+import { auth, tenants, tenantLogoUrl, type TenantBrand } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { useQueryParams } from "@/lib/use-query";
 import { withReturnTo } from "@/lib/return-to";
 import { VolunteerFlowShell } from "@/components/volunteer-flow-shell";
 
 /**
- * Generic volunteer landing (`/volunteer`, no campaign) – the same chrome + hero as
- * the per-campaign page (`/volunteer/[campaignId]`), a generic sign-up pitch, then a
- * board of every open volunteering opportunity. Picking one deep-links into that
- * campaign's page, which runs the actual onboarding wizard. Pre-session (the
- * open-join board endpoint is allowlisted).
+ * Volunteer landing (`/volunteer`) – a hero + a board of open volunteering opportunities. Picking one
+ * deep-links into that campaign's page, which runs the onboarding wizard. Pre-session (allowlisted).
+ *
+ * Two modes, one page:
+ *  - GENERIC (`/volunteer`): Uprise-branded, every open campaign across all tenants.
+ *  - TENANT-WIDE (`/volunteer?org=<slug>`): scoped to one tenant + wearing its brand — the hero fills
+ *    with the tenant's PRIMARY colour, shows its logo/name, and the board lists only its campaigns.
  */
 
 // Deterministic fallback avatar (mirrors the campaign page + admin's TenantAvatar):
@@ -33,37 +35,67 @@ function tenantGradient(id: string): string {
 export default function VolunteerBoardPage() {
   // The field app bounces unauthenticated volunteers here. Carry its `return_to` through
   // every link out of this page, or finishing the flow strands them on the wrong app.
-  const returnTo = useQueryParams().get("return_to");
+  const params = useQueryParams();
+  const returnTo = params.get("return_to");
+  // Tenant-wide recruit mode: `?org=<slug>` (or `?tenant=`) scopes + brands the board.
+  const orgSlug = params.get("org") || params.get("tenant");
   const [opportunities, setOpportunities] = useState<OpenJoinPreview[] | null>(null);
+  const [brand, setBrand] = useState<TenantBrand | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     void (async () => {
-      const res = await auth.openJoinList();
+      const [list, b] = await Promise.all([
+        auth.openJoinList(orgSlug ?? undefined),
+        orgSlug ? tenants.brandBySlug(orgSlug) : Promise.resolve(null),
+      ]);
       setLoading(false);
-      if (!res.ok) {
-        setError(res.error);
+      if (b && b.ok) setBrand(b.data);
+      if (!list.ok) {
+        setError(list.error);
         return;
       }
-      setOpportunities(res.data);
+      setOpportunities(list.data);
     })();
-  }, []);
+  }, [orgSlug]);
+
+  // Keep `?org` on every link out so the brand + scope survive the hop into a campaign / sign-in.
+  const withOrg = useMemo(
+    () =>
+      (href: string) => {
+        const h = withReturnTo(href, returnTo);
+        return orgSlug ? `${h}${h.includes("?") ? "&" : "?"}org=${encodeURIComponent(orgSlug)}` : h;
+      },
+    [orgSlug, returnTo],
+  );
+  const orgLogo = tenantLogoUrl(brand);
 
   return (
     <VolunteerFlowShell>
+    {/* Tenant-wide mode wears the org brand (primary fills the hero via --primary). */}
+    {brand ? <BrandStyle brand={brand} /> : null}
     <div className="flex flex-1 flex-col">
-      {/* Hero — identical style to the per-campaign page, generic copy. */}
+      {/* Hero — Uprise-branded generically, or the tenant's logo/name/primary in `?org` mode. */}
       <section className="rounded-b-[1.625rem] bg-primary px-[1.625rem] pb-7 pt-8 text-white">
-        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/uprise-icon.svg" alt="Uprise" className="h-11 w-11 rounded-xl" />
+        <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm">
+          {orgLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={orgLogo} alt={brand?.name ?? "Organisation"} className="h-full w-full object-contain p-1" />
+          ) : orgSlug ? (
+            <LogoMark className="h-9 w-9 text-primary" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/uprise-icon.svg" alt="Uprise" className="h-11 w-11 rounded-xl" />
+          )}
         </span>
         <p className="mt-6 text-sm font-bold uppercase tracking-[0.08em] text-white/80">Join the team</p>
-        <h1 className="mt-2 text-[2rem] font-extrabold leading-[1.1]">Become a volunteer</h1>
+        <h1 className="mt-2 text-[2rem] font-extrabold leading-[1.1]">
+          Become a volunteer{brand?.name ? ` with ${brand.name}` : ""}
+        </h1>
         <p className="mt-3 text-base leading-snug text-white/85">
-          Pick a campaign near you and start knocking on doors and talking to voters. Takes two
-          minutes to set up – no app store needed.
+          Pick a campaign{brand?.name ? "" : " near you"} and start knocking on doors and talking to voters.
+          Takes two minutes to set up – no app store needed.
         </p>
       </section>
 
@@ -84,7 +116,7 @@ export default function VolunteerBoardPage() {
             {opportunities.map((o) => (
               <li key={o.campaignId}>
                 <Link
-                  href={withReturnTo(`/volunteer/${o.campaignId}`, returnTo)}
+                  href={withOrg(`/volunteer/${o.campaignId}`)}
                   className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03]"
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl">
@@ -123,7 +155,7 @@ export default function VolunteerBoardPage() {
       {/* Sign in */}
       <div className="px-[1.625rem] pb-5 pt-5">
         <p className="text-center text-base">
-          <Link href={withReturnTo("/volunteer/sign-in", returnTo)} className="font-bold text-primary hover:underline">
+          <Link href={withOrg("/volunteer/sign-in")} className="font-bold text-primary hover:underline">
             Already a volunteer? Sign in
           </Link>
         </p>

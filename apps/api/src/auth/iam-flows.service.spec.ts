@@ -887,6 +887,30 @@ describe("IamFlowsService", () => {
       expect((prisma.tenant as any).findMany).not.toHaveBeenCalled();
     });
 
+    it("openJoinList(slug) resolves the slug and scopes the board to that tenant", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenant.findFirst.mockResolvedValueOnce({ id: "t1" }); // slug → tenant id
+      (prisma.canvassCampaign as any).findMany = jest.fn(async () => []);
+      await svc.openJoinList("org-one");
+      expect(prisma.tenant.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { slug: "org-one", deletedAt: null } }),
+      );
+      expect((prisma.canvassCampaign as any).findMany.mock.calls[0][0].where).toMatchObject({
+        openJoinEnabled: true,
+        status: "ACTIVE",
+        tenantId: "t1",
+      });
+    });
+
+    it("openJoinList(slug) returns [] for an unknown tenant (no campaign query)", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenant.findFirst.mockResolvedValueOnce(null);
+      (prisma.canvassCampaign as any).findMany = jest.fn();
+      const res = await svc.openJoinList("nope");
+      expect(res).toEqual([]);
+      expect((prisma.canvassCampaign as any).findMany).not.toHaveBeenCalled();
+    });
+
     it("openJoinPreview returns the campaign + org name + logo for an open campaign", async () => {
       const { svc, prisma } = setup();
       prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);

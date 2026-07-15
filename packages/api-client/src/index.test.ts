@@ -190,6 +190,16 @@ describe("auth flows", () => {
     expect(url).toBe(`${BASE}/iam/open-join/camp%207`);
   });
 
+  it("openJoinList hits the opportunities feed, with no query when unscoped", async () => {
+    await auth.openJoinList();
+    expect(call()[0]).toBe(`${BASE}/iam/open-join/opportunities`);
+  });
+
+  it("openJoinList appends the encoded tenant slug when scoped", async () => {
+    await auth.openJoinList("common threads");
+    expect(call()[0]).toBe(`${BASE}/iam/open-join/opportunities?tenant=common%20threads`);
+  });
+
   it("selectTenant POSTs the tenantId", async () => {
     await auth.selectTenant("t1");
     const [url, init] = call();

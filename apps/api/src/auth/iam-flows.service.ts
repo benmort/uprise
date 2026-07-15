@@ -1126,12 +1126,13 @@ export class IamFlowsService {
   }
 
   /**
-   * Public board for the generic `/volunteer` landing – every campaign that has
-   * opted into tokenless open-join (openJoinEnabled + ACTIVE), with its org name +
-   * logo. Same item shape as {@link openJoinPreview}, so the board can deep-link
-   * each opportunity into `/volunteer/[campaignId]`. Pre-session (allowlisted).
+   * Public board for the `/volunteer` landing – every campaign that has opted into tokenless
+   * open-join (openJoinEnabled + ACTIVE), with its org name + logo. Same item shape as
+   * {@link openJoinPreview}, so the board can deep-link each opportunity into
+   * `/volunteer/[campaignId]`. Pre-session (allowlisted). With `tenantSlug` the board is scoped to
+   * that one tenant (the tenant-wide recruit page `/volunteer?org=<slug>`); without it, all tenants.
    */
-  async openJoinList(): Promise<
+  async openJoinList(tenantSlug?: string): Promise<
     Array<{
       campaignId: string;
       tenantId: string;
@@ -1145,8 +1146,19 @@ export class IamFlowsService {
       doorsThisWeek: number;
     }>
   > {
+    // Tenant-scoped board: resolve the slug to a tenant id (CanvassCampaign references tenant
+    // id-only — no cross-schema relation to filter through). An unknown slug → empty board.
+    let tenantId: string | undefined;
+    if (tenantSlug) {
+      const tenant = await this.prisma.tenant.findFirst({
+        where: { slug: tenantSlug, deletedAt: null },
+        select: { id: true },
+      });
+      if (!tenant) return [];
+      tenantId = tenant.id;
+    }
     const campaigns = await this.prisma.canvassCampaign.findMany({
-      where: { openJoinEnabled: true, status: CanvassCampaignStatus.ACTIVE },
+      where: { openJoinEnabled: true, status: CanvassCampaignStatus.ACTIVE, ...(tenantId ? { tenantId } : {}) },
       select: { id: true, name: true, tenantId: true },
       orderBy: { name: "asc" },
     });

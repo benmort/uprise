@@ -180,8 +180,8 @@ export class AuthFlowsController {
   // (else "opportunities" would be read as a campaignId). Matches the pre-session
   // /iam/open-join/ allowlist.
   @Get("open-join/opportunities")
-  openJoinList() {
-    return this.flows.openJoinList();
+  openJoinList(@Query("tenant") tenantSlug?: string) {
+    return this.flows.openJoinList(tenantSlug);
   }
 
   @Get("open-join/:campaignId")
