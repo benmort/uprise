@@ -58,12 +58,25 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const ensureDevice = useCallback(async () => {
-    if (deviceRef.current) return deviceRef.current;
+    // Always mint a FRESH access token: the token is short-lived (1h) and the Device is
+    // cached for the whole session, so a token minted once goes stale and Twilio rejects it
+    // (error 20104 → the gateway HANGUPs the call, surfacing as 31005). Refreshing on every
+    // call — plus a `tokenWillExpire` handler for long-lived registrations — keeps it valid.
     const res = await transactionalCalls.voiceToken();
     if (!res.ok) throw new Error(res.error);
     setFromNumber(res.data.fromNumber || null);
+    if (deviceRef.current) {
+      deviceRef.current.updateToken(res.data.token);
+      return deviceRef.current;
+    }
     const { Device } = await import("@twilio/voice-sdk");
     const device = new Device(res.data.token, { logLevel: "error" });
+    // The SDK fires this ~before expiry while the Device is alive — re-mint and swap in the
+    // new token so an idle-but-open softphone never places a call on an expired token.
+    device.on("tokenWillExpire", async () => {
+      const next = await transactionalCalls.voiceToken();
+      if (next.ok) device.updateToken(next.data.token);
+    });
     deviceRef.current = device;
     return device;
   }, []);
