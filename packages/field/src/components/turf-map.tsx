@@ -120,6 +120,14 @@ export function TurfMap({
     return { latitude: -33.8688, longitude: 151.2093, zoom: 14 };
   }, [bounds, stops, userPosition, focusPoint, focusBounds, defaultBounds]);
 
+  // Keep the map sized to its container. mapbox-gl measures the container ONCE at init and won't
+  // repaint if it changes size later — which happens when the map is embedded in a container that
+  // gains height AFTER mount (e.g. the admin walk-list preview, whose `min-h-[60vh]` lands a beat
+  // late, or any show/hide toggle). Without this the canvas stays blank at the stale 0×0 size. A
+  // ResizeObserver (attached in onLoad, where the map is ready) re-`resize()`s on every change.
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  useEffect(() => () => resizeObserverRef.current?.disconnect(), []);
+
   // initialViewState only applies on mount; refit when the division changes
   // without a remount (e.g. navigating between division detail pages).
   const fitToBounds = useCallback(() => {
@@ -236,6 +244,13 @@ export function TurfMap({
       onLoad={() => {
         const map = mapRef.current?.getMap();
         if (!map) return;
+        // Self-heal on any later container resize (embed gains height, panel toggles) — see the
+        // ResizeObserver note above. Set up here where the map + its container are guaranteed ready.
+        if (typeof ResizeObserver !== "undefined" && !resizeObserverRef.current) {
+          const ro = new ResizeObserver(() => map.resize());
+          ro.observe(map.getContainer());
+          resizeObserverRef.current = ro;
+        }
         // The container often finishes laying out (next/dynamic + grid cell) AFTER
         // the map computes its initial view, so it fits to the wrong size and loads
         // tiles for the wrong viewport — boundaries look missing until you interact.

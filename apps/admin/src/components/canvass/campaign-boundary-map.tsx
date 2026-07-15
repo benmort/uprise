@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import MapGL, { FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
+import MapGL, { AttributionControl, FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import { bbox } from "@turf/turf";
 import { Loader2, LocateFixed } from "lucide-react";
+import { MapSizeControl } from "@uprise/field";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useTheme } from "@/components/theme/theme-provider";
 
@@ -14,10 +15,10 @@ const mapStyleFor = (theme: string) =>
 // turf-draw map's boundary shading, so the overview and the cut-turf screen match).
 const PRIMARY = "#465fff";
 // Turf shading by claim status: claimed (a volunteer is assigned) reads as a solid green
-// fill; unclaimed as an amber DASHED outline (the same dashed "available/open" treatment the
-// cut-turf map uses for already-claimed turf).
+// fill; unclaimed as a blue DASHED outline — the campaign's own blue (matches the map's
+// boundary), marking open turf without the alarm of a red/amber.
 const CLAIMED = "#16a34a";
-const UNCLAIMED = "#b45309";
+const UNCLAIMED = "#465fff";
 // Fallback frame if a boundary somehow has no computable bbox — Australia-wide.
 const AU_BOUNDS: [number, number, number, number] = [112.9, -43.7, 153.6, -10.7];
 
@@ -46,6 +47,9 @@ export function CampaignBoundaryMap({
   // Shows the "Loading boundaries…" pill while a campaign switch re-frames the map
   // (mirrors the turf-draw map's tile-loading pill). Cleared when the recentre settles.
   const [loadingBoundaries, setLoadingBoundaries] = useState(false);
+  // Regular (the `height` prop) vs large (a tall, near-viewport block). The toggle sits
+  // next to the fullscreen button; large stays in the page flow (unlike OS fullscreen).
+  const [large, setLarge] = useState(false);
 
   const feature = useMemo<GeoJSON.Feature | null>(
     () => (boundary ? { type: "Feature", geometry: boundary, properties: {} } : null),
@@ -137,16 +141,31 @@ export function CampaignBoundaryMap({
     };
   }, [recenter]);
 
+  // Re-fit when the on-page size toggles (regular ↔ large): the container resizes, so
+  // resize the canvas and re-frame the boundary against the new dimensions.
+  useEffect(() => {
+    if (!loadedRef.current) return;
+    const raf = requestAnimationFrame(() => recenter(300));
+    return () => cancelAnimationFrame(raf);
+  }, [large, recenter]);
+
   if (!feature) return null;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-border" style={{ height }}>
+    <div
+      className="relative overflow-hidden rounded-2xl border border-border"
+      style={{ height: large ? "80vh" : height }}
+    >
       <MapGL
         ref={mapRef}
         mapboxAccessToken={TOKEN}
         initialViewState={{ bounds, fitBoundsOptions: { padding: 28 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
+        // The Mapbox wordmark is hidden globally (globals.css — permitted by our plan),
+        // freeing the bottom-left corner for the claimed/unclaimed legend. Attribution is
+        // replaced with a compact control bottom-right (kept for the OpenStreetMap licence).
+        attributionControl={false}
         onLoad={() => {
           loadedRef.current = true;
           recenter(0);
@@ -186,6 +205,9 @@ export function CampaignBoundaryMap({
         ) : null}
 
         <FullscreenControl position="top-left" />
+        <MapSizeControl large={large} onToggle={() => setLarge((v) => !v)} position="top-left" />
+        {/* Compact attribution, tucked bottom-right with the logo (out of the legend's way). */}
+        <AttributionControl position="bottom-right" compact />
       </MapGL>
 
       {loadingBoundaries ? (

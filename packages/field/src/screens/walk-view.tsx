@@ -152,15 +152,22 @@ export function WalkView({
 
       {mode === "map" ? (
         <div className="relative min-h-[60vh] flex-1 overflow-hidden rounded-xl border border-border">
-          <TurfMap
-            mode="view"
-            stops={stops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, status: s.status }))}
-            turfGeometry={assignment.turf.geometry as GeoJSON.Geometry}
-            activeStopId={nextStop?.id}
-            userPosition={fix ? { lat: fix.lat, lng: fix.lng } : null}
-            onStopTap={readOnly ? undefined : (id) => openDoor(id)}
-            routeGeometry={directions?.geometry ?? null}
-          />
+          {/* Absolute-fill the map so it has a DEFINITE height to size against. The container's
+              vertical size can come from `min-h-[60vh]` alone (e.g. the admin preview, an
+              auto-height card), and mapbox's `height:100%` won't resolve against a parent that only
+              has min-height — it collapses to 0 and the canvas stays blank. `inset-0` sizes to the
+              container's used height (min-height included), so the map always fills. */}
+          <div className="absolute inset-0">
+            <TurfMap
+              mode="view"
+              stops={stops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, status: s.status }))}
+              turfGeometry={assignment.turf.geometry as GeoJSON.Geometry}
+              activeStopId={nextStop?.id}
+              userPosition={fix ? { lat: fix.lat, lng: fix.lng } : null}
+              onStopTap={readOnly ? undefined : (id) => openDoor(id)}
+              routeGeometry={directions?.geometry ?? null}
+            />
+          </div>
           {nextStop ? (
             <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-4 shadow-float">
               <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--success))]">

@@ -4,3 +4,16 @@
 /* Scan the shared design system for class strings (this app's own files are
    auto-detected by Tailwind v4). */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
+/* Also scan @uprise/field — admin embeds its components (WalkView, KpiTile,
+   ProgressBar, CampaignNavCards, DataTable, MapThumbnail, SectionCard). Without this,
+   any Tailwind class UNIQUE to a field component isn't generated for admin, so it
+   silently no-ops — e.g. the walk-view preview map's `min-h-[60vh]` collapsed the map
+   to 0 height. Mirrors apps/field's own globals. */
+@source "../../../../packages/field/src/**/*.{ts,tsx}";
+
+/* Hide the Mapbox wordmark — permitted under our Mapbox plan. Global because the
+   logo is rendered by mapbox-gl outside React, on every map. Attribution is kept
+   (compacted) to satisfy the OpenStreetMap licence. */
+.mapboxgl-ctrl-logo {
+  display: none !important;
+}

@@ -201,16 +201,22 @@ export default function DashboardPage() {
           actions={[
             {
               key: "new-conversation",
-              label: "New conversation",
+              label: "New Conversation",
               icon: <PlusCircle className="h-4 w-4" />,
               disabled: creating,
               onClick: () => setComposeOpen(true),
+            },
+            {
+              key: "audience",
+              label: "New Audience",
+              icon: <Users className="h-4 w-4" />,
+              onClick: () => router.push("/audience"),
             },
             ...(whatsappEnabled
               ? [
                   {
                     key: "new-whatsapp",
-                    label: "New WhatsApp blast",
+                    label: "New WhatsApp Blast",
                     icon: <MessageSquareText className="h-4 w-4" />,
                     variant: "outline" as const,
                     disabled: creating,
@@ -218,8 +224,13 @@ export default function DashboardPage() {
                   },
                 ]
               : []),
-            { key: "inbox", label: "Open inbox", variant: "outline", onClick: () => router.push("/inbox") },
-            { key: "audience", label: "New audience", variant: "outline", onClick: () => router.push("/audience") },
+            {
+              key: "inbox",
+              label: "Open Inbox",
+              icon: <InboxIcon className="h-4 w-4" />,
+              variant: "outline",
+              onClick: () => router.push("/inbox"),
+            },
           ]}
         />
       </div>

@@ -60,6 +60,10 @@ export default function CanvassPage() {
   const [kpis, setKpis] = useState<CampaignKpis | null>(null);
   const [turfs, setTurfs] = useState<TurfSummary[]>([]);
   const [boundary, setBoundary] = useState<GeoJSON.Geometry | null>(null);
+  // The active campaign's data (KPIs + turf + boundary) is loading. Starts true so the
+  // first paint shows skeletons — never a flash of the "No turf" empty state (which is
+  // only correct once we KNOW the campaign has none).
+  const [campaignLoading, setCampaignLoading] = useState(true);
   const [turfView, setTurfView] = useState<"cards" | "list">("cards");
   // How many turf cards are rendered (lazy load); grows as the sentinel scrolls into view.
   const [visibleCards, setVisibleCards] = useState(CARDS_PAGE_SIZE);
@@ -115,9 +119,11 @@ export default function CanvassPage() {
       setKpis(null);
       setTurfs([]);
       setBoundary(null);
+      setCampaignLoading(false);
       return;
     }
     let alive = true;
+    setCampaignLoading(true);
     void (async () => {
       const [s, t, b] = await Promise.all([
         getCampaignSummary(activeId),
@@ -128,6 +134,7 @@ export default function CanvassPage() {
       if (s.ok) setKpis(s.data);
       if (t.ok) setTurfs(t.data);
       setBoundary(b.ok ? ((b.data.boundary ?? null) as GeoJSON.Geometry | null) : null);
+      setCampaignLoading(false);
     })();
     return () => {
       alive = false;
@@ -328,7 +335,15 @@ export default function CanvassPage() {
 
       {activeId ? <CampaignNavCards campaignId={activeId} id="tour-canvass-ops" /> : null}
 
-      {boundary ? (
+      {campaignLoading ? (
+        <div>
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <MapPinned className="h-4 w-4 text-primary" />
+            Campaign area
+          </p>
+          <Skeleton className="h-[260px] w-full rounded-2xl" />
+        </div>
+      ) : boundary ? (
         <div>
           <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
             <MapPinned className="h-4 w-4 text-primary" />
@@ -402,7 +417,28 @@ export default function CanvassPage() {
         </div>
       ) : null}
 
-      {turfs.length === 0 ? (
+      {campaignLoading ? (
+        <>
+          <h2 className="flex items-center gap-1.5 text-sm font-bold text-foreground">
+            <MapPinned className="h-4 w-4 text-primary" />
+            Turf
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-border bg-surface p-3 shadow-sm">
+                <Skeleton className="h-24 w-full rounded-lg" />
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+                <Skeleton className="mt-2 h-3 w-2/3" />
+                <Skeleton className="mt-3 h-2 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        </>
+      ) : turfs.length === 0 ? (
         <EmptyState
           title="No turf in this campaign"
           description="Draw turf on the map, then build a walk list and assign a volunteer."

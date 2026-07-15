@@ -53,6 +53,19 @@ function tenantGradient(id: string): string {
   return `linear-gradient(135deg, hsl(${h1} 72% 56%), hsl(${(h1 + 48) % 360} 76% 46%))`;
 }
 
+/** Legible text (dark ink / white) for a hex background, by WCAG relative luminance. */
+function readableOn(hex?: string | null): string | undefined {
+  const m = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec((hex ?? "").trim());
+  if (!m) return undefined;
+  const h = m[1].length === 3 ? m[1].split("").map((c) => c + c).join("") : m[1];
+  const chan = (i: number) => {
+    const v = parseInt(h.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4);
+  return luminance > 0.5 ? "#111827" : "#ffffff";
+}
+
 /** A stat block in the brand hero — big number + muted label. Renders nothing when the value is 0. */
 function Stat({ value, label }: { value: number; label: string }) {
   if (!value) return null;
@@ -90,6 +103,24 @@ export function VolunteerJoinHero({
   const forName = campaignName || tenantName;
   const brandLabel = tenantName || "uprise";
   const hasStats = volunteerCount > 0 || doorsThisWeek > 0;
+
+  // Associated with a tenant/campaign → wear the brand: primary-fill the whole hero
+  // (both columns) and use the SECONDARY colour for the CTA. With no tenant/campaign
+  // context (the generic board), keep the default white feature column + primary CTA.
+  const branded = Boolean(campaignName || tenantName || tenantId);
+  const featureBg = branded ? "bg-primary" : "bg-white";
+  const heading = branded ? "text-white" : "text-ink";
+  const bodyText = branded ? "text-white/80" : "text-ink/60";
+  const iconTile = branded ? "bg-white/15 text-white" : "bg-primary/10 text-primary";
+  const rule = branded ? "border-white/25" : "border-ink/10";
+  const captionText = branded ? "text-white/80" : "text-ink/60";
+  const linkClass = branded ? "font-bold text-white underline" : "font-bold text-primary hover:underline";
+  // The CTA wears the tenant's SECONDARY colour (inline, so it beats the DS `bg-secondary`
+  // neutral without remapping that token globally). No brand secondary → the DS secondary.
+  const ctaStyle =
+    branded && secondaryColour
+      ? { backgroundColor: secondaryColour, color: readableOn(secondaryColour) }
+      : undefined;
 
   return (
     <div className="lg:flex lg:min-h-screen">
@@ -156,13 +187,14 @@ export function VolunteerJoinHero({
         </div>
       </section>
 
-      {/* White feature column — right on desktop, below on mobile */}
-      <section className="flex flex-1 flex-col bg-white px-7 pb-8 pt-8 lg:w-1/2 lg:justify-center lg:px-14 lg:py-16">
+      {/* Feature column — right on desktop, below on mobile. Primary-filled + white text
+          when branded (the tenant's colour carries the whole hero); white otherwise. */}
+      <section className={`flex flex-1 flex-col ${featureBg} px-7 pb-8 pt-8 lg:w-1/2 lg:justify-center lg:px-14 lg:py-16`}>
         <div className="lg:max-w-xl">
-          <h2 className="text-[1.6rem] font-extrabold leading-tight text-ink lg:text-4xl">
+          <h2 className={`text-[1.6rem] font-extrabold leading-tight lg:text-4xl ${heading}`}>
             Change happens one conversation at a time
           </h2>
-          <p className="mt-3 text-base leading-relaxed text-ink/60 lg:mt-4 lg:text-lg">
+          <p className={`mt-3 text-base leading-relaxed lg:mt-4 lg:text-lg ${bodyText}`}>
             You don&apos;t need experience or a script. uprise walks you through every door and does the
             admin for you.
           </p>
@@ -170,26 +202,31 @@ export function VolunteerJoinHero({
           <ul className="mt-7 space-y-5 lg:mt-9">
             {CAPABILITIES.map(({ icon: Icon, title, body }) => (
               <li key={title} className="flex gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${iconTile}`}>
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="font-bold text-ink">{title}</p>
-                  <p className="mt-0.5 text-sm leading-snug text-ink/60">{body}</p>
+                  <p className={`font-bold ${heading}`}>{title}</p>
+                  <p className={`mt-0.5 text-sm leading-snug ${bodyText}`}>{body}</p>
                 </div>
               </li>
             ))}
           </ul>
 
-          <hr className="mt-8 border-ink/10 lg:mt-10" />
+          <hr className={`mt-8 lg:mt-10 ${rule}`} />
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button className="h-14 rounded-[0.9rem] px-8 text-base" onClick={onGetStarted}>
+            <Button
+              variant={branded ? "secondary" : "default"}
+              style={ctaStyle}
+              className="h-14 rounded-[0.9rem] px-8 text-base"
+              onClick={onGetStarted}
+            >
               Get started
             </Button>
-            <p className="text-center text-base text-ink/60 sm:text-left">
+            <p className={`text-center text-base sm:text-left ${captionText}`}>
               Already a canvasser?{" "}
-              <Link href={signInHref} className="font-bold text-primary hover:underline">
+              <Link href={signInHref} className={linkClass}>
                 Sign in
               </Link>
             </p>
