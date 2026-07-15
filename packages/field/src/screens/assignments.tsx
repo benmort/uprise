@@ -19,6 +19,7 @@ import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
 import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hooks/use-canvass";
 import { claimExistingTurf } from "../api/canvass";
 import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
+import { reverseGeocode } from "../lib/geocode";
 import { MapThumbnail } from "../components/map-thumbnail";
 import { estimateWalk, formatMinutes } from "../lib/walk-estimate";
 import { useGeolocation } from "../hooks/use-geolocation";
@@ -67,6 +68,20 @@ export function Assignments() {
   // Acquire the volunteer's position as soon as My turf loads (post-login) so turf
   // features can use it. Best-effort — a denial just leaves the chip in its retry state.
   const { fix, locating, capture: locate } = useGeolocation({ auto: true });
+  // Reverse-geocode the fix to a human place ("46 Simmons Street, Newtown") so the chip tells the
+  // volunteer where it thinks they are. Best-effort — falls back to "Location on" if it can't resolve.
+  const [place, setPlace] = useState<string | null>(null);
+  useEffect(() => {
+    if (!fix) {
+      setPlace(null);
+      return;
+    }
+    const ac = new AbortController();
+    void reverseGeocode(fix.lat, fix.lng, ac.signal).then((p) => {
+      if (!ac.signal.aborted) setPlace(p);
+    });
+    return () => ac.abort();
+  }, [fix?.lat, fix?.lng]);
   const [claiming, setClaiming] = useState<string | null>(null);
   const assignments = a.data ?? [];
   const metrics = m.data ?? null;
@@ -133,9 +148,12 @@ export function Assignments() {
             Finding your location…
           </span>
         ) : fix ? (
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            <LocateFixed className="h-3.5 w-3.5 text-[hsl(var(--success))]" />
-            Location on{fix.accuracy ? ` · ±${Math.round(fix.accuracy)} m` : ""}
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-muted-foreground">
+            <LocateFixed className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--success))]" />
+            <span className="truncate">
+              {place ?? "Location on"}
+              {fix.accuracy ? ` · ±${Math.round(fix.accuracy)} m` : ""}
+            </span>
           </span>
         ) : (
           <button
