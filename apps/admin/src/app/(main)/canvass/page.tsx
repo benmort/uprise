@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, LayoutGrid, List, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, LayoutGrid, List, Loader2, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
@@ -48,6 +48,10 @@ const turfStatus = (t: TurfSummary): TurfViewStatus =>
   t.totalStops > 0 && t.visitedStops >= t.totalStops ? "COMPLETED" : t.assignedTo ? "IN_PROGRESS" : "UNASSIGNED";
 const turfPct = (t: TurfSummary) => (t.totalStops > 0 ? Math.round((t.visitedStops / t.totalStops) * 100) : 0);
 
+// Cards view reveals turf a page at a time as you scroll (lazy load). 12 = whole rows on
+// the 1/2/3-column grid. The list view keeps the DataTable's own paged control.
+const CARDS_PAGE_SIZE = 12;
+
 export default function CanvassPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -57,6 +61,9 @@ export default function CanvassPage() {
   const [turfs, setTurfs] = useState<TurfSummary[]>([]);
   const [boundary, setBoundary] = useState<GeoJSON.Geometry | null>(null);
   const [turfView, setTurfView] = useState<"cards" | "list">("cards");
+  // How many turf cards are rendered (lazy load); grows as the sentinel scrolls into view.
+  const [visibleCards, setVisibleCards] = useState(CARDS_PAGE_SIZE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -126,6 +133,29 @@ export default function CanvassPage() {
       alive = false;
     };
   }, [activeId]);
+
+  // Reset the lazy-load window whenever the turf set changes (campaign switch) or we
+  // return to the cards view, so it always starts from the first page.
+  useEffect(() => {
+    setVisibleCards(CARDS_PAGE_SIZE);
+  }, [turfs, turfView]);
+
+  // Cards lazy load: reveal another page each time the bottom sentinel scrolls into view.
+  useEffect(() => {
+    if (turfView !== "cards" || visibleCards >= turfs.length) return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCards((n) => Math.min(n + CARDS_PAGE_SIZE, turfs.length));
+        }
+      },
+      { rootMargin: "300px" }, // prefetch the next page slightly before it's on screen
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [turfView, turfs.length, visibleCards]);
 
   // "New campaign" mirrors "New blast": create a campaign with a default name and
   // drop the user straight into it (cut turf). Works from any state — no modal to
@@ -304,7 +334,14 @@ export default function CanvassPage() {
             <MapPinned className="h-4 w-4 text-primary" />
             Campaign area
           </p>
-          <CampaignBoundaryMap boundary={boundary} />
+          <CampaignBoundaryMap
+            boundary={boundary}
+            turfs={turfs.map((t) => ({
+              id: t.id,
+              geometry: (t.geometry ?? null) as GeoJSON.Geometry | null,
+              claimed: Boolean(t.assignedTo),
+            }))}
+          />
         </div>
       ) : null}
 
@@ -409,8 +446,9 @@ export default function CanvassPage() {
           ]}
         />
       ) : (
+        <>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {turfs.map((t) => {
+          {turfs.slice(0, visibleCards).map((t) => {
             const pct = turfPct(t);
             const status = turfStatus(t);
             return (
@@ -455,6 +493,13 @@ export default function CanvassPage() {
             );
           })}
         </div>
+        {visibleCards < turfs.length ? (
+          <div ref={loadMoreRef} className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading more turf…
+          </div>
+        ) : null}
+        </>
       )}
 
       <FormDialog

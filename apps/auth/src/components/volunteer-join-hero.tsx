@@ -99,9 +99,27 @@ export function VolunteerJoinHero({
 
       {/* Brand hero — left on desktop, top on mobile */}
       <section className="relative overflow-hidden rounded-b-[1.625rem] bg-primary px-7 pb-9 pt-9 text-white lg:flex lg:w-1/2 lg:flex-col lg:justify-center lg:rounded-none lg:px-14 lg:py-16">
-        {/* Decorative brand-tint circles (as in the mockup) */}
-        <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-72 w-72 rounded-full bg-white/[0.07]" />
-        <span aria-hidden className="pointer-events-none absolute -bottom-24 -left-10 h-80 w-80 rounded-full bg-white/[0.06]" />
+        {/* Decorative brand glows — soft, diffuse radial blooms (a blurred radial gradient
+            rather than a hard disc), matching the upriselabs.org background treatment. Tinted
+            with the tenant's SECONDARY colour (`--brand-secondary`, set by <BrandStyle>) over the
+            PRIMARY hero fill, so the hero wears both brand colours. Falls back to a white
+            highlight when the org has set no brand. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-16 h-72 w-72 rounded-full opacity-40"
+          style={{
+            background: "radial-gradient(circle at 30% 30%, var(--brand-secondary, #ffffff), transparent 70%)",
+            filter: "blur(32px)",
+          }}
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -bottom-24 -left-10 h-80 w-80 rounded-full opacity-30"
+          style={{
+            background: "radial-gradient(circle at 30% 30%, var(--brand-secondary, #ffffff), transparent 70%)",
+            filter: "blur(38px)",
+          }}
+        />
 
         <div className="relative z-10 lg:max-w-xl">
           {/* Logo + wordmark */}

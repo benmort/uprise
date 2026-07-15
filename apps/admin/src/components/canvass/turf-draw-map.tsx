@@ -401,6 +401,33 @@ export function TurfDrawMap({
       ?.fitBounds([[frame[0], frame[1]], [frame[2], frame[3]]], { padding: 32, duration: 600 });
   }, [boundaryBounds, focusBounds]);
 
+  // Auto-recentre on the FullscreenControl toggle — entering AND exiting. Mapbox resizes the
+  // canvas on the fullscreen change but keeps the pre-fullscreen viewport; we re-frame to the
+  // boundary against the new dimensions (a point view stays put). Skip while a point is focused.
+  useEffect(() => {
+    if (!mapLoaded) return;
+    const onFullscreenChange = () => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+      // Re-fit after the browser finishes the fullscreen layout (rAF), so fitBounds computes
+      // against the fullscreen (or restored) container size, not the stale one.
+      requestAnimationFrame(() => {
+        map.resize();
+        if (focusPoint) {
+          map.flyTo({ center: [focusPoint.lng, focusPoint.lat], zoom: POINT_ZOOM, duration: 0 });
+        } else {
+          recenter();
+        }
+      });
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
+  }, [mapLoaded, recenter, focusPoint]);
+
   // Vector-tile boundary source for the active level. mapbox requests only the
   // tiles visible at the current zoom, so this is what makes boundaries fast at any
   // zoom (no per-viewport GeoJSON, no zoom gate). Keyed by level so switching pills

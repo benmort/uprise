@@ -13,20 +13,31 @@ const mapStyleFor = (theme: string) =>
 // Brand primary for the boundary overlay (mapbox paint needs a literal hex — same as the
 // turf-draw map's boundary shading, so the overview and the cut-turf screen match).
 const PRIMARY = "#465fff";
+// Turf shading by claim status: claimed (a volunteer is assigned) reads as a solid green
+// fill; unclaimed as an amber DASHED outline (the same dashed "available/open" treatment the
+// cut-turf map uses for already-claimed turf).
+const CLAIMED = "#16a34a";
+const UNCLAIMED = "#b45309";
 // Fallback frame if a boundary somehow has no computable bbox — Australia-wide.
 const AU_BOUNDS: [number, number, number, number] = [112.9, -43.7, 153.6, -10.7];
 
+/** One turf's geometry + whether a volunteer has claimed (been assigned) it. */
+export type CampaignTurfShape = { id: string; geometry: GeoJSON.Geometry | null; claimed: boolean };
+
 /**
  * Read-only map of a campaign's saved boundary: shades the polygon and frames the map on it,
- * with a recentre button after the user pans/zooms away. A light sibling of {@link TurfDrawMap}
- * (no draw tools, no area selection) for the campaign overview. Renders nothing without a
- * boundary — the caller gates on `hasBoundary`.
+ * and overlays the campaign's turf shaded by claim status (claimed solid, unclaimed dashed).
+ * A recentre button re-frames after the user pans/zooms away. A light sibling of
+ * {@link TurfDrawMap} (no draw tools, no area selection) for the campaign overview. Renders
+ * nothing without a boundary — the caller gates on `hasBoundary`.
  */
 export function CampaignBoundaryMap({
   boundary,
+  turfs,
   height = 260,
 }: {
   boundary: GeoJSON.Geometry | null;
+  turfs?: CampaignTurfShape[];
   height?: number;
 }) {
   const { theme } = useTheme();
@@ -40,6 +51,27 @@ export function CampaignBoundaryMap({
     () => (boundary ? { type: "Feature", geometry: boundary, properties: {} } : null),
     [boundary],
   );
+
+  // Turf split into claimed / unclaimed FeatureCollections for the two shading styles.
+  const claimedFc = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: "FeatureCollection",
+      features: (turfs ?? [])
+        .filter((t) => t.claimed && t.geometry)
+        .map((t) => ({ type: "Feature", geometry: t.geometry as GeoJSON.Geometry, properties: { id: t.id } })),
+    }),
+    [turfs],
+  );
+  const unclaimedFc = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: "FeatureCollection",
+      features: (turfs ?? [])
+        .filter((t) => !t.claimed && t.geometry)
+        .map((t) => ({ type: "Feature", geometry: t.geometry as GeoJSON.Geometry, properties: { id: t.id } })),
+    }),
+    [turfs],
+  );
+  const hasTurf = claimedFc.features.length > 0 || unclaimedFc.features.length > 0;
 
   // The boundary's extent — the map fits to this on load and on recentre.
   const bounds = useMemo<[number, number, number, number]>(() => {
@@ -97,8 +129,10 @@ export function CampaignBoundaryMap({
       raf = requestAnimationFrame(() => recenter(300));
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange); // Safari
     return () => {
       document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
       cancelAnimationFrame(raf);
     };
   }, [recenter]);
@@ -126,6 +160,31 @@ export function CampaignBoundaryMap({
             paint={{ "line-color": PRIMARY, "line-width": 2, "line-opacity": 0.9 }}
           />
         </Source>
+
+        {/* Unclaimed turf — amber dashed outline (open, needs a volunteer). */}
+        {unclaimedFc.features.length > 0 ? (
+          <Source id="campaign-turf-unclaimed" type="geojson" data={unclaimedFc}>
+            <Layer id="campaign-turf-unclaimed-fill" type="fill" paint={{ "fill-color": UNCLAIMED, "fill-opacity": 0.08 }} />
+            <Layer
+              id="campaign-turf-unclaimed-line"
+              type="line"
+              paint={{ "line-color": UNCLAIMED, "line-width": 1.5, "line-dasharray": [2, 2] }}
+            />
+          </Source>
+        ) : null}
+
+        {/* Claimed turf — solid green fill (a volunteer is assigned). */}
+        {claimedFc.features.length > 0 ? (
+          <Source id="campaign-turf-claimed" type="geojson" data={claimedFc}>
+            <Layer id="campaign-turf-claimed-fill" type="fill" paint={{ "fill-color": CLAIMED, "fill-opacity": 0.22 }} />
+            <Layer
+              id="campaign-turf-claimed-line"
+              type="line"
+              paint={{ "line-color": CLAIMED, "line-width": 1.75, "line-opacity": 0.95 }}
+            />
+          </Source>
+        ) : null}
+
         <FullscreenControl position="top-left" />
       </MapGL>
 
@@ -134,6 +193,26 @@ export function CampaignBoundaryMap({
           <Loader2 className="h-3 w-3 animate-spin" />
           Loading boundaries…
         </p>
+      ) : null}
+
+      {/* Claimed / unclaimed legend — only when the campaign has turf to show. */}
+      {hasTurf ? (
+        <div className="pointer-events-none absolute bottom-2 left-2 flex flex-col gap-1 rounded-lg bg-surface/95 px-2.5 py-1.5 text-[11px] font-medium text-foreground shadow-card">
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-3.5 shrink-0 rounded-[3px] border"
+              style={{ backgroundColor: `${CLAIMED}38`, borderColor: CLAIMED }}
+            />
+            Claimed
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-3.5 shrink-0 rounded-[3px] border border-dashed"
+              style={{ backgroundColor: `${UNCLAIMED}24`, borderColor: UNCLAIMED }}
+            />
+            Unclaimed
+          </span>
+        </div>
       ) : null}
 
       <button

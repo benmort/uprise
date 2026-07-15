@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
-import { AlertTriangle, Crosshair, MapPin, Save } from "lucide-react";
+import { AlertTriangle, Crosshair, MapPin, RefreshCw, Save } from "lucide-react";
 import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import {
   assignTurf,
@@ -13,6 +13,7 @@ import {
   listVolunteers,
   loadTurfUniverse,
   rebucketTurf,
+  rebuildWalkLists,
   updateTurf,
   type TurfSummary,
 } from "@/lib/api";
@@ -31,7 +32,7 @@ import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard } from "@uprise/field";
+import { SectionCard, KpiTile } from "@uprise/field";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
@@ -108,6 +109,26 @@ export default function TurfCuttingPage() {
   );
   const turfs = data ?? [];
 
+  // Headline coverage stats, folded from the loaded turf list: how much turf is claimed
+  // (assigned to a canvasser) and how far the doors have been knocked.
+  const stats = useMemo(() => {
+    const total = turfs.length;
+    const claimed = turfs.filter((t) => t.assignedTo).length;
+    const totalStops = turfs.reduce((s, t) => s + (t.totalStops || 0), 0);
+    const visitedStops = turfs.reduce((s, t) => s + (t.visitedStops || 0), 0);
+    const doors = turfs.reduce((s, t) => s + (t.contactCount || 0), 0);
+    return {
+      total,
+      claimed,
+      unclaimed: total - claimed,
+      claimedPct: total ? Math.round((claimed / total) * 100) : 0,
+      doors,
+      totalStops,
+      visitedStops,
+      knockedPct: totalStops ? Math.round((visitedStops / totalStops) * 100) : 0,
+    };
+  }, [turfs]);
+
   // The campaign's saved boundary (if any): the map fits to it and shades it grey,
   // so turf is cut against the campaign's extent. Cached — it changes only when
   // edited on the boundary page.
@@ -170,6 +191,36 @@ export default function TurfCuttingPage() {
   const [renaming, setRenaming] = useState(false);
   const [deletingTurf, setDeletingTurf] = useState<TurfSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
+
+  // Backfill: (re)build a walk list for every turf that has doors. Future lists are
+  // already auto-built on turf-cut; this catches turfs cut before generation existed
+  // or whose build silently failed. A turf with 0 doors gets no list — its doors must
+  // be populated first (load the G-NAF universe / import geocoded contacts).
+  const rebuildAll = useCallback(async () => {
+    if (turfs.length === 0) return;
+    setRebuilding(true);
+    const res = await rebuildWalkLists(turfs.map((t) => t.id));
+    setRebuilding(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't rebuild walk lists", description: res.error });
+      return;
+    }
+    const results = res.data.results;
+    const built = results.filter((r) => r.walkListId).length;
+    const noDoors = results.filter((r) => !r.walkListId && !r.error).length;
+    const stops = results.reduce((s, r) => s + (r.items ?? 0), 0);
+    await refetch();
+    showToast({
+      tone: "success",
+      title: `Rebuilt ${built} walk list${built === 1 ? "" : "s"}`,
+      description:
+        `${stops.toLocaleString()} stop${stops === 1 ? "" : "s"}` +
+        (noDoors > 0
+          ? ` · ${noDoors} turf${noDoors === 1 ? "" : "s"} have no doors yet — load contacts or the G-NAF universe first.`
+          : "."),
+    });
+  }, [turfs, refetch, showToast]);
 
   const openRename = (t: TurfSummary) => {
     setEditingTurf(t);
@@ -287,6 +338,45 @@ export default function TurfCuttingPage() {
   return (
     <div className="page-stack">
       <CampaignPageHeader title="Cut turf" icon={MapPin} />
+
+      {/* Coverage at a glance — claimed vs unclaimed turf and knock progress. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiTile
+          label="Turf cut"
+          value={loading ? "—" : stats.total}
+          delta={loading ? undefined : { value: `${stats.doors.toLocaleString()} doors` }}
+          icon={<MapPin className="h-4 w-4" />}
+        />
+        <KpiTile
+          label="Claimed"
+          value={loading ? "—" : `${stats.claimedPct}%`}
+          delta={
+            loading
+              ? undefined
+              : { value: `${stats.claimed} of ${stats.total} assigned`, direction: stats.claimedPct >= 100 ? "up" : "flat" }
+          }
+        />
+        <KpiTile
+          label="Unclaimed"
+          value={loading ? "—" : stats.unclaimed}
+          delta={
+            loading
+              ? undefined
+              : stats.unclaimed > 0
+                ? { value: "need a canvasser", direction: "flat" }
+                : { value: "all assigned", direction: "up" }
+          }
+        />
+        <KpiTile
+          label="Doors knocked"
+          value={loading ? "—" : `${stats.knockedPct}%`}
+          delta={
+            loading
+              ? undefined
+              : { value: `${stats.visitedStops.toLocaleString()} of ${stats.totalStops.toLocaleString()} stops` }
+          }
+        />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         <div className="h-[60vh] overflow-hidden rounded-2xl border border-border">
@@ -475,7 +565,30 @@ export default function TurfCuttingPage() {
       </div>
 
       {/* Turfs — full-width below the map, styled like the geo areas list. */}
-      <SectionCard title={`Turfs (${turfs.length})`}>
+      <SectionCard
+        title={`Turfs (${turfs.length})`}
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={rebuilding || turfs.length === 0}
+            onClick={rebuildAll}
+            title="Backfill a walk list for every turf that has doors"
+          >
+            {rebuilding ? (
+              <>
+                <Spinner className="mr-2" />
+                Rebuilding…
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                Rebuild walk lists
+              </>
+            )}
+          </Button>
+        }
+      >
             <StateRegion
               loading={loading}
               error={error}
