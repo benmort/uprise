@@ -206,6 +206,7 @@ export default function WalkListBuilderPage() {
               firstName: c.firstName,
               lastName: c.lastName,
               address: c.address,
+              gnafPid: c.gnafPid,
               lat: c.lat,
               lng: c.lng,
             },

@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Map, { AttributionControl, FullscreenControl, Layer, Marker, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { AttributionControl, FullscreenControl, Layer, Marker, Popup, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Crosshair, Loader2, MapPin, Search, X } from "lucide-react";
-import { AU_BOUNDS } from "@uprise/field";
+import { AU_BOUNDS, AddressInfoCard } from "@uprise/field";
 import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
 import { getApiUrl } from "@/lib/api";
 import { useTheme } from "@/components/theme/theme-provider";
@@ -146,6 +146,8 @@ export function TurfDrawMap({
   stops = [],
   activeStopId,
   onStopTap,
+  stopPopup = false,
+  buildDetailHref,
   userPosition,
   focusPoint,
   resizeToken,
@@ -233,10 +235,16 @@ export function TurfDrawMap({
    *  so it's clear what's banked vs what's currently picked. */
   basketCodes?: string[];
   onBoundaryClick?: (code: string, name: string | null, layerId?: string) => void;
-  /** points mode — nearby-door markers (clustered) around the plotted point. */
-  stops?: Array<{ id: string; lat: number; lng: number; status?: string }>;
+  /** points mode — nearby-door markers (clustered) around the plotted point. `address`/
+   *  `contactId` feed the tap-to-open door info popover (addresses kind; the id IS the gnafPid). */
+  stops?: Array<{ id: string; lat: number; lng: number; status?: string; address?: string | null; contactId?: string | null }>;
   activeStopId?: string;
   onStopTap?: (id: string) => void;
+  /** When set (addresses kind only), the active door shows a door info popover — address +
+   *  contact + regions + a "View full detail" link. Not set for polling-places points. */
+  stopPopup?: boolean;
+  /** Builds the popover's "View full detail" link for a door's gnafPid. */
+  buildDetailHref?: (gnafPid: string) => string;
   userPosition?: { lat: number; lng: number } | null;
   /** points mode — the plotted address; flies to it and frames at street zoom. */
   focusPoint?: { lat: number; lng: number } | null;
@@ -983,6 +991,26 @@ export function TurfDrawMap({
               />
             </Source>
             {activeStop ? <Marker latitude={activeStop.lat} longitude={activeStop.lng} color="#dc2626" /> : null}
+            {/* Door info popover on the selected address — the id IS the gnafPid in
+                addresses mode, so the card fetches its regions + nearest polling. */}
+            {stopPopup && activeStop ? (
+              <Popup
+                latitude={activeStop.lat}
+                longitude={activeStop.lng}
+                anchor="bottom"
+                offset={14}
+                closeOnClick={false}
+                maxWidth="none"
+                onClose={() => onStopTap?.(activeStop.id)}
+              >
+                <AddressInfoCard
+                  gnafPid={activeStop.id}
+                  address={activeStop.address}
+                  contactId={activeStop.contactId}
+                  detailHref={buildDetailHref ? buildDetailHref(activeStop.id) : undefined}
+                />
+              </Popup>
+            ) : null}
             {userPosition ? <Marker latitude={userPosition.lat} longitude={userPosition.lng} color="#0ea5e9" /> : null}
           </>
         ) : null}

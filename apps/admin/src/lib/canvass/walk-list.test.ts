@@ -6,6 +6,7 @@ const c = (id: string, over: Partial<TurfContact> = {}): TurfContact => ({
   id,
   firstName: null,
   lastName: null,
+  gnafPid: null,
   address: null,
   street: null,
   locality: null,

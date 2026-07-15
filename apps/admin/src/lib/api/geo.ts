@@ -394,12 +394,64 @@ export type NearbyAddress = {
   sa4Code: string | null;
   lgaCode: string | null;
   hasContact: boolean;
+  /** The linked contact's id when hasContact — lets a marker open the contact/detail. */
+  contactId: string | null;
 };
 
 /** The nearest G-NAF addresses to a point (KNN over the national set). */
 export async function nearbyAddresses(lat: number, lng: number, limit = 25) {
   const qs = new URLSearchParams({ lat: String(lat), lng: String(lng), limit: String(limit) });
   return request<NearbyAddress[]>(`/geo/addresses/near?${qs}`);
+}
+
+/** The nearest polling booth to an address (from GET /geo/addresses/:gnafPid). */
+export type NearestPolling = {
+  id: string;
+  name: string | null;
+  premises: string | null;
+  address: string | null;
+  suburb: string | null;
+  state: string | null;
+  postcode: string | null;
+  divisionName: string | null;
+  placeType: string | null;
+  jurisdiction: string;
+  lat: number | null;
+  lng: number | null;
+  distanceM: number;
+};
+
+/** Everything about one address: full G-NAF detail, named containing regions,
+ *  the linked contact id, and the nearest polling place. */
+export type AddressDetail = {
+  gnafPid: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+  state: string | null;
+  street: string | null;
+  locality: string | null;
+  postcode: string | null;
+  buildingName: string | null;
+  flatNumber: string | null;
+  levelNumber: string | null;
+  numberFirst: string | null;
+  numberLast: string | null;
+  streetName: string | null;
+  streetType: string | null;
+  sa1Code: string | null;
+  sa2Code: string | null;
+  sa3Code: string | null;
+  sa4Code: string | null;
+  lgaCode: string | null;
+  contactId: string | null;
+  regions: RegionRef[];
+  nearestPolling: NearestPolling | null;
+};
+
+/** Everything about one address (popover + detail page) — GET /geo/addresses/:gnafPid. */
+export async function getAddressDetail(gnafPid: string) {
+  return request<AddressDetail>(`/geo/addresses/${encodeURIComponent(gnafPid)}`);
 }
 
 // ── Polling places (booths) — federal (AEC) + state/territory (The Tally Room) ──

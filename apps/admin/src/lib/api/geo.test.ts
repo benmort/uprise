@@ -17,6 +17,7 @@ import {
   getDensityScale,
   getReferendum,
   getAreaAddressCount,
+  getAddressDetail,
 } from "./geo";
 
 const mockReq = request as unknown as ReturnType<typeof vi.fn>;
@@ -168,5 +169,10 @@ describe("geo api client — density", () => {
     const url = mockReq.mock.calls[0][0] as string;
     expect(url).toContain("/geo/area-address-count?codes=");
     expect(decodeURIComponent(url)).toContain("sa2:201011001,sa3:20101");
+  });
+
+  it("getAddressDetail requests the per-address detail endpoint with an encoded gnafPid", async () => {
+    await getAddressDetail("GAVIC 42");
+    expect(mockReq.mock.calls[0][0]).toBe("/geo/addresses/GAVIC%2042");
   });
 });

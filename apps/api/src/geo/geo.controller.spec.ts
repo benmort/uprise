@@ -19,12 +19,19 @@ describe("GeoController", () => {
       tile: jest.fn().mockResolvedValue(Buffer.alloc(0)),
       nearbyAddresses: jest.fn().mockResolvedValue([]),
       addresses: jest.fn().mockResolvedValue([]),
+      addressDetail: jest.fn().mockResolvedValue({}),
       listChambers: jest.fn().mockResolvedValue([]),
       listChamberElectorates: jest.fn().mockResolvedValue([]),
       chamberElectorateDetail: jest.fn().mockResolvedValue({}),
       listFirstNations: jest.fn().mockResolvedValue({ rows: [], total: 0 }),
       firstNationsDetail: jest.fn().mockResolvedValue({}),
     }) as unknown as jest.Mocked<GeoService>;
+
+  it("addressDetail delegates with tenant + gnafPid", async () => {
+    const svc = makeSvc();
+    await new GeoController(svc).addressDetail("tenant-1", "GAVIC42");
+    expect(svc.addressDetail).toHaveBeenCalledWith("tenant-1", "GAVIC42");
+  });
 
   it("listFirstNations delegates, defaults to ireg, and coerces paging to numbers", async () => {
     const svc = makeSvc();

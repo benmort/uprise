@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, LocateFixed, MapPin, Plus, Scissors, Search, UserCheck } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Check, LocateFixed, MapPin, Plus, Scissors, Search, UserCheck } from "lucide-react";
 import { Spinner } from "@uprise/ui";
 import { type WalkMode } from "@uprise/field";
 import { createTurfFromSources, nearbyAddresses } from "@/lib/api/geo";
@@ -209,6 +210,12 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
                 </li>
               ) : null}
             </ul>
+            <Button asChild variant="ghost" size="sm" className="mt-2 w-full">
+              <Link href={`/data/addresses/${encodeURIComponent(active.gnafPid)}`}>
+                <ArrowUpRight className="mr-1.5 h-3.5 w-3.5" />
+                View full detail
+              </Link>
+            </Button>
             {(() => {
               const stateDigit = active.sa4Code ? active.sa4Code.slice(0, 1) : undefined;
               const cov = hasAddress(active.gnafPid) ? null : coveredBy({ kind: "address", stateDigit });

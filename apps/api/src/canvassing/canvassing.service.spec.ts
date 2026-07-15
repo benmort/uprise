@@ -1018,6 +1018,8 @@ describe("CanvassingService", () => {
       const [strings, tenantId, turfId] = prisma.$queryRaw.mock.calls[0];
       expect(strings.join("?")).toContain("geo.gnaf_address");
       expect(strings.join("?")).toContain('c."gnafPid"');
+      // gnafPid is selected out (not just joined on) so the preview popover can fetch address detail.
+      expect(strings.join("?")).toContain('c."gnafPid"   AS "gnafPid"');
       // Coords fall back to the G-NAF row so a cold door with no backfilled Contact.lat/lng
       // still gets a map pin.
       expect(strings.join("?")).toContain("COALESCE(c.lat, a.lat)");

@@ -174,6 +174,9 @@ export class CanvassingService {
                       lat: true,
                       lng: true,
                       phoneE164: true,
+                      // gnafPid lets the canvasser-preview / field door popover fetch the
+                      // address's containing regions (null for non-cold-door contacts).
+                      gnafPid: true,
                     },
                   },
                 },
@@ -643,6 +646,7 @@ export class CanvassingService {
       SELECT c.id,
              c."firstName" AS "firstName",
              c."lastName"  AS "lastName",
+             c."gnafPid"   AS "gnafPid",
              COALESCE(a.address_label, c.address) AS address,
              a.street   AS street,
              a.locality AS locality,
@@ -658,6 +662,9 @@ export class CanvassingService {
         id: string;
         firstName: string | null;
         lastName: string | null;
+        /** The contact's G-NAF address id (null for non-cold contacts) — lets the walk-list
+         *  preview's door popover fetch the address detail (regions, nearest polling). */
+        gnafPid: string | null;
         address: string | null;
         street: string | null;
         locality: string | null;

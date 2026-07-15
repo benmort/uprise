@@ -869,6 +869,9 @@ export type TurfContact = {
   id: string;
   firstName: string | null;
   lastName: string | null;
+  /** The contact's G-NAF address id (null when it has no gnafPid) — lets the canvasser
+   *  preview's door popover fetch the address detail (regions, nearest polling). */
+  gnafPid: string | null;
   address: string | null;
   /** G-NAF street/suburb/postcode (null when the contact has no gnafPid) — drive street grouping. */
   street: string | null;

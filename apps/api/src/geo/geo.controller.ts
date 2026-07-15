@@ -272,6 +272,14 @@ export class GeoController {
     });
   }
 
+  /** Everything about one address — full G-NAF detail, containing regions, linked
+   *  contact id and nearest polling place. Powers the info popover + address page.
+   *  Declared AFTER `addresses/near` + `addresses` so the literal routes win. */
+  @Get("addresses/:gnafPid")
+  async addressDetail(@TenantId() tenantId: string, @Param("gnafPid") gnafPid: string) {
+    return this.geo.addressDetail(tenantId, gnafPid);
+  }
+
   /** Trigger/queue a (re-)ingest. The heavy ETL runs via the geo CLI scripts; this
    *  marks intent + is the hook the worker/runbook reads. */
   @Post("ingest")

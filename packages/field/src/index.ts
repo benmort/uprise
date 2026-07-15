@@ -5,6 +5,7 @@
 // knocking UI exists in exactly one place.
 
 // ── Components ──────────────────────────────────────────────────────────────
+export * from "./components/address-info-card";
 export * from "./components/campaign-nav-cards";
 export * from "./components/data-table";
 export * from "./components/disposition-pad";

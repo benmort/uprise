@@ -1,14 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Map, { AttributionControl, FullscreenControl, Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { AttributionControl, FullscreenControl, Layer, Marker, Popup, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification } from "mapbox-gl";
 import { bbox } from "@turf/turf";
 import { Crosshair, Globe, Loader2, LocateFixed } from "lucide-react";
 import { useTheme } from "../lib/use-theme";
+import { AddressInfoCard } from "./address-info-card";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-export type MapStop = { id: string; lat: number; lng: number; status?: string };
+/** A walk stop. The optional address/contact/gnafPid fields feed the tap-to-open door
+ *  info popover (`stopPopup`); status alone is enough for a plain pin. */
+export type MapStop = {
+  id: string;
+  lat: number;
+  lng: number;
+  status?: string;
+  gnafPid?: string | null;
+  address?: string | null;
+  contactId?: string | null;
+  contactName?: string | null;
+};
 export type LngLat = { lat: number; lng: number };
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
@@ -39,6 +51,9 @@ export function TurfMap({
   activeStopId,
   userPosition,
   onStopTap,
+  stopPopup = false,
+  buildDetailHref,
+  knockLabel,
   routeGeometry,
   defaultBounds,
   focusBounds,
@@ -55,6 +70,16 @@ export function TurfMap({
   activeStopId?: string;
   userPosition?: LngLat | null;
   onStopTap?: (id: string) => void;
+  /** When set, tapping a stop opens the door info popover (address + contact + regions)
+   *  instead of firing `onStopTap` directly. The popover's primary action re-invokes
+   *  `onStopTap` as "Knock at this door", so the live-app knock flow is preserved —
+   *  just fronted by the info bubble. */
+  stopPopup?: boolean;
+  /** Builds the popover's "View full detail" link for a stop's gnafPid (admin surfaces).
+   *  Omit in the standalone field PWA, which has no such route. */
+  buildDetailHref?: (gnafPid: string) => string;
+  /** Label for the popover's knock button (default "Knock at this door"). */
+  knockLabel?: string;
   /** Walking route line (user → next stop) from the Mapbox Directions API. */
   routeGeometry?: GeoJSON.LineString | null;
   /** Viewport when there's no geometry/stops/position to focus (e.g. AU_BOUNDS). */
@@ -222,7 +247,20 @@ export function TurfMap({
   }, []);
   const gpsPosition = userPosition ?? locatedPos;
 
+  // Door info popover: tapping a stop opens it (when `stopPopup`), else fires onStopTap
+  // directly (the original behaviour). Cleared when the tapped stop leaves the set.
+  const [popupStopId, setPopupStopId] = useState<string | null>(null);
+  const handleStopTap = useCallback(
+    (id: string) => {
+      if (stopPopup) setPopupStopId(id);
+      else onStopTap?.(id);
+    },
+    [stopPopup, onStopTap],
+  );
+  const stopTappable = stopPopup || Boolean(onStopTap);
+
   const active = stops.find((s) => s.id === activeStopId);
+  const popupStop = popupStopId ? stops.find((s) => s.id === popupStopId) ?? null : null;
 
   // Our boundary vector tiles come from the ORGANISER-gated API on a (same-site)
   // cross-origin host; Mapbox GL won't send the parent-domain session cookie unless
@@ -429,10 +467,10 @@ export function TurfMap({
               longitude={s.lng}
               anchor="bottom"
               onClick={
-                onStopTap
+                stopTappable
                   ? (e) => {
                       e.originalEvent.stopPropagation();
-                      onStopTap(s.id);
+                      handleStopTap(s.id);
                     }
                   : undefined
               }
@@ -447,16 +485,49 @@ export function TurfMap({
           longitude={active.lng}
           anchor="bottom"
           onClick={
-            onStopTap
+            stopTappable
               ? (e) => {
                   e.originalEvent.stopPropagation();
-                  onStopTap(active.id);
+                  handleStopTap(active.id);
                 }
               : undefined
           }
         >
           <StopPin color={stopColor(active.status)} active />
         </Marker>
+      )}
+
+      {/* Door info popover — tap a stop to see the address, contact and containing
+          regions. The live app's primary action re-runs onStopTap ("Knock at this
+          door"); the read-only preview shows a "View full detail" link instead. */}
+      {stopPopup && popupStop && (
+        <Popup
+          latitude={popupStop.lat}
+          longitude={popupStop.lng}
+          anchor="bottom"
+          offset={36}
+          closeOnClick={false}
+          maxWidth="none"
+          onClose={() => setPopupStopId(null)}
+        >
+          <AddressInfoCard
+            gnafPid={popupStop.gnafPid}
+            address={popupStop.address}
+            contactId={popupStop.contactId}
+            contactName={popupStop.contactName}
+            detailHref={buildDetailHref && popupStop.gnafPid ? buildDetailHref(popupStop.gnafPid) : undefined}
+            onKnock={
+              onStopTap
+                ? () => {
+                    const id = popupStop.id;
+                    setPopupStopId(null);
+                    onStopTap(id);
+                  }
+                : undefined
+            }
+            knockLabel={knockLabel}
+          />
+        </Popup>
       )}
       {gpsPosition && (
         <Marker latitude={gpsPosition.lat} longitude={gpsPosition.lng} anchor="center">

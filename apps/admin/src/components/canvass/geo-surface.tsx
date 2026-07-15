@@ -359,9 +359,14 @@ export function GeoSurface() {
         lat: d.lat,
         lng: d.lng,
         status: d.hasContact ? "VISITED" : "PENDING",
+        address: d.address,
+        contactId: d.contactId,
       })),
       activeStopId: activePid || undefined,
       onStopTap: (id: string) => setActivePid(activePid === id ? "" : id),
+      // Tap a door → info popover (address + contact + regions + "View full detail").
+      stopPopup: true,
+      buildDetailHref: (pid: string) => `/data/addresses/${encodeURIComponent(pid)}`,
       userPosition: picked ? { lat: picked.lat, lng: picked.lng } : undefined,
       focusPoint: picked ? { lat: picked.lat, lng: picked.lng } : null,
     };

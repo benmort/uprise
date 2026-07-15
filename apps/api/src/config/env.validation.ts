@@ -93,6 +93,14 @@ export type ValidatedEnv = {
   TWILIO_API_KEY_SID: string;
   TWILIO_API_KEY_SECRET: string;
   TWILIO_TWIML_APP_SID: string;
+  // Outbound-voice caller ID the callee sees on browser calls — must be a
+  // voice-capable number (AU mobiles are SMS-only and get rejected → 13214).
+  // Blank ⇒ falls back to TWILIO_PHONE_NUMBER. The *_URL overrides default to
+  // API_BASE_URL-derived paths when blank.
+  TWILIO_VOICE_FROM: string;
+  TWILIO_VOICE_TWIML_URL: string;
+  TWILIO_VOICE_STATUS_CALLBACK_URL: string;
+  TWILIO_VOICE_RECORDING_CALLBACK_URL: string;
   TWILIO_SEND_RATE_PER_SECOND: number;
   TWILIO_SEND_MAX_CONCURRENT: number;
   TWILIO_SUBACCOUNT_SEND_RATE_PER_SECOND: number;
@@ -248,6 +256,10 @@ export function validateEnv(config: Env): ValidatedEnv {
     TWILIO_API_KEY_SID: config.TWILIO_API_KEY_SID?.trim() || "",
     TWILIO_API_KEY_SECRET: config.TWILIO_API_KEY_SECRET?.trim() || "",
     TWILIO_TWIML_APP_SID: config.TWILIO_TWIML_APP_SID?.trim() || "",
+    TWILIO_VOICE_FROM: config.TWILIO_VOICE_FROM?.trim() || "",
+    TWILIO_VOICE_TWIML_URL: config.TWILIO_VOICE_TWIML_URL?.trim() || "",
+    TWILIO_VOICE_STATUS_CALLBACK_URL: config.TWILIO_VOICE_STATUS_CALLBACK_URL?.trim() || "",
+    TWILIO_VOICE_RECORDING_CALLBACK_URL: config.TWILIO_VOICE_RECORDING_CALLBACK_URL?.trim() || "",
     TWILIO_SEND_RATE_PER_SECOND: numberInRange(config, "TWILIO_SEND_RATE_PER_SECOND", 1, 500, 475, errors),
     TWILIO_SEND_MAX_CONCURRENT: numberInRange(config, "TWILIO_SEND_MAX_CONCURRENT", 1, 50, 47, errors),
     // Per-subaccount defaults — an AU mobile long code sustains ~1 msg/sec.

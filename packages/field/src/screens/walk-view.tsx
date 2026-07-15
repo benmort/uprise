@@ -25,7 +25,7 @@ const TurfMap = dynamic(() => import("../components/turf-map").then((m) => m.Tur
   loading: () => <Skeleton className="h-full w-full" />,
 });
 
-type FullStop = WalkStop & { lat: number; lng: number };
+type FullStop = WalkStop & { lat: number; lng: number; gnafPid: string | null };
 
 function num(v: unknown): number {
   return typeof v === "number" ? v : Number.NaN;
@@ -90,6 +90,7 @@ export function WalkView({
         status: it.status,
         name,
         address: (c.address as string) ?? null,
+        gnafPid: (c.gnafPid as string) ?? null,
         lat: num(c.lat),
         lng: num(c.lng),
       } satisfies FullStop;
@@ -176,11 +177,25 @@ export function WalkView({
           <div className="absolute inset-0">
             <TurfMap
               mode="view"
-              stops={stops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, status: s.status }))}
+              stops={stops.map((s) => ({
+                id: s.id,
+                lat: s.lat,
+                lng: s.lng,
+                status: s.status,
+                gnafPid: s.gnafPid,
+                address: s.address,
+                contactId: s.contactId,
+                contactName: s.name,
+              }))}
               turfGeometry={assignment.turf.geometry as GeoJSON.Geometry}
               activeStopId={nextStop?.id}
               userPosition={userPosition}
+              // Tap a door → info popover. Live app: its "Knock at this door" button runs
+              // openDoor (the knock flow, now fronted by the bubble). Read-only preview:
+              // no knock, a "View full detail" link to the admin address page instead.
               onStopTap={readOnly ? undefined : (id) => openDoor(id)}
+              stopPopup
+              buildDetailHref={readOnly ? (pid) => `/data/addresses/${encodeURIComponent(pid)}` : undefined}
               routeGeometry={mapRoute}
             />
           </div>

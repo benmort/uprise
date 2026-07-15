@@ -939,3 +939,49 @@ describe("GeoService.areaAddressCount", () => {
     expect(geojson).toBe(JSON.stringify(boundary));
   });
 });
+
+describe("GeoService.addressDetail", () => {
+  it("returns the address, named regions, contactId and nearest polling; tenant-scoped", async () => {
+    const $queryRawUnsafe = jest
+      .fn()
+      // 1) the address row (gnaf_address + address_region + Contact join)
+      .mockResolvedValueOnce([
+        { gnafPid: "G1", address: "1 Smith St", lat: -37.8, lng: 144.9, sa1Code: "S1", sa2Code: "S2", contactId: "c1" },
+      ])
+      // 2) nearest polling place (regionParents is spied below, so this is the 2nd query)
+      .mockResolvedValueOnce([{ id: "p1", name: "Town Hall", distanceM: 120 }]);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    (svc as unknown as { regionParents: jest.Mock }).regionParents = jest
+      .fn()
+      .mockResolvedValue([{ kind: "sa2", code: "S2", name: "Fitzroy" }]);
+
+    const res = (await svc.addressDetail("t1", "G1")) as Record<string, unknown>;
+    expect(res).toMatchObject({
+      gnafPid: "G1",
+      contactId: "c1",
+      regions: [{ kind: "sa2", code: "S2", name: "Fitzroy" }],
+      nearestPolling: { id: "p1", distanceM: 120 },
+    });
+    // The address lookup is by gnaf_pid AND tenant.
+    expect($queryRawUnsafe.mock.calls[0][0]).toContain("geo.gnaf_address");
+    expect($queryRawUnsafe.mock.calls[0]).toEqual(expect.arrayContaining(["G1", "t1"]));
+    // The 2nd query is the nearest-booth KNN.
+    expect($queryRawUnsafe.mock.calls[1][0]).toContain("geo.polling_place");
+    expect($queryRawUnsafe.mock.calls[1][0]).toContain("<->");
+  });
+
+  it("throws for an unknown gnaf_pid", async () => {
+    const $queryRawUnsafe = jest.fn().mockResolvedValueOnce([]);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    await expect(svc.addressDetail("t1", "nope")).rejects.toThrow();
+  });
+
+  it("skips the polling query when the address has no coordinates", async () => {
+    const $queryRawUnsafe = jest.fn().mockResolvedValueOnce([{ gnafPid: "G2", address: "Unknown", lat: null, lng: null }]);
+    const svc = new GeoService({ $queryRawUnsafe } as never);
+    (svc as unknown as { regionParents: jest.Mock }).regionParents = jest.fn().mockResolvedValue([]);
+    const res = (await svc.addressDetail("t1", "G2")) as Record<string, unknown>;
+    expect(res.nearestPolling).toBeNull();
+    expect($queryRawUnsafe).toHaveBeenCalledTimes(1); // address only, no polling KNN
+  });
+});

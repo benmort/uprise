@@ -1183,7 +1183,8 @@ export class GeoService {
               ar.sa3_code AS "sa3Code",
               ar.sa4_code AS "sa4Code",
               ar.lga_code AS "lgaCode",
-              (c."gnafPid" IS NOT NULL) AS "hasContact"
+              (c."gnafPid" IS NOT NULL) AS "hasContact",
+              c.id AS "contactId"
        FROM geo.gnaf_address a
        LEFT JOIN geo.address_region ar ON ar.gnaf_pid = a.gnaf_pid
        LEFT JOIN geo.ced ced ON ced.code = ar.ced_code
@@ -1198,6 +1199,59 @@ export class GeoService {
       opts.lat,
       opts.lng,
     );
+  }
+
+  /**
+   * Everything about one address (the info popover + the address detail page): the full
+   * G-NAF row, its named containing regions (reusing regionParents), the linked contact id
+   * (null when none), and the nearest polling place. Demographics are a separate call
+   * (`/demographics/regions/:level/:code`) keyed on the returned SA codes. Throws when the
+   * gnaf_pid is unknown.
+   */
+  async addressDetail(tenantId: string, gnafPid: string) {
+    const rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT a.gnaf_pid AS "gnafPid", a.address_label AS address, a.lat, a.lng, a.state,
+              a.street, a.locality, a.postcode,
+              a.building_name AS "buildingName", a.flat_number AS "flatNumber",
+              a.level_number AS "levelNumber", a.number_first AS "numberFirst",
+              a.number_last AS "numberLast", a.street_name AS "streetName",
+              a.street_type AS "streetType",
+              ar.sa1_code AS "sa1Code", ar.sa2_code AS "sa2Code",
+              ar.sa3_code AS "sa3Code", ar.sa4_code AS "sa4Code", ar.lga_code AS "lgaCode",
+              c.id AS "contactId"
+       FROM geo.gnaf_address a
+       LEFT JOIN geo.address_region ar ON ar.gnaf_pid = a.gnaf_pid
+       LEFT JOIN "Contact" c ON c."gnafPid" = a.gnaf_pid AND c."tenantId" = $2
+       WHERE a.gnaf_pid = $1
+       LIMIT 1`,
+      gnafPid,
+      tenantId,
+    );
+    const row = rows[0];
+    if (!row) throw new ApiHttpException("ADDRESS_NOT_FOUND", "Address not found");
+    const lat = row.lat != null ? Number(row.lat) : null;
+    const lng = row.lng != null ? Number(row.lng) : null;
+    const [regions, nearestPolling] = await Promise.all([
+      this.regionParents("address", gnafPid),
+      lat != null && lng != null ? this.nearestPollingPlace(lat, lng) : Promise.resolve(null),
+    ]);
+    return { ...row, regions, nearestPolling };
+  }
+
+  /** The closest polling booth to a point (KNN on geo.polling_place), for the address page. */
+  private async nearestPollingPlace(lat: number, lng: number) {
+    const rows = await this.prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+      `SELECT id, name, premises, address, suburb, state, postcode,
+              division_name AS "divisionName", place_type AS "placeType", jurisdiction, lat, lng,
+              ROUND((geom::geography <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography)::numeric) AS "distanceM"
+       FROM geo.polling_place
+       WHERE geom IS NOT NULL
+       ORDER BY geom <-> ST_SetSRID(ST_MakePoint($2, $1), 4326)
+       LIMIT 1`,
+      lat,
+      lng,
+    );
+    return rows[0] ?? null;
   }
 
   // ── Polling places (booths) — federal (AEC) + state/territory (The Tally Room) ──
