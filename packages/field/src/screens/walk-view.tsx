@@ -40,12 +40,21 @@ export function WalkView({
   turfId,
   readOnly = false,
   assignment: assignmentProp,
+  sampleUserPosition,
+  routeGeometry: routeGeometryProp,
 }: {
   turfId: string;
   readOnly?: boolean;
   /** Pre-loaded assignment (organiser preview in apps/admin). When given, the
    *  screen skips the volunteer-scoped fetch and just renders it read-only. */
   assignment?: CanvassAssignment | null;
+  /** Preview-only "you are here" dot when there's no live GPS (the organiser preview
+   *  never captures GPS). Ignored once a real `fix` is available. */
+  sampleUserPosition?: LatLng | null;
+  /** Override the walking-route line drawn on the map. The organiser preview passes a
+   *  walk-order LineString through all stops here, because the live turn-by-turn fetch
+   *  is only origin→next-stop and needs a connection. Falls back to the live directions. */
+  routeGeometry?: GeoJSON.LineString | null;
 }) {
   const router = useRouter();
   const [mode, setMode] = useLocalStorage<WalkMode>("uprise.walkMode", "list");
@@ -114,6 +123,11 @@ export function WalkView({
   const dest = nextStop ? finite({ lat: nextStop.lat, lng: nextStop.lng }) : null;
   const { directions, online: directionsOnline } = useWalkingDirections(origin, dest, mode === "map");
 
+  // Live GPS wins; else the preview's sample position (organiser preview has no GPS). The map
+  // route is the caller override (preview walk-order line) if given, else the live directions.
+  const userPosition = fix ? { lat: fix.lat, lng: fix.lng } : (sampleUserPosition ?? null);
+  const mapRoute = routeGeometryProp ?? directions?.geometry ?? null;
+
   const openDoor = (id: string) => {
     if (readOnly) return;
     router.push(`/field/${turfId}/door/${id}`);
@@ -151,21 +165,23 @@ export function WalkView({
       ) : null}
 
       {mode === "map" ? (
-        <div className="relative min-h-[60vh] flex-1 overflow-hidden rounded-xl border border-border">
-          {/* Absolute-fill the map so it has a DEFINITE height to size against. The container's
-              vertical size can come from `min-h-[60vh]` alone (e.g. the admin preview, an
-              auto-height card), and mapbox's `height:100%` won't resolve against a parent that only
-              has min-height — it collapses to 0 and the canvas stays blank. `inset-0` sizes to the
-              container's used height (min-height included), so the map always fills. */}
+        <div
+          className="relative flex-1 overflow-hidden rounded-xl border border-border"
+          // Inline min-height (not a Tailwind arbitrary class): the height must not depend on
+          // admin's Tailwind build generating a field-only utility, which it didn't — the
+          // container collapsed to 0 and the map stayed blank. `absolute inset-0` below then
+          // gives mapbox a definite height to size its `height:100%` canvas against.
+          style={{ minHeight: "60vh" }}
+        >
           <div className="absolute inset-0">
             <TurfMap
               mode="view"
               stops={stops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, status: s.status }))}
               turfGeometry={assignment.turf.geometry as GeoJSON.Geometry}
               activeStopId={nextStop?.id}
-              userPosition={fix ? { lat: fix.lat, lng: fix.lng } : null}
+              userPosition={userPosition}
               onStopTap={readOnly ? undefined : (id) => openDoor(id)}
-              routeGeometry={directions?.geometry ?? null}
+              routeGeometry={mapRoute}
             />
           </div>
           {nextStop ? (

@@ -634,7 +634,9 @@ export class CanvassingService {
    * universe (raw `geo.gnaf_address`, no Prisma relation) by `gnafPid` so each stop carries its
    * real street + suburb + postcode for a complete address and street grouping — the enriched
    * `address_label` overrides the stored `Contact.address` ("96 · 3121"); we fall back to the
-   * stored value when there's no gnafPid (non-cold contacts). Cross-schema, hence `$queryRaw`.
+   * stored value when there's no gnafPid (non-cold contacts). Coordinates likewise COALESCE the
+   * stored `Contact.lat/lng` with the G-NAF row's, so a cold door with a gnafPid but no
+   * backfilled coords still gets a map pin. Cross-schema, hence `$queryRaw`.
    */
   async listTurfContacts(tenantId: string, turfId: string) {
     return this.prisma.$queryRaw`
@@ -645,7 +647,8 @@ export class CanvassingService {
              a.street   AS street,
              a.locality AS locality,
              a.postcode AS postcode,
-             c.lat, c.lng
+             COALESCE(c.lat, a.lat) AS lat,
+             COALESCE(c.lng, a.lng) AS lng
         FROM "public"."Contact" c
         LEFT JOIN geo.gnaf_address a ON a.gnaf_pid = c."gnafPid"
        WHERE c."tenantId" = ${tenantId} AND c."turfId" = ${turfId}

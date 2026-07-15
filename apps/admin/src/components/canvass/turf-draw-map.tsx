@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Map, { FullscreenControl, Layer, Marker, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { AttributionControl, FullscreenControl, Layer, Marker, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
@@ -735,6 +735,8 @@ export function TurfDrawMap({
         initialViewState={initialViewState}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
+        // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
+        attributionControl={false}
         interactiveLayerIds={
           mode === "boundaries"
             ? [
@@ -985,6 +987,7 @@ export function TurfDrawMap({
           </>
         ) : null}
         <FullscreenControl position="top-right" />
+        <AttributionControl position="bottom-right" compact />
       </Map>
 
       {/* On-map recentre — snaps back to the campaign boundary (or picked state / country). */}

@@ -11,9 +11,9 @@
    to 0 height. Mirrors apps/field's own globals. */
 @source "../../../../packages/field/src/**/*.{ts,tsx}";
 
-/* Hide the Mapbox wordmark — permitted under our Mapbox plan. Global because the
-   logo is rendered by mapbox-gl outside React, on every map. Attribution is kept
-   (compacted) to satisfy the OpenStreetMap licence. */
+/* Hide the Mapbox wordmark on every map (rendered by mapbox-gl outside React). The
+   attribution is set to `compact` per-map, so it collapses to a small ⓘ toggle
+   (text hidden until clicked) rather than the always-on "© Mapbox …" bar. */
 .mapboxgl-ctrl-logo {
   display: none !important;
 }

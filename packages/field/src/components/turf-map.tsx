@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import Map, { FullscreenControl, Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { AttributionControl, FullscreenControl, Layer, Marker, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification } from "mapbox-gl";
 import { bbox } from "@turf/turf";
 import { Crosshair, Globe } from "lucide-react";
@@ -240,6 +240,8 @@ export function TurfMap({
       initialViewState={initialViewState}
       mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
+      // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
+      attributionControl={false}
       transformRequest={transformRequest}
       onLoad={() => {
         const map = mapRef.current?.getMap();
@@ -472,6 +474,7 @@ export function TurfMap({
         )}
       </div>
       <FullscreenControl position="top-left" />
+      <AttributionControl position="bottom-right" compact />
     </Map>
   );
 }

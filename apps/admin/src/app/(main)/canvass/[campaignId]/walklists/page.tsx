@@ -23,7 +23,7 @@ import {
   type WalkListSummary,
 } from "@/lib/api";
 import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
-import { optimiseRoute, formatDistance, formatDuration, type Stop, WalkView, type CanvassAssignment } from "@uprise/field";
+import { optimiseRoute, formatDistance, formatDuration, type Stop, WalkView, OfflineBanner, type CanvassAssignment } from "@uprise/field";
 import { buildWalkGroups, doorNumber, stopLabel } from "@/lib/canvass/walk-list";
 import { FormSelect } from "@uprise/ui";
 import { Eye, EyeOff } from "lucide-react";
@@ -193,7 +193,14 @@ export default function WalkListBuilderPage() {
           items: orderedContacts.map((c, i) => ({
             id: c.id,
             orderIndex: i,
-            status: "PENDING" as const,
+            // Sample statuses so the preview reads like a real mid-walk — green (visited) +
+            // amber (skipped) pins and a moved progress bar — always leaving ≥1 PENDING so the
+            // "next stop" card shows. Preview-only: synthesised client-side, never persisted.
+            status: (i < Math.min(2, orderedContacts.length - 1)
+              ? "VISITED"
+              : i < Math.min(3, orderedContacts.length - 1)
+                ? "SKIPPED"
+                : "PENDING") as "PENDING" | "VISITED" | "SKIPPED",
             contact: {
               id: c.id,
               firstName: c.firstName,
@@ -207,6 +214,31 @@ export default function WalkListBuilderPage() {
       ],
     };
   }, [activeTurf, orderedContacts, campaignId]);
+
+  // Sample "you are here" + a walk-order route line for the preview map. A read-only organiser
+  // preview has no live GPS and no online turn-by-turn, so we synthesise both from the located
+  // stops in optimised order — matching the design's dot + multi-stop line. Preview-only.
+  const previewSample = useMemo<{
+    userPosition: { lat: number; lng: number } | null;
+    route: GeoJSON.LineString | null;
+  }>(() => {
+    const located = orderedContacts
+      .map((c) => ({ lat: c.lat, lng: c.lng }))
+      .filter(
+        (c): c is { lat: number; lng: number } =>
+          typeof c.lat === "number" &&
+          typeof c.lng === "number" &&
+          Number.isFinite(c.lat) &&
+          Number.isFinite(c.lng),
+      );
+    const route: GeoJSON.LineString | null =
+      located.length >= 2
+        ? { type: "LineString", coordinates: located.map((c) => [c.lng, c.lat]) }
+        : null;
+    // The dot sits at the last sample-visited stop ("you just finished here"), else the first stop.
+    const here = located[1] ?? located[0] ?? null;
+    return { userPosition: here, route };
+  }, [orderedContacts]);
 
   // Turf names can collide (self-serve turfs are all "My turf · <date>"), so give the batch multiselect
   // UNIQUE labels and map each back to its turf id — keying on the raw name would merge/skip turfs.
@@ -646,8 +678,18 @@ export default function WalkListBuilderPage() {
           }
         >
           {showPreview ? (
-            <div className="mx-auto max-w-[420px] rounded-2xl border border-border bg-background p-3">
-              <WalkView turfId={turfId} readOnly assignment={previewAssignment} />
+            <div className="mx-auto max-w-[420px] overflow-hidden rounded-2xl border border-border bg-background">
+              {/* Sample offline banner — canvassers work offline, so the preview shows it too. */}
+              <OfflineBanner force pending={3} />
+              <div className="p-3">
+                <WalkView
+                  turfId={turfId}
+                  readOnly
+                  assignment={previewAssignment}
+                  sampleUserPosition={previewSample.userPosition}
+                  routeGeometry={previewSample.route}
+                />
+              </div>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">

@@ -223,8 +223,10 @@ export function GeoSurface() {
         ...common,
         // Frame on the selected state so picking one centres the map: an Other
         // Territories island by its SA3 code, else the state (code = ASGS digit),
-        // else the shared State Filter, else the whole country.
-        focusBounds: OT_BOUNDS[code] ?? stateBounds(stateAsgsDigitToAbbrev(code) ?? stateParam),
+        // else the shared State Filter, else the whole country. Explicit AU_BOUNDS
+        // (not undefined) so the map fits ALL states on load / whenever the selection
+        // clears — matching the other geo kinds; undefined can leave a stale frame.
+        focusBounds: OT_BOUNDS[code] ?? stateBounds(stateAsgsDigitToAbbrev(code) ?? stateParam) ?? AU_BOUNDS,
         mode: "boundaries",
         boundaryTilesUrl: `${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=4`,
         boundaryFilter: stateDigit ? (["==", ["get", "code"], stateDigit] as FilterSpecification) : undefined,
