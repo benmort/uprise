@@ -862,9 +862,13 @@ export class IamFlowsService {
    * instead of only failing at the very end. `accept` re-verifies (idempotently) as the source
    * of truth. Throws on a bad/expired code.
    */
-  async verifyPhoneCode(challengeId: string, code: string): Promise<{ ok: true }> {
-    await this.verifyPhoneChallenge(challengeId, code);
-    return { ok: true };
+  async verifyPhoneCode(challengeId: string, code: string): Promise<{ ok: true; existingUser: boolean }> {
+    const mobile = await this.verifyPhoneChallenge(challengeId, code);
+    // Safe to reveal only now, AFTER the OTP proves control of the number (no pre-verify
+    // enumeration). Lets the onboarding wizard skip the signup questions for a returning
+    // volunteer and just log them in + join.
+    const existing = await this.prisma.user.findUnique({ where: { mobile }, select: { id: true } });
+    return { ok: true, existingUser: Boolean(existing) };
   }
 
   async acceptInvite(

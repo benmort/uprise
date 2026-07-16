@@ -38,14 +38,25 @@ export default function OpenJoinPage() {
   useEffect(() => {
     void (async () => {
       const res = await auth.openJoinPreview(campaignId);
-      setLoading(false);
       if (!res.ok) {
+        setLoading(false);
         setError(res.error);
         return;
       }
       setPreview(res.data);
+      // A returning volunteer who's already signed in AND already a member of this campaign's
+      // tenant shouldn't be asked to sign up again — send them straight where they were headed.
+      const session = await auth.checkSession();
+      if (session.ok && session.data.user) {
+        const member = session.data.user.memberships.some((m) => m.tenantId === res.data.tenantId);
+        if (member) {
+          completeAuth(session.data.user.memberships, returnTo);
+          return; // keep the spinner up through the redirect
+        }
+      }
+      setLoading(false);
     })();
-  }, [campaignId]);
+  }, [campaignId, returnTo]);
 
   /**
    * Land the new volunteer on the action app, carrying the campaign + tenant they just

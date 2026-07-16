@@ -152,9 +152,11 @@ export const auth = {
     post<{ challengeId: string }>("/iam/phone/resend", { challengeId }, captchaToken),
   phoneVerify: (challengeId: string, code: string) =>
     post<SessionGrantResponse>("/iam/phone/verify", { challengeId, code }),
-  /** Mid-flow OTP check for the onboarding wizard — validates the code without a session. */
+  /** Mid-flow OTP check for the onboarding wizard — validates the code without a session.
+   *  `existingUser` (revealed only post-verify) lets the wizard log a returning volunteer
+   *  straight in instead of re-running signup. */
   phoneCheck: (challengeId: string, code: string) =>
-    post<{ ok: true }>("/iam/phone/check", { challengeId, code }),
+    post<{ ok: true; existingUser: boolean }>("/iam/phone/check", { challengeId, code }),
 
   // DEV-ONLY: read back the plaintext OTP for a challenge so the SMS-code screens
   // can show it on-screen in local development (the API returns null in production).

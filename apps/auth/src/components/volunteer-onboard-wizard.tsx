@@ -243,7 +243,13 @@ export function VolunteerOnboardWizard({
       if (cancelled) return;
       setChecking(false);
       if (res.ok) {
-        goTo("name");
+        // Returning volunteer — their number is already an account. Skip the signup
+        // questions and just log them in + join (finalise redirects away).
+        if (res.data.existingUser) {
+          void finalise({ existing: true });
+        } else {
+          goTo("name");
+        }
       } else {
         setError(res.error);
         setCode(""); // clear so the six-digit input is ready for another try
@@ -252,6 +258,8 @@ export function VolunteerOnboardWizard({
     return () => {
       cancelled = true;
     };
+    // `finalise` is intentionally omitted — the ref-guarded `grewToSix` gate prevents re-runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, code, challengeId, goTo]);
 
   async function sendCode() {
@@ -286,45 +294,55 @@ export function VolunteerOnboardWizard({
     }
   }
 
-  async function submit() {
-    if (!agreed || busy) return;
+  /**
+   * Finalise the join. A NEW volunteer submits the answers they collected and lands on the
+   * "done" screen. A RETURNING volunteer — their number is already an account, detected at the
+   * code step — skips the signup questions entirely: we create the membership + session and
+   * redirect them straight on (createMembershipTx is a no-op for an existing membership, and the
+   * server keeps their existing name/role, so we send none of the profile fields).
+   */
+  async function finalise({ existing }: { existing: boolean }) {
+    if (busy) return;
+    if (!existing && !agreed) return;
     setBusy(true);
     setError(null);
     const displayName = [first.trim(), last.trim()].filter(Boolean).join(" ") || first.trim();
-    const preferredRole = (role as (typeof VOLUNTEER_PREFERRED_ROLES)[number]) ?? undefined;
-    // Doorknocker-only prefs — omitted for other roles even if partly filled.
-    const doorknockPrefs =
-      role === "doorknocker"
-        ? { walkingCapability: walking ?? undefined, sessionLength: sessionLen ?? undefined }
-        : {};
-    const res = token
-      ? await auth.acceptInvite({
-          token,
+    const profile = existing
+      ? {}
+      : {
           displayName,
-          challengeId: challengeId ?? undefined,
-          code: code || undefined,
-          preferredRole,
+          preferredRole: (role as (typeof VOLUNTEER_PREFERRED_ROLES)[number]) ?? undefined,
           availabilityDays: days,
-          ...doorknockPrefs,
+          // Doorknocker-only prefs — omitted for other roles even if partly filled.
+          ...(role === "doorknocker"
+            ? { walkingCapability: walking ?? undefined, sessionLength: sessionLen ?? undefined }
+            : {}),
           ...captureAttribution(),
-        })
+        };
+    const res = token
+      ? await auth.acceptInvite({ token, challengeId: challengeId ?? undefined, code: code || undefined, ...profile })
       : await auth.openJoinAccept({
           campaignId: campaignId!,
-          displayName,
           challengeId: challengeId ?? undefined,
           code: code || undefined,
-          preferredRole,
-          availabilityDays: days,
-          ...doorknockPrefs,
+          ...profile,
         });
     setBusy(false);
     if (!res.ok) {
       setError(res.error);
       return;
     }
+    if (existing) {
+      // Just log in and go — no signup screens, no "done" celebration for a returning volunteer.
+      if (onComplete) onComplete(res.data.memberships);
+      else completeAuth(res.data.memberships, returnTo);
+      return;
+    }
     setMemberships(res.data.memberships);
     goTo("done", { replace: true }); // Back must not land on a submitted form
   }
+
+  const submit = () => finalise({ existing: false });
 
   // ── Success ─────────────────────────────────────────────────────────
   if (step === "done") {
@@ -429,9 +447,9 @@ export function VolunteerOnboardWizard({
             We texted a 6-digit code to <span className="font-bold text-foreground">+61 {formatAuMobile(phone)}</span>.
           </p>
           <OtpInput value={code} onChange={setCode} length={6} className="mt-7" />
-          {checking ? (
+          {checking || busy ? (
             <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner /> Checking your code…
+              <Spinner /> {busy ? "Signing you in…" : "Checking your code…"}
             </p>
           ) : null}
           <p className="mt-4 text-sm text-muted-foreground">

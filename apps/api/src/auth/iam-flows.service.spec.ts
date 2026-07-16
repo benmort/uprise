@@ -265,13 +265,21 @@ describe("IamFlowsService", () => {
       expiresAt: new Date(Date.now() + 60_000), ...over,
     });
 
-    it("verifyPhoneCode returns ok on a correct code and marks the challenge verified", async () => {
+    it("verifyPhoneCode returns ok + existingUser:false for an unknown number", async () => {
       const { svc, prisma } = setup();
       prisma.mobileVerification.findUnique.mockResolvedValueOnce(mv({}));
-      await expect(svc.verifyPhoneCode("mv1", "123456")).resolves.toEqual({ ok: true });
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+      await expect(svc.verifyPhoneCode("mv1", "123456")).resolves.toEqual({ ok: true, existingUser: false });
       expect(prisma.mobileVerification.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { verifiedAt: expect.any(Date) } }),
       );
+    });
+
+    it("verifyPhoneCode reports existingUser:true once the OTP proves control of a known number", async () => {
+      const { svc, prisma } = setup();
+      prisma.mobileVerification.findUnique.mockResolvedValueOnce(mv({}));
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "u1" });
+      await expect(svc.verifyPhoneCode("mv1", "123456")).resolves.toEqual({ ok: true, existingUser: true });
     });
 
     it("verifyPhoneCode rejects a wrong code", async () => {
@@ -283,7 +291,8 @@ describe("IamFlowsService", () => {
     it("an already-verified challenge re-checked with the SAME code still passes (accept works after the code-step check)", async () => {
       const { svc, prisma } = setup();
       prisma.mobileVerification.findUnique.mockResolvedValueOnce(mv({ verifiedAt: new Date() }));
-      await expect(svc.verifyPhoneCode("mv1", "123456")).resolves.toEqual({ ok: true });
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+      await expect(svc.verifyPhoneCode("mv1", "123456")).resolves.toEqual({ ok: true, existingUser: false });
     });
 
     it("a verified challenge presented with a DIFFERENT code is still rejected", async () => {
