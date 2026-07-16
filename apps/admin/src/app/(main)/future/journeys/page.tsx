@@ -25,12 +25,13 @@ import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
+// Only triggers with a live producer are offered. disposition_set + survey_answer fire from the
+// engagement service; message_received from the inbox. `tag_added`/`no_answer_after` have no
+// producer yet (a journey on them would never enrol anyone), so they're withheld until wired.
 const TRIGGERS: Array<{ value: JourneyTriggerType; label: string }> = [
   { value: "disposition_set", label: "Disposition set" },
   { value: "message_received", label: "Message received" },
   { value: "survey_answer", label: "Survey answer" },
-  { value: "tag_added", label: "Tag added" },
-  { value: "no_answer_after", label: "No answer after" },
 ];
 
 const RUNG_META: Record<JourneyRungType, { label: string; icon: typeof Clock; tint: string }> = {

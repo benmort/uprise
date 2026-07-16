@@ -5,17 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  Check,
   CircleUser,
   Download,
-  DownloadCloud,
   Loader2,
   LocateFixed,
   MapPin,
   Menu,
   PersonStanding,
 } from "lucide-react";
-import { Button, EmptyState, Skeleton, cn } from "@uprise/ui";
+import { Button, EmptyState, Skeleton } from "@uprise/ui";
 import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hooks/use-canvass";
 import { claimExistingTurf } from "../api/canvass";
 import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
@@ -228,24 +226,16 @@ export function Assignments() {
                 return { id: it.id, lat: Number(c.lat), lng: Number(c.lng) };
               }),
             ).minutes;
-            const synced = online && i === 0; // per-turf offline-cache state lands later
             return (
               <div key={a.turfId} className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
+                {/* Per-turf offline state isn't known at this level — the real offline-download
+                    control lives inside each turf's walk view (OfflineMapsControl). */}
                 <div className="relative">
                   <MapThumbnail
                     polygon={outerRing(a.turf.geometry)}
                     color={TURF_SWATCHES[i % TURF_SWATCHES.length]}
                     className="h-40 w-full"
                   />
-                  <span
-                    className={cn(
-                      "absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-bold shadow-card",
-                      synced ? "text-[hsl(var(--success))]" : "text-[hsl(var(--warning-foreground))]",
-                    )}
-                  >
-                    {synced ? <Check className="h-4 w-4" /> : <DownloadCloud className="h-4 w-4" />}
-                    {synced ? "Synced" : "Download"}
-                  </span>
                 </div>
                 <div className="space-y-4 p-5">
                   <div>
