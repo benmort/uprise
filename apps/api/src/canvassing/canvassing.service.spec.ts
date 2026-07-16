@@ -69,6 +69,7 @@ describe("CanvassingService", () => {
         findUnique: jest.fn(),
         create: jest.fn(async ({ data }: any) => ({ id: "w_new", ...data })),
         update: jest.fn(async ({ data }: any) => ({ id: "w1", ...data })),
+        deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       shift: {
         findFirst: jest.fn(),
@@ -358,6 +359,22 @@ describe("CanvassingService", () => {
       expect(res.walkListId).toBe("wl_turf_t1"); // reconciled instead of throwing
       const added = (prisma.walkListItem.createMany.mock.calls[0]?.[0]?.data ?? []).map((r: any) => r.contactId);
       expect(added).toContain("c2"); // the missing door was added during recovery
+    });
+  });
+
+  describe("deleteWalkList", () => {
+    it("deletes a tenant's walk list (items cascade) and returns { deleted: true }", async () => {
+      prisma.walkList.deleteMany.mockResolvedValue({ count: 1 });
+      const res = await service.deleteWalkList("org1", "wl1");
+      expect(prisma.walkList.deleteMany).toHaveBeenCalledWith({ where: { id: "wl1", tenantId: "org1" } });
+      expect(res).toEqual({ deleted: true });
+    });
+
+    it("throws WALK_LIST_NOT_FOUND when nothing matches the tenant + id", async () => {
+      prisma.walkList.deleteMany.mockResolvedValue({ count: 0 });
+      await expect(service.deleteWalkList("org1", "ghost")).rejects.toMatchObject({
+        response: { error: { code: "WALK_LIST_NOT_FOUND" } },
+      });
     });
   });
 
@@ -1092,6 +1109,54 @@ describe("CanvassingService", () => {
       expect(res.legs).toEqual([]);
       expect(res.ordered).toEqual(["a"]); // unlocated stop still listed, sorted to the end
       expect(directions.routeLegsAndGeometry).not.toHaveBeenCalled();
+    });
+
+    it("prepends the origin as the first Mapbox waypoint and folds the from-here leg into the totals", async () => {
+      prisma.$queryRaw.mockResolvedValue(threeContacts);
+      directions.routeLegsAndGeometry.mockResolvedValue({
+        legs: [
+          { distance: 50, duration: 40 }, // origin → first stop
+          { distance: 100, duration: 80 },
+          { distance: 120, duration: 96 },
+        ],
+        geometry: { type: "LineString", coordinates: [] },
+        requests: 1,
+      });
+      const res = await service.turfRoute("org1", "t1", { lat: 0, lng: 0.0005 });
+      const waypoints = directions.routeLegsAndGeometry.mock.calls[0][0];
+      expect(waypoints).toHaveLength(4); // origin + 3 stops
+      expect(waypoints[0]).toEqual({ lat: 0, lng: 0.0005 });
+      expect(res.legs).toHaveLength(2); // stop-to-stop only (origin leg not surfaced as a leg)
+      expect(res.totalM).toBe(270); // 50 + 100 + 120 — includes the from-here leg
+      expect(res.totalS).toBe(216);
+    });
+
+    it("adds the from-here segment to the totals in the straight-line fallback when given an origin", async () => {
+      prisma.$queryRaw.mockResolvedValue(threeContacts);
+      directions.routeLegsAndGeometry.mockResolvedValue(null);
+      const without = await service.turfRoute("org1", "t1");
+      const withOrigin = await service.turfRoute("org1", "t1", { lat: 0, lng: -0.001 });
+      expect(withOrigin.source).toBe("crowflies");
+      expect(withOrigin.totalM).toBeGreaterThan(without.totalM);
+    });
+  });
+
+  describe("walkRouteForVolunteer", () => {
+    it("throws TURF_NOT_ASSIGNED when the turf isn't assigned to the volunteer", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "someone_else" });
+      await expect(service.walkRouteForVolunteer("org1", "t1", "u1")).rejects.toThrow();
+    });
+
+    it("returns the origin-aware route when the turf is assigned to the volunteer", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+      prisma.$queryRaw.mockResolvedValue([
+        { id: "a", lat: 0, lng: 0 },
+        { id: "b", lat: 0, lng: 0.001 },
+      ]);
+      directions.routeLegsAndGeometry.mockResolvedValue(null);
+      const res = await service.walkRouteForVolunteer("org1", "t1", "u1", { lat: 0, lng: 0 });
+      expect(res.ordered).toHaveLength(2);
+      expect(prisma.turfAssignment.findFirst).toHaveBeenCalled();
     });
   });
 

@@ -690,7 +690,7 @@ export class CanvassingService {
    * straight-line legs (haversine ÷ 1.25 m/s) when Mapbox is unconfigured, flagged in `source` so
    * the UI can say so. Unlocated contacts (no coords) sort to the end and get no leg.
    */
-  async turfRoute(tenantId: string, turfId: string) {
+  async turfRoute(tenantId: string, turfId: string, origin?: { lat: number; lng: number }) {
     const contacts = (await this.listTurfContacts(tenantId, turfId)) as Array<{
       id: string;
       lat: number | null;
@@ -701,7 +701,10 @@ export class CanvassingService {
       lat: typeof c.lat === "number" ? c.lat : Number.NaN,
       lng: typeof c.lng === "number" ? c.lng : Number.NaN,
     }));
-    const ordered = optimiseRoute(stops);
+    // When the volunteer sends their GPS, order from where they're standing (route-math starts at
+    // the door nearest the origin) and price the from-here first leg below.
+    const start = origin && Number.isFinite(origin.lat) && Number.isFinite(origin.lng) ? origin : undefined;
+    const ordered = optimiseRoute(stops, start);
     const orderedIds = ordered.map((s) => s.id);
     const located = ordered.filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng));
 
@@ -711,31 +714,67 @@ export class CanvassingService {
     // The street-following walk line through the located stops (Mapbox walking geometry). Null
     // when Mapbox is unconfigured/failed → the map falls back to a straight beeline.
     let geometry: GeoJSON.LineString | null = null;
+    let totalM = 0;
+    let totalS = 0;
 
+    // Prepend the origin (when given) so the Mapbox geometry + totals include the walk from where
+    // the volunteer is standing to the first door; the per-stop `legs` stay stop-to-stop.
+    const waypoints = [
+      ...(start ? [{ lat: start.lat, lng: start.lng }] : []),
+      ...located.map((s) => ({ lat: s.lat, lng: s.lng })),
+    ];
     const priced =
-      located.length >= 2
-        ? await this.directions.routeLegsAndGeometry(located.map((s) => ({ lat: s.lat, lng: s.lng })))
-        : null;
-    if (priced && priced.legs.length === located.length - 1) {
+      waypoints.length >= 2 ? await this.directions.routeLegsAndGeometry(waypoints) : null;
+    if (priced && priced.legs.length === waypoints.length - 1) {
       source = "directions";
       geometry = priced.geometry;
-      legs = priced.legs.map((leg, i) => ({
+      // With an origin prepended, priced.legs[0] is origin→firstStop; the rest are stop-to-stop.
+      const stopLegs = start ? priced.legs.slice(1) : priced.legs;
+      legs = stopLegs.map((leg, i) => ({
         fromId: located[i].id,
         toId: located[i + 1].id,
         distanceM: leg.distance,
         durationS: leg.duration,
       }));
+      // Totals cover the whole walk, INCLUDING the from-here first leg.
+      totalM = priced.legs.reduce((sum, l) => sum + l.distance, 0);
+      totalS = priced.legs.reduce((sum, l) => sum + l.duration, 0);
     } else {
       // Straight-line fallback at the model's walking pace (1.25 m/s), so the list still shows a leg.
       for (let i = 1; i < located.length; i += 1) {
         const distanceM = haversineM(located[i - 1], located[i]);
         legs.push({ fromId: located[i - 1].id, toId: located[i].id, distanceM, durationS: distanceM / 1.25 });
       }
+      totalM = legs.reduce((sum, l) => sum + l.distanceM, 0);
+      totalS = legs.reduce((sum, l) => sum + l.durationS, 0);
+      // Fold the from-here first segment into the totals when an origin was given.
+      if (start && located.length > 0) {
+        const d = haversineM(start, located[0]);
+        totalM += d;
+        totalS += d / 1.25;
+      }
     }
 
-    const totalM = legs.reduce((sum, l) => sum + l.distanceM, 0);
-    const totalS = legs.reduce((sum, l) => sum + l.durationS, 0);
     return { ordered: orderedIds, legs, totalM, totalS, source, geometry };
+  }
+
+  /**
+   * Walk route for a field volunteer, ordered from their current GPS (`origin`). Gated the same
+   * way as the door-knock path: the turf must be ASSIGNED to this volunteer, else TURF_NOT_ASSIGNED.
+   */
+  async walkRouteForVolunteer(
+    tenantId: string,
+    turfId: string,
+    volunteerId: string,
+    origin?: { lat: number; lng: number },
+  ) {
+    const lock = await this.prisma.turfAssignment.findFirst({
+      where: { turfId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
+    });
+    if (!lock || lock.volunteerId !== volunteerId) {
+      throw new ApiHttpException("TURF_NOT_ASSIGNED", "This turf is not assigned to you");
+    }
+    return this.turfRoute(tenantId, turfId, origin);
   }
 
   // ── Authoring (organiser) ───────────────────────────────────────
@@ -1440,6 +1479,14 @@ export class CanvassingService {
     if (input.name !== undefined) data.name = input.name;
     if (input.listType !== undefined) data.listType = input.listType;
     return this.prisma.walkList.update({ where: { id }, data });
+  }
+
+  /** Delete a walk list. Its WalkListItems cascade (schema onDelete: Cascade); contacts,
+   *  the turf and door-knock history are untouched (delete-list ≠ unassign-turf). */
+  async deleteWalkList(tenantId: string, id: string) {
+    const res = await this.prisma.walkList.deleteMany({ where: { id, tenantId } });
+    if (res.count === 0) throw new ApiHttpException("WALK_LIST_NOT_FOUND", "Walk list not found");
+    return { deleted: true };
   }
 
   /** Rename / reshape a turf boundary. Geometry changes don't auto-rebucket. */

@@ -126,6 +126,26 @@ export class CanvassingController {
     return this.canvassing.turfRoute(tenantId, turfId);
   }
 
+  // Field volunteers' own walk route — ordered from their GPS (?lat=&lng=), with real Mapbox
+  // walking legs + geometry. Gated on the canvasser read perm; own-turf enforced in the service.
+  @Get("turfs/:turfId/walk-route")
+  @RequirePermission(CANVASS_READ)
+  async walkRoute(
+    @Param("turfId") turfId: string,
+    @TenantId() tenantId: string,
+    @Query("volunteerId") volunteerId: string,
+    @Query("lat") lat?: string,
+    @Query("lng") lng?: string,
+  ) {
+    const latN = Number(lat);
+    const lngN = Number(lng);
+    const origin =
+      lat != null && lng != null && Number.isFinite(latN) && Number.isFinite(lngN)
+        ? { lat: latN, lng: lngN }
+        : undefined;
+    return this.canvassing.walkRouteForVolunteer(tenantId, turfId, volunteerId, origin);
+  }
+
   @Post("turfs")
   @Roles(AppUserRole.ORGANISER)
   async createTurf(@Body() dto: CreateTurfDto, @TenantId() tenantId: string) {
@@ -220,6 +240,12 @@ export class CanvassingController {
       ...dto,
       listType: dto.listType as WalkListItemListType | undefined,
     });
+  }
+
+  @Delete("walk-lists/:id")
+  @Roles(AppUserRole.ORGANISER)
+  async deleteWalkList(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.canvassing.deleteWalkList(tenantId, id);
   }
 
   @Post("turfs/assign")

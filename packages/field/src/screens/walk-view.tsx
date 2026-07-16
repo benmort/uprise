@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DownloadCloud, Home, Loader2, Navigation, Route } from "lucide-react";
-import { Button, EmptyState, FormDialog, Skeleton, cn, useToast } from "@uprise/ui";
-import { type CanvassAssignment } from "../api";
+import { Button, EmptyState, Skeleton, cn, useToast } from "@uprise/ui";
+import { getWalkRoute, type CanvassAssignment, type WalkRoute } from "../api";
 import { useAssignments } from "../hooks/use-canvass";
 import { getVolunteerId } from "../lib/volunteer";
 import { optimiseRoute, type Stop } from "../lib/route";
-import { compareRouteFromHere, estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
+import { estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
 import { formatDistance, type LatLng } from "../lib/directions";
 import { useLocalStorage } from "../hooks/use-local-storage";
 import { useGeolocation } from "../hooks/use-geolocation";
@@ -73,10 +73,10 @@ export function WalkView({
     null,
   );
   const [checking, setChecking] = useState(false);
-  const [suggestion, setSuggestion] = useState<
-    { fix: { lat: number; lng: number }; order: Stop[]; savedMetres: number; savedSeconds: number } | null
-  >(null);
-  const didAutoCheck = useRef(false);
+  // The server's Mapbox-ordered route (real walking distances + footpath geometry), ordered from
+  // `startFix` when set. Null until it loads / when offline — the client optimiser is the fallback.
+  const [serverRoute, setServerRoute] = useState<WalkRoute | null>(null);
+  const [routing, setRouting] = useState(false);
 
   // Organiser preview (apps/admin) supplies the assignment directly; the volunteer app
   // reads it from the SHARED assignments cache — so arriving from the dashboard is
@@ -112,9 +112,19 @@ export function WalkView({
         lng: num(c.lng),
       } satisfies FullStop;
     });
+    // Prefer the server's Mapbox-ordered route (matched by contactId); fall back to the client
+    // crow-flies optimiser offline or before it loads. Field stays offline-first either way.
+    if (serverRoute && serverRoute.ordered.length > 0) {
+      const rank = new Map(serverRoute.ordered.map((cid, i) => [cid, i]));
+      const sorted = [...mapped].sort(
+        (a, b) =>
+          (rank.get(a.contactId) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.contactId) ?? Number.MAX_SAFE_INTEGER),
+      );
+      return sorted.map((s, i) => ({ ...s, orderIndex: i }));
+    }
     const ordered = optimiseRoute(mapped as Stop[], startFix ?? undefined) as unknown as FullStop[];
     return ordered.map((s, i) => ({ ...s, orderIndex: i }));
-  }, [assignment, startFix]);
+  }, [assignment, startFix, serverRoute]);
 
   const nextStop = stops.find((s) => s.status === "PENDING");
   const doneCount = stops.filter((s) => s.status !== "PENDING").length;
@@ -166,52 +176,43 @@ export function WalkView({
   // Live GPS wins; else the preview's sample position (organiser preview has no GPS). The map
   // route is the caller override (preview walk-order line) if given, else the live directions.
   const userPosition = fix ? { lat: fix.lat, lng: fix.lng } : (sampleUserPosition ?? null);
-  const mapRoute = routeGeometryProp ?? directions?.geometry ?? null;
+  const mapRoute = routeGeometryProp ?? serverRoute?.geometry ?? directions?.geometry ?? null;
 
   const openDoor = (id: string) => {
     if (readOnly) return;
     router.push(`/field/${turfId}/door/${id}`);
   };
 
-  // Capture GPS (runs in the background) and, if a route starting from where the
-  // volunteer is standing is meaningfully shorter than the current order, surface it as
-  // a suggestion. `auto` (on-open) stays silent when there's nothing to offer; a manual
-  // tap gives feedback either way.
-  const checkFromHere = useCallback(
-    async (auto: boolean) => {
-      if (readOnly) return;
-      setChecking(true);
-      const gps = await capture();
-      setChecking(false);
-      if (!gps) {
-        if (!auto) showToast({ tone: "error", title: "Couldn't get your location", description: "Enable location to re-route from here." });
-        return;
-      }
-      const here = { lat: gps.lat, lng: gps.lng };
-      const pendingStops = stops.filter((s) => s.status === "PENDING") as Stop[];
-      const res = compareRouteFromHere(pendingStops, here, pendingStops);
-      if (res) setSuggestion({ fix: here, ...res });
-      else if (!auto) showToast({ tone: "success", title: "You're already on the shortest route from here" });
-    },
-    [readOnly, capture, stops, showToast],
-  );
-
-  const acceptSuggestion = () => {
-    if (!suggestion) return;
-    const first = suggestion.order[0];
-    setStartFix(suggestion.fix); // re-orders the walk (persisted) via the stops memo
-    setSuggestion(null);
-    if (first) openDoor(first.id); // …and start walking at the nearest door
-  };
-
-  // Auto-check once when the walk opens — but only if we haven't already applied a
-  // from-here start (so returning from a door doesn't re-nag). Manual button always re-checks.
+  // Fetch the server's Mapbox walk route (ordered from `startFix` when set). Online-only — a
+  // failure/offline just leaves the client crow-flies fallback in place. Not run in the organiser
+  // preview (no volunteer / it's fed a route line directly).
   useEffect(() => {
-    if (readOnly || isPreview || didAutoCheck.current || startFix) return;
-    if (!assignment || stops.length < 2) return;
-    didAutoCheck.current = true;
-    void checkFromHere(true);
-  }, [readOnly, isPreview, startFix, assignment, stops.length, checkFromHere]);
+    if (readOnly || isPreview || !assignment || !volunteerId) return;
+    let cancelled = false;
+    setRouting(true);
+    void getWalkRoute(turfId, volunteerId, startFix ?? undefined).then((res) => {
+      if (cancelled) return;
+      setRouting(false);
+      if (res.ok) setServerRoute(res.data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [turfId, volunteerId, startFix, assignment, readOnly, isPreview]);
+
+  // "Start from my location" — capture GPS once and pin it as the route origin. The fetch effect
+  // above then re-orders the list + line + totals in place from where the volunteer is standing.
+  const useMyLocation = useCallback(async () => {
+    if (readOnly) return;
+    setChecking(true);
+    const gps = await capture();
+    setChecking(false);
+    if (!gps) {
+      showToast({ tone: "error", title: "Couldn't get your location", description: "Enable location to re-route from here." });
+      return;
+    }
+    setStartFix({ lat: gps.lat, lng: gps.lng });
+  }, [readOnly, capture, showToast, setStartFix]);
 
   // A just-claimed turf (or one whose walk list the server is still building) isn't in the
   // cached assignments payload yet — and a <30s-old cache won't auto-revalidate. Rather than
@@ -290,12 +291,22 @@ export function WalkView({
       {!readOnly && stops.length >= 2 ? (
         <button
           type="button"
-          onClick={() => void checkFromHere(false)}
-          disabled={checking}
+          onClick={() => void useMyLocation()}
+          disabled={checking || routing}
           className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60"
         >
-          {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Navigation className="h-4 w-4 text-primary" />}
-          {checking ? "Checking your location…" : startFix ? "Re-optimise from my location" : "Start from my location"}
+          {checking || routing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Navigation className="h-4 w-4 text-primary" />
+          )}
+          {checking
+            ? "Getting your location…"
+            : routing
+              ? "Optimising from your location…"
+              : startFix
+                ? "Re-optimise from my location"
+                : "Start from my location"}
         </button>
       ) : null}
 
@@ -385,15 +396,27 @@ export function WalkView({
                   Directions need a connection — pins and the address work offline.
                 </p>
               ) : null}
+              {directions ? (
+                <p className="mt-2 text-[10px] text-muted-foreground">Directions © Mapbox © OpenStreetMap</p>
+              ) : null}
             </div>
           ) : null}
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
-            <Route className="h-4 w-4" />
-            Route-optimised · shortest path
-          </p>
+          <div>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.05em] text-muted-foreground">
+              <Route className="h-4 w-4" />
+              {serverRoute && serverRoute.totalM > 0
+                ? `${formatDistance(serverRoute.totalM)} · ${formatMinutes(
+                    Math.max(1, Math.round(serverRoute.totalS / 60)),
+                  )} walk${serverRoute.source === "crowflies" ? " (estimated)" : ""}`
+                : "Route-optimised · shortest path"}
+            </p>
+            {serverRoute?.source === "directions" ? (
+              <p className="mt-1 text-[10px] text-muted-foreground">Walking route © Mapbox © OpenStreetMap</p>
+            ) : null}
+          </div>
           {!readOnly ? (
             <div className="flex items-center gap-2 rounded-xl border border-border bg-surface/60 p-2.5 text-sm">
               <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -446,27 +469,6 @@ export function WalkView({
           ) : null}
         </div>
       )}
-
-      <FormDialog
-        open={!!suggestion}
-        title="A shorter route from here"
-        onClose={() => setSuggestion(null)}
-        onSubmit={acceptSuggestion}
-        submitLabel="Use this route"
-      >
-        {suggestion ? (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Starting from where you are now saves{" "}
-              <span className="font-bold text-foreground">
-                {formatMinutes(Math.max(1, Math.round(suggestion.savedSeconds / 60)))}
-              </span>{" "}
-              · <span className="font-bold text-foreground">{formatDistance(suggestion.savedMetres)}</span>.
-            </p>
-            <p className="text-sm text-foreground">Re-order your walk and head to the nearest door?</p>
-          </div>
-        ) : null}
-      </FormDialog>
     </div>
   );
 }

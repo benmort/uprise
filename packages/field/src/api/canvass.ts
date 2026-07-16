@@ -33,6 +33,35 @@ export type CanvassAssignment = {
   }>;
 };
 
+/** The turf's walk route, ordered by the server with real Mapbox walking distances/geometry.
+ *  `ordered` is CONTACT ids; `source` says whether Mapbox walked it or it fell back to straight lines. */
+export type WalkRoute = {
+  ordered: string[];
+  legs: Array<{ fromId: string; toId: string; distanceM: number; durationS: number }>;
+  totalM: number;
+  totalS: number;
+  source: "directions" | "crowflies";
+  geometry: GeoJSON.LineString | null;
+};
+
+/** The volunteer's own walk route for a turf, optionally ordered from their GPS `origin`. */
+export async function getWalkRoute(
+  turfId: string,
+  volunteerId: string,
+  origin?: { lat: number; lng: number },
+  signal?: AbortSignal,
+) {
+  const q = new URLSearchParams({ volunteerId });
+  if (origin && Number.isFinite(origin.lat) && Number.isFinite(origin.lng)) {
+    q.set("lat", String(origin.lat));
+    q.set("lng", String(origin.lng));
+  }
+  return request<WalkRoute>(
+    `/canvass/turfs/${encodeURIComponent(turfId)}/walk-route?${q}`,
+    signal ? { signal } : undefined,
+  );
+}
+
 export type DoorKnockSurveyAnswer = { questionId: string; optionId?: string; valueText?: string };
 
 export type DoorKnockInput = {
