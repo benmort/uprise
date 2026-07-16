@@ -66,9 +66,11 @@ export function TenantSwitcher({
   onSlideChange?: (px: number) => void;
 }) {
   const [switching, setSwitching] = useState(false);
-  // Name of the workspace being switched to — drives the loading modal shown from click until the
-  // page reload lands (the switch reloads the whole app to re-scope the session).
-  const [switchingName, setSwitchingName] = useState<string | null>(null);
+  // The workspace being switched to (name + brand mark) — drives the loading modal shown from click
+  // until the page reload lands (the switch reloads the whole app to re-scope the session).
+  const [switchingTo, setSwitchingTo] = useState<{ tenantId: string; name: string; logoUrl: string | null } | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [allTenants, setAllTenants] = useState<TenantSearchRow[]>([]);
@@ -203,11 +205,16 @@ export function TenantSwitcher({
         logoUrl: m.logoUrl ?? null,
       }));
 
-  const switchTo = async (tenantId: string, name: string) => {
+  const switchTo = async (tenantId: string, name: string, logoUrl: string | null = null) => {
     if (switching || tenantId === currentTenantId) return;
     setSwitching(true);
-    setSwitchingName(name);
-    const res = await auth.selectTenant(tenantId);
+    setSwitchingTo({ tenantId, name, logoUrl });
+    // Hold the modal for at least 1.5s even if the API is instant, so the brand mark + "Switching
+    // to…" register rather than flashing past. Runs concurrently with the select call.
+    const [res] = await Promise.all([
+      auth.selectTenant(tenantId),
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
     if (res.ok) {
       // Keep the modal up — the reload tears the page down and the fresh workspace's shell
       // loading state takes over. Don't clear `switching`, or the modal would flash away first.
@@ -215,7 +222,7 @@ export function TenantSwitcher({
       return;
     }
     setSwitching(false);
-    setSwitchingName(null);
+    setSwitchingTo(null);
   };
 
   const triggerHandlers = {
@@ -370,7 +377,7 @@ export function TenantSwitcher({
                   key={r.tenantId}
                   type="button"
                   disabled={switching}
-                  onClick={() => void switchTo(r.tenantId, r.tenantName)}
+                  onClick={() => void switchTo(r.tenantId, r.tenantName, r.logoUrl ?? null)}
                   className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <TenantAvatar tenantId={r.tenantId} logoUrl={r.logoUrl} name={r.tenantName} className="h-7 w-7" />
@@ -395,15 +402,22 @@ export function TenantSwitcher({
       <CreateTenantDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
 
       {pill}
-      <SwitchingModal open={switching} name={switchingName} />
+      <SwitchingModal open={switching} tenant={switchingTo} />
     </>
   );
 }
 
 /** Full-screen loading modal shown while a workspace switch is in flight — from the click until
  *  the page reload lands. Portalled to <body> so it covers the whole viewport (the topbar lives in
- *  a transformed container that would otherwise clip a fixed overlay). */
-function SwitchingModal({ open, name }: { open: boolean; name: string | null }) {
+ *  a transformed container that would otherwise clip a fixed overlay). Shows the target workspace's
+ *  brand mark (logo, or its coloured-circle avatar) so the switch is unmistakable. */
+function SwitchingModal({
+  open,
+  tenant,
+}: {
+  open: boolean;
+  tenant: { tenantId: string; name: string; logoUrl: string | null } | null;
+}) {
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div
@@ -413,10 +427,26 @@ function SwitchingModal({ open, name }: { open: boolean; name: string | null }) 
       aria-label="Switching workspace"
     >
       <div className="flex w-full max-w-xs flex-col items-center gap-4 rounded-2xl border border-border bg-surface p-8 text-center shadow-elevated">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="relative">
+          {tenant ? (
+            <TenantAvatar
+              tenantId={tenant.tenantId}
+              logoUrl={tenant.logoUrl}
+              name={tenant.name}
+              className="h-16 w-16 text-xl"
+            />
+          ) : (
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          )}
+          {tenant ? (
+            <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            </span>
+          ) : null}
+        </div>
         <div>
           <p className="text-base font-bold text-foreground">
-            Switching to {name ?? "your workspace"}
+            Switching to {tenant?.name ?? "your workspace"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">Loading your workspace…</p>
         </div>
