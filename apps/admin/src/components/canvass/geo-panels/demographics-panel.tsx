@@ -18,10 +18,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { SectionCard, type WalkMode } from "@uprise/field";
 import { cn } from "@/lib/utils";
 
+// Largest area (SA4) on the left → smallest (meshblock) on the right.
 const LEVELS: Array<{ key: AbsLevel; label: string }> = [
-  { key: "sa2", label: "SA2" },
-  { key: "sa3", label: "SA3" },
   { key: "sa4", label: "SA4" },
+  { key: "sa3", label: "SA3" },
+  { key: "sa2", label: "SA2" },
   { key: "sa1", label: "SA1" },
   { key: "mb", label: "Mesh" },
 ];
