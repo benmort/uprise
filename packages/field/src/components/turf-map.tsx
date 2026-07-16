@@ -6,7 +6,9 @@ import type { FilterSpecification } from "mapbox-gl";
 import { bbox } from "@turf/turf";
 import { Crosshair, Globe, Loader2, LocateFixed } from "lucide-react";
 import { useTheme } from "../lib/use-theme";
+import { installMoonlitDark } from "../lib/moonlit-dark";
 import { AddressInfoCard } from "./address-info-card";
+import { MapGestureToggle, useScrollToZoom } from "./map-gesture-toggle";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 /** A walk stop. The optional address/contact/gnafPid fields feed the tap-to-open door
@@ -111,6 +113,11 @@ export function TurfMap({
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
+  // Latest theme for the moonlit tint's style.load handler (registered once in onLoad).
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  // When on, plain scroll zooms (no ⌘ held) — a persisted, cross-map preference.
+  const [scrollZoom] = useScrollToZoom();
 
   // Bounding box of the turf/division polygon, if one is supplied.
   const bounds = useMemo<[number, number, number, number] | null>(() => {
@@ -299,15 +306,16 @@ export function TurfMap({
       initialViewState={initialViewState}
       mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
-      // Require ⌘/Ctrl + scroll to zoom (two fingers to pan on touch); Mapbox shows a
-      // "Use ⌘ + scroll to zoom the map" overlay when the page is scrolled over the map.
-      cooperativeGestures
+      // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the "Use ⌘ + scroll" overlay), unless
+      // the volunteer has ticked "Scroll to zoom" — then plain scroll zooms.
+      cooperativeGestures={!scrollZoom}
       // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
       attributionControl={false}
       transformRequest={transformRequest}
       onLoad={() => {
         const map = mapRef.current?.getMap();
         if (!map) return;
+        installMoonlitDark(map, () => themeRef.current);
         // Self-heal on any later container resize (embed gains height, panel toggles) — see the
         // ResizeObserver note above. Set up here where the map + its container are guaranteed ready.
         if (typeof ResizeObserver !== "undefined" && !resizeObserverRef.current) {
@@ -581,6 +589,7 @@ export function TurfMap({
       </div>
       <FullscreenControl position="top-left" />
       <AttributionControl position="bottom-right" compact />
+      <MapGestureToggle />
     </Map>
   );
 }

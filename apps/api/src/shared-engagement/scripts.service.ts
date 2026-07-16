@@ -19,10 +19,23 @@ export class ScriptsService {
       orderBy: { updatedAt: "desc" },
       include: { _count: { select: { steps: true } } },
     });
+    // Campaigns each script is bound to (ContentBinding) — the door resolves its script
+    // by matching its campaign against this list, so reuse across campaigns works.
+    const bindings = await this.prisma.contentBinding.findMany({
+      where: { tenantId, contentType: "SCRIPT", objectType: "CANVASS_CAMPAIGN" },
+      select: { contentId: true, objectId: true },
+    });
+    const campaignsByScript = new Map<string, string[]>();
+    for (const b of bindings) {
+      const list = campaignsByScript.get(b.contentId) ?? [];
+      list.push(b.objectId);
+      campaignsByScript.set(b.contentId, list);
+    }
     return scripts.map((s) => ({
       id: s.id,
       name: s.name,
       channel: s.channel,
+      campaignIds: campaignsByScript.get(s.id) ?? [],
       stepCount: s._count.steps,
       updatedAt: s.updatedAt,
     }));

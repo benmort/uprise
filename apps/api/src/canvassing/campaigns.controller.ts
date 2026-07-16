@@ -23,6 +23,20 @@ export class CampaignsController {
     return this.campaigns.create(tenantId, dto);
   }
 
+  // Tenant-wide aggregates (the "All campaigns" views). Declared BEFORE `:id` so the
+  // literal segment wins — otherwise `/canvass/campaigns/results` matches `:id="results"`.
+  @Get("results")
+  @Roles(AppUserRole.ORGANISER)
+  async resultsAll(@TenantId() tenantId: string) {
+    return this.campaigns.getResults(tenantId);
+  }
+
+  @Get("live")
+  @Roles(AppUserRole.ORGANISER)
+  async liveAll(@TenantId() tenantId: string) {
+    return this.campaigns.getLive(tenantId);
+  }
+
   @Get(":id")
   @Roles(AppUserRole.ORGANISER)
   async get(@Param("id") id: string, @TenantId() tenantId: string) {

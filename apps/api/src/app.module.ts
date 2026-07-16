@@ -25,6 +25,7 @@ import { InboxModule } from "./inbox/inbox.module";
 import { ContactsModule } from "./contacts/contacts.module";
 import { SharedEngagementModule } from "./shared-engagement/shared-engagement.module";
 import { JourneysModule } from "./journeys/journeys.module";
+import { TagsModule } from "./tags/tags.module";
 import { CanvassingModule } from "./canvassing/canvassing.module";
 import { ComplianceModule } from "./compliance/compliance.module";
 import { SharedSeedModule } from "./shared-seed/shared-seed.module";
@@ -92,6 +93,7 @@ import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
     AnalyticsModule,
     ContactsModule,
     JourneysModule,
+    TagsModule,
     SharedEngagementModule,
     CanvassingModule,
     ComplianceModule,

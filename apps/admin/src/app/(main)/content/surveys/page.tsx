@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { MessageSquare, Plus, Save, Smartphone, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Save, Sparkles, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
+import { DualChannelPreview } from "@/components/content/dual-channel-preview";
 import {
   createSurvey,
   deleteSurvey,
@@ -37,10 +38,25 @@ const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
 
 function blankQuestion(): SurveyQuestion {
   return {
+    // Stable branch key so options can target this question the moment it's added.
+    key: crypto.randomUUID(),
     prompt: "New question",
     type: "single_choice",
     options: [{ value: "yes", label: "Yes", cannedReplyText: "Thanks!", dispositionCode: "spoke_to_target" }],
   };
+}
+
+// Encode an option's branch target as a single Select value.
+const GO_NEXT = "__next__";
+const GO_END = "__end__";
+function goToValue(o: { nextQuestionKey?: string | null; isTerminal?: boolean }): string {
+  if (o.isTerminal) return GO_END;
+  return o.nextQuestionKey || GO_NEXT;
+}
+function goToPatch(v: string): { nextQuestionKey: string | null; isTerminal: boolean } {
+  if (v === GO_END) return { nextQuestionKey: null, isTerminal: true };
+  if (v === GO_NEXT) return { nextQuestionKey: null, isTerminal: false };
+  return { nextQuestionKey: v, isTerminal: false };
 }
 
 /** Validate a survey before save — returns a human message if invalid, else null. */
@@ -138,7 +154,12 @@ export default function SurveysPage() {
       return;
     }
     setBusy(true);
-    const res = await updateSurvey(draft.id, { name: draft.name, questions: draft.questions });
+    const res = await updateSurvey(draft.id, {
+      name: draft.name,
+      entryQuestionKey: draft.entryQuestionKey ?? null,
+      opensAfterDisposition: draft.opensAfterDisposition ?? true,
+      questions: draft.questions,
+    });
     setBusy(false);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't save", description: res.error });
@@ -235,9 +256,23 @@ export default function SurveysPage() {
                 }
               >
                 <div className="space-y-4">
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={draft.opensAfterDisposition ?? true}
+                      onChange={(e) => setDraft({ ...draft, opensAfterDisposition: e.target.checked })}
+                      className="h-4 w-4"
+                    />
+                    Disposition first — open this survey only after a “spoke to someone” outcome
+                  </label>
                   {draft.questions.map((q, qi) => (
-                    <div key={qi} className="rounded-xl border border-border p-3">
+                    <div key={qi}>
+                      {qi > 0 ? <div className="mx-auto my-1 h-3 w-px bg-border" aria-hidden /> : null}
+                      <div className="rounded-xl border border-border bg-surface p-3 shadow-card">
                       <div className="flex items-center gap-2">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary dark:bg-primary/20">
+                          {qi + 1}
+                        </span>
                         <Input
                           value={q.prompt}
                           onChange={(e) => patchQuestion(qi, { prompt: e.target.value })}
@@ -266,15 +301,16 @@ export default function SurveysPage() {
                         </button>
                       </div>
 
-                      {/* Dual-channel options table */}
+                      {/* Dual-channel options table + branch edge */}
                       <div className="mt-2 space-y-1.5">
-                        <div className="grid grid-cols-[1fr_1fr_120px] gap-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                        <div className="grid grid-cols-[1fr_1fr_110px_130px] gap-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                           <span>Door label</span>
                           <span>SMS reply</span>
                           <span>Disposition</span>
+                          <span>Go to</span>
                         </div>
                         {(q.options ?? []).map((o, oi) => (
-                          <div key={oi} className="grid grid-cols-[1fr_1fr_120px] gap-2">
+                          <div key={oi} className="grid grid-cols-[1fr_1fr_110px_130px] gap-2">
                             <Input
                               value={o.label}
                               onChange={(e) => patchOption(qi, oi, { label: e.target.value })}
@@ -299,6 +335,21 @@ export default function SurveysPage() {
                                 </SelectItem>
                               ))}
                             </Select>
+                            <Select
+                              value={goToValue(o)}
+                              onValueChange={(v) => patchOption(qi, oi, goToPatch(v))}
+                              className="h-8"
+                            >
+                              <SelectItem value={GO_NEXT}>Next question</SelectItem>
+                              <SelectItem value={GO_END}>End survey</SelectItem>
+                              {draft.questions
+                                .filter((tq) => tq.key && tq.key !== q.key)
+                                .map((tq) => (
+                                  <SelectItem key={tq.key} value={tq.key as string}>
+                                    → {tq.prompt.slice(0, 24) || "(untitled)"}
+                                  </SelectItem>
+                                ))}
+                            </Select>
                           </div>
                         ))}
                         <Button
@@ -317,6 +368,7 @@ export default function SurveysPage() {
                           Add option
                         </Button>
                       </div>
+                      </div>
                     </div>
                   ))}
                   <Button
@@ -329,37 +381,8 @@ export default function SurveysPage() {
                 </div>
               </SectionCard>
 
-              {/* Live dual preview */}
-              {draft.questions[0] ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <SectionCard title={<span className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" />At the door</span>}>
-                    <p className="mb-2 text-sm font-semibold text-foreground">{draft.questions[0].prompt}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(draft.questions[0].options ?? []).map((o, i) => (
-                        <span key={i} className="rounded-xl border border-primary bg-primary/10 dark:bg-primary/20 px-3 py-1.5 text-sm font-semibold text-primary">
-                          {o.label}
-                        </span>
-                      ))}
-                    </div>
-                  </SectionCard>
-                  <SectionCard title={<span className="flex items-center gap-1.5"><MessageSquare className="h-3.5 w-3.5" />As a text reply</span>}>
-                    <div className="space-y-2">
-                      {(draft.questions[0].options ?? []).map((o, i) => (
-                        <div key={i}>
-                          <div className="ml-auto w-fit max-w-[80%] rounded-2xl bg-primary px-3 py-1.5 text-sm text-white">
-                            {o.cannedReplyText || o.label}
-                          </div>
-                          {o.dispositionCode ? (
-                            <p className="mt-0.5 text-right text-[11px] text-muted-foreground">
-                              logs {o.dispositionCode.replaceAll("_", " ")}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </SectionCard>
-                </div>
-              ) : null}
+              {/* Live dual-channel preview — walks every question, channel-toggled. */}
+              <DualChannelPreview questions={draft.questions} />
             </div>
           ) : null}
         </div>

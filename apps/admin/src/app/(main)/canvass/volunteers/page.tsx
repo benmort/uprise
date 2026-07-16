@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Megaphone, Pencil, Phone } from "lucide-react";
+import { Megaphone, Pencil, Phone } from "lucide-react";
 import { listVolunteers, updateVolunteer } from "@/lib/api";
+import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import { useSoftphone } from "@/components/softphone/softphone-provider";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
@@ -69,23 +69,11 @@ export default function VolunteersPage() {
 
   return (
     <div className="page-stack">
-      <div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/canvass">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Canvass
-            </Link>
-          </Button>
-          <div className="flex items-center gap-2">
-            <Megaphone className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">Volunteers</h1>
-          </div>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Invite and manage the people knocking doors and making calls.
-        </p>
-      </div>
+      <CampaignPageHeader
+        title="Volunteers"
+        icon={Megaphone}
+        description="Invite and manage the people knocking doors and making calls."
+      />
 
       <ShareSignupLinkCard />
 

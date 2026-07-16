@@ -161,8 +161,51 @@ export function WalkView({
     router.push(`/field/${turfId}/door/${id}`);
   };
 
+  // A just-claimed turf (or one whose walk list the server is still building) isn't in the
+  // cached assignments payload yet — and a <30s-old cache won't auto-revalidate. Rather than
+  // flash "Turf not found", force a refetch and poll for a short grace window, showing a
+  // loading state meanwhile. `settled` flips true once the turf appears or the window elapses,
+  // so a genuine miss still reaches the empty state.
+  const hasAssignment = !isPreview && Boolean(assignment);
+  const refetchAssignments = a.refetch;
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (isPreview || hasAssignment) {
+      setSettled(true);
+      return;
+    }
+    setSettled(false);
+    let tries = 0;
+    void refetchAssignments();
+    const id = setInterval(() => {
+      tries += 1;
+      if (tries >= 12) {
+        setSettled(true);
+        clearInterval(id);
+        return;
+      }
+      void refetchAssignments();
+    }, 2000);
+    return () => clearInterval(id);
+  }, [isPreview, hasAssignment, turfId, refetchAssignments]);
+
   if (loading) return <Skeleton className="h-64 w-full" />;
-  if (!assignment) return <EmptyState title="Turf not found" description="This turf isn't assigned to you." />;
+  if (!assignment) {
+    if (!settled) {
+      return (
+        <div className="flex h-64 flex-col items-center justify-center gap-3 px-6 text-center">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" />
+          <div className="space-y-1">
+            <p className="font-bold text-foreground">Getting your turf ready…</p>
+            <p className="text-sm text-muted-foreground">
+              Setting up your walk list — this can take a moment after claiming.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return <EmptyState title="Turf not found" description="This turf isn't assigned to you." />;
+  }
 
   return (
     <div className="flex h-full flex-col gap-3">

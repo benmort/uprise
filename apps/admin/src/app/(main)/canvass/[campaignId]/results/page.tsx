@@ -30,9 +30,11 @@ function toCsv(r: CampaignResults): string {
 }
 
 export default function ResultsPage() {
-  const { campaignId } = useParams<{ campaignId: string }>();
+  // Undefined on the campaign-less aggregate route (/canvass/results) — then results are
+  // tenant-wide across every campaign; defined on the [campaignId] scoped route.
+  const { campaignId } = useParams<{ campaignId?: string }>();
   const { data: results, loading, error, noPermission, refetch } = useApi(
-    `/canvass/${campaignId}/results`,
+    campaignId ? `/canvass/${campaignId}/results` : "/canvass/results",
     () => getCampaignResults(campaignId),
     { ttlMs: 15_000 },
   );
@@ -43,7 +45,7 @@ export default function ResultsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `campaign-${campaignId}-results.csv`;
+    a.download = `campaign-${campaignId ?? "all"}-results.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }

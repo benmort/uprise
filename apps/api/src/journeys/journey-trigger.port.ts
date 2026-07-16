@@ -8,6 +8,8 @@ export type JourneyTriggerPayload = {
   code?: string; // disposition code
   questionId?: string;
   optionId?: string | null;
+  surveyId?: string | null;
+  campaignId?: string | null;
   tag?: string;
   blastId?: string | null;
 };

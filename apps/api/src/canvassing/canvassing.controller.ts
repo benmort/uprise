@@ -384,6 +384,13 @@ export class CanvassingController {
   }
 
   // ── QA review (organiser) ────────────────────────────────────
+  // Tenant-wide aggregate (the "All campaigns" QA view). Declared before the `:id` variant.
+  @Get("campaigns/qa")
+  @Roles(AppUserRole.ORGANISER)
+  async qaReviewAll(@TenantId() tenantId: string) {
+    return this.canvassing.qaReview(tenantId);
+  }
+
   @Get("campaigns/:id/qa")
   @Roles(AppUserRole.ORGANISER)
   async qaReview(@Param("id") id: string, @TenantId() tenantId: string) {

@@ -15,6 +15,7 @@ import { QUEUE_JOB_TYPES, QUEUE_NAMES, getJourneyRungJobId } from "../common/que
 import { JourneyRunRungJobPayload } from "../common/queue/queue.payloads";
 import { JourneyTriggerPayload, JourneyTriggerPort } from "./journey-trigger.port";
 import { SingleSendService } from "./single-send.service";
+import { CONTACT_TAG_PORT, type ContactTagPort } from "../tags/tag.port";
 
 export type UpdateJourneyInput = {
   name?: string;
@@ -57,6 +58,7 @@ export class JourneysService implements JourneyTriggerPort {
     private readonly singleSend: SingleSendService,
     @Optional() private readonly flags?: FeatureFlagsService,
     @Optional() @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+    @Optional() @Inject(CONTACT_TAG_PORT) private readonly contactTags?: ContactTagPort,
   ) {
     this.queue = queue ?? { enqueue: async (job) => ({ jobId: job.id, queued: true }) };
   }
@@ -86,8 +88,15 @@ export class JourneysService implements JourneyTriggerPort {
     const cfg = (config && typeof config === "object" ? config : {}) as Record<string, unknown>;
     switch (type) {
       case JourneyTriggerType.disposition_set:
+        // Scope: a journey can target a specific campaign/blast and/or code.
+        if (cfg.campaignId && cfg.campaignId !== payload.campaignId) return false;
+        if (cfg.blastId && cfg.blastId !== payload.blastId) return false;
         return !cfg.code || cfg.code === payload.code;
       case JourneyTriggerType.survey_answer:
+        // Scope: this survey / campaign / blast, and optionally a specific answer.
+        if (cfg.surveyId && cfg.surveyId !== payload.surveyId) return false;
+        if (cfg.campaignId && cfg.campaignId !== payload.campaignId) return false;
+        if (cfg.blastId && cfg.blastId !== payload.blastId) return false;
         if (cfg.questionId && cfg.questionId !== payload.questionId) return false;
         if (cfg.optionId && cfg.optionId !== payload.optionId) return false;
         return true;
@@ -274,8 +283,9 @@ export class JourneysService implements JourneyTriggerPort {
         this.events.emit("inbox.inbound", tenantId, { contactId, source: "journey" });
         return;
       case "tag":
-        // Tag storage lands with the contact-tags model; emit the trigger now so
-        // tag-driven journeys still fire once tags are persisted.
+        // Persist the tag (idempotent; emits contacts.tag.added) when the port is
+        // wired; always emit the realtime signal for the live inbox.
+        if (this.contactTags) await this.contactTags.applyTag(tenantId, contactId, String(cfg.tag ?? ""), "journey");
         this.events.emit("journey.tag", tenantId, { contactId, tag: String(cfg.tag ?? "") });
         return;
       case "door_task":

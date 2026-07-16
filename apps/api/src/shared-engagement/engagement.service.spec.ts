@@ -5,6 +5,7 @@ describe("EngagementService", () => {
   let prisma: any;
   let events: any;
   let canned: any;
+  let outbox: any;
   let service: EngagementService;
 
   beforeEach(() => {
@@ -12,6 +13,7 @@ describe("EngagementService", () => {
       disposition: { create: jest.fn(async ({ data }: any) => ({ id: "d1", ...data })) },
       questionResponse: { create: jest.fn(async ({ data }: any) => ({ id: "qr1", ...data })) },
       questionOption: { findUnique: jest.fn() },
+      question: { findUnique: jest.fn().mockResolvedValue({ surveyId: "sv1" }) },
       dispositionDef: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
@@ -23,7 +25,8 @@ describe("EngagementService", () => {
     };
     events = { emit: jest.fn() };
     canned = { getById: jest.fn() };
-    service = new EngagementService(prisma, events, canned);
+    outbox = { append: jest.fn() };
+    service = new EngagementService(prisma, events, canned, outbox);
   });
 
   describe("recordSurveyAnswer", () => {
@@ -43,6 +46,11 @@ describe("EngagementService", () => {
         "engagement.answer",
         "org_1",
         expect.objectContaining({ contactId: "c1", questionId: "q1" }),
+      );
+      // Durable outbox event for the answer, emitted atomically in the write tx.
+      expect(outbox.append).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ eventType: "canvass.survey.answered", payload: expect.objectContaining({ surveyId: "sv1", questionId: "q1" }) }),
       );
     });
 
@@ -71,6 +79,9 @@ describe("EngagementService", () => {
           supportLevel: "STRONG_SUPPORT",
         }),
       });
+      // Both the answer AND its mapped disposition emit durable events in the same commit.
+      const emitted = outbox.append.mock.calls.map((c: any[]) => c[1].eventType);
+      expect(emitted).toEqual(expect.arrayContaining(["canvass.disposition.set", "canvass.survey.answered"]));
     });
   });
 
@@ -86,6 +97,10 @@ describe("EngagementService", () => {
 
       expect(result.layer).toBe(DispositionLayer.TERMINAL);
       expect(events.emit).toHaveBeenCalledWith("engagement.disposition", "org_1", expect.any(Object));
+      expect(outbox.append).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ eventType: "canvass.disposition.set", payload: expect.objectContaining({ code: "moved" }) }),
+      );
     });
 
     it("falls back to CONTACT_RESULT when the code is unknown", async () => {

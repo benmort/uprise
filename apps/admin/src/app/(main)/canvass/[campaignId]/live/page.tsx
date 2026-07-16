@@ -26,12 +26,14 @@ function ago(iso: string | null): string {
 }
 
 export default function LiveWarRoomPage() {
-  const { campaignId } = useParams<{ campaignId: string }>();
+  // Undefined on the campaign-less aggregate route (/canvass/live) — then the war room spans
+  // every campaign; defined on the [campaignId] scoped route.
+  const { campaignId } = useParams<{ campaignId?: string }>();
   const { showToast } = useToast();
   // Poll the live snapshot every 10s (paused when the tab is hidden). useApi keeps prior
   // data on a failed refresh but still surfaces error/no-permission distinctly.
   const { data: live, loading, error, noPermission, refetch } = useApi(
-    `/canvass/${campaignId}/live`,
+    campaignId ? `/canvass/${campaignId}/live` : "/canvass/live",
     () => getCampaignLive(campaignId),
     { refetchInterval: 10_000 },
   );

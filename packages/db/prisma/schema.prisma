@@ -292,6 +292,11 @@ model Tenant {
   apiKeys           ApiKey[]
   storedFiles       StoredFile[]
   featureFlagOverrides FeatureFlagOverride[]
+  contentBindings   ContentBinding[]
+  dispositionSets   DispositionSet[]
+  cannedSets        CannedSet[]
+  contactTags       ContactTag[]
+  contactTagAssignments ContactTagAssignment[]
 
   @@schema("tenant")
 }
@@ -379,6 +384,7 @@ model Contact {
   turf             Turf?             @relation(fields: [turfId], references: [id], onDelete: SetNull)
   walkListItems    WalkListItem[]
   doorKnocks       DoorKnock[]
+  tagAssignments   ContactTagAssignment[]
 
   // Dedup is enforced by partial unique indexes (created in the migration):
   //   UNIQUE (tenantId, phoneE164)   WHERE phoneE164   IS NOT NULL
@@ -390,6 +396,41 @@ model Contact {
   @@index([tenantId, gnafPid])
   @@index([tenantId, email])
   @@index([canonicalContactId])
+  @@schema("public")
+}
+
+// Contact tags — a tenant label taxonomy applied to contacts by responses/automations
+// (a survey answer or a journey "tag" action) and, later, filtered on in audiences.
+// In the public schema alongside Contact so the assignment FK is same-schema.
+model ContactTag {
+  id        String                 @id @default(cuid())
+  tenantId  String
+  key       String                 // stable slug, e.g. "volunteer"
+  label     String
+  color     String?
+  createdAt DateTime               @default(now())
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignments ContactTagAssignment[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@schema("public")
+}
+
+model ContactTagAssignment {
+  id        String     @id @default(cuid())
+  tenantId  String
+  contactId String
+  tagId     String
+  source    String?    // "manual" | "journey" | "survey" | …
+  createdAt DateTime   @default(now())
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact   Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       ContactTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, contactId, tagId])
+  @@index([tenantId, contactId])
+  @@index([tagId])
   @@schema("public")
 }
 
@@ -816,6 +857,11 @@ model Survey {
   name           String
   campaignId     String?
   isArchived     Boolean      @default(false)
+  // Branching: the first question to ask (by Question.key). Null ⇒ first by orderIndex.
+  entryQuestionKey String?
+  // When true, a disposition is recorded first and the survey opens only on a
+  // "spoke to someone" outcome (the disposition-first → bifurcating-survey flow).
+  opensAfterDisposition Boolean @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -828,16 +874,23 @@ model Survey {
 model Question {
   id         String           @id @default(cuid())
   surveyId   String
+  // Stable, client-assigned identifier for branch edges. The DB id changes on every
+  // save (questions are replace-persisted), so edges reference `key`, not `id`.
+  key        String
   prompt     String           @db.Text
   type       QuestionType
   orderIndex Int              @default(0)
   required   Boolean          @default(false)
   scaleMin   Int?
   scaleMax   Int?
+  // Branch taken when no option overrides it (e.g. free-text / scale answers). Null ⇒
+  // fall through to the next question by orderIndex.
+  defaultNextQuestionKey String?
   survey     Survey           @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   options    QuestionOption[]
   responses  QuestionResponse[]
 
+  @@unique([surveyId, key])
   @@index([surveyId, orderIndex])
   @@schema("canvass")
 }
@@ -853,6 +906,10 @@ model QuestionOption {
   dispositionCode String?       // picking this option ALSO logs this disposition
   supportLevel    SupportLevel?
   cannedReplyText String?       @db.Text // SMS reply text for this option
+  // Branching: choosing this option jumps to Question.key `nextQuestionKey`, or ends
+  // the survey when `isTerminal`. Null nextQuestionKey + not terminal ⇒ fall through.
+  nextQuestionKey String?
+  isTerminal      Boolean       @default(false)
   question        Question      @relation(fields: [questionId], references: [id], onDelete: Cascade)
   responses       QuestionResponse[]
 
@@ -900,6 +957,7 @@ model DispositionDef {
   /// canvass.DoorKnock has rows: consecutive knocks by one volunteer give the real figure.
   expectedSeconds Int?
   tenant   Tenant?     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  setItems DispositionSetItem[]
 
   @@unique([tenantId, code])
   @@index([tenantId, layer, channel])
@@ -946,9 +1004,118 @@ model CannedResponse {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  setItems CannedSetItem[]
 
   @@index([tenantId, channel, visibility, isArchived])
   @@index([tenantId, ownerId])
+  @@schema("canvass")
+}
+
+// ── Content reuse: bind one survey/script/set to MANY objects ────────────────
+// Surveys, scripts, disposition sets and canned sets are a reusable tenant
+// library; a ContentBinding attaches one of them to a specific object. contentId
+// + objectId are BARE ids (no cross-schema FK) so a single binding can point a
+// Survey (canvass) at a CanvassCampaign (canvass) OR a Blast (messaging) — the
+// id-only cross-schema invariant. One content-of-type per slot per object.
+enum ContentType {
+  SURVEY
+  SCRIPT
+  DISPOSITION_SET
+  CANNED_SET
+
+  @@schema("canvass")
+}
+
+enum ContentObjectType {
+  CANVASS_CAMPAIGN
+  BLAST
+
+  @@schema("canvass")
+}
+
+enum ContentSlot {
+  PRIMARY
+  OPENING
+  PERSUASION
+  FOLLOW_UP
+
+  @@schema("canvass")
+}
+
+model ContentBinding {
+  id          String            @id @default(cuid())
+  tenantId    String
+  contentType ContentType
+  contentId   String
+  objectType  ContentObjectType
+  objectId    String
+  slot        ContentSlot       @default(PRIMARY)
+  orderIndex  Int               @default(0)
+  createdAt   DateTime          @default(now())
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, objectType, objectId, contentType, slot], map: "ContentBinding_object_content_slot_key")
+  @@index([tenantId, contentType, contentId])
+  @@index([tenantId, objectType, objectId])
+  @@schema("canvass")
+}
+
+// A named, reusable group of dispositions — the bindable outcome taxonomy for a
+// campaign/blast (ContentBinding.contentType = DISPOSITION_SET). Items may point
+// at system-default defs (DispositionDef.tenantId null) as well as org-defined ones.
+model DispositionSet {
+  id         String               @id @default(cuid())
+  tenantId   String
+  name       String
+  isArchived Boolean              @default(false)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items      DispositionSetItem[]
+
+  @@index([tenantId, isArchived])
+  @@schema("canvass")
+}
+
+model DispositionSetItem {
+  id               String         @id @default(cuid())
+  setId            String
+  dispositionDefId String
+  orderIndex       Int            @default(0)
+  set              DispositionSet @relation(fields: [setId], references: [id], onDelete: Cascade)
+  dispositionDef   DispositionDef @relation(fields: [dispositionDefId], references: [id], onDelete: Cascade)
+
+  @@unique([setId, dispositionDefId])
+  @@index([setId, orderIndex])
+  @@schema("canvass")
+}
+
+// A named, reusable group of canned responses — the bindable reply library for a
+// campaign/blast (ContentBinding.contentType = CANNED_SET).
+model CannedSet {
+  id         String          @id @default(cuid())
+  tenantId   String
+  name       String
+  isArchived Boolean         @default(false)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items      CannedSetItem[]
+
+  @@index([tenantId, isArchived])
+  @@schema("canvass")
+}
+
+model CannedSetItem {
+  id               String         @id @default(cuid())
+  setId            String
+  cannedResponseId String
+  orderIndex       Int            @default(0)
+  set              CannedSet      @relation(fields: [setId], references: [id], onDelete: Cascade)
+  cannedResponse   CannedResponse @relation(fields: [cannedResponseId], references: [id], onDelete: Cascade)
+
+  @@unique([setId, cannedResponseId])
+  @@index([setId, orderIndex])
   @@schema("canvass")
 }
 

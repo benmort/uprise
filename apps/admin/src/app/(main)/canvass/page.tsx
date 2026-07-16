@@ -18,6 +18,8 @@ import {
   type CampaignStatus,
   type CampaignSummary,
 } from "@/lib/api/campaigns";
+import { listSurveys, listScripts, type SurveyListItem, type ScriptListItem } from "@/lib/api/engagement";
+import { listBindings, setPrimaryBinding, type ContentBinding } from "@/lib/api/content";
 import { Button } from "@/components/ui/button";
 import { CampaignSwitcher } from "@/components/canvass/campaign-switcher";
 import { Input } from "@/components/ui/input";
@@ -52,6 +54,9 @@ const turfPct = (t: TurfSummary) => (t.totalStops > 0 ? Math.round((t.visitedSto
 // the 1/2/3-column grid. The list view keeps the DataTable's own paged control.
 const CARDS_PAGE_SIZE = 12;
 
+// Radix Select forbids an empty-string item value, so "no content" uses a sentinel.
+const NONE_VALUE = "__none__";
+
 export default function CanvassPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -78,6 +83,13 @@ export default function CanvassPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CampaignSummary | null>(null);
   const [form, setForm] = useState({ name: "", status: "ACTIVE" as CampaignStatus, channel: "BOTH" as CampaignChannel, doors: "", conversations: "", openJoin: false, selfClaim: false });
+  // Reusable content bound to this campaign (survey + script). Loaded when the edit
+  // dialog opens; reconciled to ContentBinding rows on save.
+  const [surveyList, setSurveyList] = useState<SurveyListItem[]>([]);
+  const [scriptList, setScriptList] = useState<ScriptListItem[]>([]);
+  const [contentSurveyId, setContentSurveyId] = useState<string>("");
+  const [contentScriptId, setContentScriptId] = useState<string>("");
+  const [campaignBindings, setCampaignBindings] = useState<ContentBinding[]>([]);
 
   // Load the campaign list once; the active campaign comes from ?campaign= when
   // it names a real campaign (shareable/deep-linkable), else the first campaign.
@@ -194,7 +206,25 @@ export default function CanvassPage() {
       openJoin: c.openJoinEnabled,
       selfClaim: c.volunteerCanSelfClaimTurf ?? false,
     });
+    setContentSurveyId("");
+    setContentScriptId("");
+    setCampaignBindings([]);
     setDialogOpen(true);
+    // Load the reusable content library + this campaign's current bindings.
+    void (async () => {
+      const [sv, sc, bnd] = await Promise.all([
+        listSurveys(),
+        listScripts(),
+        listBindings("CANVASS_CAMPAIGN", c.id),
+      ]);
+      if (sv.ok) setSurveyList(sv.data);
+      if (sc.ok) setScriptList(sc.data);
+      if (bnd.ok) {
+        setCampaignBindings(bnd.data);
+        setContentSurveyId(bnd.data.find((b) => b.contentType === "SURVEY" && b.slot === "PRIMARY")?.contentId ?? "");
+        setContentScriptId(bnd.data.find((b) => b.contentType === "SCRIPT" && b.slot === "PRIMARY")?.contentId ?? "");
+      }
+    })();
   };
 
   // Delete the active campaign. Its turf/walk lists survive (schema SetNull); we just
@@ -229,6 +259,17 @@ export default function CanvassPage() {
     const res = editing
       ? await updateCampaign(editing.id, { name: form.name.trim(), status: form.status, channel: form.channel, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim })
       : await createCampaign({ name: form.name.trim(), status: form.status, channel: form.channel, goals, openJoinEnabled: form.openJoin, volunteerCanSelfClaimTurf: form.selfClaim });
+    // Reconcile the reusable content bindings (edit dialog only — a new campaign has
+    // no id yet; content is attached on the next edit). A binding failure is surfaced
+    // but doesn't roll back the campaign save.
+    if (editing && res.ok) {
+      const [sBind, cBind] = await Promise.all([
+        setPrimaryBinding("CANVASS_CAMPAIGN", res.data.id, "SURVEY", contentSurveyId || null, campaignBindings),
+        setPrimaryBinding("CANVASS_CAMPAIGN", res.data.id, "SCRIPT", contentScriptId || null, campaignBindings),
+      ]);
+      const bindErr = !sBind.ok ? sBind.error : !cBind.ok ? cBind.error : null;
+      if (bindErr) showToast({ tone: "error", title: "Content not fully saved", description: bindErr });
+    }
     setCreating(false);
     if (!res.ok) {
       showToast({ tone: "error", title: editing ? "Couldn't update" : "Couldn't create campaign", description: res.error });
@@ -238,7 +279,7 @@ export default function CanvassPage() {
     setCampaigns((cur) => (editing ? cur.map((c) => (c.id === res.data.id ? res.data : c)) : [res.data, ...cur]));
     setActiveId(res.data.id);
     showToast({ tone: "success", title: editing ? "Campaign updated" : "Campaign created", description: res.data.name });
-  }, [editing, form, showToast]);
+  }, [editing, form, showToast, contentSurveyId, contentScriptId, campaignBindings]);
 
   // Shareable tokenless-join link for the open-join toggle (auth app, per campaign).
   const joinLink = editing
@@ -302,7 +343,12 @@ export default function CanvassPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <CampaignSwitcher campaigns={campaigns} activeId={activeId} onSelect={setActiveId} />
+          <CampaignSwitcher
+            campaigns={campaigns}
+            activeId={activeId}
+            onSelect={setActiveId}
+            onSelectAll={() => router.push("/canvass/campaigns")}
+          />
           <Button variant="outline" onClick={() => void onNewCampaign()} disabled={creating}>
             <PlusCircle className="mr-1.5 h-4 w-4" />
             New campaign
@@ -580,6 +626,37 @@ export default function CanvassPage() {
             <SelectItem value="SMS">SMS</SelectItem>
           </Select>
         </Field>
+        {editing ? (
+          <>
+            <Field label="Survey" htmlFor="camp-survey">
+              <Select
+                id="camp-survey"
+                value={contentSurveyId || NONE_VALUE}
+                onValueChange={(v) => setContentSurveyId(v === NONE_VALUE ? "" : v)}
+              >
+                <SelectItem value={NONE_VALUE}>No survey</SelectItem>
+                {surveyList.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </Select>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                The question set canvassers run after a conversation. Reusable across campaigns.
+              </p>
+            </Field>
+            <Field label="Script" htmlFor="camp-script">
+              <Select
+                id="camp-script"
+                value={contentScriptId || NONE_VALUE}
+                onValueChange={(v) => setContentScriptId(v === NONE_VALUE ? "" : v)}
+              >
+                <SelectItem value={NONE_VALUE}>No script</SelectItem>
+                {scriptList.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
+              </Select>
+            </Field>
+          </>
+        ) : null}
         {editing ? (
           <Field label="Open join" htmlFor="camp-open-join">
             <label className="flex items-start gap-2.5 text-sm">

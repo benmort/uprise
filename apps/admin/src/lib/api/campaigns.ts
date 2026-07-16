@@ -141,8 +141,11 @@ export type CampaignResults = {
   funnel: { doorsAttempted: number; contacted: number; surveyed: number; newSupporters: number };
 };
 
-export async function getCampaignResults(id: string) {
-  return request<CampaignResults>(`/canvass/campaigns/${encodeURIComponent(id)}/results`);
+/** Campaign results, or the tenant-wide aggregate across all campaigns when `id` is omitted. */
+export async function getCampaignResults(id?: string) {
+  return request<CampaignResults>(
+    id ? `/canvass/campaigns/${encodeURIComponent(id)}/results` : "/canvass/campaigns/results",
+  );
 }
 
 export type CampaignLive = {
@@ -163,6 +166,9 @@ export type CampaignLive = {
   }>;
 };
 
-export async function getCampaignLive(id: string) {
-  return request<CampaignLive>(`/canvass/campaigns/${encodeURIComponent(id)}/live`);
+/** Live snapshot for a campaign, or the tenant-wide aggregate when `id` is omitted. */
+export async function getCampaignLive(id?: string) {
+  return request<CampaignLive>(
+    id ? `/canvass/campaigns/${encodeURIComponent(id)}/live` : "/canvass/campaigns/live",
+  );
 }

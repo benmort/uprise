@@ -16,7 +16,9 @@ describe("CampaignsService", () => {
         delete: jest.fn(async () => ({ id: "c1" })),
       },
       turf: { findMany: jest.fn() },
-      doorKnock: { count: jest.fn() },
+      doorKnock: { count: jest.fn(), findMany: jest.fn() },
+      disposition: { groupBy: jest.fn(), count: jest.fn() },
+      questionResponse: { count: jest.fn() },
       walkListItem: { count: jest.fn() },
       turfAssignment: { findMany: jest.fn() },
     };
@@ -143,6 +145,52 @@ describe("CampaignsService", () => {
     it("throws for an unknown campaign", async () => {
       prisma.canvassCampaign.findFirst.mockResolvedValue(null);
       await expect(service.getSummary("org1", "missing")).rejects.toThrow();
+    });
+  });
+
+  describe("getResults", () => {
+    it("aggregates tenant-wide when no campaign id (no campaign lookup, no turf filter)", async () => {
+      prisma.disposition.groupBy
+        .mockResolvedValueOnce([{ code: "NOT_HOME", _count: { _all: 3 } }])
+        .mockResolvedValueOnce([{ supportLevel: "STRONG_SUPPORT", _count: { _all: 2 } }]);
+      prisma.doorKnock.count.mockResolvedValueOnce(10).mockResolvedValueOnce(6); // attempted, contacted
+      prisma.questionResponse.count.mockResolvedValue(4);
+      prisma.disposition.count.mockResolvedValue(2); // newSupporters
+
+      const res = await service.getResults("org1");
+      // Tenant-wide never resolves a campaign or its turfs.
+      expect(prisma.canvassCampaign.findFirst).not.toHaveBeenCalled();
+      // Doors attempted is filtered by tenant only — no turf restriction.
+      expect(prisma.doorKnock.count).toHaveBeenCalledWith({ where: { tenantId: "org1" } });
+      expect(res.dispositionBreakdown).toEqual([{ code: "NOT_HOME", count: 3 }]);
+      expect(res.funnel).toEqual({ doorsAttempted: 10, contacted: 6, surveyed: 4, newSupporters: 2 });
+    });
+
+    it("scopes to the campaign's turf contacts when an id is given", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue({ id: "c1" });
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.disposition.groupBy.mockResolvedValue([]);
+      prisma.doorKnock.count.mockResolvedValue(0);
+      prisma.questionResponse.count.mockResolvedValue(0);
+      prisma.disposition.count.mockResolvedValue(0);
+      await service.getResults("org1", "c1");
+      expect(prisma.doorKnock.count).toHaveBeenCalledWith({
+        where: { tenantId: "org1", contact: { turfId: { in: ["t1"] } } },
+      });
+    });
+  });
+
+  describe("getLive", () => {
+    it("aggregates across all tenant turfs when no campaign id", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      const res = await service.getLive("org1");
+      expect(prisma.canvassCampaign.findFirst).not.toHaveBeenCalled();
+      // Locks are scoped by the turf's tenant, not a turfId list.
+      expect(prisma.turfAssignment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ turf: { tenantId: "org1" } }) }),
+      );
+      expect(res).toMatchObject({ doorsToday: 0, volunteers: [] });
     });
   });
 

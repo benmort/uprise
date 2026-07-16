@@ -184,11 +184,17 @@ export class CampaignsService {
     return turfs.map((t) => t.id);
   }
 
-  /** Disposition breakdown, support-level distribution and the door+text funnel. */
-  async getResults(tenantId: string, id: string) {
-    const turfIds = await this.campaignTurfIds(tenantId, id);
+  /** Disposition breakdown, support-level distribution and the door+text funnel.
+   *  Tenant-wide when no campaign id (the "All campaigns" view) — otherwise scoped to
+   *  the campaign's turf contacts. */
+  async getResults(tenantId: string, id?: string) {
+    const turfIds = id ? await this.campaignTurfIds(tenantId, id) : null;
     const contactFilter =
-      turfIds.length > 0 ? { contact: { turfId: { in: turfIds } } } : { id: "__none__" };
+      turfIds === null
+        ? {}
+        : turfIds.length > 0
+          ? { contact: { turfId: { in: turfIds } } }
+          : { id: "__none__" };
 
     const [byCode, bySupport, doorsAttempted, contacted, surveyed, newSupporters] =
       await Promise.all([
@@ -226,17 +232,22 @@ export class CampaignsService {
     };
   }
 
-  /** Live war-room snapshot: who's out, recent knocks, simple alerts. */
-  async getLive(tenantId: string, id: string) {
-    const turfIds = await this.campaignTurfIds(tenantId, id);
-    if (turfIds.length === 0) {
+  /** Live war-room snapshot: who's out, recent knocks, simple alerts. Tenant-wide when
+   *  no campaign id (the "All campaigns" view) — otherwise scoped to the campaign's turfs. */
+  async getLive(tenantId: string, id?: string) {
+    const turfIds = id ? await this.campaignTurfIds(tenantId, id) : null;
+    // A scoped campaign with no turf → empty snapshot (unchanged). Tenant-wide never short-circuits.
+    if (turfIds !== null && turfIds.length === 0) {
       return { volunteers: [], recentKnocks: [], doorsToday: 0 };
     }
-    const contactFilter = { contact: { turfId: { in: turfIds } } };
+    const contactFilter = turfIds ? { contact: { turfId: { in: turfIds } } } : {};
+    const lockWhere = turfIds
+      ? { turfId: { in: turfIds }, status: TurfAssignmentStatus.ASSIGNED }
+      : { turf: { tenantId }, status: TurfAssignmentStatus.ASSIGNED };
 
     const [locks, knocksToday, recent] = await Promise.all([
       this.prisma.turfAssignment.findMany({
-        where: { turfId: { in: turfIds }, status: TurfAssignmentStatus.ASSIGNED },
+        where: lockWhere,
         include: {
           volunteer: { select: { id: true, displayName: true } },
           turf: { select: { id: true, name: true } },

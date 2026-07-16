@@ -26,10 +26,13 @@ function toLocalInput(iso: string): string {
 const EMPTY = { name: "", location: "", startsAt: "", endsAt: "" };
 
 export default function ShiftsPage() {
-  const { campaignId } = useParams<{ campaignId: string }>();
+  // Undefined on the campaign-less aggregate route (/canvass/shifts) — then shifts span
+  // every campaign (listing/editing works; scheduling a new one needs a campaign, so that
+  // card is hidden). Defined on the [campaignId] scoped route.
+  const { campaignId } = useParams<{ campaignId?: string }>();
   const { showToast } = useToast();
   const { data, loading, error, noPermission, refetch } = useApi(
-    `/canvass/${campaignId}/shifts`,
+    campaignId ? `/canvass/${campaignId}/shifts` : "/canvass/shifts",
     () => listShifts(campaignId),
     { ttlMs: 30_000 },
   );
@@ -43,6 +46,7 @@ export default function ShiftsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Shift | null>(null);
 
   const add = useCallback(async () => {
+    if (!campaignId) return; // scheduling needs a campaign; the form is hidden in the aggregate view
     if (!form.name.trim() || !form.startsAt || !form.endsAt) {
       showToast({ tone: "warning", title: "Fill name, start and end" });
       return;
@@ -111,6 +115,7 @@ export default function ShiftsPage() {
     <div className="page-stack">
       <CampaignPageHeader title="Shifts" icon={CalendarPlus} />
 
+      {campaignId ? (
       <SectionCard title="Schedule a shift">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Shift name" htmlFor="shift-name" required>
@@ -131,6 +136,7 @@ export default function ShiftsPage() {
           Add shift
         </Button>
       </SectionCard>
+      ) : null}
 
       <StateRegion
         loading={loading}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2, Plus, Search, X } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
 import { auth, orgProfile, tenants, tenantLogoUrl, type Membership, type TenantSearchRow } from "@uprise/api-client";
 import { cn } from "@/lib/utils";
@@ -66,6 +66,9 @@ export function TenantSwitcher({
   onSlideChange?: (px: number) => void;
 }) {
   const [switching, setSwitching] = useState(false);
+  // Name of the workspace being switched to — drives the loading modal shown from click until the
+  // page reload lands (the switch reloads the whole app to re-scope the session).
+  const [switchingName, setSwitchingName] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [allTenants, setAllTenants] = useState<TenantSearchRow[]>([]);
@@ -200,15 +203,19 @@ export function TenantSwitcher({
         logoUrl: m.logoUrl ?? null,
       }));
 
-  const switchTo = async (tenantId: string) => {
+  const switchTo = async (tenantId: string, name: string) => {
     if (switching || tenantId === currentTenantId) return;
     setSwitching(true);
+    setSwitchingName(name);
     const res = await auth.selectTenant(tenantId);
     if (res.ok) {
+      // Keep the modal up — the reload tears the page down and the fresh workspace's shell
+      // loading state takes over. Don't clear `switching`, or the modal would flash away first.
       window.location.reload();
       return;
     }
     setSwitching(false);
+    setSwitchingName(null);
   };
 
   const triggerHandlers = {
@@ -363,7 +370,7 @@ export function TenantSwitcher({
                   key={r.tenantId}
                   type="button"
                   disabled={switching}
-                  onClick={() => void switchTo(r.tenantId)}
+                  onClick={() => void switchTo(r.tenantId, r.tenantName)}
                   className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-variant disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <TenantAvatar tenantId={r.tenantId} logoUrl={r.logoUrl} name={r.tenantName} className="h-7 w-7" />
@@ -388,7 +395,34 @@ export function TenantSwitcher({
       <CreateTenantDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
 
       {pill}
+      <SwitchingModal open={switching} name={switchingName} />
     </>
+  );
+}
+
+/** Full-screen loading modal shown while a workspace switch is in flight — from the click until
+ *  the page reload lands. Portalled to <body> so it covers the whole viewport (the topbar lives in
+ *  a transformed container that would otherwise clip a fixed overlay). */
+function SwitchingModal({ open, name }: { open: boolean; name: string | null }) {
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      role="alertdialog"
+      aria-busy="true"
+      aria-label="Switching workspace"
+    >
+      <div className="flex w-full max-w-xs flex-col items-center gap-4 rounded-2xl border border-border bg-surface p-8 text-center shadow-elevated">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div>
+          <p className="text-base font-bold text-foreground">
+            Switching to {name ?? "your workspace"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Loading your workspace…</p>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 

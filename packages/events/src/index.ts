@@ -82,6 +82,9 @@ export const EVENT_TYPES = {
   EMAIL_PROVISIONING_RETRY_REQUESTED: "email.provisioning.retry-requested",
   POLL_INGESTED: "insights.poll.ingested",
   POLL_PUBLISHED: "insights.poll.published",
+  DISPOSITION_SET: "canvass.disposition.set",
+  SURVEY_ANSWERED: "canvass.survey.answered",
+  CONTACT_TAG_ADDED: "contacts.tag.added",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -92,6 +95,32 @@ export interface DomainEventMap {
   "audience.segment.recomputed": { segmentId: string; tenantId: string; memberCount: number };
   "insights.poll.ingested": { pollId: string; tenantId: string | null; questionCount: number; estimateCount: number };
   "insights.poll.published": { pollId: string; tenantId: string | null };
+  "canvass.disposition.set": {
+    dispositionId: string;
+    tenantId: string;
+    contactId: string;
+    code: string;
+    channel: string;
+    campaignId: string | null;
+    blastId: string | null;
+  };
+  "canvass.survey.answered": {
+    responseId: string;
+    tenantId: string;
+    contactId: string;
+    surveyId: string | null;
+    questionId: string;
+    optionId: string | null;
+    campaignId: string | null;
+    blastId: string | null;
+  };
+  "contacts.tag.added": {
+    tenantId: string;
+    contactId: string;
+    tagId: string;
+    key: string;
+    source: string | null;
+  };
   "messaging.blast.created": { blastId: string; tenantId: string; title: string };
   "messaging.blast.scheduled": { blastId: string; tenantId: string; scheduledAt: string };
   "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };

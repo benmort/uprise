@@ -43,6 +43,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "demographics.all" },
     { action: "manage", resource: "compliance.all" },
     { action: "manage", resource: "contacts.contact" },
+    { action: "manage", resource: "contacts.tag" },
     { action: "manage", resource: "payment.all" },
     { action: "read", resource: "audit.log" },
     { action: "manage", resource: "system.feature-flags" },
@@ -62,6 +63,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "civic.all" },
     { action: "manage", resource: "demographics.all" },
     { action: "manage", resource: "contacts.contact" },
+    { action: "manage", resource: "contacts.tag" },
     { action: "manage", resource: "tenant.member" },
     { action: "manage", resource: "tenant.invitation" },
     { action: "manage", resource: "tenant.org-profile" },
@@ -81,6 +83,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "canvass.doorknock" },
     { action: "create", resource: "canvass.disposition" },
     { action: "read", resource: "contacts.contact" },
+    { action: "read", resource: "contacts.tag" },
   ],
 
   member: [

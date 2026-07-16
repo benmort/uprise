@@ -8,6 +8,7 @@ import {
 } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
+import { OutboxService } from "../common/outbox/outbox.service";
 import { ApiHttpException } from "../common/http/api-response";
 import {
   JOURNEY_TRIGGER_PORT,
@@ -51,6 +52,7 @@ export class EngagementService {
     private readonly prisma: PrismaService,
     private readonly events: RealtimeEventsService,
     private readonly canned: CannedResponsesService,
+    private readonly outbox: OutboxService,
     @Optional() @Inject(JOURNEY_TRIGGER_PORT) private readonly journeys?: JourneyTriggerPort,
   ) {}
 
@@ -153,20 +155,39 @@ export class EngagementService {
 
   async recordDisposition(tenantId: string, input: RecordDispositionInput): Promise<Disposition> {
     const layer = await this.resolveLayer(tenantId, input.code);
-    const disposition = await this.prisma.disposition.create({
-      data: {
+    // The row write and its domain event commit atomically (outbox invariant) so the
+    // durable `canvass.disposition.set` event can never diverge from the recorded row.
+    const disposition = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.disposition.create({
+        data: {
+          tenantId,
+          contactId: input.contactId,
+          code: input.code,
+          layer,
+          channel: input.channel,
+          campaignId: input.campaignId ?? null,
+          blastId: input.blastId ?? null,
+          scriptStepId: input.scriptStepId ?? null,
+          cannedResponseId: input.cannedResponseId ?? null,
+          supportLevel: input.supportLevel ?? null,
+          recordedById: input.recordedById ?? null,
+        },
+      });
+      await this.outbox.append(tx, {
         tenantId,
-        contactId: input.contactId,
-        code: input.code,
-        layer,
-        channel: input.channel,
-        campaignId: input.campaignId ?? null,
-        blastId: input.blastId ?? null,
-        scriptStepId: input.scriptStepId ?? null,
-        cannedResponseId: input.cannedResponseId ?? null,
-        supportLevel: input.supportLevel ?? null,
-        recordedById: input.recordedById ?? null,
-      },
+        eventType: "canvass.disposition.set",
+        aggregateId: created.id,
+        payload: {
+          dispositionId: created.id,
+          tenantId,
+          contactId: input.contactId,
+          code: input.code,
+          channel: input.channel,
+          campaignId: input.campaignId ?? null,
+          blastId: input.blastId ?? null,
+        },
+      });
+      return created;
     });
     this.events.emit("engagement.disposition", tenantId, {
       contactId: input.contactId,
@@ -177,6 +198,8 @@ export class EngagementService {
       tenantId,
       contactId: input.contactId,
       code: input.code,
+      campaignId: input.campaignId ?? null,
+      blastId: input.blastId ?? null,
     });
     return disposition;
   }
@@ -192,6 +215,10 @@ export class EngagementService {
     const option = input.optionId
       ? await this.prisma.questionOption.findUnique({ where: { id: input.optionId } })
       : null;
+    const question = await this.prisma.question.findUnique({
+      where: { id: input.questionId },
+      select: { surveyId: true },
+    });
 
     const response = await this.prisma.$transaction(async (tx) => {
       const created = await tx.questionResponse.create({
@@ -210,7 +237,7 @@ export class EngagementService {
 
       if (option?.dispositionCode) {
         const layer = await this.resolveLayer(tenantId, option.dispositionCode);
-        await tx.disposition.create({
+        const disp = await tx.disposition.create({
           data: {
             tenantId,
             contactId: input.contactId,
@@ -223,7 +250,38 @@ export class EngagementService {
             recordedById: input.recordedById ?? null,
           },
         });
+        // The answer maps a disposition — emit its event too, in the same commit.
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "canvass.disposition.set",
+          aggregateId: disp.id,
+          payload: {
+            dispositionId: disp.id,
+            tenantId,
+            contactId: input.contactId,
+            code: option.dispositionCode,
+            channel: input.channel,
+            campaignId: input.campaignId ?? null,
+            blastId: input.blastId ?? null,
+          },
+        });
       }
+
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "canvass.survey.answered",
+        aggregateId: created.id,
+        payload: {
+          responseId: created.id,
+          tenantId,
+          contactId: input.contactId,
+          surveyId: question?.surveyId ?? null,
+          questionId: input.questionId,
+          optionId: input.optionId ?? null,
+          campaignId: input.campaignId ?? null,
+          blastId: input.blastId ?? null,
+        },
+      });
       return created;
     });
 
@@ -237,6 +295,9 @@ export class EngagementService {
       contactId: input.contactId,
       questionId: input.questionId,
       optionId: input.optionId ?? null,
+      surveyId: question?.surveyId ?? null,
+      campaignId: input.campaignId ?? null,
+      blastId: input.blastId ?? null,
     });
     return response;
   }

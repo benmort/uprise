@@ -32,6 +32,7 @@ export * from "./components/password-strength";
 export * from "./components/quick-actions";
 export * from "./components/radio-group";
 export * from "./components/role-select-cards";
+export * from "./components/segmented-control";
 export * from "./components/pagination-controls";
 export * from "./components/select";
 export * from "./components/step-progress";

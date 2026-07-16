@@ -82,7 +82,8 @@ export default function GoalsPage() {
 
   return (
     <div className="page-stack max-w-xl">
-      <CampaignPageHeader title="Goals & pace" icon={Target} />
+      {/* Goals are per-campaign configuration — no cross-campaign aggregate makes sense here. */}
+      <CampaignPageHeader title="Goals & pace" icon={Target} allowAllCampaigns={false} />
 
       <StateRegion error={error} noPermission={noPermission} onRetry={() => void load()}>
         <SectionCard title="Targets">

@@ -5,6 +5,7 @@
 // It's an orientation aid, not the turf-cut map — that's the Map view (TurfDrawMap).
 import { useEffect, useRef, useState } from "react";
 import Map, { type MapRef } from "react-map-gl/mapbox";
+import { installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
 import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -36,6 +37,11 @@ export function AustraliaMap({ focusState }: { focusState?: string }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Latest theme for the moonlit tint's style.load handler (registered once in onLoad).
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  // When on, plain scroll zooms (no ⌘ held) — a persisted, cross-map preference.
+  const [scrollZoom] = useScrollToZoom();
 
   // Fit to the selected state's bounds (or the whole country when cleared). Runs on
   // load too, so an initial ?state= is framed correctly, not just later changes.
@@ -62,9 +68,15 @@ export function AustraliaMap({ focusState }: { focusState?: string }) {
       initialViewState={AUSTRALIA_VIEW}
       mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
-      // Require ⌘/Ctrl + scroll to zoom; Mapbox shows a "Use ⌘ + scroll to zoom the map" overlay otherwise.
-      cooperativeGestures
-      onLoad={() => setLoaded(true)}
-    />
+      // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
+      cooperativeGestures={!scrollZoom}
+      onLoad={() => {
+        const map = mapRef.current?.getMap();
+        if (map) installMoonlitDark(map, () => themeRef.current);
+        setLoaded(true);
+      }}
+    >
+      <MapGestureToggle />
+    </Map>
   );
 }

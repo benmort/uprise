@@ -11,7 +11,10 @@ import {
   useDispositions,
   useSurvey,
   useSurveys,
+  useScript,
+  useScripts,
 } from "../hooks/use-canvass";
+import { ScriptAssistPanel } from "../components/script-assist-panel";
 import { getVolunteerId, newLocalId } from "../lib/volunteer";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useSyncQueue } from "../hooks/use-sync-queue";
@@ -67,27 +70,37 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   // campaign → door is disposition-only.
   const campaignId = assignment?.turf.campaignId ?? null;
   const surveyList = useSurveys();
-  const surveyMatch = campaignId ? (surveyList.data ?? []).find((s) => s.campaignId === campaignId) ?? null : null;
+  // A survey is bound to campaigns via ContentBinding (reusable across many). Match on
+  // that list; fall back to the legacy single Survey.campaignId for un-migrated data.
+  const surveyMatch = campaignId
+    ? (surveyList.data ?? []).find((s) => s.campaignIds?.includes(campaignId) || s.campaignId === campaignId) ?? null
+    : null;
   const surveyFull = useSurvey(surveyMatch?.id ?? null);
   const survey = useMemo<SurveySchema | null>(() => {
     if (!surveyMatch || !surveyFull.data) return null;
     return {
       category: surveyMatch.name ?? "Survey",
+      entryQuestionKey: surveyFull.data.entryQuestionKey ?? null,
       questions: surveyFull.data.questions
         .filter((q) => q.id)
         .map((q) => ({
           id: String(q.id),
+          // Stable branch key (falls back to the db id for un-migrated surveys).
+          key: q.key ?? String(q.id),
           prompt: q.prompt,
           type: q.type,
           required: q.required,
           scaleMin: q.scaleMin ?? undefined,
           scaleMax: q.scaleMax ?? undefined,
+          defaultNextQuestionKey: q.defaultNextQuestionKey ?? null,
           options: q.options
             ?.filter((o) => o.id)
             .map((o) => ({
               id: String(o.id),
               value: o.value,
               label: o.label,
+              nextQuestionKey: o.nextQuestionKey ?? null,
+              isTerminal: o.isTerminal ?? false,
               // "Author once, use everywhere": surface the option's dual-channel mapping under
               // each choice — the door-button label and the SMS canned reply it logs.
               hint: o.cannedReplyText ? `Door: "${o.label}" · SMS: "${o.cannedReplyText}"` : `Door: "${o.label}"`,
@@ -95,6 +108,14 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
         })),
     };
   }, [surveyMatch, surveyFull.data]);
+
+  // The campaign's talk-track script (opener + outcome branches), resolved by binding
+  // like the survey. Shown as script-assist so the canvasser knows what to say.
+  const scriptList = useScripts();
+  const scriptMatch = campaignId
+    ? (scriptList.data ?? []).find((s) => s.campaignIds?.includes(campaignId)) ?? null
+    : null;
+  const scriptFull = useScript(scriptMatch?.id ?? null);
 
   // The informed knock: this resident's recent contact history — cached + durable so it
   // survives going offline.
@@ -212,6 +233,10 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
       </div>
 
       {profile ? <PriorContactStrip timeline={profile.timeline} /> : null}
+
+      {scriptFull.data ? (
+        <ScriptAssistPanel name={scriptFull.data.name} steps={scriptFull.data.steps} outcomeKey={chosenCode} />
+      ) : null}
 
       {!showSurvey ? (
         <div className="space-y-4">

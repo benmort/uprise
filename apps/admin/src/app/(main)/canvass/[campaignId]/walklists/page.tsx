@@ -25,7 +25,7 @@ import {
 import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { optimiseRoute, formatDistance, formatDuration, type Stop, WalkView, OfflineBanner, type CanvassAssignment } from "@uprise/field";
 import { buildWalkGroups, doorNumber, stopLabel } from "@/lib/canvass/walk-list";
-import { FormSelect } from "@uprise/ui";
+import { AssigneePicker } from "@/components/canvass/assignee-picker";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,9 @@ type ListType = "STATIC" | "DYNAMIC";
 const GROUPS_PER_PAGE = 20;
 
 export default function WalkListBuilderPage() {
-  const params = useParams<{ campaignId: string }>();
+  // Undefined on the campaign-less aggregate route (/canvass/walklists) — then every turf
+  // across all campaigns is listed; defined on the [campaignId] scoped route.
+  const params = useParams<{ campaignId?: string }>();
   const campaignId = params.campaignId;
   const search = useSearchParams();
   const { showToast } = useToast();
@@ -184,7 +186,7 @@ export default function WalkListBuilderPage() {
         id: activeTurf.id,
         name: activeTurf.name,
         geometry: activeTurf.geometry,
-        campaignId,
+        campaignId: campaignId ?? null,
       },
       walkLists: [
         {
@@ -395,7 +397,9 @@ export default function WalkListBuilderPage() {
             Cut turf first, then come back to build and assign walk lists.
           </p>
           <Button asChild className="mt-3">
-            <Link href={`/canvass/${campaignId}/turf`}>Cut turf</Link>
+            <Link href={campaignId ? `/canvass/${campaignId}/turf` : "/canvass/campaigns"}>
+              {campaignId ? "Cut turf" : "Go to campaigns"}
+            </Link>
           </Button>
         </SectionCard>
       ) : (
@@ -588,11 +592,11 @@ export default function WalkListBuilderPage() {
                     <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
                       Reassign to
                     </span>
-                    <FormSelect
+                    <AssigneePicker
+                      people={volunteers}
                       value={selectedVolunteer}
-                      onChange={(e) => setSelectedVolunteer(e.target.value)}
-                      placeholder="Select a volunteer…"
-                      options={volunteers.map((v) => ({ value: v.id, label: v.displayName }))}
+                      onChange={setSelectedVolunteer}
+                      disabled={busy}
                     />
                     <Button
                       className="mt-2 w-full"
@@ -606,17 +610,12 @@ export default function WalkListBuilderPage() {
                 </div>
               ) : (
                 <>
-                  <Select
+                  <AssigneePicker
+                    people={volunteers}
                     value={selectedVolunteer}
-                    onValueChange={setSelectedVolunteer}
-                    placeholder="Select a volunteer…"
-                  >
-                    {volunteers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.displayName}
-                      </SelectItem>
-                    ))}
-                  </Select>
+                    onChange={setSelectedVolunteer}
+                    disabled={busy}
+                  />
                   <Button
                     className="mt-3 w-full"
                     onClick={handleAssign}

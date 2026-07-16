@@ -33,6 +33,7 @@ export const UPRISE_RESOURCES = [
 
   // contacts (cross-cutting canonical person)
   "contacts.contact",
+  "contacts.tag",
 
   // audience
   "audience.audience",
@@ -72,6 +73,8 @@ export const UPRISE_RESOURCES = [
   "canvass.disposition",
   "canvass.script",
   "canvass.survey",
+  // Reusable content library + object bindings (surveys/scripts/sets → campaigns/blasts).
+  "canvass.content",
   "canvass.shift",
   "canvass.all",
 

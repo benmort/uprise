@@ -7,7 +7,7 @@ import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Crosshair, Loader2, MapPin, Search, X } from "lucide-react";
-import { AU_BOUNDS, AddressInfoCard } from "@uprise/field";
+import { AU_BOUNDS, AddressInfoCard, installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
 import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
 import { getApiUrl } from "@/lib/api";
 import { useTheme } from "@/components/theme/theme-provider";
@@ -257,6 +257,11 @@ export function TurfDrawMap({
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
+  // Latest theme for the moonlit tint's style.load handler (registered once in onLoad).
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  // When on, plain scroll zooms (no ⌘ held) — a persisted, cross-map preference.
+  const [scrollZoom] = useScrollToZoom();
 
   // Controlled-or-internal: read the prop when supplied, else own state; the
   // setter delegates to the callback when controlled. Keeps the two uncontrolled
@@ -743,8 +748,8 @@ export function TurfDrawMap({
         initialViewState={initialViewState}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
-        // Require ⌘/Ctrl + scroll to zoom; Mapbox shows a "Use ⌘ + scroll to zoom the map" overlay otherwise.
-        cooperativeGestures
+        // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
+        cooperativeGestures={!scrollZoom}
         // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
         attributionControl={false}
         interactiveLayerIds={
@@ -764,6 +769,7 @@ export function TurfDrawMap({
           setMapLoaded(true);
           const map = mapRef.current?.getMap();
           if (map) {
+            installMoonlitDark(map, () => themeRef.current);
             // The container finishes laying out (next/dynamic + grid) after the map
             // computes its initial view, so re-fit once sized or the wrong tiles load
             // and boundaries look missing until you interact. A `center`/`focusPoint`
@@ -1019,6 +1025,8 @@ export function TurfDrawMap({
         <FullscreenControl position="top-right" />
         <AttributionControl position="bottom-right" compact />
       </Map>
+
+      <MapGestureToggle />
 
       {/* On-map recentre — snaps back to the campaign boundary (or picked state / country). */}
       <button

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { SendHorizontal } from "lucide-react";
+import { MessagesSquare, SendHorizontal } from "lucide-react";
 import { Spinner } from "@uprise/ui";
 import {
   getApiUrl,
@@ -15,9 +15,12 @@ import {
   listConversations,
   markConversation,
   sendInboxReply,
+  listCannedResponses,
   type CannedSuggestion,
+  type CannedResponseItem,
   type MessageChannel,
 } from "@/lib/api";
+import { CannedResponsePicker } from "@uprise/field";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -164,6 +167,7 @@ export default function InboxPage() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [conversationPage, setConversationPage] = useState(0);
   const [suggestions, setSuggestions] = useState<CannedSuggestion[]>([]);
+  const [cannedReplies, setCannedReplies] = useState<CannedResponseItem[]>([]);
   const [showBlastHistory, setShowBlastHistory] = useState(false);
   const [, setStreamStatus] = useState("idle");
   const [alertSettings, setAlertSettings] = useState<ResponderAlertSettings>(
@@ -261,6 +265,12 @@ export default function InboxPage() {
     setAlertSettings(loadResponderAlertSettings());
     setBlastWatch(loadBlastWatchSettings());
     setSnoozeMap(loadSnoozeMap());
+  }, []);
+
+  // Canned replies for the texter — the first time authored canned responses reach a
+  // conversation (SMS + both-channel, org + auto-send + the agent's own personal).
+  useEffect(() => {
+    void listCannedResponses("SMS").then((r) => r.ok && setCannedReplies(r.data as CannedResponseItem[]));
   }, []);
 
   useEffect(() => {
@@ -795,6 +805,14 @@ export default function InboxPage() {
             </p>
           ) : null}
         </div>
+        {routeBlastId ? (
+          <Button asChild size="sm">
+            <Link href={`/future/sms-inbox/session?blastId=${encodeURIComponent(routeBlastId)}`}>
+              <MessagesSquare className="mr-1.5 h-4 w-4" />
+              Start texting session
+            </Link>
+          </Button>
+        ) : null}
       </div>
       <div className="grid h-full gap-4 xl:grid-cols-[360px_1fr]">
         <Card id="tour-inbox-list" className="flex h-full flex-col overflow-hidden">
@@ -1361,7 +1379,17 @@ export default function InboxPage() {
                   ))}
                 </div>
               )}
-              <div className="mt-3 flex items-center justify-end">
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <CannedResponsePicker
+                  responses={cannedReplies.map((c) => ({
+                    id: c.id,
+                    title: c.title,
+                    body: c.body,
+                    dispositionCode: c.dispositionCode ?? null,
+                  }))}
+                  disabled={waClosed}
+                  onPick={(r) => setDraftReply(r.body)}
+                />
                 <Button
                   size="sm"
                   className="gap-1.5"

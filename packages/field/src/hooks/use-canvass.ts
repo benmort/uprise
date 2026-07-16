@@ -10,7 +10,16 @@ import {
   type RecommendedTurf,
   type VolunteerMetrics,
 } from "../api/canvass";
-import { listSurveys, getSurvey, type SurveyListItem, type Survey } from "../api/engagement";
+import {
+  listSurveys,
+  getSurvey,
+  listScripts,
+  getScript,
+  type SurveyListItem,
+  type Survey,
+  type ScriptListItem,
+  type Script,
+} from "../api/engagement";
 import { getContactProfile, type ContactProfile } from "../api/contacts";
 import { useApi } from "./use-api";
 
@@ -68,6 +77,20 @@ export function useSurvey(id: string | null) {
   return useApi<Survey>(
     id ? `/engagement/surveys/${encodeURIComponent(id)}` : null,
     () => getSurvey(id as string),
+    { ttlMs: 300_000 },
+  );
+}
+
+/** Script catalogue + one script's full step tree — cached + durable like surveys, so
+ *  the door's talk-track works offline. `useScript(null)` skips (no script bound). */
+export function useScripts() {
+  return useApi<ScriptListItem[]>("/engagement/scripts", () => listScripts(), { ttlMs: 300_000 });
+}
+
+export function useScript(id: string | null) {
+  return useApi<Script>(
+    id ? `/engagement/scripts/${encodeURIComponent(id)}` : null,
+    () => getScript(id as string),
     { ttlMs: 300_000 },
   );
 }

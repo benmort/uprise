@@ -21,23 +21,35 @@ export function CampaignPageHeader({
   icon: Icon,
   description,
   actions,
+  allowAllCampaigns = true,
 }: {
   title: string;
   icon?: LucideIcon;
   description?: ReactNode;
   actions?: ReactNode;
+  /** Show the "All campaigns" option — it routes to the campaign-less variant of THIS page
+   *  (e.g. /canvass/{id}/results → /canvass/results). Set false on inherently per-campaign
+   *  pages (turf, goals) where an aggregate view has no meaning. */
+  allowAllCampaigns?: boolean;
 }) {
-  const { campaignId } = useParams<{ campaignId: string }>();
+  // Undefined on the campaign-less aggregate routes (/canvass/results, …) — that absence is
+  // how we detect "All campaigns" mode; defined on the [campaignId] scoped routes.
+  const { campaignId } = useParams<{ campaignId?: string }>();
   const pathname = usePathname();
   const router = useRouter();
   const { data } = useApi("/canvass/campaigns", () => listCampaigns(), { ttlMs: 30_000 });
   const campaigns = data ?? [];
 
+  // The sub-page path after the campaign scope — "/results", "/walklists", …. Preserved across
+  // a scope change so switching campaign (or to "All campaigns") keeps you on the same page.
+  // The query string is dropped deliberately (turfId etc. belong to the campaign being left).
+  const subPath = campaignId
+    ? pathname.split(`/canvass/${campaignId}`)[1] ?? ""
+    : pathname.replace(/^\/canvass/, "");
+
   const switchTo = (id: string) => {
     if (!id || id === campaignId) return;
-    // Same sub-page, other campaign; the query string is dropped deliberately (turfId etc.
-    // belong to the campaign being left).
-    router.push(pathname.replace(`/canvass/${campaignId}`, `/canvass/${id}`));
+    router.push(`/canvass/${id}${subPath}`);
   };
 
   return (
@@ -51,9 +63,10 @@ export function CampaignPageHeader({
           {campaigns.length > 0 ? (
             <CampaignSwitcher
               campaigns={campaigns}
-              activeId={campaignId}
+              activeId={campaignId ?? ""}
+              allActive={!campaignId}
               onSelect={switchTo}
-              onSelectAll={() => router.push("/canvass")}
+              onSelectAll={allowAllCampaigns ? () => router.push(`/canvass${subPath}`) : undefined}
             />
           ) : null}
         </div>

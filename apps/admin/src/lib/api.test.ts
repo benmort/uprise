@@ -72,6 +72,11 @@ describe("canvass QA wrappers", () => {
     expect(mockRequest).toHaveBeenCalledWith("/canvass/campaigns/c1/qa", undefined);
   });
 
+  it("getQaReview GETs the tenant-wide aggregate path when no campaign id", async () => {
+    await getQaReview();
+    expect(mockRequest).toHaveBeenCalledWith("/canvass/campaigns/qa", undefined);
+  });
+
   it("resolveQaFlag POSTs the flag action body", async () => {
     const input = {
       doorKnockId: "dk1",

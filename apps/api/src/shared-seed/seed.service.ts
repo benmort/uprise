@@ -223,6 +223,7 @@ export class SeedService {
           name: DEMO_SURVEY.name,
           questions: {
             create: DEMO_SURVEY.questions.map((q, qi) => ({
+              key: `q${qi}`,
               prompt: q.prompt,
               type: q.type,
               orderIndex: qi,

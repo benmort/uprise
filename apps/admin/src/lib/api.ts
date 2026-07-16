@@ -1061,9 +1061,10 @@ export type QaFlag = {
   state: string | null;
 };
 
-export async function getQaReview(campaignId: string) {
+/** QA flags for a campaign, or the tenant-wide aggregate when `campaignId` is omitted. */
+export async function getQaReview(campaignId?: string) {
   return request<{ flags: QaFlag[] }>(
-    `/canvass/campaigns/${encodeURIComponent(campaignId)}/qa`,
+    campaignId ? `/canvass/campaigns/${encodeURIComponent(campaignId)}/qa` : "/canvass/campaigns/qa",
   );
 }
 

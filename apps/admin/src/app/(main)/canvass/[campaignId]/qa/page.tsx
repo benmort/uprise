@@ -13,10 +13,13 @@ import { useApi } from "@/lib/use-api";
 import { useToast } from "@/components/ui/toast";
 
 export default function QaPage() {
-  const { campaignId } = useParams<{ campaignId: string }>();
+  // Undefined on the campaign-less aggregate route (/canvass/qa) — flags then span every
+  // campaign, and are read-only (a flag doesn't carry its campaign, so resolving is done
+  // within the campaign). Defined on the [campaignId] scoped route.
+  const { campaignId } = useParams<{ campaignId?: string }>();
   const { showToast } = useToast();
   const { data, loading, error, noPermission, refetch } = useApi(
-    `/canvass/campaigns/${campaignId}/qa`,
+    campaignId ? `/canvass/campaigns/${campaignId}/qa` : "/canvass/campaigns/qa",
     () => getQaReview(campaignId),
   );
   const flags = data?.flags ?? [];
@@ -28,6 +31,7 @@ export default function QaPage() {
       input: { state?: "RESOLVED" | "DISMISSED"; resolved?: boolean },
       successTitle: string,
     ) => {
+      if (!campaignId) return; // read-only in the aggregate view
       setBusyFlag(f.id);
       const res = await resolveQaFlag(campaignId, { doorKnockId: f.doorKnockId, kind: f.kind, ...input });
       setBusyFlag(null);
@@ -62,7 +66,11 @@ export default function QaPage() {
         ) : (
           <SectionCard
             title={`Flagged knocks (${flags.length})`}
-            description="Too-fast cadence or missing GPS — spot-check these."
+            description={
+              campaignId
+                ? "Too-fast cadence or missing GPS — spot-check these."
+                : "Across all campaigns — too-fast cadence or missing GPS. Open a campaign to resolve."
+            }
           >
             <ul className="space-y-2">
               {flags.map((f) => (
@@ -89,37 +97,39 @@ export default function QaPage() {
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                     {new Date(f.at).toLocaleString()}
                   </span>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    {f.resolved ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={busyFlag === f.id}
-                        onClick={() => void act(f, { resolved: false }, "Flag reopened")}
-                      >
-                        Undo
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busyFlag === f.id}
-                          onClick={() => void act(f, { state: "RESOLVED" }, "Flag resolved")}
-                        >
-                          Resolve
-                        </Button>
+                  {campaignId ? (
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {f.resolved ? (
                         <Button
                           variant="ghost"
                           size="sm"
                           disabled={busyFlag === f.id}
-                          onClick={() => void act(f, { state: "DISMISSED" }, "Flag dismissed")}
+                          onClick={() => void act(f, { resolved: false }, "Flag reopened")}
                         >
-                          Dismiss
+                          Undo
                         </Button>
-                      </>
-                    )}
-                  </span>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busyFlag === f.id}
+                            onClick={() => void act(f, { state: "RESOLVED" }, "Flag resolved")}
+                          >
+                            Resolve
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={busyFlag === f.id}
+                            onClick={() => void act(f, { state: "DISMISSED" }, "Flag dismissed")}
+                          >
+                            Dismiss
+                          </Button>
+                        </>
+                      )}
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ul>

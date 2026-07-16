@@ -49,6 +49,16 @@ describe("CampaignsController", () => {
     expect(svc.getLive).toHaveBeenCalledWith("t1", "c1");
   });
 
+  it("resultsAll delegates to getResults with tenantId only (tenant-wide)", async () => {
+    await c.resultsAll("t1");
+    expect(svc.getResults).toHaveBeenCalledWith("t1");
+  });
+
+  it("liveAll delegates to getLive with tenantId only (tenant-wide)", async () => {
+    await c.liveAll("t1");
+    expect(svc.getLive).toHaveBeenCalledWith("t1");
+  });
+
   it("update delegates with tenantId + id", async () => {
     await c.update("c1", { name: "N" } as any, "t1");
     expect(svc.update).toHaveBeenCalledWith("t1", "c1", { name: "N" });

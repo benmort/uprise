@@ -5,6 +5,7 @@ import MapGL, { Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import type { ExpressionSpecification } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { LocateFixed } from "lucide-react";
+import { installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
 import { getApiUrl } from "@/lib/api";
 import { useTheme } from "@/components/theme/theme-provider";
 import { usePollPalette } from "@/components/insights/use-poll-palette";
@@ -74,6 +75,11 @@ export function PollChoroplethMap({
   const { theme } = useTheme();
   const palette = usePollPalette();
   const mapRef = useRef<MapRef | null>(null);
+  // Latest theme for the moonlit tint's style.load handler (registered once in onLoad).
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  // When on, plain scroll zooms (no ⌘ held) — a persisted, cross-map preference.
+  const [scrollZoom] = useScrollToZoom();
   const [hover, setHover] = useState<{ name: string; percent: number | null; reportable: boolean } | null>(null);
 
   const byCode = useMemo(() => {
@@ -153,13 +159,17 @@ export function PollChoroplethMap({
         initialViewState={{ bounds, fitBoundsOptions: { padding: 24 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
-        // Require ⌘/Ctrl + scroll to zoom; Mapbox shows a "Use ⌘ + scroll to zoom the map" overlay otherwise.
-        cooperativeGestures
+        // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
+        cooperativeGestures={!scrollZoom}
         interactiveLayerIds={["poll-fill"]}
         transformRequest={transformRequest}
         onMouseMove={onMouseMove}
         onMouseLeave={() => setHover(null)}
-        onLoad={() => recenter(0)}
+        onLoad={() => {
+          const map = mapRef.current?.getMap();
+          if (map) installMoonlitDark(map, () => themeRef.current);
+          recenter(0);
+        }}
       >
         <Source id="poll-regions" type="vector" tiles={[tileUrl]} minzoom={0} maxzoom={16}>
           <Layer id="poll-fill" source-layer="areas" type="fill" paint={{ "fill-color": fillColour, "fill-opacity": 0.75 }} />
@@ -170,6 +180,7 @@ export function PollChoroplethMap({
             paint={{ "line-color": palette?.ink ?? "transparent", "line-width": 0.8, "line-opacity": 0.35 }}
           />
         </Source>
+        <MapGestureToggle />
       </MapGL>
 
       {/* Recentre — re-fit the region extent after panning/zooming */}

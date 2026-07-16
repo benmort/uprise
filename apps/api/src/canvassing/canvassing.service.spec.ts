@@ -522,6 +522,20 @@ describe("CanvassingService", () => {
       expect(flags).toEqual([]);
     });
 
+    it("reviews tenant-wide when no campaign id (no campaignId filter)", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      prisma.qaFlagResolution.findMany.mockResolvedValue([]);
+      await service.qaReview("org1");
+      // Turfs + resolutions are tenant-scoped only, with no campaignId narrowing.
+      expect(prisma.turf.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "org1" } }),
+      );
+      expect(prisma.qaFlagResolution.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { tenantId: "org1" } }),
+      );
+    });
+
     it("annotates flags that have a resolution", async () => {
       prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
       const base = new Date("2026-06-17T10:00:00Z").getTime();

@@ -465,11 +465,24 @@ export class CanvassingService {
       });
     }
 
+    // Resolve the contact's campaign once so BOTH the disposition and survey answers
+    // carry it — campaign-scoped journeys match on campaignId (a null here silently
+    // skips them).
+    let campaignId: string | null = null;
+    if (input.dispositionCode || input.surveyAnswers?.length) {
+      const contact = await this.prisma.contact.findFirst({
+        where: { id: input.contactId, tenantId },
+        select: { turf: { select: { campaignId: true } } },
+      });
+      campaignId = contact?.turf?.campaignId ?? null;
+    }
+
     if (input.dispositionCode) {
       await this.engagement.recordDisposition(tenantId, {
         contactId: input.contactId,
         code: input.dispositionCode,
         channel: EngagementChannel.DOOR,
+        campaignId,
         recordedById: input.volunteerId,
       });
     }
@@ -483,11 +496,6 @@ export class CanvassingService {
     // each answer best-effort and log failures rather than abort. The web only sends
     // ids from the live campaign survey, so this is an edge-case guard.
     if (input.surveyAnswers?.length) {
-      const contact = await this.prisma.contact.findFirst({
-        where: { id: input.contactId, tenantId },
-        select: { turf: { select: { campaignId: true } } },
-      });
-      const campaignId = contact?.turf?.campaignId ?? null;
       for (const answer of input.surveyAnswers) {
         try {
           await this.engagement.recordSurveyAnswer(tenantId, {
@@ -1580,10 +1588,11 @@ export class CanvassingService {
   }
 
   // ── QA review (G10): flag suspicious knocks ─────────────────────
-  /** Knocks that look suspect: too-fast cadence or missing GPS. Read-only heuristic. */
-  async qaReview(tenantId: string, campaignId: string) {
+  /** Knocks that look suspect: too-fast cadence or missing GPS. Read-only heuristic.
+   *  Tenant-wide when no campaign id (the "All campaigns" view). */
+  async qaReview(tenantId: string, campaignId?: string) {
     const turfs = await this.prisma.turf.findMany({
-      where: { tenantId, campaignId },
+      where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       select: { id: true },
     });
     const turfIds = turfs.map((t) => t.id);
@@ -1639,7 +1648,7 @@ export class CanvassingService {
 
     // Annotate with any organiser resolutions (keyed by doorKnockId:kind).
     const resolutions = await this.prisma.qaFlagResolution.findMany({
-      where: { tenantId, campaignId },
+      where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       select: { doorKnockId: true, kind: true, state: true },
     });
     const resByKey = new Map(resolutions.map((r) => [`${r.doorKnockId}:${r.kind}`, r.state]));

@@ -116,6 +116,45 @@ psql "$GEO_DB_URL" -c "SELECT c.name, count(*) FROM geo.address_region ar JOIN g
   without-contact counts; `/settings/data` shows loaded datasets; cutting a turf from a
   division with the "Existing + cold doors" universe materialises cold-door contacts.
 
+## 6. Load ABS demographics (SEIFA 2021 + Census 2021 G02) → `/data/demographics`
+
+Independent of the address pipeline — it only needs the SA1–SA4 boundary tables (step 2, already
+on prod). Populates `geo.abs_indicator` + `geo.abs_value`, which power the Demographics explorer,
+the choropleth, region profiles and the address detail page. Until this runs those views are empty.
+
+```bash
+# a) Stage the ABS source files into data/geo/abs/ (gitignored). Filenames must match the config
+#    at the top of apps/api/src/scripts/demographics/abs-parse.ts (edit there if yours differ).
+#    The loader skips any file that isn't staged, so SEIFA-only or Census-only runs are fine.
+#
+#   SEIFA 2021 (ABS 2033.0.55.001) — one "Indexes" workbook PER LEVEL; the "Table 1" Summary sheet
+#   carries all four indexes. Direct downloads (small — SA2 ≈ 1.3 MB, SA1 ≈ 15 MB):
+mkdir -p data/geo/abs
+S='https://www.abs.gov.au/statistics/people/people-and-communities/socio-economic-indexes-areas-seifa-australia/2021'
+curl -s -o data/geo/abs/seifa_sa2_indexes.xlsx "$S/Statistical%20Area%20Level%202%2C%20Indexes%2C%20SEIFA%202021.xlsx"
+curl -s -o data/geo/abs/seifa_sa1_indexes.xlsx "$S/Statistical%20Area%20Level%201%2C%20Indexes%2C%20SEIFA%202021.xlsx"
+#
+#   Census 2021 GCP, table G02 "Selected Medians and Averages" — one CSV per level. There is no
+#   single-table download: fetch the GCP "all geographies for AUST" DataPack (≈612 MB zip) and
+#   extract just the four G02 CSVs, renamed to what the loader expects:
+#     curl -s -o /tmp/gcp.zip 'https://www.abs.gov.au/census/find-census-data/datapacks/download/2021_GCP_all_for_AUS_short-header.zip'
+#     unzip -j /tmp/gcp.zip '*2021Census_G02_AUST_SA1.csv' -d data/geo/abs   # repeat SA2/SA3/SA4
+#   (target names: data/geo/abs/2021Census_G02_AUST_{SA1,SA2,SA3,SA4}.csv)
+
+# b) Run against the target DB (dev first, then prod). Idempotent (ON CONFLICT upserts).
+psql "$GEO_DB_URL" -c 'select 1;'                      # wake compute
+DATABASE_URL="$GEO_DB_URL" npm --prefix apps/api run geo:load-abs
+
+# c) Verify
+psql "$GEO_DB_URL" -c "SELECT count(*) FROM geo.abs_indicator;"                       -- 13
+psql "$GEO_DB_URL" -c "SELECT level, count(*) FROM geo.abs_value GROUP BY 1 ORDER BY 1;"
+psql "$GEO_DB_URL" -c "SELECT key,row_count,status,last_ingested FROM geo.dataset_meta WHERE key IN ('abs_census_2021','seifa_2021');"
+```
+- App: `/data/demographics` shades the map when you pick an indicator + level; clicking a region
+  shows its full profile; `/data/datasets` lists ABS Census + SEIFA as loaded. If the map is blank,
+  the indicator's column name in your DataPack likely differs — adjust `CENSUS_G02_COLUMNS` /
+  `SEIFA_COLUMNS` at the top of `load-abs.ts` and re-run (a header mismatch loads NULL values).
+
 ## Notes
 - **ASGS mesh blocks + SA1–SA4 are now part of the load** (steps 1–2 + 3b): the clickable
   MB/SA1/SA2/SA3/SA4 turf-selection layers and the Data-page counts come from `geo.meshblock`/`geo.sa*`;

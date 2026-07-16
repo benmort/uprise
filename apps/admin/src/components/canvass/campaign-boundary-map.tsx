@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapGL, { AttributionControl, FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import { bbox } from "@turf/turf";
 import { Loader2, LocateFixed } from "lucide-react";
-import { MapSizeControl } from "@uprise/field";
+import { MapSizeControl, installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useTheme } from "@/components/theme/theme-provider";
 
@@ -44,6 +44,11 @@ export function CampaignBoundaryMap({
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
   const loadedRef = useRef(false);
+  // Latest theme for the moonlit tint's style.load handler (registered once in onLoad).
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  // When on, plain scroll zooms (no ⌘ held) — a persisted, cross-map preference.
+  const [scrollZoom] = useScrollToZoom();
   // Shows the "Loading boundaries…" pill while a campaign switch re-frames the map
   // (mirrors the turf-draw map's tile-loading pill). Cleared when the recentre settles.
   const [loadingBoundaries, setLoadingBoundaries] = useState(false);
@@ -162,14 +167,16 @@ export function CampaignBoundaryMap({
         initialViewState={{ bounds, fitBoundsOptions: { padding: 28 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
-        // Require ⌘/Ctrl + scroll to zoom; Mapbox shows a "Use ⌘ + scroll to zoom the map" overlay otherwise.
-        cooperativeGestures
+        // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
+        cooperativeGestures={!scrollZoom}
         // The Mapbox wordmark is hidden globally (globals.css — permitted by our plan),
         // freeing the bottom-left corner for the claimed/unclaimed legend. Attribution is
         // replaced with a compact control bottom-right (kept for the OpenStreetMap licence).
         attributionControl={false}
         onLoad={() => {
           loadedRef.current = true;
+          const map = mapRef.current?.getMap();
+          if (map) installMoonlitDark(map, () => themeRef.current);
           recenter(0);
         }}
       >
@@ -208,6 +215,7 @@ export function CampaignBoundaryMap({
 
         <FullscreenControl position="top-left" />
         <MapSizeControl large={large} onToggle={() => setLarge((v) => !v)} position="top-left" />
+        <MapGestureToggle />
         {/* Compact attribution, tucked bottom-right with the logo (out of the legend's way). */}
         <AttributionControl position="bottom-right" compact />
       </MapGL>

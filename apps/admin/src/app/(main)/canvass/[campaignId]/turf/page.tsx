@@ -337,7 +337,8 @@ export default function TurfCuttingPage() {
 
   return (
     <div className="page-stack">
-      <CampaignPageHeader title="Cut turf" icon={MapPin} />
+      {/* Cutting turf targets one campaign — no cross-campaign aggregate makes sense here. */}
+      <CampaignPageHeader title="Cut turf" icon={MapPin} allowAllCampaigns={false} />
 
       {/* Coverage at a glance — claimed vs unclaimed turf and knock progress. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

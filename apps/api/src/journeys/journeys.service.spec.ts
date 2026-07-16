@@ -74,6 +74,62 @@ describe("JourneysService", () => {
 
       expect(prisma.journeyEnrolment.create).not.toHaveBeenCalled();
     });
+
+    it("enrols a survey_answer journey scoped to a matching surveyId", async () => {
+      prisma.journey.findMany.mockResolvedValue([
+        { id: "jrn1", tenantId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: { surveyId: "sv1" }, rungs: [] },
+      ]);
+      await service.handleTrigger(JourneyTriggerType.survey_answer, {
+        tenantId: "org1",
+        contactId: "c1",
+        surveyId: "sv1",
+        questionId: "q1",
+      });
+      expect(prisma.journeyEnrolment.create).toHaveBeenCalled();
+    });
+
+    it("does not enrol when the scoped surveyId or campaignId differs", async () => {
+      prisma.journey.findMany.mockResolvedValue([
+        { id: "jrn1", tenantId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: { surveyId: "sv1" }, rungs: [] },
+      ]);
+      await service.handleTrigger(JourneyTriggerType.survey_answer, {
+        tenantId: "org1",
+        contactId: "c1",
+        surveyId: "OTHER",
+        questionId: "q1",
+      });
+      expect(prisma.journeyEnrolment.create).not.toHaveBeenCalled();
+
+      prisma.journey.findMany.mockResolvedValue([
+        { id: "jrn2", tenantId: "org1", reentryCooldownMinutes: 0, maxActivePerContact: 1, triggerConfig: { campaignId: "camp1" }, rungs: [] },
+      ]);
+      await service.handleTrigger(JourneyTriggerType.disposition_set, {
+        tenantId: "org1",
+        contactId: "c1",
+        code: "refused",
+        campaignId: "OTHER",
+      });
+      expect(prisma.journeyEnrolment.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("tag action", () => {
+    it("persists the tag via the contact-tag port when wired", async () => {
+      const contactTags = { applyTag: jest.fn().mockResolvedValue(undefined) };
+      const withPort = new JourneysService(prisma, events, singleSend, flags, queue, contactTags as any);
+      prisma.journeyEnrolment.findUnique.mockResolvedValue({
+        id: "enr1",
+        tenantId: "org1",
+        contactId: "c1",
+        state: JourneyEnrolmentState.ACTIVE,
+        currentRungIndex: 0,
+        rungExecCount: 0,
+        journey: { rungs: [{ rungIndex: 0, type: "action", config: { kind: "tag", tag: "vip" } }] },
+      });
+      const result = await withPort.processRungJob({ enrolmentId: "enr1", rungIndex: 0 });
+      expect(contactTags.applyTag).toHaveBeenCalledWith("org1", "c1", "vip", "journey");
+      expect(result.state).toBe(JourneyEnrolmentState.COMPLETED);
+    });
   });
 
   describe("processRungJob", () => {

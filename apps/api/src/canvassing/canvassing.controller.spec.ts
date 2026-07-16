@@ -257,6 +257,11 @@ describe("CanvassingController", () => {
     expect(svc.qaReview).toHaveBeenCalledWith("t1", "camp1");
   });
 
+  it("qaReviewAll delegates with tenantId only (tenant-wide)", async () => {
+    await c.qaReviewAll("t1");
+    expect(svc.qaReview).toHaveBeenCalledWith("t1");
+  });
+
   it("resolveQaFlag delegates with tenantId + id + resolvedById from the session", async () => {
     await c.resolveQaFlag("camp1", { flagId: "f1" } as any, req, "t1");
     expect(svc.setQaFlagResolution).toHaveBeenCalledWith("t1", "camp1", {

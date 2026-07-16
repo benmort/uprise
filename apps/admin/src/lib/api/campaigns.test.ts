@@ -10,6 +10,8 @@ import {
   previewCampaignBoundary,
   getCampaignAreas,
   getCampaignBoundaryAddressCount,
+  getCampaignResults,
+  getCampaignLive,
   deleteCampaign,
   type BoundarySource,
 } from "./campaigns";
@@ -65,5 +67,19 @@ describe("campaigns api client — boundary", () => {
     const [url, opts] = mockReq.mock.calls[0];
     expect(url).toBe("/canvass/campaigns/c%2F1/boundary/address-count");
     expect(opts).toBeUndefined(); // a bare GET
+  });
+
+  it("getCampaignResults hits the campaign endpoint, or the tenant-wide aggregate when no id", async () => {
+    await getCampaignResults("c/1");
+    expect(mockReq.mock.calls[0][0]).toBe("/canvass/campaigns/c%2F1/results");
+    await getCampaignResults();
+    expect(mockReq.mock.calls[1][0]).toBe("/canvass/campaigns/results");
+  });
+
+  it("getCampaignLive hits the campaign endpoint, or the tenant-wide aggregate when no id", async () => {
+    await getCampaignLive("c/1");
+    expect(mockReq.mock.calls[0][0]).toBe("/canvass/campaigns/c%2F1/live");
+    await getCampaignLive();
+    expect(mockReq.mock.calls[1][0]).toBe("/canvass/campaigns/live");
   });
 });

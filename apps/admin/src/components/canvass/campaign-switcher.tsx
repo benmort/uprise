@@ -55,8 +55,9 @@ function CampaignRow({
   );
 }
 
-/** "All campaigns" — leaves the per-campaign view for the canvass overview. Pinned atop the list. */
-function AllCampaignsRow({ onSelect }: { onSelect: () => void }) {
+/** "All campaigns" — the cross-campaign aggregate of the current page. Pinned atop the list;
+ *  checked when it's the active scope. */
+function AllCampaignsRow({ onSelect, active }: { onSelect: () => void; active?: boolean }) {
   const close = useDropdownClose();
   return (
     <button
@@ -69,6 +70,7 @@ function AllCampaignsRow({ onSelect }: { onSelect: () => void }) {
     >
       <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" />
       <span className="block flex-1 truncate text-sm font-semibold text-foreground">All campaigns</span>
+      {active ? <Check className="h-4 w-4 shrink-0 text-success" /> : null}
     </button>
   );
 }
@@ -86,18 +88,22 @@ export function CampaignSwitcher({
   activeId,
   onSelect,
   onSelectAll,
+  allActive = false,
 }: {
   campaigns: CampaignSummary[];
   activeId: string;
   onSelect: (id: string) => void;
-  /** Navigate to the all-campaigns overview (drops the per-campaign scope). Row hidden when unset. */
+  /** Navigate to the all-campaigns aggregate of the current page. Row hidden when unset. */
   onSelectAll?: () => void;
+  /** True on the campaign-less aggregate pages: the trigger reads "All campaigns" and the
+   *  "All campaigns" row shows the active check. */
+  allActive?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [stateFilter, setStateFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const active = campaigns.find((c) => c.id === activeId) ?? null;
-  const activeName = active?.name ?? "Select campaign";
+  const activeName = allActive ? "All campaigns" : active?.name ?? "Select campaign";
 
   // Distinct geographic states + priorities present, for the filter dropdowns.
   const states = useMemo(
@@ -201,7 +207,7 @@ export function CampaignSwitcher({
 
       {/* Campaign list */}
       <div className="max-h-72 overflow-y-auto p-1.5">
-        {onSelectAll ? <AllCampaignsRow onSelect={onSelectAll} /> : null}
+        {onSelectAll ? <AllCampaignsRow onSelect={onSelectAll} active={allActive} /> : null}
         {filtered.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-muted-foreground">No campaigns found</p>
         ) : (

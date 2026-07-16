@@ -1,27 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronLeft, Circle } from "lucide-react";
 import { Button, Input, cn } from "@uprise/ui";
+import { entryQuestionKey, resolveNextQuestionKey, type FlowOption } from "../lib/survey-flow";
 
-export type SurveyOption = { id: string; value: string; label: string; hint?: string };
+export type SurveyOption = {
+  id: string;
+  value: string;
+  label: string;
+  hint?: string;
+  nextQuestionKey?: string | null;
+  isTerminal?: boolean;
+};
 export type SurveyQuestion = {
   id: string;
+  /** Stable branch-edge identifier. */
+  key: string;
   prompt: string;
   type: "yes_no" | "single_choice" | "multi_choice" | "text" | "scale";
   required?: boolean;
   scaleMin?: number;
   scaleMax?: number;
+  defaultNextQuestionKey?: string | null;
   options?: SurveyOption[];
 };
 
-export type SurveySchema = { questions: SurveyQuestion[]; category?: string };
+export type SurveySchema = { questions: SurveyQuestion[]; category?: string; entryQuestionKey?: string | null };
 export type SurveyAnswer = { questionId: string; optionId?: string; valueText?: string };
 
 /**
  * Door survey — one question per screen, big tap targets, fully offline. Choice
- * questions auto-advance on select (one-tap); text needs a confirm. A progress bar
- * tracks position; each question can be skipped. Calls onComplete with the answers.
+ * questions auto-advance on select (one-tap); text needs a confirm. Bifurcates: the
+ * next question is resolved from the chosen option's branch edge (shared resolver),
+ * with a visited stack driving Back. Calls onComplete with the answers in path order.
  */
 export function SurveyRunner({
   schema,
@@ -32,33 +44,61 @@ export function SurveyRunner({
   onComplete: (answers: SurveyAnswer[]) => void;
   onCancel?: () => void;
 }) {
-  const total = schema.questions.length;
   const category = (schema.category ?? "Survey").toUpperCase();
-  const [index, setIndex] = useState(0);
+  const questions = schema.questions;
+  const [currentKey, setCurrentKey] = useState<string | null>(() => entryQuestionKey(schema));
+  const [path, setPath] = useState<string[]>([]); // visited question keys, in order (excl. current)
   const [answers, setAnswers] = useState<Record<string, SurveyAnswer>>({});
-  const question = schema.questions[index];
+  const question = currentKey ? questions.find((q) => q.key === currentKey) ?? null : null;
 
-  if (!question) {
-    onComplete([]);
-    return null;
-  }
+  // Empty / entryless survey — complete in an effect, never during render (a render-time
+  // parent setState warns and can loop).
+  useEffect(() => {
+    if (!question) onComplete([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question]);
 
-  const isLast = index === total - 1;
+  if (!question) return null;
+
   const current = answers[question.id];
-  const finish = (next: Record<string, SurveyAnswer>) =>
-    onComplete(schema.questions.map((q) => next[q.id]).filter(Boolean) as SurveyAnswer[]);
+  const orderedAnswers = (next: Record<string, SurveyAnswer>) =>
+    [...path, question.key]
+      .map((k) => questions.find((q) => q.key === k))
+      .map((q) => (q ? next[q.id] : undefined))
+      .filter(Boolean) as SurveyAnswer[];
 
   const commit = (a: SurveyAnswer | null) => {
     const next = { ...answers };
     if (a) next[question.id] = a;
     else delete next[question.id];
     setAnswers(next);
-    if (isLast) finish(next);
-    else setIndex((i) => i + 1);
+    const chosen: FlowOption | null = a?.optionId
+      ? (question.options?.find((o) => o.id === a.optionId) ?? null)
+      : null;
+    const nextKey = resolveNextQuestionKey(question, chosen, questions);
+    // End when there's no next, or on a would-be cycle back to an answered question.
+    if (!nextKey || path.includes(nextKey) || nextKey === question.key) {
+      onComplete(orderedAnswers(next));
+      return;
+    }
+    setPath((p) => [...p, question.key]);
+    setCurrentKey(nextKey);
   };
 
-  const back = () => (index > 0 ? setIndex((i) => i - 1) : onCancel?.());
-  const pct = Math.round((index / total) * 100);
+  const back = () => {
+    if (path.length === 0) {
+      onCancel?.();
+      return;
+    }
+    const prev = path[path.length - 1];
+    setPath((p) => p.slice(0, -1));
+    setCurrentKey(prev);
+  };
+  const stepNumber = path.length + 1;
+  // Approximate progress — branching has no fixed length, so track answered depth.
+  const pct = questions.length ? Math.min(100, Math.round((stepNumber / questions.length) * 100)) : 0;
+  // Whether skipping / a text answer would end the survey (drives the button label).
+  const willEnd = !resolveNextQuestionKey(question, null, questions);
 
   const choiceOptions =
     question.type === "yes_no" ? question.options ?? defaultYesNo(question) : question.options ?? [];
@@ -71,14 +111,14 @@ export function SurveyRunner({
           <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
         <span className="shrink-0 text-sm font-bold tabular-nums text-muted-foreground">
-          Question {index + 1} of {total}
+          Question {stepNumber}
         </span>
       </div>
 
       {/* Question card */}
       <div className="rounded-3xl border border-border bg-surface p-6 shadow-card">
         <p className="text-sm font-bold uppercase tracking-[0.08em] text-primary">
-          {category} · Question {index + 1}
+          {category} · Question {stepNumber}
         </p>
         <h2 className="mt-2 text-[26px] font-extrabold leading-tight text-foreground">{question.prompt}</h2>
 
@@ -148,7 +188,7 @@ export function SurveyRunner({
         </button>
         {question.type === "text" ? (
           <Button className="h-14 flex-1 text-base" onClick={() => commit(current ?? null)}>
-            {isLast ? "Done" : "Next"}
+            {willEnd ? "Done" : "Next"}
           </Button>
         ) : (
           <button
