@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DownloadCloud, Home, Loader2, Navigation, Route } from "lucide-react";
@@ -26,6 +26,11 @@ const TurfMap = dynamic(() => import("../components/turf-map").then((m) => m.Tur
 });
 
 type FullStop = WalkStop & { lat: number; lng: number; gnafPid: string | null };
+
+// The List lazy-loads: an initial batch, then reveal-on-scroll (a turf can hold thousands
+// of doors, so mounting every card up front is slow on a phone). View-only — the full route
+// still drives the next-stop, progress, map and walk-budget.
+const STOPS_PAGE = 25;
 
 function num(v: unknown): number {
   return typeof v === "number" ? v : Number.NaN;
@@ -107,6 +112,28 @@ export function WalkView({
   const walk = useMemo(() => estimateWalk(stops as Stop[]), [stops]);
   const pending = useMemo(() => stops.filter((s) => s.status === "PENDING"), [stops]);
   const [budgetMin, setBudgetMin] = useState<number | "">("");
+
+  // Lazy-load window for the List. Reveal more as the sentinel scrolls into view; reset when the
+  // route changes (a turf/assignment switch rebuilds `stops`, so collapse back to the first batch).
+  const [visibleCount, setVisibleCount] = useState(STOPS_PAGE);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    setVisibleCount(STOPS_PAGE);
+  }, [stops.length]);
+  useEffect(() => {
+    if (mode === "map" || visibleCount >= stops.length) return;
+    const el = loadMoreRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisibleCount((n) => Math.min(n + STOPS_PAGE, stops.length));
+      },
+      { rootMargin: "300px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [mode, stops.length, visibleCount]);
+
   const fitIds = useMemo(() => {
     if (typeof budgetMin !== "number" || budgetMin <= 0) return null;
     const { fit } = trimToBudget(pending as Stop[], budgetMin, fix ? { start: { lat: fix.lat, lng: fix.lng } } : {});
@@ -292,7 +319,7 @@ export function WalkView({
             </div>
           ) : null}
           <div className="space-y-3">
-            {stops.map((s) => {
+            {stops.slice(0, visibleCount).map((s) => {
               const beyond = fitIds !== null && s.status === "PENDING" && !fitIds.has(s.id);
               return (
                 <div key={s.id} className={cn(beyond && "opacity-40")}>
@@ -301,6 +328,15 @@ export function WalkView({
               );
             })}
           </div>
+          {visibleCount < stops.length ? (
+            <div
+              ref={loadMoreRef}
+              className="flex items-center justify-center gap-2 py-3 text-xs font-medium text-muted-foreground"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading more stops… ({visibleCount} of {stops.length})
+            </div>
+          ) : null}
         </div>
       )}
     </div>
