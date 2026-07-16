@@ -88,3 +88,4 @@ Read `dev/ai/guide-map.md` first to route the changes to their layer guides, the
 - `docs/observability.md` – core signals, recommended alerts, and the incident triage checklist.
 - `dev/ai/guide-map.md` – the router each changed area is checked through.
 - `apps/api/dev/ai/how-to/migrations.md`, `apps/api/dev/ai/how-to/bullmq-jobs.md` – the patterns the operational surface maps back to.
+- `.claude/skills/cloud-ops/SKILL.md` – the **execute** sibling. This skill only *proposes* the walk; when the ask is "run the deploy / set the env var / change DNS" rather than "plan it", hand off to `cloud-ops`, which drives Vercel/Railway/DNSimple + env commands directly (with the standing full-autonomy permission). Their per-service depth is in `dev/ai/how-to/{vercel-ops,railway-ops,dnsimple-dns,env-access}.md`.

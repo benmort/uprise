@@ -7,7 +7,7 @@ Core guidance for AI agents working in uprise. Layer-specific detail lives in `a
 Binding – follow on every task.
 
 1. **Plan before executing** – for non-trivial work, plan and get approval before editing.
-2. **Use the guide map** – start at `dev/ai/guide-map.md` and read every guide whose frontmatter (`use_when`) fits the task. The guide-read is unconditional, not gated on whether the task "seems" to need one.
+2. **Use the guide map** – start at `dev/ai/guide-map.md` and read every guide whose frontmatter (`use_when`) fits the task. The guide-read is unconditional, not gated on whether the task "seems" to need one. Cloud/infra/env work (Vercel deploys + env vars, the Railway worker, DNSimple DNS, reading any secret) routes through the `cloud-ops` skill and `dev/ai/how-to/{vercel-ops,railway-ops,dnsimple-dns,env-access,warp-shell}.md`; the agent holds standing permission for it (`.claude/settings.local.json`) but never prints a secret to the transcript (see `env-access.md`).
 3. **Architecture canon is `docs/meld/`** – the meld docs (00–14) are the authoritative design of how uprise is built (outbox/reactions, schema namespacing, FSM, SSO). Read the relevant one before changing a subsystem.
 4. **Australian English everywhere; en-dashes, never em-dashes** – `organise`, `colour`, `authorise`, `analyse`. Use a spaced en-dash for parenthetical breaks; never the em-dash character.
 5. **Imports** – cross-package code is imported via the `@uprise/*` workspace packages (`@uprise/db`, `@uprise/events`, `@uprise/permissions`, `@uprise/contracts`, `@uprise/ui`, `@uprise/api-client`). Within an app, use relative imports. uprise has **no** intra-app path aliases – do not invent `@api/`-style ones.

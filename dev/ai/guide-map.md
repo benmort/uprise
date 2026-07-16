@@ -36,6 +36,11 @@ Single entry point and router to layer-local guides. Read this, then read every 
 | Apply web security (cookie SSO, CORS, secrets) | `apps/admin/dev/ai/how-to/web-security.md` |
 | Show loading / empty / error / no-permission states | `apps/admin/dev/ai/how-to/feedback-states.md` |
 | Permission-gate UI | `apps/admin/dev/ai/how-to/permission-gating.md` |
+| Deploy / promote / rollback a Vercel app, or manage its env vars | `dev/ai/how-to/vercel-ops.md` |
+| Deploy or configure the Railway BullMQ worker | `dev/ai/how-to/railway-ops.md` |
+| Add / verify / remove a DNS record (DNSimple) | `dev/ai/how-to/dnsimple-dns.md` |
+| Read or use an env var / secret safely (local or cloud) | `dev/ai/how-to/env-access.md` |
+| Operate inside the Warp terminal (the `!` command, session state) | `dev/ai/how-to/warp-shell.md` |
 | Add a domain event type to `@uprise/events` | `packages/dev/ai/how-to/events-catalogue.md` |
 | Work with `@uprise/db` / the Prisma client | `packages/dev/ai/how-to/db-and-prisma.md` |
 | Work with `@uprise/permissions` (abilities/roles) | `packages/dev/ai/how-to/permissions-package.md` |
@@ -74,4 +79,5 @@ packages/dev/ai/how-to/                             ← @uprise/* package guides
 - **Executing a work-unit** → `.claude/skills/uprise-implement/SKILL.md` (classify → route to a layer engineer → end at review).
 - **Handing work to a cold agent** → `.claude/skills/uprise-dispatch/SKILL.md` (brief + worktree from a task description).
 - **Closing a session** → `.claude/skills/session-wrap/SKILL.md` (DoD validation + sweep + memory).
-- **Deploy / incident** → `.claude/skills/uprise-operate/SKILL.md` (proposes a deploy walk / triage; humans execute).
+- **Deploy / incident (plan only)** → `.claude/skills/uprise-operate/SKILL.md` (proposes a deploy walk / triage; humans execute).
+- **Cloud / infra execution** → `.claude/skills/cloud-ops/SKILL.md` (runs Vercel deploys + env, the Railway worker, DNSimple DNS, and env-var reads — the execute sibling of uprise-operate; routes to the vercel/railway/dnsimple/env/warp guides above).
