@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   bboxOfGeometry,
+  downloadRegion,
   fillTemplate,
   latToTileY,
   lngToTileX,
@@ -164,5 +165,56 @@ describe("verifyRegionCached", () => {
     const present = new Set([...assets, ...tiles.filter((_t, i) => i !== 0)]); // index 0 is sampled
     withCache(present);
     expect(await verifyRegionCached(assets, tiles, 40)).toBe(false);
+  });
+});
+
+describe("downloadRegion", () => {
+  // A fake Cache Storage recording what gets written, with a preset already-present set.
+  const cacheMock = (present = new Set<string>()) => {
+    const puts: string[] = [];
+    globalThis.caches = {
+      open: async () => ({
+        match: async (url: string) => (present.has(url) ? new Response("x") : undefined),
+        put: async (url: string) => {
+          puts.push(String(url));
+        },
+      }),
+    } as unknown as CacheStorage;
+    return puts;
+  };
+
+  it("caches 200s, treats 404 as empty, counts network errors as failed, and skips already-cached", async () => {
+    const puts = cacheMock(new Set(["https://have"]));
+    global.fetch = vi.fn(async (url: unknown) => {
+      const u = String(url);
+      if (u.endsWith("404")) return new Response("", { status: 404 });
+      if (u.endsWith("boom")) throw new TypeError("network");
+      return new Response("data", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const progress: Array<[number, number]> = [];
+    const urls = ["https://have", "https://ok1", "https://ok2", "https://x/404", "https://x/boom"];
+    const res = await downloadRegion(urls, { concurrency: 2, onProgress: (d, t) => progress.push([d, t]) });
+
+    expect(res).toMatchObject({ total: 5, done: 5, cached: 3, empty: 1, failed: 1 });
+    // Only the two fresh 200s were written — not the pre-cached one, the 404, or the failure.
+    expect(puts.sort()).toEqual(["https://ok1", "https://ok2"]);
+    expect(progress.at(-1)).toEqual([5, 5]);
+  });
+
+  it("a no-data region (all 404) still completes with zero failures", async () => {
+    cacheMock();
+    global.fetch = vi.fn(async () => new Response("", { status: 404 })) as unknown as typeof fetch;
+    const res = await downloadRegion(["https://a", "https://b"]);
+    expect(res.failed).toBe(0); // → the hook reports "done", not "some tiles didn't save"
+    expect(res.empty).toBe(2);
+  });
+
+  it("rejects when the signal is already aborted", async () => {
+    cacheMock();
+    global.fetch = vi.fn(async () => new Response("data")) as unknown as typeof fetch;
+    const ac = new AbortController();
+    ac.abort();
+    await expect(downloadRegion(["https://a"], { signal: ac.signal })).rejects.toThrow();
   });
 });

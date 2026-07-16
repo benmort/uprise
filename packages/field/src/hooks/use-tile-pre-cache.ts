@@ -6,7 +6,6 @@ import {
   DEFAULT_ZOOM,
   downloadRegion,
   planRegionDownload,
-  verifyRegionCached,
   type ZoomRange,
 } from "../lib/map-cache";
 import { getManifest, putManifest, type TileManifestStatus } from "../lib/tile-cache-store";
@@ -112,11 +111,12 @@ export function useTilePreCache(
             }
           },
         });
-        // Don't trust the progress counter alone — fetches can succeed opaquely without
-        // caching, or get LRU-evicted mid-download. Verify the pack is really in Cache
-        // Storage before promising offline; otherwise flag it so the UI offers a retry.
-        const verified = await verifyRegionCached(plan.assets, plan.tileUrls);
-        const finalStatus: TileManifestStatus = verified ? "done" : "incomplete";
+        // Complete unless a fetch actually FAILED (network/CORS) — those are retryable. Tiles
+        // that 404 (no data over water / map edges) are expected and must NOT block "done":
+        // downloadRegion cached every response it received, so the pack is as complete as the
+        // data allows. (The old check verified 100% of a tile sample, which the inevitable
+        // no-data 404s failed every time → a permanent false "some tiles didn't save".)
+        const finalStatus: TileManifestStatus = result.failed === 0 ? "done" : "incomplete";
         setStatus(finalStatus);
         setDone(result.done);
         void putManifest({

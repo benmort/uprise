@@ -246,18 +246,35 @@ export async function verifyRegionCached(
   return isRegionCached([...assets, ...sampled]);
 }
 
+export type DownloadResult = {
+  done: number; // URLs processed (drives the progress bar)
+  total: number;
+  cached: number; // stored in Cache Storage (or already present)
+  empty: number; // fetched but no data (404/204) — expected for tiles over water/edges, NOT a failure
+  failed: number; // fetch threw (network / CORS) — the only condition worth a retry
+};
+
 /**
- * Fetch every URL (skipping any already cached, so a resumed download is cheap),
- * letting the CacheFirst service worker populate the mapbox cache. Concurrency-
- * capped; reports progress after each completion. Returns the number fetched.
+ * Download every URL into the `mapbox` Cache Storage, skipping any already present (so a resumed
+ * download is cheap). Concurrency-capped; reports progress after each completion.
+ *
+ * We `cache.put()` each successful response OURSELVES rather than relying on the service worker's
+ * CacheFirst rule to intercept these fetches — SW interception is timing/scope-dependent (a fresh
+ * SW may not yet control the page), which made the old "verify" step fail even when the network was
+ * fine. Fetched with `mode:"cors"` so the cached body is READABLE by GL JS offline; an opaque
+ * (no-cors) tile is useless to the renderer, so a CORS failure counts as a real failure, not a
+ * silent opaque cache. A 404 (no data at that tile) is expected and never blocks completion.
  */
 export async function downloadRegion(
   urls: string[],
   opts: { concurrency?: number; signal?: AbortSignal; onProgress?: (done: number, total: number) => void } = {},
-): Promise<{ done: number; total: number }> {
+): Promise<DownloadResult> {
   const concurrency = opts.concurrency ?? 6;
   const total = urls.length;
   let done = 0;
+  let cached = 0;
+  let empty = 0;
+  let failed = 0;
   let cursor = 0;
   const cache = typeof caches !== "undefined" ? await caches.open(MAPBOX_CACHE_NAME) : null;
 
@@ -267,16 +284,20 @@ export async function downloadRegion(
       const url = urls[cursor];
       cursor += 1;
       try {
-        // Skip if the SW cache already holds it (resume). Otherwise fetch — the
-        // SW's CacheFirst rule stores the response (opaque responses included).
-        if (!cache || !(await cache.match(url, MATCH))) {
-          await fetch(url, { signal: opts.signal, mode: "cors" }).catch(() =>
-            fetch(url, { signal: opts.signal, mode: "no-cors" }),
-          );
+        if (cache && (await cache.match(url, MATCH))) {
+          cached += 1; // already downloaded (resume)
+        } else {
+          const res = await fetch(url, { signal: opts.signal, mode: "cors" });
+          if (res.ok) {
+            if (cache) await cache.put(url, res);
+            cached += 1;
+          } else {
+            empty += 1; // 404/204 etc. — no tile data here; nothing to cache, not a failure
+          }
         }
       } catch (error) {
         if (opts.signal?.aborted) throw error;
-        // A single failed tile shouldn't abort the whole region.
+        failed += 1; // real network/CORS error — a retry can fix this
       } finally {
         done += 1;
         opts.onProgress?.(done, total);
@@ -285,5 +306,5 @@ export async function downloadRegion(
   };
 
   await Promise.all(Array.from({ length: Math.min(concurrency, total) }, () => worker()));
-  return { done, total };
+  return { done, total, cached, empty, failed };
 }

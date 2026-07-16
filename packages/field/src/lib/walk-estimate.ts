@@ -68,6 +68,38 @@ export function trimToBudget(
   return { fit, total: ordered.length };
 }
 
+export type RouteFromHere = { order: Stop[]; savedMetres: number; savedSeconds: number };
+
+// Smallest improvement worth interrupting the volunteer for — below this the current
+// route is "good enough" and we stay silent rather than nag.
+const MIN_SAVED_METRES = 100;
+
+/**
+ * Compare the current walk order against one optimised to START from the volunteer's
+ * location. Scores each order as approach (current location → its first stop) + tour
+ * length, so "you're standing next to a different stop, start there" is rewarded.
+ * Returns the better-from-here order + savings, or null when the gain is below the
+ * threshold (or there's nothing to reorder). Pure + offline (haversine).
+ */
+export function compareRouteFromHere(
+  stops: Stop[],
+  fix: { lat: number; lng: number },
+  currentOrder: Stop[],
+  opts: { speedMps?: number } = {},
+): RouteFromHere | null {
+  if (stops.length < 2) return null;
+  const candidate = optimiseRoute(stops, fix);
+  const score = (order: Stop[]): number => {
+    if (order.length === 0) return 0;
+    const approach = located(order[0]) ? haversineM(fix, order[0]) : 0;
+    return approach + routeLengthMeters(order);
+  };
+  const savedMetres = Math.round(score(currentOrder) - score(candidate));
+  if (savedMetres < MIN_SAVED_METRES) return null;
+  const speed = opts.speedMps ?? DEFAULTS.speedMps;
+  return { order: candidate, savedMetres, savedSeconds: Math.round(savedMetres / speed) };
+}
+
 /** "45 min" / "1 h 20 min". */
 export function formatMinutes(min: number): string {
   if (min < 60) return `${min} min`;
