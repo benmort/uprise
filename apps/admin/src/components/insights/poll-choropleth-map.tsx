@@ -153,6 +153,8 @@ export function PollChoroplethMap({
         initialViewState={{ bounds, fitBoundsOptions: { padding: 24 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
+        // Require ⌘/Ctrl + scroll to zoom; Mapbox shows a "Use ⌘ + scroll to zoom the map" overlay otherwise.
+        cooperativeGestures
         interactiveLayerIds={["poll-fill"]}
         transformRequest={transformRequest}
         onMouseMove={onMouseMove}

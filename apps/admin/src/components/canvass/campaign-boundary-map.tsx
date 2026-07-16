@@ -162,6 +162,8 @@ export function CampaignBoundaryMap({
         initialViewState={{ bounds, fitBoundsOptions: { padding: 28 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
+        // Require ⌘/Ctrl + scroll to zoom; Mapbox shows a "Use ⌘ + scroll to zoom the map" overlay otherwise.
+        cooperativeGestures
         // The Mapbox wordmark is hidden globally (globals.css — permitted by our plan),
         // freeing the bottom-left corner for the claimed/unclaimed legend. Attribution is
         // replaced with a compact control bottom-right (kept for the OpenStreetMap licence).

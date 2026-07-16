@@ -743,6 +743,8 @@ export function TurfDrawMap({
         initialViewState={initialViewState}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
+        // Require ⌘/Ctrl + scroll to zoom; Mapbox shows a "Use ⌘ + scroll to zoom the map" overlay otherwise.
+        cooperativeGestures
         // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
         attributionControl={false}
         interactiveLayerIds={

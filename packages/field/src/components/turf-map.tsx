@@ -299,6 +299,9 @@ export function TurfMap({
       initialViewState={initialViewState}
       mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
+      // Require ⌘/Ctrl + scroll to zoom (two fingers to pan on touch); Mapbox shows a
+      // "Use ⌘ + scroll to zoom the map" overlay when the page is scrolled over the map.
+      cooperativeGestures
       // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
       attributionControl={false}
       transformRequest={transformRequest}
