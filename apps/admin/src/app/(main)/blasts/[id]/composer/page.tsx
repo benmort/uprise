@@ -35,10 +35,25 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Field } from "@/components/ui/field";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { useToast } from "@/components/ui/toast";
+import { useLocalStorage } from "@uprise/ui";
+import { profile } from "@uprise/api-client";
 import { FromNumberSelector } from "@/components/blasts/from-number-selector";
 
 const FALLBACK_PERSONALIZATION_TAGS = ["{{first_name}}"];
 const PERSONALIZATION_SAMPLE_LIMIT = 150;
+
+// Opt-out detection for the SMS compliance check. A message is compliant if it tells recipients
+// how to opt out — the STOP keyword used as an instruction, or explicit "opt out"/"unsubscribe"
+// language — NOT only the rigid "reply STOP". So "Reply YES to volunteer or STOP to opt out" passes.
+const OPT_OUT_PATTERNS: RegExp[] = [
+  /\b(reply|text|sms|send|txt)\b[^.!?\n]*\bstop\b/i, // "reply/text … STOP"
+  /\bstop\b[^.!?\n]*\b(to\s+)?(opt[\s-]?out|unsubscrib\w*|end|cancel|quit|leave|stop)\b/i, // "STOP to opt out/unsubscribe/end/cancel"
+  /\b(opt[\s-]?out|unsubscrib\w*)\b[^.!?\n]*\bstop\b/i, // "opt out … STOP"
+  /\b(opt[\s-]?out|unsubscribe)\b/i, // explicit opt-out phrasing (no STOP keyword)
+];
+function hasOptOutLanguage(body: string): boolean {
+  return OPT_OUT_PATTERNS.some((re) => re.test(body));
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -133,6 +148,8 @@ export default function BlastComposerPage() {
   const [scheduleAt, setScheduleAt] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [complianceWarnings, setComplianceWarnings] = useState<string[]>([]);
+  // Per-user default for whether the privacy-compliance checks run (persisted on this device).
+  const [complianceEnabled, setComplianceEnabled] = useLocalStorage("uprise.blast.complianceChecks", true);
   const [availableTags, setAvailableTags] = useState<string[]>(FALLBACK_PERSONALIZATION_TAGS);
   const [previewContext, setPreviewContext] = useState<Record<string, unknown>>(() =>
     normalizePreviewContext({}),
@@ -325,10 +342,12 @@ export default function BlastComposerPage() {
     return rendered;
   }, [selectedTemplate, template, contentVariableMap, previewContext]);
 
-  const validateDraft = () => {
+  // A proof only needs message content to render + send to a manually-entered number, so it skips
+  // the audience + campaign-name checks a real send requires (`forProof`).
+  const validateDraft = ({ forProof = false }: { forProof?: boolean } = {}) => {
     const nextErrors: string[] = [];
-    if (!campaignName.trim()) nextErrors.push("Campaign name is required.");
-    if (!audienceId.trim()) nextErrors.push("Select an audience before sending.");
+    if (!forProof && !campaignName.trim()) nextErrors.push("Campaign name is required.");
+    if (!forProof && !audienceId.trim()) nextErrors.push("Select an audience before sending.");
     if (isWhatsapp) {
       if (!contentSid) nextErrors.push("Select an approved WhatsApp template.");
     } else if (!template.trim()) {
@@ -339,13 +358,17 @@ export default function BlastComposerPage() {
   };
 
   const evaluateCompliance = (body: string) => {
+    if (!complianceEnabled) {
+      setComplianceWarnings([]);
+      return;
+    }
     const warnings: string[] = [];
     if (isWhatsapp) {
       warnings.push("WhatsApp requires recorded opt-in. Only opted-in contacts will receive this blast.");
       setComplianceWarnings(warnings);
       return;
     }
-    if (!/reply\s+stop/i.test(body)) {
+    if (!hasOptOutLanguage(body)) {
       warnings.push("Missing opt-out language. Include 'Reply STOP to opt out'.");
     }
     if (body.length > 320) {
@@ -357,7 +380,21 @@ export default function BlastComposerPage() {
   useEffect(() => {
     evaluateCompliance(template);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template, channel]);
+  }, [template, channel, complianceEnabled]);
+
+  // Default the Proof Number to the current user's own phone — they almost always proof to
+  // themselves. Best-effort + only when the field is still empty, so it never clobbers a typed value.
+  useEffect(() => {
+    let alive = true;
+    void profile.get().then((res) => {
+      if (!alive || !res.ok) return;
+      const mine = res.data.phone?.trim();
+      if (mine) setProofNumber((cur) => cur || mine);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!blastId) return;
@@ -606,7 +643,7 @@ export default function BlastComposerPage() {
               variant="outline"
               disabled={deletingBlast}
               onClick={async () => {
-                if (!validateDraft()) return;
+                if (!validateDraft({ forProof: true })) return;
                 if (!proofNumber.trim()) {
                   setActionMessage("Enter a proof number in E.164 format (e.g. +614xxxxxxxx).");
                   return;
@@ -976,7 +1013,9 @@ export default function BlastComposerPage() {
             <CardTitle>Privacy Compliance</CardTitle>
           </CardHeader>
           <CardContent>
-            {complianceWarnings.length === 0 ? (
+            {!complianceEnabled ? (
+              <p className="text-sm text-muted-foreground">Compliance checks are off.</p>
+            ) : complianceWarnings.length === 0 ? (
               <p className="text-sm text-success">No compliance warnings detected.</p>
             ) : (
               <ul className="space-y-2 text-sm text-error">
@@ -985,6 +1024,16 @@ export default function BlastComposerPage() {
                 ))}
               </ul>
             )}
+            {/* Per-user default: whether these checks run. Persisted on this device. */}
+            <label className="mt-3 flex cursor-pointer items-center gap-2 border-t border-border pt-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary"
+                checked={complianceEnabled}
+                onChange={(e) => setComplianceEnabled(e.target.checked)}
+              />
+              Run compliance checks on my blasts
+            </label>
           </CardContent>
         </Card>
 
