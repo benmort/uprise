@@ -111,6 +111,55 @@ describe("TenantsService", () => {
     expect(dispatcher.sendEmail).not.toHaveBeenCalled();
   });
 
+  it("createInvitation SMS substitutes {{invite_link}} in a composed message", async () => {
+    const { svc, dispatcher } = setup();
+    const res = await svc.createInvitation("t1", {
+      phone: "+61400000000",
+      role: AppUserRole.VOLUNTEER,
+      message: "Join us: {{invite_link}} — see you there",
+    });
+    expect(dispatcher.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: `Join us: http://localhost:3002/volunteer/invite/${res.token} — see you there`,
+      }),
+    );
+  });
+
+  it("createInvitation SMS appends the link when a composed message omits the placeholder", async () => {
+    const { svc, dispatcher } = setup();
+    const res = await svc.createInvitation("t1", {
+      phone: "+61400000000",
+      role: AppUserRole.VOLUNTEER,
+      message: "Come volunteer with us!",
+    });
+    expect(dispatcher.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: `Come volunteer with us!\n\nhttp://localhost:3002/volunteer/invite/${res.token}`,
+      }),
+    );
+  });
+
+  it("createInvitation email sends a composed body via the newsletter passthrough template", async () => {
+    const { svc, dispatcher } = setup();
+    const res = await svc.createInvitation("t1", {
+      email: "x@y.z",
+      role: AppUserRole.VOLUNTEER,
+      subject: "Come help out",
+      message: "Tap here: {{invite_link}}",
+    });
+    expect(dispatcher.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toAddress: "x@y.z",
+        templateKey: "newsletter",
+        purpose: "invitation",
+        vars: {
+          subject: "Come help out",
+          body: `Tap here: http://localhost:3002/invite/${res.token}`,
+        },
+      }),
+    );
+  });
+
   it("createInvitation still succeeds when the inline send throws (best-effort)", async () => {
     const { svc, dispatcher } = setup();
     dispatcher.sendEmail.mockRejectedValueOnce(new Error("smtp down"));

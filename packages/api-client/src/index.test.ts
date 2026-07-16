@@ -13,6 +13,7 @@ import {
   marketing,
   plans,
   telephony,
+  messageTemplates,
   transactionalCalls,
   emailProvisioning,
   tenantLogoUrl,
@@ -326,6 +327,28 @@ describe("tenants", () => {
     expect(url).toBe(`${BASE}/tenants/t1/invitations`);
     expect(init.method).toBe("POST");
     expect(bodyOf(init)).toEqual({ email: "inv@x.com", role: "VOLUNTEER" });
+  });
+
+  it("createInvitation forwards a composed message + subject", async () => {
+    await tenants.createInvitation("t1", {
+      phone: "+61400000000",
+      role: "VOLUNTEER",
+      message: "Join: {{invite_link}}",
+      subject: "Hi",
+    });
+    expect(bodyOf(call()[1])).toEqual({
+      phone: "+61400000000",
+      role: "VOLUNTEER",
+      message: "Join: {{invite_link}}",
+      subject: "Hi",
+    });
+  });
+
+  it("messageTemplates.list GETs the templates collection", async () => {
+    await messageTemplates.list();
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/message-templates`);
+    expect(init.method ?? "GET").toBe("GET");
   });
 });
 

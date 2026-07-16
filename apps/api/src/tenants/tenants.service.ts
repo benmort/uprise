@@ -73,6 +73,24 @@ export interface CreateInvitationInput {
   phone?: string;
   role: AppUserRole;
   invitedBy?: string;
+  // Composed invite copy from the "Invite a volunteer" compose view. The accept link is
+  // always injected (see `composeInviteBody`). Absent ⇒ the default copy. `subject` = email only.
+  message?: string;
+  subject?: string;
+}
+
+/**
+ * Fold the accept link into a composed invite body: substitute a `{{invite_link}}` placeholder,
+ * or append the link when the author didn't place one (so the link can never go missing). Returns
+ * undefined for an empty/blank message so callers fall back to the default copy.
+ */
+function composeInviteBody(message: string | undefined, link: string): string | undefined {
+  const trimmed = message?.trim();
+  if (!trimmed) return undefined;
+  if (/\{\{\s*invite_link\s*\}\}/.test(trimmed)) {
+    return trimmed.replace(/\{\{\s*invite_link\s*\}\}/g, link);
+  }
+  return trimmed.includes(link) ? trimmed : `${trimmed}\n\n${link}`;
 }
 
 /**
@@ -435,13 +453,30 @@ export class TenantsService {
       .replace(/\/+$/, "");
     try {
       if (phone && !email) {
+        const smsLink = `${authAppUrl}/volunteer/invite/${result.token}`;
         await this.dispatcher.sendSms({
           tenantId,
           toPhone: phone,
-          body: `You're invited to join ${tenant.name} — tap to accept: ${authAppUrl}/volunteer/invite/${result.token}`,
+          body:
+            composeInviteBody(input.message, smsLink) ??
+            `You're invited to join ${tenant.name} — tap to accept: ${smsLink}`,
           purpose: "invitation",
         });
       } else if (email) {
+        const emailLink = `${authAppUrl}/invite/${result.token}`;
+        const composed = composeInviteBody(input.message, emailLink);
+        if (composed) {
+          // Composed invite from the compose view: send the author's copy verbatim through the
+          // generic "newsletter" passthrough template (subject/body are its only vars).
+          await this.dispatcher.sendEmail({
+            tenantId,
+            toAddress: email,
+            templateKey: "newsletter",
+            vars: { subject: input.subject?.trim() || `You're invited to join ${tenant.name}`, body: composed },
+            purpose: "invitation",
+          });
+          return result;
+        }
         // Pre-format the role + expiry into the {{vars}} the template interpolates (the engine is
         // a plain {{key}} substitution with no conditionals, so the suffixes are built here).
         const roleLabel = input.role.charAt(0) + input.role.slice(1).toLowerCase(); // VOLUNTEER → Volunteer

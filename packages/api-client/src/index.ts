@@ -528,7 +528,10 @@ export const tenants = {
     request<TenantInvitationSummary[]>(`/tenants/${encodeURIComponent(tenantId)}/invitations`),
   // Exactly one of email / phone. Phone invites are delivered by SMS and accepted
   // via the volunteer phone-first flow (the invite link runs the phone signup).
-  createInvitation: (tenantId: string, body: { email?: string; phone?: string; role: AppUserRole }) =>
+  createInvitation: (
+    tenantId: string,
+    body: { email?: string; phone?: string; role: AppUserRole; message?: string; subject?: string },
+  ) =>
     request<{ id: string; token: string }>(
       `/tenants/${encodeURIComponent(tenantId)}/invitations`,
       { method: "POST", body: JSON.stringify(body) },
@@ -665,6 +668,25 @@ export interface TelephonyPhoneNumber {
   status: "PENDING" | "ACTIVE" | "RELEASED";
   createdAt: string;
 }
+
+// Transactional message templates (meld doc 09/12) — the pickable copy for the invite
+// compose view and other 1:1 sends. SMS + WhatsApp channels; `kind` splits transactional
+// from marketing.
+export interface MessageTemplate {
+  id: string;
+  tenantId: string;
+  key: string;
+  channel: "SMS" | "WHATSAPP";
+  kind: string;
+  category: string | null;
+  body: string;
+  isActive: boolean;
+}
+
+export const messageTemplates = {
+  /** All of the tenant's transactional/marketing templates (organiser/owner). */
+  list: () => request<MessageTemplate[]>("/message-templates"),
+};
 
 export const telephony = {
   /** Super-admin: start an automated provisioning run for a tenant (or campaign). */

@@ -49,6 +49,11 @@ export class CreateInvitationDto {
   @IsOptional() @IsEmail() @MaxLength(200) email?: string;
   @IsOptional() @IsString() @MaxLength(20) phone?: string;
   @IsEnum(AppUserRole) role!: AppUserRole;
+  // Optional composed invite message (the "Invite a volunteer" compose view). The accept
+  // link is always injected: a `{{invite_link}}` placeholder is substituted, else appended.
+  // Absent ⇒ the default invite copy. `subject` applies to email only.
+  @IsOptional() @IsString() @MaxLength(1600) message?: string;
+  @IsOptional() @IsString() @MaxLength(200) subject?: string;
 }
 
 export class RegisterDto {
