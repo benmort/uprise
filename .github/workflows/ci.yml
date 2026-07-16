@@ -26,6 +26,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so scripts/coverage-check.mjs can diff against origin/main for the patch floor.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -47,11 +50,14 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-      - name: API tests
-        run: pnpm --filter api run test
+      # Runs every package's `test:cov` (jest for api, vitest elsewhere) — generates the
+      # lcov + coverage-summary artifacts the gate consumes. Includes the api boot smoke.
+      - name: Unit tests (all packages, with coverage)
+        run: pnpm -r run test:cov
 
-      - name: Web tests
-        run: pnpm --filter admin run test
+      # Patch floor (new/changed lines ≥ 80%) + no-regression ratchet vs coverage-baseline.json.
+      - name: Coverage gate
+        run: node scripts/coverage-check.mjs --no-run
 
       - name: API build
         run: pnpm --filter api run build
@@ -61,3 +67,90 @@ jobs:
 
       - name: Worker build
         run: pnpm --filter worker run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: uprise
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uprise?schema=public
+      REDIS_URL: redis://localhost:6379
+      BULLMQ_REDIS_URL: redis://localhost:6379
+      API_BASE_URL: http://localhost:3001
+      BASIC_AUTH_USERNAME: ci-user
+      BASIC_AUTH_PASSWORD: ci-password
+      STREAM_TOKEN_SECRET: ci-stream-secret
+      INTEGRATION_CREDENTIAL_SECRET: integration-secret
+      CRON_SECRET: cron-secret
+      TWILIO_ACCOUNT_SID: AC00000000000000000000000000000000
+      TWILIO_AUTH_TOKEN: token
+      TWILIO_PHONE_NUMBER: +15550000000
+      ACTION_NETWORK_API_KEY: test-key
+      INTERNAL_SOURCE_API_BASE_URL: http://localhost:4000
+      INTERNAL_SOURCE_API_KEY: test-key
+      # The apps read these at dev-server boot; the Playwright webServer starts each app.
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
+      NEXT_PUBLIC_AUTH_APP_URL: http://localhost:3002
+      WEB_URL: http://localhost:3000
+      FIELD_URL: http://localhost:3005
+      MARKETING_URL: http://localhost:3003
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Apply the additive migrations to the fresh CI Postgres + generate the client.
+      - name: Prepare database
+        run: |
+          pnpm --filter @uprise/db exec prisma migrate deploy
+          pnpm --filter @uprise/db exec prisma generate
+
+      - name: Install Playwright (chromium)
+        run: pnpm --filter admin exec playwright install --with-deps chromium
+
+      # Playwright's webServer boots api/admin/auth/field/product-marketing; global-setup seeds the
+      # demo tenant + mints the organiser/volunteer sessions. Geo/ABS-data journeys degrade to smoke
+      # (no boundary data loaded in CI); the demo seed covers the canvass/walklists/field journeys.
+      - name: Run e2e
+        run: pnpm --filter admin run e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/admin/playwright-report
+            apps/admin/test-results
+          retention-days: 7
+          if-no-files-found: ignore

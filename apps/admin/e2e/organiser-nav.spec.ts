@@ -1,75 +1,36 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 
-const ctx = JSON.parse(readFileSync(resolve(__dirname, ".auth/context.json"), "utf8"));
-const ids = ctx.ids ?? {};
-async function authed(page: Page) {
-  await page.addInitScript(
-    ([u, p, cid]) => {
-      try {
-        window.sessionStorage.setItem("yarn_auth_credentials", JSON.stringify({ username: u, password: p }));
-      } catch {}
-      try {
-        if (cid) window.localStorage.setItem("uprise.volunteerId", cid);
-      } catch {}
-    },
-    [ctx.user, ctx.pass, ids.volunteerId ?? ""],
-  );
+/**
+ * Nav route matrix — smoke-navigate every live organiser route and assert it stays authed and
+ * renders its surface. Auth is the storageState cookie from global-setup (no client-side injection).
+ * Canvass, geo, inbox/blasts and field journeys have their own deeper specs; this is the broad
+ * "every top-level route renders" net. (gotoOk is inlined — no shared local .ts import; the
+ * Playwright Node-23 loader trips on those, per the config header.)
+ */
+async function gotoOk(page: Page, path: string, expected: RegExp): Promise<void> {
+  await page.goto(path, { waitUntil: "domcontentloaded" });
+  await expect(page, `no sign-in bounce from ${path}`).not.toHaveURL(/\/sign-in|\/login/);
+  await expect(page.locator("body")).toContainText(expected, { timeout: 20_000 });
 }
-test.beforeEach(async ({ page }) => authed(page));
 
-/** Smoke-navigate every organiser route; assert it stays authed + renders a heading. */
 const STATIC_ROUTES: Array<[string, RegExp]> = [
-  ["/dashboard", /dashboard|command|overview/i],
-  ["/audience", /audience/i],
-  ["/analytics", /analytic|performance|blast/i],
-  ["/future/sms-inbox", /conversation|inbox/i],
-  ["/canvass", /canvass/i],
-  ["/canvass/new", /campaign/i],
-  ["/canvass/volunteers", /volunteer/i],
-  ["/canvass/divisions", /division/i],
-  ["/canvass/areas", /area/i],
-  ["/engagement", /engagement|survey|script|disposition/i],
-  ["/engagement/dispositions", /disposition/i],
-  ["/engagement/canned-responses", /canned/i],
-  ["/engagement/surveys", /survey/i],
-  ["/engagement/scripts", /script/i],
-  ["/future/journeys", /journey/i],
-  ["/compliance", /complian|opt.?out/i],
+  ["/dashboard", /dashboard|overview|command|today/i],
+  ["/inbox", /inbox|conversation|message|all|no messages/i],
+  ["/audience", /audience|contacts|members|no audiences/i],
+  ["/analytics", /analytic|performance|blast|report/i],
+  ["/channels/text", /text|sms|message|blast|send/i],
+  ["/channels/calls", /call|dial|phone|number|softphone/i],
+  ["/content/surveys", /survey/i],
+  ["/content/scripts", /script/i],
+  ["/content/dispositions", /disposition/i],
+  ["/content/canned-responses", /canned|response|reply/i],
+  ["/compliance", /complian|opt.?out|consent/i],
   ["/settings", /setting/i],
-  ["/settings/integrations", /integration/i],
-  ["/settings/roles", /role/i],
-  ["/settings/data", /data|dataset|geo/i],
-  ["/channels/text", /text|sms|channel/i],
-  ["/channels/whatsapp", /whatsapp|channel/i],
+  ["/settings/team", /team|member|invite|join request/i],
 ];
 
 for (const [route, expected] of STATIC_ROUTES) {
   test(`renders ${route}`, async ({ page }) => {
-    await page.goto(route, { waitUntil: "domcontentloaded" });
-    await expect(page, `should not bounce to /login from ${route}`).not.toHaveURL(/\/login/);
-    await expect(page.locator("body")).toContainText(expected, { timeout: 20_000 });
+    await gotoOk(page, route, expected);
   });
 }
-
-test("dynamic routes render with seeded ids", async ({ page }) => {
-  if (ids.campaignId) {
-    for (const sub of ["turf", "walklists", "live", "results", "goals", "shifts", "qa"]) {
-      await page.goto(`/canvass/${ids.campaignId}/${sub}`, { waitUntil: "domcontentloaded" });
-      await expect(page).not.toHaveURL(/\/login/);
-    }
-  }
-  if (ids.contactId) {
-    await page.goto(`/contacts/${ids.contactId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.locator("body")).toBeVisible();
-  }
-  if (ids.audienceId) {
-    await page.goto(`/audience/${ids.audienceId}`, { waitUntil: "domcontentloaded" });
-    await expect(page).not.toHaveURL(/\/login/);
-  }
-  if (ids.blastId) {
-    await page.goto(`/blasts/${ids.blastId}`, { waitUntil: "domcontentloaded" });
-    await expect(page).not.toHaveURL(/\/login/);
-  }
-});

@@ -172,6 +172,27 @@ describe("auth flows", () => {
     expect(bodyOf(init)).toEqual({ challengeId: "ch1", code: "0000" });
   });
 
+  it("phoneStart POSTs the phone to /iam/phone/start", async () => {
+    await auth.phoneStart("+61400000000", "cap-1");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/iam/phone/start`);
+    expect(bodyOf(init)).toEqual({ phone: "+61400000000" });
+  });
+
+  it("phoneResend POSTs the challenge to /iam/phone/resend", async () => {
+    await auth.phoneResend("ch2", "cap-2");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/iam/phone/resend`);
+    expect(bodyOf(init)).toEqual({ challengeId: "ch2" });
+  });
+
+  it("phoneCheck POSTs challenge + code to /iam/phone/check (mid-flow OTP validation)", async () => {
+    await auth.phoneCheck("ch3", "1234");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/iam/phone/check`);
+    expect(bodyOf(init)).toEqual({ challengeId: "ch3", code: "1234" });
+  });
+
   it("devPeekOtp GETs the OTP with an encoded challengeId query", async () => {
     await auth.devPeekOtp("ch/2");
     const [url, init] = call();
