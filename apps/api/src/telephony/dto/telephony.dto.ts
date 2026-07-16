@@ -6,6 +6,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateNested,
 } from "class-validator";
 
@@ -98,6 +99,14 @@ export class UploadDocumentDto {
   @IsString()
   @IsNotEmpty()
   type!: string;
+}
+
+export class SetNumberNicknameDto {
+  /** Human label for a provisioned number; empty string clears it. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  nickname?: string;
 }
 
 export class BundleStatusCallbackDto {

@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ImageUploadService } from "../common/storage/image-upload.service";
 import {
@@ -744,6 +744,21 @@ export class TelephonyProvisioningService {
       where: tenantId ? { tenantId } : undefined,
       orderBy: { createdAt: "desc" },
       take: 200,
+    });
+  }
+
+  /** Rename a provisioned number. `scopeTenantId` (set for non-super-admin callers)
+   *  guards against relabelling another tenant's number. Empty ⇒ clears the nickname. */
+  async setNickname(numberId: string, nickname: string | undefined, scopeTenantId?: string) {
+    const number = await this.prisma.telephonyPhoneNumber.findUnique({ where: { id: numberId } });
+    if (!number) throw new NotFoundException("Number not found");
+    if (scopeTenantId && number.tenantId !== scopeTenantId) {
+      throw new ForbiddenException("You can only rename your own organisation's numbers");
+    }
+    const trimmed = nickname?.trim();
+    return this.prisma.telephonyPhoneNumber.update({
+      where: { id: numberId },
+      data: { nickname: trimmed ? trimmed : null },
     });
   }
 

@@ -92,6 +92,39 @@ export class TelephonySenderResolver {
     return value;
   }
 
+  /**
+   * Sender for one explicitly-chosen provisioned number (a blast's `fromNumberId`).
+   * Undefined when the number isn't an ACTIVE tenant number — the caller then falls
+   * back to `resolve()` / platform env, so a released/reassigned choice degrades safely.
+   */
+  async resolveByNumberId(tenantId: string, numberId: string): Promise<ResolvedSender | undefined> {
+    const enabled = await this.flags.isEnabled("FEATURE_TENANT_TELEPHONY_ENABLED", { tenantId });
+    if (!enabled) return undefined;
+
+    const key = `${tenantId}:id:${numberId}`;
+    const cached = this.cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+    const number = await this.prisma.telephonyPhoneNumber.findFirst({
+      where: { id: numberId, tenantId, status: "ACTIVE" },
+    });
+    const account = number
+      ? await this.prisma.telephonyAccount.findFirst({
+          where: { id: number.accountId, status: "ACTIVE" },
+        })
+      : null;
+    const value: ResolvedSender | undefined =
+      number && account
+        ? {
+            accountSid: account.accountSid,
+            authToken: this.crypto.decrypt(account.encryptedAuthToken),
+            from: number.phoneNumberE164,
+          }
+        : undefined;
+    this.cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+    return value;
+  }
+
   private async lookup(ctx: SenderContext): Promise<ResolvedSender | undefined> {
     const numbers = await this.prisma.telephonyPhoneNumber.findMany({
       where: { tenantId: ctx.tenantId, status: "ACTIVE" },

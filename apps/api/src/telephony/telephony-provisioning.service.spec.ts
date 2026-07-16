@@ -640,6 +640,45 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
     });
   });
 
+  describe("setNickname", () => {
+    it("saves a trimmed nickname", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber());
+
+      await service.setNickname(NUMBER_ID, "  Field team  ", TENANT_ID);
+
+      expect(prisma.telephonyPhoneNumber.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: NUMBER_ID }, data: { nickname: "Field team" } }),
+      );
+    });
+
+    it("clears the nickname when given whitespace or empty", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber());
+
+      await service.setNickname(NUMBER_ID, "   ", TENANT_ID);
+
+      expect(prisma.telephonyPhoneNumber.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { nickname: null } }),
+      );
+    });
+
+    it("forbids renaming another tenant's number", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber({ tenantId: "other-tenant" }));
+
+      await expect(service.setNickname(NUMBER_ID, "Nope", TENANT_ID)).rejects.toThrow(/your own/i);
+      expect(prisma.telephonyPhoneNumber.update).not.toHaveBeenCalled();
+    });
+
+    it("throws when the number does not exist", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(null);
+
+      await expect(service.setNickname("missing", "x")).rejects.toThrow(/not found/i);
+    });
+  });
+
   describe("reads", () => {
     it("listRuns filters by tenant", async () => {
       const { service, prisma } = setup();

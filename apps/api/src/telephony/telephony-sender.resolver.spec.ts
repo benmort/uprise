@@ -127,4 +127,25 @@ describe("TelephonySenderResolver", () => {
     prisma.telephonyPhoneNumber.findFirst.mockResolvedValue(null);
     expect(await resolver.resolveByNumber("t1", "+61499999999")).toBeUndefined();
   });
+
+  it("resolveByNumberId resolves the chosen number's sender and caches it", async () => {
+    const { resolver, prisma } = build({ numbers: [num({ id: "num_pick" })] });
+    const sender = await resolver.resolveByNumberId("t1", "num_pick");
+    expect(sender).toMatchObject({ accountSid: "ACsub", authToken: "dec:tok", from: "+61485052501" });
+    // Second call served from cache — no extra DB read.
+    await resolver.resolveByNumberId("t1", "num_pick");
+    expect(prisma.telephonyPhoneNumber.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolveByNumberId returns undefined when the flag is off", async () => {
+    const { resolver, prisma } = build({ flagEnabled: false, numbers: [num({})] });
+    expect(await resolver.resolveByNumberId("t1", "num_1")).toBeUndefined();
+    expect(prisma.telephonyPhoneNumber.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("resolveByNumberId returns undefined when the id is not an ACTIVE tenant number", async () => {
+    const { resolver, prisma } = build({ numbers: [] });
+    prisma.telephonyPhoneNumber.findFirst.mockResolvedValue(null);
+    expect(await resolver.resolveByNumberId("t1", "missing")).toBeUndefined();
+  });
 });

@@ -660,6 +660,7 @@ export interface TelephonyPhoneNumber {
   tenantId: string;
   campaignId: string | null;
   phoneNumberE164: string;
+  nickname: string | null;
   purpose: string;
   status: "PENDING" | "ACTIVE" | "RELEASED";
   createdAt: string;
@@ -712,6 +713,13 @@ export const telephony = {
 
   releaseNumber: (numberId: string) =>
     request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}/release`, { method: "POST" }),
+
+  /** Rename a provisioned number (owner-reachable). Empty string clears the nickname. */
+  setNickname: (numberId: string, nickname: string) =>
+    request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ nickname }),
+    }),
 };
 
 // ── Transactional calls (one-to-one, event-driven outbound voice; meld doc 09) ──

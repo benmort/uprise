@@ -400,6 +400,7 @@ export async function createBlast(input: {
   channel?: MessageChannel;
   contentSid?: string;
   contentVariableMap?: Record<string, string>;
+  fromNumberId?: string;
 }) {
   return request<Record<string, unknown>>("/blasts", {
     method: "POST",
@@ -417,6 +418,7 @@ export async function updateBlast(
     channel?: MessageChannel;
     contentSid?: string;
     contentVariableMap?: Record<string, string>;
+    fromNumberId?: string;
   },
 ) {
   return request<Record<string, unknown>>(`/blasts/${blastId}`, {

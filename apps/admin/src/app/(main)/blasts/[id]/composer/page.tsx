@@ -35,6 +35,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Field } from "@/components/ui/field";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { useToast } from "@/components/ui/toast";
+import { FromNumberSelector } from "@/components/blasts/from-number-selector";
 
 const FALLBACK_PERSONALIZATION_TAGS = ["{{first_name}}"];
 const PERSONALIZATION_SAMPLE_LIMIT = 150;
@@ -127,6 +128,8 @@ export default function BlastComposerPage() {
   const [status, setStatus] = useState("DRAFTED");
   const [proof, setProof] = useState("");
   const [proofNumber, setProofNumber] = useState("");
+  // Explicit send-from number (TelephonyPhoneNumber id); null ⇒ the tenant default sender.
+  const [fromNumberId, setFromNumberId] = useState<string | null>(null);
   const [scheduleAt, setScheduleAt] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [complianceWarnings, setComplianceWarnings] = useState<string[]>([]);
@@ -213,6 +216,7 @@ export default function BlastComposerPage() {
       setStatus(String(blast.status || "DRAFTED"));
       setChannel((blast.channel as MessageChannel) || "SMS");
       setContentSid(String(blast.contentSid || ""));
+      setFromNumberId((blast.fromNumberId as string) || null);
       setContentVariableMap(
         blast.contentVariableMap && typeof blast.contentVariableMap === "object"
           ? (blast.contentVariableMap as Record<string, string>)
@@ -372,13 +376,14 @@ export default function BlastComposerPage() {
     }, 1200);
     return () => window.clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blastId, campaignName, audienceId, template, channel, contentSid, contentVariableMap]);
+  }, [blastId, campaignName, audienceId, template, channel, contentSid, contentVariableMap, fromNumberId]);
 
   const blastPayload = () => ({
     title: campaignName,
     audienceId: audienceId || undefined,
     bodyTemplate: template,
     channel,
+    fromNumberId: fromNumberId || undefined,
     ...(channel === "WHATSAPP"
       ? { contentSid: contentSid || undefined, contentVariableMap }
       : {}),
@@ -873,6 +878,9 @@ export default function BlastComposerPage() {
             <details className="rounded border border-border p-3">
               <summary className="cursor-pointer text-sm font-medium">Proof and scheduling options</summary>
               <div className="mt-3 space-y-3">
+                {channel !== "WHATSAPP" ? (
+                  <FromNumberSelector value={fromNumberId} onChange={setFromNumberId} />
+                ) : null}
                 <div className="max-w-sm">
                   <label className="mb-1 block text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                     Proof Number

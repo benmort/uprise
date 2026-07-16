@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -17,6 +18,7 @@ import type { AuthUser } from "../auth/auth-user";
 import { TelephonyProvisioningService } from "./telephony-provisioning.service";
 import {
   ResubmitRunDto,
+  SetNumberNicknameDto,
   StartProvisioningRunDto,
   UploadDocumentDto,
 } from "./dto/telephony.dto";
@@ -26,6 +28,8 @@ import {
 const PROVISION = { action: "manage", resource: "system.telephony-provisioning" } as const;
 // Reads are owner-visible (the tenant-settings timeline); scoped in-controller.
 const READ = { action: "read", resource: "telephony.provisioning" } as const;
+// Renaming a number is owner-reachable via the `manage telephony.all` wildcard.
+const MANAGE_NUMBER = { action: "manage", resource: "telephony.number" } as const;
 
 @Controller("telephony")
 export class TelephonyProvisioningController {
@@ -107,6 +111,18 @@ export class TelephonyProvisioningController {
   @RequirePermission(PROVISION)
   async releaseNumber(@Param("id") id: string) {
     return this.provisioning.releaseNumber(id);
+  }
+
+  // Renaming is tenant-owner metadata (not a platform-operator action), so it uses
+  // the owner-reachable `manage telephony.number` gate, scoped in-controller.
+  @Patch("numbers/:id")
+  @RequirePermission(MANAGE_NUMBER)
+  async setNickname(
+    @Param("id") id: string,
+    @Body() dto: SetNumberNicknameDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    return this.provisioning.setNickname(id, dto.nickname, this.scopeTenant(req));
   }
 
   /**

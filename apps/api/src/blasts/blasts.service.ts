@@ -186,6 +186,7 @@ export class BlastsService {
           channel: (dto.channel as MessageChannel) ?? MessageChannel.SMS,
           contentSid: dto.contentSid ?? null,
           contentVariableMap: (dto.contentVariableMap ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+          fromNumberId: dto.fromNumberId || null,
           status: BlastStatus.DRAFTED,
         },
       });
@@ -232,6 +233,7 @@ export class BlastsService {
               contentVariableMap: (dto.contentVariableMap ?? Prisma.JsonNull) as Prisma.InputJsonValue,
             }
           : {}),
+        ...(dto.fromNumberId !== undefined ? { fromNumberId: dto.fromNumberId || null } : {}),
       },
     });
   }
@@ -535,13 +537,21 @@ export class BlastsService {
       channel: MessageChannel;
       contentSid: string | null;
       contentVariableMap: Prisma.JsonValue | null;
+      fromNumberId?: string | null;
     },
     context: Record<string, unknown>,
   ): Promise<SendOptions> {
-    const sender = await this.senderResolver.resolve({
-      tenantId: blast.tenantId,
-      purpose: blast.channel === MessageChannel.WHATSAPP ? "whatsapp" : "marketing",
-    });
+    // An explicitly chosen from-number wins over the purpose/campaign default; if that
+    // number is no longer ACTIVE the resolver returns undefined and we fall back to the
+    // tenant default (then platform env). WhatsApp stays on its own sender path.
+    const sender =
+      blast.fromNumberId && blast.channel !== MessageChannel.WHATSAPP
+        ? (await this.senderResolver.resolveByNumberId(blast.tenantId, blast.fromNumberId)) ??
+          (await this.senderResolver.resolve({ tenantId: blast.tenantId, purpose: "marketing" }))
+        : await this.senderResolver.resolve({
+            tenantId: blast.tenantId,
+            purpose: blast.channel === MessageChannel.WHATSAPP ? "whatsapp" : "marketing",
+          });
     return { ...this.buildSendOptions(blast, context), ...(sender ? { sender } : {}) };
   }
 

@@ -38,6 +38,11 @@ export class CreateBlastDto {
   @IsOptional()
   @IsObject()
   contentVariableMap?: Record<string, string>;
+
+  /** Chosen provisioned number (TelephonyPhoneNumber id); resolved at send time. */
+  @IsOptional()
+  @IsString()
+  fromNumberId?: string;
 }
 
 export class UpdateBlastDto {
@@ -66,6 +71,10 @@ export class UpdateBlastDto {
   @IsOptional()
   @IsObject()
   contentVariableMap?: Record<string, string>;
+
+  @IsOptional()
+  @IsString()
+  fromNumberId?: string;
 }
 
 export class ProofBlastDto {

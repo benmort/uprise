@@ -386,6 +386,22 @@ describe("telephony + email provisioning", () => {
     expect(init.method).toBe("POST");
   });
 
+  it("telephony.listNumbers appends an encoded tenantId query only when provided", async () => {
+    await telephony.listNumbers("t/1");
+    expect(call()[0]).toBe(`${BASE}/telephony/numbers?tenantId=t%2F1`);
+    fetchMock.mockClear();
+    await telephony.listNumbers();
+    expect(call()[0]).toBe(`${BASE}/telephony/numbers`);
+  });
+
+  it("telephony.setNickname PATCHes the encoded number path with the nickname body", async () => {
+    await telephony.setNickname("n 1", "Field team");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/telephony/numbers/n%201`);
+    expect(init.method).toBe("PATCH");
+    expect(bodyOf(init)).toMatchObject({ nickname: "Field team" });
+  });
+
   it("emailProvisioning.startRun POSTs to /email-provisioning/runs", async () => {
     await emailProvisioning.startRun({
       tenantId: "t1",

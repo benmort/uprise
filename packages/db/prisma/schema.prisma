@@ -524,6 +524,7 @@ model Blast {
   channel        MessageChannel @default(SMS)
   contentSid     String?        // WhatsApp: approved Content template SID (HX...)
   contentVariableMap Json?      // WhatsApp: template slot -> personalization key
+  fromNumberId   String?        // chosen TelephonyPhoneNumber id (id-only, cross-schema); null ⇒ default sender
   status         BlastStatus  @default(DRAFTED)
   scheduledFor   DateTime?
   proofedAt      DateTime?
@@ -1944,6 +1945,7 @@ model TelephonyPhoneNumber {
   phoneNumberSid  String                @unique
   bundleSid       String?
   addressSid      String?
+  nickname        String?               // human label shown in the from-number selector
   purpose         String                @default("marketing")
   status          TelephonyNumberStatus @default(PENDING)
   createdAt       DateTime              @default(now())
