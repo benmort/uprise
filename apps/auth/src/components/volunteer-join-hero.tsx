@@ -147,19 +147,20 @@ export function VolunteerJoinHero({
         />
 
         <div className="relative z-10 lg:max-w-xl">
-          {/* Logo + wordmark */}
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/15">
+          {/* Logo + wordmark — the mark sits on a solid-white, padded tile so the org's logo reads
+              cleanly against the brand hero (not tinted by the coloured background). */}
+          <div className="flex items-center gap-4">
+            <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white p-2.5 shadow-sm">
               {logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt={tenantName ? `${tenantName} logo` : "Organisation logo"} className="h-full w-full object-cover" />
+                <img src={logoUrl} alt={tenantName ? `${tenantName} logo` : "Organisation logo"} className="h-full w-full object-contain" />
               ) : tenantId ? (
-                <span aria-hidden className="h-full w-full" style={{ backgroundImage: tenantGradient(tenantId) }} />
+                <span aria-hidden className="h-full w-full rounded-xl" style={{ backgroundImage: tenantGradient(tenantId) }} />
               ) : (
-                <LogoMark className="h-6 w-6 text-white" />
+                <LogoMark className="h-10 w-10 text-primary" />
               )}
             </span>
-            <span className="truncate text-lg font-extrabold text-white">{brandLabel}</span>
+            <span className="truncate text-2xl font-extrabold text-white lg:text-3xl">{brandLabel}</span>
           </div>
 
           <p className="mt-8 text-sm font-bold uppercase tracking-[0.1em] text-white/75 lg:mt-12">You&apos;re invited</p>
