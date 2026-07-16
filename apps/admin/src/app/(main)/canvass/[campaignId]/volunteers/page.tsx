@@ -6,6 +6,7 @@ import { Megaphone, Pencil, Phone } from "lucide-react";
 import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import { useSoftphone } from "@/components/softphone/softphone-provider";
 import { InviteVolunteerCard } from "@/components/canvass/invite-volunteer-card";
+import { ShareSignupLinkCard } from "@/components/canvass/share-signup-link-card";
 import {
   listTurfs,
   listVolunteers,
@@ -174,6 +175,8 @@ export default function CampaignVolunteersPage() {
       </SectionCard>
 
       {/* ── Team roster: invite (email login or SMS invite) + manage ── */}
+      <ShareSignupLinkCard campaignId={campaignId} />
+
       <InviteVolunteerCard onInvited={() => void refetch()} />
 
       <StateRegion

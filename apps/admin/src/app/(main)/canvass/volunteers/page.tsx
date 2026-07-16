@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable } from "@uprise/field";
 import { RoleChip } from "@uprise/field";
 import { InviteVolunteerCard } from "@/components/canvass/invite-volunteer-card";
+import { ShareSignupLinkCard } from "@/components/canvass/share-signup-link-card";
 import { useToast } from "@/components/ui/toast";
 
 type Role = "VOLUNTEER" | "ORGANISER";
@@ -85,6 +86,8 @@ export default function VolunteersPage() {
           Invite and manage the people knocking doors and making calls.
         </p>
       </div>
+
+      <ShareSignupLinkCard />
 
       <InviteVolunteerCard onInvited={() => void refetch()} />
 
