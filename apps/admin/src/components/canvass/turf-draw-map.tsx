@@ -51,6 +51,10 @@ const TILE_MAX_ZOOM = 16;
 const sourceMinZoom = (lvl: AreaLevel) => (lvl === "mb" ? MB_MIN_ZOOM : 0);
 // Brand primary for boundary overlays (mapbox paint needs a literal hex).
 const PRIMARY = "#465fff";
+
+/** Match-all filter — the default when no `boundaryFilter` is passed. Never pass
+ *  `filter: undefined` to a <Layer>: mapbox-gl 3.x rejects the spec and drops the layer. */
+const MATCH_ALL: FilterSpecification = ["boolean", true];
 // "In My turf" (basket) overlay colour — green, matching the "Added / In my turf"
 // affordance in the panels. Rendered dashed so it reads as banked, distinct from
 // the solid `selectedBoundaryCode` highlight (what you've just clicked).
@@ -221,6 +225,9 @@ export function TurfDrawMap({
   /** boundaries mode — minzoom floor for the single-tile source (default 0). Set for dense levels
    *  (meshblock/SA1) so a low-zoom whole-country tile is never requested. */
   boundaryMinZoom?: number;
+  /** boundaries mode — optional feature filter. Defaulted to match-all below: mapbox-gl 3.x
+   *  VALIDATES layer specs and `filter: undefined` rejects the whole layer ("array expected,
+   *  undefined found"), silently blanking every boundary (the demographics regression). */
   boundaryFilter?: FilterSpecification;
   /**
    * boundaries mode — paint the fill from a data expression instead of the flat layer
@@ -931,8 +938,8 @@ export function TurfDrawMap({
         {/* boundaries mode — single overlay (States). */}
         {mode === "boundaries" && boundaryTilesUrl ? (
           <Source key={boundaryTilesUrl} id="boundaries" type="vector" tiles={[boundaryTilesUrl]} minzoom={boundaryMinZoom} maxzoom={16}>
-            <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": boundaryFill ?? PRIMARY, "fill-opacity": boundaryFill ? 0.75 : 0.06 }} />
-            <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": PRIMARY, "line-width": 1.2, "line-opacity": 0.7 }} />
+            <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter ?? MATCH_ALL} paint={{ "fill-color": boundaryFill ?? PRIMARY, "fill-opacity": boundaryFill ? 0.75 : 0.06 }} />
+            <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter ?? MATCH_ALL} paint={{ "line-color": PRIMARY, "line-width": 1.2, "line-opacity": 0.7 }} />
             {basketFilter ? (
               <>
                 <Layer id="boundaries-basket-fill" source-layer="areas" type="fill" filter={basketFilter} paint={{ "fill-color": BASKET_COLOR, "fill-opacity": 0.22 }} />
@@ -953,9 +960,9 @@ export function TurfDrawMap({
           ? boundaryLayers.map((bl) => (
               <Source key={bl.tilesUrl} id={`boundaries-${bl.id}`} type="vector" tiles={[bl.tilesUrl]} minzoom={0} maxzoom={16}>
                 {bl.interactive ? (
-                  <Layer id={`boundaries-${bl.id}-fill`} source-layer="areas" type="fill" filter={boundaryFilter} paint={{ "fill-color": boundaryFill ?? bl.color, "fill-opacity": boundaryFill ? 0.75 : 0.05 }} />
+                  <Layer id={`boundaries-${bl.id}-fill`} source-layer="areas" type="fill" filter={boundaryFilter ?? MATCH_ALL} paint={{ "fill-color": boundaryFill ?? bl.color, "fill-opacity": boundaryFill ? 0.75 : 0.05 }} />
                 ) : null}
-                <Layer id={`boundaries-${bl.id}-line`} source-layer="areas" type="line" filter={boundaryFilter} paint={{ "line-color": bl.color, "line-width": bl.interactive ? 1.4 : 1, "line-opacity": bl.interactive ? 1 : 0.6 }} />
+                <Layer id={`boundaries-${bl.id}-line`} source-layer="areas" type="line" filter={boundaryFilter ?? MATCH_ALL} paint={{ "line-color": bl.color, "line-width": bl.interactive ? 1.4 : 1, "line-opacity": bl.interactive ? 1 : 0.6 }} />
                 {bl.interactive && basketFilter ? (
                   <>
                     <Layer id={`boundaries-${bl.id}-basketfill`} source-layer="areas" type="fill" filter={basketFilter} paint={{ "fill-color": BASKET_COLOR, "fill-opacity": 0.22 }} />
