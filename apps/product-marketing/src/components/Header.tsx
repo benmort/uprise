@@ -10,8 +10,18 @@ import { useSession } from "@/lib/session";
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const { user } = useSession();
+  const { user, loading: sessionLoading } = useSession();
   const sessionHint = user?.email ? { email: user.email } : null;
+
+  // Don't flash the logged-out CTAs and then snap to "Continue" once /auth/check resolves.
+  // While the session is unknown we show a neutral placeholder; once resolved we reveal ONLY the
+  // correct set, eased in via opacity (revealed flips a tick after loading ends so the transition runs).
+  const [revealed, setRevealed] = useState(false);
+  React.useEffect(() => {
+    if (sessionLoading) return;
+    const id = requestAnimationFrame(() => setRevealed(true));
+    return () => cancelAnimationFrame(id);
+  }, [sessionLoading]);
 
   React.useEffect(() => {
     const handleScroll = () => {
@@ -67,13 +77,13 @@ export default function Header() {
           <nav>
             <ul className="flex flex-col gap-5 xl:flex-row xl:items-center 2xl:gap-8">
               <li className="nav__menu group xl:py-4">
-                <Link className="font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white" href="/#channels">
-                  Channels
+                <Link className="font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white" href="/#features">
+                  Features
                 </Link>
               </li>
               <li className="nav__menu group xl:py-4">
-                <Link className="font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white" href="/#features">
-                  Features
+                <Link className="font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white" href="/blog">
+                  Blog
                 </Link>
               </li>
               <li className="nav__menu group relative xl:py-4">
@@ -86,9 +96,6 @@ export default function Header() {
                 <div className="invisible absolute left-[120%] top-full w-[270px] -translate-x-1/2 rounded-2xl border bg-white p-3 opacity-0 shadow-lg group-hover:visible group-hover:opacity-100">
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/about-us">
                     About Us
-                  </Link>
-                  <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/blog">
-                    Blog
                   </Link>
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/plans">
                     Plans
@@ -148,8 +155,15 @@ export default function Header() {
             </ul>
           </nav>
 
-          <div className="mt-7 flex items-center gap-3 xl:mt-0">
-            <div className="flex flex-col gap-3.5 xl:flex-row xl:items-center">
+          <div className="mt-7 flex min-h-[3.25rem] items-center gap-3 xl:mt-0">
+            {sessionLoading ? (
+              <div className="h-11 w-44 animate-pulse rounded-lg bg-gray-100 max-xl:w-full" aria-hidden />
+            ) : (
+            <div
+              className={`flex flex-col gap-3.5 transition-opacity duration-300 xl:flex-row xl:items-center ${
+                revealed ? "opacity-100" : "opacity-0"
+              }`}
+            >
               {sessionHint ? (
                 <div className="flex items-center gap-3 py-3">
                   <a
@@ -195,6 +209,7 @@ export default function Header() {
                 </>
               )}
             </div>
+            )}
           </div>
         </div>
       </div>
