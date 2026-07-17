@@ -11,7 +11,6 @@ import {
   UserPlus,
   Palette,
   ClipboardList,
-  BarChart3,
 } from "lucide-react";
 import SectionHeading from "@/components/marketing/SectionHeading";
 import NotableFeatureRow from "@/components/marketing/NotableFeatureRow";
@@ -50,10 +49,10 @@ export default function NotableFeatures() {
               },
             ]}
             image={{
-              src: "/images/marketing/dashboard-screenshot.png",
-              alt: "The uprise outreach dashboard",
-              width: 1491,
-              height: 682,
+              src: "/images/marketing/inbox-screenshot.jpg",
+              alt: "The uprise unified team inbox",
+              width: 1600,
+              height: 943,
             }}
           />
 
@@ -76,10 +75,10 @@ export default function NotableFeatures() {
               },
             ]}
             image={{
-              src: "/images/marketing/mobile-screenshot.png",
-              alt: "The uprise offline canvasser app",
-              width: 410,
-              height: 554,
+              src: "/images/marketing/canvassing-screenshot.jpg",
+              alt: "The uprise canvassing campaign surface",
+              width: 1600,
+              height: 868,
             }}
           />
 
@@ -126,11 +125,11 @@ export default function NotableFeatures() {
                   "G-NAF addresses, ASGS geography, federal, state and local divisions, politicians and policies built in – plus electorate polling with crosstabs and choropleth maps.",
               },
             ]}
-            preview={{
-              tone: "green",
-              icon: BarChart3,
-              label: "Electorate insights",
-              chips: ["G-NAF addresses", "Electoral divisions", "Choropleth polling", "Crosstabs"],
+            image={{
+              src: "/images/marketing/datasets-screenshot.jpg",
+              alt: "The uprise Australian datasets library",
+              width: 1600,
+              height: 868,
             }}
           />
 
