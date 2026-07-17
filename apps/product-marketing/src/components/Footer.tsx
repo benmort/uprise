@@ -1,5 +1,4 @@
 import React from "react";
-import { CircleIcon } from "lucide-react";
 import Link from "next/link";
 import FooterAecWidget from "./FooterAecWidget";
 import NewsletterSignup from "./NewsletterSignup";
@@ -138,8 +137,16 @@ export default function Footer() {
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <span>A product by</span>
-              <CircleIcon className="h-4 w-4 text-primary" />
-              <span className="font-medium text-gray-700">Uprise Labs</span>
+              <a
+                href="https://upriselabs.org"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-medium text-gray-700 transition-colors hover:text-gray-900"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/labs-icon.svg" alt="Uprise Labs" className="h-5 w-5" />
+                Uprise Labs
+              </a>
             </div>
           </div>
         </div>
