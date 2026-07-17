@@ -11,7 +11,7 @@ export default function TermsOfServicePage() {
               Terms of Service
             </h1>
             <PolicyProse>
-              <PolicyP><strong className="font-semibold">Last updated: January 2025</strong></PolicyP>
+              <PolicyP><strong className="font-semibold">Last updated: 17 July 2026</strong></PolicyP>
 
               <PolicyH2>Agreement to Terms</PolicyH2>
               <PolicyP>

@@ -7,7 +7,7 @@ import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import { bbox } from "@turf/turf";
 import { Crosshair, Loader2, MapPin, Search, X } from "lucide-react";
-import { AU_BOUNDS, AddressInfoCard, installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
+import { AU_BOUNDS, AddressInfoCard, installMoonlitDark, useScrollToZoom } from "@uprise/field";
 import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
 import { getApiUrl } from "@/lib/api";
 import { useTheme } from "@/components/theme/theme-provider";
@@ -1025,8 +1025,6 @@ export function TurfDrawMap({
         <FullscreenControl position="top-right" />
         <AttributionControl position="bottom-right" compact />
       </Map>
-
-      <MapGestureToggle />
 
       {/* On-map recentre — snaps back to the campaign boundary (or picked state / country). */}
       <button

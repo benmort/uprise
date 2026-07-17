@@ -29,7 +29,7 @@ export default function EditSegmentPage() {
   if (error) {
     return (
       <EmptyState
-        title={error.status === 403 ? "No permission" : error.status === 404 ? "Segment not found" : "Couldn't load the segment"}
+        title={error.status === 403 ? "No permission" : error.status === 404 ? "Search not found" : "Couldn't load the search"}
         description={error.message}
       />
     );

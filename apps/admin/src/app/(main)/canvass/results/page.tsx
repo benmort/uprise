@@ -1,3 +1,6 @@
-// Campaign-less "All campaigns" results. Same component as the scoped route — with no
-// [campaignId] param, useParams() yields undefined and it fetches the tenant-wide aggregate.
-export { default } from "../[campaignId]/results/page";
+// All-campaigns results merged into the aggregate Insights page — redirect to preserve old links.
+import { redirect } from "next/navigation";
+
+export default function ResultsAggregateRedirect() {
+  redirect("/canvass/insights");
+}

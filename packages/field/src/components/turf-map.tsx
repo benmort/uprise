@@ -8,7 +8,7 @@ import { Crosshair, Globe, Loader2, LocateFixed } from "lucide-react";
 import { useTheme } from "../lib/use-theme";
 import { installMoonlitDark } from "../lib/moonlit-dark";
 import { AddressInfoCard } from "./address-info-card";
-import { MapGestureToggle, useScrollToZoom } from "./map-gesture-toggle";
+import { useScrollToZoom } from "./map-gesture-toggle";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 /** A walk stop. The optional address/contact/gnafPid fields feed the tap-to-open door
@@ -589,7 +589,6 @@ export function TurfMap({
       </div>
       <FullscreenControl position="top-left" />
       <AttributionControl position="bottom-right" compact />
-      <MapGestureToggle />
     </Map>
   );
 }

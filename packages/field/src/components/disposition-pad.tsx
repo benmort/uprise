@@ -18,15 +18,25 @@ export function DispositionPad({
   options,
   onSelect,
   disabled,
+  firstName,
 }: {
   options: DispositionDef[];
   onSelect: (code: string) => void;
   disabled?: boolean;
+  /** The resident's first name, when known — personalises the "Spoke to …" tile. */
+  firstName?: string | null;
 }) {
-  // Per design (README A3): "Spoke to …" is the prominent green action (reveals the
-  // survey); other contact results are the neutral no-contact grid; terminal /
-  // data-quality codes sit in a separated, warning-styled (amber) row.
+  // "Spoke to …" is the prominent primary action (reveals the survey); other contact
+  // results are the neutral no-contact grid; terminal / data-quality codes sit in a
+  // separated, secondary row. The "spoke to target" tile reads "Spoke to {firstName}"
+  // when the resident is known, else "Spoke to resident".
   const spoke = options.filter((o) => o.layer === "CONTACT_RESULT" && o.code.startsWith("spoke"));
+  const spokeLabel = (o: DispositionDef): string =>
+    o.code.startsWith("spoke_to_target")
+      ? firstName && firstName.trim()
+        ? `Spoke to ${firstName.trim()}`
+        : "Spoke to resident"
+      : o.label;
   const noContact = options.filter((o) => o.layer === "CONTACT_RESULT" && !o.code.startsWith("spoke"));
   const terminal = options.filter((o) => o.layer !== "CONTACT_RESULT");
 
@@ -38,13 +48,13 @@ export function DispositionPad({
             <Button
               key={o.code}
               type="button"
-              variant="success"
+              variant="default"
               disabled={disabled}
               className="h-16 w-full gap-2 rounded-2xl text-base font-bold"
               onClick={() => onSelect(o.code)}
             >
               <MessageSquare className="h-5 w-5 shrink-0" />
-              {o.label}
+              {spokeLabel(o)}
             </Button>
           ))}
         </div>
@@ -77,7 +87,7 @@ export function DispositionPad({
       )}
       {terminal.length > 0 && (
         <div className="space-y-2 pt-1">
-          <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-[hsl(var(--warning-foreground))]">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
             <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
             Data quality
           </p>
@@ -86,9 +96,9 @@ export function DispositionPad({
               <Button
                 key={o.code}
                 type="button"
-                variant="warning"
+                variant="secondary"
                 disabled={disabled}
-                className="h-14 rounded-2xl border border-[hsl(var(--warning-foreground)/0.25)] text-sm font-bold"
+                className="h-14 rounded-2xl text-sm font-bold"
                 onClick={() => onSelect(o.code)}
               >
                 {o.label}

@@ -17,6 +17,7 @@ import { useTilePreCache } from "../hooks/use-tile-pre-cache";
 import { useWalkingDirections } from "../hooks/use-walking-directions";
 import { WalkStopCard, type WalkStop } from "../components/walk-stop-card";
 import { WalkModeToggle, type WalkMode } from "../components/walk-mode-toggle";
+import { MarqueeText } from "../components/marquee-text";
 import { ProgressBar } from "../components/progress-bar";
 
 // Map is heavy + touches window: keep it out of the offline list-mode bundle.
@@ -274,7 +275,10 @@ export function WalkView({
           </button>
         ) : null}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-extrabold text-foreground">{assignment.turf.name}</h1>
+          <MarqueeText
+            text={assignment.turf.name}
+            className="text-lg font-extrabold text-foreground"
+          />
           <p className="text-sm text-muted-foreground tabular-nums">
             {doneCount} of {stops.length} stops done
           </p>
@@ -357,7 +361,7 @@ export function WalkView({
                   <p className="truncate text-sm text-muted-foreground">{nextStop.name || "Resident"}</p>
                 </div>
                 {!readOnly ? (
-                  <Button className="h-11 shrink-0 gap-2 px-5 text-base" onClick={() => openDoor(nextStop.id)}>
+                  <Button variant="secondary" className="h-11 shrink-0 gap-2 px-5 text-base" onClick={() => openDoor(nextStop.id)}>
                     <Home className="h-5 w-5" />
                     Knock
                   </Button>

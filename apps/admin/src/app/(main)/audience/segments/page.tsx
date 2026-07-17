@@ -56,8 +56,8 @@ export default function SegmentsPage() {
   if (error) {
     return (
       <EmptyState
-        title={error.status === 403 ? "No permission" : "Couldn't load segments"}
-        description={error.status === 403 ? "You need audience access to view segments." : error.message}
+        title={error.status === 403 ? "No permission" : "Couldn't load searches"}
+        description={error.status === 403 ? "You need audience access to view searches." : error.message}
       />
     );
   }
@@ -66,14 +66,14 @@ export default function SegmentsPage() {
     <div className="page-stack">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">Segments</h1>
+          <h1 className="text-3xl font-semibold">Searches</h1>
           <p className="text-sm text-muted-foreground">
             Reusable audience definitions — evaluated live, targetable from any blast.
           </p>
         </div>
         <Button asChild>
           <Link href="/audience/segments/new">
-            <Plus className="mr-1.5 h-4 w-4" /> New segment
+            <Plus className="mr-1.5 h-4 w-4" /> New search
           </Link>
         </Button>
       </div>
@@ -85,9 +85,9 @@ export default function SegmentsPage() {
         </div>
       ) : segments.length === 0 ? (
         <EmptyState
-          title="No segments yet"
+          title="No searches yet"
           description="Define who you want to reach — by location, tags, activity or plain English — and target them from any blast."
-          ctaLabel="Build your first segment"
+          ctaLabel="Build your first search"
           onCta={() => router.push("/audience/segments/new")}
         />
       ) : (
@@ -137,7 +137,7 @@ export default function SegmentsPage() {
                         variant="ghost"
                         size="sm"
                         aria-label="Restore"
-                        onClick={() => act(() => restoreSegmentDefinition(segment.id), "Segment restored")}
+                        onClick={() => act(() => restoreSegmentDefinition(segment.id), "Search restored")}
                       >
                         <ArchiveRestore className="h-4 w-4" />
                       </Button>
@@ -146,7 +146,7 @@ export default function SegmentsPage() {
                         variant="ghost"
                         size="sm"
                         aria-label="Archive"
-                        onClick={() => act(() => archiveSegmentDefinition(segment.id), "Segment archived")}
+                        onClick={() => act(() => archiveSegmentDefinition(segment.id), "Search archived")}
                       >
                         <Archive className="h-4 w-4" />
                       </Button>

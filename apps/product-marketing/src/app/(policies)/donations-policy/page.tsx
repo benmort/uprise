@@ -11,7 +11,7 @@ export default function DonationsPolicyPage() {
               Donations Policy
             </h1>
             <PolicyProse>
-              <PolicyP><strong className="font-semibold">Last updated: January 2025</strong></PolicyP>
+              <PolicyP><strong className="font-semibold">Last updated: 17 July 2026</strong></PolicyP>
 
               <PolicyH2>Overview</PolicyH2>
               <PolicyP>

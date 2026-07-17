@@ -114,7 +114,7 @@ export function AddressInfoCard({
         <button
           type="button"
           onClick={onKnock}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#465fff] px-3 py-2 text-sm font-bold text-white transition hover:brightness-95"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#e4e4e7] bg-[#f4f4f5] px-3 py-2 text-sm font-bold text-[#18181b] transition hover:brightness-95"
         >
           <Home className="h-4 w-4" />
           {knockLabel}

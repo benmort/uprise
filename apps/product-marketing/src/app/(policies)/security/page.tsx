@@ -15,7 +15,7 @@ export default function SecurityPage() {
               Security
             </h1>
             <PolicyProse>
-              <PolicyP><B>Last updated: January 2025</B></PolicyP>
+              <PolicyP><B>Last updated: 17 July 2026</B></PolicyP>
 
               <PolicyH2>Overview</PolicyH2>
               <PolicyP>

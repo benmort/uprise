@@ -87,11 +87,9 @@ function canvassOps(campaignId: string | null): NavLeaf[] {
   const onSub = (sub: string): NavMatch => (p) => new RegExp(`^/canvass/[^/]+/${sub}(?:/|$)`).test(p);
   return [
     { label: "Cut turf", href: href("turf"), match: onSub("turf") },
-    { label: "Live action room", href: href("live"), match: onSub("live") },
-    { label: "Results", href: href("results"), match: onSub("results") },
-    { label: "Goals", href: href("goals"), match: onSub("goals") },
+    { label: "Live", href: href("live"), match: onSub("live") },
+    { label: "Insights", href: href("insights"), match: onSub("insights") },
     { label: "Shifts", href: href("shifts"), match: onSub("shifts") },
-    { label: "QA", href: href("qa"), match: onSub("qa") },
     { label: "Volunteers", href: href("volunteers"), match: onSub("volunteers") },
     { label: "Walk lists", href: href("walklists"), match: onSub("walklists") },
   ];
@@ -269,7 +267,7 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
               },
               { label: "SMS inbox", href: "/future/sms-inbox", match: px("sms-inbox"), flag: "FEATURE_NAV_INBOX" },
               { label: "Journeys", href: "/future/journeys", match: px("journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
-              { label: "Segmentation", href: "/audience/segments", match: (p) => p.startsWith("/audience/segments"), flag: "FEATURE_SEGMENTS_ENABLED" },
+              { label: "Searches", href: "/audience/segments", match: (p) => p.startsWith("/audience/segments"), flag: "FEATURE_SEGMENTS_ENABLED" },
               { label: "Events", href: "/future/events", match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING" },
               { label: "Chats", href: "/future/chats", match: px("chats") },
               // Manage: the parked back-office/admin stubs (mirrors the top-level Manage zone).

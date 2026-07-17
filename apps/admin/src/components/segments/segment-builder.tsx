@@ -265,7 +265,7 @@ export function SegmentBuilder({ segment }: { segment?: SegmentDetail }) {
       showToast({ tone: "error", title: "Save failed", description: result.error });
       return;
     }
-    showToast({ tone: "success", title: segment ? "Audience updated" : "Audience created" });
+    showToast({ tone: "success", title: segment ? "Search updated" : "Search created" });
     router.push("/audience/segments");
   };
 
@@ -290,7 +290,7 @@ export function SegmentBuilder({ segment }: { segment?: SegmentDetail }) {
         title={catalogueError.status === 403 ? "No permission" : "Couldn't load the catalogue"}
         description={
           catalogueError.status === 403
-            ? "You need audience access to build segments."
+            ? "You need audience access to build searches."
             : catalogueError.message
         }
       />
@@ -312,14 +312,14 @@ export function SegmentBuilder({ segment }: { segment?: SegmentDetail }) {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Audience definition
+            Search definition
           </p>
           <div className="mt-1 flex items-center gap-2">
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="h-auto max-w-lg border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
-              aria-label="Audience name"
+              aria-label="Search name"
             />
             <Pencil className="h-4 w-4 shrink-0 text-muted-foreground" />
           </div>
@@ -353,7 +353,7 @@ export function SegmentBuilder({ segment }: { segment?: SegmentDetail }) {
           </div>
           <Button onClick={save} disabled={saving || !name.trim()}>
             {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
-            Save audience
+            Save search
           </Button>
         </div>
       </div>

@@ -244,6 +244,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
           <DispositionPad
             options={dispositions}
             disabled={saving}
+            firstName={typeof contact.firstName === "string" ? contact.firstName : null}
             onSelect={(code) => {
               // "Spoke to someone" reveals the survey — but only if the campaign has
               // one; otherwise it's a plain disposition-only knock.

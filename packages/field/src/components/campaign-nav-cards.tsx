@@ -4,10 +4,8 @@ import {
   ArrowRight,
   BarChart3,
   CalendarClock,
-  ClipboardCheck,
   ListChecks,
   Map as MapIcon,
-  Target,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -19,11 +17,9 @@ type NavItem = { href: string; label: string; desc: string; icon: LucideIcon };
 export function CampaignNavCards({ campaignId, className, id }: { campaignId: string; className?: string; id?: string }) {
   const items: NavItem[] = [
     { href: `/canvass/${campaignId}/turf`, label: "Cut turf", desc: "Claim areas & boundaries", icon: MapIcon },
-    { href: `/canvass/${campaignId}/live`, label: "Live action room", desc: "Real-time door activity", icon: Activity },
-    { href: `/canvass/${campaignId}/results`, label: "Results", desc: "Support & contact rates", icon: BarChart3 },
-    { href: `/canvass/${campaignId}/goals`, label: "Goals", desc: "Targets & progress", icon: Target },
+    { href: `/canvass/${campaignId}/live`, label: "Live", desc: "Real-time door activity", icon: Activity },
+    { href: `/canvass/${campaignId}/insights`, label: "Insights", desc: "Results, goals & data quality", icon: BarChart3 },
     { href: `/canvass/${campaignId}/shifts`, label: "Shifts", desc: "Schedule & sign-ups", icon: CalendarClock },
-    { href: `/canvass/${campaignId}/qa`, label: "QA", desc: "Flagged knocks to review", icon: ClipboardCheck },
     { href: `/canvass/${campaignId}/volunteers`, label: "Volunteers", desc: "Team & assignments", icon: Users },
     { href: `/canvass/${campaignId}/walklists`, label: "Walk lists", desc: "Build & assign door routes", icon: ListChecks },
   ];

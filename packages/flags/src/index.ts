@@ -67,8 +67,8 @@ const CORE_FLAGS = [
   {
     key: "FEATURE_SEGMENTS_ENABLED",
     description:
-      "The segment builder (engine v2): audience definitions with the filter tree, policy layer, live preview, AI authoring and blast targeting.",
-    default: false,
+      "Searches (engine v2): audience definitions with the filter tree, policy layer, live preview, AI authoring and blast targeting.",
+    default: true,
     kind: "release",
     controllableBy: RELEASE,
     envVar: "FEATURE_SEGMENTS_ENABLED",

@@ -375,7 +375,7 @@ export default function AudiencePage() {
         {segmentsEnabled && (
           <Button asChild variant="outline">
             <Link href="/audience/segments">
-              <Split className="mr-1.5 h-4 w-4" /> Segments
+              <Split className="mr-1.5 h-4 w-4" /> Searches
             </Link>
           </Button>
         )}
@@ -848,15 +848,24 @@ export default function AudiencePage() {
 
       <Card id="tour-audience-segments">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle>Dynamic Segments</CardTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void loadSegments()}
-            disabled={segmentsLoading}
-          >
-            Refresh
-          </Button>
+          <CardTitle>Searches</CardTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void loadSegments()}
+              disabled={segmentsLoading}
+            >
+              Refresh
+            </Button>
+            {segmentsEnabled && (
+              <Button asChild size="sm">
+                <Link href="/audience/segments/new">
+                  <Split className="mr-1.5 h-4 w-4" /> New search
+                </Link>
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {segmentsLoading ? (
@@ -866,22 +875,24 @@ export default function AudiencePage() {
             </div>
           ) : segmentsError ? (
             <EmptyState
-              title="We couldn't load segments"
+              title="We couldn't load searches"
               description={segmentsError}
               ctaLabel="Retry"
               onCta={() => void loadSegments()}
             />
           ) : segments.length === 0 ? (
             <EmptyState
-              title="No segments yet"
-              description="Segments are created automatically when you sync a list — sync an Action Network list to see its members resolved here."
+              title="No searches yet"
+              description="Build a reusable audience definition — by location, tags, activity or plain English. Segments synced from a list also appear here."
+              ctaLabel={segmentsEnabled ? "Build a search" : undefined}
+              onCta={segmentsEnabled ? () => router.push("/audience/segments/new") : undefined}
             />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
-                    <th className="py-2 pr-4">Segment</th>
+                    <th className="py-2 pr-4">Search</th>
                     <th className="py-2 pr-4">Audience</th>
                     <th className="py-2 pr-4">Type</th>
                     <th className="py-2 pr-4">Members</th>

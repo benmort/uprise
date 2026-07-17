@@ -74,7 +74,7 @@ export function WalkStopCard({
           <button
             type="button"
             onClick={onOpen}
-            className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-base font-bold text-white transition-colors hover:bg-primary/90"
+            className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-secondary text-base font-bold text-secondary-foreground transition-colors hover:bg-secondary/90"
           >
             <Home className="h-5 w-5" />
             Knock — next stop
@@ -83,7 +83,7 @@ export function WalkStopCard({
           <button
             type="button"
             onClick={onOpen}
-            className="mt-4 flex h-12 w-full items-center justify-center rounded-xl border border-border text-base font-bold text-primary transition-colors hover:bg-primary/5"
+            className="mt-4 flex h-12 w-full items-center justify-center rounded-xl border border-border text-base font-bold text-foreground transition-colors hover:bg-secondary"
           >
             Knock here
           </button>
