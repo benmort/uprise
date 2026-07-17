@@ -48,6 +48,9 @@ import {
   listEventRsvps,
   rsvpEvent,
   cancelEventRsvp,
+  checkInRsvp,
+  eventRsvpsExportUrl,
+  uploadEventCover,
   listCalendar,
   createCalendarEntry,
   updateCalendarEntry,
@@ -251,6 +254,19 @@ describe("events wrappers", () => {
   it("cancelEventRsvp POSTs the nested cancel path", async () => {
     await cancelEventRsvp("e1", "r1");
     expect(mockRequest).toHaveBeenCalledWith("/events/e1/rsvps/r1/cancel", { method: "POST" });
+  });
+  it("checkInRsvp POSTs the check-in path", async () => {
+    await checkInRsvp("e1", "r1");
+    expect(mockRequest).toHaveBeenCalledWith("/events/e1/rsvps/r1/check-in", { method: "POST" });
+  });
+  it("eventRsvpsExportUrl builds the absolute, encoded CSV url", () => {
+    expect(eventRsvpsExportUrl("e 1")).toBe("http://api.test/events/e%201/rsvps/export");
+  });
+  it("uploadEventCover POSTs multipart to the image path", async () => {
+    await uploadEventCover("e1", new File(["x"], "c.jpg", { type: "image/jpeg" }));
+    const [path, init] = mockRequest.mock.calls[0];
+    expect(path).toBe("/events/e1/image");
+    expect((init as { method: string }).method).toBe("POST");
   });
 });
 

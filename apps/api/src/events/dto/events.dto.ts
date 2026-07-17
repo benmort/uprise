@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from "class-validator";
 
 const EVENT_STATUSES = ["DRAFT", "PUBLISHED", "CANCELLED"] as const;
 export type EventStatusInput = (typeof EVENT_STATUSES)[number];
@@ -82,6 +82,7 @@ export class RsvpDto {
   @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() contactId?: string;
   @IsOptional() @IsString() volunteerId?: string;
+  @IsOptional() @IsInt() @Min(0) guests?: number;
 }
 
 /** Public (tokenless) RSVP submission — no contact/volunteer linkage. */
@@ -89,4 +90,10 @@ export class PublicRsvpDto {
   @IsString() name!: string;
   @IsOptional() @IsString() email?: string;
   @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsInt() @Min(0) guests?: number;
+}
+
+/** Attendee self-manage: change party size via the manage token. */
+export class ManageRsvpDto {
+  @IsInt() @Min(0) guests!: number;
 }

@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
 import { RequirePermission } from "../auth/require-permission.decorator";
 import { TenantId } from "../auth/tenant-id.decorator";
 import { EventsService, type DerivedEventStatus } from "./events.service";
@@ -25,6 +37,18 @@ export class EventsController {
     });
   }
 
+  // Platform cron (Bearer CRON_SECRET; no session — allowlisted in BasicAuthGuard.isCronDispatchPath).
+  // Declared before `:id` so the literal path isn't captured by the id param.
+  @Get("dispatch-due-reminders")
+  async dispatchDueRemindersGet() {
+    return this.events.dispatchDueReminders();
+  }
+
+  @Post("dispatch-due-reminders")
+  async dispatchDueReminders() {
+    return this.events.dispatchDueReminders();
+  }
+
   @Get(":id")
   @RequirePermission(EVENT_READ)
   async get(@TenantId() tenantId: string, @Param("id") id: string) {
@@ -49,10 +73,29 @@ export class EventsController {
     return this.events.cancelEvent(tenantId, id);
   }
 
+  @Post(":id/image")
+  @RequirePermission(EVENT_MANAGE)
+  @UseInterceptors(FileInterceptor("file"))
+  async uploadCover(
+    @TenantId() tenantId: string,
+    @Param("id") id: string,
+    @UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string },
+  ) {
+    return this.events.uploadCover(tenantId, id, file);
+  }
+
   @Get(":id/rsvps")
   @RequirePermission(EVENT_READ)
   async listRsvps(@TenantId() tenantId: string, @Param("id") id: string) {
     return this.events.listRsvps(tenantId, id);
+  }
+
+  @Get(":id/rsvps/export")
+  @RequirePermission(EVENT_READ)
+  @Header("Content-Type", "text/csv")
+  @Header("Content-Disposition", 'attachment; filename="rsvps.csv"')
+  async exportRsvps(@TenantId() tenantId: string, @Param("id") id: string): Promise<string> {
+    return this.events.exportRsvpsCsv(tenantId, id);
   }
 
   @Post(":id/rsvp")
@@ -63,11 +106,13 @@ export class EventsController {
 
   @Post(":id/rsvps/:rsvpId/cancel")
   @RequirePermission(EVENT_MANAGE)
-  async cancelRsvp(
-    @TenantId() tenantId: string,
-    @Param("id") id: string,
-    @Param("rsvpId") rsvpId: string,
-  ) {
+  async cancelRsvp(@TenantId() tenantId: string, @Param("id") id: string, @Param("rsvpId") rsvpId: string) {
     return this.events.cancelRsvp(tenantId, id, rsvpId);
+  }
+
+  @Post(":id/rsvps/:rsvpId/check-in")
+  @RequirePermission(EVENT_MANAGE)
+  async checkIn(@TenantId() tenantId: string, @Param("id") id: string, @Param("rsvpId") rsvpId: string) {
+    return this.events.checkIn(tenantId, id, rsvpId);
   }
 }

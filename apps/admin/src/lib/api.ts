@@ -1153,7 +1153,9 @@ export type EventRsvp = {
   name: string;
   email: string | null;
   phone: string | null;
+  guests: number;
   status: RsvpStatus;
+  checkedInAt: string | null;
   createdAt: string;
 };
 
@@ -1210,7 +1212,7 @@ export async function listEventRsvps(id: string) {
 
 export async function rsvpEvent(
   id: string,
-  input: { name: string; email?: string; phone?: string; contactId?: string; volunteerId?: string },
+  input: { name: string; email?: string; phone?: string; contactId?: string; volunteerId?: string; guests?: number },
 ) {
   return request<EventRsvp>(`/events/${encodeURIComponent(id)}/rsvp`, {
     method: "POST",
@@ -1226,31 +1228,68 @@ export async function cancelEventRsvp(eventId: string, rsvpId: string) {
   );
 }
 
-// ── Public (tokenless) event RSVP — powers /e/[eventId], gated per-event server-side ──
+/** Door check-in — marks the RSVP ATTENDED. */
+export async function checkInRsvp(eventId: string, rsvpId: string) {
+  return request<{ id: string; status: RsvpStatus }>(
+    `/events/${encodeURIComponent(eventId)}/rsvps/${encodeURIComponent(rsvpId)}/check-in`,
+    { method: "POST" },
+  );
+}
+
+/** Absolute URL for the RSVP CSV download (cookie-authed; use in an <a download>). */
+export function eventRsvpsExportUrl(eventId: string) {
+  return `${getApiUrl()}/events/${encodeURIComponent(eventId)}/rsvps/export`;
+}
+
+/** Upload an event cover image (multipart) → returns the stored URL. */
+export async function uploadEventCover(eventId: string, file: File) {
+  const body = new FormData();
+  body.append("file", file);
+  return request<{ imageUrl: string }>(`/events/${encodeURIComponent(eventId)}/image`, { method: "POST", body });
+}
+
+// ── Public (tokenless) event RSVP — the branded action-app pages consume the same payload ──
+export type PublicEventTenant = {
+  id: string;
+  name: string;
+  slug: string;
+  logoLandscapeUrl: string | null;
+  logoBlockUrl: string | null;
+  primaryColour: string | null;
+  secondaryColour: string | null;
+  customCss: string | null;
+};
+
 export type PublicEvent = {
   id: string;
   title: string;
   description: string | null;
   category: string | null;
   location: string | null;
+  lat: number | null;
+  lng: number | null;
   startsAt: string;
   endsAt: string;
   capacity: number | null;
   imageUrl: string | null;
   attendeeCount: number;
   spotsLeft: number | null;
+  derivedStatus: DerivedEventStatus;
+  tenant: PublicEventTenant | null;
 };
 
 export async function getPublicEvent(id: string) {
   return request<PublicEvent>(`/public-events/${encodeURIComponent(id)}`);
 }
 
-export async function publicEventRsvp(id: string, input: { name: string; email?: string; phone?: string }) {
-  return request<{ id: string; status: RsvpStatus }>(`/public-events/${encodeURIComponent(id)}/rsvp`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(input),
-  });
+export async function publicEventRsvp(
+  id: string,
+  input: { name: string; email?: string; phone?: string; guests?: number },
+) {
+  return request<{ id: string; status: RsvpStatus; manageToken: string | null }>(
+    `/public-events/${encodeURIComponent(id)}/rsvp`,
+    { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(input) },
+  );
 }
 
 // ── Calendar (aggregate + generic entries) ───────────────────────────────────

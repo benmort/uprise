@@ -51,6 +51,16 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplateDef> = {
       outro: ["This link expires shortly and can only be used once."],
     },
   },
+  event_reminder: {
+    subject: "Reminder: {{eventTitle}} is coming up",
+    body: "Hi {{name}},\n\nA quick reminder that {{eventTitle}} is on {{whenText}}{{whereSuffix}}.\n\nManage your RSVP: {{manageUrl}}",
+    layout: {
+      preheader: "{{eventTitle}} is coming up.",
+      heading: "See you at {{eventTitle}}",
+      intro: ["Hi {{name}},", "Just a reminder that {{eventTitle}} is on {{whenText}}{{whereSuffix}}."],
+      cta: { label: "Manage your RSVP", hrefVar: "manageUrl" },
+    },
+  },
   verification: {
     subject: "Verify your email",
     body: "Your verification code is {{code}}.",

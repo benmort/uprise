@@ -96,6 +96,8 @@ export const EVENT_TYPES = {
   EVENT_CANCELLED: "events.event.cancelled",
   EVENT_RSVP_CREATED: "events.rsvp.created",
   EVENT_RSVP_CANCELLED: "events.rsvp.cancelled",
+  EVENT_RSVP_PROMOTED: "events.rsvp.promoted",
+  EVENT_RSVP_ATTENDED: "events.rsvp.attended",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -157,6 +159,8 @@ export interface DomainEventMap {
   "events.event.cancelled": { eventId: string; tenantId: string };
   "events.rsvp.created": { rsvpId: string; eventId: string; tenantId: string };
   "events.rsvp.cancelled": { rsvpId: string; eventId: string; tenantId: string };
+  "events.rsvp.promoted": { rsvpId: string; eventId: string; tenantId: string };
+  "events.rsvp.attended": { rsvpId: string; eventId: string; tenantId: string };
   "messaging.blast.created": { blastId: string; tenantId: string; title: string };
   "messaging.blast.scheduled": { blastId: string; tenantId: string; scheduledAt: string };
   "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };

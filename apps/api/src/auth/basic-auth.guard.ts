@@ -163,6 +163,8 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/telephony/provisioning/poll",
       "/email-provisioning/poll",
       "/api/v1/email-provisioning/poll",
+      "/events/dispatch-due-reminders",
+      "/api/v1/events/dispatch-due-reminders",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));

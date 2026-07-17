@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   createEvent,
   updateEvent,
+  uploadEventCover,
   type EventDetail,
   type EventStatus,
   type EventSummary,
@@ -28,6 +29,8 @@ type FormState = {
   description: string;
   category: string;
   location: string;
+  lat: string;
+  lng: string;
   startsAt: string;
   endsAt: string;
   capacity: string;
@@ -41,6 +44,8 @@ const EMPTY: FormState = {
   description: "",
   category: "",
   location: "",
+  lat: "",
+  lng: "",
   startsAt: "",
   endsAt: "",
   capacity: "",
@@ -64,7 +69,21 @@ export function EventFormDialog({
   const { showToast } = useToast();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const editing = !!event;
+
+  const onCoverFile = async (file: File | undefined) => {
+    if (!file || !event) return;
+    setUploading(true);
+    const res = await uploadEventCover(event.id, file);
+    setUploading(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't upload image", description: res.error });
+      return;
+    }
+    setForm((f) => ({ ...f, imageUrl: res.data.imageUrl }));
+    showToast({ tone: "success", title: "Cover uploaded" });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -75,6 +94,8 @@ export function EventFormDialog({
             description: event.description ?? "",
             category: event.category ?? "",
             location: event.location ?? "",
+            lat: event.lat != null ? String(event.lat) : "",
+            lng: event.lng != null ? String(event.lng) : "",
             startsAt: toLocalInput(event.startsAt),
             endsAt: toLocalInput(event.endsAt),
             capacity: event.capacity != null ? String(event.capacity) : "",
@@ -99,6 +120,8 @@ export function EventFormDialog({
       description: form.description.trim() || undefined,
       category: form.category.trim() || undefined,
       location: form.location.trim() || undefined,
+      lat: form.lat ? Number(form.lat) : undefined,
+      lng: form.lng ? Number(form.lng) : undefined,
       startsAt: new Date(form.startsAt).toISOString(),
       endsAt: new Date(form.endsAt).toISOString(),
       capacity: form.capacity ? Number(form.capacity) : undefined,
@@ -144,6 +167,14 @@ export function EventFormDialog({
         <Input id="ev-loc" value={form.location} onChange={(e) => set("location", e.target.value)} placeholder="Venue / address" />
       </Field>
       <div className="grid grid-cols-2 gap-3">
+        <Field label="Latitude" htmlFor="ev-lat" hint="Optional — pins the map">
+          <Input id="ev-lat" value={form.lat} onChange={(e) => set("lat", e.target.value)} placeholder="-37.80" />
+        </Field>
+        <Field label="Longitude" htmlFor="ev-lng">
+          <Input id="ev-lng" value={form.lng} onChange={(e) => set("lng", e.target.value)} placeholder="144.98" />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Starts" htmlFor="ev-start" required>
           <Input id="ev-start" type="datetime-local" value={form.startsAt} onChange={(e) => set("startsAt", e.target.value)} />
         </Field>
@@ -151,9 +182,25 @@ export function EventFormDialog({
           <Input id="ev-end" type="datetime-local" value={form.endsAt} onChange={(e) => set("endsAt", e.target.value)} />
         </Field>
       </div>
-      <Field label="Image URL" htmlFor="ev-img">
-        <Input id="ev-img" value={form.imageUrl} onChange={(e) => set("imageUrl", e.target.value)} placeholder="Optional" />
+      <Field label="Cover image" htmlFor="ev-img" hint={editing ? "Paste a URL or upload a file" : "Paste a URL (upload once the event is saved)"}>
+        <Input id="ev-img" value={form.imageUrl} onChange={(e) => set("imageUrl", e.target.value)} placeholder="https://…" />
       </Field>
+      {editing ? (
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-primary">
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => onCoverFile(e.target.files?.[0])}
+            disabled={uploading}
+          />
+          {uploading ? "Uploading…" : "Upload a cover image"}
+        </label>
+      ) : null}
+      {form.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={form.imageUrl} alt="" className="h-24 w-full rounded-lg object-cover" />
+      ) : null}
       <Field label="Status" htmlFor="ev-status">
         <SegmentedControl
           value={form.status}

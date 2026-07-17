@@ -47,6 +47,8 @@ const OPEN_ROUTES = new Set<string>([
   "JourneysController#sweepDue",
   "TelephonyProvisioningController#poll",
   "EmailProvisioningController#poll",
+  "EventsController#dispatchDueReminders", // cron sweep (Bearer CRON_SECRET)
+  "EventsController#dispatchDueRemindersGet", // cron sweep (GET variant)
 ]);
 
 describe("route authorization guardrail", () => {
