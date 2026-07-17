@@ -124,6 +124,13 @@
 .dark .cal-cell.is-today {
   background: color-mix(in srgb, #465fff 15%, hsl(var(--surface)));
 }
+/* Past days are locked (no add/drag) — read as slightly recessed. Events stay legible. */
+.cal-cell.is-past {
+  background: color-mix(in srgb, hsl(var(--surface-variant)) 55%, hsl(var(--surface)));
+}
+.dark .cal-cell.is-past {
+  background: color-mix(in srgb, #000 16%, hsl(var(--surface)));
+}
 
 /* Today's date — the pulsing primary circle. */
 .cal-today-num {

@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BellPlus, CalendarDays, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import EventModal, { type EventColor, type EventFormData } from "@/components/prog/calendar/EventModal";
+import { AddItemPanel, draftWindow, type AddItemDraft } from "@/components/prog/calendar/AddItemPanel";
 import {
   listCalendar,
   createCalendarEntry,
   updateCalendarEntry,
+  createEvent,
+  createShift,
   type CalendarItem,
   type CalendarItemKind,
 } from "@/lib/api";
@@ -62,6 +65,9 @@ type CalView = "month" | "week" | "day";
 const toYMD = (date: Date): YMD => ({ y: date.getFullYear(), m: date.getMonth(), d: date.getDate() });
 const addDays = (f: YMD, n: number): YMD => toYMD(new Date(f.y, f.m, f.d + n));
 const sameDay = (a: YMD, b: YMD) => a.y === b.y && a.m === b.m && a.d === b.d;
+/** True when `a` is a strictly earlier calendar day than `b` (used to lock the past). */
+const beforeDay = (a: YMD, b: YMD) =>
+  a.y < b.y || (a.y === b.y && (a.m < b.m || (a.m === b.m && a.d < b.d)));
 const fmtLong = (f: YMD) => `${f.d} ${MONTHS[f.m]} ${f.y}`;
 
 const hhmm = (iso: string) =>
@@ -110,6 +116,24 @@ export default function CalendarPage() {
   const [editing, setEditing] = useState<EventFormData | undefined>();
   // Any add gesture opens the "Start a new conversation" picker (not a direct add).
   const [convoOpen, setConvoOpen] = useState(false);
+  // Click-a-date / drag-across-days on the month grid → opens the same picker. `sel`
+  // is the [anchor, head] cell-index range being dragged (for the live highlight);
+  // `dragging` gates the window mouseup that commits the gesture.
+  const dragging = useRef(false);
+  const [sel, setSel] = useState<[number, number] | null>(null);
+  // Persistent (mount-once) listener — gated on the `dragging` ref, NOT on `sel`. If it
+  // were tied to `sel` (set async via setSel), a very fast click could release before the
+  // re-render attached the listener and silently not open the picker.
+  useEffect(() => {
+    const onUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      setSel(null);
+      setConvoOpen(true);
+    };
+    window.addEventListener("mouseup", onUp);
+    return () => window.removeEventListener("mouseup", onUp);
+  }, []);
   // The mock's 165ms grid fade on navigation/view changes.
   const [gridFx, setGridFx] = useState<{ opacity: number; transform: string }>({ opacity: 1, transform: "none" });
   const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -196,13 +220,43 @@ export default function CalendarPage() {
     [router],
   );
 
-  // Reminders keep a direct-add path (the picker has no reminder channel).
-  const openReminderAdd = useCallback((day?: YMD) => {
-    const at = day ?? focus;
-    setModalMode("add");
-    setEditing({ title: "", startDate: new Date(at.y, at.m, at.d).toISOString(), endDate: "", color: "warning" });
-    setModalOpen(true);
+  // The mock's "New event" slide-over: day-level quick-adds open it with the day
+  // pinned; Type picks Event / Shift / Reminder and Add creates the real object.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDate, setAddDate] = useState<YMD>(today);
+  const [addBusy, setAddBusy] = useState(false);
+  const openAddPanel = useCallback((day?: YMD) => {
+    setAddDate(day ?? focus);
+    setAddOpen(true);
   }, [focus]);
+
+  const handleAddItem = useCallback(
+    async (draft: AddItemDraft) => {
+      setAddBusy(true);
+      const { startsAt, endsAt, allDay } = draftWindow(draft);
+      const res =
+        draft.kind === "event"
+          ? await createEvent({ title: draft.title, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() })
+          : draft.kind === "shift"
+            ? await createShift({ type: "GENERAL", name: draft.title, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() })
+            : await createCalendarEntry({
+                title: draft.title,
+                color: "danger",
+                startsAt: startsAt.toISOString(),
+                endsAt: allDay ? undefined : endsAt.toISOString(),
+                allDay,
+              });
+      setAddBusy(false);
+      if (!res.ok) {
+        showToast({ tone: "error", title: "Couldn't add it", description: res.error });
+        return;
+      }
+      setAddOpen(false);
+      showToast({ tone: "success", title: `Added "${draft.title}"` });
+      void refetch();
+    },
+    [refetch, showToast],
+  );
 
   const handleSave = useCallback(
     async (form: EventFormData) => {
@@ -254,6 +308,7 @@ export default function CalendarPage() {
         inMonth: day.m === m && day.y === y,
         weekend: dow === 0 || dow === 6,
         isToday: sameDay(day, today),
+        past: beforeDay(day, today),
         items: eventsOn(day.y, day.m, day.d),
       };
     });
@@ -268,12 +323,14 @@ export default function CalendarPage() {
         day,
         weekday: WD_SHORT[new Date(day.y, day.m, day.d).getDay()],
         isToday: sameDay(day, today),
+        past: beforeDay(day, today),
         items: eventsOn(day.y, day.m, day.d),
       };
     });
   }, [focus, eventsOn, today]);
 
   const dayItems = useMemo(() => eventsOn(focus.y, focus.m, focus.d), [eventsOn, focus]);
+  const focusPast = beforeDay(focus, today);
 
   return (
     <PageShell
@@ -367,17 +424,9 @@ export default function CalendarPage() {
                 Today
               </button>
               <Button className="h-10" onClick={() => setConvoOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.4} /> Add event
+                <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.4} /> Start a new conversation
               </Button>
-              <button
-                type="button"
-                onClick={() => openReminderAdd()}
-                title="New reminder"
-                aria-label="New reminder"
-                className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border bg-surface text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-              >
-                <BellPlus className="h-4 w-4" />
-              </button>
+
             </div>
 
             <h2 className="min-w-[200px] flex-1 text-center text-[22px] font-bold tracking-[-0.01em]">
@@ -422,18 +471,39 @@ export default function CalendarPage() {
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-px border-t border-border bg-border">
-                  {monthDays.map(({ day, inMonth, weekend, isToday, items: dayList }, i) => {
+                  {monthDays.map(({ day, inMonth, weekend, isToday, past, items: dayList }, i) => {
                     const shownItems = dayList.slice(0, MAX_PER_CELL);
                     const more = dayList.length - shownItems.length;
+                    const lo = sel ? Math.min(sel[0], sel[1]) : -1;
+                    const hi = sel ? Math.max(sel[0], sel[1]) : -1;
+                    const inSel = i >= lo && i <= hi;
                     return (
                       <div
                         key={i}
+                        // Click a date or drag across days → open the "Start a new conversation"
+                        // picker (committed on window mouseup); inner pills/buttons stopPropagation.
+                        // Past days are read-only: no add gesture, no drag start/extend into them.
+                        onMouseDown={(e) => {
+                          if (e.button !== 0 || past) return;
+                          dragging.current = true;
+                          setSel([i, i]);
+                          e.preventDefault();
+                        }}
+                        onMouseEnter={() => {
+                          if (dragging.current && !past) setSel((s) => (s ? [s[0], i] : [i, i]));
+                        }}
                         className={cn(
-                          "cal-cell min-h-[118px]",
+                          "cal-cell min-h-[118px] select-none",
+                          past ? "is-past cursor-default" : "cursor-pointer",
                           isToday && "is-today",
                           !inMonth && "is-out",
-                          inMonth && !isToday && weekend && "is-weekend",
+                          inMonth && !isToday && !past && weekend && "is-weekend",
                         )}
+                        style={
+                          inSel
+                            ? { boxShadow: "inset 0 0 0 2px hsl(var(--primary))", background: "hsl(var(--primary) / 0.06)" }
+                            : undefined
+                        }
                       >
                         <div className="flex min-h-6 items-center justify-between gap-1">
                           {isToday ? (
@@ -446,12 +516,13 @@ export default function CalendarPage() {
                               {day.d}
                             </span>
                           )}
-                          {inMonth && (
+                          {inMonth && !past && (
                             <button
                               type="button"
                               aria-label="Add on this day"
                               className="cal-add-day"
-                              onClick={() => setConvoOpen(true)}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={() => openAddPanel(day)}
                             >
                               <Plus className="h-3.5 w-3.5" strokeWidth={2.6} />
                             </button>
@@ -465,6 +536,7 @@ export default function CalendarPage() {
                               title={item.title}
                               className="cal-pill"
                               style={tintVars(item)}
+                              onMouseDown={(e) => e.stopPropagation()}
                               onClick={() => openItem(item)}
                             >
                               <span className="text-xs leading-none">{CAT[item.kind].icon}</span>
@@ -475,6 +547,7 @@ export default function CalendarPage() {
                             <button
                               type="button"
                               className="self-start rounded-[5px] px-1.5 py-px text-[11.5px] font-semibold text-muted-foreground transition-colors hover:text-primary"
+                              onMouseDown={(e) => e.stopPropagation()}
                               onClick={() => openDay(day)}
                             >
                               +{more} more
@@ -490,8 +563,11 @@ export default function CalendarPage() {
 
             {view === "week" && (
               <div className="grid grid-cols-7 gap-px bg-border">
-                {weekColumns.map(({ day, weekday, isToday, items: colItems }) => (
-                  <div key={`${day.m}-${day.d}`} className="flex min-h-[520px] flex-col bg-surface">
+                {weekColumns.map(({ day, weekday, isToday, past, items: colItems }) => (
+                  <div
+                    key={`${day.m}-${day.d}`}
+                    className={cn("flex min-h-[520px] flex-col", past ? "bg-surface-variant/30" : "bg-surface")}
+                  >
                     <div
                       className={cn(
                         "cal-weekhead flex items-center justify-between border-b border-border px-3 py-2.5",
@@ -525,11 +601,11 @@ export default function CalendarPage() {
                           <span className="text-[12.5px] font-semibold leading-[1.25]">{item.title}</span>
                         </button>
                       ))}
-                      {colItems.length === 0 && (
+                      {colItems.length === 0 && !past && (
                         <button
                           type="button"
                           className="mt-1 rounded-lg border border-dashed border-border p-2 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                          onClick={() => setConvoOpen(true)}
+                          onClick={() => openAddPanel(day)}
                         >
                           + Add
                         </button>
@@ -576,15 +652,20 @@ export default function CalendarPage() {
                     </span>
                   </button>
                 ))}
-                {dayItems.length === 0 && (
-                  <button
-                    type="button"
-                    className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
-                    onClick={() => setConvoOpen(true)}
-                  >
-                    Nothing scheduled — add something
-                  </button>
-                )}
+                {dayItems.length === 0 &&
+                  (focusPast ? (
+                    <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                      Nothing scheduled
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                      onClick={() => openAddPanel(focus)}
+                    >
+                      Nothing scheduled — add something
+                    </button>
+                  ))}
               </div>
             )}
           </div>
@@ -597,6 +678,14 @@ export default function CalendarPage() {
         mode={modalMode}
         eventData={editing}
         onSave={handleSave}
+      />
+
+      <AddItemPanel
+        open={addOpen}
+        date={addDate}
+        busy={addBusy}
+        onClose={() => setAddOpen(false)}
+        onAdd={handleAddItem}
       />
 
       <NewConversationMenu
