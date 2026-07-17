@@ -241,6 +241,7 @@ export default function DashboardPage() {
         onPick={(ch) => {
           if (ch === "sms") void newBlast("SMS");
           else if (ch === "call") router.push("/channels/calls");
+          else if (ch === "event") router.push("/canvass/events");
         }}
       />
 

@@ -70,6 +70,7 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
               onPick={(ch) => {
                 if (ch === 'sms') void createBlastAndOpen(router, showToast, { channel: 'SMS' });
                 else if (ch === 'call') router.push('/channels/calls');
+                else if (ch === 'event') router.push('/canvass/events');
               }}
             />
             {children}

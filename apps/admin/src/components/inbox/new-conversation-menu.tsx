@@ -2,10 +2,10 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Heart, Mail, MessageCircle, MessageSquareText, MessagesSquare, Phone, X } from "lucide-react";
+import { CalendarPlus, Heart, Mail, MessageCircle, MessageSquareText, Phone, X } from "lucide-react";
 import { cn } from "@uprise/ui";
 
-export type NewConversationChannel = "email" | "sms" | "whatsapp" | "livechat" | "social" | "call";
+export type NewConversationChannel = "email" | "sms" | "whatsapp" | "event" | "social" | "call";
 
 type ChannelCard = {
   key: NewConversationChannel;
@@ -15,20 +15,20 @@ type ChannelCard = {
   tint: string;
 };
 
-// Channel catalogue. SMS + Call are live (first two in the grid); the rest are
+// Channel catalogue. SMS, Call + Event are live (first three in the grid); the rest are
 // placeholders shown greyed-out with a "Soon" badge until their composers land, so
 // the picker previews the full cross-channel roadmap without dead ends.
 const CHANNELS: ChannelCard[] = [
   { key: "sms", title: "New text (SMS)", sub: "Send an SMS broadcast or reply", icon: MessageSquareText, tint: "bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300" },
   { key: "call", title: "New call", sub: "Place an outbound voice call", icon: Phone, tint: "bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300" },
+  { key: "event", title: "New event", sub: "Schedule an event supporters can RSVP to", icon: CalendarPlus, tint: "bg-teal-100 text-teal-600 dark:bg-teal-500/15 dark:text-teal-300" },
   { key: "email", title: "New email", sub: "Send from the shared address", icon: Mail, tint: "bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300" },
   { key: "whatsapp", title: "WhatsApp message", sub: "Reply to a WhatsApp contact", icon: MessageCircle, tint: "bg-green-100 text-green-600 dark:bg-green-500/15 dark:text-green-300" },
-  { key: "livechat", title: "Live chat reply", sub: "Respond on the website widget", icon: MessagesSquare, tint: "bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300" },
   { key: "social", title: "Social message", sub: "DM or reply on socials", icon: Heart, tint: "bg-pink-100 text-pink-600 dark:bg-pink-500/15 dark:text-pink-300" },
 ];
 
-// SMS + Call have live destinations today; everything else is "Soon" (disabled + greyed).
-const isLive = (key: NewConversationChannel) => key === "sms" || key === "call";
+// SMS, Call + Event have live destinations today; everything else is "Soon" (disabled + greyed).
+const isLive = (key: NewConversationChannel) => key === "sms" || key === "call" || key === "event";
 
 /**
  * "Start a new conversation" — the shared-inbox channel picker. A backdrop-blurred
