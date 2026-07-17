@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { FilterSpecification } from "mapbox-gl";
+import { bbox } from "@turf/turf";
 import { AU_BOUNDS, type WalkMode } from "@uprise/field";
 import { getApiUrl } from "@/lib/api";
 import type { AreaLevel, DivisionType } from "@/lib/api/geo";
@@ -21,7 +22,7 @@ import { FirstNationsPanel } from "@/components/canvass/geo-panels/first-nations
 import { ReferendumPanel } from "@/components/canvass/geo-panels/referendum-panel";
 import { DemographicsPanel } from "@/components/canvass/geo-panels/demographics-panel";
 import { firstNationsSlug, resolveFirstNationsLevel } from "@/lib/canvass/first-nations";
-import { getDensityScale, getFirstNations, getReferendum } from "@/lib/api/geo";
+import { getArea, getDensityScale, getFirstNations, getReferendum } from "@/lib/api/geo";
 import { getChoropleth } from "@/lib/api/demographics";
 import { densityBands, densityFill } from "@/lib/canvass/density";
 import { referendumBands, referendumFill } from "@/lib/canvass/referendum-fill";
@@ -32,7 +33,7 @@ import { useApi } from "@/lib/use-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Plus, X } from "lucide-react";
+import { Crosshair, Globe2, Plus, X } from "lucide-react";
 
 // The ONE map for the whole explorer — module-scope dynamic (never in render) so
 // the fiber persists across kind switches; mapbox-gl touches window (ssr:false).
@@ -166,6 +167,26 @@ export function GeoSurface() {
     { ttlMs: 300_000 },
   );
   const demoData = demographics.data;
+
+  // Selected-region geometry → frame the map to the REGION (not just its state).
+  // `frame` toggles between the selection and the country/state extent; bumping
+  // `recenterNonce` re-fits to whichever is active (the two on-map buttons).
+  const demoArea = useApi(
+    demographicsOn && code ? `/geo/areas/${demoLevel}/${code}` : null,
+    () => getArea(demoLevel as AreaLevel, code),
+    { ttlMs: 300_000 },
+  );
+  const demoRegionBounds = useMemo<[number, number, number, number] | undefined>(() => {
+    if (!demographicsOn || !code || !demoArea.data?.geometry) return undefined;
+    const [w, s2, e, n] = bbox(demoArea.data);
+    return [w, s2, e, n];
+  }, [demographicsOn, code, demoArea.data]);
+  const [demoFrame, setDemoFrame] = useState<"selection" | "country">("country");
+  const [demoRecenterNonce, setDemoRecenterNonce] = useState(0);
+  // A new selection frames to it; clearing the selection falls back to country/state.
+  useEffect(() => {
+    setDemoFrame(code ? "selection" : "country");
+  }, [code]);
   const demoRamp = palette && demoData ? rampFor(demoData.indicator.polarity, palette) : [];
   const demographicsFillExpr =
     demographicsOn && palette && demoData
@@ -265,6 +286,7 @@ export function GeoSurface() {
           : undefined,
         boundaryFill,
         selectedBoundaryCode: fnCode || undefined,
+        showDraw: false,
         // The tile carries no slug, so derive it from the boundary's name — exactly the way
         // the API derives it — rather than writing an opaque code into the URL.
         onBoundaryClick: (clicked: string, name: string | null) => {
@@ -291,6 +313,7 @@ export function GeoSurface() {
           : undefined,
         boundaryFill: referendumFillExpr,
         selectedBoundaryCode: code || undefined,
+        showDraw: false,
         // Reference-only — never turf, so no basketCodes.
         onBoundaryClick: (clicked: string) => writeGeoParam("code", code === clicked ? null : clicked),
       };
@@ -301,10 +324,16 @@ export function GeoSurface() {
       // meshblock tile is never requested. Codes are state-prefixed, so the shared state filter
       // + code-first framing hold at every level.
       const baked = !demoClientJoin && Boolean(indicatorKey);
-      const selectionBounds = code ? stateBounds(stateAsgsDigitToAbbrev(code.slice(0, 1)) ?? "") : undefined;
+      const selectionBounds = code
+        ? (demoRegionBounds ?? stateBounds(stateAsgsDigitToAbbrev(code.slice(0, 1)) ?? ""))
+        : undefined;
+      const countryBounds = common.focusBounds ?? AU_BOUNDS;
       return {
         ...common,
-        focusBounds: selectionBounds ?? common.focusBounds ?? AU_BOUNDS,
+        focusBounds:
+          demoFrame === "selection" ? (selectionBounds ?? countryBounds) : countryBounds,
+        recenterToken: demoRecenterNonce,
+        showDraw: false,
         mode: "boundaries",
         boundaryTilesUrl: `${getApiUrl()}/geo/tiles/${demoLevel}/{z}/{x}/{y}?v=4${
           baked ? `&metric=${encodeURIComponent(indicatorKey)}` : ""
@@ -377,6 +406,7 @@ export function GeoSurface() {
     pollingPlaces, pollingSelectedId, setPollingSelectedId,
     fnCode, boundaryFill, refLevel, referendumFillExpr,
     demoLevel, demoClientJoin, indicatorKey, demographicsFillExpr,
+    demoRegionBounds, demoFrame, demoRecenterNonce,
   ]);
 
   if (!kind) return null;
@@ -415,6 +445,36 @@ export function GeoSurface() {
         )}
       >
         <GeoMap {...mapProps} />
+        {demographicsOn ? (
+          <div className="absolute left-3 top-3 z-10 flex flex-col gap-1.5">
+            <button
+              type="button"
+              disabled={!code}
+              title="Recentre on the selected area"
+              onClick={() => {
+                setDemoFrame("selection");
+                setDemoRecenterNonce((n) => n + 1);
+              }}
+              className={cn(
+                "flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 text-xs font-semibold shadow-card backdrop-blur transition-colors",
+                code ? "text-foreground hover:border-primary hover:text-primary" : "cursor-not-allowed text-muted-foreground opacity-60",
+              )}
+            >
+              <Crosshair className="h-3.5 w-3.5" /> Selected area
+            </button>
+            <button
+              type="button"
+              title={stateParam ? `Recentre on ${stateParam}` : "Recentre on Australia"}
+              onClick={() => {
+                setDemoFrame("country");
+                setDemoRecenterNonce((n) => n + 1);
+              }}
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 text-xs font-semibold text-foreground shadow-card backdrop-blur transition-colors hover:border-primary hover:text-primary"
+            >
+              <Globe2 className="h-3.5 w-3.5" /> {stateParam || "Australia"}
+            </button>
+          </div>
+        ) : null}
         {densityOn && densityLegend.length > 0 && palette ? (
           <div className="pointer-events-none absolute bottom-3 right-3 z-10">
             <SequentialLegend bands={densityLegend} nodata={palette.nodata} unit="addresses / km²" />

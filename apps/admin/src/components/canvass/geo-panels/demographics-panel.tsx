@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   getChoropleth,
@@ -15,7 +15,8 @@ import { useApi } from "@/lib/use-api";
 import { writeGeoParam } from "@/components/canvass/use-geo-explorer-url-state";
 import { StateRegion } from "@/components/shell/state-region";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard, type WalkMode } from "@uprise/field";
+import { type WalkMode } from "@uprise/field";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Largest area (SA4) on the left → smallest (meshblock) on the right.
@@ -40,6 +41,42 @@ function fmtValue(v: AbsRegionValue): string {
   return v.value === null ? "—" : formatIndicator(v.value, v.unit);
 }
 
+/** SectionCard's shell with a collapsible, toggling header — the Indicator picker
+ *  and the clicked-region profile share the sidebar one-at-a-time. */
+function CollapsibleCard({
+  title,
+  description,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  description?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-surface shadow-card">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left"
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-extrabold uppercase tracking-[0.04em] text-foreground">{title}</h2>
+          {description ? <p className="mt-1 truncate text-[13.5px] text-muted-foreground">{description}</p> : null}
+        </div>
+        <ChevronDown
+          className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+        />
+      </button>
+      {open ? <div className="border-t border-[hsl(var(--muted))] px-5 py-4">{children}</div> : null}
+    </section>
+  );
+}
+
 /**
  * Demographics panel for the unified geo surface. The map (owned by GeoSurface) shades the chosen
  * ASGS level by the chosen indicator; this is the picker + read-out beside it. The indicator rides
@@ -53,6 +90,13 @@ export function DemographicsPanel({ view }: { view: WalkMode }) {
   const level = (["mb", "sa1", "sa2", "sa3", "sa4"].includes(rawLevel ?? "") ? rawLevel : "sa2") as AbsLevel;
   const ind = searchParams.get("ind") ?? "";
   const code = searchParams.get("code") ?? "";
+
+  // Accordion: the Indicator picker and the region profile toggle between each
+  // other — clicking a region opens the profile; reopening Indicator collapses it.
+  const [openSection, setOpenSection] = useState<"indicator" | "profile">(code ? "profile" : "indicator");
+  useEffect(() => {
+    setOpenSection(code ? "profile" : "indicator");
+  }, [code]);
 
   const indicators = useApi("/demographics/indicators", () => listIndicators(), { ttlMs: 600_000 });
   const all = useMemo(() => indicators.data ?? [], [indicators.data]);
@@ -111,7 +155,12 @@ export function DemographicsPanel({ view }: { view: WalkMode }) {
         skeleton={<Skeleton className="h-72 w-full" />}
       >
         {/* Indicator picker, grouped by category */}
-        <SectionCard title="Indicator" description={choropleth.data ? `${choropleth.data.regions.toLocaleString()} regions shaded` : undefined}>
+        <CollapsibleCard
+          title="Indicator"
+          description={choropleth.data ? `${choropleth.data.regions.toLocaleString()} regions shaded` : undefined}
+          open={openSection === "indicator"}
+          onToggle={() => setOpenSection(openSection === "indicator" ? "profile" : "indicator")}
+        >
           <div className="max-h-[40vh] space-y-3 overflow-y-auto">
             {byCategory.map(([category, items]) => (
               <div key={category}>
@@ -138,10 +187,18 @@ export function DemographicsPanel({ view }: { view: WalkMode }) {
               </div>
             ))}
           </div>
-        </SectionCard>
+        </CollapsibleCard>
 
         {/* Clicked-region profile */}
-        {code ? <RegionProfile level={level} code={code} activeIndicator={ind} /> : (
+        {code ? (
+          <RegionProfile
+            level={level}
+            code={code}
+            activeIndicator={ind}
+            open={openSection === "profile"}
+            onToggle={() => setOpenSection(openSection === "profile" ? "indicator" : "profile")}
+          />
+        ) : (
           <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
             Click a region on the map for its full ABS profile.
           </p>
@@ -152,7 +209,19 @@ export function DemographicsPanel({ view }: { view: WalkMode }) {
 }
 
 /** The full ABS profile for one region, grouped by category — the click read-out. */
-function RegionProfile({ level, code, activeIndicator }: { level: AbsLevel; code: string; activeIndicator: string }) {
+function RegionProfile({
+  level,
+  code,
+  activeIndicator,
+  open,
+  onToggle,
+}: {
+  level: AbsLevel;
+  code: string;
+  activeIndicator: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const { data, loading, error } = useApi(
     `/demographics/regions/${level}/${code}`,
     () => getRegionProfile(level, code),
@@ -166,7 +235,7 @@ function RegionProfile({ level, code, activeIndicator }: { level: AbsLevel; code
   for (const v of data.values) (groups.get(v.category) ?? groups.set(v.category, []).get(v.category)!).push(v);
 
   return (
-    <SectionCard title={data.name} description={`${level.toUpperCase()} ${data.code}`}>
+    <CollapsibleCard title={data.name} description={`${level.toUpperCase()} ${data.code}`} open={open} onToggle={onToggle}>
       {data.values.length === 0 ? (
         <p className="text-sm text-muted-foreground">No ABS data for this region.</p>
       ) : (
@@ -194,6 +263,6 @@ function RegionProfile({ level, code, activeIndicator }: { level: AbsLevel; code
           ))}
         </div>
       )}
-    </SectionCard>
+    </CollapsibleCard>
   );
 }

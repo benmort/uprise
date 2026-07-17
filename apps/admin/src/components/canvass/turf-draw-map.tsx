@@ -156,6 +156,7 @@ export function TurfDrawMap({
   focusPoint,
   resizeToken,
   recenterToken,
+  showDraw = true,
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
@@ -261,6 +262,10 @@ export function TurfDrawMap({
   /** Bump to re-fit the map to the campaign boundary (or focusBounds/country
    *  fallback) on demand — the "Recentre on boundary" affordance. */
   recenterToken?: number;
+  /** Mount the freehand polygon-draw control (default on). Reference-only browse
+   *  surfaces (demographics/referendum/First Nations) turn it off — nothing there
+   *  is turf, so the draw + bin buttons are noise. */
+  showDraw?: boolean;
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
@@ -874,7 +879,7 @@ export function TurfDrawMap({
           });
         }}
       >
-        <DrawControl onChange={onPolygonsChange} clearToken={clearToken} />
+        {showDraw ? <DrawControl onChange={onPolygonsChange} clearToken={clearToken} /> : null}
 
         {/* Campaign boundary — grey shaded backdrop of the campaign's extent. Drawn
             first so it sits beneath the selectable areas and the turf being cut. */}

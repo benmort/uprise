@@ -19,6 +19,10 @@ type SearchInputProps = Omit<ComponentProps<typeof Input>, "value" | "onChange">
  * appears once there's text (the Areas/Places search pattern). Adopted across search
  * bars and sidebar/menu filters so clearing is one click everywhere. Controlled —
  * pass `value` + `onValueChange`.
+ *
+ * The wrapper carries a MINIMUM width: in a crowded `flex-wrap` toolbar the field
+ * wraps to the row below instead of squashing into an unusable sliver. Override
+ * via `wrapperClassName` (a `min-w-*` there wins) for genuinely tight slots.
  */
 export function SearchInput({
   value,
@@ -29,7 +33,7 @@ export function SearchInput({
   ...props
 }: SearchInputProps) {
   return (
-    <div className={cn("relative", wrapperClassName)}>
+    <div className={cn("relative min-w-[220px]", wrapperClassName)}>
       <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={value}
