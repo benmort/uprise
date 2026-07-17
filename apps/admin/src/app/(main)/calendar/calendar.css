@@ -1,0 +1,170 @@
+/* Calendar surface — a faithful replication of the approved design mock
+   (Downloads/Calendar.html): one visual language for the whole page. Category
+   tinting is driven by three custom props each pill/card/badge sets inline
+   (--acc accent, --txl light text, --txd dark text); the .dark variants mirror
+   the mock's dark branches exactly. */
+
+@keyframes calRing {
+  0% { box-shadow: 0 0 0 0 rgba(70, 95, 255, 0.35); }
+  100% { box-shadow: 0 0 0 6px rgba(70, 95, 255, 0); }
+}
+
+/* Month-cell event pill */
+.cal-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: none;
+  padding: 3px 7px 3px 8px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--txl);
+  background: color-mix(in srgb, var(--acc) 13%, #ffffff);
+  border-left: 3px solid var(--acc);
+  box-shadow: 0 1px 1px rgba(16, 24, 40, 0.05);
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+  overflow: hidden;
+}
+.cal-pill:hover {
+  box-shadow: 0 4px 10px -3px rgba(16, 24, 40, 0.28);
+  transform: translateY(-1px);
+}
+.dark .cal-pill {
+  color: var(--txd);
+  background: color-mix(in srgb, var(--acc) 24%, #16161c);
+  box-shadow: none;
+}
+
+/* Week-column event card */
+.cal-card {
+  cursor: pointer;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--txl);
+  background: color-mix(in srgb, var(--acc) 13%, #ffffff);
+  border-left: 3px solid var(--acc);
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+.cal-card:hover {
+  box-shadow: 0 6px 14px -4px rgba(16, 24, 40, 0.3);
+  transform: translateY(-1px);
+}
+.dark .cal-card {
+  color: var(--txd);
+  background: color-mix(in srgb, var(--acc) 24%, #16161c);
+}
+
+/* Day-list category badge */
+.cal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--txl);
+  background: color-mix(in srgb, var(--acc) 15%, transparent);
+}
+.dark .cal-badge {
+  color: var(--txd);
+  background: color-mix(in srgb, var(--acc) 26%, transparent);
+}
+
+/* Day-list row */
+.cal-row {
+  border: 1px solid color-mix(in srgb, var(--acc) 26%, transparent);
+  background: color-mix(in srgb, var(--acc) 6%, #ffffff);
+  transition: box-shadow 0.16s ease, transform 0.16s ease;
+}
+.cal-row:hover {
+  box-shadow: 0 6px 14px -4px rgba(16, 24, 40, 0.22);
+  transform: translateY(-1px);
+}
+.dark .cal-row {
+  border-color: color-mix(in srgb, var(--acc) 40%, transparent);
+  background: color-mix(in srgb, var(--acc) 14%, hsl(var(--surface)));
+}
+
+/* Month day cells — background variants per the mock's light/dark branches. */
+.cal-cell {
+  background: hsl(var(--surface));
+  padding: 6px 6px 7px;
+  display: flex;
+  flex-direction: column;
+}
+.cal-cell.is-weekend {
+  background: color-mix(in srgb, hsl(var(--surface-variant)) 45%, #ffffff);
+}
+.cal-cell.is-out {
+  background: hsl(var(--surface-variant));
+  opacity: 0.72;
+}
+.cal-cell.is-today {
+  background: color-mix(in srgb, #465fff 7%, #ffffff);
+}
+.dark .cal-cell.is-weekend {
+  background: color-mix(in srgb, #000 8%, hsl(var(--surface)));
+}
+.dark .cal-cell.is-out {
+  background: color-mix(in srgb, #000 22%, hsl(var(--surface)));
+}
+.dark .cal-cell.is-today {
+  background: color-mix(in srgb, #465fff 15%, hsl(var(--surface)));
+}
+
+/* Today's date — the pulsing primary circle. */
+.cal-today-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: calRing 2.4s ease-out infinite;
+}
+
+/* Per-day quick-add — invisible until the pointer says otherwise. */
+.cal-add-day {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  opacity: 0.35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.cal-add-day:hover {
+  opacity: 1;
+  background: hsl(var(--surface-variant));
+  color: hsl(var(--primary));
+}
+
+/* Week-column today header tint */
+.cal-weekhead.is-today {
+  background: color-mix(in srgb, #465fff 8%, #ffffff);
+}
+.dark .cal-weekhead.is-today {
+  background: color-mix(in srgb, #465fff 16%, hsl(var(--surface)));
+}
