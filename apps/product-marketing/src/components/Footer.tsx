@@ -118,7 +118,9 @@ export default function Footer() {
           {/* Newsletter */}
           <div className="lg:col-span-3">
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Newsletter</h3>
-            <p className="text-gray-600 mb-4">Subscribe for the latest updates</p>
+            {/* Muted caption — deliberately smaller/lighter than the footer's gray-600 link text,
+                so it reads as a static prompt, not a clickable link/button. */}
+            <p className="text-sm text-gray-500 mb-4">Subscribe for the latest updates</p>
             <NewsletterSignup />
           </div>
         </div>
