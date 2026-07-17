@@ -1,0 +1,114 @@
+/* Segment canvas — the react-flow chrome + the bespoke wiring Tailwind
+ * utilities can't express (edge strokes by class, junction-dot handles, the
+ * elbow stubs that join condition cards to their group's rail). Extracted from
+ * the slingshot prototype's segment-canvas.css; every colour resolves to a
+ * design token (globals.css channel vars) — no raw hex/rgb literals. */
+
+.seg-canvas {
+  --seg-wire: hsl(var(--muted-foreground) / 0.45);
+}
+
+.seg-canvas .react-flow__node {
+  cursor: default;
+}
+
+/* ── junction handles (edge anchors, styled as the prototype's wiring dots) ── */
+.seg-canvas .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: hsl(var(--muted-foreground));
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 0 0 1px hsl(var(--border));
+  pointer-events: none !important;
+}
+
+.seg-canvas .seg-group-node--excl .react-flow__handle {
+  background: hsl(var(--error));
+}
+
+.seg-canvas .react-flow__handle.seg-handle--hidden {
+  opacity: 0;
+}
+
+/* ── edges ── */
+.seg-canvas .seg-edge .react-flow__edge-path {
+  stroke: var(--seg-wire);
+  stroke-width: 2;
+}
+
+.seg-canvas .seg-edge--excl .react-flow__edge-path {
+  stroke: hsl(var(--error) / 0.6);
+  stroke-dasharray: 6 4;
+}
+
+.seg-canvas .seg-edge--result .react-flow__edge-path {
+  stroke: hsl(var(--primary) / 0.7);
+  stroke-width: 2.5;
+}
+
+/* ── in-group wiring: the vertical rail + per-card elbow stub and dot ── */
+.seg-canvas .seg-rail {
+  position: absolute;
+  left: 10px;
+  top: 42px;
+  bottom: 24px;
+  border-left: 2px solid var(--seg-wire);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.seg-canvas .seg-card-node::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 10px;
+  border-top: 2px solid var(--seg-wire);
+}
+
+.seg-canvas .seg-card-node::after {
+  content: "";
+  position: absolute;
+  left: -14.5px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  transform: translateY(-50%);
+  background: hsl(var(--muted-foreground));
+  box-shadow: 0 0 0 2px hsl(var(--background));
+  z-index: 2;
+}
+
+.seg-canvas .seg-card-node--standalone::before,
+.seg-canvas .seg-card-node--standalone::after {
+  display: none;
+}
+
+/* ── controls + attribution, themed with tokens (light and dark) ── */
+.seg-canvas .react-flow__controls {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 3px hsl(var(--foreground) / 0.12);
+}
+
+.seg-canvas .react-flow__controls-button {
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  fill: hsl(var(--foreground));
+}
+
+.seg-canvas .react-flow__controls-button:hover {
+  background: hsl(var(--surface-variant));
+}
+
+.seg-canvas .react-flow__attribution {
+  background: transparent;
+}
+
+.seg-canvas .react-flow__attribution a {
+  color: hsl(var(--muted-foreground));
+}

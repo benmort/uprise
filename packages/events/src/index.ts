@@ -10,6 +10,9 @@
 export const EVENT_TYPES = {
   AUDIENCE_IMPORTED: "audience.imported",
   SEGMENT_RECOMPUTED: "audience.segment.recomputed",
+  SEGMENT_CREATED: "audience.segment.created",
+  SEGMENT_UPDATED: "audience.segment.updated",
+  SEGMENT_ARCHIVED: "audience.segment.archived",
   BLAST_CREATED: "messaging.blast.created",
   BLAST_SCHEDULED: "messaging.blast.scheduled",
   BLAST_SENT: "messaging.blast.sent",
@@ -101,6 +104,9 @@ export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
 export interface DomainEventMap {
   "audience.imported": { audienceId: string; tenantId: string; count: number };
   "audience.segment.recomputed": { segmentId: string; tenantId: string; memberCount: number };
+  "audience.segment.created": { segmentId: string; audienceId: string; tenantId: string };
+  "audience.segment.updated": { segmentId: string; tenantId: string; version: number };
+  "audience.segment.archived": { segmentId: string; tenantId: string; archived: boolean };
   "insights.poll.ingested": { pollId: string; tenantId: string | null; questionCount: number; estimateCount: number };
   "insights.poll.published": { pollId: string; tenantId: string | null };
   "canvass.disposition.set": {

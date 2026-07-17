@@ -269,7 +269,7 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
               },
               { label: "SMS inbox", href: "/future/sms-inbox", match: px("sms-inbox"), flag: "FEATURE_NAV_INBOX" },
               { label: "Journeys", href: "/future/journeys", match: px("journeys"), flag: "FEATURE_JOURNEYS_ENABLED" },
-              { label: "Segmentation", href: "/future/segmentation", match: px("segmentation") },
+              { label: "Segmentation", href: "/audience/segments", match: (p) => p.startsWith("/audience/segments"), flag: "FEATURE_SEGMENTS_ENABLED" },
               { label: "Events", href: "/future/events", match: px("events"), flag: "FEATURE_NAV_PROG_ORGANISING" },
               { label: "Chats", href: "/future/chats", match: px("chats") },
               // Manage: the parked back-office/admin stubs (mirrors the top-level Manage zone).

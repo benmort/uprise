@@ -1462,3 +1462,97 @@ export async function rejectSignup(requestId: string) {
     method: "POST",
   });
 }
+
+// ── Segments (engine v2) — audience definitions over the contact spine ────
+import type {
+  CompileCustomQueryResponse,
+  GenerateSegmentResponse,
+  PreviewSegmentRequest,
+  SaveSegmentRequest,
+  SegmentCatalogueResponse,
+  SegmentDetail,
+  SegmentPreview,
+  SegmentSummary,
+} from "@uprise/segmentation";
+
+export type {
+  CompileCustomQueryResponse,
+  GenerateSegmentResponse,
+  PreviewSegmentRequest,
+  SaveSegmentRequest,
+  SegmentCatalogueResponse,
+  SegmentDetail,
+  SegmentPreview,
+  SegmentSummary,
+};
+
+/** The condition catalogue + this tenant's entity-picker feeds. */
+export async function getSegmentCatalogue() {
+  return request<SegmentCatalogueResponse>("/segments/catalogue");
+}
+
+export async function listSegmentDefinitions() {
+  return request<SegmentSummary[]>("/segments");
+}
+
+export async function getSegmentDefinition(id: string) {
+  return request<SegmentDetail>(`/segments/${encodeURIComponent(id)}`);
+}
+
+export async function createSegmentDefinition(input: SaveSegmentRequest) {
+  return request<SegmentDetail>("/segments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateSegmentDefinition(id: string, input: SaveSegmentRequest) {
+  return request<SegmentDetail>(`/segments/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function archiveSegmentDefinition(id: string) {
+  return request<SegmentDetail>(`/segments/${encodeURIComponent(id)}/archive`, { method: "PATCH" });
+}
+
+export async function restoreSegmentDefinition(id: string) {
+  return request<SegmentDetail>(`/segments/${encodeURIComponent(id)}/restore`, { method: "PATCH" });
+}
+
+/** Live preview of an unsaved spec (the builder calls this debounced). */
+export async function previewSegment(input: PreviewSegmentRequest) {
+  return request<SegmentPreview>("/segments/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+/** Manual re-materialisation of a saved segment's membership. */
+export async function evaluateSegment(id: string) {
+  return request<{ queued: boolean }>(`/segments/${encodeURIComponent(id)}/evaluate`, {
+    method: "POST",
+  });
+}
+
+/** AI prompt-to-segment (deterministic keyword fallback when AI is off). */
+export async function generateSegment(prompt: string) {
+  return request<GenerateSegmentResponse>("/segments/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
+  });
+}
+
+/** The AI custom-query lane: plain-English intent → validated predicate + live count. */
+export async function compileSegmentCustomQuery(intent: string) {
+  return request<CompileCustomQueryResponse>("/segments/custom-query/compile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ intent }),
+  });
+}

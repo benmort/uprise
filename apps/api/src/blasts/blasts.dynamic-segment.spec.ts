@@ -1,5 +1,6 @@
 import { ConfigService } from "@nestjs/config";
 import { AudienceKind, MessageChannel } from "@uprise/db";
+import { orderByHash } from "@uprise/segmentation";
 import { BlastsService } from "./blasts.service";
 import { TemplateRendererService } from "./template-renderer.service";
 import { ComplianceService } from "./compliance.service";
@@ -14,7 +15,7 @@ const consentMock = {
   canSend: jest.fn().mockReturnValue(true),
 } as unknown as ConsentService;
 
-function build(prismaMock: any) {
+function build(prismaMock: any, segmentEvaluator?: { evaluate: jest.Mock }) {
   return new BlastsService(
     prismaMock,
     configMock,
@@ -24,6 +25,11 @@ function build(prismaMock: any) {
     { resolve: async () => undefined, resolveByNumber: async () => undefined, invalidate: () => {} } as any,
     eventsMock,
     consentMock,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    segmentEvaluator as any,
   );
 }
 
@@ -67,6 +73,105 @@ describe("BlastsService — dynamic-segment recipients (meld doc 10)", () => {
       ]),
     );
     expect(recipients).toHaveLength(2);
+  });
+
+  it("orders v2 (seeded) segment recipients by the deterministic hash order (preview == send)", async () => {
+    const seed = "seed-blast-spec";
+    const memberIds = ["c1", "c2", "c3", "c4"];
+    const prismaMock: any = {
+      audience: { findFirst: jest.fn().mockResolvedValue({ kind: AudienceKind.STATIC }) },
+      audienceSegment: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: "seg1", seed, lastEvaluatedAt: new Date() }]),
+      },
+      audienceSegmentMember: {
+        findMany: jest.fn().mockResolvedValue(memberIds.map((contactId) => ({ contactId }))),
+      },
+      contact: {
+        // Deliberately NOT in hash order — the service must reorder.
+        findMany: jest.fn().mockResolvedValue(
+          memberIds.map((id, i) => ({
+            id,
+            phoneE164: `+6140000000${i + 1}`,
+            metadata: null,
+          })),
+        ),
+      },
+      audienceContact: { findMany: jest.fn() },
+    };
+    const service = build(prismaMock);
+
+    const recipients = await (service as any).getBlastRecipients({
+      audienceId: "aud_1",
+      id: "blast_1",
+      tenantId: "t1",
+      channel: MessageChannel.SMS,
+    });
+
+    const expectedOrder = orderByHash(memberIds, seed);
+    expect(recipients.map((r: { contactId: string }) => r.contactId)).toEqual(expectedOrder);
+  });
+
+  it("re-evaluates a stale v2 segment inline before drawing members", async () => {
+    const evaluator = { evaluate: jest.fn().mockResolvedValue({ count: 1 }) };
+    const stale = new Date(Date.now() - 60 * 60_000); // an hour old > the 15-min default
+    const prismaMock: any = {
+      audience: { findFirst: jest.fn().mockResolvedValue({ kind: AudienceKind.STATIC }) },
+      audienceSegment: {
+        findMany: jest.fn().mockResolvedValue([{ id: "seg1", seed: "s", lastEvaluatedAt: stale }]),
+      },
+      audienceSegmentMember: { findMany: jest.fn().mockResolvedValue([{ contactId: "c1" }]) },
+      contact: {
+        findMany: jest.fn().mockResolvedValue([{ id: "c1", phoneE164: "+61400000001", metadata: null }]),
+      },
+      audienceContact: { findMany: jest.fn() },
+    };
+    const service = build(prismaMock, evaluator);
+
+    await (service as any).getBlastRecipients({
+      audienceId: "aud_1",
+      id: "blast_1",
+      tenantId: "t1",
+      channel: MessageChannel.SMS,
+    });
+
+    expect(evaluator.evaluate).toHaveBeenCalledWith("seg1");
+  });
+
+  it("does NOT re-evaluate a fresh v2 segment, and never re-evaluates legacy (unseeded) segments", async () => {
+    const evaluator = { evaluate: jest.fn() };
+    const prismaMock: any = {
+      audience: { findFirst: jest.fn().mockResolvedValue({ kind: AudienceKind.STATIC }) },
+      audienceSegment: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: "seg1", seed: "s", lastEvaluatedAt: new Date() }]),
+      },
+      audienceSegmentMember: { findMany: jest.fn().mockResolvedValue([]) },
+      contact: { findMany: jest.fn().mockResolvedValue([]) },
+      audienceContact: { findMany: jest.fn() },
+    };
+    const service = build(prismaMock, evaluator);
+    await (service as any).getBlastRecipients({
+      audienceId: "aud_1",
+      id: "blast_1",
+      tenantId: "t1",
+      channel: MessageChannel.SMS,
+    });
+    expect(evaluator.evaluate).not.toHaveBeenCalled();
+
+    // Legacy: no seed → no staleness path even when stale.
+    prismaMock.audienceSegment.findMany.mockResolvedValue([
+      { id: "seg2", seed: null, lastEvaluatedAt: null },
+    ]);
+    await (service as any).getBlastRecipients({
+      audienceId: "aud_1",
+      id: "blast_1",
+      tenantId: "t1",
+      channel: MessageChannel.SMS,
+    });
+    expect(evaluator.evaluate).not.toHaveBeenCalled();
   });
 
   it("falls back to the static AudienceContact list when there are no dynamic segments", async () => {

@@ -37,6 +37,8 @@ import { BlastRetryFailedJobPayload, BlastSendBatchJobPayload } from "../common/
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { canTransitionTxSms } from "../messaging/tx-sms-state.machine";
+import { orderByHash } from "@uprise/segmentation";
+import { SegmentEvaluatorService } from "../audiences/segment-evaluator.service";
 
 const TWILIO_SMS_PROVIDER = "twilio";
 
@@ -132,6 +134,8 @@ export class BlastsService {
     @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
     webhookEvents?: WebhookEventService,
     outbox?: OutboxService,
+    /** Optional (spec-friendly tail param): re-materialises stale v2 segments at send time. */
+    private readonly segmentEvaluator?: SegmentEvaluatorService,
   ) {
     this.flags = flags ?? {
       isEnabled: async () => false,
@@ -388,24 +392,48 @@ export class BlastsService {
           tenantId: blast.tenantId,
           type: AudienceSegmentType.DYNAMIC,
         },
-        select: { id: true },
+        select: { id: true, seed: true, lastEvaluatedAt: true },
       });
 
       if (dynamicSegments.length > 0) {
+        // Engine-v2 container audiences hold exactly ONE seeded segment — that seed
+        // drives the deterministic send order (preview == send) and the staleness
+        // re-evaluation. Legacy dynamic segments (no seed) keep the old behaviour.
+        const v2 = dynamicSegments.length === 1 && dynamicSegments[0].seed ? dynamicSegments[0] : null;
+        if (v2 && this.segmentEvaluator) {
+          const configured = Number(this.config.get("SEGMENT_STALE_MINUTES"));
+          const staleMinutes = Number.isFinite(configured) && configured > 0 ? configured : 15;
+          const staleBefore = Date.now() - staleMinutes * 60_000;
+          if (!v2.lastEvaluatedAt || v2.lastEvaluatedAt.getTime() < staleBefore) {
+            // Re-materialise inline so the send reflects the definition NOW (blast
+            // sends are queue-driven; the evaluation latency is acceptable here).
+            await this.segmentEvaluator.evaluate(v2.id);
+          }
+        }
+
         // Dynamic-segment audience: members are the materialised AudienceSegmentMember
         // set (rewritten by SegmentEvaluatorService), resolved to the Contact spine.
         const members = await this.prisma.audienceSegmentMember.findMany({
           where: { segmentId: { in: dynamicSegments.map((s) => s.id) } },
           select: { contactId: true },
         });
-        const contactIds = Array.from(new Set(members.map((m) => m.contactId)));
+        let contactIds = Array.from(new Set(members.map((m) => m.contactId)));
+        if (v2?.seed) {
+          // Deterministic hash order: the preview sample is the head of exactly
+          // this order, so what the organiser saw is who the send starts with.
+          contactIds = orderByHash(contactIds, v2.seed);
+        }
         if (contactIds.length > 0) {
           const contacts = await this.prisma.contact.findMany({
             where: { id: { in: contactIds }, tenantId: blast.tenantId, phoneE164: { not: null } },
             select: { id: true, phoneE164: true, metadata: true },
           });
-          for (const c of contacts) {
-            if (!c.phoneE164) continue;
+          // Insert in contactIds order (hash order for v2) — the dedup Map's
+          // insertion order becomes recipient-creation order downstream.
+          const byId = new Map(contacts.map((c) => [c.id, c]));
+          for (const id of contactIds) {
+            const c = byId.get(id);
+            if (!c?.phoneE164) continue;
             dedup.set(c.phoneE164, {
               contactId: c.id,
               phoneE164: c.phoneE164,

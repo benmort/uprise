@@ -7,6 +7,7 @@
   "packages/permissions": 10,
   "packages/flags": 10,
   "packages/domains": 10,
+  "packages/segmentation": 10,
   "packages/api-client": 73,
   "apps/auth": 62,
   "apps/action": 10,

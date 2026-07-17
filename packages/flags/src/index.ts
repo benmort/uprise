@@ -65,6 +65,15 @@ const CORE_FLAGS = [
     envVar: "FEATURE_BLAST_SCHEDULER_ENABLED",
   },
   {
+    key: "FEATURE_SEGMENTS_ENABLED",
+    description:
+      "The segment builder (engine v2): audience definitions with the filter tree, policy layer, live preview, AI authoring and blast targeting.",
+    default: false,
+    kind: "release",
+    controllableBy: RELEASE,
+    envVar: "FEATURE_SEGMENTS_ENABLED",
+  },
+  {
     key: "FEATURE_JOURNEYS_ENABLED",
     description: "Automated supporter journeys.",
     default: false,

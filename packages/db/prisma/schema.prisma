@@ -42,6 +42,9 @@ enum AudienceChannel {
 enum AudienceKind {
   STATIC
   WHATSAPP_OPTED_IN
+  // The container audience behind one engine-v2 dynamic segment (one audience ↔
+  // one segment) — lets blasts target segments with no targeting-model change.
+  DYNAMIC_SEGMENT
   @@schema("audience")
 }
 
@@ -572,12 +575,22 @@ model AudienceSegment {
   audienceId     String
   name           String
   type           AudienceSegmentType @default(DYNAMIC)
+  // Legacy clause object (no `format` key) OR the engine-v2 envelope
+  // `{ format: 2, filter, policy, customClauses? }` (@uprise/segmentation).
   definition     Json
+  // ── engine v2 (format: 2) columns — null/default for legacy segments ──
+  version         Int       @default(1)
+  // Deterministic-order seed (whitespace-free): preview sample == send order.
+  seed            String?
+  archivedAt      DateTime?
+  lastEvaluatedAt DateTime?
+  createdById     String?   // id-only → iam.User
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   audience       Audience            @relation(fields: [audienceId], references: [id], onDelete: Cascade)
   members        AudienceSegmentMember[]
   @@index([audienceId, type])
+  @@index([tenantId, archivedAt])
   @@schema("audience")
 }
 
@@ -1719,7 +1732,16 @@ model EventRsvp {
   name        String
   email       String?
   phone       String?
+  // Extra heads beyond the registrant. A party (1 + guests) is admitted together;
+  // capacity + waitlist maths count heads, not rows.
+  guests      Int        @default(0)
   status      RsvpStatus @default(GOING)
+  // Long-lived, non-consuming self-manage token (attendee change/cancel link). Unique
+  // via a hand-maintained index. checkedInAt is set on door check-in (status→ATTENDED);
+  // reminderSentAt gates the T-24h reminder sweep to once per RSVP.
+  manageToken   String?  @unique
+  checkedInAt   DateTime?
+  reminderSentAt DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)

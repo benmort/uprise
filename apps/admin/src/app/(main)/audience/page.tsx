@@ -31,7 +31,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { fuzzyIncludes } from "@/lib/fuzzy";
-import { Users } from "lucide-react";
+import { Split, Users } from "lucide-react";
+import Link from "next/link";
+import { useFlag } from "@/components/flags/flags-provider";
 
 type AudienceRow = {
   id: string;
@@ -131,6 +133,7 @@ function getUploadProgressDetails(uploadState: UploadState): string {
 export default function AudiencePage() {
   const router = useRouter();
   const { showToast } = useToast();
+  const segmentsEnabled = useFlag("FEATURE_SEGMENTS_ENABLED");
   const filterRef = useRef<HTMLInputElement | null>(null);
   const [rows, setRows] = useState<AudienceRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -369,6 +372,13 @@ export default function AudiencePage() {
             Import subscribers, sync remote lists, and prepare recipients for sends.
           </p>
         </div>
+        {segmentsEnabled && (
+          <Button asChild variant="outline">
+            <Link href="/audience/segments">
+              <Split className="mr-1.5 h-4 w-4" /> Segments
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

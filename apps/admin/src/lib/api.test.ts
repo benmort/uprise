@@ -58,6 +58,7 @@ import {
   approveSignup,
   rejectSignup,
 } from "./api";
+import * as api from "./api";
 
 const mockRequest = vi.mocked(apiClientRequest);
 
@@ -313,5 +314,81 @@ describe("super-admin signup wrappers", () => {
   it("rejectSignup POSTs the encoded reject sub-path", async () => {
     await rejectSignup("jr/2");
     expect(mockRequest).toHaveBeenCalledWith("/tenants/pending-signups/jr%2F2/reject", { method: "POST" });
+  });
+});
+
+describe("segment (engine v2) wrappers", () => {
+  it("getSegmentCatalogue GETs the catalogue", async () => {
+    await api.getSegmentCatalogue();
+    expect(mockRequest).toHaveBeenCalledWith("/segments/catalogue", undefined);
+  });
+
+  it("listSegmentDefinitions GETs /segments", async () => {
+    await api.listSegmentDefinitions();
+    expect(mockRequest).toHaveBeenCalledWith("/segments", undefined);
+  });
+
+  it("getSegmentDefinition GETs the encoded id", async () => {
+    await api.getSegmentDefinition("seg 1");
+    expect(mockRequest).toHaveBeenCalledWith("/segments/seg%201", undefined);
+  });
+
+  it("createSegmentDefinition POSTs the spec", async () => {
+    const input = { name: "Reef", filter: { kind: "all", children: [] } } as never;
+    await api.createSegmentDefinition(input);
+    expect(mockRequest).toHaveBeenCalledWith("/segments", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(input),
+    });
+  });
+
+  it("updateSegmentDefinition PATCHes the encoded id", async () => {
+    await api.updateSegmentDefinition("seg1", { name: "Renamed" } as never);
+    expect(mockRequest).toHaveBeenCalledWith("/segments/seg1", {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: "Renamed" }),
+    });
+  });
+
+  it("archive/restore PATCH the sub-paths", async () => {
+    await api.archiveSegmentDefinition("seg1");
+    expect(mockRequest).toHaveBeenCalledWith("/segments/seg1/archive", { method: "PATCH" });
+    await api.restoreSegmentDefinition("seg1");
+    expect(mockRequest).toHaveBeenCalledWith("/segments/seg1/restore", { method: "PATCH" });
+  });
+
+  it("previewSegment POSTs the spec to /segments/preview", async () => {
+    const spec = { filter: { kind: "all", children: [] }, seed: "s1" } as never;
+    await api.previewSegment(spec);
+    expect(mockRequest).toHaveBeenCalledWith("/segments/preview", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(spec),
+    });
+  });
+
+  it("evaluateSegment POSTs the evaluate sub-path", async () => {
+    await api.evaluateSegment("seg1");
+    expect(mockRequest).toHaveBeenCalledWith("/segments/seg1/evaluate", { method: "POST" });
+  });
+
+  it("generateSegment POSTs the prompt", async () => {
+    await api.generateSegment("reef people");
+    expect(mockRequest).toHaveBeenCalledWith("/segments/generate", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ prompt: "reef people" }),
+    });
+  });
+
+  it("compileSegmentCustomQuery POSTs the intent", async () => {
+    await api.compileSegmentCustomQuery("big donors");
+    expect(mockRequest).toHaveBeenCalledWith("/segments/custom-query/compile", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ intent: "big donors" }),
+    });
   });
 });
