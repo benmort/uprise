@@ -12,7 +12,7 @@ import { LOGOS } from './logos';
  *
  * Differences from LogoCarousel:
  * - No scroll animation / no duplicated set
- * - Images render 30% larger (carousel h-8 = 32px -> h-[2.6rem] = 41.6px)
+ * - Images render larger than the carousel (h-[3.9rem] = 62.4px vs carousel h-8 = 32px)
  * - Same grayscale -> colour on hover, same fade... n/a (no edge fade needed)
  *
  * Usage:
@@ -36,8 +36,9 @@ export default function LogoRow() {
                   src={logo.src}
                   width={logo.width}
                   height={logo.height}
-                  className="h-[2.6rem] w-auto opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300"
+                  className="h-[3.9rem] w-auto opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300"
                   loading="lazy"
+                  unoptimized={logo.src.endsWith('.svg')}
                 />
               </div>
             ))}

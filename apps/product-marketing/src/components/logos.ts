@@ -15,8 +15,13 @@ export interface Logo {
 }
 
 export const LOGOS: Logo[] = [
-  { alt: 'Common Threads', src: '/images/logos/common-threads.webp', width: 582, height: 311 },
-  { alt: 'Australian Progress', src: '/images/logos/australian-progress.webp', width: 1200, height: 295 },
-  { alt: 'GetUp', src: '/images/logos/getup.png', width: 1024, height: 1024 },
+  // NB: australian-progress uses the COLOUR .png (white-legible), not the .webp — that
+  // variant is white-on-transparent and vanishes on this section's white background.
+  { alt: 'Australian Progress', src: '/images/logos/australian-progress.png', width: 1200, height: 295 },
   { alt: 'Climate 200', src: '/images/logos/climate-200.png', width: 1353, height: 293 },
+  { alt: 'Common Threads', src: '/images/logos/common-threads.webp', width: 582, height: 311 },
+  { alt: 'Democracy in Colour', src: '/images/logos/democracy-in-colour.png', width: 1024, height: 147 },
+  { alt: 'Gellung Warl', src: '/images/logos/gellung-warl.png', width: 1128, height: 514 },
+  { alt: 'GetUp', src: '/images/logos/getup.png', width: 1024, height: 1024 },
+  { alt: 'Victoria Trades Hall', src: '/images/logos/victoria-trades-hall.svg', width: 827, height: 377 },
 ];
