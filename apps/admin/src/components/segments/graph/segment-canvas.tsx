@@ -1,168 +1,109 @@
 "use client";
 
-/**
- * The segment graph builder — a react-flow port of slingshot's orphaned
- * segment-canvas prototype, re-cut for uprise's `FilterNode` tree.
- *
- * Left-to-right flow: sub-groups feed the root match group, the root feeds the
- * terminal audience endpoint. Structure edits (match-kind chips, removals, the
- * add buttons) go through `onChange` / the host callbacks — nodes are laid out
- * from the tree, not freely draggable.
- */
-import { useCallback, useMemo } from "react";
-import {
-  Background,
-  BackgroundVariant,
-  Controls,
-  Panel,
-  ReactFlow,
-} from "@xyflow/react";
-import { Plus } from "lucide-react";
-import type { CatalogueEntry, FilterNode } from "@uprise/segmentation";
-import { Button } from "@/components/ui/button";
-import { buildGraph } from "./graph-layout";
-import { ConditionCardNode } from "./condition-card-node";
-import { EndpointNode } from "./endpoint-node";
-import { ExclusionsNode } from "./exclusions-node";
-import { MatchGroupNode } from "./match-group-node";
-import {
-  appendChildAtPath,
-  emptyGroup,
-  getNodeAtPath,
-  isGroup,
-  nextGroupKind,
-  removeNodeAtPath,
-  setGroupKind,
-} from "./tree-ops";
-
+import { useMemo } from "react";
+import { ReactFlow, Background, Controls, Panel, type Edge, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import "./segment-canvas.css";
+import type { CatalogueEntry, Condition, FilterNode } from "@uprise/segmentation";
+import { Button } from "@/components/ui/button";
+import { List, Plus } from "lucide-react";
 
-const nodeTypes = {
-  matchGroup: MatchGroupNode,
-  conditionCard: ConditionCardNode,
-  exclusions: ExclusionsNode,
-  endpoint: EndpointNode,
+type Props = {
+  tree: FilterNode;
+  catalogueByType: Record<string, CatalogueEntry>;
+  formatCondition: (condition: Condition) => string;
+  /** Reserved for future in-canvas edits; edits currently flow through the list view. */
+  onChange?: (tree: FilterNode) => void;
+  onEditCondition: () => void;
+  onAddCondition: (path: number[]) => void;
+  counts: { matched: number; sendable: number } | null;
 };
 
-export interface SegmentCanvasProps {
-  /** The root filter tree (root is always a group node). */
-  tree: FilterNode;
-  /** type → catalogue entry, for labels/accents/descriptions. */
-  catalogueByType: Record<string, CatalogueEntry>;
-  /** Human labels for condition operand values (e.g. tag ids → names). */
-  formatCondition: (condition: unknown) => string;
-  /** Replace the whole tree (the canvas edits structure: match kinds, removals, reorder). */
-  onChange: (tree: FilterNode) => void;
-  /** Ask the host to open the condition editor for the node at this path (child indices from the root). */
-  onEditCondition: (path: number[]) => void;
-  /** Ask the host to open the add-condition dialog targeting the group at this path. */
-  onAddCondition: (path: number[]) => void;
-  /** Live count hints (optional): matched/sendable totals for the endpoint node. */
-  counts?: { matched: number; sendable: number } | null;
+const GROUP_LABEL: Record<string, string> = { all: "ALL of", any: "ANY of", none: "NONE of" };
+const COL = 260;
+const ROW = 120;
+
+/**
+ * A read-only react-flow view of a segment's filter tree — boolean-group nodes (ALL/ANY/NONE)
+ * over condition leaves — with a toolbar that routes back to the list builder for edits. A
+ * visual companion to the list view; authoring itself still happens there (SEG-0005 keeps the
+ * canvas non-authoritative for now).
+ */
+function toGraph(tree: FilterNode, formatCondition: (c: Condition) => string): { nodes: Node[]; edges: Edge[] } {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  let nextId = 0;
+  let leafCol = 0;
+
+  const groupStyle = {
+    background: "var(--brand-primary, #465fff)",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    fontWeight: 700,
+    fontSize: 12,
+    padding: "8px 14px",
+  } as const;
+  const leafStyle = {
+    background: "#ffffff",
+    color: "#1f2937",
+    border: "1px solid #d1d5db",
+    borderRadius: 10,
+    fontSize: 12,
+    padding: "8px 12px",
+    maxWidth: 220,
+  } as const;
+
+  // Post-order: children first (so a group can centre over them).
+  const walk = (node: FilterNode, depth: number, parentId: string | null): string => {
+    const id = String(nextId++);
+    if (node.kind === "condition") {
+      const x = leafCol * COL;
+      leafCol += 1;
+      nodes.push({ id, position: { x, y: depth * ROW }, data: { label: formatCondition(node.condition) }, style: leafStyle });
+    } else {
+      const childIds = node.children.map((child) => walk(child, depth + 1, id));
+      const xs = childIds.map((cid) => nodes.find((n) => n.id === cid)?.position.x ?? 0);
+      const x = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : leafCol * COL;
+      if (!node.children.length) leafCol += 1;
+      nodes.push({ id, position: { x, y: depth * ROW }, data: { label: GROUP_LABEL[node.kind] ?? node.kind }, style: groupStyle });
+    }
+    if (parentId !== null) edges.push({ id: `${parentId}-${id}`, source: parentId, target: id, animated: false });
+    return id;
+  };
+  walk(tree, 0, null);
+  return { nodes, edges };
 }
 
-export function SegmentCanvas({
-  tree,
-  catalogueByType,
-  formatCondition,
-  onChange,
-  onEditCondition,
-  onAddCondition,
-  counts,
-}: SegmentCanvasProps): JSX.Element {
-  const handleCycleKind = useCallback(
-    (path: number[]) => {
-      const node = getNodeAtPath(tree, path);
-      if (!node || !isGroup(node)) return;
-      onChange(setGroupKind(tree, path, nextGroupKind(node.kind)));
-    },
-    [tree, onChange],
-  );
-
-  const handleRemoveNode = useCallback(
-    (path: number[]) => onChange(removeNodeAtPath(tree, path)),
-    [tree, onChange],
-  );
-
-  const handleAddGroup = useCallback(
-    () => onChange(appendChildAtPath(tree, [], emptyGroup())),
-    [tree, onChange],
-  );
-
-  const { nodes, edges } = useMemo(
-    () =>
-      buildGraph({
-        tree,
-        catalogueByType,
-        formatCondition,
-        counts,
-        callbacks: {
-          onCycleKind: handleCycleKind,
-          onRemoveNode: handleRemoveNode,
-          onEditCondition,
-          onAddCondition,
-        },
-      }),
-    [
-      tree,
-      catalogueByType,
-      formatCondition,
-      counts,
-      handleCycleKind,
-      handleRemoveNode,
-      onEditCondition,
-      onAddCondition,
-    ],
-  );
+export function SegmentCanvas({ tree, formatCondition, onEditCondition, onAddCondition, counts }: Props) {
+  const { nodes, edges } = useMemo(() => toGraph(tree, formatCondition), [tree, formatCondition]);
 
   return (
-    <div className="seg-canvas h-full w-full">
+    <div className="h-[480px] w-full overflow-hidden rounded-lg border border-border">
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
-        minZoom={0.35}
-        maxZoom={1.5}
         nodesDraggable={false}
         nodesConnectable={false}
-        nodesFocusable={false}
-        edgesFocusable={false}
-        elementsSelectable={false}
-        deleteKeyCode={null}
-        proOptions={{ hideAttribution: false }}
+        proOptions={{ hideAttribution: true }}
+        onNodeClick={() => onEditCondition()}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={22}
-          size={1.4}
-          color="hsl(var(--muted-foreground) / 0.35)"
-        />
-        <Controls showInteractive={false} position="bottom-left" />
-        <Panel position="top-left">
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-background/85 px-3 py-1.5 shadow-sm backdrop-blur">
-            <span className="text-xs font-bold tracking-wide text-foreground">Segment graph</span>
-            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span
-                aria-hidden
-                className="w-5 rounded-sm border-t-[3px] border-muted-foreground/50"
-              />
-              flow &amp; combine logic
+        <Background gap={20} />
+        <Controls showInteractive={false} />
+        <Panel position="top-left" className="flex items-center gap-2 rounded-lg border border-border bg-surface/95 px-2 py-1.5 shadow-card">
+          <Button size="sm" variant="outline" onClick={() => onAddCondition([])}>
+            <Plus className="mr-1 h-4 w-4" />
+            Add condition
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => onEditCondition()}>
+            <List className="mr-1 h-4 w-4" />
+            Edit as list
+          </Button>
+          {counts ? (
+            <span className="ml-1 text-xs tabular-nums text-muted-foreground">
+              {counts.matched.toLocaleString()} matched · {counts.sendable.toLocaleString()} sendable
             </span>
-            {isGroup(tree) ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 px-2.5 text-xs"
-                onClick={handleAddGroup}
-              >
-                <Plus className="h-3.5 w-3.5" /> Match group
-              </Button>
-            ) : null}
-          </div>
+          ) : null}
         </Panel>
       </ReactFlow>
     </div>
