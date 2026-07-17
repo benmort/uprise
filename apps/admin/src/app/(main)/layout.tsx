@@ -238,6 +238,8 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
               // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version
               // lives on /settings ("Tenant Queue & Redis Stats").
               { label: "Queue & Redis Stats", href: "/super/queues", match: sp("queues") },
+              // Every route across all six frontend apps (generated manifest).
+              { label: "Sitemap", href: "/super/sitemap", match: sp("sitemap") },
             ],
           },
           {
@@ -1103,6 +1105,7 @@ export default function MainLayout({
                   <Link
                     key={node.key}
                     href={node.href}
+                    data-testid={`nav-${node.key}`}
                     onClick={() => setMobileOpen(false)}
                     onMouseEnter={(e) => showFlyout(e.currentTarget, node)}
                     onMouseLeave={scheduleCloseFlyout}

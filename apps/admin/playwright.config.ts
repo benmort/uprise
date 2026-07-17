@@ -22,6 +22,9 @@ const AUTH_APP_URL =
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || (IS_NGROK ? "https://api.dev.uprise.org.au/api/v1" : "http://localhost:3001/api/v1");
 const MARKETING_URL = process.env.MARKETING_URL || (IS_NGROK ? "https://dev.uprise.org.au" : "http://localhost:3003");
+// The canvasser PWA (apps/field) runs on :3005 locally; field-PWA specs navigate to it absolutely
+// and use the volunteer storageState (e2e/.auth/volunteer.json, minted by global-setup).
+const FIELD_URL = process.env.FIELD_URL || (IS_NGROK ? "https://field.dev.uprise.org.au" : "http://localhost:3005");
 const API_HEALTH = API_BASE + "/health";
 
 export default defineConfig({
@@ -71,6 +74,14 @@ export default defineConfig({
         {
           command: "npm --prefix ../product-marketing run dev",
           url: MARKETING_URL,
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+        {
+          // The canvasser PWA. Its root 307-redirects when unauthenticated (SSO gate), which
+          // Playwright accepts as "ready".
+          command: "npm --prefix ../field run dev",
+          url: FIELD_URL,
           reuseExistingServer: true,
           timeout: 120_000,
         },

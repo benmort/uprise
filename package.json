@@ -24,7 +24,8 @@
     "test": "pnpm -r run test",
     "build": "pnpm -r run build",
     "check:ai-guides": "node scripts/check-ai-guides.mjs",
-    "coverage:check": "node scripts/coverage-check.mjs"
+    "coverage:check": "node scripts/coverage-check.mjs",
+    "gen:sitemap": "node scripts/gen-sitemap.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"
