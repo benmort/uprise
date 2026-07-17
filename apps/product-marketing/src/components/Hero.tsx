@@ -51,10 +51,10 @@ export default function Hero() {
               <div className="relative mx-auto w-full max-w-[860px]">
                 <div className="mx-auto overflow-hidden rounded-t-xl border-[8px] border-white bg-white shadow-feature">
                   <Image
-                    alt="Uprise campaign dashboard"
-                    src="/images/marketing/dashboard-screenshot.png"
-                    width={1491}
-                    height={682}
+                    alt="Uprise — ABS census demographics mapped across Australia"
+                    src="/images/marketing/demographics-screenshot.png"
+                    width={1720}
+                    height={1024}
                     className="h-auto w-full"
                     priority
                   />
