@@ -27,6 +27,8 @@ import { SharedEngagementModule } from "./shared-engagement/shared-engagement.mo
 import { JourneysModule } from "./journeys/journeys.module";
 import { TagsModule } from "./tags/tags.module";
 import { CanvassingModule } from "./canvassing/canvassing.module";
+import { EventsDomainModule } from "./events/events.module";
+import { CalendarModule } from "./calendar/calendar.module";
 import { ComplianceModule } from "./compliance/compliance.module";
 import { SharedSeedModule } from "./shared-seed/shared-seed.module";
 import { PushModule } from "./push/push.module";
@@ -96,6 +98,8 @@ import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
     TagsModule,
     SharedEngagementModule,
     CanvassingModule,
+    EventsDomainModule,
+    CalendarModule,
     ComplianceModule,
     SharedSeedModule,
     PushModule,

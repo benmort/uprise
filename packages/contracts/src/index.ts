@@ -238,6 +238,18 @@ export interface RequestAccessResponse {
   alreadyMember?: boolean;
 }
 
+/** A new-workspace signup awaiting super-admin approval (gated /auth/register). Rendered in the
+ *  super-admin Signups queue; approving mints the OWNER membership, rejecting frees the slug. */
+export interface PendingSignup {
+  requestId: string;
+  tenantId: string;
+  orgName: string;
+  slug: string;
+  email: string;
+  displayName: string | null;
+  createdAt: string;
+}
+
 export const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -256,6 +268,19 @@ export interface SessionGrantResponse {
   token: string;
   user: { id: string; memberships: Membership[] };
   memberships: Membership[];
+}
+
+/** POST /auth/register when signup approval is gated (SIGNUP_APPROVAL_REQUIRED): the account +
+ *  workspace exist but no session is issued — the owner waits for super-admin approval. */
+export interface RegisterPendingResponse {
+  pending: true;
+}
+
+/** /auth/register returns a full session, or `{ pending: true }` when approval is gated. */
+export type RegisterResponse = SessionGrantResponse | RegisterPendingResponse;
+
+export function isRegisterPending(r: RegisterResponse): r is RegisterPendingResponse {
+  return (r as RegisterPendingResponse).pending === true;
 }
 
 export interface TwofaChallengeResponse {

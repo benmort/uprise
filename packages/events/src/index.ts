@@ -52,6 +52,7 @@ export const EVENT_TYPES = {
   JOIN_REQUEST_SUBMITTED: "tenant.join-request.submitted",
   JOIN_REQUEST_APPROVED: "tenant.join-request.approved",
   JOIN_REQUEST_REJECTED: "tenant.join-request.rejected",
+  SIGNUP_PENDING: "tenant.signup.pending",
   TENANT_RENAMED: "tenant.tenant.renamed",
   TENANT_DELETED: "tenant.tenant.deleted",
   API_KEY_ISSUED: "tenant.api-key.issued",
@@ -85,6 +86,13 @@ export const EVENT_TYPES = {
   DISPOSITION_SET: "canvass.disposition.set",
   SURVEY_ANSWERED: "canvass.survey.answered",
   CONTACT_TAG_ADDED: "contacts.tag.added",
+  SHIFT_SCHEDULED: "canvass.shift.scheduled",
+  SHIFT_ASSIGNED: "canvass.shift.assigned",
+  SHIFT_RELEASED: "canvass.shift.released",
+  EVENT_PUBLISHED: "events.event.published",
+  EVENT_CANCELLED: "events.event.cancelled",
+  EVENT_RSVP_CREATED: "events.rsvp.created",
+  EVENT_RSVP_CANCELLED: "events.rsvp.cancelled",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -121,6 +129,28 @@ export interface DomainEventMap {
     key: string;
     source: string | null;
   };
+  "canvass.shift.scheduled": {
+    shiftId: string;
+    tenantId: string;
+    campaignId: string | null;
+    type: string;
+    startsAt: string;
+  };
+  "canvass.shift.assigned": {
+    shiftId: string;
+    tenantId: string;
+    volunteerId: string;
+    status: string;
+  };
+  "canvass.shift.released": {
+    shiftId: string;
+    tenantId: string;
+    volunteerId: string;
+  };
+  "events.event.published": { eventId: string; tenantId: string; campaignId: string | null };
+  "events.event.cancelled": { eventId: string; tenantId: string };
+  "events.rsvp.created": { rsvpId: string; eventId: string; tenantId: string };
+  "events.rsvp.cancelled": { rsvpId: string; eventId: string; tenantId: string };
   "messaging.blast.created": { blastId: string; tenantId: string; title: string };
   "messaging.blast.scheduled": { blastId: string; tenantId: string; scheduledAt: string };
   "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };
@@ -168,6 +198,7 @@ export interface DomainEventMap {
   "tenant.join-request.submitted": { requestId: string; tenantId: string; email: string; requestedRole: string };
   "tenant.join-request.approved": { requestId: string; tenantId: string; userId: string; role: string };
   "tenant.join-request.rejected": { requestId: string; tenantId: string; userId: string };
+  "tenant.signup.pending": { tenantId: string; userId: string; email: string; orgName: string; slug: string };
   "tenant.tenant.renamed": { tenantId: string; name: string };
   "tenant.tenant.deleted": { tenantId: string };
   "tenant.api-key.issued": { apiKeyId: string; tenantId: string; name: string };

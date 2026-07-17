@@ -1096,4 +1096,86 @@ describe("IamFlowsService", () => {
       expect(await svc.signIn("nobody@x.y", "pw")).toEqual({ kind: "invalid" });
     });
   });
+
+  describe("super-admin signup approvals", () => {
+    it("listPendingSignups returns OWNER requests joined to tenant + owner", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantJoinRequest.findMany = jest.fn(async () => [
+        {
+          id: "jr1",
+          tenantId: "t1",
+          userId: "u1",
+          email: "owner@x.y",
+          createdAt: new Date("2026-07-01T00:00:00.000Z"),
+          tenant: { name: "Acme", slug: "acme" },
+        },
+      ]);
+      prisma.user.findMany = jest.fn(async () => [{ id: "u1", email: "owner@x.y", displayName: "Ada" }]);
+      const rows = await svc.listPendingSignups();
+      expect(prisma.tenantJoinRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: "pending", requestedRole: "OWNER" }),
+        }),
+      );
+      expect(rows).toEqual([
+        {
+          requestId: "jr1",
+          tenantId: "t1",
+          orgName: "Acme",
+          slug: "acme",
+          email: "owner@x.y",
+          displayName: "Ada",
+          createdAt: "2026-07-01T00:00:00.000Z",
+        },
+      ]);
+    });
+
+    it("approveSignup mints the OWNER membership via approveJoinRequest", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantJoinRequest.findUnique.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
+      prisma.tenantJoinRequest.findFirst.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
+      const res = await svc.approveSignup("jr1", "super1");
+      expect(res).toEqual({ ok: true });
+      expect(prisma.tenantMember.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: expect.objectContaining({ role: "OWNER", userId: "u1" }) }),
+      );
+      const events = outbox.append.mock.calls.map((c: any) => c[1].eventType);
+      expect(events).toContain("tenant.member.added");
+      expect(events).toContain("tenant.join-request.approved");
+    });
+
+    it("approveSignup throws when the request is missing", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantJoinRequest.findUnique.mockResolvedValueOnce(null);
+      await expect(svc.approveSignup("nope", "super1")).rejects.toThrow();
+    });
+
+    it("rejectSignup hard-deletes the member-less tenant + the orphaned owner, emits deleted", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantJoinRequest.findUnique.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
+      prisma.tenant.findUnique.mockResolvedValueOnce({ id: "t1" });
+      prisma.tenant.delete = jest.fn(async () => ({}));
+      prisma.tenantMember.count = jest.fn(async () => 0);
+      prisma.tenantJoinRequest.count = jest.fn(async () => 0);
+      prisma.user.delete = jest.fn(async () => ({}));
+      const res = await svc.rejectSignup("jr1");
+      expect(res).toEqual({ ok: true });
+      expect(prisma.tenant.delete).toHaveBeenCalledWith({ where: { id: "t1" } });
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: "u1" } });
+      const events = outbox.append.mock.calls.map((c: any) => c[1].eventType);
+      expect(events).toContain("tenant.tenant.deleted");
+    });
+
+    it("rejectSignup keeps the owner account when it still has other memberships", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantJoinRequest.findUnique.mockResolvedValueOnce({ id: "jr1", tenantId: "t1", userId: "u1", status: "pending" });
+      prisma.tenant.findUnique.mockResolvedValueOnce({ id: "t1" });
+      prisma.tenant.delete = jest.fn(async () => ({}));
+      prisma.tenantMember.count = jest.fn(async () => 1); // still a member elsewhere
+      prisma.tenantJoinRequest.count = jest.fn(async () => 0);
+      prisma.user.delete = jest.fn(async () => ({}));
+      await svc.rejectSignup("jr1");
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+  });
 });

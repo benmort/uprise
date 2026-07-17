@@ -4,12 +4,15 @@ import {
   AppUserRole,
   EngagementChannel,
   Prisma,
+  ShiftAssignmentStatus,
+  ShiftType,
   SupportLevel,
   TurfAssignmentStatus,
   WalkListItemListType,
   WalkListItemStatus,
 } from "@uprise/db";
 import { ImageUploadService } from "../common/storage/image-upload.service";
+import { OutboxService } from "../common/outbox/outbox.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
@@ -23,6 +26,7 @@ import {
   type TurfDivisionType,
 } from "../geo/geo.service";
 import { assertTurfAssignmentTransition } from "./turf-assignment-state.machine";
+import { assertShiftAssignmentTransition } from "./shift-assignment-state.machine";
 import { rankTurfsByPrefs, type CanvassPrefs } from "./recommend-turf";
 import { MapboxDirectionsClient } from "./mapbox-directions.client";
 import { optimiseRoute, haversineM, type Stop } from "./route-math";
@@ -86,6 +90,7 @@ export class CanvassingService {
     @Inject(DISPATCH_QUEUE_TOKEN) private readonly queue: DispatchQueue,
     private readonly images: ImageUploadService,
     private readonly directions: MapboxDirectionsClient,
+    private readonly outbox: OutboxService,
   ) {}
 
   /**
@@ -1589,27 +1594,75 @@ export class CanvassingService {
     return { added: toAdd.length, removed: toRemove.length, total };
   }
 
-  // ── Shifts (G8) ─────────────────────────────────────────────────
+  // ── Shifts (generalised: canvass / polling booth / event / general) ──────────
+  /** A shift row plus its derived seat counts, with the raw assignment rows stripped. */
+  private withSeatCounts<
+    T extends { capacity: number | null; assignments: { status: ShiftAssignmentStatus }[] },
+  >(s: T) {
+    const assignedCount = s.assignments.filter((a) => a.status === ShiftAssignmentStatus.ASSIGNED).length;
+    const requestedCount = s.assignments.filter((a) => a.status === ShiftAssignmentStatus.REQUESTED).length;
+    const { assignments: _assignments, ...rest } = s;
+    return {
+      ...rest,
+      assignedCount,
+      requestedCount,
+      isFull: s.capacity != null && assignedCount >= s.capacity,
+    };
+  }
+
   async listShifts(tenantId: string, campaignId?: string) {
-    return this.prisma.shift.findMany({
+    const shifts = await this.prisma.shift.findMany({
       where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       orderBy: { startsAt: "asc" },
+      include: { assignments: { select: { status: true } } },
     });
+    return shifts.map((s) => this.withSeatCounts(s));
   }
 
   async createShift(
     tenantId: string,
-    input: { campaignId: string; name: string; startsAt: string; endsAt: string; location?: string },
+    input: {
+      campaignId?: string | null;
+      type?: ShiftType;
+      name: string;
+      startsAt: string;
+      endsAt: string;
+      location?: string;
+      eventId?: string;
+      pollingPlaceId?: string;
+      capacity?: number;
+      notes?: string;
+    },
   ) {
-    return this.prisma.shift.create({
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const shift = await tx.shift.create({
+        data: {
+          tenantId,
+          campaignId: input.campaignId ?? null,
+          type: (input.type as ShiftType | undefined) ?? ShiftType.CANVASS,
+          name: input.name,
+          location: input.location ?? null,
+          eventId: input.eventId ?? null,
+          pollingPlaceId: input.pollingPlaceId ?? null,
+          capacity: input.capacity ?? null,
+          notes: input.notes ?? null,
+          startsAt: new Date(input.startsAt),
+          endsAt: new Date(input.endsAt),
+        },
+      });
+      await this.outbox.append(tx, {
         tenantId,
-        campaignId: input.campaignId,
-        name: input.name,
-        startsAt: new Date(input.startsAt),
-        endsAt: new Date(input.endsAt),
-        location: input.location ?? null,
-      },
+        eventType: "canvass.shift.scheduled",
+        aggregateId: shift.id,
+        payload: {
+          shiftId: shift.id,
+          tenantId,
+          campaignId: shift.campaignId,
+          type: shift.type,
+          startsAt: shift.startsAt.toISOString(),
+        },
+      });
+      return shift;
     });
   }
 
@@ -1622,16 +1675,280 @@ export class CanvassingService {
   async updateShift(
     tenantId: string,
     id: string,
-    input: { name?: string; location?: string | null; startsAt?: string; endsAt?: string },
+    input: {
+      type?: ShiftType;
+      name?: string;
+      location?: string | null;
+      startsAt?: string;
+      endsAt?: string;
+      eventId?: string | null;
+      pollingPlaceId?: string | null;
+      capacity?: number | null;
+      notes?: string | null;
+    },
   ) {
     const existing = await this.prisma.shift.findFirst({ where: { id, tenantId } });
     if (!existing) throw new ApiHttpException("SHIFT_NOT_FOUND", "Shift not found");
     const data: Prisma.ShiftUpdateInput = {};
+    if (input.type !== undefined) data.type = input.type as ShiftType;
     if (input.name !== undefined) data.name = input.name;
     if (input.location !== undefined) data.location = input.location;
+    if (input.eventId !== undefined) data.eventId = input.eventId;
+    if (input.pollingPlaceId !== undefined) data.pollingPlaceId = input.pollingPlaceId;
+    if (input.capacity !== undefined) data.capacity = input.capacity;
+    if (input.notes !== undefined) data.notes = input.notes;
     if (input.startsAt !== undefined) data.startsAt = new Date(input.startsAt);
     if (input.endsAt !== undefined) data.endsAt = new Date(input.endsAt);
     return this.prisma.shift.update({ where: { id }, data });
+  }
+
+  // ── Shift roster: organiser assign + volunteer self-signup (mirrors turf) ────
+
+  /** Throws SHIFT_FULL if a bounded shift has no seat left (a volunteer already
+   *  holding a seat can always be re-confirmed). Run inside the per-shift advisory lock. */
+  private async assertShiftCapacity(
+    tx: Prisma.TransactionClient,
+    shiftId: string,
+    capacity: number | null,
+    volunteerId: string,
+  ) {
+    if (capacity == null) return;
+    const [assigned, mine] = await Promise.all([
+      tx.shiftAssignment.count({ where: { shiftId, status: ShiftAssignmentStatus.ASSIGNED } }),
+      tx.shiftAssignment.findFirst({
+        where: { shiftId, volunteerId, status: ShiftAssignmentStatus.ASSIGNED },
+        select: { id: true },
+      }),
+    ]);
+    if (!mine && assigned >= capacity) throw new ApiHttpException("SHIFT_FULL", "This shift is full");
+  }
+
+  /** Create the seat, or promote an existing REQUESTED one to ASSIGNED. Idempotent for a
+   *  volunteer who already holds the target status. Run inside the per-shift advisory lock. */
+  private async takeSeat(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    shiftId: string,
+    volunteerId: string,
+    status: ShiftAssignmentStatus,
+  ) {
+    const existing = await tx.shiftAssignment.findFirst({
+      where: {
+        shiftId,
+        volunteerId,
+        status: { in: [ShiftAssignmentStatus.REQUESTED, ShiftAssignmentStatus.ASSIGNED] },
+      },
+    });
+    if (existing) {
+      // Already holding the target (or a stronger) seat — no downgrade ASSIGNED→REQUESTED.
+      if (existing.status === status || existing.status === ShiftAssignmentStatus.ASSIGNED) return existing;
+      return tx.shiftAssignment.update({ where: { id: existing.id }, data: { status } });
+    }
+    return tx.shiftAssignment.create({ data: { tenantId, shiftId, volunteerId, status } });
+  }
+
+  private isSeatConflict(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  }
+
+  /** Organiser assigns a volunteer to a shift (instant ASSIGNED). */
+  async assignShift(tenantId: string, shiftId: string, volunteerId: string) {
+    const shift = await this.prisma.shift.findFirst({
+      where: { id: shiftId, tenantId },
+      select: { id: true, capacity: true },
+    });
+    if (!shift) throw new ApiHttpException("SHIFT_NOT_FOUND", "Shift not found", HttpStatus.NOT_FOUND);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, shiftId);
+        await this.assertShiftCapacity(tx, shiftId, shift.capacity, volunteerId);
+        const row = await this.takeSeat(tx, tenantId, shiftId, volunteerId, ShiftAssignmentStatus.ASSIGNED);
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "canvass.shift.assigned",
+          aggregateId: shiftId,
+          payload: { shiftId, tenantId, volunteerId, status: ShiftAssignmentStatus.ASSIGNED },
+        });
+        return row;
+      });
+    } catch (error) {
+      if (this.isSeatConflict(error)) {
+        throw new ApiHttpException("SHIFT_SEAT_CONFLICT", "That volunteer already has a seat on this shift");
+      }
+      throw error;
+    }
+  }
+
+  /** Volunteer self-signup, gated by the campaign self-serve switch (reuses turf gating).
+   *  Lands REQUESTED on approval-required campaigns, else instant ASSIGNED (capacity-bounded). */
+  async signUpShift(tenantId: string, campaignId: string, shiftId: string, volunteerId: string) {
+    const campaign = await this.assertSelfClaim(tenantId, campaignId);
+    const shift = await this.prisma.shift.findFirst({
+      where: { id: shiftId, tenantId, campaignId },
+      select: { id: true, capacity: true },
+    });
+    if (!shift) throw new ApiHttpException("SHIFT_NOT_FOUND", "Shift not found in this campaign", HttpStatus.NOT_FOUND);
+    const status = campaign.turfClaimRequiresApproval
+      ? ShiftAssignmentStatus.REQUESTED
+      : ShiftAssignmentStatus.ASSIGNED;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, shiftId);
+        if (status === ShiftAssignmentStatus.ASSIGNED) {
+          await this.assertShiftCapacity(tx, shiftId, shift.capacity, volunteerId);
+        }
+        const row = await this.takeSeat(tx, tenantId, shiftId, volunteerId, status);
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "canvass.shift.assigned",
+          aggregateId: shiftId,
+          payload: { shiftId, tenantId, volunteerId, status },
+        });
+        return row;
+      });
+    } catch (error) {
+      if (this.isSeatConflict(error)) {
+        throw new ApiHttpException("SHIFT_SEAT_CONFLICT", "You already have a seat on this shift");
+      }
+      throw error;
+    }
+  }
+
+  /** Organiser approves a pending self-signup → ASSIGNED (capacity-guarded, FSM-guarded). */
+  async approveShiftRequest(tenantId: string, assignmentId: string) {
+    const req = await this.prisma.shiftAssignment.findFirst({
+      where: { id: assignmentId, tenantId },
+      select: { id: true, status: true, shiftId: true, volunteerId: true, shift: { select: { capacity: true } } },
+    });
+    if (!req) throw new ApiHttpException("ASSIGNMENT_NOT_FOUND", "Shift request not found", HttpStatus.NOT_FOUND);
+    assertShiftAssignmentTransition(req.status, ShiftAssignmentStatus.ASSIGNED);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, req.shiftId);
+        await this.assertShiftCapacity(tx, req.shiftId, req.shift.capacity, req.volunteerId);
+        await tx.shiftAssignment.update({
+          where: { id: assignmentId },
+          data: { status: ShiftAssignmentStatus.ASSIGNED },
+        });
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "canvass.shift.assigned",
+          aggregateId: req.shiftId,
+          payload: { shiftId: req.shiftId, tenantId, volunteerId: req.volunteerId, status: ShiftAssignmentStatus.ASSIGNED },
+        });
+      });
+    } catch (error) {
+      if (this.isSeatConflict(error)) {
+        throw new ApiHttpException("SHIFT_SEAT_CONFLICT", "That volunteer already has a seat on this shift");
+      }
+      throw error;
+    }
+    return { id: assignmentId, status: ShiftAssignmentStatus.ASSIGNED };
+  }
+
+  /** Release a seat (organiser release, deny a request, or a volunteer dropping out). */
+  private async releaseAssignmentTo(tenantId: string, assignmentId: string) {
+    const req = await this.prisma.shiftAssignment.findFirst({
+      where: { id: assignmentId, tenantId },
+      select: { id: true, status: true, shiftId: true, volunteerId: true },
+    });
+    if (!req) throw new ApiHttpException("ASSIGNMENT_NOT_FOUND", "Shift assignment not found", HttpStatus.NOT_FOUND);
+    assertShiftAssignmentTransition(req.status, ShiftAssignmentStatus.RELEASED);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.shiftAssignment.update({
+        where: { id: assignmentId },
+        data: { status: ShiftAssignmentStatus.RELEASED },
+      });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "canvass.shift.released",
+        aggregateId: req.shiftId,
+        payload: { shiftId: req.shiftId, tenantId, volunteerId: req.volunteerId },
+      });
+    });
+    return { id: assignmentId, status: ShiftAssignmentStatus.RELEASED };
+  }
+
+  denyShiftRequest(tenantId: string, assignmentId: string) {
+    return this.releaseAssignmentTo(tenantId, assignmentId);
+  }
+
+  releaseShiftAssignment(tenantId: string, assignmentId: string) {
+    return this.releaseAssignmentTo(tenantId, assignmentId);
+  }
+
+  /** A volunteer drops their own seat on a shift. */
+  async releaseOwnShift(tenantId: string, shiftId: string, volunteerId: string) {
+    const active = await this.prisma.shiftAssignment.findFirst({
+      where: {
+        tenantId,
+        shiftId,
+        volunteerId,
+        status: { in: [ShiftAssignmentStatus.REQUESTED, ShiftAssignmentStatus.ASSIGNED] },
+      },
+      select: { id: true },
+    });
+    if (!active) throw new ApiHttpException("ASSIGNMENT_NOT_FOUND", "You have no seat on this shift", HttpStatus.NOT_FOUND);
+    return this.releaseAssignmentTo(tenantId, active.id);
+  }
+
+  /** The roster for one shift — active seats + pending requests, with volunteer detail. */
+  async listShiftAssignments(tenantId: string, shiftId: string) {
+    const rows = await this.prisma.shiftAssignment.findMany({
+      where: {
+        tenantId,
+        shiftId,
+        status: { in: [ShiftAssignmentStatus.REQUESTED, ShiftAssignmentStatus.ASSIGNED] },
+      },
+      include: { volunteer: { select: { id: true, displayName: true, email: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((r) => ({
+      assignmentId: r.id,
+      status: r.status,
+      volunteer: { id: r.volunteer.id, name: r.volunteer.displayName, email: r.volunteer.email },
+    }));
+  }
+
+  /** Upcoming, self-serve-eligible shifts in a campaign for the "pick a shift" field screen —
+   *  each with its seat counts and whether this volunteer already holds/requested a seat. */
+  async listAvailableShifts(tenantId: string, campaignId: string, volunteerId: string) {
+    await this.assertSelfClaim(tenantId, campaignId);
+    const shifts = await this.prisma.shift.findMany({
+      where: { tenantId, campaignId, endsAt: { gte: new Date() } },
+      orderBy: { startsAt: "asc" },
+      include: { assignments: { select: { status: true, volunteerId: true } } },
+    });
+    return shifts.map((s) => {
+      const assignedCount = s.assignments.filter((a) => a.status === ShiftAssignmentStatus.ASSIGNED).length;
+      const mine = s.assignments.find(
+        (a) =>
+          a.volunteerId === volunteerId &&
+          (a.status === ShiftAssignmentStatus.ASSIGNED || a.status === ShiftAssignmentStatus.REQUESTED),
+      );
+      const { assignments: _a, ...rest } = s;
+      return {
+        ...rest,
+        assignedCount,
+        isFull: s.capacity != null && assignedCount >= s.capacity,
+        mine: mine ? mine.status : null,
+      };
+    });
+  }
+
+  /** A volunteer's own upcoming shifts (assigned or pending), tenant-wide. */
+  async listMyShifts(tenantId: string, volunteerId: string) {
+    const rows = await this.prisma.shiftAssignment.findMany({
+      where: {
+        tenantId,
+        volunteerId,
+        status: { in: [ShiftAssignmentStatus.REQUESTED, ShiftAssignmentStatus.ASSIGNED] },
+        shift: { endsAt: { gte: new Date() } },
+      },
+      include: { shift: true },
+      orderBy: { shift: { startsAt: "asc" } },
+    });
+    return rows.map((r) => ({ assignmentId: r.id, status: r.status, shift: r.shift }));
   }
 
   // ── QA review (G10): flag suspicious knocks ─────────────────────

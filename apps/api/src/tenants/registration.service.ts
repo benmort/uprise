@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { AppUserRole } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
@@ -23,6 +24,14 @@ export interface RegistrationGrant {
   memberships: { tenantId: string; tenantName: string; role: AppUserRole }[];
 }
 
+/** Returned when signup approval is gated: the account + tenant exist but no session is issued —
+ *  the owner can't sign in until a super-admin approves (SIGNUP_APPROVAL_REQUIRED). */
+export interface RegistrationPending {
+  pending: true;
+}
+
+export type RegistrationResult = RegistrationGrant | RegistrationPending;
+
 /**
  * Self-service sign-up (meld doc 12 / prog RegisterUser + CreateTenant onboarding). Creates the
  * User + their first Tenant + owner membership atomically, emits the iam.user.created /
@@ -36,9 +45,10 @@ export class RegistrationService {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     private readonly sessions: SessionService,
+    private readonly config: ConfigService,
   ) {}
 
-  async register(input: RegisterInput): Promise<RegistrationGrant> {
+  async register(input: RegisterInput): Promise<RegistrationResult> {
     const email = input.email.trim().toLowerCase();
     if (!email) throw new BadRequestException("email is required");
     if (!input.password || input.password.length < 8) {
@@ -58,6 +68,48 @@ export class RegistrationService {
 
     const passwordHash = await hashPassword(input.password);
     const displayName = input.displayName?.trim() || email;
+
+    // Production gate (SIGNUP_APPROVAL_REQUIRED): create the account + workspace (reserving the
+    // slug) plus a pending OWNER join request, but issue NO membership and NO session — the owner
+    // can't sign in until a super-admin approves. signIn already 403s "awaiting approval" for a
+    // user with a pending request and no membership; approving reuses approveJoinRequest, which
+    // mints the OWNER membership + emails "you're in". tenant.signup.pending drives the admin SMS.
+    if (this.config.get<boolean>("SIGNUP_APPROVAL_REQUIRED") === true) {
+      await this.prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: { email, displayName, passwordHash, emailVerified: false },
+        });
+        const tenant = await tx.tenant.create({ data: { slug, name: orgName } });
+        await tx.tenantJoinRequest.create({
+          data: {
+            tenantId: tenant.id,
+            userId: user.id,
+            email: user.email,
+            requestedRole: AppUserRole.OWNER,
+            status: "pending",
+          },
+        });
+        await this.outbox.append(tx, {
+          tenantId: tenant.id,
+          eventType: "iam.user.created",
+          aggregateId: user.id,
+          payload: { userId: user.id, email: user.email, tenantId: tenant.id },
+        });
+        await this.outbox.append(tx, {
+          tenantId: tenant.id,
+          eventType: "tenant.tenant.created",
+          aggregateId: tenant.id,
+          payload: { tenantId: tenant.id, slug: tenant.slug, name: tenant.name, networkId: null },
+        });
+        await this.outbox.append(tx, {
+          tenantId: tenant.id,
+          eventType: "tenant.signup.pending",
+          aggregateId: tenant.id,
+          payload: { tenantId: tenant.id, userId: user.id, email: user.email, orgName: tenant.name, slug: tenant.slug },
+        });
+      });
+      return { pending: true };
+    }
 
     const { userId, tenantId } = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({

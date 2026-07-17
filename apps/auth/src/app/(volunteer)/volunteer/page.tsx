@@ -2,25 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Alert, BrandStyle, LogoMark, Spinner } from "@uprise/ui";
+import { ChevronLeft } from "lucide-react";
+import { Alert, Spinner } from "@uprise/ui";
 import { auth, tenants, tenantLogoUrl, type TenantBrand } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { useQueryParams } from "@/lib/use-query";
 import { withReturnTo } from "@/lib/return-to";
 import { VolunteerFlowShell } from "@/components/volunteer-flow-shell";
+import { VolunteerJoinHero } from "@/components/volunteer-join-hero";
 
 /**
- * Volunteer landing (`/volunteer`) – a hero + a board of open volunteering opportunities. Picking one
- * deep-links into that campaign's page, which runs the onboarding wizard. Pre-session (allowlisted).
- *
- * Two modes, one page:
- *  - GENERIC (`/volunteer`): Uprise-branded, every open campaign across all tenants.
- *  - TENANT-WIDE (`/volunteer?org=<slug>`): scoped to one tenant + wearing its brand — the hero fills
- *    with the tenant's PRIMARY colour, shows its logo/name, and the board lists only its campaigns.
+ * Volunteer landing (`/volunteer`) — the SAME two-column join hero as the per-campaign page
+ * (`/volunteer/[campaignId]`), so the campaign-less entry reads identically. It wears Uprise's
+ * brand colours by default; `?org=<slug>` scopes + brands it to one tenant. Because there's no
+ * campaign chosen yet, "Get started" opens the open-opportunities board (pick a campaign) rather
+ * than launching a campaign's onboarding wizard.
  */
-
-// Deterministic fallback avatar (mirrors the campaign page + admin's TenantAvatar):
-// a gradient disc keyed on the tenant id when the org hasn't uploaded a logo.
 function hashHue(seed: string): number {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
@@ -33,16 +30,16 @@ function tenantGradient(id: string): string {
 }
 
 export default function VolunteerBoardPage() {
-  // The field app bounces unauthenticated volunteers here. Carry its `return_to` through
-  // every link out of this page, or finishing the flow strands them on the wrong app.
   const params = useQueryParams();
   const returnTo = params.get("return_to");
-  // Tenant-wide recruit mode: `?org=<slug>` (or `?tenant=`) scopes + brands the board.
   const orgSlug = params.get("org") || params.get("tenant");
   const [opportunities, setOpportunities] = useState<OpenJoinPreview[] | null>(null);
   const [brand, setBrand] = useState<TenantBrand | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Landing = the join hero; "Get started" reveals the campaign board (there's no single
+  // campaign to onboard into from the generic route).
+  const [view, setView] = useState<"hero" | "board">("hero");
 
   useEffect(() => {
     void (async () => {
@@ -60,7 +57,7 @@ export default function VolunteerBoardPage() {
     })();
   }, [orgSlug]);
 
-  // Keep `?org` on every link out so the brand + scope survive the hop into a campaign / sign-in.
+  // Keep `?org` + `return_to` on every link out so brand + scope survive the hop.
   const withOrg = useMemo(
     () =>
       (href: string) => {
@@ -71,96 +68,100 @@ export default function VolunteerBoardPage() {
   );
   const orgLogo = tenantLogoUrl(brand);
 
+  // ── Hero landing (identical layout to the campaign page) ──────────────────
+  if (view === "hero") {
+    return (
+      <VolunteerJoinHero
+        tenantName={brand?.name ?? null}
+        logoUrl={orgLogo}
+        tenantId={brand?.id ?? null}
+        // No brand → the hero keeps Uprise's default primary/secondary. `?org` wears the tenant's.
+        primaryColour={brand?.primaryColour ?? null}
+        secondaryColour={brand?.secondaryColour ?? null}
+        customCss={brand?.customCss ?? null}
+        eyebrow="Join the team"
+        headline={`Become a volunteer${brand?.name ? ` with ${brand.name}` : ""}`}
+        intro="Pick a campaign near you and start knocking on doors and talking to voters. Takes two minutes to set up – no app store needed."
+        featureHeading="Open opportunities"
+        onGetStarted={() => setView("board")}
+        signInHref={withOrg("/volunteer/sign-in")}
+      />
+    );
+  }
+
+  // ── Opportunities board (pick a campaign) ─────────────────────────────────
   return (
     <VolunteerFlowShell>
-    {/* Tenant-wide mode wears the org brand (primary fills the hero via --primary). */}
-    {brand ? <BrandStyle brand={brand} /> : null}
-    <div className="flex flex-1 flex-col">
-      {/* Hero — Uprise-branded generically, or the tenant's logo/name/primary in `?org` mode. */}
-      <section className="rounded-b-[1.625rem] bg-primary px-[1.625rem] pb-7 pt-8 text-white">
-        <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-sm">
-          {orgLogo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={orgLogo} alt={brand?.name ?? "Organisation"} className="h-full w-full object-contain p-1" />
-          ) : orgSlug ? (
-            <LogoMark className="h-9 w-9 text-primary" />
+      <div className="flex flex-1 flex-col">
+        <div className="px-[1.625rem] pt-6">
+          <button
+            type="button"
+            onClick={() => setView("hero")}
+            className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-ink/60 hover:text-ink"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </button>
+          <h1 className="text-2xl font-extrabold text-ink">Open opportunities</h1>
+          <p className="mt-1 text-base text-ink/60">Pick a campaign near you to get started.</p>
+        </div>
+
+        <div className="flex-1 px-[1.625rem] pt-5">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Spinner />
+            </div>
+          ) : error ? (
+            <Alert variant="error" title={error} />
+          ) : opportunities && opportunities.length > 0 ? (
+            <ul className="space-y-2.5">
+              {opportunities.map((o) => (
+                <li key={o.campaignId}>
+                  <Link
+                    href={withOrg(`/volunteer/${o.campaignId}`)}
+                    className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03]"
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl">
+                      {o.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={o.logoUrl} alt={o.tenantName} className="h-full w-full object-cover" />
+                      ) : (
+                        <span
+                          className="flex h-full w-full items-center justify-center text-base font-extrabold text-white"
+                          style={{ background: tenantGradient(o.tenantId) }}
+                        >
+                          {(o.tenantName || o.campaignName).charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-bold text-ink">{o.campaignName}</span>
+                      {o.tenantName ? (
+                        <span className="block truncate text-sm text-ink/55">{o.tenantName}</span>
+                      ) : null}
+                    </span>
+                    <span aria-hidden className="shrink-0 text-lg text-ink/30">
+                      →
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src="/uprise-icon.svg" alt="Uprise" className="h-11 w-11 rounded-xl" />
+            <p className="rounded-[0.9rem] border border-dashed border-ink/15 px-4 py-8 text-center text-sm text-ink/55">
+              No open opportunities right now. Check back soon.
+            </p>
           )}
-        </span>
-        <p className="mt-6 text-sm font-bold uppercase tracking-[0.08em] text-white/80">Join the team</p>
-        <h1 className="mt-2 text-[2rem] font-extrabold leading-[1.1]">
-          Become a volunteer{brand?.name ? ` with ${brand.name}` : ""}
-        </h1>
-        <p className="mt-3 text-base leading-snug text-white/85">
-          Pick a campaign{brand?.name ? "" : " near you"} and start knocking on doors and talking to voters.
-          Takes two minutes to set up – no app store needed.
-        </p>
-      </section>
+        </div>
 
-      {/* Opportunities board */}
-      <div className="flex-1 px-[1.625rem] pt-6">
-        <p className="mb-3 text-sm font-bold uppercase tracking-[0.08em] text-ink/50">
-          Open opportunities
-        </p>
-
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <Spinner />
-          </div>
-        ) : error ? (
-          <Alert variant="error" title={error} />
-        ) : opportunities && opportunities.length > 0 ? (
-          <ul className="space-y-2.5">
-            {opportunities.map((o) => (
-              <li key={o.campaignId}>
-                <Link
-                  href={withOrg(`/volunteer/${o.campaignId}`)}
-                  className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03]"
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl">
-                    {o.logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={o.logoUrl} alt={o.tenantName} className="h-full w-full object-cover" />
-                    ) : (
-                      <span
-                        className="flex h-full w-full items-center justify-center text-base font-extrabold text-white"
-                        style={{ background: tenantGradient(o.tenantId) }}
-                      >
-                        {(o.tenantName || o.campaignName).charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-bold text-ink">{o.campaignName}</span>
-                    {o.tenantName ? (
-                      <span className="block truncate text-sm text-ink/55">{o.tenantName}</span>
-                    ) : null}
-                  </span>
-                  <span aria-hidden className="shrink-0 text-lg text-ink/30">
-                    →
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-[0.9rem] border border-dashed border-ink/15 px-4 py-8 text-center text-sm text-ink/55">
-            No open opportunities right now. Check back soon.
+        <div className="px-[1.625rem] pb-5 pt-5">
+          <p className="text-center text-base">
+            <Link href={withOrg("/volunteer/sign-in")} className="font-bold text-primary hover:underline">
+              Already a volunteer? Sign in
+            </Link>
           </p>
-        )}
+        </div>
       </div>
-
-      {/* Sign in */}
-      <div className="px-[1.625rem] pb-5 pt-5">
-        <p className="text-center text-base">
-          <Link href={withOrg("/volunteer/sign-in")} className="font-bold text-primary hover:underline">
-            Already a volunteer? Sign in
-          </Link>
-        </p>
-      </div>
-    </div>
     </VolunteerFlowShell>
   );
 }

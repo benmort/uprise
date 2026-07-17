@@ -83,6 +83,18 @@ export interface SessionGrant {
   memberships: Membership[];
 }
 
+/** A new-workspace signup awaiting super-admin approval — the super Signups queue row.
+ *  Structurally mirrors PendingSignup in @uprise/contracts (the api doesn't depend on it). */
+export interface PendingSignup {
+  requestId: string;
+  tenantId: string;
+  orgName: string;
+  slug: string;
+  email: string;
+  displayName: string | null;
+  createdAt: string;
+}
+
 /** Result of a password sign-in attempt (the controller maps these to HTTP). */
 export type SignInResult =
   | { kind: "invalid" }
@@ -1558,6 +1570,75 @@ export class IamFlowsService {
         aggregateId: requestId,
         payload: { requestId, tenantId, userId: reqRow.userId },
       });
+    });
+    return { ok: true };
+  }
+
+  // ── Super-admin signup approvals (new self-service workspaces) ────────
+  /**
+   * Pending new-workspace signups awaiting super-admin review. These are OWNER join requests on
+   * member-less tenants created by the gated /auth/register path (SIGNUP_APPROVAL_REQUIRED) — the
+   * `requestedRole = "OWNER"` marks them apart from ordinary organiser-approved join requests.
+   */
+  async listPendingSignups(): Promise<PendingSignup[]> {
+    const rows = await this.prisma.tenantJoinRequest.findMany({
+      where: { status: "pending", requestedRole: AppUserRole.OWNER, tenant: { deletedAt: null } },
+      orderBy: { createdAt: "desc" },
+      include: { tenant: { select: { name: true, slug: true } } },
+    });
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: rows.map((r) => r.userId) } },
+      select: { id: true, email: true, displayName: true },
+    });
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return rows.map((r) => ({
+      requestId: r.id,
+      tenantId: r.tenantId,
+      orgName: r.tenant.name,
+      slug: r.tenant.slug,
+      email: byId.get(r.userId)?.email ?? r.email,
+      displayName: byId.get(r.userId)?.displayName ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  /** Super-admin: approve a pending signup → mint the OWNER membership (reuses approveJoinRequest,
+   *  which emits tenant.join-request.approved → the "you're in" email). Role is fixed server-side. */
+  async approveSignup(requestId: string, approvedBy?: string | null): Promise<{ ok: true }> {
+    const req = await this.prisma.tenantJoinRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new BadRequestException("Signup request not found");
+    return this.approveJoinRequest(req.tenantId, requestId, { role: AppUserRole.OWNER, approvedBy });
+  }
+
+  /**
+   * Super-admin: reject a pending signup → completely undo it. The workspace was never activated
+   * (member-less, no data), so it's hard-deleted — freeing its unique slug (a soft delete keeps the
+   * row + its @unique slug, so the URL couldn't be reused). The cascade removes the pending join
+   * request; the orphaned owner account is deleted too (when it has no other memberships/requests)
+   * so the email is free to sign up again. Idempotent if the tenant is already gone.
+   */
+  async rejectSignup(requestId: string): Promise<{ ok: true }> {
+    const req = await this.prisma.tenantJoinRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new BadRequestException("Signup request not found");
+    await this.prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.findUnique({ where: { id: req.tenantId } });
+      if (tenant) {
+        await tx.tenant.delete({ where: { id: req.tenantId } }); // cascades the join request
+        await this.outbox.append(tx, {
+          tenantId: req.tenantId,
+          eventType: "tenant.tenant.deleted",
+          aggregateId: req.tenantId,
+          payload: { tenantId: req.tenantId },
+        });
+      }
+      const [memberships, otherRequests] = await Promise.all([
+        tx.tenantMember.count({ where: { userId: req.userId } }),
+        tx.tenantJoinRequest.count({ where: { userId: req.userId } }),
+      ]);
+      // Best-effort: never 500 the reject on an unexpected FK — the tenant removal is what matters.
+      if (memberships === 0 && otherRequests === 0) {
+        await tx.user.delete({ where: { id: req.userId } }).catch(() => undefined);
+      }
     });
     return { ok: true };
   }

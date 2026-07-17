@@ -41,6 +41,14 @@ export type VolunteerJoinHeroProps = {
   doorsThisWeek?: number;
   onGetStarted: () => void;
   signInHref: string;
+  /** Copy overrides — default to the campaign/invite wording. The campaign-less
+   *  `/volunteer` board passes generic "Join the team / Become a volunteer" copy. */
+  eyebrow?: string;
+  headline?: string;
+  intro?: string;
+  /** The right (feature) column's heading — "Change happens…" by default. */
+  featureHeading?: string;
+  getStartedLabel?: string;
 };
 
 function hashHue(seed: string): number {
@@ -99,6 +107,11 @@ export function VolunteerJoinHero({
   doorsThisWeek = 0,
   onGetStarted,
   signInHref,
+  eyebrow,
+  headline,
+  intro,
+  featureHeading,
+  getStartedLabel = "Get started",
 }: VolunteerJoinHeroProps) {
   const forName = campaignName || tenantName;
   const brandLabel = tenantName || "uprise";
@@ -163,13 +176,15 @@ export function VolunteerJoinHero({
             <span className="truncate text-2xl font-extrabold text-white lg:text-3xl">{brandLabel}</span>
           </div>
 
-          <p className="mt-8 text-sm font-bold uppercase tracking-[0.1em] text-white/75 lg:mt-12">You&apos;re invited</p>
+          <p className="mt-8 text-sm font-bold uppercase tracking-[0.1em] text-white/75 lg:mt-12">
+            {eyebrow ?? "You're invited"}
+          </p>
           <h1 className="mt-3 text-[2rem] font-extrabold leading-[1.05] lg:text-[3.25rem]">
-            Become a canvasser{forName ? ` for ${forName}` : ""}
+            {headline ?? `Become a canvasser${forName ? ` for ${forName}` : ""}`}
           </h1>
           <p className="mt-4 max-w-md text-base leading-relaxed text-white/85 lg:mt-5 lg:text-lg">
-            Join your neighbours knocking on doors and talking to voters. Takes two minutes to set up –
-            no app store needed.
+            {intro ??
+              "Join your neighbours knocking on doors and talking to voters. Takes two minutes to set up – no app store needed."}
           </p>
 
           {hasStats ? (
@@ -188,7 +203,7 @@ export function VolunteerJoinHero({
       <section className="flex flex-1 flex-col bg-[#faf8f5] px-7 pb-8 pt-8 lg:w-1/2 lg:justify-center lg:px-14 lg:py-16">
         <div className="lg:max-w-xl">
           <h2 className="text-[1.6rem] font-extrabold leading-tight text-ink lg:text-4xl">
-            Change happens one conversation at a time
+            {featureHeading ?? "Change happens one conversation at a time"}
           </h2>
           <p className="mt-3 text-base leading-relaxed text-ink/60 lg:mt-4 lg:text-lg">
             You don&apos;t need experience or a script. uprise walks you through every door and does the
@@ -218,7 +233,7 @@ export function VolunteerJoinHero({
               className="h-14 rounded-[0.9rem] px-8 text-base"
               onClick={onGetStarted}
             >
-              Get started
+              {getStartedLabel}
             </Button>
             <p className="text-center text-base text-ink/60 sm:text-left">
               Already a canvasser?{" "}

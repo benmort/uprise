@@ -54,20 +54,20 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
           <ul>
             <li className="group relative">
               <Link
-                href="/#channels"
-                className="flex items-center justify-between gap-2 border-b border-gray-200 p-3 text-base text-gray-700 duration-200 hover:text-blue-600"
-                onClick={onClose}
-              >
-                Channels
-              </Link>
-            </li>
-            <li className="group relative">
-              <Link
                 href="/#features"
                 className="flex items-center justify-between gap-2 border-b border-gray-200 p-3 text-base text-gray-700 duration-200 hover:text-blue-600"
                 onClick={onClose}
               >
                 Features
+              </Link>
+            </li>
+            <li className="group relative">
+              <Link
+                href="/blog"
+                className="flex items-center justify-between gap-2 border-b border-gray-200 p-3 text-base text-gray-700 duration-200 hover:text-blue-600"
+                onClick={onClose}
+              >
+                Blog
               </Link>
             </li>
             <li className="group relative">
@@ -92,13 +92,6 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                     onClick={onClose}
                   >
                     About Us
-                  </Link>
-                  <Link
-                    href="/blog"
-                    className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
-                    onClick={onClose}
-                  >
-                    Blog
                   </Link>
                   <Link
                     href="/plans"

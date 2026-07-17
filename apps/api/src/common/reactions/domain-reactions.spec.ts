@@ -40,7 +40,7 @@ function setup() {
 describe("domain reactions", () => {
   it("are loop-safe (no reaction emits its own trigger)", () => {
     const { reactions } = setup();
-    expect(reactions).toHaveLength(8);
+    expect(reactions).toHaveLength(9);
     expect(() => assertReactionsLoopSafe(reactions)).not.toThrow();
   });
 
@@ -119,6 +119,33 @@ describe("domain reactions", () => {
     expect(email.sendTransactional).toHaveBeenCalledWith(
       expect.objectContaining({ templateKey: "refund", vars: expect.objectContaining({ amount: "$15.00" }) }),
     );
+  });
+
+  it("tenant.signup.pending → SMS every super-admin with a mobile", async () => {
+    const { byTrigger, ev, sms, prisma } = setup();
+    prisma.user.findMany.mockResolvedValueOnce([
+      { id: "sa1", mobile: "+61400000001" },
+      { id: "sa2", mobile: "+61400000002" },
+    ]);
+    await byTrigger("tenant.signup.pending").handle(
+      ev({ tenantId: "t1", userId: "u1", email: "owner@x.y", orgName: "Acme", slug: "acme" }),
+    );
+    expect(sms.sendSms).toHaveBeenCalledTimes(2);
+    expect(sms.sendSms.mock.calls[0][0]).toMatchObject({
+      tenantId: "t1",
+      toPhone: "+61400000001",
+      purpose: "signup_pending_admin",
+    });
+    expect(sms.sendSms.mock.calls[0][0].body).toContain("Acme");
+  });
+
+  it("signup-pending reaction no-ops when no super-admin has a mobile", async () => {
+    const { byTrigger, ev, sms, prisma } = setup();
+    prisma.user.findMany.mockResolvedValueOnce([]);
+    await byTrigger("tenant.signup.pending").handle(
+      ev({ tenantId: "t1", userId: "u1", email: "owner@x.y", orgName: "Acme", slug: "acme" }),
+    );
+    expect(sms.sendSms).not.toHaveBeenCalled();
   });
 
   it("iam.user.created → welcome email", async () => {

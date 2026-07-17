@@ -37,6 +37,10 @@ export type ValidatedEnv = {
   NODE_ENV: string;
   // Dev only: actually send OTP/2FA SMS via Twilio (vs the on-screen code). Ignored in prod.
   DEV_SEND_OTP_SMS: boolean;
+  // Gate new-workspace self-service signups behind super-admin approval. When on, /auth/register
+  // creates the account + a pending TenantJoinRequest but issues NO session — the owner can't sign
+  // in until a super-admin approves it. Defaults on in production, off elsewhere (frictionless dev).
+  SIGNUP_APPROVAL_REQUIRED: boolean;
   PORT: number;
   API_BASE_URL: string;
   CORS_ALLOWED_ORIGINS: string;
@@ -143,6 +147,12 @@ export function validateEnv(config: Env): ValidatedEnv {
   const output: ValidatedEnv = {
     NODE_ENV: config.NODE_ENV?.trim() || "development",
     DEV_SEND_OTP_SMS: boolish(config, "DEV_SEND_OTP_SMS", false),
+    // Default on in production so a public launch is gated; explicit env value always wins.
+    SIGNUP_APPROVAL_REQUIRED: boolish(
+      config,
+      "SIGNUP_APPROVAL_REQUIRED",
+      (config.NODE_ENV?.trim() || "development") === "production",
+    ),
     PORT: numberInRange(config, "PORT", 1, 65535, 3001, errors),
     API_BASE_URL: required(config, "API_BASE_URL", errors),
     CORS_ALLOWED_ORIGINS: config.CORS_ALLOWED_ORIGINS?.trim() || "",

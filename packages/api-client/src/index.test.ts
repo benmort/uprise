@@ -128,11 +128,31 @@ describe("auth flows", () => {
     expect(bodyOf(init)).toEqual({ email: "a@b.com", password: "pw" });
   });
 
+  it("register POSTs the signup payload to /auth/register and forwards the captcha token", async () => {
+    await auth.register(
+      { email: "a@b.com", password: "longenoughpw", orgName: "Acme", slug: "acme" },
+      "cap-1",
+    );
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/auth/register`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual({ email: "a@b.com", password: "longenoughpw", orgName: "Acme", slug: "acme" });
+    expect((init.headers as Record<string, string>)["cf-turnstile-response"]).toBe("cap-1");
+  });
+
   it("logout DELETEs /iam/sessions", async () => {
     await auth.logout();
     const [url, init] = call();
     expect(url).toBe(`${BASE}/iam/sessions`);
     expect(init.method).toBe("DELETE");
+  });
+
+  it("phoneCheck POSTs challenge + code to /iam/phone/check", async () => {
+    await auth.phoneCheck("ch1", "0000");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/iam/phone/check`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual({ challengeId: "ch1", code: "0000" });
   });
 
   it("requestMagicLink POSTs the email and forwards the captcha token as a header", async () => {

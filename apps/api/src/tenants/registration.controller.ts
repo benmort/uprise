@@ -33,14 +33,17 @@ export class RegistrationController {
   @RequireCaptcha("strict")
   @Post("register")
   async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const grant = await this.registration.register(dto);
+    const result = await this.registration.register(dto);
+    // Gated signup (SIGNUP_APPROVAL_REQUIRED): the account + workspace exist but no session is
+    // issued — set no cookie, tell the client it's awaiting super-admin approval.
+    if ("pending" in result) return { pending: true };
     // Log the sign-up device (IP + user agent) — surfaced under Active sessions.
-    await this.sessions.stampLoginMeta(grant.token, requestMeta(req));
-    setSessionCookie(res, this.config, grant.token, grant.expiresAt);
+    await this.sessions.stampLoginMeta(result.token, requestMeta(req));
+    setSessionCookie(res, this.config, result.token, result.expiresAt);
     return {
-      token: grant.token,
-      user: { id: grant.userId, tenantId: grant.tenantId, memberships: grant.memberships },
-      memberships: grant.memberships,
+      token: result.token,
+      user: { id: result.userId, tenantId: result.tenantId, memberships: result.memberships },
+      memberships: result.memberships,
     };
   }
 

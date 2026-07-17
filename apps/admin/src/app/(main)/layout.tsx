@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Boxes,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   Database,
@@ -109,6 +110,8 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
     // Shared inbox (unified cross-channel queue). Open to organisers, flag-gated
     // (FEATURE_NAV_PROG_CHANNELS). The SMS-only inbox is parked in Future as "SMS inbox".
     { type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
+    // First-tier generic calendar — plots shifts + events + ad-hoc entries tenant-wide.
+    { type: "leaf", key: "calendar", label: "Calendar", href: "/calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar"), flag: "FEATURE_NAV_CALENDAR" },
 
     // ── Engage: the campaigning work — reach out, canvass, organise, target ──
     { type: "section", key: "sec-engage", label: "Engage" },
@@ -133,6 +136,7 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
         ...canvassOps(canvassCampaignId),
+        { label: "Events", href: "/canvass/events", match: (p) => p.startsWith("/canvass/events"), flag: "FEATURE_NAV_EVENTS" },
         { label: "Turf planner", href: "/canvass/planner", match: (p) => p.startsWith("/canvass/planner") },
       ],
     },
@@ -228,6 +232,7 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
             match: (p) => p.startsWith("/super/"),
             children: [
               { label: "Tenants", href: "/super/tenants", match: sp("tenants") },
+              { label: "Signups", href: "/super/signups", match: sp("signups") },
               { label: "Plans", href: "/super/plans", match: sp("plans") },
               { label: "Feature flags", href: "/super/flags", match: (p) => p === "/super/flags" },
               // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version

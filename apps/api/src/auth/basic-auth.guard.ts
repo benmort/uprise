@@ -214,7 +214,10 @@ export class BasicAuthGuard implements CanActivate {
         // This also covers /insights/public/tiles/* — the choropleth's boundary vector tiles,
         // scoped in PublicInsightsController to PUBLIC_TILE_LAYERS (open ABS geo data, no tenant
         // data). The organiser-gated /geo/tiles/* surface stays session-only.
-        /^(?:\/api\/v1)?\/insights\/public\//.test(candidate),
+        /^(?:\/api\/v1)?\/insights\/public\//.test(candidate) ||
+        // Public event RSVP surface — gated per-event by Event.publicRsvpEnabled + PUBLISHED
+        // status in the service. Preview (GET) + RSVP (POST) only.
+        /^(?:\/api\/v1)?\/public-events\//.test(candidate),
     );
   }
 

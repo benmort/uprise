@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, DoorOpen, Layers } from "lucide-react";
+import { ArrowLeft, DoorOpen, Layers, MapPinned } from "lucide-react";
 import {
   getCampaignSummary,
   listCampaigns,
@@ -18,6 +19,13 @@ import { MapThumbnail } from "@uprise/field";
 import { ProgressBar } from "@uprise/field";
 import { CampaignNavCards } from "@uprise/field";
 import { outerRing } from "@/lib/geometry";
+import { CAMPAIGN_COLORS } from "@/components/canvass/campaigns-map";
+
+// mapbox-gl touches window — keep the shared map out of SSR.
+const CampaignsMap = dynamic(
+  () => import("@/components/canvass/campaigns-map").then((m) => m.CampaignsMap),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full rounded-2xl" /> },
+);
 
 type Loaded = { campaign: CampaignSummary; kpis: CampaignKpis | null; turfs: TurfSummary[] };
 
@@ -82,7 +90,25 @@ export default function CampaignsIndexPage() {
         />
       ) : (
         <div className="space-y-4">
-          {rows.map(({ campaign, kpis, turfs }) => {
+          <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+            <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-foreground">
+              <MapPinned className="h-4 w-4 text-primary" />
+              All campaigns
+            </h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Every campaign&apos;s claimed turf on one map — click a shape to open that campaign.
+            </p>
+            <CampaignsMap
+              campaigns={rows.map(({ campaign, turfs }, idx) => ({
+                id: campaign.id,
+                name: campaign.name,
+                color: CAMPAIGN_COLORS[idx % CAMPAIGN_COLORS.length],
+                geometries: turfs.map((t) => t.geometry).filter(Boolean) as GeoJSON.Geometry[],
+              }))}
+            />
+          </section>
+          {rows.map(({ campaign, kpis, turfs }, idx) => {
+            const color = CAMPAIGN_COLORS[idx % CAMPAIGN_COLORS.length];
             const doors = turfs.reduce((sum, t) => sum + t.contactCount, 0);
             const shown = turfs.slice(0, THUMBS);
             const more = turfs.length - shown.length;
@@ -90,6 +116,7 @@ export default function CampaignsIndexPage() {
               <section key={campaign.id} className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
+                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
                     <h2 className="text-lg font-bold text-foreground">{campaign.name}</h2>
                     <StatusBadge status={campaign.status} />
                   </div>

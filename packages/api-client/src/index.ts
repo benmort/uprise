@@ -17,6 +17,7 @@ import type {
   LoginResponse,
   OkResponse,
   RegisterRequest,
+  RegisterResponse,
   RejectJoinRequestRequest,
   RequestAccessByPhoneRequest,
   RequestAccessRequest,
@@ -121,7 +122,7 @@ export const auth = {
   login: (email: string, password: string, captchaToken?: string) =>
     post<LoginResponse>("/iam/sessions", { email, password }, captchaToken),
   register: (body: RegisterRequest, captchaToken?: string) =>
-    post<SessionGrantResponse>("/auth/register", body, captchaToken),
+    post<RegisterResponse>("/auth/register", body, captchaToken),
   logout: () => request<OkResponse>("/iam/sessions", { method: "DELETE" }, { redirectOn401: false }),
   checkSession: () => request<CheckSessionResponse>("/auth/check", undefined, { redirectOn401: false }),
 

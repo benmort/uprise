@@ -1,19 +1,25 @@
 import React from "react";
 import Hero from "@/components/Hero";
-// Supporter logos. Small set (~4-5) -> static <LogoRow />. Once the list is long
-// enough to scroll, swap the import + tag below to <LogoCarousel />.
-import LogoRow from "@/components/LogoRow";
-import CommsChannels from "@/components/CommsChannels";
+// Supporter logos. Now a scrolling <LogoCarousel /> — the set is large enough that a
+// static row would wrap; for a small set (~4-5) swap back to <LogoRow />.
+import LogoCarousel from "@/components/LogoCarousel";
 import Features from "@/components/Features";
+import NotableFeatures from "@/components/NotableFeatures";
+import CampaignTypes from "@/components/CampaignTypes";
+import Roadmap from "@/components/Roadmap";
+import LatestBlog from "@/components/LatestBlog";
 import CTA from "@/components/CTA";
 
 export default function LandingPage() {
   return (
     <main>
       <Hero />
-      <LogoRow />
-      <CommsChannels />
+      <LogoCarousel />
       <Features />
+      <NotableFeatures />
+      <CampaignTypes />
+      <Roadmap />
+      <LatestBlog />
       <CTA />
     </main>
   );

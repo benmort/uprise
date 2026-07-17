@@ -78,6 +78,11 @@ export const UPRISE_RESOURCES = [
   "canvass.shift",
   "canvass.all",
 
+  // events (public happenings people RSVP to) + the generic calendar
+  "events.event",
+  "events.calendar",
+  "events.all",
+
   // journeys
   "journey.journey",
   "journey.enrolment",

@@ -17,6 +17,7 @@ import {
   rebuildWalkLists,
   unassignTurf,
   updateWalkList,
+  deleteWalkList,
   type TurfContact,
   type TurfRoute,
   type TurfSummary,
@@ -32,12 +33,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionCard } from "@uprise/field";
 import { StateRegion } from "@/components/shell/state-region";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
 type Volunteer = { id: string; displayName: string; email: string | null; role: string };
@@ -79,6 +81,8 @@ export default function WalkListBuilderPage() {
   const [editingWl, setEditingWl] = useState<WalkListSummary | null>(null);
   const [wlForm, setWlForm] = useState<{ name: string; listType: ListType }>({ name: "", listType: "STATIC" });
   const [wlBusy, setWlBusy] = useState(false);
+  const [confirmDeleteWl, setConfirmDeleteWl] = useState<WalkListSummary | null>(null);
+  const [deletingWl, setDeletingWl] = useState(false);
 
   const activeTurf = turfs.find((t) => t.id === turfId) ?? null;
 
@@ -315,6 +319,21 @@ export default function WalkListBuilderPage() {
     await loadTurf();
     showToast({ tone: "success", title: "Walk list updated" });
   }, [editingWl, wlForm, loadTurf, showToast]);
+
+  const onDeleteWl = useCallback(async () => {
+    if (!confirmDeleteWl) return;
+    setDeletingWl(true);
+    const res = await deleteWalkList(confirmDeleteWl.id);
+    setDeletingWl(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't delete walk list", description: res.error });
+      return;
+    }
+    const name = confirmDeleteWl.name;
+    setWalkLists((cur) => cur.filter((w) => w.id !== confirmDeleteWl.id));
+    setConfirmDeleteWl(null);
+    showToast({ tone: "success", title: "Walk list deleted", description: name });
+  }, [confirmDeleteWl, showToast]);
 
   const handleAssign = useCallback(async () => {
     if (!turfId || !selectedVolunteer) return;
@@ -647,6 +666,14 @@ export default function WalkListBuilderPage() {
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
+                        <button
+                          type="button"
+                          aria-label="Delete walk list"
+                          onClick={() => setConfirmDeleteWl(w)}
+                          className="text-muted-foreground hover:text-error"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </span>
                     </li>
                   ))}
@@ -730,6 +757,16 @@ export default function WalkListBuilderPage() {
           </Select>
         </Field>
       </FormDialog>
+
+      <ConfirmDialog
+        open={!!confirmDeleteWl}
+        title="Delete walk list"
+        description={`Permanently delete "${confirmDeleteWl?.name ?? "this walk list"}"? This can't be undone. Its stops are removed, but the turf and its contacts are kept.`}
+        confirmLabel="Delete walk list"
+        onConfirm={() => void onDeleteWl()}
+        onCancel={() => setConfirmDeleteWl(null)}
+        busy={deletingWl}
+      />
     </div>
   );
 }

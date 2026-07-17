@@ -266,11 +266,18 @@ export function Assignments() {
             );
           })}
           {assignments[0]?.turf.campaignId ? (
-            <Link href={`/field/get-turf?campaignId=${assignments[0].turf.campaignId}`} className="block">
-              <Button variant="outline" className="h-12 w-full text-base">
-                Get more turf
-              </Button>
-            </Link>
+            <>
+              <Link href={`/field/get-turf?campaignId=${assignments[0].turf.campaignId}`} className="block">
+                <Button variant="outline" className="h-12 w-full text-base">
+                  Get more turf
+                </Button>
+              </Link>
+              <Link href={`/field/shifts?campaignId=${assignments[0].turf.campaignId}`} className="block">
+                <Button variant="outline" className="h-12 w-full text-base">
+                  Pick a shift
+                </Button>
+              </Link>
+            </>
           ) : null}
         </div>
       )}

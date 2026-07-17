@@ -1,150 +1,143 @@
 import React from "react";
-import { 
-  Globe, 
-  Shield, 
-  Users, 
-  Zap, 
-  CreditCard,
-  Layout,
+import type { LucideIcon } from "lucide-react";
+import {
+  MessageSquare,
+  PhoneCall,
+  Inbox,
+  MapPin,
+  WifiOff,
+  Radio,
+  GitBranch,
+  Gauge,
+  Users,
+  RefreshCw,
+  Database,
   BarChart3,
-  Settings,
-  Palette
+  Palette,
+  ShieldCheck,
+  Clock,
+  Ticket,
+  ShieldOff,
+  BadgeCheck,
 } from "lucide-react";
+import SectionHeading from "@/components/marketing/SectionHeading";
+import FeatureCard from "@/components/marketing/FeatureCard";
+
+const FEATURES: { icon: LucideIcon; title: string; description: string }[] = [
+  {
+    icon: MessageSquare,
+    title: "P2P text messaging",
+    description:
+      "Send personalised one-to-one SMS with a live dual-channel preview, proof sends, schedule-or-send and an automatic opt-out check.",
+  },
+  {
+    icon: PhoneCall,
+    title: "Browser softphone calls",
+    description:
+      "Place calls from the campaign's own number right in the browser – click-to-dial with a global call bar, no hardware.",
+  },
+  {
+    icon: Inbox,
+    title: "Unified team inbox",
+    description:
+      "One shared, claimable queue for SMS and WhatsApp replies – live over SSE, with folders, search and audible responder alerts.",
+  },
+  {
+    icon: MapPin,
+    title: "Doorknocking & turf",
+    description:
+      "Cut turf on a Mapbox map or from geographic areas with live address-count estimates, then build optimised walk lists.",
+  },
+  {
+    icon: WifiOff,
+    title: "Offline canvasser app",
+    description:
+      "An installable PWA that queues door knocks to an on-device outbox and auto-flushes the moment volunteers reconnect.",
+  },
+  {
+    icon: Radio,
+    title: "Live action room",
+    description:
+      "Watch active canvassers refresh in real time and push a one-tap broadcast to every volunteer's phone.",
+  },
+  {
+    icon: GitBranch,
+    title: "Branching surveys",
+    description:
+      "Build skip-logic surveys that run on the doors and over SMS, with per-option canned replies and disposition mapping.",
+  },
+  {
+    icon: Gauge,
+    title: "Dispositions & 5-point scoring",
+    description:
+      "Custom outcome codes mapped to a five-point support scale, from strong support through to strong oppose.",
+  },
+  {
+    icon: Users,
+    title: "Audiences & CSV imports",
+    description:
+      "Build audiences and segments, upload contacts by CSV with live import progress, and target the right channel.",
+  },
+  {
+    icon: RefreshCw,
+    title: "Action Network sync",
+    description:
+      "Connect and test Action Network, search lists and run sync jobs to keep your contacts in step.",
+  },
+  {
+    icon: Database,
+    title: "Australian data built in",
+    description:
+      "G-NAF addresses, ASGS geography, federal, state and local electoral divisions, politicians, policies and demographics.",
+  },
+  {
+    icon: BarChart3,
+    title: "Electorate polling",
+    description:
+      "Crosstabs, regional choropleth maps and canvassing targets – with public and embeddable views.",
+  },
+];
+
+const MORE: { icon: LucideIcon; label: string }[] = [
+  { icon: Palette, label: "White-label multi-brand" },
+  { icon: ShieldCheck, label: "Role-based team access" },
+  { icon: Clock, label: "Shift scheduling" },
+  { icon: Ticket, label: "Events & RSVPs" },
+  { icon: ShieldOff, label: "Opt-out compliance" },
+  { icon: BadgeCheck, label: "Quality assurance" },
+];
 
 export default function Features() {
   return (
-    <section id="features" className="relative z-10 bg-[linear-gradient(180deg,rgba(242,244,247,0.00)_53.55%,#F2F4F7_101.85%)] py-16 md:py-24 lg:py-30">
+    <section
+      id="features"
+      className="relative z-10 bg-[linear-gradient(180deg,rgba(242,244,247,0.00)_53.55%,#F2F4F7_101.85%)] py-16 md:py-24 lg:py-30"
+    >
       <div className="container">
-        <div className="mx-auto mb-12 w-full max-w-[880px] text-center lg:mb-15">
-          <span className="mb-5 inline-block text-lg font-medium text-primary">
-            Core Features
-          </span>
-          <h2 className="text-3xl font-bold !leading-[1.2] text-title-color md:text-[40px]">
-            Fully Featured Campaigning Platform – Crafted for Modern Organisations
-          </h2>
+        <SectionHeading
+          eyebrow="Core Features"
+          title="Fully Featured Campaigning Platform – Crafted for Modern Organisations"
+          subtitle="Everything a modern campaign needs to reach people, knock doors, run volunteers and turn conversations into wins – in one platform."
+        />
+
+        <div className="mx-auto mt-12 grid max-w-[1170px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-7.5">
+          {FEATURES.map((feature) => (
+            <FeatureCard key={feature.title} {...feature} />
+          ))}
         </div>
-        
-        <div className="container">
-          <div className="mx-auto grid w-full max-w-[1170px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-7.5">
-            <div className="rounded-3xl border border-stroke-secondary bg-gray-50 p-1 duration-200 hover:border-primary-200 hover:bg-primary-25 md:p-2">
-              <div className="h-full rounded-2xl border border-[#F2F4F7] bg-white p-4 md:p-6">
-                <div className="mb-7.5 text-primary">
-                  <Globe className="h-12 w-12" />
-                </div>
-                <h3 className="mb-4 text-xl font-semibold text-title-color md:text-2xl lg:text-xl xl:text-2xl">
-                  Multi-tenant &amp; multi-brand
-                </h3>
-                <p className="text-base !leading-normal text-text-color-secondary">
-                  Run many campaigns and brands from one account. Each gets its own white-label portal at yourname.uprise.org.au with isolated data and its own branding. Available on the Scale plan.
-                </p>
-              </div>
-            </div>
 
-            <div className="rounded-3xl border border-stroke-secondary bg-gray-50 p-1 duration-200 hover:border-primary-200 hover:bg-primary-25 md:p-2">
-              <div className="h-full rounded-2xl border border-[#F2F4F7] bg-white p-4 md:p-6">
-                <div className="mb-7.5 text-primary">
-                  <Shield className="h-12 w-12" />
-                </div>
-                <h3 className="mb-4 text-xl font-semibold text-title-color md:text-2xl lg:text-xl xl:text-2xl">
-                  Secure Access Control
-                </h3>
-                <p className="text-base !leading-normal text-text-color-secondary">
-                  Role-based permissions and secure authentication for your team and clients with multi-factor authentication support.
-                </p>
+        <div className="mx-auto mt-12.5 grid max-w-[1170px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-7.5 xl:gap-y-6">
+          {MORE.map(({ icon: Icon, label }) => (
+            <div
+              key={label}
+              className="group flex items-center gap-4 rounded-3xl border border-stroke-secondary bg-white px-5 py-4 duration-200 hover:border-primary-200 md:px-7.5 md:py-5"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-25 text-primary duration-200 group-hover:bg-primary group-hover:text-white">
+                <Icon className="h-5 w-5" />
               </div>
+              <h4 className="text-lg font-semibold text-text-color">{label}</h4>
             </div>
-
-            <div className="rounded-3xl border border-stroke-secondary bg-gray-50 p-1 duration-200 hover:border-primary-200 hover:bg-primary-25 md:p-2">
-              <div className="h-full rounded-2xl border border-[#F2F4F7] bg-white p-4 md:p-6">
-                <div className="mb-7.5 text-primary">
-                  <Users className="h-12 w-12" />
-                </div>
-                <h3 className="mb-4 text-xl font-semibold text-title-color md:text-2xl lg:text-xl xl:text-2xl">
-                  Team Management
-                </h3>
-                <p className="text-base !leading-normal text-text-color-secondary">
-                  Invite team members with different access levels and roles. Manage client relationships and project collaboration.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-stroke-secondary bg-gray-50 p-1 duration-200 hover:border-primary-200 hover:bg-primary-25 md:p-2">
-              <div className="h-full rounded-2xl border border-[#F2F4F7] bg-white p-4 md:p-6">
-                <div className="mb-7.5 text-primary">
-                  <Zap className="h-12 w-12" />
-                </div>
-                <h3 className="mb-4 text-xl font-semibold text-title-color md:text-2xl lg:text-xl xl:text-2xl">
-                  Quick Setup
-                </h3>
-                <p className="text-base !leading-normal text-text-color-secondary">
-                  Get your client portal running in minutes, not days. Pre-built templates and components for rapid deployment.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-stroke-secondary bg-gray-50 p-1 duration-200 hover:border-primary-200 hover:bg-primary-25 md:p-2">
-              <div className="h-full rounded-2xl border border-[#F2F4F7] bg-white p-4 md:p-6">
-                <div className="mb-7.5 text-primary">
-                  <Palette className="h-12 w-12" />
-                </div>
-                <h3 className="mb-4 text-xl font-semibold text-title-color md:text-2xl lg:text-xl xl:text-2xl">
-                  Custom Branding
-                </h3>
-                <p className="text-base !leading-normal text-text-color-secondary">
-                  Upload your logo, set brand colours and custom CSS per tenant to match each organisation&apos;s identity – part of multi-brand on the Scale plan.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-stroke-secondary bg-gray-50 p-1 duration-200 hover:border-primary-200 hover:bg-primary-25 md:p-2">
-              <div className="h-full rounded-2xl border border-[#F2F4F7] bg-white p-4 md:p-6">
-                <div className="mb-7.5 text-primary">
-                  <CreditCard className="h-12 w-12" />
-                </div>
-                <h3 className="mb-4 text-xl font-semibold text-title-color md:text-2xl lg:text-xl xl:text-2xl">
-                  Payments
-                </h3>
-                <p className="text-base !leading-normal text-text-color-secondary">
-                  Built-in billing and subscription management for your clients with automated invoicing and payment processing.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-12.5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-7.5 xl:gap-y-6">
-            <div className="flex items-center gap-4 rounded-3xl border border-stroke-secondary bg-white px-4 py-3 duration-200 hover:border-primary-200 md:px-7.5 md:py-6">
-              <div className="flex items-center gap-4">
-                <div className="text-primary">
-                  <Layout className="h-7 w-7 md:h-9 md:w-9 lg:h-7 lg:w-7 xl:h-9 xl:w-9" />
-                </div>
-                <h4 className="text-lg font-semibold text-text-color md:text-xl lg:text-lg xl:text-xl">
-                  Fully Responsive
-                </h4>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 rounded-3xl border border-stroke-secondary bg-white px-4 py-3 duration-200 hover:border-primary-200 md:px-7.5 md:py-6">
-              <div className="flex items-center gap-4">
-                <div className="text-primary">
-                  <BarChart3 className="h-7 w-7 md:h-9 md:w-9 lg:h-7 lg:w-7 xl:h-9 xl:w-9" />
-                </div>
-                <h4 className="text-lg font-semibold text-text-color md:text-xl lg:text-lg xl:text-xl">
-                  Analytics Dashboard
-                </h4>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4 rounded-3xl border border-stroke-secondary bg-white px-4 py-3 duration-200 hover:border-primary-200 md:px-7.5 md:py-6">
-              <div className="flex items-center gap-4">
-                <div className="text-primary">
-                  <Settings className="h-7 w-7 md:h-9 md:w-9 lg:h-7 lg:w-7 xl:h-9 xl:w-9" />
-                </div>
-                <h4 className="text-lg font-semibold text-text-color md:text-xl lg:text-lg xl:text-xl">
-                  Multi-Framework
-                </h4>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>

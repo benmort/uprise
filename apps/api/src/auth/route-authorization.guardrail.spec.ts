@@ -29,6 +29,7 @@ const OPEN_CONTROLLERS = new Set<string>([
   "IamController", // sessions login/logout + my-sessions (self) + select-tenant (session self)
   "ProfileController", // self-scoped: operates only on the caller's own userId
   "PublicInsightsController", // public poll viewer (action app): isPublic-only, basic-auth allowlisted
+  "PublicEventsController", // public event RSVP: gated per-event by publicRsvpEnabled, basic-auth allowlisted
 ]);
 
 // Specific open routes on otherwise-gated controllers, keyed "ControllerClass#method".

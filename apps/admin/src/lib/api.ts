@@ -1,4 +1,4 @@
-import { request as cookieRequest, getApiUrl, type ApiResult } from "@uprise/api-client";
+import { request as cookieRequest, getApiUrl, type ApiResult, type PendingSignup } from "@uprise/api-client";
 // Field-facing canvass API now lives in @uprise/field (shared with apps/field, no
 // duplication). Re-exported here so organiser pages keep importing from "@/lib/api".
 import {
@@ -781,6 +781,12 @@ export async function updateWalkList(
   });
 }
 
+export async function deleteWalkList(id: string) {
+  return request<{ deleted: boolean }>(`/canvass/walk-lists/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export async function updateTurf(
   turfId: string,
   input: { name?: string; geometry?: unknown },
@@ -1006,13 +1012,33 @@ export async function broadcastPush(input: { title: string; body: string; url?: 
   });
 }
 
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+export type ShiftType = "CANVASS" | "POLLING_BOOTH" | "EVENT" | "GENERAL";
+export type ShiftAssignmentStatus = "REQUESTED" | "ASSIGNED" | "RELEASED";
+
 export type Shift = {
   id: string;
   campaignId: string | null;
+  type: ShiftType;
   name: string;
   location: string | null;
+  eventId: string | null;
+  pollingPlaceId: string | null;
+  capacity: number | null;
+  notes: string | null;
   startsAt: string;
   endsAt: string;
+  /** Derived by the API: confirmed seats, pending requests, and full-ness. */
+  assignedCount: number;
+  requestedCount: number;
+  isFull: boolean;
+};
+
+export type ShiftAssignmentRow = {
+  assignmentId: string;
+  status: ShiftAssignmentStatus;
+  volunteer: { id: string; name: string; email: string };
 };
 
 export async function listShifts(campaignId?: string) {
@@ -1021,32 +1047,271 @@ export async function listShifts(campaignId?: string) {
 }
 
 export async function createShift(input: {
-  campaignId: string;
+  campaignId?: string;
+  type?: ShiftType;
   name: string;
   startsAt: string;
   endsAt: string;
   location?: string;
+  eventId?: string;
+  pollingPlaceId?: string;
+  capacity?: number;
+  notes?: string;
 }) {
   return request<Shift>("/canvass/shifts", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify(input),
   });
 }
 
 export async function updateShift(
   id: string,
-  input: { name?: string; location?: string; startsAt?: string; endsAt?: string },
+  input: {
+    type?: ShiftType;
+    name?: string;
+    location?: string;
+    startsAt?: string;
+    endsAt?: string;
+    eventId?: string;
+    pollingPlaceId?: string;
+    capacity?: number;
+    notes?: string;
+  },
 ) {
   return request<Shift>(`/canvass/shifts/${encodeURIComponent(id)}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: JSON_HEADERS,
     body: JSON.stringify(input),
   });
 }
 
 export async function deleteShift(id: string) {
   return request<{ deleted: boolean }>(`/canvass/shifts/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ── Shift roster (organiser assign / approve / release) ──────────────────────
+export async function listShiftAssignments(shiftId: string) {
+  return request<ShiftAssignmentRow[]>(`/canvass/shifts/${encodeURIComponent(shiftId)}/assignments`);
+}
+
+export async function assignShift(shiftId: string, volunteerId: string) {
+  return request<{ id: string; status: ShiftAssignmentStatus }>(
+    `/canvass/shifts/${encodeURIComponent(shiftId)}/assign`,
+    { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ volunteerId }) },
+  );
+}
+
+export async function approveShiftRequest(assignmentId: string) {
+  return request<{ id: string; status: ShiftAssignmentStatus }>(
+    `/canvass/shift-assignments/${encodeURIComponent(assignmentId)}/approve`,
+    { method: "POST" },
+  );
+}
+
+export async function denyShiftRequest(assignmentId: string) {
+  return request<{ id: string; status: ShiftAssignmentStatus }>(
+    `/canvass/shift-assignments/${encodeURIComponent(assignmentId)}/deny`,
+    { method: "POST" },
+  );
+}
+
+export async function releaseShiftAssignment(assignmentId: string) {
+  return request<{ id: string; status: ShiftAssignmentStatus }>(
+    `/canvass/shift-assignments/${encodeURIComponent(assignmentId)}/release`,
+    { method: "POST" },
+  );
+}
+
+// ── Events domain ────────────────────────────────────────────────────────────
+export type EventStatus = "DRAFT" | "PUBLISHED" | "CANCELLED";
+export type DerivedEventStatus = "draft" | "upcoming" | "ongoing" | "completed" | "cancelled";
+export type RsvpStatus = "GOING" | "WAITLIST" | "CANCELLED" | "ATTENDED";
+
+export type EventSummary = {
+  id: string;
+  campaignId: string | null;
+  title: string;
+  description: string | null;
+  category: string | null;
+  status: EventStatus;
+  location: string | null;
+  pollingPlaceId: string | null;
+  lat: number | null;
+  lng: number | null;
+  startsAt: string;
+  endsAt: string;
+  capacity: number | null;
+  imageUrl: string | null;
+  publicRsvpEnabled: boolean;
+  attendeeCount: number;
+  derivedStatus: DerivedEventStatus;
+};
+
+export type EventRsvp = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  status: RsvpStatus;
+  createdAt: string;
+};
+
+export type EventDetail = EventSummary & { rsvps: EventRsvp[]; shifts: Shift[] };
+
+export type EventInput = {
+  title: string;
+  description?: string;
+  category?: string;
+  status?: EventStatus;
+  location?: string;
+  pollingPlaceId?: string;
+  lat?: number;
+  lng?: number;
+  startsAt: string;
+  endsAt: string;
+  capacity?: number;
+  imageUrl?: string;
+  campaignId?: string;
+  publicRsvpEnabled?: boolean;
+};
+
+export async function listEvents(params?: { status?: DerivedEventStatus | "all"; search?: string }) {
+  const q = new URLSearchParams();
+  if (params?.status && params.status !== "all") q.set("status", params.status);
+  if (params?.search) q.set("search", params.search);
+  const qs = q.toString();
+  return request<EventSummary[]>(`/events${qs ? `?${qs}` : ""}`);
+}
+
+export async function getEvent(id: string) {
+  return request<EventDetail>(`/events/${encodeURIComponent(id)}`);
+}
+
+export async function createEvent(input: EventInput) {
+  return request<EventSummary>("/events", { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(input) });
+}
+
+export async function updateEvent(id: string, input: Partial<EventInput>) {
+  return request<EventSummary>(`/events/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function cancelEvent(id: string) {
+  return request<EventSummary>(`/events/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}
+
+export async function listEventRsvps(id: string) {
+  return request<EventRsvp[]>(`/events/${encodeURIComponent(id)}/rsvps`);
+}
+
+export async function rsvpEvent(
+  id: string,
+  input: { name: string; email?: string; phone?: string; contactId?: string; volunteerId?: string },
+) {
+  return request<EventRsvp>(`/events/${encodeURIComponent(id)}/rsvp`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function cancelEventRsvp(eventId: string, rsvpId: string) {
+  return request<{ id: string; status: RsvpStatus }>(
+    `/events/${encodeURIComponent(eventId)}/rsvps/${encodeURIComponent(rsvpId)}/cancel`,
+    { method: "POST" },
+  );
+}
+
+// ── Public (tokenless) event RSVP — powers /e/[eventId], gated per-event server-side ──
+export type PublicEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  location: string | null;
+  startsAt: string;
+  endsAt: string;
+  capacity: number | null;
+  imageUrl: string | null;
+  attendeeCount: number;
+  spotsLeft: number | null;
+};
+
+export async function getPublicEvent(id: string) {
+  return request<PublicEvent>(`/public-events/${encodeURIComponent(id)}`);
+}
+
+export async function publicEventRsvp(id: string, input: { name: string; email?: string; phone?: string }) {
+  return request<{ id: string; status: RsvpStatus }>(`/public-events/${encodeURIComponent(id)}/rsvp`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+}
+
+// ── Calendar (aggregate + generic entries) ───────────────────────────────────
+export type CalendarItemKind = "entry" | "event" | "shift";
+export type CalendarItem = {
+  kind: CalendarItemKind;
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string | null;
+  allDay: boolean;
+  color: string | null;
+  meta: Record<string, unknown>;
+};
+
+export type CalendarEntry = {
+  id: string;
+  title: string;
+  description: string | null;
+  color: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  allDay: boolean;
+};
+
+export async function listCalendar(from?: string, to?: string) {
+  const q = new URLSearchParams();
+  if (from) q.set("from", from);
+  if (to) q.set("to", to);
+  const qs = q.toString();
+  return request<CalendarItem[]>(`/calendar${qs ? `?${qs}` : ""}`);
+}
+
+export async function createCalendarEntry(input: {
+  title: string;
+  description?: string;
+  color?: string;
+  startsAt: string;
+  endsAt?: string;
+  allDay?: boolean;
+}) {
+  return request<CalendarEntry>("/calendar/entries", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateCalendarEntry(
+  id: string,
+  input: { title?: string; description?: string; color?: string; startsAt?: string; endsAt?: string; allDay?: boolean },
+) {
+  return request<CalendarEntry>(`/calendar/entries/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteCalendarEntry(id: string) {
+  return request<{ deleted: boolean }>(`/calendar/entries/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export type QaFlagKind = "NO_GPS" | "FAST_CADENCE";
@@ -1173,5 +1438,27 @@ export async function dryRunJourney(id: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
+  });
+}
+
+// ── Super-admin: new-workspace signup approvals ──────────────────────────
+export type { PendingSignup };
+
+/** New-workspace signups awaiting super-admin approval (SIGNUP_APPROVAL_REQUIRED). */
+export async function listPendingSignups() {
+  return request<PendingSignup[]>("/tenants/pending-signups");
+}
+
+/** Approve a pending signup → mints the OWNER membership + emails the owner "you're in". */
+export async function approveSignup(requestId: string) {
+  return request<{ ok: true }>(`/tenants/pending-signups/${encodeURIComponent(requestId)}/approve`, {
+    method: "POST",
+  });
+}
+
+/** Reject a pending signup → soft-deletes the member-less tenant, freeing its slug. */
+export async function rejectSignup(requestId: string) {
+  return request<{ ok: true }>(`/tenants/pending-signups/${encodeURIComponent(requestId)}/reject`, {
+    method: "POST",
   });
 }

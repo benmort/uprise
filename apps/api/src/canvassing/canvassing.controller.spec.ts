@@ -38,6 +38,15 @@ describe("CanvassingController", () => {
     createShift: jest.fn().mockResolvedValue({}),
     updateShift: jest.fn().mockResolvedValue({}),
     deleteShift: jest.fn().mockResolvedValue({}),
+    listShiftAssignments: jest.fn().mockResolvedValue([]),
+    assignShift: jest.fn().mockResolvedValue({}),
+    approveShiftRequest: jest.fn().mockResolvedValue({}),
+    denyShiftRequest: jest.fn().mockResolvedValue({}),
+    releaseShiftAssignment: jest.fn().mockResolvedValue({}),
+    listMyShifts: jest.fn().mockResolvedValue([]),
+    listAvailableShifts: jest.fn().mockResolvedValue([]),
+    signUpShift: jest.fn().mockResolvedValue({}),
+    releaseOwnShift: jest.fn().mockResolvedValue({}),
     qaReview: jest.fn().mockResolvedValue({}),
     setQaFlagResolution: jest.fn().mockResolvedValue({}),
   } as any;
@@ -249,6 +258,53 @@ describe("CanvassingController", () => {
   it("deleteShift delegates with tenantId + id", async () => {
     await c.deleteShift("s1", "t1");
     expect(svc.deleteShift).toHaveBeenCalledWith("t1", "s1");
+  });
+
+  // ── Shift roster (organiser) ──
+  it("listShiftAssignments delegates with tenantId + shiftId", async () => {
+    await c.listShiftAssignments("s1", "t1");
+    expect(svc.listShiftAssignments).toHaveBeenCalledWith("t1", "s1");
+  });
+
+  it("assignShift delegates with tenantId + shiftId + volunteerId", async () => {
+    await c.assignShift("s1", { volunteerId: "v1" } as any, "t1");
+    expect(svc.assignShift).toHaveBeenCalledWith("t1", "s1", "v1");
+  });
+
+  it("approveShiftRequest delegates with tenantId + assignmentId", async () => {
+    await c.approveShiftRequest("a1", "t1");
+    expect(svc.approveShiftRequest).toHaveBeenCalledWith("t1", "a1");
+  });
+
+  it("denyShiftRequest delegates with tenantId + assignmentId", async () => {
+    await c.denyShiftRequest("a1", "t1");
+    expect(svc.denyShiftRequest).toHaveBeenCalledWith("t1", "a1");
+  });
+
+  it("releaseShiftAssignment delegates with tenantId + assignmentId", async () => {
+    await c.releaseShiftAssignment("a1", "t1");
+    expect(svc.releaseShiftAssignment).toHaveBeenCalledWith("t1", "a1");
+  });
+
+  // ── Shift self-signup (volunteer; user id from session) ──
+  it("listMyShifts delegates with tenantId + session user id", async () => {
+    await c.listMyShifts(req, "t1");
+    expect(svc.listMyShifts).toHaveBeenCalledWith("t1", "u1");
+  });
+
+  it("listAvailableShifts delegates with tenantId + campaignId + user id", async () => {
+    await c.listAvailableShifts("camp1", req, "t1");
+    expect(svc.listAvailableShifts).toHaveBeenCalledWith("t1", "camp1", "u1");
+  });
+
+  it("signUpShift delegates with tenantId + campaignId + shiftId + user id", async () => {
+    await c.signUpShift("camp1", "s1", req, "t1");
+    expect(svc.signUpShift).toHaveBeenCalledWith("t1", "camp1", "s1", "u1");
+  });
+
+  it("releaseOwnShift delegates with tenantId + shiftId + user id", async () => {
+    await c.releaseOwnShift("camp1", "s1", req, "t1");
+    expect(svc.releaseOwnShift).toHaveBeenCalledWith("t1", "s1", "u1");
   });
 
   // ── QA review ──

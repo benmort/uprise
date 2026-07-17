@@ -146,6 +146,26 @@ export class TenantsController {
     return this.tenants.searchTenants(q);
   }
 
+  // ── Super-admin signup approvals — new self-service workspaces awaiting review. Declared
+  // before :id so "pending-signups" isn't captured as a tenant id. @SuperAdmin is the gate. ──
+  @Get("pending-signups")
+  @SuperAdmin()
+  listPendingSignups() {
+    return this.flows.listPendingSignups();
+  }
+
+  @Post("pending-signups/:requestId/approve")
+  @SuperAdmin()
+  approveSignup(@Param("requestId") requestId: string, @Req() req: Request & { user?: AuthUser }) {
+    return this.flows.approveSignup(requestId, req.user?.id);
+  }
+
+  @Post("pending-signups/:requestId/reject")
+  @SuperAdmin()
+  rejectSignup(@Param("requestId") requestId: string) {
+    return this.flows.rejectSignup(requestId);
+  }
+
   @Get(":id")
   @RequirePermission(TENANT_READ)
   get(@Param("id") id: string) {

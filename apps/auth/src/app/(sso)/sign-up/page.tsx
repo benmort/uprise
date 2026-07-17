@@ -15,7 +15,7 @@ import {
   TurnstileWidget,
   type TurnstileHandle,
 } from "@uprise/ui";
-import { auth, tenants, type Membership } from "@uprise/api-client";
+import { auth, isRegisterPending, tenants, type Membership } from "@uprise/api-client";
 import { completeAuth } from "@/lib/session";
 import { useQueryParams } from "@/lib/use-query";
 
@@ -52,6 +52,9 @@ export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  // Gated signup (SIGNUP_APPROVAL_REQUIRED): the account is created but no session — the owner
+  // waits for super-admin approval, so step 3 shows a "pending" note instead of redirecting.
+  const [pending, setPending] = useState(false);
 
   // Debounced subdomain availability check.
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,16 +125,23 @@ export default function SignUpPage() {
       setError(res.error);
       return;
     }
+    if (isRegisterPending(res.data)) {
+      // No session issued — the workspace awaits super-admin approval.
+      setPending(true);
+      setStep(3);
+      return;
+    }
     setMemberships(res.data.memberships);
     setStep(3);
   }
 
-  // Step 3 — brief success, then complete the session + redirect.
+  // Step 3 — brief success, then complete the session + redirect. Skipped when the signup is
+  // pending approval (there's no session to complete — the owner signs in once approved).
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 3 || pending) return;
     const t = setTimeout(() => completeAuth(memberships, returnTo), 1800);
     return () => clearTimeout(t);
-  }, [step, memberships, returnTo]);
+  }, [step, pending, memberships, returnTo]);
 
   const homepageUrl = process.env.NEXT_PUBLIC_MARKETING_URL || "http://localhost:3003";
 
@@ -281,9 +291,18 @@ export default function SignUpPage() {
         <div className="flex flex-col items-center py-10 text-center">
           <CheckCircle className="mb-4 h-12 w-12 text-success-500" />
           <h1 className="mb-2 text-title-sm font-semibold text-gray-800 dark:text-white/90">
-            Account created
+            {pending ? "Thanks — you're on the list" : "Account created"}
           </h1>
-          <p className="text-sm text-muted-foreground">Setting up your workspace…</p>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {pending
+              ? "Your workspace is pending approval. We'll be in touch once it's live — you'll be able to sign in then."
+              : "Setting up your workspace…"}
+          </p>
+          {pending ? (
+            <Link className="mt-6 text-sm text-primary hover:underline" href="/sign-in">
+              Back to sign in
+            </Link>
+          ) : null}
         </div>
       )}
 

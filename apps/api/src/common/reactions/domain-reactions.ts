@@ -29,6 +29,7 @@ export interface ReactionDeps {
 export function buildDomainReactions(deps: ReactionDeps): Reaction[] {
   return [
     welcomeEmailReaction(deps),
+    signupPendingReaction(deps),
     joinRequestSubmittedReaction(deps),
     joinRequestApprovedReaction(deps),
     joinRequestRejectedReaction(deps),
@@ -88,6 +89,47 @@ function welcomeEmailReaction({ email }: ReactionDeps): Reaction {
         vars: { name: p.email, appName: "Uprise" },
         purpose: "welcome",
       });
+    },
+  };
+}
+
+/**
+ * tenant.signup.pending → SMS every super-admin (with a mobile on file) that a new workspace has
+ * signed up and needs approval. Best-effort: a brand-new tenant has no provisioned number, so the
+ * transactional dispatcher falls back to the platform sender; a bad number logs and is skipped.
+ */
+function signupPendingReaction({ prisma, sms, logger }: ReactionDeps): Reaction {
+  return {
+    trigger: "tenant.signup.pending",
+    emits: ["messaging.tx-sms.requested"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as { tenantId: string; orgName: string; slug: string; email: string };
+      if (!p?.tenantId) return;
+      const admins = await prisma.user.findMany({
+        where: { isSuperAdmin: true, deletedAt: null, mobile: { not: null } },
+        select: { id: true, mobile: true },
+      });
+      if (admins.length === 0) {
+        logger.warn("tenant", "New signup pending approval but no super-admin has a mobile to SMS", {
+          tenantId: p.tenantId,
+          slug: p.slug,
+        });
+        return;
+      }
+      const body =
+        `Uprise: new workspace "${p.orgName}" (${p.slug}) signed up and needs approval. ` +
+        `Approve it in Admin → Super Admin → Signups.`;
+      for (const admin of admins) {
+        if (!admin.mobile) continue;
+        try {
+          await sms.sendSms({ tenantId: p.tenantId, toPhone: admin.mobile, body, purpose: "signup_pending_admin" });
+        } catch (err) {
+          logger.warn("tenant", "Failed to SMS a super-admin about a pending signup", {
+            tenantId: p.tenantId,
+            error: String(err),
+          });
+        }
+      }
     },
   };
 }

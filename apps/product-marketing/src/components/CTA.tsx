@@ -12,11 +12,11 @@ export default function CTA() {
         <div className="relative z-10 w-full justify-between overflow-hidden rounded-3xl bg-gray-800 px-8 pt-20 md:px-15 lg:flex">
           <div className="self-center pb-13 lg:max-w-[470px]">
             <span className="mb-3 block text-base text-gray-400">
-              What are you waiting for?
+              Ready to organise?
             </span>
             <h2 className="mb-9 text-2xl font-semibold text-white md:text-3xl">
-              Join organisations already using the{" "}
-              next generation platform for progressive movements!
+              Every channel, every door, every volunteer{" "}
+              – run your whole campaign from one place.
             </h2>
             <div className="mb-17.5">
               <MarketingLaunchpad tone="dark">
@@ -49,10 +49,10 @@ export default function CTA() {
               </div>
               <div>
                 <h3 className="text-base font-medium text-gray-200">
-                  <strong className="font-bold">500+</strong> Successful Campaigns!
+                  Built by campaigners, for campaigners
                 </h3>
                 <p className="text-sm text-gray-400">
-                  Leading Campaigns Platform
+                  SMS, calls, canvassing and data in one platform
                 </p>
               </div>
             </div>

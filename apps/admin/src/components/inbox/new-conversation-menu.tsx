@@ -67,7 +67,7 @@ export function NewConversationMenu({
 
   return createPortal(
     <div
-      className="animate-overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="animate-overlay-in fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Start a new conversation"
@@ -75,7 +75,10 @@ export function NewConversationMenu({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="animate-dialog-pop w-full max-w-2xl overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-xl sm:p-8">
+      {/* Bottom sheet on mobile (flush to the bottom edge, scrolls, capped to the
+          dynamic viewport so the cards never clip off-screen); centred dialog ≥ sm. */}
+      <div className="animate-dialog-pop flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-y-auto rounded-t-3xl border border-border bg-surface p-5 shadow-xl sm:max-h-[85vh] sm:rounded-3xl sm:p-8">
+        <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-border sm:hidden" aria-hidden />
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h2 className="text-2xl font-extrabold text-foreground">Start a new conversation</h2>
@@ -108,7 +111,9 @@ export function NewConversationMenu({
                 }}
                 style={{ animationDelay: `${70 + i * 45}ms` }}
                 className={cn(
-                  "animate-fade-up group flex flex-col rounded-2xl border p-4 text-left transition-colors",
+                  // Compact icon+text row on mobile (fits many in a short sheet); the
+                  // taller icon-over-text card ≥ sm.
+                  "animate-fade-up group flex flex-row items-center gap-3 rounded-2xl border p-4 text-left transition-colors sm:flex-col sm:items-start sm:gap-0",
                   live
                     ? "border-border hover:border-primary/40 hover:bg-primary/[0.04]"
                     : "cursor-not-allowed border-border/60 bg-surface-variant/30 opacity-70",
@@ -116,26 +121,28 @@ export function NewConversationMenu({
               >
                 <span
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-xl",
+                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
                     live ? c.tint : "bg-surface-variant text-muted-foreground",
                   )}
                 >
                   <Icon className="h-5 w-5" />
                 </span>
-                <span
-                  className={cn(
-                    "mt-6 flex items-center gap-2 font-bold",
-                    live ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  {c.title}
-                  {!live ? (
-                    <span className="rounded-full bg-surface-variant px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                      Soon
-                    </span>
-                  ) : null}
+                <span className="min-w-0 sm:mt-6">
+                  <span
+                    className={cn(
+                      "flex items-center gap-2 font-bold",
+                      live ? "text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {c.title}
+                    {!live ? (
+                      <span className="rounded-full bg-surface-variant px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                        Soon
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="mt-0.5 block text-sm text-muted-foreground sm:mt-1">{c.sub}</span>
                 </span>
-                <span className="mt-1 text-sm text-muted-foreground">{c.sub}</span>
               </button>
             );
           })}

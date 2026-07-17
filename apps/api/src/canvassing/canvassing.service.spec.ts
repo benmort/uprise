@@ -31,6 +31,7 @@ describe("CanvassingService", () => {
   let service: CanvassingService;
   let queue: { enqueue: jest.Mock };
   let directions: { routeLegs: jest.Mock; routeLegsAndGeometry: jest.Mock };
+  let outbox: { append: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -121,6 +122,7 @@ describe("CanvassingService", () => {
       routeLegs: jest.fn().mockResolvedValue(null),
       routeLegsAndGeometry: jest.fn().mockResolvedValue(null),
     };
+    outbox = { append: jest.fn() };
     service = new CanvassingService(
       prisma,
       engagement,
@@ -128,6 +130,7 @@ describe("CanvassingService", () => {
       queue as never,
       new ImageUploadService(),
       directions as never,
+      outbox as never,
     );
   });
 
@@ -1600,7 +1603,7 @@ describe("CanvassingService", () => {
 
   describe("shifts", () => {
     it("listShifts filters by campaign when given", async () => {
-      prisma.shift.findMany.mockResolvedValue([{ id: "s1" }]);
+      prisma.shift.findMany.mockResolvedValue([{ id: "s1", capacity: null, assignments: [] }]);
       await service.listShifts("org1", "camp1");
       expect(prisma.shift.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { tenantId: "org1", campaignId: "camp1" } }),

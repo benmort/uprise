@@ -351,9 +351,18 @@ export class LoadUniverseDto {
   limit?: number;
 }
 
+const SHIFT_TYPES = ["CANVASS", "POLLING_BOOTH", "EVENT", "GENERAL"] as const;
+export type ShiftTypeInput = (typeof SHIFT_TYPES)[number];
+
 export class CreateShiftDto {
+  // Optional: a polling-booth or event shift needn't belong to a canvass campaign.
+  @IsOptional()
   @IsString()
-  campaignId!: string;
+  campaignId?: string;
+
+  @IsOptional()
+  @IsIn(SHIFT_TYPES)
+  type?: ShiftTypeInput;
 
   @IsString()
   name!: string;
@@ -367,9 +376,29 @@ export class CreateShiftDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @IsOptional()
+  @IsString()
+  eventId?: string;
+
+  @IsOptional()
+  @IsString()
+  pollingPlaceId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  capacity?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
 
 export class UpdateShiftDto {
+  @IsOptional()
+  @IsIn(SHIFT_TYPES)
+  type?: ShiftTypeInput;
+
   @IsOptional()
   @IsString()
   name?: string;
@@ -385,6 +414,28 @@ export class UpdateShiftDto {
   @IsOptional()
   @IsString()
   endsAt?: string;
+
+  @IsOptional()
+  @IsString()
+  eventId?: string;
+
+  @IsOptional()
+  @IsString()
+  pollingPlaceId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  capacity?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+/** Organiser assigns a specific volunteer to a shift. */
+export class AssignShiftDto {
+  @IsString()
+  volunteerId!: string;
 }
 
 export class UpdateWalkListDto {

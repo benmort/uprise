@@ -24,6 +24,7 @@ import { TenantId } from "../auth/tenant-id.decorator";
 import type { AuthUser } from "../auth/auth-user";
 import { CanvassingService } from "./canvassing.service";
 import {
+  AssignShiftDto,
   AssignTurfDto,
   ClaimAreaDto,
   ClaimDrawDto,
@@ -53,6 +54,9 @@ import {
 // (openJoinEnabled, own-turf) stay enforced in the service.
 const CANVASS_READ = { action: "read", resource: "canvass.turf" } as const;
 const DOORKNOCK = { action: "manage", resource: "canvass.doorknock" } as const;
+// Volunteers hold `read canvass.shift` (list/sign-up); organisers manage the roster.
+const SHIFT_READ = { action: "read", resource: "canvass.shift" } as const;
+const SHIFT_MANAGE = { action: "manage", resource: "canvass.shift" } as const;
 
 @Controller("canvass")
 @UseGuards(RolesGuard)
@@ -407,6 +411,76 @@ export class CanvassingController {
   @Roles(AppUserRole.ORGANISER)
   async deleteShift(@Param("id") id: string, @TenantId() tenantId: string) {
     return this.canvassing.deleteShift(tenantId, id);
+  }
+
+  // ── Shift roster (organiser assign / approve / release) ──────────
+  @Get("shifts/:id/assignments")
+  @RequirePermission(SHIFT_MANAGE)
+  async listShiftAssignments(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.canvassing.listShiftAssignments(tenantId, id);
+  }
+
+  @Post("shifts/:id/assign")
+  @RequirePermission(SHIFT_MANAGE)
+  async assignShift(@Param("id") id: string, @Body() dto: AssignShiftDto, @TenantId() tenantId: string) {
+    return this.canvassing.assignShift(tenantId, id, dto.volunteerId);
+  }
+
+  @Post("shift-assignments/:assignmentId/approve")
+  @RequirePermission(SHIFT_MANAGE)
+  async approveShiftRequest(@Param("assignmentId") assignmentId: string, @TenantId() tenantId: string) {
+    return this.canvassing.approveShiftRequest(tenantId, assignmentId);
+  }
+
+  @Post("shift-assignments/:assignmentId/deny")
+  @RequirePermission(SHIFT_MANAGE)
+  async denyShiftRequest(@Param("assignmentId") assignmentId: string, @TenantId() tenantId: string) {
+    return this.canvassing.denyShiftRequest(tenantId, assignmentId);
+  }
+
+  @Post("shift-assignments/:assignmentId/release")
+  @RequirePermission(SHIFT_MANAGE)
+  async releaseShiftAssignment(@Param("assignmentId") assignmentId: string, @TenantId() tenantId: string) {
+    return this.canvassing.releaseShiftAssignment(tenantId, assignmentId);
+  }
+
+  // ── Volunteer shift self-signup (gated per-campaign; volunteer id from session) ──
+  @Get("my-shifts")
+  @RequirePermission(SHIFT_READ)
+  async listMyShifts(@Req() req: Request & { user?: AuthUser }, @TenantId() tenantId: string) {
+    return this.canvassing.listMyShifts(tenantId, this.requireUserId(req));
+  }
+
+  @Get("campaigns/:campaignId/shifts/available")
+  @RequirePermission(SHIFT_READ)
+  async listAvailableShifts(
+    @Param("campaignId") campaignId: string,
+    @Req() req: Request & { user?: AuthUser },
+    @TenantId() tenantId: string,
+  ) {
+    return this.canvassing.listAvailableShifts(tenantId, campaignId, this.requireUserId(req));
+  }
+
+  @Post("campaigns/:campaignId/shifts/:id/sign-up")
+  @RequirePermission(SHIFT_READ)
+  async signUpShift(
+    @Param("campaignId") campaignId: string,
+    @Param("id") id: string,
+    @Req() req: Request & { user?: AuthUser },
+    @TenantId() tenantId: string,
+  ) {
+    return this.canvassing.signUpShift(tenantId, campaignId, id, this.requireUserId(req));
+  }
+
+  @Post("campaigns/:campaignId/shifts/:id/release")
+  @RequirePermission(SHIFT_READ)
+  async releaseOwnShift(
+    @Param("campaignId") campaignId: string,
+    @Param("id") id: string,
+    @Req() req: Request & { user?: AuthUser },
+    @TenantId() tenantId: string,
+  ) {
+    return this.canvassing.releaseOwnShift(tenantId, id, this.requireUserId(req));
   }
 
   // ── QA review (organiser) ────────────────────────────────────

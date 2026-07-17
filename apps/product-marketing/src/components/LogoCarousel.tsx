@@ -45,6 +45,7 @@ export default function LogoCarousel() {
                     height={logo.height}
                     className="h-8 w-auto opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300"
                     loading="lazy"
+                    unoptimized={logo.src.endsWith('.svg')}
                   />
                 </div>
               ))}
@@ -59,6 +60,7 @@ export default function LogoCarousel() {
                     height={logo.height}
                     className="h-8 w-auto opacity-60 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300"
                     loading="lazy"
+                    unoptimized={logo.src.endsWith('.svg')}
                   />
                 </div>
               ))}

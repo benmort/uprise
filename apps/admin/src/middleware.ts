@@ -27,6 +27,9 @@ function publicHref(req: NextRequest): string {
 export function middleware(req: NextRequest): NextResponse {
   // Public poll viewer (/p/*) — chrome-less, unauthenticated; the action app rewrites onto it.
   if (req.nextUrl.pathname.startsWith("/p/")) return NextResponse.next();
+  // Public event RSVP (/e/*) — chrome-less, unauthenticated; gated per-event by
+  // publicRsvpEnabled in the API. Supporters register without a session.
+  if (req.nextUrl.pathname.startsWith("/e/")) return NextResponse.next();
   // Embeddable insights viz (/embed/*) — unauthenticated (public data only) AND frameable, so the
   // action app can iframe it into its own layout. Scope who may frame it to uprise sites.
   if (req.nextUrl.pathname.startsWith("/embed/")) {

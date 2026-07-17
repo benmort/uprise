@@ -9,7 +9,7 @@ on:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       API_BASE_URL: http://localhost:3001
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uprise?schema=public
@@ -26,11 +26,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so the coverage gate can diff the PR against origin/main.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # Match the repo's packageManager (pnpm@10.15.0) so --frozen-lockfile is honoured.
+          version: 10.15.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,17 +51,26 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-      - name: API tests
-        run: pnpm --filter api run test
+      # Every package's suite (api jest + all vitest packages), not just api + admin.
+      - name: Tests (all packages)
+        run: pnpm run test
 
-      - name: Web tests
-        run: pnpm --filter admin run test
+      # Patch floor (>=80% on changed lines) + no-regression ratchet, per CLAUDE.md rule 15.
+      # On push to main the diff base equals HEAD, so nothing is checked; on PRs it gates the change.
+      - name: Coverage gate (patch floor + ratchet)
+        run: pnpm coverage:check
 
-      - name: API build
+      - name: Build - api
         run: pnpm --filter api run build
-
-      - name: Web build
-        run: pnpm --filter admin run build
-
-      - name: Worker build
+      - name: Build - worker
         run: pnpm --filter worker run build
+      - name: Build - admin
+        run: pnpm --filter admin run build
+      - name: Build - auth
+        run: pnpm --filter auth run build
+      - name: Build - action
+        run: pnpm --filter action run build
+      - name: Build - product-marketing
+        run: pnpm --filter product-marketing run build
+      - name: Build - organisation-marketing
+        run: pnpm --filter organisation-marketing run build
