@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Alert, Spinner } from "@uprise/ui";
+import { Alert, BrandStyle, Spinner } from "@uprise/ui";
 import { auth, getActionAppUrl } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { completeAuth } from "@/lib/session";
@@ -74,12 +74,23 @@ export default function OpenJoinPage() {
   };
 
   if (loading) {
+    // Match the join hero's silhouette (brand-primary left + off-white right) so the page loads
+    // AS the hero and fills in — rather than flashing the light two-column VolunteerFlowShell
+    // (which reads like the admin app) and then swapping the whole layout when the preview lands.
     return (
-      <VolunteerFlowShell>
-        <div className="flex flex-1 items-center justify-center py-10">
-          <Spinner />
-        </div>
-      </VolunteerFlowShell>
+      <div className="lg:flex lg:min-h-screen">
+        <BrandStyle
+          brand={{
+            primaryColour: preview?.primaryColour ?? null,
+            secondaryColour: preview?.secondaryColour ?? null,
+            customCss: preview?.customCss ?? null,
+          }}
+        />
+        <section className="flex min-h-[45vh] items-center justify-center rounded-b-[1.625rem] bg-primary text-white lg:min-h-screen lg:w-1/2 lg:rounded-none">
+          <Spinner className="text-white" />
+        </section>
+        <section aria-hidden className="hidden flex-1 bg-[#faf8f5] lg:block lg:w-1/2" />
+      </div>
     );
   }
   if (error && campaignName === null) {
