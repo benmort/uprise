@@ -79,20 +79,25 @@ export interface CreateInvitationInput {
   // always injected (see `composeInviteBody`). Absent ⇒ the default copy. `subject` = email only.
   message?: string;
   subject?: string;
+  // Recipient's first name — personalises the invite via the `{{firstname}}` merge tag.
+  firstName?: string;
 }
 
 /**
- * Fold the accept link into a composed invite body: substitute a `{{invite_link}}` placeholder,
- * or append the link when the author didn't place one (so the link can never go missing). Returns
- * undefined for an empty/blank message so callers fall back to the default copy.
+ * Fold the accept link + recipient name into a composed invite body: substitute the
+ * `{{invite_link}}` placeholder (or append the link when the author didn't place one, so it can
+ * never go missing) and the `{{firstname}}` merge tag (→ the given name, or "there" when unknown).
+ * Returns undefined for an empty/blank message so callers fall back to the default copy.
  */
-function composeInviteBody(message: string | undefined, link: string): string | undefined {
+function composeInviteBody(message: string | undefined, link: string, firstName?: string): string | undefined {
   const trimmed = message?.trim();
   if (!trimmed) return undefined;
-  if (/\{\{\s*invite_link\s*\}\}/.test(trimmed)) {
-    return trimmed.replace(/\{\{\s*invite_link\s*\}\}/g, link);
+  const name = firstName?.trim() || "there";
+  const withName = trimmed.replace(/\{\{\s*firstname\s*\}\}/gi, name);
+  if (/\{\{\s*invite_link\s*\}\}/.test(withName)) {
+    return withName.replace(/\{\{\s*invite_link\s*\}\}/g, link);
   }
-  return trimmed.includes(link) ? trimmed : `${trimmed}\n\n${link}`;
+  return withName.includes(link) ? withName : `${withName}\n\n${link}`;
 }
 
 /**
@@ -524,13 +529,13 @@ export class TenantsService {
           tenantId,
           toPhone: phone,
           body:
-            composeInviteBody(input.message, smsLink) ??
+            composeInviteBody(input.message, smsLink, input.firstName) ??
             `You're invited to join ${tenant.name} — tap to accept: ${smsLink}`,
           purpose: "invitation",
         });
       } else if (email) {
         const emailLink = `${authAppUrl}/invite/${result.token}`;
-        const composed = composeInviteBody(input.message, emailLink);
+        const composed = composeInviteBody(input.message, emailLink, input.firstName);
         if (composed) {
           // Composed invite from the compose view: send the author's copy verbatim through the
           // generic "newsletter" passthrough template (subject/body are its only vars).

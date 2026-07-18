@@ -138,6 +138,17 @@ export default function VolunteerBoardPage() {
     </div>
   );
 
+  // With an `?org`, hold the first paint until the brand resolves, so the page opens directly
+  // in the org's colours + name — never a flash of Uprise's default brand snapping to the org's.
+  // (No `?org` → Uprise's default brand is already correct, so paint immediately.)
+  if (orgSlug && loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#faf8f5]">
+        <Spinner />
+      </div>
+    );
+  }
+
   // Same two-column join hero throughout — "Get started" swaps the RIGHT column to the
   // opportunities board (via `rightOverride`) instead of switching to a separate shell.
   return (

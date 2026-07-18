@@ -533,7 +533,7 @@ export const tenants = {
   // via the volunteer phone-first flow (the invite link runs the phone signup).
   createInvitation: (
     tenantId: string,
-    body: { email?: string; phone?: string; role: AppUserRole; message?: string; subject?: string },
+    body: { email?: string; phone?: string; role: AppUserRole; message?: string; subject?: string; firstName?: string },
   ) =>
     request<{ id: string; token: string }>(
       `/tenants/${encodeURIComponent(tenantId)}/invitations`,

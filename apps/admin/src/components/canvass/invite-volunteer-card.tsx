@@ -19,8 +19,9 @@ type Mode = "phone" | "email";
 // The join link is substituted server-side wherever this placeholder appears (else appended),
 // so an organiser can position it — and can never accidentally drop it.
 const LINK_TOKEN = "{{invite_link}}";
-const DEFAULT_SMS = `You're invited to become a volunteer. Tap to accept: ${LINK_TOKEN}`;
-const DEFAULT_EMAIL = `Hi,\n\nWe'd love your help. Tap the link below to join as a volunteer — it takes a minute.\n\n${LINK_TOKEN}\n\nThank you!`;
+const NAME_TOKEN = "{{firstname}}";
+const DEFAULT_SMS = `Hi ${NAME_TOKEN}, you're invited to become a volunteer. Tap to accept: ${LINK_TOKEN}`;
+const DEFAULT_EMAIL = `Hi ${NAME_TOKEN},\n\nWe'd love your help. Tap the link below to join as a volunteer — it takes a minute.\n\n${LINK_TOKEN}\n\nThank you!`;
 // Radix forbids an empty-string item value, so the "Default invite" option uses a sentinel.
 const NO_TEMPLATE = "__default__";
 
@@ -33,6 +34,7 @@ const NO_TEMPLATE = "__default__";
 export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
   const { showToast } = useToast();
   const [mode, setMode] = useState<Mode>("phone");
+  const [firstName, setFirstName] = useState("");
   const [phone, setPhone] = useState(""); // national digits
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("VOLUNTEER");
@@ -96,10 +98,16 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
         return;
       }
       setBusy(true);
-      const res = await tenants.createInvitation(tenantId, { phone: toE164(digits), role, message: body });
+      const res = await tenants.createInvitation(tenantId, {
+        phone: toE164(digits),
+        role,
+        message: body,
+        firstName: firstName.trim() || undefined,
+      });
       setBusy(false);
       if (!res.ok) return showToast({ tone: "error", title: "Couldn't send invite", description: res.error });
       setPhone("");
+      setFirstName("");
       onInvited?.();
       showToast({ tone: "success", title: "Invite texted", description: `On its way to ${formatAuMobile(digits)}.` });
     } else {
@@ -108,14 +116,21 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
         return;
       }
       setBusy(true);
-      const res = await tenants.createInvitation(tenantId, { email: email.trim(), role, subject: subject.trim(), message: body });
+      const res = await tenants.createInvitation(tenantId, {
+        email: email.trim(),
+        role,
+        subject: subject.trim(),
+        message: body,
+        firstName: firstName.trim() || undefined,
+      });
       setBusy(false);
       if (!res.ok) return showToast({ tone: "error", title: "Couldn't send invite", description: res.error });
       setEmail("");
+      setFirstName("");
       onInvited?.();
       showToast({ tone: "success", title: "Invite emailed", description: `On its way to ${email.trim()}.` });
     }
-  }, [mode, phone, email, subject, body, role, onInvited, showToast]);
+  }, [mode, phone, email, subject, body, role, firstName, onInvited, showToast]);
 
   return (
     <SectionCard
@@ -139,6 +154,21 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
             {m === "phone" ? "SMS" : "Email"}
           </button>
         ))}
+      </div>
+
+      <div className="mb-3">
+        <Field
+          label="First name"
+          htmlFor="iv-firstname"
+          hint="Personalises the message via the {{firstname}} tag. Optional — defaults to “there”."
+        >
+          <Input
+            id="iv-firstname"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="e.g. Sam"
+          />
+        </Field>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -195,7 +225,7 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
           label="Message"
           htmlFor="iv-body"
           required
-          hint={`${LINK_TOKEN} becomes the recipient's personal join link (added automatically if you remove it).`}
+          hint={`Merge tags: ${NAME_TOKEN} (recipient's first name) and ${LINK_TOKEN} (their personal join link — added automatically if you remove it).`}
         >
           <textarea
             id="iv-body"

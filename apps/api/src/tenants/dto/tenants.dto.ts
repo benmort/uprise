@@ -54,6 +54,8 @@ export class CreateInvitationDto {
   // Absent ⇒ the default invite copy. `subject` applies to email only.
   @IsOptional() @IsString() @MaxLength(1600) message?: string;
   @IsOptional() @IsString() @MaxLength(200) subject?: string;
+  // Recipient's first name — fills the `{{firstname}}` merge tag in the composed message.
+  @IsOptional() @IsString() @MaxLength(100) firstName?: string;
 }
 
 export class RegisterDto {

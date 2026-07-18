@@ -134,6 +134,30 @@ describe("TenantsService", () => {
     );
   });
 
+  it("createInvitation substitutes {{firstname}} with the given name (else 'there')", async () => {
+    const { svc, dispatcher } = setup();
+    await svc.createInvitation("t1", {
+      phone: "+61400000000",
+      role: AppUserRole.VOLUNTEER,
+      message: "Hi {{firstname}}, join us: {{invite_link}}",
+      firstName: "  Sam ",
+      actor: { isSuperAdmin: true },
+    });
+    expect(dispatcher.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining("Hi Sam, join us: http") }),
+    );
+    dispatcher.sendSms.mockClear();
+    await svc.createInvitation("t1", {
+      phone: "+61400000000",
+      role: AppUserRole.VOLUNTEER,
+      message: "Hi {{firstname}}, join us: {{invite_link}}",
+      actor: { isSuperAdmin: true },
+    });
+    expect(dispatcher.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining("Hi there, join us: http") }),
+    );
+  });
+
   it("createInvitation SMS appends the link when a composed message omits the placeholder", async () => {
     const { svc, dispatcher } = setup();
     const res = await svc.createInvitation("t1", {
