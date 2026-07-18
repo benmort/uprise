@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BarChart3,
   Boxes,
   CalendarDays,
   ChevronDown,
@@ -63,7 +62,9 @@ type NavMatch = (pathname: string) => boolean;
 // Prog → Grant Management → Grants → Manage). Leaf vs branch is told apart by
 // the presence of `href`. `flag` (optional) plan-driven-gates the node: hidden
 // unless the flag resolves on for the tenant (super-admins always see it).
-type NavLeaf = { label: string; href: string; match: NavMatch; flag?: FeatureFlagKey };
+// `icon` (optional) replaces the dot on a child leaf's rail — used sparingly for a
+// child that carries a distinct identity (e.g. Polling relocated under Data).
+type NavLeaf = { label: string; href: string; match: NavMatch; flag?: FeatureFlagKey; icon?: LucideIcon };
 type NavBranch = { label: string; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
 // A non-clickable zone header inside a group's child list (e.g. Future → Engage/Manage),
 // mirroring the top-level `section` nodes. Identified by the `subheading` key.
@@ -75,6 +76,24 @@ type NavNode =
   | { type: "section"; key: string; label: string; flag?: FeatureFlagKey }
   | { type: "leaf"; key: string; label: string; href: string; icon: LucideIcon; match: NavMatch; flag?: FeatureFlagKey }
   | { type: "group"; key: string; label: string; icon: LucideIcon; match: NavMatch; children: NavEntry[]; flag?: FeatureFlagKey };
+
+// One-line descriptions per top-level nav node (keyed by node.key). Surfaced in the
+// hover popover: under the title when the rail is collapsed, and on its own when the
+// rail is open. Mirrors each surface's own page subtitle.
+const NAV_DESCRIPTIONS: Record<string, string> = {
+  dashboard: "Everything across Uprise at a glance.",
+  "getting-started": "Set up your organisation, step by step.",
+  "shared-inbox": "Every conversation across your channels, in one queue.",
+  calendar: "Shifts, events and reminders in one place.",
+  channels: "Reach people by text and voice.",
+  canvass: "Plan turf, knock doors and run the field.",
+  content: "Surveys, scripts, dispositions and canned replies.",
+  audience: "Build and target who you reach.",
+  "data-files": "Australian addresses, electorates, politicians and datasets.",
+  settings: "Your workspace, team, branding and integrations.",
+  "super-admin": "Platform administration across every tenant.",
+  future: "Features in the pipeline, parked for later.",
+};
 
 // Cascade sidebar model (matches the design prototype): leaf items + expandable
 // groups whose children appear on an indented rail.
@@ -158,7 +177,7 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
     { type: "section", key: "sec-manage", label: "Manage" },
     {
       type: "group", key: "data-files", label: "Data", icon: Database,
-      match: (p) => p.startsWith("/data"),
+      match: (p) => p.startsWith("/data") || p.startsWith("/insights"),
       children: [
         { label: "Datasets", href: "/data/datasets", match: (p) => p.startsWith("/data/datasets") },
         { label: "Divisions", href: "/data/divisions", match: (p) => p.startsWith("/data/divisions"), flag: "FEATURE_NAV_CANVASS_DIVISIONS" },
@@ -170,12 +189,12 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
         { label: "Demographics", href: "/data/demographics", match: (p) => p.startsWith("/data/demographics"), flag: "FEATURE_NAV_CANVASS_DEMOGRAPHICS" },
         { label: "Politicians", href: "/data/politicians", match: (p) => p.startsWith("/data/politicians") },
         { label: "Policies", href: "/data/policies", match: (p) => p.startsWith("/data/policies") },
+        // Polling — public-opinion polls attached to geo regions (choropleth, targeting).
+        // Sits under Policies in Data; uses the standard rail dot like every other second-level item.
+        { label: "Polling", href: "/insights", match: (p) => p.startsWith("/insights"), flag: "FEATURE_NAV_INSIGHTS" },
         { label: "File Manager", href: "/data/file-manager", match: (p) => p.startsWith("/data/file-manager"), flag: "FEATURE_NAV_PROG_DATA" },
       ],
     },
-    // Polling — public-opinion polls attached to geo regions (choropleth, targeting). Its own
-    // top-level item directly under Data, not a Data child.
-    { type: "leaf", key: "polling", label: "Polling", href: "/insights", icon: BarChart3, match: (p) => p.startsWith("/insights"), flag: "FEATURE_NAV_INSIGHTS" },
 
     {
       type: "group", key: "settings", label: "Settings", icon: Settings,
@@ -184,16 +203,22 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
         p.startsWith("/compliance") ||
         px("tenant-settings")(p) || px("security")(p),
       children: [
-        // General settings tabs are real /settings/<section> routes now; highlight for
-        // any of them (i.e. /settings and its sections, excluding Team, which has its own
-        // nav entry). Plans/flags/queues moved out to the Super Admin group under /super.
-        {
-          label: "General",
-          href: "/settings/tenant",
-          match: (p) =>
-            (p === "/settings" || p.startsWith("/settings/")) &&
-            !p.startsWith("/settings/team"),
-        },
+        // Every General-settings tab is a real /settings/<section> route, so the sidebar
+        // mirrors the tab bar: one dot-rail child per section, in PRIMARY_TABS order,
+        // between General (the tenant tab) and Team (which owns the last tab + its own page).
+        // "General" now matches only the tenant landing so it doesn't stay lit on every section.
+        { label: "General", href: "/settings/tenant", match: (p) => p === "/settings" || p.startsWith("/settings/tenant") },
+        { label: "Organisation", href: "/settings/organisation", match: (p) => p.startsWith("/settings/organisation") },
+        { label: "Branding", href: "/settings/branding", match: (p) => p.startsWith("/settings/branding") },
+        { label: "Business & Legal", href: "/settings/business", match: (p) => p.startsWith("/settings/business") },
+        { label: "Contacts", href: "/settings/contacts", match: (p) => p.startsWith("/settings/contacts") },
+        { label: "Addresses", href: "/settings/addresses", match: (p) => p.startsWith("/settings/addresses") },
+        { label: "Access", href: "/settings/access", match: (p) => p.startsWith("/settings/access") },
+        { label: "Domains", href: "/settings/domains", match: (p) => p.startsWith("/settings/domains") },
+        { label: "Integrations", href: "/settings/integrations", match: (p) => p.startsWith("/settings/integrations") },
+        { label: "Security", href: "/settings/security", match: (p) => p.startsWith("/settings/security") },
+        { label: "Compliance", href: "/settings/compliance", match: (p) => p.startsWith("/settings/compliance") },
+        { label: "Alerts", href: "/settings/alerts", match: (p) => p.startsWith("/settings/alerts") },
         { label: "Team", href: "/settings/team", match: (p) => p.startsWith("/settings/team") },
         // Integrations moved into Settings → General (the tenant-settings tab); the
         // /settings/integrations route still works but isn't a standalone nav item.
@@ -243,7 +268,7 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
           {
             type: "group", key: "future", label: "Future", icon: Boxes,
             match: (p) =>
-              px("calendar")(p) || px("sms-inbox")(p) || px("journeys")(p) || px("segmentation")(p) || px("events")(p) ||
+              px("sms-inbox")(p) || px("journeys")(p) || px("segmentation")(p) || px("events")(p) ||
               px("settings")(p) ||
               px("transactions")(p) || px("invoices")(p) || px("products")(p) ||
               px("support-tickets")(p) || px("checkout")(p) || px("api-keys")(p) ||
@@ -252,7 +277,6 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
               px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
             flag: "FEATURE_NAV_PROG",
             children: [
-              { label: "Calendar", href: "/future/calendar", match: px("calendar"), flag: "FEATURE_NAV_PROG_CALENDAR" },
               // Engage: the parked outreach/campaigning stubs (mirrors the top-level Engage zone).
               { subheading: "Engage" },
               // Deferred channel stubs, parked here until they ship (consolidation doc Part B).
@@ -792,28 +816,37 @@ export default function MainLayout({
   }, [pathname]);
   const labelHidden = collapsed ? "lg:hidden" : "";
 
-  // Collapsed-rail flyout: when the sidebar is an icon rail, a 500ms hover over an
-  // icon opens a popout to its right with the item's label — and, for groups, its
-  // child links so they stay reachable without expanding the whole rail. A short
-  // close grace lets the pointer travel from the icon across the gap to the popout.
+  // Hover popover to the right of a nav item. Appears INSTANTLY on hover (desktop only).
+  //  · collapsed rail → the item's title + its description, and for groups the child links
+  //    so they stay reachable without expanding the whole rail;
+  //  · open rail → the item's description alone (title's already visible), only when there
+  //    is one to show. A short close grace lets the pointer travel across the gap.
   const [flyout, setFlyout] = useState<{ node: NavNode; x: number; y: number } | null>(null);
-  const flyoutOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flyoutCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Hover-intent delay: the flyout only opens after the pointer has RESTED on an
+  // item for a beat, so skimming the rail doesn't strobe popovers. Once one is
+  // open, moving to a sibling re-arms the delay (deliberate — a rest, not a tour).
+  const FLYOUT_OPEN_DELAY_MS = 1000;
+  const flyoutOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showFlyout = useCallback(
     (el: HTMLElement, node: NavNode) => {
-      // Icon rail only, and only on desktop (mobile uses the slide-in drawer).
-      if (!collapsed || typeof window === "undefined" || window.innerWidth < 1024) return;
+      // Desktop only (mobile uses the slide-in drawer). When the rail is open there's
+      // nothing to add unless the item has a description.
+      if (typeof window === "undefined" || window.innerWidth < 1024) return;
+      if (!collapsed && !NAV_DESCRIPTIONS[node.key]) return;
       if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
       if (flyoutOpenTimer.current) clearTimeout(flyoutOpenTimer.current);
+      const r = el.getBoundingClientRect();
       flyoutOpenTimer.current = setTimeout(() => {
-        const r = el.getBoundingClientRect();
         setFlyout({ node, x: r.right, y: r.top });
-      }, 500);
+      }, FLYOUT_OPEN_DELAY_MS);
     },
     [collapsed],
   );
   const scheduleCloseFlyout = useCallback(() => {
+    // Leaving an item cancels a pending (not-yet-shown) flyout outright…
     if (flyoutOpenTimer.current) clearTimeout(flyoutOpenTimer.current);
+    // …and gives a visible one the short travel grace before closing.
     if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
     flyoutCloseTimer.current = setTimeout(() => setFlyout(null), 140);
   }, []);
@@ -830,8 +863,8 @@ export default function MainLayout({
   // Clear any pending open/close timers if the shell unmounts mid-hover.
   useEffect(
     () => () => {
-      if (flyoutOpenTimer.current) clearTimeout(flyoutOpenTimer.current);
       if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
+      if (flyoutOpenTimer.current) clearTimeout(flyoutOpenTimer.current);
     },
     [],
   );
@@ -919,12 +952,21 @@ export default function MainLayout({
                 childPlanLocked && "opacity-50",
               )}
             >
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                  childActive ? "bg-primary" : "bg-muted-foreground/40",
-                )}
-              />
+              {entry.icon ? (
+                <entry.icon
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    childActive ? "text-primary" : "text-muted-foreground/70",
+                  )}
+                />
+              ) : (
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    childActive ? "bg-primary" : "bg-muted-foreground/40",
+                  )}
+                />
+              )}
               <span>{entry.label}</span>
               {childPlanLocked ? <Lock className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground/70" /> : null}
               {entry.href === "/settings/team" && pendingJoinCount > 0 ? (
@@ -1266,8 +1308,22 @@ export default function MainLayout({
           onMouseLeave={scheduleCloseFlyout}
           role="menu"
         >
-          <div className="px-2.5 py-1.5 text-[13px] font-semibold text-foreground">{flyout.node.label}</div>
-          {flyout.node.type === "group" && flyout.node.children.length ? (
+          {/* Title only on the collapsed rail — when open, it's already visible in the item. */}
+          {collapsed ? (
+            <div className="px-2.5 pt-1.5 text-[13px] font-semibold text-foreground">{flyout.node.label}</div>
+          ) : null}
+          {NAV_DESCRIPTIONS[flyout.node.key] ? (
+            <div
+              className={cn(
+                "px-2.5 text-[12px] leading-snug text-muted-foreground",
+                collapsed ? "pb-1.5 pt-0.5" : "py-1.5",
+              )}
+            >
+              {NAV_DESCRIPTIONS[flyout.node.key]}
+            </div>
+          ) : null}
+          {/* Group child links — only on the collapsed rail, where they're otherwise unreachable. */}
+          {collapsed && flyout.node.type === "group" && flyout.node.children.length ? (
             <div className="mt-0.5 space-y-0.5 border-t border-border pt-1">
               {renderFlyoutChildren(flyout.node.children)}
             </div>
