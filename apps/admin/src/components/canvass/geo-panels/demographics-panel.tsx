@@ -16,7 +16,7 @@ import { writeGeoParam } from "@/components/canvass/use-geo-explorer-url-state";
 import { StateRegion } from "@/components/shell/state-region";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type WalkMode } from "@uprise/field";
-import { ChevronDown } from "lucide-react";
+import { AccordionGroup, CollapsibleCard } from "./collapsible-card";
 import { cn } from "@/lib/utils";
 
 // Largest area (SA4) on the left → smallest (meshblock) on the right.
@@ -39,42 +39,6 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 function fmtValue(v: AbsRegionValue): string {
   return v.value === null ? "—" : formatIndicator(v.value, v.unit);
-}
-
-/** SectionCard's shell with a collapsible, toggling header — the Indicator picker
- *  and the clicked-region profile share the sidebar one-at-a-time. */
-function CollapsibleCard({
-  title,
-  description,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  description?: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-surface shadow-card">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={onToggle}
-        className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left"
-      >
-        <div className="min-w-0">
-          <h2 className="text-sm font-extrabold uppercase tracking-[0.04em] text-foreground">{title}</h2>
-          {description ? <p className="mt-1 truncate text-[13.5px] text-muted-foreground">{description}</p> : null}
-        </div>
-        <ChevronDown
-          className={cn("mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
-        />
-      </button>
-      {open ? <div className="border-t border-[hsl(var(--muted))] px-5 py-4">{children}</div> : null}
-    </section>
-  );
 }
 
 /**
@@ -155,11 +119,11 @@ export function DemographicsPanel({ view }: { view: WalkMode }) {
         skeleton={<Skeleton className="h-72 w-full" />}
       >
         {/* Indicator picker, grouped by category */}
+        <AccordionGroup open={openSection} onOpenChange={(id) => setOpenSection(id as "indicator" | "profile")}>
         <CollapsibleCard
+          id="indicator"
           title="Indicator"
           description={choropleth.data ? `${choropleth.data.regions.toLocaleString()} regions shaded` : undefined}
-          open={openSection === "indicator"}
-          onToggle={() => setOpenSection(openSection === "indicator" ? "profile" : "indicator")}
         >
           <div className="max-h-[40vh] space-y-3 overflow-y-auto">
             {byCategory.map(([category, items]) => (
@@ -191,37 +155,20 @@ export function DemographicsPanel({ view }: { view: WalkMode }) {
 
         {/* Clicked-region profile */}
         {code ? (
-          <RegionProfile
-            level={level}
-            code={code}
-            activeIndicator={ind}
-            open={openSection === "profile"}
-            onToggle={() => setOpenSection(openSection === "profile" ? "indicator" : "profile")}
-          />
+          <RegionProfile level={level} code={code} activeIndicator={ind} />
         ) : (
           <p className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
             Click a region on the map for its full ABS profile.
           </p>
         )}
+        </AccordionGroup>
       </StateRegion>
     </div>
   );
 }
 
 /** The full ABS profile for one region, grouped by category — the click read-out. */
-function RegionProfile({
-  level,
-  code,
-  activeIndicator,
-  open,
-  onToggle,
-}: {
-  level: AbsLevel;
-  code: string;
-  activeIndicator: string;
-  open: boolean;
-  onToggle: () => void;
-}) {
+function RegionProfile({ level, code, activeIndicator }: { level: AbsLevel; code: string; activeIndicator: string }) {
   const { data, loading, error } = useApi(
     `/demographics/regions/${level}/${code}`,
     () => getRegionProfile(level, code),
@@ -235,7 +182,7 @@ function RegionProfile({
   for (const v of data.values) (groups.get(v.category) ?? groups.set(v.category, []).get(v.category)!).push(v);
 
   return (
-    <CollapsibleCard title={data.name} description={`${level.toUpperCase()} ${data.code}`} open={open} onToggle={onToggle}>
+    <CollapsibleCard id="profile" title={data.name} description={`${level.toUpperCase()} ${data.code}`}>
       {data.values.length === 0 ? (
         <p className="text-sm text-muted-foreground">No ABS data for this region.</p>
       ) : (

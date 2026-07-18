@@ -17,7 +17,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { cn } from "@/lib/utils";
-import { SectionCard, type WalkMode } from "@uprise/field";
+import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
+import { type WalkMode } from "@uprise/field";
 
 /** Jurisdiction filter pills — "all" plus federal and each state/territory. The dot
  *  colour matches the map's booth palette (see turf-draw-map.tsx). */
@@ -102,7 +103,7 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
   );
 
   const detailCard = detail.data ? (
-    <SectionCard title={detail.data.name ?? "Polling place"}>
+    <CollapsibleCard id={`booth:${detail.data.id}`} title={detail.data.name ?? "Polling place"}>
       <ul className="space-y-1 text-sm text-muted-foreground">
         {detail.data.premises ? <li className="text-foreground">{detail.data.premises}</li> : null}
         {detail.data.address ? <li>{detail.data.address}</li> : null}
@@ -132,7 +133,7 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
           {detail.data.lat.toFixed(5)}, {detail.data.lng.toFixed(5)}
         </li>
       </ul>
-    </SectionCard>
+    </CollapsibleCard>
   ) : null;
 
   const pagination = (
@@ -156,7 +157,11 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
     return (
       <div className="space-y-4">
         {jurisdictionPills}
-        <SectionCard title={`Booths (${total.toLocaleString()})`}>
+        <AutoAccordionGroup
+          defaultOpen="booths"
+          follow={pollingSelectedId && detail.data ? `booth:${detail.data.id}` : ""}
+        >
+        <CollapsibleCard id="booths" title={`Booths (${total.toLocaleString()})`}>
           <StateRegion
             loading={list.loading}
             error={list.error}
@@ -190,8 +195,9 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
             </ul>
             <div className="mt-3">{pagination}</div>
           </StateRegion>
-        </SectionCard>
+        </CollapsibleCard>
         {detailCard}
+        </AutoAccordionGroup>
       </div>
     );
   }

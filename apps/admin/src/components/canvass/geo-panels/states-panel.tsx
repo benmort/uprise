@@ -26,7 +26,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@uprise/ui";
-import { SectionCard, type WalkMode } from "@uprise/field";
+import { type WalkMode } from "@uprise/field";
+import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 
 /**
  * States panel for the unified geo surface (Phase 2). Selection lives in `?code=`
@@ -77,7 +78,8 @@ export function StatesPanel({ view }: { view: WalkMode }) {
   if (view === "map") {
     return (
       <div className="space-y-4">
-        <SectionCard title={`States (${filtered.length})${q ? ` matching “${q.trim()}”` : ""}`}>
+        <AutoAccordionGroup defaultOpen="states" follow={selectedCode ? `detail:${selectedCode}` : ""}>
+        <CollapsibleCard id="states" title={`States (${filtered.length})${q ? ` matching “${q.trim()}”` : ""}`}>
           <StateRegion
             loading={loading}
             error={error}
@@ -107,10 +109,10 @@ export function StatesPanel({ view }: { view: WalkMode }) {
               ))}
             </ul>
           </StateRegion>
-        </SectionCard>
+        </CollapsibleCard>
 
         {detail.data ? (
-          <SectionCard title={detail.data.name}>
+          <CollapsibleCard id={`detail:${selectedCode}`} title={detail.data.name}>
             <ul className="space-y-1 text-sm text-muted-foreground">
               <li className="tabular-nums">{detail.data.addressCount.toLocaleString()} addresses</li>
               <li className="tabular-nums">{detail.data.contactCount.toLocaleString()} existing contacts</li>
@@ -139,8 +141,9 @@ export function StatesPanel({ view }: { view: WalkMode }) {
                 <><Plus className="mr-1.5 h-4 w-4" />Add to my turf</>
               )}
             </Button>
-          </SectionCard>
+          </CollapsibleCard>
         ) : null}
+        </AutoAccordionGroup>
 
         <UniverseCards value={universe} onChange={setUniverse} />
         <MyTurfPanel universe={universe} onUniverseChange={setUniverse} />

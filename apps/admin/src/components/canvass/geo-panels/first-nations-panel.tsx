@@ -20,6 +20,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { DataTable } from "@uprise/field";
 import { cn } from "@/lib/utils";
 import { SectionCard, type WalkMode } from "@uprise/field";
+import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 
 const PAGE_SIZE = 10;
 
@@ -141,28 +142,32 @@ export function FirstNationsPanel({ view }: { view: WalkMode }) {
   if (view === "map") {
     return (
       <div className="space-y-4">
-        <SectionCard title={`First Nations (${total.toLocaleString()})`}>
-          {pills}
-          <div className="mt-3">{listBody}</div>
-        </SectionCard>
+        {/* One panel of attention: selecting a boundary opens its detail card and folds the browser. */}
+        <AutoAccordionGroup defaultOpen="browse" follow={selectedCode ? `detail:${selectedCode}` : ""}>
+          <CollapsibleCard id="browse" title={`First Nations (${total.toLocaleString()})`}>
+            {pills}
+            <div className="mt-3">{listBody}</div>
+          </CollapsibleCard>
 
-        {detail.data ? (
-          <SectionCard title={detail.data.name}>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              <li className="tabular-nums">{detail.data.addressCount.toLocaleString()} addresses</li>
-              <li className="tabular-nums">{detail.data.contactCount.toLocaleString()} existing contacts</li>
-              <li className="tabular-nums">{detail.data.withoutContacts.toLocaleString()} without a contact</li>
-            </ul>
-            <Link
-              href={`/data/first-nations/${level}/${encodeURIComponent(detail.data.slug)}`}
-              className="mt-3 inline-block text-sm font-medium text-primary hover:underline"
-            >
-              Open detail
-            </Link>
-          </SectionCard>
-        ) : null}
+          {detail.data ? (
+            <CollapsibleCard id={`detail:${selectedCode}`} title={detail.data.name}>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li className="tabular-nums">{detail.data.addressCount.toLocaleString()} addresses</li>
+                <li className="tabular-nums">{detail.data.contactCount.toLocaleString()} existing contacts</li>
+                <li className="tabular-nums">{detail.data.withoutContacts.toLocaleString()} without a contact</li>
+              </ul>
+              <Link
+                href={`/data/first-nations/${level}/${encodeURIComponent(detail.data.slug)}`}
+                className="mt-3 inline-block text-sm font-medium text-primary hover:underline"
+              >
+                Open detail
+              </Link>
+            </CollapsibleCard>
+          ) : null}
+        </AutoAccordionGroup>
 
-        {/* The hierarchy endpoint keys on the ABS code, not the slug — pass the resolved one. */}
+        {/* The hierarchy endpoint keys on the ABS code, not the slug — pass the resolved one.
+            It renders its own SectionCards internally, so it stays outside the accordion. */}
         {detail.data ? <RegionHierarchy kind={level} code={detail.data.code} /> : null}
       </div>
     );

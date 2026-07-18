@@ -8,10 +8,12 @@ import { writeGeoParam } from "@/components/canvass/use-geo-explorer-url-state";
 import { ApexChart, ChartFigure } from "@/components/insights/apex-chart";
 import { usePollPalette } from "@/components/insights/use-poll-palette";
 import { useTheme } from "@/components/theme/theme-provider";
+import { type PollPalette } from "@/lib/insights/palette";
 import { rankedBarOptions, type ChartCtx } from "@/lib/insights/apex-options";
 import { StateRegion } from "@/components/shell/state-region";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, SectionCard, type WalkMode } from "@uprise/field";
+import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 import { cn } from "@/lib/utils";
 
 type Level = "division" | "state";
@@ -35,8 +37,9 @@ function voteTypeRows(r: ReferendumRow): Array<{ label: string; percent: number 
 /**
  * Referendum panel for the unified geo surface. The map (owned by GeoSurface) shades the
  * division/state boundaries by Yes share; this panel is the list + read-out beside it. Map
- * view is a compact sidebar (national headline + a scrollable list); list view is the full
- * table plus the two crosstab charts. Level (division/state) rides in `?tab`, the picked
+ * view is a compact sidebar (national headline + an accordion: results list, picked-region
+ * read-out, and the two crosstab charts — one card of attention at a time); list view is the
+ * full table plus the two crosstab charts. Level (division/state) rides in `?tab`, the picked
  * region in `?code` — the same durable URL state the surface reads to shade + frame the map.
  */
 export function ReferendumPanel({ view }: { view: WalkMode }) {
@@ -64,6 +67,13 @@ export function ReferendumPanel({ view }: { view: WalkMode }) {
       return [r.name, r.stateAb].some((f) => f?.toLowerCase().includes(needle));
     });
   }, [data, level, q, stateParam]);
+
+  // The picked row at the current level — drives the accordion's detail card.
+  const selected = useMemo(() => {
+    if (!code) return undefined;
+    const all = level === "division" ? (data?.divisions ?? []) : (data?.states ?? []);
+    return all.find((r) => r.geoCode === code);
+  }, [data, level, code]);
 
   return (
     <div className="section-stack">
@@ -97,30 +107,95 @@ export function ReferendumPanel({ view }: { view: WalkMode }) {
         skeleton={<Skeleton className="h-72 w-full" />}
       >
         {view === "map" ? (
-          <div className="max-h-[52vh] space-y-1 overflow-y-auto rounded-xl border border-border p-1.5">
-            {rows.map((r) => {
-              const active = r.geoCode === code;
-              return (
-                <button
-                  key={r.geoCode ?? r.name}
-                  type="button"
-                  onClick={() => writeGeoParam("code", active ? null : (r.geoCode ?? null))}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
-                    active ? "bg-primary/10 text-foreground" : "hover:bg-surface-variant",
-                  )}
-                >
-                  <span className="min-w-0 truncate font-medium text-foreground">
-                    {r.name}
-                    {level === "division" && r.stateAb ? (
-                      <span className="ml-1 text-xs text-muted-foreground">{r.stateAb}</span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0 tabular-nums text-muted-foreground">{pct(r.yesPct)} Yes</span>
-                </button>
-              );
-            })}
-          </div>
+          /* One panel of attention: picking a division/state opens its detail card and folds the list. */
+          <AutoAccordionGroup defaultOpen="results" follow={selected ? `detail:${code}` : ""}>
+            <CollapsibleCard
+              id="results"
+              title={`${level === "division" ? "Divisions" : "States & territories"} (${rows.length})`}
+            >
+              <div className="max-h-[52vh] space-y-1 overflow-y-auto">
+                {rows.map((r) => {
+                  const active = r.geoCode === code;
+                  return (
+                    <button
+                      key={r.geoCode ?? r.name}
+                      type="button"
+                      onClick={() => writeGeoParam("code", active ? null : (r.geoCode ?? null))}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
+                        active ? "bg-primary/10 text-foreground" : "hover:bg-surface-variant",
+                      )}
+                    >
+                      <span className="min-w-0 truncate font-medium text-foreground">
+                        {r.name}
+                        {level === "division" && r.stateAb ? (
+                          <span className="ml-1 text-xs text-muted-foreground">{r.stateAb}</span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">{pct(r.yesPct)} Yes</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </CollapsibleCard>
+
+            {selected ? (
+              <CollapsibleCard
+                id={`detail:${code}`}
+                title={selected.name}
+                description={level === "division" && selected.stateAb ? selected.stateAb : undefined}
+              >
+                <dl className="divide-y divide-border rounded-lg border border-border">
+                  {[
+                    { label: "Yes", value: pct(selected.yesPct) },
+                    { label: "No", value: pct(selected.noPct) },
+                    { label: "Turnout", value: pct(selected.turnoutPct) },
+                    { label: "Total votes", value: num(selected.totalVotes) },
+                  ].map((s) => (
+                    <div key={s.label} className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-sm">
+                      <dt className="text-muted-foreground">{s.label}</dt>
+                      <dd className="font-semibold tabular-nums text-foreground">{s.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {voteTypeRows(selected).length > 0 ? (
+                  <div className="mt-3">
+                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Vote types
+                    </div>
+                    <dl className="divide-y divide-border rounded-lg border border-border">
+                      {voteTypeRows(selected).map((v) => (
+                        <div key={v.label} className="flex items-baseline justify-between gap-3 px-3 py-1.5 text-sm">
+                          <dt className="text-muted-foreground">{v.label}</dt>
+                          <dd className="font-semibold tabular-nums text-foreground">{v.percent.toFixed(1)}%</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ) : null}
+              </CollapsibleCard>
+            ) : null}
+
+            {palette && data ? (
+              <CollapsibleCard
+                id="yes-by-state"
+                title="Yes vote by state"
+                description="States and territories ranked by their Yes share."
+              >
+                <YesByStateFigure states={data.states ?? []} palette={palette} ctx={ctx} />
+              </CollapsibleCard>
+            ) : null}
+
+            {palette && data?.national ? (
+              <CollapsibleCard
+                id="vote-types"
+                title="Votes counted by vote type"
+                description="How the nation's votes were cast."
+              >
+                <VoteTypeFigure national={data.national} palette={palette} ctx={ctx} />
+              </CollapsibleCard>
+            ) : null}
+          </AutoAccordionGroup>
         ) : (
           <div className="section-stack">
             <SectionCard title={level === "division" ? "Divisions" : "States & territories"}>
@@ -144,26 +219,12 @@ export function ReferendumPanel({ view }: { view: WalkMode }) {
             {palette && data ? (
               <div className="grid gap-6 lg:grid-cols-2">
                 <SectionCard title="Yes vote by state" description="States and territories ranked by their Yes share.">
-                  <ChartFigure summary="Yes share by state, highest first">
-                    <ApexChart
-                      bundle={rankedBarOptions(
-                        [...(data.states ?? [])]
-                          .filter((s) => typeof s.yesPct === "number")
-                          .map((s) => ({ label: s.name, percent: s.yesPct as number })),
-                        palette,
-                        ctx,
-                      )}
-                      type="bar"
-                      height={Math.max(240, (data.states?.length ?? 0) * 34)}
-                    />
-                  </ChartFigure>
+                  <YesByStateFigure states={data.states ?? []} palette={palette} ctx={ctx} />
                 </SectionCard>
 
                 {data.national ? (
                   <SectionCard title="Votes counted by vote type" description="How the nation's votes were cast.">
-                    <ChartFigure summary="Share of national votes by vote type">
-                      <ApexChart bundle={rankedBarOptions(voteTypeRows(data.national), palette, ctx)} type="bar" height={240} />
-                    </ChartFigure>
+                    <VoteTypeFigure national={data.national} palette={palette} ctx={ctx} />
                   </SectionCard>
                 ) : null}
               </div>
@@ -172,6 +233,34 @@ export function ReferendumPanel({ view }: { view: WalkMode }) {
         )}
       </StateRegion>
     </div>
+  );
+}
+
+/** "Yes vote by state" ranked bars — shared by the list-view card and the map-rail accordion. */
+function YesByStateFigure({ states, palette, ctx }: { states: ReferendumRow[]; palette: PollPalette; ctx: ChartCtx }) {
+  return (
+    <ChartFigure summary="Yes share by state, highest first">
+      <ApexChart
+        bundle={rankedBarOptions(
+          [...states]
+            .filter((s) => typeof s.yesPct === "number")
+            .map((s) => ({ label: s.name, percent: s.yesPct as number })),
+          palette,
+          ctx,
+        )}
+        type="bar"
+        height={Math.max(240, states.length * 34)}
+      />
+    </ChartFigure>
+  );
+}
+
+/** National vote-type shares — shared by the list-view card and the map-rail accordion. */
+function VoteTypeFigure({ national, palette, ctx }: { national: ReferendumRow; palette: PollPalette; ctx: ChartCtx }) {
+  return (
+    <ChartFigure summary="Share of national votes by vote type">
+      <ApexChart bundle={rankedBarOptions(voteTypeRows(national), palette, ctx)} type="bar" height={240} />
+    </ChartFigure>
   );
 }
 

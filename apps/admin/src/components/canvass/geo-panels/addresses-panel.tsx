@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 import { SectionCard } from "@uprise/field";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
@@ -174,7 +175,8 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
           </p>
         ) : null}
 
-        <SectionCard title="Searched address">
+        <AutoAccordionGroup defaultOpen="search" follow={active ? `door:${active.gnafPid}` : ""}>
+        <CollapsibleCard id="search" title="Searched address">
           {picked ? (
             <>
               <div className="flex items-start gap-2.5">
@@ -197,10 +199,10 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
           ) : (
             <p className="text-sm text-muted-foreground">Nothing plotted yet.</p>
           )}
-        </SectionCard>
+        </CollapsibleCard>
 
         {active ? (
-          <SectionCard title="Selected door">
+          <CollapsibleCard id={`door:${active.gnafPid}`} title="Selected door" description={formatDoorLabel(active.address)}>
             <p className="text-sm font-semibold text-foreground">{active.address}</p>
             <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
               <li className="tabular-nums">{active.distanceM.toLocaleString()} m from the pin</li>
@@ -266,12 +268,10 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
                 <><Scissors className="mr-1.5 h-3.5 w-3.5" />Cut turf from this door</>
               )}
             </Button>
-          </SectionCard>
+          </CollapsibleCard>
         ) : null}
 
-        {active ? <RegionHierarchy kind="address" code={active.gnafPid} /> : null}
-
-        <SectionCard title={`Nearest doors${doors.length ? ` (${doors.length})` : ""}`}>
+        <CollapsibleCard id="doors" title={`Nearest doors${doors.length ? ` (${doors.length})` : ""}`}>
           {loadingDoors ? (
             <div className="space-y-2">
               <Skeleton className="h-8 w-full" />
@@ -348,7 +348,10 @@ export function AddressesPanel({ view }: { view: WalkMode }) {
               </Button>
             </>
           )}
-        </SectionCard>
+        </CollapsibleCard>
+        </AutoAccordionGroup>
+
+        {active ? <RegionHierarchy kind="address" code={active.gnafPid} /> : null}
 
         <MyTurfPanel />
       </div>

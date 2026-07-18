@@ -30,7 +30,8 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@uprise/ui";
-import { SectionCard, type WalkMode } from "@uprise/field";
+import { type WalkMode } from "@uprise/field";
+import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 
 const DIGIT_TO_STATE: Record<string, string> = Object.fromEntries(
   STATE_ABBREVS.map((s) => [stateAbbrevToAsgsDigit(s) ?? "", s]),
@@ -265,7 +266,10 @@ export function AreasPanel({ view }: { view: WalkMode }) {
   if (view === "map") {
     return (
       <div className="space-y-4">
-        <SectionCard
+        {/* One card of attention: picking areas (or drawing) opens Cut selection and folds the browse list. */}
+        <AutoAccordionGroup defaultOpen="in-view" follow={hasSelection ? "cut" : ""}>
+        <CollapsibleCard
+          id="in-view"
           title={
             usingStateBase
               ? `${level.toUpperCase()} in ${state} (${inViewAreas.length})`
@@ -304,9 +308,10 @@ export function AreasPanel({ view }: { view: WalkMode }) {
               No {level.toUpperCase()} areas in view — pan or zoom the map, or search on it.
             </p>
           )}
-        </SectionCard>
+        </CollapsibleCard>
 
-        <SectionCard
+        <CollapsibleCard
+          id="cut"
           title="Cut selection"
           description="Cut these areas now, or add them to My turf below to combine with other parts."
         >
@@ -334,10 +339,10 @@ export function AreasPanel({ view }: { view: WalkMode }) {
             <Plus className="mr-1.5 h-4 w-4" />
             Add selection to my turf
           </Button>
-        </SectionCard>
+        </CollapsibleCard>
 
         {selectedAreas.length > 0 ? (
-          <SectionCard title={`Selected areas (${selectedAreas.length})`}>
+          <CollapsibleCard id="selected" title={`Selected areas (${selectedAreas.length})`}>
             <ul className="space-y-1.5">
               {selectedAreas.map((a) => (
                 <li key={`${a.level}:${a.code}`} className="flex items-center gap-2 text-sm">
@@ -357,8 +362,9 @@ export function AreasPanel({ view }: { view: WalkMode }) {
               ))}
             </ul>
             <SelectedAreasEstimate areas={selectedAreas.map((a) => ({ level: a.level, code: a.code }))} />
-          </SectionCard>
+          </CollapsibleCard>
         ) : null}
+        </AutoAccordionGroup>
 
         <UniverseCards value={universe} onChange={setUniverse} />
         <MyTurfPanel universe={universe} onUniverseChange={setUniverse} />

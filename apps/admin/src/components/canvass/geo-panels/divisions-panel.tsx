@@ -27,7 +27,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@uprise/ui";
-import { SectionCard, type WalkMode } from "@uprise/field";
+import { type WalkMode } from "@uprise/field";
+import { AutoAccordionGroup, CollapsibleCard } from "./collapsible-card";
 
 import { DIVISION_TABS as TABS, TYPE_COLORS, resolveDivisionTab } from "@/components/canvass/division-layers";
 
@@ -145,83 +146,89 @@ export function DivisionsPanel({ view }: { view: WalkMode }) {
           </button>
         </div>
 
-        <SectionCard
-          title={`Divisions (${filtered.length.toLocaleString()})${q ? ` matching “${q.trim()}”` : ""}`}
+        <AutoAccordionGroup
+          defaultOpen="browse"
+          follow={selectedCode && detail.data ? `detail:${detail.data.code}` : ""}
         >
-          <StateRegion
-            loading={loading}
-            error={error}
-            noPermission={noPermission}
-            onRetry={() => void refetch()}
-            empty={filtered.length === 0}
-            emptyTitle={q ? "No divisions match" : "No divisions loaded"}
+          <CollapsibleCard
+            id="browse"
+            title={`Divisions (${filtered.length.toLocaleString()})${q ? ` matching “${q.trim()}”` : ""}`}
           >
-            <p className="mb-2 text-xs text-muted-foreground">
-              Showing {mapList.length.toLocaleString()} of {filtered.length.toLocaleString()}
-            </p>
-            <ul className="max-h-72 space-y-1 overflow-y-auto">
-              {mapList.map((d) => (
-                <li key={d.code}>
-                  <button
-                    type="button"
-                    onClick={() => selectDivision(d.code)}
-                    aria-pressed={selectedCode === d.code}
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-surface-variant",
-                      selectedCode === d.code && "bg-primary-container/20",
-                    )}
-                  >
-                    <span className="truncate font-medium text-foreground">{d.name}</span>
-                    <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
-                      {d.addressCount.toLocaleString()}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </StateRegion>
-        </SectionCard>
-
-        {detail.data ? (
-          <SectionCard title={detail.data.name}>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              <li className="tabular-nums">{detail.data.addressCount.toLocaleString()} addresses</li>
-              <li className="tabular-nums">{detail.data.contactCount.toLocaleString()} existing contacts</li>
-              <li className="tabular-nums">{detail.data.withoutContacts.toLocaleString()} cold doors</li>
-            </ul>
-            <Button
-              className="mt-3 w-full"
-              disabled={busy === detail.data.code}
-              onClick={() => void cutFromDivision(detail.data!)}
+            <StateRegion
+              loading={loading}
+              error={error}
+              noPermission={noPermission}
+              onRetry={() => void refetch()}
+              empty={filtered.length === 0}
+              emptyTitle={q ? "No divisions match" : "No divisions loaded"}
             >
-              <Scissors className="mr-1.5 h-4 w-4" />
-              {busy === detail.data.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf from boundary"}
-            </Button>
-            {(() => {
-              const cov = coveredBy({ kind: "division", type, code: detail.data.code, stateDigit: divDigit(detail.data.state) });
-              return (
-                <Button
-                  variant="outline"
-                  className="mt-2 w-full"
-                  disabled={!!cov}
-                  onClick={() =>
-                    hasDivision(type, detail.data!.code)
-                      ? removeDivision(type, detail.data!.code)
-                      : addDiv(detail.data!)
-                  }
-                >
-                  {cov ? (
-                    <><Check className="mr-1.5 h-4 w-4" />Covered by {cov}</>
-                  ) : hasDivision(type, detail.data.code) ? (
-                    <><Check className="mr-1.5 h-4 w-4" />In my turf</>
-                  ) : (
-                    <><Plus className="mr-1.5 h-4 w-4" />Add to my turf</>
-                  )}
-                </Button>
-              );
-            })()}
-          </SectionCard>
-        ) : null}
+              <p className="mb-2 text-xs text-muted-foreground">
+                Showing {mapList.length.toLocaleString()} of {filtered.length.toLocaleString()}
+              </p>
+              <ul className="max-h-72 space-y-1 overflow-y-auto">
+                {mapList.map((d) => (
+                  <li key={d.code}>
+                    <button
+                      type="button"
+                      onClick={() => selectDivision(d.code)}
+                      aria-pressed={selectedCode === d.code}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-surface-variant",
+                        selectedCode === d.code && "bg-primary-container/20",
+                      )}
+                    >
+                      <span className="truncate font-medium text-foreground">{d.name}</span>
+                      <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {d.addressCount.toLocaleString()}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </StateRegion>
+          </CollapsibleCard>
+
+          {detail.data ? (
+            <CollapsibleCard id={`detail:${detail.data.code}`} title={detail.data.name}>
+              <ul className="space-y-1 text-sm text-muted-foreground">
+                <li className="tabular-nums">{detail.data.addressCount.toLocaleString()} addresses</li>
+                <li className="tabular-nums">{detail.data.contactCount.toLocaleString()} existing contacts</li>
+                <li className="tabular-nums">{detail.data.withoutContacts.toLocaleString()} cold doors</li>
+              </ul>
+              <Button
+                className="mt-3 w-full"
+                disabled={busy === detail.data.code}
+                onClick={() => void cutFromDivision(detail.data!)}
+              >
+                <Scissors className="mr-1.5 h-4 w-4" />
+                {busy === detail.data.code ? (<><Spinner className="mr-2" />Cutting…</>) : "Cut turf from boundary"}
+              </Button>
+              {(() => {
+                const cov = coveredBy({ kind: "division", type, code: detail.data.code, stateDigit: divDigit(detail.data.state) });
+                return (
+                  <Button
+                    variant="outline"
+                    className="mt-2 w-full"
+                    disabled={!!cov}
+                    onClick={() =>
+                      hasDivision(type, detail.data!.code)
+                        ? removeDivision(type, detail.data!.code)
+                        : addDiv(detail.data!)
+                    }
+                  >
+                    {cov ? (
+                      <><Check className="mr-1.5 h-4 w-4" />Covered by {cov}</>
+                    ) : hasDivision(type, detail.data.code) ? (
+                      <><Check className="mr-1.5 h-4 w-4" />In my turf</>
+                    ) : (
+                      <><Plus className="mr-1.5 h-4 w-4" />Add to my turf</>
+                    )}
+                  </Button>
+                );
+              })()}
+            </CollapsibleCard>
+          ) : null}
+        </AutoAccordionGroup>
 
         <UniverseCards value={universe} onChange={setUniverse} />
         <MyTurfPanel universe={universe} onUniverseChange={setUniverse} />
