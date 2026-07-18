@@ -460,4 +460,9 @@ export class UpdateVolunteerDto {
   @IsOptional()
   @IsString()
   password?: string;
+
+  // Mobile number (E.164) — powers click-to-call on the roster. Empty string clears it.
+  @IsOptional()
+  @IsString()
+  mobile?: string;
 }

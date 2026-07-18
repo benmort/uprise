@@ -799,6 +799,15 @@ describe("CanvassingService", () => {
       expect(prisma.user.update.mock.calls[0][0].data.passwordHash).toBeUndefined();
     });
 
+    it("sets the mobile number (trimmed), and clears it with an empty string", async () => {
+      prisma.tenantMember.findFirst.mockResolvedValue({ tenantId: "org1", userId: "u1", role: "VOLUNTEER" });
+      await service.updateVolunteer("org1", "u1", { mobile: "  +61412345678 " });
+      expect(prisma.user.update.mock.calls[0][0].data.mobile).toBe("+61412345678");
+      prisma.user.update.mockClear();
+      await service.updateVolunteer("org1", "u1", { mobile: "" });
+      expect(prisma.user.update.mock.calls[0][0].data.mobile).toBeNull();
+    });
+
     it("throws for an unknown user", async () => {
       prisma.tenantMember.findFirst.mockResolvedValue(null);
       await expect(service.updateVolunteer("org1", "missing", { displayName: "x" })).rejects.toThrow();

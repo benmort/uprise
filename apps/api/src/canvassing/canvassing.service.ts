@@ -605,13 +605,15 @@ export class CanvassingService {
   async updateVolunteer(
     tenantId: string,
     id: string,
-    input: { displayName?: string; role?: AppUserRole; password?: string },
+    input: { displayName?: string; role?: AppUserRole; password?: string; mobile?: string },
   ) {
     const membership = await this.prisma.tenantMember.findFirst({ where: { userId: id, tenantId } });
     if (!membership) throw new ApiHttpException("USER_NOT_FOUND", "User not found");
     const userData: Prisma.UserUpdateInput = {};
     if (input.displayName !== undefined) userData.displayName = input.displayName;
     if (input.password) userData.passwordHash = await hashPassword(input.password);
+    // Trim; an empty string clears the number (→ null).
+    if (input.mobile !== undefined) userData.mobile = input.mobile.trim() || null;
     try {
       return await this.prisma.$transaction(async (tx) => {
         const u =
@@ -619,11 +621,11 @@ export class CanvassingService {
             ? await tx.user.update({
                 where: { id },
                 data: userData,
-                select: { id: true, displayName: true, email: true },
+                select: { id: true, displayName: true, email: true, mobile: true },
               })
             : await tx.user.findUniqueOrThrow({
                 where: { id },
-                select: { id: true, displayName: true, email: true },
+                select: { id: true, displayName: true, email: true, mobile: true },
               });
         let role = membership.role;
         if (input.role !== undefined) {

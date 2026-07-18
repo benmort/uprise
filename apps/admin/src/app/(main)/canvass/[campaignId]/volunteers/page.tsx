@@ -82,16 +82,22 @@ export default function CampaignVolunteersPage() {
   const rows: Volunteer[] = data ?? [];
 
   const [editing, setEditing] = useState<Volunteer | null>(null);
-  const [editForm, setEditForm] = useState<{ displayName: string; role: Role; password: string }>({
+  const [editForm, setEditForm] = useState<{ displayName: string; role: Role; password: string; mobile: string }>({
     displayName: "",
     role: "VOLUNTEER",
     password: "",
+    mobile: "",
   });
   const [editBusy, setEditBusy] = useState(false);
 
   const openEdit = (c: Volunteer) => {
     setEditing(c);
-    setEditForm({ displayName: c.displayName, role: c.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER", password: "" });
+    setEditForm({
+      displayName: c.displayName,
+      role: c.role === "ORGANISER" ? "ORGANISER" : "VOLUNTEER",
+      password: "",
+      mobile: c.mobile ?? "",
+    });
   };
 
   const submitEdit = useCallback(async () => {
@@ -105,6 +111,7 @@ export default function CampaignVolunteersPage() {
       displayName: editForm.displayName.trim(),
       role: editForm.role,
       password: editForm.password || undefined,
+      mobile: editForm.mobile.trim(),
     });
     setEditBusy(false);
     if (!res.ok) {
@@ -246,6 +253,16 @@ export default function CampaignVolunteersPage() {
             value={editForm.displayName}
             onChange={(e) => setEditForm((f) => ({ ...f, displayName: e.target.value }))}
             autoFocus
+          />
+        </Field>
+        <Field label="Mobile number" htmlFor="cv-edit-mobile" hint="For click-to-call and SMS. Include the country code, e.g. +61412345678.">
+          <Input
+            id="cv-edit-mobile"
+            type="tel"
+            inputMode="tel"
+            value={editForm.mobile}
+            onChange={(e) => setEditForm((f) => ({ ...f, mobile: e.target.value }))}
+            placeholder="+61412345678"
           />
         </Field>
         <Field label="Role" htmlFor="cv-edit-role">

@@ -32,6 +32,7 @@ import {
   setIntegrationConnectionStatus,
   testIntegrationConnection,
   unassignTurf,
+  updateVolunteer,
   upsertIntegrationConnection,
   createShift,
   updateShift,
@@ -160,6 +161,17 @@ describe("integration connection wrappers", () => {
   it("deleteIntegrationConnection DELETEs the encoded id", async () => {
     await deleteIntegrationConnection("id/2");
     expect(mockRequest).toHaveBeenCalledWith("/integrations/connections/id%2F2", { method: "DELETE" });
+  });
+});
+
+describe("updateVolunteer", () => {
+  it("PATCHes the encoded id with the input body, including the mobile number", async () => {
+    await updateVolunteer("v 1", { displayName: "Ada", role: "VOLUNTEER", mobile: "+61412345678" });
+    expect(mockRequest).toHaveBeenCalledWith("/canvass/volunteers/v%201", {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ displayName: "Ada", role: "VOLUNTEER", mobile: "+61412345678" }),
+    });
   });
 });
 

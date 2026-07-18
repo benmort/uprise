@@ -936,9 +936,9 @@ export async function createVolunteer(input: {
 
 export async function updateVolunteer(
   id: string,
-  input: { displayName?: string; role?: "ORGANISER" | "VOLUNTEER"; password?: string },
+  input: { displayName?: string; role?: "ORGANISER" | "VOLUNTEER"; password?: string; mobile?: string },
 ) {
-  return request<{ id: string; displayName: string; email: string | null; role: string }>(
+  return request<{ id: string; displayName: string; email: string | null; role: string; mobile: string | null }>(
     `/canvass/volunteers/${encodeURIComponent(id)}`,
     {
       method: "PATCH",
