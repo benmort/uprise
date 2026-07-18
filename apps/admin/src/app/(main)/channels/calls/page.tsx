@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Phone, Plus } from "lucide-react";
 import {
   transactionalCalls,
@@ -70,6 +71,17 @@ export default function CallsPage() {
   const [q, setQ] = useState("");
   const [qDebounced, setQDebounced] = useState("");
   const [newCallOpen, setNewCallOpen] = useState(false);
+  // Deep-link: /channels/calls?new=1 (the "New call" picker option) opens the
+  // dialler on load, then strips the param so refresh/back don't reopen it.
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    setNewCallOpen(true);
+    router.replace(pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Debounce search so each keystroke doesn't refetch.
   useEffect(() => {

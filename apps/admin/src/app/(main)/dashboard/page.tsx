@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarClock,
+  CalendarDays,
   LayoutDashboard,
   Inbox as InboxIcon,
   MapPin,
@@ -10,6 +12,8 @@ import {
   PlusCircle,
   SendHorizontal,
   ShieldCheck,
+  Split,
+  Sparkles,
   Users,
   Workflow,
 } from "lucide-react";
@@ -23,17 +27,19 @@ import {
   listConversations,
   listJourneys,
   getJourneyStats,
+  listSegmentDefinitions,
+  listEvents,
+  listCalendar,
   type FeatureFlagsResponse,
   type Journey,
   type OptOutLedger,
   type QueueStatsResponse,
 } from "@/lib/api";
+import { listSurveys, listScripts } from "@/lib/api/engagement";
 import {
   listCampaigns,
   getCampaignSummary,
-  getCampaignLive,
   type CampaignKpis,
-  type CampaignLive,
 } from "@/lib/api/campaigns";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
@@ -64,7 +70,7 @@ type JourneysData = {
   activeCount: number;
   agg: { enrolled: number; active: number; completed: number };
 };
-type CampaignData = { name: string; summary?: CampaignKpis; live?: CampaignLive } | null;
+type CampaignData = { campaigns: number; summary?: CampaignKpis } | null;
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -80,6 +86,10 @@ export default function DashboardPage() {
   const [journeys, setJourneys] = useState<Slice<JourneysData>>(null);
   const [campaign, setCampaign] = useState<Slice<CampaignData>>(null);
   const [optOuts, setOptOuts] = useState<Slice<OptOutLedger>>(null);
+  const [searches, setSearches] = useState<Slice<{ count: number; members: number }>>(null);
+  const [events, setEvents] = useState<Slice<{ count: number }>>(null);
+  const [calendar, setCalendar] = useState<Slice<{ upcoming: number }>>(null);
+  const [content, setContent] = useState<Slice<{ surveys: number; scripts: number }>>(null);
   const [queue, setQueue] = useState<QueueStatsResponse | null>(null);
   const [flags, setFlags] = useState<FeatureFlagsResponse | null>(null);
 
@@ -95,6 +105,31 @@ export default function DashboardPage() {
       getOptOuts().then((r) => alive && setOptOuts(r.ok ? { data: r.data } : { error: r.error }));
       getQueueStats().then((r) => alive && r.ok && setQueue(r.data));
       getFeatureFlags().then((r) => alive && r.ok && setFlags(r.data));
+
+      listSegmentDefinitions().then(
+        (r) =>
+          alive &&
+          setSearches(
+            r.ok
+              ? { data: { count: r.data.length, members: r.data.reduce((t, s) => t + (s.memberCount ?? 0), 0) } }
+              : { error: r.error },
+          ),
+      );
+      listEvents({ status: "upcoming" }).then(
+        (r) => alive && setEvents(r.ok ? { data: { count: r.data.length } } : { error: r.error }),
+      );
+      listCalendar().then((r) => {
+        if (!alive) return;
+        if (!r.ok) return setCalendar({ error: r.error });
+        const now = Date.now();
+        setCalendar({ data: { upcoming: r.data.filter((i) => new Date(i.startsAt).getTime() >= now).length } });
+      });
+      Promise.all([listSurveys(), listScripts()]).then(([s, sc]) => {
+        if (!alive) return;
+        if (!s.ok) return setContent({ error: s.error });
+        if (!sc.ok) return setContent({ error: sc.error });
+        setContent({ data: { surveys: s.data.length, scripts: sc.data.length } });
+      });
 
       listJourneys().then(async (r) => {
         if (!alive) return;
@@ -119,17 +154,26 @@ export default function DashboardPage() {
       listCampaigns().then(async (r) => {
         if (!alive) return;
         if (!r.ok) return setCampaign({ error: r.error });
-        const active = r.data.find((c) => c.status === "ACTIVE") ?? r.data[0];
-        if (!active) return setCampaign({ data: null });
-        const [sum, live] = await Promise.all([getCampaignSummary(active.id), getCampaignLive(active.id)]);
+        if (r.data.length === 0) return setCampaign({ data: null });
+        // Collective figures across EVERY campaign (parity with the other cards):
+        // counts sum; turf-complete recomputes from summed stops; contact rate is
+        // weighted by knocked doors so an idle campaign can't dilute a busy one.
+        const sums = await Promise.all(r.data.map((c) => getCampaignSummary(c.id)));
         if (!alive) return;
-        setCampaign({
-          data: {
-            name: active.name,
-            summary: sum.ok ? sum.data : undefined,
-            live: live.ok ? live.data : undefined,
-          },
-        });
+        const agg: CampaignKpis = { doorsToday: 0, turfCompletePct: 0, contactRate: 0, volunteersOut: 0, knockedStops: 0, totalStops: 0 };
+        let rateWeight = 0;
+        for (const sum of sums) {
+          if (!sum.ok) continue;
+          agg.doorsToday += sum.data.doorsToday;
+          agg.volunteersOut += sum.data.volunteersOut;
+          agg.knockedStops += sum.data.knockedStops;
+          agg.totalStops += sum.data.totalStops;
+          agg.contactRate += sum.data.contactRate * sum.data.knockedStops;
+          rateWeight += sum.data.knockedStops;
+        }
+        agg.turfCompletePct = agg.totalStops > 0 ? (agg.knockedStops / agg.totalStops) * 100 : 0;
+        agg.contactRate = rateWeight > 0 ? agg.contactRate / rateWeight : 0;
+        setCampaign({ data: { campaigns: r.data.length, summary: agg } });
       });
 
       if (alive) setLastUpdatedAt(new Date());
@@ -240,7 +284,7 @@ export default function DashboardPage() {
         onClose={() => setComposeOpen(false)}
         onPick={(ch) => {
           if (ch === "sms") void newBlast("SMS");
-          else if (ch === "call") router.push("/channels/calls");
+          else if (ch === "call") router.push("/channels/calls?new=1");
           else if (ch === "event") router.push("/canvass/events");
         }}
       />
@@ -276,6 +320,29 @@ export default function DashboardPage() {
         </OverviewModuleCard>
 
         <OverviewModuleCard
+          title="Calendar"
+          description="Shifts, events & reminders"
+          href="/calendar"
+          hidden={hideCard("FEATURE_NAV_CALENDAR")}
+          locked={lockCard("FEATURE_NAV_CALENDAR")}
+          icon={<CalendarDays className="h-4 w-4" />}
+          loading={calendar === null}
+          error={calendar?.error}
+          isEmpty={Boolean(calendar?.data && calendar.data.upcoming === 0)}
+          empty="Nothing scheduled ahead."
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(calendar?.data?.upcoming ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">scheduled ahead</span>
+            </p>
+            <p className="text-xs text-muted-foreground">Everything on the calendar, from now on</p>
+          </div>
+        </OverviewModuleCard>
+
+        <OverviewModuleCard
           title="Audiences"
           description="Who you reach"
           href="/audience"
@@ -304,30 +371,6 @@ export default function DashboardPage() {
           </div>
         </OverviewModuleCard>
 
-        <OverviewModuleCard
-          title="Compliance"
-          description="Opt-outs & consent"
-          href="/compliance"
-          icon={<ShieldCheck className="h-4 w-4" />}
-          loading={optOuts === null}
-          error={optOuts?.error}
-        >
-          <div className="space-y-2 text-sm">
-            <p>
-              <span className="text-2xl font-extrabold tabular-nums">
-                {(optOuts?.data?.total ?? 0).toLocaleString()}
-              </span>{" "}
-              <span className="text-muted-foreground">opted out</span>
-            </p>
-            <ul className="space-y-1 text-xs text-muted-foreground">
-              {(optOuts?.data?.byChannel ?? []).map((c) => (
-                <li key={c.channel}>
-                  {c.channel}: {c.count.toLocaleString()}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </OverviewModuleCard>
 
         <OverviewModuleCard
           title="Messaging"
@@ -386,7 +429,9 @@ export default function DashboardPage() {
         >
           {campaign?.data ? (
             <div className="space-y-2">
-              <p className="text-sm font-medium">{campaign.data.name}</p>
+              <p className="text-sm font-medium">
+                Across {campaign.data.campaigns.toLocaleString()} campaign{campaign.data.campaigns === 1 ? "" : "s"}
+              </p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-xl font-extrabold tabular-nums">
@@ -417,6 +462,108 @@ export default function DashboardPage() {
           ) : null}
         </OverviewModuleCard>
 
+
+        <OverviewModuleCard
+          title="Searches"
+          description="Reusable audience definitions"
+          href="/audience/segments"
+          hidden={hideCard("FEATURE_SEGMENTS_ENABLED")}
+          locked={lockCard("FEATURE_SEGMENTS_ENABLED")}
+          icon={<Split className="h-4 w-4" />}
+          loading={searches === null}
+          error={searches?.error}
+          isEmpty={Boolean(searches?.data && searches.data.count === 0)}
+          empty="No searches yet."
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(searches?.data?.count ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">searches</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {(searches?.data?.members ?? 0).toLocaleString()} members matched
+            </p>
+          </div>
+        </OverviewModuleCard>
+
+        <OverviewModuleCard
+          title="Events"
+          description="Organising & RSVPs"
+          href="/canvass/events"
+          hidden={hideCard("FEATURE_NAV_EVENTS")}
+          locked={lockCard("FEATURE_NAV_EVENTS")}
+          icon={<CalendarClock className="h-4 w-4" />}
+          loading={events === null}
+          error={events?.error}
+          isEmpty={Boolean(events?.data && events.data.count === 0)}
+          empty="No upcoming events."
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(events?.data?.count ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">upcoming</span>
+            </p>
+            <p className="text-xs text-muted-foreground">Published events supporters can RSVP to</p>
+          </div>
+        </OverviewModuleCard>
+
+
+        <OverviewModuleCard
+          title="Content"
+          description="Surveys & scripts"
+          href="/content/surveys"
+          hidden={hideCard("FEATURE_NAV_ENGAGEMENT")}
+          locked={lockCard("FEATURE_NAV_ENGAGEMENT")}
+          icon={<Sparkles className="h-4 w-4" />}
+          loading={content === null}
+          error={content?.error}
+          isEmpty={Boolean(content?.data && content.data.surveys === 0 && content.data.scripts === 0)}
+          empty="No content yet."
+        >
+          <div className="flex gap-6 text-sm">
+            <div>
+              <p className="text-2xl font-extrabold tabular-nums">
+                {(content?.data?.surveys ?? 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-muted-foreground">surveys</p>
+            </div>
+            <div>
+              <p className="text-2xl font-extrabold tabular-nums">
+                {(content?.data?.scripts ?? 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-muted-foreground">scripts</p>
+            </div>
+          </div>
+        </OverviewModuleCard>
+        <OverviewModuleCard
+          title="Compliance"
+          description="Opt-outs & consent"
+          href="/compliance"
+          icon={<ShieldCheck className="h-4 w-4" />}
+          loading={optOuts === null}
+          error={optOuts?.error}
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(optOuts?.data?.total ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">opted out</span>
+            </p>
+            <ul className="space-y-1 text-xs text-muted-foreground">
+              {(optOuts?.data?.byChannel ?? []).map((c) => (
+                <li key={c.channel}>
+                  {c.channel}: {c.count.toLocaleString()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </OverviewModuleCard>
+
         <OverviewModuleCard
           title="Journeys"
           description="Automated follow-ups"
@@ -442,6 +589,7 @@ export default function DashboardPage() {
             </p>
           </div>
         </OverviewModuleCard>
+
       </div>
 
       {/* System-health footer */}

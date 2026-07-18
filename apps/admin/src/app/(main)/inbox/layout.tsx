@@ -3,13 +3,15 @@
 // Shared Inbox folder shell — the breadcrumb, sidebar and compose modal live here once
 // (they persist across list ↔ detail navigation). The folder is a URL path segment; the
 // list/detail pages render only the main content pane (`xl:col-span-9`) as children.
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { Inbox } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
+import { cn } from '@/lib/utils';
 import { createBlastAndOpen } from '@/lib/blasts';
 import { NewConversationMenu } from '@/components/inbox/new-conversation-menu';
+import { FullscreenButton, useFullscreen } from '@/components/ui/fullscreen-button';
 import SharedInboxSidebar from '@/components/prog/shared-inbox/sidebar';
 import { folderLabel } from './conversations';
 
@@ -19,6 +21,9 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
   const { showToast } = useToast();
   const folder = String(params.folder ?? 'inbox');
   const [composeOpen, setComposeOpen] = useState(false);
+  // Full-screen the inbox pane (sidebar + conversation) — the same Fullscreen API the maps use.
+  const inboxRef = useRef<HTMLDivElement>(null);
+  const fs = useFullscreen(inboxRef);
 
   return (
     <div className="page-stack">
@@ -28,40 +33,49 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
             <Inbox className="h-6 w-6 shrink-0 text-primary" />
             <h1 className="text-2xl font-extrabold">Inbox</h1>
           </div>
-          <nav>
-            <ol className="flex items-center gap-1.5">
-              <li>
-                <a className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400" href="/dashboard">
-                  Dashboard
-                  <BreadcrumbChevron />
-                </a>
-              </li>
-              {folder === 'inbox' ? (
-                // Default /inbox — Inbox is the current page: Dashboard > Inbox.
-                <li className="text-sm text-gray-800 dark:text-white/90">Inbox</li>
-              ) : (
-                // A sub-folder — Inbox links back, the folder is current: Dashboard > Inbox > {Folder}.
-                <>
-                  <li>
-                    <Link
-                      className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"
-                      href="/inbox"
-                    >
-                      Inbox
-                      <BreadcrumbChevron />
-                    </Link>
-                  </li>
-                  <li className="text-sm text-gray-800 dark:text-white/90">{folderLabel(folder)}</li>
-                </>
-              )}
-            </ol>
-          </nav>
+          <div className="flex items-center gap-3">
+            <nav>
+              <ol className="flex items-center gap-1.5">
+                <li>
+                  <a className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400" href="/dashboard">
+                    Dashboard
+                    <BreadcrumbChevron />
+                  </a>
+                </li>
+                {folder === 'inbox' ? (
+                  // Default /inbox — Inbox is the current page: Dashboard > Inbox.
+                  <li className="text-sm text-gray-800 dark:text-white/90">Inbox</li>
+                ) : (
+                  // A sub-folder — Inbox links back, the folder is current: Dashboard > Inbox > {Folder}.
+                  <>
+                    <li>
+                      <Link
+                        className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"
+                        href="/inbox"
+                      >
+                        Inbox
+                        <BreadcrumbChevron />
+                      </Link>
+                    </li>
+                    <li className="text-sm text-gray-800 dark:text-white/90">{folderLabel(folder)}</li>
+                  </>
+                )}
+              </ol>
+            </nav>
+            <FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />
+          </div>
         </div>
         <p className="mb-6 text-sm text-muted-foreground">
           Every conversation across your channels, in one queue.
         </p>
 
-        <div className="sm:h-[calc(100vh-174px)] h-screen xl:h-[calc(100vh-186px)]">
+        <div
+          ref={inboxRef}
+          className={cn(
+            "sm:h-[calc(100vh-174px)] h-screen xl:h-[calc(100vh-186px)]",
+            fs.isFullscreen && "!h-screen overflow-auto bg-background p-4",
+          )}
+        >
           <div className="xl:grid xl:grid-cols-12 flex flex-col gap-5 sm:gap-5">
             <SharedInboxSidebar onCompose={() => setComposeOpen(true)} />
             <NewConversationMenu
@@ -69,7 +83,7 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
               onClose={() => setComposeOpen(false)}
               onPick={(ch) => {
                 if (ch === 'sms') void createBlastAndOpen(router, showToast, { channel: 'SMS' });
-                else if (ch === 'call') router.push('/channels/calls');
+                else if (ch === 'call') router.push('/channels/calls?new=1');
                 else if (ch === 'event') router.push('/canvass/events');
               }}
             />
