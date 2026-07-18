@@ -43,6 +43,23 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
   const [templateId, setTemplateId] = useState(NO_TEMPLATE);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [busy, setBusy] = useState(false);
+  // Advisory permission gate (the API enforces): inviting needs `manage tenant.invitation`,
+  // held by OWNER (tenant.all) + ORGANISER. A volunteer browsing this page sees no card
+  // rather than a card that can only end in "Missing permission".
+  const [canInvite, setCanInvite] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void getSession().then((session) => {
+      if (!alive) return;
+      setCanInvite(
+        Boolean(session?.isSuperAdmin || session?.role === "OWNER" || session?.role === "ORGANISER"),
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Transactional templates the organiser can pull copy from (best-effort — the compose
   // view works without any, using the channel default).
@@ -144,6 +161,8 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
       showToast({ tone: "success", title: "Invite emailed", description: `On its way to ${email.trim()}.` });
     }
   }, [mode, phone, email, subject, body, role, firstName, onInvited, showToast]);
+
+  if (!canInvite) return null;
 
   return (
     <SectionCard
