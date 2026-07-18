@@ -115,17 +115,17 @@ export function NewConversationMenu({
                   // taller icon-over-text card ≥ sm.
                   "animate-fade-up group flex flex-row items-center gap-3 rounded-2xl border p-4 text-left transition-colors sm:flex-col sm:items-start sm:gap-0",
                   live
-                    ? "border-border hover:border-primary/40 hover:bg-primary/[0.04]"
+                    ? "cursor-pointer border-border hover:border-primary/40 hover:bg-primary/[0.04]"
                     : "cursor-not-allowed border-border/60 bg-surface-variant/30 opacity-70",
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                    "flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl",
                     live ? c.tint : "bg-surface-variant text-muted-foreground",
                   )}
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon className="h-[3.75rem] w-[3.75rem]" />
                 </span>
                 <span className="min-w-0 sm:mt-6">
                   <span

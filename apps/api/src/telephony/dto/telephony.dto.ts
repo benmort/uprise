@@ -57,9 +57,11 @@ export class ComplianceInputDto {
 }
 
 export class StartProvisioningRunDto {
+  /** Optional for tenant self-serve (the server forces the caller's own tenant);
+   *  super-admins may target any tenant explicitly. */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  tenantId!: string;
+  tenantId?: string;
 
   @IsOptional()
   @IsString()
@@ -67,6 +69,11 @@ export class StartProvisioningRunDto {
 
   @IsIn(["SUBACCOUNT", "BYO"])
   mode!: "SUBACCOUNT" | "BYO";
+
+  /** "mobile" (SMS, default) or "local" (voice caller-id capable). */
+  @IsOptional()
+  @IsIn(["mobile", "local"])
+  numberType?: "mobile" | "local";
 
   @IsOptional()
   @IsString()
@@ -107,6 +114,11 @@ export class SetNumberNicknameDto {
   @IsString()
   @MaxLength(80)
   nickname?: string;
+
+  /** Which sends this number serves ("transactional" = calls, "marketing" = SMS blasts). */
+  @IsOptional()
+  @IsIn(["transactional", "marketing", "whatsapp"])
+  purpose?: "transactional" | "marketing" | "whatsapp";
 }
 
 export class BundleStatusCallbackDto {

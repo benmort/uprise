@@ -3,7 +3,7 @@ import { VoiceAccountResolver } from "./voice-account.resolver";
 const BASE_ENV: Record<string, string> = {
   TWILIO_ACCOUNT_SID: "AC_platform",
   TWILIO_AUTH_TOKEN: "platform-token",
-  TWILIO_VOICE_FROM: "+61400000111",
+  TWILIO_VOICE_FROM: "+61255501111",
   API_BASE_URL: "https://api.test",
 };
 // Explicit platform voice env (operator-provisioned); omit to exercise the lazy path.
@@ -45,7 +45,7 @@ function setup(
   return { resolver, prisma, crypto, twilio, senders };
 }
 
-const SUBACCOUNT_SENDER = { accountSid: "AC_sub", authToken: "tok", from: "+61485052501" };
+const SUBACCOUNT_SENDER = { accountSid: "AC_sub", authToken: "tok", from: "+61255052501" };
 
 describe("VoiceAccountResolver", () => {
   it("uses explicit platform voice env when it is set (operator-provisioned)", async () => {
@@ -53,7 +53,7 @@ describe("VoiceAccountResolver", () => {
     expect(await resolver.resolveForTenant("t1")).toEqual({
       mode: "platform",
       accountSid: "AC_platform",
-      callerId: "+61400000111",
+      callerId: "+61255501111",
       apiKeySid: "SK_platform",
       apiKeySecret: "platform-secret",
       twimlAppSid: "AP_platform",
@@ -75,7 +75,7 @@ describe("VoiceAccountResolver", () => {
     expect(acc).toEqual({
       mode: "platform",
       accountSid: "AC_platform",
-      callerId: "+61400000111",
+      callerId: "+61255501111",
       apiKeySid: "SK_platform_new",
       apiKeySecret: "platform-new-secret",
       twimlAppSid: "AP_platform_new",
@@ -116,7 +116,7 @@ describe("VoiceAccountResolver", () => {
     expect(acc).toEqual({
       mode: "subaccount",
       accountSid: "AC_sub",
-      callerId: "+61485052501",
+      callerId: "+61255052501",
       apiKeySid: "SK_cached",
       apiKeySecret: "cached-secret",
       twimlAppSid: "AP_cached",
@@ -146,13 +146,46 @@ describe("VoiceAccountResolver", () => {
     );
     expect(acc.mode).toBe("subaccount");
     expect(acc.apiKeySecret).toBe("sub-secret");
-    expect(acc.callerId).toBe("+61485052501");
+    expect(acc.callerId).toBe("+61255052501");
   });
 
   it("callerIdForAccount returns the tenant number for the matching account, else platform (no lazy create)", async () => {
     const { resolver, twilio } = setup(SUBACCOUNT_SENDER);
-    expect(await resolver.callerIdForAccount("t1", "AC_sub")).toBe("+61485052501");
-    expect(await resolver.callerIdForAccount("t1", "AC_other")).toBe("+61400000111");
+    expect(await resolver.callerIdForAccount("t1", "AC_sub")).toBe("+61255052501");
+    expect(await resolver.callerIdForAccount("t1", "AC_other")).toBe("+61255501111");
     expect(twilio.createVoiceApp).not.toHaveBeenCalled();
+  });
+
+  it("skips a +614 (SMS-only) tenant sender and falls back to the platform account", async () => {
+    const mobileSender = { accountSid: "AC_sub", authToken: "tok", from: "+61485052501" };
+    const { resolver, twilio } = setup(mobileSender, { envVoice: true });
+    const acc = await resolver.resolveForTenant("t1");
+    expect(acc.mode).toBe("platform");
+    expect(acc.callerId).toBe("+61255501111");
+    // The subaccount voice app is never touched — the mobile can't dial.
+    expect(twilio.createVoiceApp).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty callerId marker when every platform number is a +614 mobile", async () => {
+    const { resolver } = setup(undefined, { envVoice: true });
+    // Override the platform voice-from to mobiles only.
+    (resolver as any).config = {
+      get: jest.fn((k: string, fb?: string) =>
+        k === "TWILIO_VOICE_FROM"
+          ? "+61400000111"
+          : k === "TWILIO_PHONE_NUMBER"
+            ? "+61485052501"
+            : ({ TWILIO_ACCOUNT_SID: "AC_platform", TWILIO_API_KEY_SID: "SK_platform", TWILIO_API_KEY_SECRET: "platform-secret", TWILIO_TWIML_APP_SID: "AP_platform", API_BASE_URL: "https://api.test" } as Record<string, string>)[k] ?? fb,
+      ),
+    };
+    const acc = await resolver.resolveForTenant("t1");
+    expect(acc.mode).toBe("platform");
+    expect(acc.callerId).toBe("");
+  });
+
+  it("callerIdForAccount refuses a +614 tenant number and yields the platform caller id", async () => {
+    const mobileSender = { accountSid: "AC_sub", authToken: "tok", from: "+61485052501" };
+    const { resolver } = setup(mobileSender);
+    expect(await resolver.callerIdForAccount("t1", "AC_sub")).toBe("+61255501111");
   });
 });

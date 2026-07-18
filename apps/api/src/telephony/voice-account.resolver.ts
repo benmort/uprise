@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";
 import { TwilioService, type ResolvedSender } from "../twilio/twilio.service";
 import { TelephonySenderResolver } from "./telephony-sender.resolver";
+import { isVoiceCapable } from "./phone-capabilities";
 
 /** The Twilio account + credentials a browser voice call runs under. */
 export type VoiceAccount = {
@@ -46,10 +47,12 @@ export class VoiceAccountResolver {
   }
 
   private platformCallerId(): string {
-    return (
-      this.config.get<string>("TWILIO_VOICE_FROM", "").trim() ||
-      this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim()
-    );
+    // AU mobiles are never a voice caller ID — a +614 platform number yields ""
+    // (the "no voice number" marker voiceToken turns into VOICE_NUMBER_REQUIRED).
+    const preferred = this.config.get<string>("TWILIO_VOICE_FROM", "").trim();
+    if (isVoiceCapable(preferred)) return preferred;
+    const fallback = this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
+    return isVoiceCapable(fallback) ? fallback : "";
   }
 
   /**
@@ -79,7 +82,8 @@ export class VoiceAccountResolver {
   /** The account (+ caller id) a browser call for `tenantId` places calls under. */
   async resolveForTenant(tenantId: string): Promise<VoiceAccount> {
     const sender = await this.senders.resolve({ tenantId, purpose: "transactional" });
-    if (!sender || !sender.from) return this.resolvePlatformAccount();
+    // A tenant sender that is an AU mobile (+614) is SMS-only — never dial from it.
+    if (!sender?.from || !isVoiceCapable(sender.from)) return this.resolvePlatformAccount();
     const voice = await this.ensureSubaccountVoiceApp(sender);
     return {
       mode: "subaccount",
@@ -98,7 +102,9 @@ export class VoiceAccountResolver {
    */
   async callerIdForAccount(tenantId: string, accountSid: string): Promise<string> {
     const sender = await this.senders.resolve({ tenantId, purpose: "transactional" });
-    if (sender?.from && sender.accountSid === accountSid) return sender.from;
+    if (sender?.from && isVoiceCapable(sender.from) && sender.accountSid === accountSid) {
+      return sender.from;
+    }
     return this.platformCallerId();
   }
 

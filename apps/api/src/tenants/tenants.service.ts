@@ -73,6 +73,8 @@ export interface CreateInvitationInput {
   phone?: string;
   role: AppUserRole;
   invitedBy?: string;
+  // The caller — so we can enforce that only an OWNER invites an OWNER, etc.
+  actor?: TenantActor;
   // Composed invite copy from the "Invite a volunteer" compose view. The accept link is
   // always injected (see `composeInviteBody`). Absent ⇒ the default copy. `subject` = email only.
   message?: string;
@@ -102,6 +104,10 @@ function composeInviteBody(message: string | undefined, link: string): string | 
  * the worker's reaction path being healthy. uprise' TenantMember.role is AppUserRole
  * (OWNER/ORGANISER/VOLUNTEER); a tenant's creator is the OWNER (full tenant + billing role).
  */
+/** The authenticated caller, for role-hierarchy checks on member/invitation mutations.
+ *  Only the id + super-admin flag are trusted; the caller's rank is looked up fresh. */
+export type TenantActor = { userId?: string; isSuperAdmin?: boolean };
+
 @Injectable()
 export class TenantsService {
   constructor(
@@ -282,9 +288,10 @@ export class TenantsService {
   /** Directly add an EXISTING user (by id or email) to a tenant. */
   async addMember(
     tenantId: string,
-    input: { userId?: string; email?: string; role: AppUserRole; addedBy?: string },
+    input: { userId?: string; email?: string; role: AppUserRole; addedBy?: string; actor?: TenantActor },
   ): Promise<TenantMember> {
     await this.getTenant(tenantId);
+    await this.assertCanGrant(tenantId, input.role, input.actor);
     const user = input.userId
       ? await this.prisma.user.findUnique({ where: { id: input.userId } })
       : input.email
@@ -314,6 +321,44 @@ export class TenantsService {
     });
   }
 
+  // ── Role hierarchy (OWNER > ORGANISER > VOLUNTEER) ─────────────────────
+  // The API is the real boundary: an organiser can't invite/grant OWNER, can't raise their
+  // own role, and can't change a member at their level or above. Only an OWNER grants OWNER.
+  // Super-admins bypass. Mirrors the team-page UI, which just hides impossible actions.
+  private roleRank(role?: AppUserRole | null): number {
+    switch (role) {
+      case AppUserRole.OWNER:
+        return 3;
+      case AppUserRole.ORGANISER:
+        return 2;
+      case AppUserRole.VOLUNTEER:
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  /** The actor's seniority IN this tenant (looked up fresh — not trusted from the session,
+   *  so a stale/cross-tenant token can't escalate). Super-admins rank above everyone. */
+  private async actorRank(tenantId: string, actor?: TenantActor): Promise<number> {
+    if (actor?.isSuperAdmin) return 99;
+    if (!actor?.userId) return 0;
+    const m = await this.prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId, userId: actor.userId } },
+      select: { role: true },
+    });
+    return this.roleRank(m?.role ?? null);
+  }
+
+  /** Throw unless `actor` may GRANT `targetRole` (invite/add/promote) — only roles at or
+   *  below their own, so OWNER can only be granted by an OWNER. Super-admins bypass. */
+  private async assertCanGrant(tenantId: string, targetRole: AppUserRole, actor?: TenantActor): Promise<void> {
+    if (actor?.isSuperAdmin) return;
+    if (this.roleRank(targetRole) > (await this.actorRank(tenantId, actor))) {
+      throw new ForbiddenException("You can only assign a role at or below your own");
+    }
+  }
+
   /** Guard: a tenant must keep at least one OWNER (the workspace owner). */
   private async assertNotLastOwner(tenantId: string, userId: string): Promise<void> {
     const member = await this.prisma.tenantMember.findUnique({
@@ -326,11 +371,31 @@ export class TenantsService {
     if (owners <= 1) throw new BadRequestException("Cannot remove or demote the last owner of a tenant");
   }
 
-  async updateMemberRole(tenantId: string, userId: string, role: AppUserRole): Promise<TenantMember> {
+  async updateMemberRole(
+    tenantId: string,
+    userId: string,
+    role: AppUserRole,
+    actor?: TenantActor,
+  ): Promise<TenantMember> {
     const existing = await this.prisma.tenantMember.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
+    // Role-hierarchy: can't grant above your own level; on yourself you may only step down;
+    // on others you can only change someone strictly below you. Super-admins bypass.
+    if (!actor?.isSuperAdmin) {
+      const rankOf = await this.actorRank(tenantId, actor);
+      if (this.roleRank(role) > rankOf) {
+        throw new ForbiddenException("You can only assign a role at or below your own");
+      }
+      if (actor?.userId && actor.userId === userId) {
+        if (this.roleRank(role) > this.roleRank(existing.role)) {
+          throw new ForbiddenException("You can't raise your own role");
+        }
+      } else if (this.roleRank(existing.role) >= rankOf) {
+        throw new ForbiddenException("You can't change a member at your level or above");
+      }
+    }
     if (existing.role === AppUserRole.OWNER && role !== AppUserRole.OWNER) {
       await this.assertNotLastOwner(tenantId, userId);
     }
@@ -404,6 +469,7 @@ export class TenantsService {
     input: CreateInvitationInput,
   ): Promise<{ id: string; token: string }> {
     const tenant = await this.getTenant(tenantId);
+    await this.assertCanGrant(tenantId, input.role, input.actor);
     const email = input.email?.trim().toLowerCase() || undefined;
     const phone = input.phone?.trim() || undefined;
     if ((email && phone) || (!email && !phone)) {

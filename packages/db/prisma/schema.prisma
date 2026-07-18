@@ -2183,6 +2183,12 @@ model Call {
   currency        String?
   startedAt       DateTime?
   endedAt         DateTime?
+  // Failure detail captured from the provider status callback on a BUSY/NO_ANSWER/FAILED
+  // transition — the Twilio error code (e.g. "13224"), its message, and the SIP response
+  // code (e.g. "486"). Null while the call is live or on success. Mirrors BlastRecipient.
+  errorCode       String?
+  errorMessage    String?
+  sipCode         String?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -2302,6 +2308,8 @@ model TelephonyProvisioningRun {
   accountId       String?
   status          TelephonyProvisioningStatus  @default(REQUESTED)
   resumeStatus    TelephonyProvisioningStatus?
+  // "mobile" (SMS-capable, the historical default) or "local" (voice caller-id capable).
+  numberType      String                    @default("mobile")
   complianceInput Json
   documents       Json?
   bundleSid       String?                      @unique

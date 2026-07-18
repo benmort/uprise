@@ -103,8 +103,17 @@ describe("WebhooksController.voiceOutbound", () => {
       toNumber: "+61400000999",
       contactId: "ct1",
       accountSid: "AC1",
+      fromNumberId: null,
     });
     expect(out).toContain("<Dial");
+  });
+
+  it("threads an explicit fromNumberId (the dialler's number pick) through to the call", async () => {
+    await makeController().voiceOutbound(
+      { To: "+61400000999", From: "client:uUSER1.tTEN1", AccountSid: "AC1", fromNumberId: "num1" },
+      req,
+    );
+    expect(calls.startBrowserCall).toHaveBeenCalledWith(expect.objectContaining({ fromNumberId: "num1" }));
   });
 
   it("returns a spoken apology (no bridge) for an invalid To", async () => {
@@ -151,6 +160,72 @@ describe("WebhooksController.voiceRecordingCallback", () => {
     expect(calls.processRecordingCallback).toHaveBeenCalledWith(
       { callSid: "CA1", recordingUrl: "https://rec/1" },
       undefined,
+    );
+  });
+});
+
+describe("WebhooksController.voiceStatusCallback", () => {
+  const calls = { processStatusCallback: jest.fn().mockResolvedValue(undefined) } as any;
+  const telephonyAuth = { tokenForAccountSid: jest.fn().mockResolvedValue("tok") } as any;
+  const req = { headers: {}, protocol: "https", get: () => "example.com", originalUrl: "/hook" } as any;
+
+  function makeController() {
+    const c = new WebhooksController(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      calls,
+      telephonyAuth,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    (c as any).validateTwilioSignature = jest.fn();
+    return c;
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("forwards the provider failure detail (error code/message/SIP) on a failed call", async () => {
+    const out = await makeController().voiceStatusCallback(
+      {
+        CallSid: "CA1",
+        CallStatus: "failed",
+        AccountSid: "AC1",
+        ErrorCode: "13224",
+        ErrorMessage: "Twilio could not connect the call",
+        SipResponseCode: "486",
+      },
+      req,
+      "call1",
+    );
+
+    expect(out).toBe(TWIML_EMPTY);
+    expect(telephonyAuth.tokenForAccountSid).toHaveBeenCalledWith("AC1");
+    expect(calls.processStatusCallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        callSid: "CA1",
+        status: "failed",
+        errorCode: "13224",
+        errorMessage: "Twilio could not connect the call",
+        sipCode: "486",
+      }),
+      "call1",
+    );
+  });
+
+  it("omits the error fields on a clean completed callback", async () => {
+    await makeController().voiceStatusCallback(
+      { CallSid: "CA1", CallStatus: "completed", CallDuration: "42", AccountSid: "AC1" },
+      req,
+    );
+    const arg = calls.processStatusCallback.mock.calls[0][0];
+    expect(arg).toEqual(
+      expect.objectContaining({ callSid: "CA1", status: "completed", durationSeconds: 42, errorCode: undefined }),
     );
   });
 });

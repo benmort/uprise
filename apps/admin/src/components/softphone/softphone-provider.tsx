@@ -6,7 +6,13 @@ import { invalidateApi } from "@/lib/use-api";
 
 export type CallState = "idle" | "connecting" | "ringing" | "open" | "error";
 
-export type StartCallInput = { toNumber: string; label?: string; contactId?: string };
+export type StartCallInput = {
+  toNumber: string;
+  label?: string;
+  contactId?: string;
+  /** Explicit tenant number pick (validated server-side; must be voice-capable). */
+  fromNumberId?: string;
+};
 
 type SoftphoneContextValue = {
   state: CallState;
@@ -14,6 +20,15 @@ type SoftphoneContextValue = {
   active: StartCallInput | null;
   /** The provisioned number the callee sees; resolved on first call. */
   fromNumber: string | null;
+  /**
+   * No voice-capable caller id resolves for this tenant (+614 mobiles are
+   * SMS-only) — the voiceToken 422 VOICE_NUMBER_REQUIRED, as a typed state so
+   * the dialler renders the "get a local number" affordance instead of a toast.
+   * null = not probed yet.
+   */
+  voiceBlocked: boolean | null;
+  /** Re-check voice availability (mints a token; refreshes fromNumber/voiceBlocked). */
+  probeVoice: () => Promise<void>;
   error: string | null;
   elapsedSec: number;
   muted: boolean;
@@ -43,6 +58,7 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<CallState>("idle");
   const [active, setActive] = useState<StartCallInput | null>(null);
   const [fromNumber, setFromNumber] = useState<string | null>(null);
+  const [voiceBlocked, setVoiceBlocked] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [muted, setMuted] = useState(false);
@@ -63,7 +79,12 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     // (error 20104 → the gateway HANGUPs the call, surfacing as 31005). Refreshing on every
     // call — plus a `tokenWillExpire` handler for long-lived registrations — keeps it valid.
     const res = await transactionalCalls.voiceToken();
-    if (!res.ok) throw new Error(res.error);
+    if (!res.ok) {
+      // 422 = VOICE_NUMBER_REQUIRED: only SMS-only mobiles resolve — a state, not a fault.
+      if (res.status === 422) setVoiceBlocked(true);
+      throw new Error(res.error);
+    }
+    setVoiceBlocked(false);
     setFromNumber(res.data.fromNumber || null);
     if (deviceRef.current) {
       deviceRef.current.updateToken(res.data.token);
@@ -87,6 +108,19 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
     setActive(null);
   }, []);
 
+  // Cheap availability probe for the dialler UI (no Device registration).
+  const probeVoice = useCallback(async () => {
+    const res = await transactionalCalls.voiceToken();
+    if (res.ok) {
+      setVoiceBlocked(false);
+      setFromNumber(res.data.fromNumber || null);
+    } else if (res.status === 422) {
+      setVoiceBlocked(true);
+      setFromNumber(null);
+    }
+    // Other failures (network, 5xx) leave voiceBlocked as-is — unknown, not blocked.
+  }, []);
+
   const startCall = useCallback(
     async (input: StartCallInput) => {
       if (state !== "idle" && state !== "error") return; // one call at a time
@@ -96,7 +130,11 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
       try {
         const device = await ensureDevice();
         const call = await device.connect({
-          params: { To: input.toNumber, ...(input.contactId ? { contactId: input.contactId } : {}) },
+          params: {
+            To: input.toNumber,
+            ...(input.contactId ? { contactId: input.contactId } : {}),
+            ...(input.fromNumberId ? { fromNumberId: input.fromNumberId } : {}),
+          },
         });
         callRef.current = call;
         call.on("ringing", () => setState("ringing"));
@@ -147,7 +185,19 @@ export function SoftphoneProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <SoftphoneContext.Provider
-      value={{ state, active, fromNumber, error, elapsedSec, muted, startCall, hangup, toggleMute }}
+      value={{
+        state,
+        active,
+        fromNumber,
+        voiceBlocked,
+        probeVoice,
+        error,
+        elapsedSec,
+        muted,
+        startCall,
+        hangup,
+        toggleMute,
+      }}
     >
       {children}
     </SoftphoneContext.Provider>

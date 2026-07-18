@@ -194,12 +194,7 @@ export default function BlastDetailsPage() {
   if (noPermission) {
     return (
       <div className="page-stack">
-        <Breadcrumbs
-          items={[
-            { label: "Analytics", href: "/analytics" },
-            { label: blastTitle || "Blast Details" },
-          ]}
-        />
+        <Breadcrumbs items={[{ label: blastTitle || "Blast Details" }]} />
         <StateRegion noPermission>{null}</StateRegion>
       </div>
     );
@@ -207,12 +202,7 @@ export default function BlastDetailsPage() {
 
   return (
     <div className="page-stack">
-      <Breadcrumbs
-        items={[
-          { label: "Analytics", href: "/analytics" },
-          { label: blastTitle || "Blast Details" },
-        ]}
-      />
+      <Breadcrumbs items={[{ label: blastTitle || "Blast Details" }]} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold">{blastTitle}</h1>

@@ -87,6 +87,7 @@ export function PollBody({
                   : undefined
               }
               label={poll.isPublic ? "Copy public link" : "Copy share link"}
+              qr
             />
           </>
         ) : null}

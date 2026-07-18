@@ -154,18 +154,22 @@ describe("TenantsController", () => {
     expect(tenants.listMembers).toHaveBeenCalledWith("t1");
   });
 
-  it("addMember delegates with id + dto + addedBy", () => {
+  it("addMember delegates with id + dto + addedBy + actor", () => {
     c.addMember("t1", { userId: "u2", role: AppUserRole.ORGANISER } as any, ownReq);
     expect(tenants.addMember).toHaveBeenCalledWith("t1", {
       userId: "u2",
       role: AppUserRole.ORGANISER,
       addedBy: "u1",
+      actor: { userId: "u1", isSuperAdmin: false },
     });
   });
 
-  it("updateMemberRole delegates with id, userId + role", () => {
-    c.updateMemberRole("t1", "u2", { role: AppUserRole.ORGANISER } as any);
-    expect(tenants.updateMemberRole).toHaveBeenCalledWith("t1", "u2", AppUserRole.ORGANISER);
+  it("updateMemberRole delegates with id, userId, role + actor", () => {
+    c.updateMemberRole("t1", "u2", { role: AppUserRole.ORGANISER } as any, ownReq);
+    expect(tenants.updateMemberRole).toHaveBeenCalledWith("t1", "u2", AppUserRole.ORGANISER, {
+      userId: "u1",
+      isSuperAdmin: false,
+    });
   });
 
   it("removeMember delegates with id + userId", () => {
@@ -173,12 +177,13 @@ describe("TenantsController", () => {
     expect(tenants.removeMember).toHaveBeenCalledWith("t1", "u2");
   });
 
-  it("createInvitation delegates with id + dto + invitedBy", () => {
+  it("createInvitation delegates with id + dto + invitedBy + actor", () => {
     c.createInvitation("t1", { email: "a@b.co", role: AppUserRole.ORGANISER } as any, ownReq);
     expect(tenants.createInvitation).toHaveBeenCalledWith("t1", {
       email: "a@b.co",
       role: AppUserRole.ORGANISER,
       invitedBy: "u1",
+      actor: { userId: "u1", isSuperAdmin: false },
     });
   });
 

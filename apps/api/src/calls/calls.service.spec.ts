@@ -17,7 +17,9 @@ function setup(callRow?: any) {
     // Supports both forms: the callback form (writes) and the array form (list + count).
     $transaction: jest.fn(async (arg: any) => (Array.isArray(arg) ? Promise.all(arg) : arg(prisma))),
   };
-  const config = { get: jest.fn((_k: string, fb?: string) => fb ?? "") } as any;
+  // Platform env: a voice-capable local caller id (the +614 mobile case is covered explicitly).
+  const env: Record<string, string> = { TWILIO_VOICE_FROM: "+61255501111" };
+  const config = { get: jest.fn((k: string, fb?: string) => env[k] ?? fb ?? "") } as any;
   const outbox = { append: jest.fn() } as any;
   const webhookEvents = { claim: jest.fn(async () => true), release: jest.fn() } as any;
   const twilio = {
@@ -31,13 +33,14 @@ function setup(callRow?: any) {
     resolveForTenant: jest.fn(async () => ({
       mode: "platform",
       accountSid: "AC_platform",
-      callerId: "+61400000111",
+      callerId: "+61255501111",
       apiKeySid: "SK1",
       apiKeySecret: "secret",
       twimlAppSid: "AP1",
     })),
-    callerIdForAccount: jest.fn(async () => "+61400000111"),
+    callerIdForAccount: jest.fn(async () => "+61255501111"),
   } as any;
+  const senderResolver = { resolveByNumberId: jest.fn(async () => null) } as any;
   const svc = new CallsService(
     prisma,
     config,
@@ -47,8 +50,9 @@ function setup(callRow?: any) {
     logger,
     telephonyAuth,
     voiceAccounts,
+    senderResolver,
   );
-  return { svc, prisma, outbox, webhookEvents, twilio, telephonyAuth, voiceAccounts };
+  return { svc, prisma, config, outbox, webhookEvents, twilio, logger, telephonyAuth, voiceAccounts, senderResolver };
 }
 
 describe("CallsService", () => {
@@ -73,6 +77,24 @@ describe("CallsService", () => {
     it("rejects a non-E.164 toNumber", async () => {
       const { svc } = setup();
       await expect(svc.initiate("t1", { toNumber: "0400 000 001" })).rejects.toThrow();
+    });
+
+    it("rejects a +614 (SMS-only) fromNumber with VOICE_NUMBER_REQUIRED", async () => {
+      const { svc, prisma } = setup();
+      await expect(
+        svc.initiate("t1", { toNumber: "+61255500001", fromNumber: "+61485052501" }),
+      ).rejects.toMatchObject({ response: expect.objectContaining({ code: "VOICE_NUMBER_REQUIRED" }) });
+      expect(prisma.call.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects when the env fallback numbers are also mobiles (nothing voice-capable)", async () => {
+      const { svc, config } = setup();
+      config.get.mockImplementation((k: string, fb?: string) =>
+        k === "TWILIO_VOICE_FROM" ? "+61485052501" : (fb ?? ""),
+      );
+      await expect(svc.initiate("t1", { toNumber: "+61255500001" })).rejects.toMatchObject({
+        response: expect.objectContaining({ code: "VOICE_NUMBER_REQUIRED" }),
+      });
     });
 
     it("marks the call FAILED and rethrows when dispatch fails", async () => {
@@ -126,6 +148,55 @@ describe("CallsService", () => {
           priceCents: 2,
           currency: "USD",
         }),
+      );
+      expect(data.endedAt).toBeInstanceOf(Date);
+    });
+
+    it.each([
+      ["failed", CallStatus.FAILED],
+      ["busy", CallStatus.BUSY],
+      ["no-answer", CallStatus.NO_ANSWER],
+    ])("captures the failure reason + endedAt and logs on %s", async (raw, target) => {
+      const { svc, prisma, outbox, logger } = setup({ id: "call1", tenantId: "t1", toNumber: "+61400000001", status: CallStatus.INITIATED, providerCallId: "CA1" });
+      await svc.processStatusCallback({
+        callSid: "CA1",
+        status: raw,
+        errorCode: "13224",
+        errorMessage: "Twilio could not connect the call",
+        sipCode: "486",
+      });
+      const data = prisma.call.update.mock.calls[0][0].data;
+      expect(data).toEqual(
+        expect.objectContaining({
+          status: target,
+          errorCode: "13224",
+          errorMessage: "Twilio could not connect the call",
+          sipCode: "486",
+        }),
+      );
+      expect(data.endedAt).toBeInstanceOf(Date);
+      // The failure is logged with the provider's reason so it's identifiable, not silent.
+      expect(logger.warn).toHaveBeenCalledWith(
+        "telephony",
+        expect.stringContaining("without connecting"),
+        expect.objectContaining({ callId: "call1", status: target, errorCode: "13224", sipCode: "486" }),
+      );
+      // The status-changed event carries the error for failure-alerting reactions.
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          eventType: "telephony.call.status-changed",
+          payload: expect.objectContaining({ status: target, errorCode: "13224" }),
+        }),
+      );
+    });
+
+    it("records a failure with null reason when the provider sends no error fields", async () => {
+      const { svc, prisma } = setup({ id: "call1", status: CallStatus.INITIATED, providerCallId: "CA1" });
+      await svc.processStatusCallback({ callSid: "CA1", status: "failed" });
+      const data = prisma.call.update.mock.calls[0][0].data;
+      expect(data).toEqual(
+        expect.objectContaining({ status: CallStatus.FAILED, errorCode: null, errorMessage: null, sipCode: null }),
       );
       expect(data.endedAt).toBeInstanceOf(Date);
     });
@@ -225,8 +296,39 @@ describe("CallsService", () => {
         expect.objectContaining({ accountSid: "AC_platform", apiKeySid: "SK1", twimlAppSid: "AP1", identity: "uuser1.tt1" }),
       );
       expect(res).toEqual(
-        expect.objectContaining({ token: "jwt.voice.token", identity: "uuser1.tt1", fromNumber: "+61400000111" }),
+        expect.objectContaining({ token: "jwt.voice.token", identity: "uuser1.tt1", fromNumber: "+61255501111" }),
       );
+    });
+
+    it("throws VOICE_NUMBER_REQUIRED (422) when the resolved caller id is a +614 mobile", async () => {
+      const { svc, twilio, voiceAccounts } = setup();
+      voiceAccounts.resolveForTenant.mockResolvedValueOnce({
+        mode: "platform",
+        accountSid: "AC_platform",
+        callerId: "+61485052501",
+        apiKeySid: "SK1",
+        apiKeySecret: "secret",
+        twimlAppSid: "AP1",
+      });
+      await expect(svc.voiceToken("u1", "t1")).rejects.toMatchObject({
+        response: expect.objectContaining({ code: "VOICE_NUMBER_REQUIRED" }),
+      });
+      expect(twilio.mintVoiceToken).not.toHaveBeenCalled();
+    });
+
+    it("throws VOICE_NUMBER_REQUIRED when no caller id resolves at all (empty marker)", async () => {
+      const { svc, voiceAccounts } = setup();
+      voiceAccounts.resolveForTenant.mockResolvedValueOnce({
+        mode: "platform",
+        accountSid: "AC_platform",
+        callerId: "",
+        apiKeySid: "SK1",
+        apiKeySecret: "secret",
+        twimlAppSid: "AP1",
+      });
+      await expect(svc.voiceToken("u1", "t1")).rejects.toMatchObject({
+        response: expect.objectContaining({ code: "VOICE_NUMBER_REQUIRED" }),
+      });
     });
 
     it("throws when the resolved account lacks voice credentials", async () => {
@@ -272,9 +374,50 @@ describe("CallsService", () => {
       const res = await svc.startBrowserCall({ tenantId: "t1", toNumber: "+61400000333", contactId: "ct1", accountSid: "AC_platform" });
       expect(voiceAccounts.callerIdForAccount).toHaveBeenCalledWith("t1", "AC_platform");
       expect(twilio.buildDialTwiml).toHaveBeenCalledWith(
-        expect.objectContaining({ to: "+61400000333", callerId: "+61400000111", callId: "call1" }),
+        expect.objectContaining({ to: "+61400000333", callerId: "+61255501111", callId: "call1" }),
       );
       expect(res.twiml).toContain("<Dial");
+    });
+
+    it("uses the explicitly picked tenant number when fromNumberId resolves voice-capable", async () => {
+      const { svc, twilio, voiceAccounts, senderResolver } = setup();
+      senderResolver.resolveByNumberId.mockResolvedValueOnce({
+        accountSid: "AC_sub",
+        authToken: "tok",
+        from: "+61255059999",
+      });
+      await svc.startBrowserCall({ tenantId: "t1", toNumber: "+61400000333", fromNumberId: "num1" });
+      expect(senderResolver.resolveByNumberId).toHaveBeenCalledWith("t1", "num1");
+      // The explicit pick wins — no account-based fallback lookup needed.
+      expect(voiceAccounts.callerIdForAccount).not.toHaveBeenCalled();
+      expect(twilio.buildDialTwiml).toHaveBeenCalledWith(
+        expect.objectContaining({ callerId: "+61255059999" }),
+      );
+    });
+
+    it("ignores a +614 fromNumberId pick and falls back to the account caller id", async () => {
+      const { svc, twilio, voiceAccounts, senderResolver } = setup();
+      senderResolver.resolveByNumberId.mockResolvedValueOnce({
+        accountSid: "AC_sub",
+        authToken: "tok",
+        from: "+61485052501",
+      });
+      await svc.startBrowserCall({ tenantId: "t1", toNumber: "+61400000333", fromNumberId: "num1", accountSid: "AC_platform" });
+      expect(voiceAccounts.callerIdForAccount).toHaveBeenCalledWith("t1", "AC_platform");
+      expect(twilio.buildDialTwiml).toHaveBeenCalledWith(
+        expect.objectContaining({ callerId: "+61255501111" }),
+      );
+    });
+
+    it("answers with a spoken explanation + hangup (no call row) when only a mobile resolves", async () => {
+      const { svc, prisma, twilio, voiceAccounts } = setup();
+      voiceAccounts.callerIdForAccount.mockResolvedValueOnce("+61485052501");
+      const res = await svc.startBrowserCall({ tenantId: "t1", toNumber: "+61400000333", accountSid: "AC_platform" });
+      expect(res.twiml).toContain("<Say");
+      expect(res.twiml).toContain("<Hangup/>");
+      expect(res.twiml).not.toContain("<Dial");
+      expect(prisma.call.create).not.toHaveBeenCalled();
+      expect(twilio.buildDialTwiml).not.toHaveBeenCalled();
     });
   });
 

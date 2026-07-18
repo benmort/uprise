@@ -30,6 +30,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ShareCard } from "@uprise/ui";
 import { KpiTile } from "@uprise/field";
 import { MapThumbnail } from "@uprise/field";
 import { ProgressBar } from "@uprise/field";
@@ -675,20 +676,8 @@ export default function CanvassPage() {
           </Field>
         ) : null}
         {editing && form.openJoin ? (
-          <Field label="Shareable join link" htmlFor="camp-join-link">
-            <div className="flex gap-2">
-              <Input id="camp-join-link" readOnly value={joinLink} onFocus={(e) => e.currentTarget.select()} />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(joinLink);
-                  showToast({ tone: "success", title: "Link copied" });
-                }}
-              >
-                Copy
-              </Button>
-            </div>
+          <Field label="Shareable join link">
+            <ShareCard url={joinLink} title="Join this campaign" text="Join us as a canvasser:" qr />
             <p className="mt-1.5 text-xs text-muted-foreground">
               Save to activate. Anyone with this link can join as a canvasser, and each join uses a team seat –
               share carefully.

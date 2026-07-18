@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Rocket } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { createCampaign } from "@/lib/api/campaigns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionCard } from "@uprise/field";
+import { Wizard, type WizardStep } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 
 export default function NewCampaignPage() {
@@ -38,6 +39,45 @@ export default function NewCampaignPage() {
     router.push(`/canvass/${res.data.id}/turf`);
   }
 
+  const steps: WizardStep[] = [
+    {
+      key: "basics",
+      label: "Basics",
+      canAdvance: Boolean(name.trim()),
+      content: (
+        <SectionCard title="The basics">
+          <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+            Campaign name
+          </label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Spring doorknock" autoFocus />
+        </SectionCard>
+      ),
+    },
+    {
+      key: "goals",
+      label: "Goals",
+      content: (
+        <SectionCard title="Goals (optional)" description="Set targets to track pace later.">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Doors</label>
+              <Input value={doors} onChange={(e) => setDoors(e.target.value)} type="number" placeholder="5000" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">Conversations</label>
+              <Input
+                value={conversations}
+                onChange={(e) => setConversations(e.target.value)}
+                type="number"
+                placeholder="1200"
+              />
+            </div>
+          </div>
+        </SectionCard>
+      ),
+    },
+  ];
+
   return (
     <div className="page-stack max-w-xl">
       <div className="flex items-center gap-2">
@@ -50,35 +90,7 @@ export default function NewCampaignPage() {
         <h1 className="text-2xl font-extrabold">New campaign</h1>
       </div>
 
-      <SectionCard title="The basics">
-        <label className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
-          Campaign name
-        </label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Spring doorknock" />
-      </SectionCard>
-
-      <SectionCard title="Goals (optional)" description="Set targets to track pace later.">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Doors</label>
-            <Input value={doors} onChange={(e) => setDoors(e.target.value)} type="number" placeholder="5000" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-muted-foreground">Conversations</label>
-            <Input
-              value={conversations}
-              onChange={(e) => setConversations(e.target.value)}
-              type="number"
-              placeholder="1200"
-            />
-          </div>
-        </div>
-      </SectionCard>
-
-      <Button onClick={create} disabled={busy || !name.trim()}>
-        <Rocket className="mr-1.5 h-4 w-4" />
-        Create &amp; cut turf
-      </Button>
+      <Wizard steps={steps} onComplete={() => void create()} completeLabel="Create &amp; cut turf" busy={busy} />
     </div>
   );
 }

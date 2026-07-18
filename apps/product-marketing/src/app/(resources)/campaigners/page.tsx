@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Building2, Globe, Palette, Layers, Users, ShieldCheck } from "lucide-react";
 
 export const metadata = {
-  title: "For Campaigners – Multi-tenant & multi-brand portals | Uprise",
+  title: "Campaigners – Multi-tenant & multi-brand portals | Uprise",
   description:
     "Run many campaigns, brands and partner organisations from one Uprise account – each with its own branded, white-label portal. Available on the Scale plan.",
 };

@@ -66,7 +66,6 @@ export default function EventsPage() {
   const events: EventSummary[] = data ?? [];
   const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<EventSummary | null>(null);
 
   const counts = useMemo(() => {
@@ -106,9 +105,11 @@ export default function EventsPage() {
             <Download className="mr-1.5 h-4 w-4" />
             Export
           </Button>
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Create event
+          <Button asChild size="sm">
+            <Link href="/canvass/events/new">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Create event
+            </Link>
           </Button>
         </div>
       }
@@ -240,7 +241,6 @@ export default function EventsPage() {
         />
       </StateRegion>
 
-      <EventFormDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => void refetch()} />
       <EventFormDialog
         open={!!editing}
         event={editing}

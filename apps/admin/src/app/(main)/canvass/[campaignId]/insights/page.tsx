@@ -201,40 +201,44 @@ export default function InsightsPage() {
                 <SupportLevelBar counts={supportCounts} />
               </SectionCard>
             </div>
-
-            {funnel ? (
-              <SectionCard title="Door + text funnel">
-                <div className="space-y-2">
-                  {[
-                    { label: "Doors attempted", value: funnel.doorsAttempted },
-                    { label: "Contacted", value: funnel.contacted },
-                    { label: "Surveyed", value: funnel.surveyed },
-                    { label: "New supporters", value: funnel.newSupporters },
-                  ].map((step) => (
-                    <ProgressBar
-                      key={step.label}
-                      tone="success"
-                      value={step.value}
-                      max={Math.max(1, funnel.doorsAttempted)}
-                      label={
-                        <>
-                          <span>{step.label}</span>
-                          <span>{step.value}</span>
-                        </>
-                      }
-                    />
-                  ))}
-                </div>
-              </SectionCard>
-            ) : null}
           </>
         ) : null}
       </StateRegion>
 
-      {/* ── Goals & pace (per-campaign only) ─────────────────────────────── */}
-      {campaignId ? (
-        <div className="max-w-xl space-y-4">
-          <SectionCard title={<span className="flex items-center gap-1.5"><Target className="h-3.5 w-3.5" />Goals &amp; pace</span>}>
+      {/* ── Door + text funnel + Goals & pace ─────────────────────────────
+          Share the row on desktop (6/6, funnel left); stack full-width on mobile. */}
+      {funnel || campaignId ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {funnel ? (
+            <SectionCard title="Door + text funnel">
+              <div className="space-y-2">
+                {[
+                  { label: "Doors attempted", value: funnel.doorsAttempted },
+                  { label: "Contacted", value: funnel.contacted },
+                  { label: "Surveyed", value: funnel.surveyed },
+                  { label: "New supporters", value: funnel.newSupporters },
+                ].map((step) => (
+                  <ProgressBar
+                    key={step.label}
+                    tone="success"
+                    value={step.value}
+                    max={Math.max(1, funnel.doorsAttempted)}
+                    label={
+                      <>
+                        <span>{step.label}</span>
+                        <span>{step.value}</span>
+                      </>
+                    }
+                  />
+                ))}
+              </div>
+            </SectionCard>
+          ) : null}
+          {campaignId ? (
+            <SectionCard
+              title={<span className="flex items-center gap-1.5"><Target className="h-3.5 w-3.5" />Goals &amp; pace</span>}
+              className={funnel ? undefined : "md:col-span-2"}
+            >
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-xs text-muted-foreground">Doors target</label>
@@ -287,7 +291,8 @@ export default function InsightsPage() {
                 )}
               </div>
             ) : null}
-          </SectionCard>
+            </SectionCard>
+          ) : null}
         </div>
       ) : null}
 

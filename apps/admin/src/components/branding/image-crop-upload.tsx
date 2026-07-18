@@ -25,6 +25,9 @@ export interface ImageCropUploadProps {
   mimeType?: "image/png" | "image/jpeg";
   /** Height utility class for the preview + crop box (wide logos want shorter). */
   boxClassName?: string;
+  /** Destination folder in the /files store (default "branding"). Event covers pass
+   *  "event-covers" so uploads seed the suggested-asset library. */
+  folder?: string;
 }
 
 export function ImageCropUpload({
@@ -36,6 +39,7 @@ export function ImageCropUpload({
   helpText,
   mimeType = "image/png",
   boxClassName = "h-40",
+  folder = "branding",
 }: ImageCropUploadProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -72,7 +76,7 @@ export function ImageCropUpload({
       const blob = await getCroppedImg(imageSrc, areaPixels, mimeType);
       const ext = mimeType === "image/png" ? "png" : "jpg";
       const name = `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}.${ext}`;
-      const res = await uploadFile(new File([blob], name, { type: mimeType }), "branding");
+      const res = await uploadFile(new File([blob], name, { type: mimeType }), folder);
       if (!res.ok) {
         setError(res.error);
         return;

@@ -17,7 +17,6 @@ const STATIC_ROUTES: Array<[string, RegExp]> = [
   ["/dashboard", /dashboard|overview|command|today/i],
   ["/inbox", /inbox|conversation|message|all|no messages/i],
   ["/audience", /audience|contacts|members|no audiences/i],
-  ["/analytics", /analytic|performance|blast|report/i],
   ["/channels/text", /text|sms|message|blast|send/i],
   ["/channels/calls", /call|dial|phone|number|softphone/i],
   ["/content/surveys", /survey/i],

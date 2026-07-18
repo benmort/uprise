@@ -13,7 +13,6 @@ import {
   ListChecks,
   MapPin,
   MessageSquareText,
-  MousePointerClick,
   PlusCircle,
   Radio,
   Route,
@@ -321,39 +320,6 @@ export const upriseTourSteps: TourStep[] = [
     selector: "#tour-composer-send",
     route: composerRoute,
   },
-  // ── Analytics ────────────────────────────────────────────────────────────────
-  {
-    icon: BarChart3,
-    title: "Performance",
-    content: "Track delivery and replies in near real time.",
-    detail: "Pick any blast from the selector to load its numbers.",
-    selector: "#tour-analytics-select",
-    route: "/analytics",
-  },
-  {
-    icon: BarChart3,
-    title: "Key metrics",
-    content: "Contacted, delivered and engagement at a glance.",
-    detail: "These update live as the send progresses via a streaming connection.",
-    selector: "#tour-analytics-kpis",
-    route: "/analytics",
-  },
-  {
-    icon: Clock,
-    title: "Engagement over time",
-    content: "Watch contacts and responses build across the send.",
-    detail: "Switch the time window to zoom from the last 15 minutes out to all time.",
-    selector: "#tour-analytics-trend",
-    route: "/analytics",
-  },
-  {
-    icon: MousePointerClick,
-    title: "Recipient activity",
-    content: "Every recipient's outcome, row by row.",
-    detail: "Retry failed sends in place, or jump straight into the conversation thread.",
-    selector: "#tour-analytics-activity",
-    route: "/analytics",
-  },
   // ── Inbox ────────────────────────────────────────────────────────────────────
   {
     icon: Inbox,
@@ -418,8 +384,8 @@ export const upriseTourSteps: TourStep[] = [
 
 // ─── WhatsApp channel tour ──────────────────────────────────────────────────
 // Walks the WhatsApp-specific UI: channel toggle, template picker + variable
-// mapping, WhatsApp preview, opt-in compliance, per-channel inbox + 24h window,
-// and channel surfacing in dashboard/analytics. Uses the same seeded example blast.
+// mapping, WhatsApp preview, opt-in compliance, and the per-channel inbox + 24h
+// window. Uses the same seeded example blast.
 export const WHATSAPP_TOUR_ID = "uprise-whatsapp-channel";
 
 export const whatsappTourSteps: TourStep[] = [
@@ -504,21 +470,12 @@ export const whatsappTourSteps: TourStep[] = [
     route: "/future/sms-inbox",
   },
   {
-    icon: BarChart3,
-    title: "Channel in analytics",
-    content: "Each blast's channel shows next to the selector.",
-    detail:
-      "WhatsApp adds a READ status beyond SMS's delivered — it shows up in the status distribution and badges.",
-    selector: "#tour-analytics-select",
-    route: "/analytics",
-  },
-  {
     icon: CheckCircle2,
     title: "That's WhatsApp",
     content: "Templates, opt-in, the 24-hour window, and per-channel threads.",
     detail: "Flip any blast to WhatsApp from the composer. Re-run this tour from the help menu any time.",
     selector: "#tour-help-button",
-    route: "/analytics",
+    route: "/future/sms-inbox",
   },
 ];
 

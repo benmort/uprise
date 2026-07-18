@@ -115,15 +115,21 @@ export class TwilioProvisioningClient {
     return String(parsed.sid);
   }
 
-  /** Create a draft AU-mobile business bundle with a status callback. */
-  async createBundle(creds: TwilioCreds, friendlyName: string, email: string, statusCallback: string): Promise<string> {
+  /** Create a draft AU business bundle (mobile or local regulation) with a status callback. */
+  async createBundle(
+    creds: TwilioCreds,
+    friendlyName: string,
+    email: string,
+    statusCallback: string,
+    numberType: "mobile" | "local" = "mobile",
+  ): Promise<string> {
     const created = await withRetry(
       () =>
         this.client(creds).numbers.v2.regulatoryCompliance.bundles.create({
           friendlyName,
           email,
           isoCountry: "AU",
-          numberType: "mobile",
+          numberType,
           endUserType: "business",
           statusCallback,
         }),
@@ -166,15 +172,23 @@ export class TwilioProvisioningClient {
     };
   }
 
-  /** First available AU mobile number (throws when inventory is empty — retryable). */
-  async findAvailableAuMobile(creds: TwilioCreds): Promise<string> {
-    const numbers = await withRetry(
-      () => this.client(creds).availablePhoneNumbers("AU").mobile.list({ limit: 1 }),
+  /** First available AU number of the given type (throws when inventory is empty — retryable). */
+  async findAvailableAuNumber(creds: TwilioCreds, numberType: "mobile" | "local" = "mobile"): Promise<string> {
+    const numbers = await withRetry<Array<{ phoneNumber?: string }>>(
+      () =>
+        numberType === "local"
+          ? this.client(creds).availablePhoneNumbers("AU").local.list({ limit: 1 })
+          : this.client(creds).availablePhoneNumbers("AU").mobile.list({ limit: 1 }),
       { retries: 2 },
     );
     const first = numbers[0]?.phoneNumber;
-    if (!first) throw new Error("No AU mobile numbers available to purchase right now");
+    if (!first) throw new Error(`No AU ${numberType} numbers available to purchase right now`);
     return String(first);
+  }
+
+  /** Back-compat alias for the historical mobile-only flow. */
+  async findAvailableAuMobile(creds: TwilioCreds): Promise<string> {
+    return this.findAvailableAuNumber(creds, "mobile");
   }
 
   async purchaseNumber(

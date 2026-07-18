@@ -565,7 +565,7 @@ export default function BlastComposerPage() {
       <div className="page-stack">
         <Breadcrumbs
           items={[
-            { label: "Analytics", href: "/analytics" },
+            ...(blastId ? [{ label: "Blast Details", href: `/blasts/${encodeURIComponent(blastId)}` }] : []),
             { label: "Composer" },
           ]}
         />
@@ -579,7 +579,7 @@ export default function BlastComposerPage() {
       <div className="page-stack">
         <Breadcrumbs
           items={[
-            { label: "Analytics", href: "/analytics" },
+            ...(blastId ? [{ label: "Blast Details", href: `/blasts/${encodeURIComponent(blastId)}` }] : []),
             { label: "Composer" },
           ]}
         />
@@ -601,7 +601,6 @@ export default function BlastComposerPage() {
     <div className="page-stack">
       <Breadcrumbs
         items={[
-          { label: "Analytics", href: "/analytics" },
           ...(blastId ? [{ label: "Blast Details", href: `/blasts/${encodeURIComponent(blastId)}` }] : []),
           { label: "Composer" },
         ]}

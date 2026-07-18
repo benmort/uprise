@@ -77,7 +77,7 @@ export function EventRsvpForm(props: Props) {
               url: pageUrl,
             }}
           />
-          <ShareCard url={pageUrl} title={props.title} text={`RSVP to ${props.title}`} className="w-full text-left" />
+          <ShareCard url={pageUrl} title={props.title} text={`RSVP to ${props.title}`} qr className="w-full text-left" />
           {done.manageToken ? (
             <a
               href={`/events/rsvp/${encodeURIComponent(done.manageToken)}`}

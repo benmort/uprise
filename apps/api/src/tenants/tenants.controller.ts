@@ -217,7 +217,11 @@ export class TenantsController {
     @Body() dto: AddMemberDto,
     @Req() req: Request & { user?: AuthUser },
   ) {
-    return this.tenants.addMember(id, { ...dto, addedBy: req.user?.id });
+    return this.tenants.addMember(id, {
+      ...dto,
+      addedBy: req.user?.id,
+      actor: { userId: req.user?.id, isSuperAdmin: req.user?.isSuperAdmin },
+    });
   }
 
   @Patch(":id/members/:userId")
@@ -226,8 +230,12 @@ export class TenantsController {
     @Param("id") id: string,
     @Param("userId") userId: string,
     @Body() dto: UpdateMemberRoleDto,
+    @Req() req: Request & { user?: AuthUser },
   ) {
-    return this.tenants.updateMemberRole(id, userId, dto.role);
+    return this.tenants.updateMemberRole(id, userId, dto.role, {
+      userId: req.user?.id,
+      isSuperAdmin: req.user?.isSuperAdmin,
+    });
   }
 
   @Delete(":id/members/:userId")
@@ -243,7 +251,11 @@ export class TenantsController {
     @Body() dto: CreateInvitationDto,
     @Req() req: Request & { user?: AuthUser },
   ) {
-    return this.tenants.createInvitation(id, { ...dto, invitedBy: req.user?.id });
+    return this.tenants.createInvitation(id, {
+      ...dto,
+      invitedBy: req.user?.id,
+      actor: { userId: req.user?.id, isSuperAdmin: req.user?.isSuperAdmin },
+    });
   }
 
   @Get(":id/invitations")

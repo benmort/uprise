@@ -20,6 +20,9 @@ export interface BrandedEmailContent {
   preheader?: string;
   /** The organisation the email is from — the wordmark + footer attribution. */
   brandName: string;
+  /** The platform the email is delivered through — the "via …" footer attribution. Defaults
+   *  to "Uprise", and collapses to just the platform when the sender IS the platform. */
+  platformName?: string;
   /**
    * Absolute https URL of the sending tenant's logo. When present it replaces the text wordmark
    * in the header (email clients only load absolute, publicly reachable images).
@@ -51,6 +54,15 @@ const esc = (v: unknown): string =>
 /** A safe `#rrggbb` accent, or null — guards the raw interpolation into inline `style`. */
 function safeHex(value: unknown): string | null {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : null;
+}
+
+/** Footer attribution: "Sent by {org} via {platform}." — collapsed to "Sent by {platform}."
+ *  when the sending org IS the platform (so platform-sent mail doesn't read "Uprise via Uprise"). */
+function sentBy(brandName: string, platformName?: string): string {
+  const platform = (platformName ?? "").trim() || "Uprise";
+  return brandName.trim().toLowerCase() === platform.toLowerCase()
+    ? `Sent by ${platform}.`
+    : `Sent by ${brandName} via ${platform}.`;
 }
 
 // Considered neutral-with-ink palette (not a default blue-on-white): warm-grey ground, an ink
@@ -134,7 +146,7 @@ export function renderBrandedEmail(c: BrandedEmailContent): string {
           <tr>
             <td style="padding:18px 8px 4px;">
               <p style="margin:0;font-size:12px;line-height:1.5;color:${C.muted};">
-                Sent by ${esc(c.brandName)}. If you weren't expecting this email you can safely ignore it.
+                ${esc(sentBy(c.brandName, c.platformName))} If you weren't expecting this email you can safely ignore it.
               </p>
             </td>
           </tr>
@@ -151,6 +163,6 @@ export function renderPlainEmail(c: BrandedEmailContent): string {
   const lines: string[] = [c.heading, "", ...c.intro];
   if (c.cta) lines.push("", `${c.cta.label}: ${c.cta.url}`);
   if (c.outro?.length) lines.push("", ...c.outro);
-  lines.push("", `— ${c.brandName}`);
+  lines.push("", sentBy(c.brandName, c.platformName), `— ${c.brandName}`);
   return lines.join("\n");
 }

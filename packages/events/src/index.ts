@@ -177,7 +177,15 @@ export interface DomainEventMap {
   "payment.payment.succeeded": { paymentId: string; tenantId: string; amountCents: number };
   "payment.payment.refunded": { paymentId: string; tenantId: string; amountCents: number };
   "telephony.call.initiated": { callId: string; tenantId: string; toNumber: string };
-  "telephony.call.status-changed": { callId: string; tenantId: string; status: string };
+  "telephony.call.status-changed": {
+    callId: string;
+    tenantId: string;
+    status: string;
+    // Present on a busy/no-answer/failed transition — the provider's reason the call
+    // never connected, for failure-alerting reactions.
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  };
   "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
   "tenant.tenant.created": { tenantId: string; slug: string; name: string; networkId: string | null };
   "tenant.member.added": { tenantId: string; userId: string; role: string };

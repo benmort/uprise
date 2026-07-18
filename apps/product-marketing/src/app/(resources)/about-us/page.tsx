@@ -125,7 +125,7 @@ export default function AboutPage() {
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link
-                href="/for-campaigners"
+                href="/campaigners"
                 className="inline-flex items-center justify-center rounded-lg bg-brand-500 px-5 py-3.5 text-base font-medium text-white duration-200 hover:bg-brand-600"
               >
                 Explore the platform

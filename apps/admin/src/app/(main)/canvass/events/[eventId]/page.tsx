@@ -250,7 +250,7 @@ export default function EventDetailPage() {
 
             {event.publicRsvpEnabled ? (
               <SectionCard title="Share &amp; promote" description="Reminders send automatically 24 hours before the event.">
-                <ShareCard url={publicUrl} title={event.title} text={`RSVP to ${event.title}`} />
+                <ShareCard url={publicUrl} title={event.title} text={`RSVP to ${event.title}`} qr />
               </SectionCard>
             ) : null}
 

@@ -25,7 +25,11 @@ import {
 
 // Provisioning mutations live on system.* — a platform-operator domain the
 // tenant-owner `manage telephony.all` wildcard cannot reach (super-admin only).
+// Platform-operator gate (super-admin `manage all`) — release keeps this.
 const PROVISION = { action: "manage", resource: "system.telephony-provisioning" } as const;
+// Tenant self-serve provisioning: owners hold this via the `telephony.all` wildcard.
+// Every mutation under it is tenant-scoped in-controller (never a cross-tenant id).
+const PROVISION_TENANT = { action: "manage", resource: "telephony.provisioning" } as const;
 // Reads are owner-visible (the tenant-settings timeline); scoped in-controller.
 const READ = { action: "read", resource: "telephony.provisioning" } as const;
 // Renaming a number is owner-reachable via the `manage telephony.all` wildcard.
@@ -34,6 +38,16 @@ const MANAGE_NUMBER = { action: "manage", resource: "telephony.number" } as cons
 @Controller("telephony")
 export class TelephonyProvisioningController {
   constructor(private readonly provisioning: TelephonyProvisioningService) {}
+
+  /** A run-scoped mutation must target the caller's own tenant (super-admin exempt). */
+  private async assertRunInScope(runId: string, req: Request & { user?: AuthUser }): Promise<void> {
+    const user = req.user;
+    if (user?.isSuperAdmin) return;
+    const run = await this.provisioning.getRunWithTimeline(runId);
+    if (!user?.tenantId || run.tenantId !== user.tenantId) {
+      throw new ForbiddenException("You can only manage your own organisation's telephony");
+    }
+  }
 
   /** Non-super-admin readers see only their own tenant's rows. */
   private scopeTenant(req: Request & { user?: AuthUser }, requested?: string): string | undefined {
@@ -47,40 +61,47 @@ export class TelephonyProvisioningController {
   }
 
   @Post("provisioning-runs")
-  @RequirePermission(PROVISION)
+  @RequirePermission(PROVISION_TENANT)
   async startRun(@Body() dto: StartProvisioningRunDto, @Req() req: Request & { user?: AuthUser }) {
+    const tenantId = this.scopeTenant(req, dto.tenantId) ?? dto.tenantId;
+    if (!tenantId) throw new ForbiddenException("No tenant in scope for this provisioning run");
     return this.provisioning.startRun({
-      tenantId: dto.tenantId,
+      tenantId,
       campaignId: dto.campaignId ?? null,
       mode: dto.mode,
       byoAccountSid: dto.byoAccountSid,
       byoAuthToken: dto.byoAuthToken,
       friendlyName: dto.friendlyName,
+      numberType: dto.numberType,
       complianceInput: dto.complianceInput,
       requestedById: req.user?.id ?? null,
     });
   }
 
   @Post("provisioning-runs/:id/documents")
-  @RequirePermission(PROVISION)
+  @RequirePermission(PROVISION_TENANT)
   @UseInterceptors(FileInterceptor("file"))
   async uploadDocument(
     @Param("id") id: string,
     @Body() dto: UploadDocumentDto,
     @UploadedFile() file: { buffer?: Buffer; originalname?: string; mimetype?: string },
+    @Req() req: Request & { user?: AuthUser },
   ) {
+    await this.assertRunInScope(id, req);
     return this.provisioning.addDocument(id, file, dto.type);
   }
 
   @Post("provisioning-runs/:id/retry")
-  @RequirePermission(PROVISION)
-  async retry(@Param("id") id: string) {
+  @RequirePermission(PROVISION_TENANT)
+  async retry(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    await this.assertRunInScope(id, req);
     return this.provisioning.retry(id);
   }
 
   @Post("provisioning-runs/:id/resubmit")
-  @RequirePermission(PROVISION)
-  async resubmit(@Param("id") id: string, @Body() dto: ResubmitRunDto) {
+  @RequirePermission(PROVISION_TENANT)
+  async resubmit(@Param("id") id: string, @Body() dto: ResubmitRunDto, @Req() req: Request & { user?: AuthUser }) {
+    await this.assertRunInScope(id, req);
     return this.provisioning.resubmit(id, dto.complianceInput);
   }
 
@@ -99,6 +120,19 @@ export class TelephonyProvisioningController {
       throw new ForbiddenException("You can only view your own organisation's telephony");
     }
     return run;
+  }
+
+  /**
+   * Org-KYC → compliance-form prefill for the tenant self-serve dialog: legal
+   * name/ABN from OrgCredential, the primary contact, and the first address.
+   * Missing pieces come back empty — the form stays editable either way.
+   */
+  @Get("compliance-prefill")
+  @RequirePermission(READ)
+  async compliancePrefill(@Req() req: Request & { user?: AuthUser }) {
+    const tenantId = this.scopeTenant(req);
+    if (!tenantId) throw new ForbiddenException("No tenant in scope");
+    return this.provisioning.compliancePrefill(tenantId);
   }
 
   @Get("numbers")
@@ -122,7 +156,7 @@ export class TelephonyProvisioningController {
     @Body() dto: SetNumberNicknameDto,
     @Req() req: Request & { user?: AuthUser },
   ) {
-    return this.provisioning.setNickname(id, dto.nickname, this.scopeTenant(req));
+    return this.provisioning.setNickname(id, dto.nickname, this.scopeTenant(req), dto.purpose);
   }
 
   /**

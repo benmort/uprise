@@ -79,7 +79,11 @@ describe("TenantsService", () => {
 
   it("createInvitation issues a token, emits the event, and sends the invite email inline", async () => {
     const { svc, outbox, dispatcher } = setup();
-    const res = await svc.createInvitation("t1", { email: "New@X.Y", role: AppUserRole.VOLUNTEER });
+    const res = await svc.createInvitation("t1", {
+      email: "New@X.Y",
+      role: AppUserRole.VOLUNTEER,
+      actor: { isSuperAdmin: true },
+    });
     expect(res.token).toEqual(expect.any(String));
     expect(res.token.length).toBeGreaterThan(20);
     expect(outbox.append).toHaveBeenCalledWith(
@@ -100,7 +104,11 @@ describe("TenantsService", () => {
 
   it("createInvitation sends an SMS for a phone-only invite (not email)", async () => {
     const { svc, dispatcher } = setup();
-    const res = await svc.createInvitation("t1", { phone: "+61400000000", role: AppUserRole.VOLUNTEER });
+    const res = await svc.createInvitation("t1", {
+      phone: "+61400000000",
+      role: AppUserRole.VOLUNTEER,
+      actor: { isSuperAdmin: true },
+    });
     expect(dispatcher.sendSms).toHaveBeenCalledWith(
       expect.objectContaining({
         toPhone: "+61400000000",
@@ -117,6 +125,7 @@ describe("TenantsService", () => {
       phone: "+61400000000",
       role: AppUserRole.VOLUNTEER,
       message: "Join us: {{invite_link}} — see you there",
+      actor: { isSuperAdmin: true },
     });
     expect(dispatcher.sendSms).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -131,6 +140,7 @@ describe("TenantsService", () => {
       phone: "+61400000000",
       role: AppUserRole.VOLUNTEER,
       message: "Come volunteer with us!",
+      actor: { isSuperAdmin: true },
     });
     expect(dispatcher.sendSms).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -146,6 +156,7 @@ describe("TenantsService", () => {
       role: AppUserRole.VOLUNTEER,
       subject: "Come help out",
       message: "Tap here: {{invite_link}}",
+      actor: { isSuperAdmin: true },
     });
     expect(dispatcher.sendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -163,7 +174,11 @@ describe("TenantsService", () => {
   it("createInvitation still succeeds when the inline send throws (best-effort)", async () => {
     const { svc, dispatcher } = setup();
     dispatcher.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
-    const res = await svc.createInvitation("t1", { email: "x@y.z", role: AppUserRole.VOLUNTEER });
+    const res = await svc.createInvitation("t1", {
+      email: "x@y.z",
+      role: AppUserRole.VOLUNTEER,
+      actor: { isSuperAdmin: true },
+    });
     expect(res.token).toEqual(expect.any(String));
     expect(dispatcher.sendEmail).toHaveBeenCalled();
   });
@@ -171,7 +186,11 @@ describe("TenantsService", () => {
   it("addMember resolves the user by email and creates the membership", async () => {
     const { svc, prisma, outbox } = setup();
     prisma.tenantMember.findUnique.mockResolvedValueOnce(null); // not yet a member
-    await svc.addMember("t1", { email: "a@b.c", role: AppUserRole.ORGANISER });
+    await svc.addMember("t1", {
+      email: "a@b.c",
+      role: AppUserRole.ORGANISER,
+      actor: { isSuperAdmin: true },
+    });
     expect(prisma.tenantMember.create).toHaveBeenCalled();
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
@@ -183,14 +202,24 @@ describe("TenantsService", () => {
     const { svc, prisma } = setup();
     prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "ORGANISER" });
     await expect(
-      svc.addMember("t1", { email: "a@b.c", role: AppUserRole.VOLUNTEER }),
+      svc.addMember("t1", {
+        email: "a@b.c",
+        role: AppUserRole.VOLUNTEER,
+        actor: { isSuperAdmin: true },
+      }),
     ).rejects.toThrow("already_member");
   });
 
   it("addMember throws when the user does not exist", async () => {
     const { svc, prisma } = setup();
     prisma.user.findUnique.mockResolvedValueOnce(null);
-    await expect(svc.addMember("t1", { email: "nope@x.y", role: AppUserRole.VOLUNTEER })).rejects.toThrow();
+    await expect(
+      svc.addMember("t1", {
+        email: "nope@x.y",
+        role: AppUserRole.VOLUNTEER,
+        actor: { isSuperAdmin: true },
+      }),
+    ).rejects.toThrow();
   });
 
   it("createNetwork emits tenant.network.created", async () => {
@@ -220,7 +249,7 @@ describe("TenantsService", () => {
 
   it("updateMemberRole emits tenant.member.role-updated", async () => {
     const { svc, outbox } = setup();
-    await svc.updateMemberRole("t1", "u1", AppUserRole.VOLUNTEER);
+    await svc.updateMemberRole("t1", "u1", AppUserRole.VOLUNTEER, { isSuperAdmin: true });
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventType: "tenant.member.role-updated" }),
@@ -404,5 +433,100 @@ describe("TenantsService brand payloads", () => {
     const rows = await svc.searchTenants();
     expect(rows[0]).toMatchObject({ id: "t1", logoBlockUrl: "https://b/a.png", logoLandscapeUrl: null });
     expect(rows[1]).toMatchObject({ id: "t2", logoBlockUrl: null, logoLandscapeUrl: null });
+  });
+});
+
+// The role hierarchy is OWNER > ORGANISER > VOLUNTEER; the actor's rank is looked up fresh
+// from their own TenantMember row (never trusted from the session). Super-admins bypass.
+describe("TenantsService role hierarchy", () => {
+  it("createInvitation forbids a non-owner inviting an OWNER", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "actor", role: "ORGANISER" });
+    await expect(
+      svc.createInvitation("t1", {
+        email: "x@y.z",
+        role: AppUserRole.OWNER,
+        actor: { userId: "actor" },
+      }),
+    ).rejects.toThrow("at or below your own");
+    expect(outbox.append).not.toHaveBeenCalled();
+  });
+
+  it("createInvitation lets an OWNER invite an OWNER", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "actor", role: "OWNER" });
+    const res = await svc.createInvitation("t1", {
+      email: "x@y.z",
+      role: AppUserRole.OWNER,
+      actor: { userId: "actor" },
+    });
+    expect(res.token).toEqual(expect.any(String));
+  });
+
+  it("addMember forbids an organiser granting OWNER", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "actor", role: "ORGANISER" });
+    await expect(
+      svc.addMember("t1", {
+        email: "a@b.c",
+        role: AppUserRole.OWNER,
+        actor: { userId: "actor" },
+      }),
+    ).rejects.toThrow("at or below your own");
+  });
+
+  it("updateMemberRole forbids promoting another member above your own rank", async () => {
+    const { svc, prisma } = setup();
+    // call 1: the target; call 2: the actor's own membership (an organiser).
+    prisma.tenantMember.findUnique
+      .mockResolvedValueOnce({ tenantId: "t1", userId: "u2", role: "VOLUNTEER" })
+      .mockResolvedValueOnce({ tenantId: "t1", userId: "actor", role: "ORGANISER" });
+    await expect(
+      svc.updateMemberRole("t1", "u2", AppUserRole.OWNER, { userId: "actor" }),
+    ).rejects.toThrow("at or below your own");
+  });
+
+  it("updateMemberRole forbids raising your own role", async () => {
+    const { svc, prisma } = setup();
+    // call 1: the target (self); call 2: the actor's own membership.
+    prisma.tenantMember.findUnique
+      .mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "VOLUNTEER" })
+      .mockResolvedValueOnce({ tenantId: "t1", userId: "u1", role: "ORGANISER" });
+    await expect(
+      svc.updateMemberRole("t1", "u1", AppUserRole.ORGANISER, { userId: "u1" }),
+    ).rejects.toThrow("raise your own role");
+  });
+
+  it("updateMemberRole lets you demote yourself", async () => {
+    const { svc, prisma, outbox } = setup();
+    // Self is an OWNER stepping down; every membership lookup + the last-owner check see an OWNER.
+    prisma.tenantMember.findUnique.mockResolvedValue({ tenantId: "t1", userId: "u1", role: "OWNER" });
+    prisma.tenantMember.count.mockResolvedValue(2); // not the last owner
+    await svc.updateMemberRole("t1", "u1", AppUserRole.ORGANISER, { userId: "u1" });
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.member.role-updated" }),
+    );
+  });
+
+  it("updateMemberRole forbids changing a peer at your level", async () => {
+    const { svc, prisma } = setup();
+    // call 1: the target (a peer ORGANISER); call 2: the actor (also ORGANISER).
+    prisma.tenantMember.findUnique
+      .mockResolvedValueOnce({ tenantId: "t1", userId: "u2", role: "ORGANISER" })
+      .mockResolvedValueOnce({ tenantId: "t1", userId: "actor", role: "ORGANISER" });
+    await expect(
+      svc.updateMemberRole("t1", "u2", AppUserRole.VOLUNTEER, { userId: "actor" }),
+    ).rejects.toThrow("at your level or above");
+  });
+
+  it("updateMemberRole lets a super-admin bypass the hierarchy", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({ tenantId: "t1", userId: "u2", role: "ORGANISER" });
+    await svc.updateMemberRole("t1", "u2", AppUserRole.OWNER, { isSuperAdmin: true });
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.member.role-updated" }),
+    );
   });
 });

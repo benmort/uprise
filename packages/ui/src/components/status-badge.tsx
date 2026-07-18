@@ -51,6 +51,16 @@ const STATUS_STYLES: Record<string, string> = {
   RINGING: "bg-primary-container text-foreground",
   BUSY: "bg-warning-container text-warning-foreground",
   NO_ANSWER: "bg-surface-variant text-foreground",
+  // Provisioning runs (telephony/email; ACTIVE/FAILED reuse the above)
+  REQUESTED: "bg-secondary-container text-secondary-foreground",
+  SUBACCOUNT_CREATED: "bg-primary-container text-foreground",
+  COMPLIANCE_DRAFT: "bg-primary-container text-foreground",
+  COMPLIANCE_SUBMITTED: "bg-warning-container text-warning-foreground",
+  COMPLIANCE_APPROVED: "bg-success-container text-success",
+  COMPLIANCE_REJECTED: "bg-error-container text-error",
+  NUMBER_PURCHASED: "bg-primary-container text-foreground",
+  WEBHOOKS_CONFIGURED: "bg-primary-container text-foreground",
+  RELEASED: "bg-surface-variant text-foreground",
 };
 
 const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -85,6 +95,15 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   RINGING: PhoneCall,
   BUSY: PhoneOff,
   NO_ANSWER: PhoneMissed,
+  REQUESTED: CircleDashed,
+  SUBACCOUNT_CREATED: Clock3,
+  COMPLIANCE_DRAFT: Clock3,
+  COMPLIANCE_SUBMITTED: Clock3,
+  COMPLIANCE_APPROVED: CheckCircle2,
+  COMPLIANCE_REJECTED: AlertCircle,
+  NUMBER_PURCHASED: PhoneCall,
+  WEBHOOKS_CONFIGURED: Clock3,
+  RELEASED: PhoneOff,
 };
 
 export function StatusBadge({

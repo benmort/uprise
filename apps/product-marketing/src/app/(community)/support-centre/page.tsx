@@ -13,7 +13,7 @@ const CHANNELS = [
     icon: Rocket,
     title: "Getting started",
     body: "New to Uprise? Set up your organisation, import contacts, and send your first text or cut your first turf.",
-    href: "/for-campaigners",
+    href: "/campaigners",
     cta: "Explore the platform",
   },
   {

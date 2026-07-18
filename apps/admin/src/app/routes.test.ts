@@ -40,12 +40,6 @@ describe("major route files", () => {
     expect(source).toContain("Open Composer");
   });
 
-  it("contains analytics page scaffold", () => {
-    const source = read("analytics/page.tsx");
-    expect(source).toContain("Review Blast Performance");
-    expect(source).toContain("Recipient Activity Log");
-  });
-
   it("contains inbox page scaffold", () => {
     // /inbox renders the default folder via the shared list view; the shell
     // (breadcrumb, sidebar, compose) lives in inbox/layout.tsx.

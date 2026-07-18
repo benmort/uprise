@@ -18,6 +18,7 @@ export type PageTab =
   | "security"
   | "compliance"
   | "alerts"
+  | "team"
   | "flags"
   | "queue";
 
@@ -37,6 +38,7 @@ export const TAB_SEGMENT: Record<PageTab, string> = {
   security: "security",
   compliance: "compliance",
   alerts: "alerts",
+  team: "team",
   flags: "feature-flags",
   queue: "queue",
 };
@@ -49,3 +51,42 @@ const SEGMENT_TAB = Object.fromEntries(
 export function sectionToTab(section: string | undefined): PageTab {
   return (section && SEGMENT_TAB[section]) || "tenant";
 }
+
+// The Settings tab bar, in display order. Shared by the tab-bar component (SettingsTabs)
+// and kept in sync with the sidebar (buildNav's settings group). "Team" is appended last
+// per the design; it owns its own /settings/team page rather than a GeneralSettings content
+// case — exactly like the Data explorer's Politicians/Policies tabs, which are separate
+// pages that still render the shared DataExplorerTabs bar.
+export const SETTINGS_PRIMARY_TABS: readonly { key: PageTab; label: string; ownerOnly?: boolean }[] = [
+  { key: "tenant", label: "General" },
+  { key: "organisation", label: "Organisation" },
+  { key: "branding", label: "Branding" },
+  { key: "business", label: "Business & Legal", ownerOnly: true },
+  { key: "contacts", label: "Contacts", ownerOnly: true },
+  { key: "addresses", label: "Addresses", ownerOnly: true },
+  { key: "access", label: "Access", ownerOnly: true },
+  { key: "domains", label: "Domains" },
+  { key: "integrations", label: "Integrations" },
+  { key: "security", label: "Security", ownerOnly: true },
+  { key: "compliance", label: "Compliance" },
+  { key: "alerts", label: "Alerts" },
+  { key: "team", label: "Team" },
+];
+/** Tabs only a workspace OWNER (or super-admin) may view/change — see SETTINGS_PRIMARY_TABS. */
+export const OWNER_ONLY_TABS: ReadonlySet<PageTab> = new Set(
+  SETTINGS_PRIMARY_TABS.filter((t) => t.ownerOnly).map((t) => t.key),
+);
+
+/** The display label for a settings tab (falls back gracefully for the super-admin row). */
+export function settingsTabLabel(tab: PageTab): string {
+  return (
+    SETTINGS_PRIMARY_TABS.find((t) => t.key === tab)?.label ??
+    SETTINGS_SUPERADMIN_TABS.find((t) => t.key === tab)?.label ??
+    "This section"
+  );
+}
+// Row 2 — super-admin only, rendered lock-badged + greyed by SettingsTabs.
+export const SETTINGS_SUPERADMIN_TABS: readonly { key: PageTab; label: string }[] = [
+  { key: "flags", label: "Feature Flags" },
+  { key: "queue", label: "Queue & Redis" },
+];

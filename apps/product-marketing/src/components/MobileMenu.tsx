@@ -101,11 +101,11 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                     Plans
                   </Link>
                   <Link
-                    href="/for-campaigners"
+                    href="/campaigners"
                     className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
                     onClick={onClose}
                   >
-                    For Campaigners
+                    Campaigners
                   </Link>
                   <Link
                     href="/integrations"
@@ -113,6 +113,13 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                     onClick={onClose}
                   >
                     Integrations
+                  </Link>
+                  <Link
+                    href="/developers"
+                    className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
+                    onClick={onClose}
+                  >
+                    Developers
                   </Link>
                 </div>
               </div>

@@ -5,9 +5,9 @@
 // Org/brand tabs persist via orgProfile.*; Tenant & Access via tenants.update; the last
 // three tabs are the former /settings sections (shared from components/settings).
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { Loader2, Lock, Save, Settings } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 import {
   orgProfile,
   tenants,
@@ -34,7 +34,7 @@ import type {
   OrganisationContactFormValues,
   OrganisationAddressFormValues,
 } from "./types";
-import { TAB_SEGMENT, type PageTab } from "./sections";
+import { type PageTab, OWNER_ONLY_TABS, settingsTabLabel } from "./sections";
 import { SettingsTabSkeleton } from "./settings-tab-skeleton";
 import {
   ResponderAlertsSettings,
@@ -44,35 +44,16 @@ import {
 } from "@/components/settings/observability";
 import { SecuritySettings } from "@/components/settings/security";
 import { DeleteWorkspaceCard } from "@/components/settings/delete-workspace";
+import { InstallAppCard } from "@/components/pwa/install-app-card";
 import { ComplianceSettings } from "@/components/settings/compliance";
 import { IntegrationsSettings } from "@/components/settings/integrations";
 import { DomainsSettings } from "@/components/settings/domains-settings";
 import { getSession } from "@/lib/session";
 import { useToast } from "@/components/ui/toast";
-import { cn } from "@/lib/utils";
 
-// Row 1 — any admin. "Tenant" (network + tenant identity) leads; "Access" keeps its
-// slot but now holds only the Access Control card (see TenantForm's `section` prop).
-const PRIMARY_TABS = [
-  { key: "tenant", label: "Tenant" },
-  { key: "organisation", label: "Organisation" },
-  { key: "branding", label: "Branding" },
-  { key: "business", label: "Business & Legal" },
-  { key: "contacts", label: "Contacts" },
-  { key: "addresses", label: "Addresses" },
-  { key: "access", label: "Access" },
-  { key: "domains", label: "Domains" },
-  { key: "integrations", label: "Integrations" },
-  { key: "security", label: "Security" },
-  { key: "compliance", label: "Compliance" },
-  { key: "alerts", label: "Alerts" },
-] as const;
-// Row 2 — super-admin only. Rendered lock-badged + greyed, and the whole row only
-// appears when isSuperAdmin (content stays defensively gated by TenantLockedSection).
-const SUPERADMIN_TABS = [
-  { key: "flags", label: "Feature Flags" },
-  { key: "queue", label: "Queue & Redis" },
-] as const;
+// The tab bar (SETTINGS_PRIMARY_TABS / SETTINGS_SUPERADMIN_TABS) + segment↔tab mapping
+// live in ./sections (a non-client module) and render via <SettingsTabs>, shared with the
+// standalone /settings/team page and kept in sync with the sidebar.
 // Tabs that fetch their own data and own their loading state (their content components
 // render their own skeletons). They render straight away rather than waiting behind the
 // settings skeleton, which reflects the orgProfile / tenant fetch only.
@@ -458,6 +439,13 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
     </div>
   );
 
+  // OWNER (or super-admin) gate for the sensitive tabs (Business & Legal, Contacts,
+  // Addresses, Access, Security). `awaitingRole` holds the content behind a skeleton until
+  // the session role resolves, so we never flash owner-only content to an organiser.
+  const isOwner = isSuperAdmin || role === "OWNER";
+  const roleLocked = OWNER_ONLY_TABS.has(tab) && !isOwner;
+  const awaitingRole = OWNER_ONLY_TABS.has(tab) && !sessionLoaded;
+
   return (
     <AdminOrHigher>
       <section className="page-stack">
@@ -467,48 +455,9 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
           description="Your workspace identity, brand assets, legal details and operational preferences. Each tab saves on its own."
         />
 
-        {/* Tab pills — row 1 for any admin; row 2 (super-admin only) is lock-badged
-            and greyed, and only rendered when the session is a super-admin. */}
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-1 rounded-xl border border-border p-0.5">
-            {PRIMARY_TABS.map((t) => (
-              <Link
-                key={t.key}
-                href={`/settings/${TAB_SEGMENT[t.key]}`}
-                aria-current={tab === t.key ? "page" : undefined}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-                  tab === t.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
-                )}
-              >
-                {t.label}
-              </Link>
-            ))}
-          </div>
-          {isSuperAdmin ? (
-            <div className="flex flex-wrap items-center gap-1 rounded-xl border border-dashed border-border/70 bg-surface-variant/30 p-0.5">
-              <span className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                Super-admin
-              </span>
-              {SUPERADMIN_TABS.map((t) => (
-                <Link
-                  key={t.key}
-                  href={`/settings/${TAB_SEGMENT[t.key]}`}
-                  aria-current={tab === t.key ? "page" : undefined}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-                    tab === t.key
-                      ? "bg-primary text-white"
-                      : "text-muted-foreground hover:bg-surface-variant hover:text-foreground",
-                  )}
-                >
-                  <Lock className="h-3 w-3" />
-                  {t.label}
-                </Link>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        {/* Tab bar — shared with the /settings/team page; owner-only tabs lock for non-owners,
+            the super-admin row appears only for super-admins. */}
+        <SettingsTabs active={tab} isSuperAdmin={isSuperAdmin} isOwner={isOwner} />
 
         {loadError ? (
           <div className="rounded-md border border-error/30 bg-error-container/40 p-3 text-sm text-error">
@@ -516,8 +465,16 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
           </div>
         ) : null}
 
-        {loading && !SELF_CONTAINED_TABS.includes(tab) ? (
+        {(loading && !SELF_CONTAINED_TABS.includes(tab)) || awaitingRole ? (
           <SettingsTabSkeleton tab={tab} />
+        ) : roleLocked ? (
+          <div className="rounded-xl border border-border bg-surface-variant/30 p-10 text-center">
+            <Lock className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
+            <p className="font-semibold text-foreground">{settingsTabLabel(tab)} is owner-only</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+              Only a workspace owner can view or change this. Ask an owner if you need access.
+            </p>
+          </div>
         ) : (
           <div className="space-y-6">
             {tab === "tenant" ? (
@@ -529,6 +486,7 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
                 ) : (
                   <p className="text-sm text-muted-foreground">No active tenant to configure.</p>
                 )}
+                <InstallAppCard />
                 <DeleteWorkspaceCard role={role} isSuperAdmin={isSuperAdmin} sessionLoaded={sessionLoaded} />
               </>
             ) : null}

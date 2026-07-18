@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   createEvent,
   updateEvent,
-  uploadEventCover,
   type EventDetail,
   type EventStatus,
   type EventSummary,
@@ -14,6 +13,8 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { ImageCropUpload } from "@/components/branding/image-crop-upload";
+import { CoverAssetPicker } from "@/components/events/cover-asset-picker";
 import { useToast } from "@/components/ui/toast";
 
 /** ISO → the value a <input type="datetime-local"> expects (local time, no seconds). */
@@ -69,21 +70,7 @@ export function EventFormDialog({
   const { showToast } = useToast();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const editing = !!event;
-
-  const onCoverFile = async (file: File | undefined) => {
-    if (!file || !event) return;
-    setUploading(true);
-    const res = await uploadEventCover(event.id, file);
-    setUploading(false);
-    if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't upload image", description: res.error });
-      return;
-    }
-    setForm((f) => ({ ...f, imageUrl: res.data.imageUrl }));
-    showToast({ tone: "success", title: "Cover uploaded" });
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -182,25 +169,20 @@ export function EventFormDialog({
           <Input id="ev-end" type="datetime-local" value={form.endsAt} onChange={(e) => set("endsAt", e.target.value)} />
         </Field>
       </div>
-      <Field label="Cover image" htmlFor="ev-img" hint={editing ? "Paste a URL or upload a file" : "Paste a URL (upload once the event is saved)"}>
-        <Input id="ev-img" value={form.imageUrl} onChange={(e) => set("imageUrl", e.target.value)} placeholder="https://…" />
-      </Field>
-      {editing ? (
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-primary">
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => onCoverFile(e.target.files?.[0])}
-            disabled={uploading}
-          />
-          {uploading ? "Uploading…" : "Upload a cover image"}
-        </label>
-      ) : null}
-      {form.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={form.imageUrl} alt="" className="h-24 w-full rounded-lg object-cover" />
-      ) : null}
+      <ImageCropUpload
+        label="Cover image"
+        value={form.imageUrl || null}
+        onChange={(url) => set("imageUrl", url ?? "")}
+        aspect={16 / 9}
+        mimeType="image/jpeg"
+        folder="event-covers"
+        boxClassName="h-40"
+        helpText="Recommended 1200×675 or larger. JPEG."
+      />
+      <div>
+        <p className="mb-2 text-sm font-medium text-foreground">Suggested cover images</p>
+        <CoverAssetPicker value={form.imageUrl || null} onSelect={(url) => set("imageUrl", url)} />
+      </div>
       <Field label="Status" htmlFor="ev-status">
         <SegmentedControl
           value={form.status}

@@ -466,6 +466,34 @@ describe("telephony + email provisioning", () => {
     expect(bodyOf(init)).toMatchObject({ nickname: "Field team" });
   });
 
+  it("telephony.setPurpose PATCHes the number with a purpose body", async () => {
+    await telephony.setPurpose("n 1", "transactional");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/telephony/numbers/n%201`);
+    expect(init.method).toBe("PATCH");
+    expect(bodyOf(init)).toEqual({ purpose: "transactional" });
+  });
+
+  it("telephony.compliancePrefill GETs the prefill", async () => {
+    await telephony.compliancePrefill();
+    expect(call()[0]).toBe(`${BASE}/telephony/compliance-prefill`);
+  });
+
+  it("telephony.startRun carries numberType when provided", async () => {
+    await telephony.startRun({
+      mode: "SUBACCOUNT",
+      numberType: "local",
+      complianceInput: {
+        legalName: "Acme",
+        contactFirstName: "A",
+        contactLastName: "B",
+        email: "a@x.com",
+        address: { street: "1 St", city: "Town", region: "VIC", postalCode: "3000" },
+      },
+    });
+    expect(bodyOf(call()[1])).toMatchObject({ numberType: "local" });
+  });
+
   it("emailProvisioning.startRun POSTs to /email-provisioning/runs", async () => {
     await emailProvisioning.startRun({
       tenantId: "t1",

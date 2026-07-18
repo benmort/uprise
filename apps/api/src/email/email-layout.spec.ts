@@ -27,6 +27,17 @@ describe("renderBrandedEmail", () => {
     expect(html).toContain("paste this link into your browser");
   });
 
+  it("attributes the footer to the org 'via' the platform, defaulting to Uprise", () => {
+    expect(renderBrandedEmail(base)).toContain("Sent by Common Threads via Uprise.");
+    expect(renderBrandedEmail({ ...base, platformName: "Field" })).toContain("Sent by Common Threads via Field.");
+  });
+
+  it("collapses the footer to just the platform when the sender IS the platform", () => {
+    const html = renderBrandedEmail({ ...base, brandName: "Uprise" });
+    expect(html).toContain("Sent by Uprise.");
+    expect(html).not.toContain("via Uprise");
+  });
+
   it("hides the preheader as a zero-height snippet", () => {
     const html = renderBrandedEmail(base);
     expect(html).toContain("You've been invited to join Common Threads.");

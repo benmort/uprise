@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, Share2, UserPlus } from "lucide-react";
+import { Check, Copy, QrCode as QrCodeIcon, Share2, UserPlus } from "lucide-react";
 import { getAuthAppUrl } from "@uprise/api-client";
+import { QrCode } from "@uprise/ui";
 import { SectionCard } from "@uprise/field";
 import { getSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export function ShareSignupLinkCard({ campaignId }: { campaignId?: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [canShare, setCanShare] = useState(false);
+  const [showQr, setShowQr] = useState(false);
 
   useEffect(() => {
     setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
@@ -69,24 +71,35 @@ export function ShareSignupLinkCard({ campaignId }: { campaignId?: string }) {
       }
     >
       {url ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2.5">
-            <UserPlus className="h-4 w-4 shrink-0 text-primary" />
-            <span className="min-w-0 flex-1 truncate font-mono text-sm text-foreground" title={url}>
-              {url}
-            </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button onClick={() => void copy()}>
-              {copied ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />}
-              {copied ? "Copied!" : "Copy link"}
-            </Button>
-            {canShare ? (
-              <Button variant="outline" onClick={() => void share()} title="Share via your device">
-                <Share2 className="h-4 w-4" />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2.5">
+              <UserPlus className="h-4 w-4 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate font-mono text-sm text-foreground" title={url}>
+                {url}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button onClick={() => void copy()}>
+                {copied ? <Check className="mr-1.5 h-4 w-4" /> : <Copy className="mr-1.5 h-4 w-4" />}
+                {copied ? "Copied!" : "Copy link"}
               </Button>
-            ) : null}
+              <Button
+                variant={showQr ? "secondary" : "outline"}
+                aria-pressed={showQr}
+                onClick={() => setShowQr((v) => !v)}
+                title="Show a QR code for this link"
+              >
+                <QrCodeIcon className="h-4 w-4" />
+              </Button>
+              {canShare ? (
+                <Button variant="outline" onClick={() => void share()} title="Share via your device">
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
           </div>
+          {showQr ? <QrCode value={url} size={176} /> : null}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">Preparing your signup link…</p>

@@ -258,6 +258,11 @@ export class WebhooksController {
       Price?: string;
       PriceUnit?: string;
       AccountSid?: string;
+      // Twilio posts these on a failed/busy/no-answer call so we can record WHY it never
+      // connected (e.g. ErrorCode 13224, SipResponseCode 486). Absent on success.
+      ErrorCode?: string;
+      ErrorMessage?: string;
+      SipResponseCode?: string;
     },
     @Req() req: Request,
     @Query("callId") callId?: string,
@@ -279,6 +284,9 @@ export class WebhooksController {
             : undefined,
         currency: body?.PriceUnit || undefined,
         startedAt: status === "in-progress" ? new Date() : undefined,
+        errorCode: body?.ErrorCode ? String(body.ErrorCode) : undefined,
+        errorMessage: body?.ErrorMessage ? String(body.ErrorMessage) : undefined,
+        sipCode: body?.SipResponseCode ? String(body.SipResponseCode) : undefined,
       },
       callId,
     );
@@ -295,7 +303,7 @@ export class WebhooksController {
   @Post("voice-outbound")
   @Header("Content-Type", "application/xml")
   async voiceOutbound(
-    @Body() body: { To?: string; From?: string; AccountSid?: string; contactId?: string },
+    @Body() body: { To?: string; From?: string; AccountSid?: string; contactId?: string; fromNumberId?: string },
     @Req() req: Request,
   ): Promise<string> {
     const token = await this.telephonyAuth.tokenForAccountSid(body?.AccountSid);
@@ -307,6 +315,8 @@ export class WebhooksController {
     }
     const { twiml } = await this.calls.startBrowserCall({
       tenantId,
+      // Optional dialler choice; validated tenant-scoped + voice-capable in the service.
+      fromNumberId: body?.fromNumberId || null,
       toNumber: to,
       contactId: body?.contactId || null,
       accountSid: body?.AccountSid,

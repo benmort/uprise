@@ -46,6 +46,8 @@ export type StartRunInput = {
   byoAccountSid?: string;
   byoAuthToken?: string;
   friendlyName?: string;
+  /** "mobile" (SMS, historical default) or "local" (voice caller-id capable). */
+  numberType?: "mobile" | "local";
   complianceInput: ComplianceInput;
   requestedById?: string | null;
 };
@@ -211,6 +213,38 @@ export class TelephonyProvisioningService {
   }
 
   // ── lifecycle ───────────────────────────────────────────────────────
+  /** The number type a run purchases ("mobile" unless explicitly "local"). */
+  private runNumberType(run: { numberType?: string | null }): "mobile" | "local" {
+    return run.numberType === "local" ? "local" : "mobile";
+  }
+
+  /** Org KYC → a best-effort ComplianceInput prefill (empty strings where unknown). */
+  async compliancePrefill(tenantId: string): Promise<ComplianceInput> {
+    const profile = await this.prisma.orgProfile.findFirst({
+      where: { tenantId },
+      include: { contacts: true, addresses: true, credential: true },
+    });
+    const contact =
+      profile?.contacts.find((c) => c.isPrimaryContact) ?? profile?.contacts[0] ?? null;
+    const address = profile?.addresses[0] ?? null;
+    return {
+      legalName: profile?.credential?.legalTradingName || profile?.name || "",
+      contactFirstName: contact?.firstName || "",
+      contactLastName: contact?.lastName || "",
+      email: contact?.email || "",
+      businessNumber:
+        profile?.credential?.australianBusinessNumber ||
+        profile?.credential?.australianCompanyNumber ||
+        undefined,
+      address: {
+        street: [address?.line1, address?.line2].filter(Boolean).join(", "),
+        city: address?.suburb || address?.city || "",
+        region: address?.state || "",
+        postalCode: address?.postcode || "",
+      },
+    };
+  }
+
   async startRun(input: StartRunInput) {
     const friendlyName = input.friendlyName?.trim() || `uprise ${input.tenantId}`;
     return this.prisma.$transaction(async (tx) => {
@@ -238,6 +272,7 @@ export class TelephonyProvisioningService {
           campaignId: input.campaignId ?? null,
           accountId,
           status: S.REQUESTED,
+          numberType: input.numberType === "local" ? "local" : "mobile",
           complianceInput: input.complianceInput as unknown as Prisma.InputJsonValue,
           requestedById: input.requestedById ?? null,
         },
@@ -444,9 +479,17 @@ export class TelephonyProvisioningService {
       const creds = await this.accountCreds(run.accountId);
       const input = this.complianceInputOf(run);
 
-      // Reuse: any prior number of this tenant that carries an approved bundle.
+      // Reuse: a prior number of this tenant with an approved bundle — but only of
+      // the SAME regulation class (a mobile bundle cannot purchase a local number).
+      const wantType = this.runNumberType(run);
       const prior = await this.prisma.telephonyPhoneNumber.findFirst({
-        where: { tenantId: run.tenantId, accountId: run.accountId, bundleSid: { not: null }, addressSid: { not: null } },
+        where: {
+          tenantId: run.tenantId,
+          accountId: run.accountId,
+          bundleSid: { not: null },
+          addressSid: { not: null },
+          phoneNumberE164: wantType === "mobile" ? { startsWith: "+614" } : { not: { startsWith: "+614" } },
+        },
         orderBy: { createdAt: "desc" },
       });
       if (prior?.bundleSid && prior.addressSid && run.status === S.SUBACCOUNT_CREATED) {
@@ -489,7 +532,7 @@ export class TelephonyProvisioningService {
         });
       }
 
-      const bundleSid = await this.twilio.createBundle(creds, `uprise ${run.tenantId}`, input.email, this.bundleCallbackUrl());
+      const bundleSid = await this.twilio.createBundle(creds, `uprise ${run.tenantId}`, input.email, this.bundleCallbackUrl(), this.runNumberType(run));
       await this.twilio.assignBundleItem(creds, bundleSid, endUserSid);
       await this.twilio.assignBundleItem(creds, bundleSid, addressSid);
       for (const doc of documents) {
@@ -616,7 +659,7 @@ export class TelephonyProvisioningService {
     return this.getRunOrThrow(runId);
   }
 
-  /** COMPLIANCE_APPROVED → NUMBER_PURCHASED: buy an AU mobile into the account. */
+  /** COMPLIANCE_APPROVED → NUMBER_PURCHASED: buy an AU number (mobile or local) into the account. */
   async stepPurchaseNumber(runId: string): Promise<void> {
     await this.guarded(runId, "number.purchase", [S.COMPLIANCE_APPROVED], async () => {
       const run = await this.getRunOrThrow(runId);
@@ -627,7 +670,8 @@ export class TelephonyProvisioningService {
       const addressSid = run.addressSid ?? input.reuse?.addressSid;
       if (!bundleSid || !addressSid) throw new Error("Run has no approved bundle/address to purchase with");
 
-      const candidate = await this.twilio.findAvailableAuMobile(creds);
+      const numberType = this.runNumberType(run);
+      const candidate = await this.twilio.findAvailableAuNumber(creds, numberType);
       const purchased = await this.twilio.purchaseNumber(creds, {
         phoneNumber: candidate,
         bundleSid,
@@ -653,6 +697,8 @@ export class TelephonyProvisioningService {
               phoneNumberSid: purchased.phoneNumberSid,
               bundleSid,
               addressSid,
+              // Local numbers are the voice caller-id ("transactional"); mobiles stay SMS ("marketing").
+              purpose: numberType === "local" ? "transactional" : "marketing",
               status: TelephonyNumberStatus.PENDING,
             },
           });
@@ -749,16 +795,33 @@ export class TelephonyProvisioningService {
 
   /** Rename a provisioned number. `scopeTenantId` (set for non-super-admin callers)
    *  guards against relabelling another tenant's number. Empty ⇒ clears the nickname. */
-  async setNickname(numberId: string, nickname: string | undefined, scopeTenantId?: string) {
+  async setNickname(
+    numberId: string,
+    nickname: string | undefined,
+    scopeTenantId?: string,
+    purpose?: "transactional" | "marketing" | "whatsapp",
+  ) {
     const number = await this.prisma.telephonyPhoneNumber.findUnique({ where: { id: numberId } });
     if (!number) throw new NotFoundException("Number not found");
     if (scopeTenantId && number.tenantId !== scopeTenantId) {
       throw new ForbiddenException("You can only rename your own organisation's numbers");
     }
+    // An AU mobile can never serve as the calls number — refuse the repurpose
+    // rather than silently letting the voice resolver skip it later.
+    if (purpose === "transactional" && number.phoneNumberE164.startsWith("+614")) {
+      throw new ApiHttpException(
+        "VOICE_NUMBER_REQUIRED",
+        "Mobile numbers can't place outbound calls — only a local number can be the calls number.",
+        422,
+      );
+    }
     const trimmed = nickname?.trim();
     return this.prisma.telephonyPhoneNumber.update({
       where: { id: numberId },
-      data: { nickname: trimmed ? trimmed : null },
+      data: {
+        ...(nickname !== undefined ? { nickname: trimmed ? trimmed : null } : {}),
+        ...(purpose ? { purpose } : {}),
+      },
     });
   }
 

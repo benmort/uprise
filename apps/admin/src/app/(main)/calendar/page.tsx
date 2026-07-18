@@ -22,8 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { NewConversationMenu } from "@/components/inbox/new-conversation-menu";
-import { createBlastAndOpen } from "@/lib/blasts";
+import { FullscreenButton, useFullscreen } from "@/components/ui/fullscreen-button";
 import "./calendar.css";
 
 /**
@@ -114,26 +113,38 @@ export default function CalendarPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editing, setEditing] = useState<EventFormData | undefined>();
-  // Any add gesture opens the "Start a new conversation" picker (not a direct add).
-  const [convoOpen, setConvoOpen] = useState(false);
-  // Click-a-date / drag-across-days on the month grid → opens the same picker. `sel`
-  // is the [anchor, head] cell-index range being dragged (for the live highlight);
-  // `dragging` gates the window mouseup that commits the gesture.
+  // The "New event" add panel — opened from any add gesture, pinned to the gesture's day so
+  // the new entry records at that date. Declared here (above the mouseup effect that opens it).
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDate, setAddDate] = useState<YMD>(today);
+  const [addBusy, setAddBusy] = useState(false);
+  // Click-a-date / drag-across-days on the month grid → open the add panel for the day the
+  // gesture started on. `sel` is the [anchor, head] cell-index range being dragged (for the
+  // live highlight); `dragging` gates the window mouseup that commits it; `dragStartDay`
+  // remembers which day to pin the new entry to.
   const dragging = useRef(false);
+  const dragStartDay = useRef<YMD | null>(null);
   const [sel, setSel] = useState<[number, number] | null>(null);
   // Persistent (mount-once) listener — gated on the `dragging` ref, NOT on `sel`. If it
   // were tied to `sel` (set async via setSel), a very fast click could release before the
-  // re-render attached the listener and silently not open the picker.
+  // re-render attached the listener and silently drop the gesture.
   useEffect(() => {
     const onUp = () => {
       if (!dragging.current) return;
       dragging.current = false;
       setSel(null);
-      setConvoOpen(true);
+      const day = dragStartDay.current;
+      if (day) {
+        setAddDate(day);
+        setAddOpen(true);
+      }
     };
     window.addEventListener("mouseup", onUp);
     return () => window.removeEventListener("mouseup", onUp);
   }, []);
+  // Full-screen the whole calendar card — the same Fullscreen API the maps use.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const fs = useFullscreen(cardRef);
   // The mock's 165ms grid fade on navigation/view changes.
   const [gridFx, setGridFx] = useState<{ opacity: number; transform: string }>({ opacity: 1, transform: "none" });
   const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -220,11 +231,8 @@ export default function CalendarPage() {
     [router],
   );
 
-  // The mock's "New event" slide-over: day-level quick-adds open it with the day
-  // pinned; Type picks Event / Shift / Reminder and Add creates the real object.
-  const [addOpen, setAddOpen] = useState(false);
-  const [addDate, setAddDate] = useState<YMD>(today);
-  const [addBusy, setAddBusy] = useState(false);
+  // Day-level quick-adds (the per-day + and the toolbar button) open the add panel with the
+  // day pinned; Type picks Event / Shift / Reminder and Add creates the real object.
   const openAddPanel = useCallback((day?: YMD) => {
     setAddDate(day ?? focus);
     setAddOpen(true);
@@ -392,7 +400,11 @@ export default function CalendarPage() {
       >
         {/* The calendar card — 18px radius, layered shadow, everything inside. */}
         <div
-          className="relative overflow-hidden rounded-[18px] border border-border bg-surface"
+          ref={cardRef}
+          className={cn(
+            "relative rounded-[18px] border border-border bg-surface",
+            fs.isFullscreen ? "h-screen overflow-auto rounded-none" : "overflow-hidden",
+          )}
           style={{ boxShadow: "0 1px 2px rgba(16,24,40,.04), 0 12px 32px -18px rgba(16,24,40,.18)" }}
         >
           {/* Toolbar: prev/next + Today + add actions | period label | view switcher */}
@@ -423,10 +435,10 @@ export default function CalendarPage() {
               >
                 Today
               </button>
-              <Button className="h-10" onClick={() => setConvoOpen(true)}>
-                <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.4} /> Start a new conversation
+              <Button className="h-10" onClick={() => openAddPanel()}>
+                <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.4} /> New event
               </Button>
-
+              <FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />
             </div>
 
             <h2 className="min-w-[200px] flex-1 text-center text-[22px] font-bold tracking-[-0.01em]">
@@ -486,6 +498,7 @@ export default function CalendarPage() {
                         onMouseDown={(e) => {
                           if (e.button !== 0 || past) return;
                           dragging.current = true;
+                          dragStartDay.current = day;
                           setSel([i, i]);
                           e.preventDefault();
                         }}
@@ -688,15 +701,6 @@ export default function CalendarPage() {
         onAdd={handleAddItem}
       />
 
-      <NewConversationMenu
-        open={convoOpen}
-        onClose={() => setConvoOpen(false)}
-        onPick={(ch) => {
-          if (ch === "event") router.push("/canvass/events");
-          else if (ch === "sms") void createBlastAndOpen(router, showToast, { channel: "SMS" });
-          else if (ch === "call") router.push("/channels/calls");
-        }}
-      />
     </PageShell>
   );
 }

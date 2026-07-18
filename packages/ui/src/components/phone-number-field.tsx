@@ -16,6 +16,15 @@ export function toE164(national: string): string {
   return "+61" + (d.startsWith("0") ? d.slice(1) : d);
 }
 
+/**
+ * AU mobile (+614…) — SMS-only on our platform: mobiles can't be a voice caller
+ * ID, so calls UIs tag them "SMS only" and exclude them from number pickers.
+ * Mirrors the API's phone-capabilities rule.
+ */
+export function isAuMobile(e164: string | null | undefined): boolean {
+  return typeof e164 === "string" && /^\+614/.test(e164.trim());
+}
+
 export interface PhoneNumberFieldProps {
   /** Raw national digits (e.g. "0481565866"); driven by the Keypad. */
   value: string;

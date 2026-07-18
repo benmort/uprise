@@ -642,6 +642,8 @@ export interface TelephonyProvisioningRun {
   tenantId: string;
   campaignId: string | null;
   accountId: string | null;
+  /** Regulation class: "local" numbers do voice, "mobile" numbers are SMS-only. */
+  numberType?: "mobile" | "local" | string;
   status: TelephonyProvisioningStatus;
   resumeStatus: TelephonyProvisioningStatus | null;
   bundleSid: string | null;
@@ -694,12 +696,13 @@ export const messageTemplates = {
 export const telephony = {
   /** Super-admin: start an automated provisioning run for a tenant (or campaign). */
   startRun: (body: {
-    tenantId: string;
+    tenantId?: string;
     campaignId?: string;
     mode: "SUBACCOUNT" | "BYO";
     byoAccountSid?: string;
     byoAuthToken?: string;
     friendlyName?: string;
+    numberType?: "mobile" | "local";
     complianceInput: TelephonyComplianceInput;
   }) => request<TelephonyProvisioningRun>("/telephony/provisioning-runs", { method: "POST", body: JSON.stringify(body) }),
 
@@ -744,7 +747,19 @@ export const telephony = {
     request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}`, {
       method: "PATCH",
       body: JSON.stringify({ nickname }),
+      headers: { "Content-Type": "application/json" },
     }),
+
+  /** Repurpose a number ("transactional" = the calls number; +614 is refused server-side). */
+  setPurpose: (numberId: string, purpose: "transactional" | "marketing" | "whatsapp") =>
+    request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ purpose }),
+      headers: { "Content-Type": "application/json" },
+    }),
+
+  /** Org-KYC prefill for the tenant compliance form. */
+  compliancePrefill: () => request<TelephonyComplianceInput>("/telephony/compliance-prefill"),
 };
 
 // ── Transactional calls (one-to-one, event-driven outbound voice; meld doc 09) ──
@@ -772,6 +787,10 @@ export interface TransactionalCall {
   currency: string | null;
   startedAt: string | null;
   endedAt: string | null;
+  /** Provider failure detail on a BUSY/NO_ANSWER/FAILED call — the reason it never connected. */
+  errorCode: string | null;
+  errorMessage: string | null;
+  sipCode: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -887,7 +906,7 @@ export interface EmailProvisioningStep {
 export const emailProvisioning = {
   /** Super-admin: start an automated identity-provisioning run for a tenant (or campaign). */
   startRun: (body: {
-    tenantId: string;
+    tenantId?: string;
     campaignId?: string;
     mode: "SUBUSER" | "BYO";
     kind: "UPRISE_SUBDOMAIN" | "CUSTOM_DOMAIN" | "SINGLE_ADDRESS";

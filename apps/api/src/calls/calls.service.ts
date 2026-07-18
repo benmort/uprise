@@ -1,4 +1,5 @@
 import {
+  UnprocessableEntityException,
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -13,6 +14,8 @@ import { DomainLogger } from "../common/logging/domain-logger.service";
 import { TwilioService } from "../twilio/twilio.service";
 import { TelephonyWebhookAuthService } from "../telephony/telephony-webhook-auth.service";
 import { VoiceAccountResolver } from "../telephony/voice-account.resolver";
+import { isVoiceCapable } from "../telephony/phone-capabilities";
+import { TelephonySenderResolver } from "../telephony/telephony-sender.resolver";
 import { canTransitionCall, mapTwilioCallStatus } from "./call-state.machine";
 
 const VOICE_TOKEN_TTL_SECONDS = 3600;
@@ -51,7 +54,18 @@ export interface VoiceStatusCallback {
   currency?: string;
   startedAt?: Date;
   endedAt?: Date;
+  /** Failure detail from the provider on a busy/no-answer/failed callback. */
+  errorCode?: string;
+  errorMessage?: string;
+  sipCode?: string;
 }
+
+/** Terminal failure states — the call ended without connecting. */
+const FAILED_STATUSES: ReadonlySet<CallStatus> = new Set([
+  CallStatus.FAILED,
+  CallStatus.BUSY,
+  CallStatus.NO_ANSWER,
+]);
 
 @Injectable()
 export class CallsService {
@@ -64,6 +78,8 @@ export class CallsService {
     private readonly logger: DomainLogger,
     private readonly telephonyAuth: TelephonyWebhookAuthService,
     private readonly voiceAccounts: VoiceAccountResolver,
+    /** Optional tail dep (existing specs construct positionally); DI supplies it. */
+    private readonly senderResolver?: TelephonySenderResolver,
   ) {}
 
   /**
@@ -82,6 +98,15 @@ export class CallsService {
       throw new ServiceUnavailableException(
         "Browser calling isn't configured yet — set up a Twilio Voice API key + TwiML App.",
       );
+    }
+    if (!isVoiceCapable(account.callerId)) {
+      // Mobile (+614) numbers are SMS-only: refuse cleanly at token time rather
+      // than letting the dial fail at Twilio. The UI turns this into the
+      // "provision a local number" affordance.
+      throw new UnprocessableEntityException({
+        code: "VOICE_NUMBER_REQUIRED",
+        message: "Mobile numbers can't place outbound calls — provision a local number for calling.",
+      });
     }
     const identity = `u${userId}.t${tenantId}`;
     const token = this.twilio.mintVoiceToken({
@@ -144,8 +169,27 @@ export class CallsService {
     toNumber: string;
     contactId?: string | null;
     accountSid?: string;
+    /** Explicit tenant number choice from the dialler (validated + tenant-scoped). */
+    fromNumberId?: string | null;
   }): Promise<{ twiml: string }> {
-    const callerId = await this.voiceAccounts.callerIdForAccount(input.tenantId, input.accountSid ?? "");
+    let callerId = "";
+    if (input.fromNumberId) {
+      const picked = await this.senderResolver?.resolveByNumberId(input.tenantId, input.fromNumberId);
+      if (picked?.from && isVoiceCapable(picked.from)) callerId = picked.from;
+    }
+    if (!callerId) {
+      callerId = await this.voiceAccounts.callerIdForAccount(input.tenantId, input.accountSid ?? "");
+    }
+    if (!isVoiceCapable(callerId)) {
+      // Never hand Twilio a mobile CLI: answer with a spoken explanation + hangup
+      // (this path is a Twilio webhook — an exception would surface as a 500 tone).
+      return {
+        twiml:
+          '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Olivia">' +
+          "Outbound calls need a local number. Mobile numbers can only send text messages. " +
+          "Please provision a local calling number in uprise.</Say><Hangup/></Response>",
+      };
+    }
     const call = await this.createBrowserCall({
       tenantId: input.tenantId,
       toNumber: input.toNumber,
@@ -177,6 +221,12 @@ export class CallsService {
       this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
     if (fromNumber && !E164_RE.test(fromNumber)) {
       throw new BadRequestException("fromNumber must be E.164");
+    }
+    if (!isVoiceCapable(fromNumber)) {
+      throw new UnprocessableEntityException({
+        code: "VOICE_NUMBER_REQUIRED",
+        message: "Mobile (+614) numbers can't place outbound calls — use a local number.",
+      });
     }
 
     const call = await this.prisma.$transaction(async (tx) => {
@@ -255,6 +305,27 @@ export class CallsService {
         if (cb.currency !== undefined) data.currency = cb.currency;
         data.endedAt = cb.endedAt ?? new Date();
       }
+      // A terminal failure (busy/no-answer/failed) ends the call without connecting: stamp
+      // endedAt and capture the provider's reason so the row says WHY, not just "failed".
+      const isFailure = FAILED_STATUSES.has(target);
+      if (isFailure) {
+        data.endedAt = cb.endedAt ?? new Date();
+        data.errorCode = cb.errorCode ?? null;
+        data.errorMessage = cb.errorMessage ?? null;
+        data.sipCode = cb.sipCode ?? null;
+        // Accurate, queryable failure log — the reason a call never connected. warn (not
+        // error): an unreachable/busy number is an expected outcome, not a system fault.
+        this.logger.warn("telephony", "call ended without connecting", {
+          callId: call.id,
+          tenantId: call.tenantId,
+          status: target,
+          toNumber: call.toNumber,
+          providerCallId: cb.callSid,
+          errorCode: cb.errorCode ?? null,
+          errorMessage: cb.errorMessage ?? null,
+          sipCode: cb.sipCode ?? null,
+        });
+      }
       await this.prisma.$transaction(async (tx) => {
         await tx.call.update({ where: { id: call.id }, data });
         // Durable lifecycle event for every legal transition
@@ -264,7 +335,12 @@ export class CallsService {
           tenantId: call.tenantId,
           eventType: "telephony.call.status-changed",
           aggregateId: call.id,
-          payload: { callId: call.id, tenantId: call.tenantId, status: target },
+          payload: {
+            callId: call.id,
+            tenantId: call.tenantId,
+            status: target,
+            ...(isFailure ? { errorCode: cb.errorCode ?? null, errorMessage: cb.errorMessage ?? null } : {}),
+          },
         });
         // The completion-specific event carries the billable duration.
         if (target === CallStatus.COMPLETED) {

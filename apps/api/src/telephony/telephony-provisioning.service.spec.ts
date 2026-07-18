@@ -31,6 +31,7 @@ function makeRun(overrides: Record<string, unknown> = {}) {
     endUserSid: null as string | null,
     phoneNumberId: null as string | null,
     resumeStatus: null as (typeof S)[keyof typeof S] | null,
+    numberType: "mobile" as string,
     lastError: null as string | null,
     complianceInput: {
       email: "compliance@example.org",
@@ -98,6 +99,7 @@ function setup() {
       update: jest.fn(async (args: any) => ({ ...makeNumber(), ...args.data })),
     },
     tenant: { findUnique: jest.fn(async () => ({ id: TENANT_ID, name: "Test Tenant" })) },
+    orgProfile: { findFirst: jest.fn().mockResolvedValue(null) },
     $queryRaw: jest.fn().mockResolvedValue([]),
   };
   prisma.$transaction = jest.fn((cb: any) => cb(prisma));
@@ -113,7 +115,7 @@ function setup() {
     assignBundleItem: jest.fn(async () => undefined),
     submitBundle: jest.fn(async () => undefined),
     fetchBundleStatus: jest.fn(async () => ({ status: "twilio-approved", failureReason: null })),
-    findAvailableAuMobile: jest.fn(async () => "+61400000000"),
+    findAvailableAuNumber: jest.fn(async () => "+61400000000"),
     purchaseNumber: jest.fn(async () => ({ phoneNumberSid: "PN" + "9".repeat(32), phoneNumberE164: "+61400000000" })),
     configureNumberWebhook: jest.fn(async () => undefined),
     releaseNumber: jest.fn(async () => undefined),
@@ -245,6 +247,36 @@ describe("TelephonyProvisioningService steps", () => {
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.compliance-approved"));
     });
 
+    it("bundle reuse is scoped to the run's regulation class (a mobile bundle can't buy a local number)", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(makeRun({ status: S.SUBACCOUNT_CREATED, accountId: ACCOUNT_ID, numberType: "local" }));
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(prisma.telephonyPhoneNumber.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ phoneNumberE164: { not: { startsWith: "+614" } } }),
+        }),
+      );
+    });
+
+    it('passes the run\'s numberType through to the Twilio bundle ("local" regulation)', async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(makeRun({ status: S.SUBACCOUNT_CREATED, accountId: ACCOUNT_ID, numberType: "local" }));
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(twilio.createBundle).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(String),
+        "compliance@example.org",
+        expect.any(String),
+        "local",
+      );
+    });
+
     it("parks FAILED (resume SUBACCOUNT_CREATED) when a Twilio compliance call throws", async () => {
       const { service, prisma, twilio, outbox } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(draftRun());
@@ -360,8 +392,8 @@ describe("TelephonyProvisioningService steps", () => {
   });
 
   describe("stepPurchaseNumber", () => {
-    const approvedRun = () =>
-      makeRun({ status: S.COMPLIANCE_APPROVED, accountId: ACCOUNT_ID, bundleSid: "BUnew", addressSid: "ADnew" });
+    const approvedRun = (overrides: Record<string, unknown> = {}) =>
+      makeRun({ status: S.COMPLIANCE_APPROVED, accountId: ACCOUNT_ID, bundleSid: "BUnew", addressSid: "ADnew", ...overrides });
 
     it("COMPLIANCE_APPROVED → NUMBER_PURCHASED: buys a number, writes the row, emits number-purchased", async () => {
       const { service, prisma, twilio, outbox } = setup();
@@ -370,23 +402,47 @@ describe("TelephonyProvisioningService steps", () => {
 
       await service.stepPurchaseNumber(RUN_ID);
 
-      expect(twilio.findAvailableAuMobile).toHaveBeenCalled();
+      expect(twilio.findAvailableAuNumber).toHaveBeenCalledWith(expect.anything(), "mobile");
       expect(twilio.purchaseNumber).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ bundleSid: "BUnew", addressSid: "ADnew", smsUrl: "https://api.test/api/v1/inbound-text-message-hook" }),
       );
       expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ status: TelephonyNumberStatus.PENDING, phoneNumberE164: "+61400000000" }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: TelephonyNumberStatus.PENDING,
+            phoneNumberE164: "+61400000000",
+            // A mobile number is SMS-only — never the voice caller id.
+            purpose: "marketing",
+          }),
+        }),
       );
       expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.NUMBER_PURCHASED));
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.number-purchased"));
+    });
+
+    it('a "local" run searches local inventory and lands the number purpose "transactional" (voice)', async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun({ numberType: "local" }));
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      twilio.findAvailableAuNumber.mockResolvedValue("+61255501234");
+      twilio.purchaseNumber.mockResolvedValue({ phoneNumberSid: "PN" + "8".repeat(32), phoneNumberE164: "+61255501234" });
+
+      await service.stepPurchaseNumber(RUN_ID);
+
+      expect(twilio.findAvailableAuNumber).toHaveBeenCalledWith(expect.anything(), "local");
+      expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ phoneNumberE164: "+61255501234", purpose: "transactional" }),
+        }),
+      );
     });
 
     it("parks FAILED (resume COMPLIANCE_APPROVED) when number search throws", async () => {
       const { service, prisma, twilio, outbox } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun());
       prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
-      twilio.findAvailableAuMobile.mockRejectedValue(new Error("no inventory"));
+      twilio.findAvailableAuNumber.mockRejectedValue(new Error("no inventory"));
 
       await service.stepPurchaseNumber(RUN_ID);
 
@@ -526,6 +582,29 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       await expectApiError(
         service.startRun({ tenantId: TENANT_ID, mode: "BYO", complianceInput: makeRun().complianceInput as any }),
         "BYO_CREDENTIALS_REQUIRED",
+      );
+    });
+
+    it('stores numberType "local" on the run (default is "mobile")', async () => {
+      const { service, prisma } = setup();
+
+      await service.startRun({
+        tenantId: TENANT_ID,
+        mode: "SUBACCOUNT",
+        numberType: "local",
+        complianceInput: makeRun().complianceInput as any,
+      });
+      expect(prisma.telephonyProvisioningRun.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ numberType: "local" }) }),
+      );
+
+      await service.startRun({
+        tenantId: TENANT_ID,
+        mode: "SUBACCOUNT",
+        complianceInput: makeRun().complianceInput as any,
+      });
+      expect(prisma.telephonyProvisioningRun.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ numberType: "mobile" }) }),
       );
     });
   });
@@ -676,6 +755,65 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(null);
 
       await expect(service.setNickname("missing", "x")).rejects.toThrow(/not found/i);
+    });
+
+    it('refuses to repurpose a +614 mobile as the calls number ("transactional")', async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber({ phoneNumberE164: "+61485052501" }));
+
+      await expectApiError(
+        service.setNickname(NUMBER_ID, undefined, TENANT_ID, "transactional"),
+        "VOICE_NUMBER_REQUIRED",
+      );
+      expect(prisma.telephonyPhoneNumber.update).not.toHaveBeenCalled();
+    });
+
+    it("repurposes a local number to transactional (and leaves the nickname untouched)", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber({ phoneNumberE164: "+61255501234" }));
+
+      await service.setNickname(NUMBER_ID, undefined, TENANT_ID, "transactional");
+
+      expect(prisma.telephonyPhoneNumber.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: NUMBER_ID }, data: { purpose: "transactional" } }),
+      );
+    });
+  });
+
+  describe("compliancePrefill", () => {
+    it("maps the org profile (credential legal name, primary contact, first address) to a compliance input", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Trading Name",
+        credential: { legalTradingName: "Legal Org Ltd", australianBusinessNumber: "12 345 678 901", australianCompanyNumber: null },
+        contacts: [
+          { isPrimaryContact: false, firstName: "Bob", lastName: "Backup", email: "bob@example.org" },
+          { isPrimaryContact: true, firstName: "Ada", lastName: "Lovelace", email: "ada@example.org" },
+        ],
+        addresses: [{ line1: "1 Test St", line2: "Level 2", suburb: "Sydney", city: null, state: "NSW", postcode: "2000" }],
+      });
+
+      const prefill = await service.compliancePrefill(TENANT_ID);
+
+      expect(prefill).toEqual({
+        legalName: "Legal Org Ltd",
+        contactFirstName: "Ada",
+        contactLastName: "Lovelace",
+        email: "ada@example.org",
+        businessNumber: "12 345 678 901",
+        address: { street: "1 Test St, Level 2", city: "Sydney", region: "NSW", postalCode: "2000" },
+      });
+    });
+
+    it("returns empty fields when the tenant has no org profile", async () => {
+      const { service } = setup();
+
+      const prefill = await service.compliancePrefill(TENANT_ID);
+
+      expect(prefill.legalName).toBe("");
+      expect(prefill.email).toBe("");
+      expect(prefill.businessNumber).toBeUndefined();
+      expect(prefill.address).toEqual({ street: "", city: "", region: "", postalCode: "" });
     });
   });
 

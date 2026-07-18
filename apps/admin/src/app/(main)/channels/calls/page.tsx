@@ -185,7 +185,28 @@ export default function CallsPage() {
               header: "From",
               cell: (c: TransactionalCall) => <span className="font-mono text-muted-foreground">{c.fromNumber || "—"}</span>,
             },
-            { key: "status", header: "Status", cell: (c: TransactionalCall) => <StatusBadge status={c.status} /> },
+            {
+              key: "status",
+              header: "Status",
+              cell: (c: TransactionalCall) => {
+                const reason = c.errorMessage || (c.errorCode ? `Error ${c.errorCode}` : null);
+                return (
+                  <div className="flex flex-col gap-0.5">
+                    <StatusBadge status={c.status} />
+                    {reason ? (
+                      <span
+                        className="max-w-[220px] truncate text-xs text-error"
+                        title={[c.errorMessage, c.errorCode && `code ${c.errorCode}`, c.sipCode && `SIP ${c.sipCode}`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      >
+                        {reason}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              },
+            },
             {
               key: "duration",
               header: "Duration",

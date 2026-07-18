@@ -44,13 +44,18 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/for-campaigners" className="text-gray-600 hover:text-primary transition-colors">
-                  For Campaigners
+                <Link href="/campaigners" className="text-gray-600 hover:text-primary transition-colors">
+                  Campaigners
                 </Link>
               </li>
               <li>
                 <Link href="/integrations" className="text-gray-600 hover:text-primary transition-colors">
                   Integrations
+                </Link>
+              </li>
+              <li>
+                <Link href="/developers" className="text-gray-600 hover:text-primary transition-colors">
+                  Developers
                 </Link>
               </li>
             </ul>
@@ -73,11 +78,6 @@ export default function Footer() {
               <li>
                 <Link href="/request-demo" className="text-gray-600 hover:text-primary transition-colors">
                   Request a Demo
-                </Link>
-              </li>
-              <li>
-                <Link href="/developers" className="text-gray-600 hover:text-primary transition-colors">
-                  Developers
                 </Link>
               </li>
             </ul>

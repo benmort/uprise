@@ -1,7 +1,8 @@
 "use client";
 
+import { type ReactNode } from "react";
 import Link from "next/link";
-import { MapPin, MessageSquare, WifiOff, type LucideIcon } from "lucide-react";
+import { ChevronDown, MapPin, MessageSquare, WifiOff, type LucideIcon } from "lucide-react";
 import { BrandStyle, Button, LogoMark } from "@uprise/ui";
 
 /** What the field genuinely gives a canvasser — the right column's feature rows (desktop mockup). */
@@ -49,6 +50,14 @@ export type VolunteerJoinHeroProps = {
   /** The right (feature) column's heading — "Change happens…" by default. */
   featureHeading?: string;
   getStartedLabel?: string;
+  /** When set, the right column renders this INSTEAD of the capabilities + CTA — used to
+   *  slot the open-opportunities board into the same two-column hero (keeping the brand
+   *  hero on the left) rather than switching to a separate single-column shell. On mobile
+   *  the brand hero is hidden so the board takes the full screen, as before. */
+  rightOverride?: ReactNode;
+  /** Mobile-only animated "scroll down" hint below the intro — nudges supporters past the
+   *  brand hero to the actions/board, which sit below the fold on a phone. */
+  scrollHint?: boolean;
 };
 
 function hashHue(seed: string): number {
@@ -112,6 +121,8 @@ export function VolunteerJoinHero({
   intro,
   featureHeading,
   getStartedLabel = "Get started",
+  rightOverride,
+  scrollHint = false,
 }: VolunteerJoinHeroProps) {
   const forName = campaignName || tenantName;
   const brandLabel = tenantName || "uprise";
@@ -135,8 +146,13 @@ export function VolunteerJoinHero({
           so Uprise's default `--primary` stands (non-tenant routes keep Uprise's colours). */}
       <BrandStyle brand={{ primaryColour, secondaryColour, customCss }} />
 
-      {/* Brand hero — left on desktop, top on mobile */}
-      <section className="relative overflow-hidden rounded-b-[1.625rem] bg-primary px-7 pb-9 pt-9 text-white lg:flex lg:w-1/2 lg:flex-col lg:justify-center lg:rounded-none lg:px-14 lg:py-16">
+      {/* Brand hero — left on desktop, top on mobile. In board mode it's hidden on mobile
+          (the board takes the full screen there) but stays as the left column on desktop. */}
+      <section
+        className={`relative overflow-hidden rounded-b-[1.625rem] bg-primary px-7 pb-9 pt-9 text-white lg:flex lg:w-1/2 lg:flex-col lg:justify-center lg:rounded-none lg:px-14 lg:py-16 ${
+          rightOverride ? "max-lg:hidden" : ""
+        }`}
+      >
         {/* Decorative brand glows — soft, diffuse radial blooms (a blurred radial gradient
             rather than a hard disc), matching the upriselabs.org background treatment. Tinted
             with the tenant's SECONDARY colour (`--brand-secondary`, set by <BrandStyle>) over the
@@ -187,6 +203,21 @@ export function VolunteerJoinHero({
               "Join your neighbours knocking on doors and talking to voters. Takes two minutes to set up – no app store needed."}
           </p>
 
+          {scrollHint ? (
+            <button
+              type="button"
+              aria-label="Scroll down for more"
+              onClick={() => {
+                if (typeof window !== "undefined")
+                  window.scrollBy({ top: Math.round(window.innerHeight * 0.82), behavior: "smooth" });
+              }}
+              className="mt-7 flex w-full flex-col items-center gap-1 text-white/70 transition-colors hover:text-white lg:hidden"
+            >
+              <span className="text-[11px] font-bold uppercase tracking-[0.15em]">Scroll</span>
+              <ChevronDown className="h-6 w-6 animate-bounce" aria-hidden />
+            </button>
+          ) : null}
+
           {hasStats ? (
             <div className="mt-8 flex items-stretch gap-6 lg:mt-14">
               <Stat value={doorsThisWeek} label="doors knocked this week" />
@@ -200,7 +231,12 @@ export function VolunteerJoinHero({
       {/* Feature column — right on desktop, below on mobile. Always off-white with dark ink so the
           "Change happens…" section reads as a clean light panel; brand-tinted icon tiles + a
           secondary-coloured CTA carry the brand. */}
-      <section className="flex flex-1 flex-col bg-[#faf8f5] px-7 pb-8 pt-8 lg:w-1/2 lg:justify-center lg:px-14 lg:py-16">
+      <section
+        className={`flex flex-1 flex-col bg-[#faf8f5] px-7 pb-8 pt-8 lg:w-1/2 lg:px-14 lg:py-16 ${
+          rightOverride ? "lg:justify-start" : "lg:justify-center"
+        }`}
+      >
+        {rightOverride ?? (
         <div className="lg:max-w-xl">
           <h2 className="text-[1.6rem] font-extrabold leading-tight text-ink lg:text-4xl">
             {featureHeading ?? "Change happens one conversation at a time"}
@@ -243,6 +279,7 @@ export function VolunteerJoinHero({
             </p>
           </div>
         </div>
+        )}
       </section>
     </div>
   );

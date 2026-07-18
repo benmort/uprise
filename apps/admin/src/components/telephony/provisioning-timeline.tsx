@@ -15,19 +15,19 @@ export type TimelineStep = {
 };
 
 /** Telephony defaults (append-only rows fold onto these). */
-const TELEPHONY_STEPS: TimelineStepDef[] = [
+export const TELEPHONY_STEPS: TimelineStepDef[] = [
   { key: "run.requested", label: "Requested" },
   { key: "subaccount.create", label: "Twilio subaccount" },
   { key: "compliance.draft", label: "Compliance details" },
   { key: "compliance.submit", label: "Submitted for review" },
   { key: "compliance.review", label: "Regulatory review", hint: "Review by Twilio can take hours – days" },
-  { key: "number.purchase", label: "Mobile number purchased" },
+  { key: "number.purchase", label: "Number purchased" },
   { key: "webhooks.configure", label: "Webhooks configured" },
   { key: "activate", label: "Live" },
 ];
 
 /** Which canonical step is "in progress" for each telephony run status. */
-const TELEPHONY_CURRENT_STEP: Record<string, string | null> = {
+export const TELEPHONY_CURRENT_STEP: Record<string, string | null> = {
   REQUESTED: "subaccount.create",
   SUBACCOUNT_CREATED: "compliance.draft",
   COMPLIANCE_DRAFT: "compliance.submit",
@@ -62,6 +62,18 @@ export const EMAIL_TIMELINE_CURRENT_STEP: Record<string, string | null> = {
   ACTIVE: null,
   FAILED: null,
 };
+
+/**
+ * Compact "step N of M" for a telephony run status — the calls-page progress bar.
+ * ACTIVE = all done; FAILED callers should pass the run's resumeStatus instead.
+ */
+export function telephonyStepIndex(status: string): { step: number; total: number } {
+  const total = TELEPHONY_STEPS.length;
+  if (status === "ACTIVE") return { step: total, total };
+  const key = TELEPHONY_CURRENT_STEP[status] ?? null;
+  const i = key ? TELEPHONY_STEPS.findIndex((s) => s.key === key) : -1;
+  return { step: i >= 0 ? i + 1 : 1, total };
+}
 
 type RowState = "done" | "skipped" | "failed" | "current" | "pending";
 

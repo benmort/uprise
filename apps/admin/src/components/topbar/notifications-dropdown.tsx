@@ -48,7 +48,7 @@ export function NotificationsDropdown({ unreadCount }: { unreadCount: number }) 
       </div>
       <div className="border-t border-border p-2">
         <Link
-          href="/analytics"
+          href="/inbox"
           className="block rounded-lg px-3 py-2 text-center text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground"
         >
           View all activity

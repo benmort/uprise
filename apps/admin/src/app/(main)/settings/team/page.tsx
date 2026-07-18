@@ -19,6 +19,7 @@ import {
 import { SectionCard } from "@uprise/field";
 import { DataTable } from "@uprise/field";
 import { UserAvatar } from "@/components/user-profile/user-avatar";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 import {
   tenants,
   type AppUserRole,
@@ -85,6 +86,11 @@ const ROLE_OPTIONS = [
   { value: "ORGANISER", label: "Organiser (staff / admin)" },
   { value: "VOLUNTEER", label: "Volunteer (field)" },
 ] as const;
+
+// Role seniority. You can only assign a role at or below your own, only change members
+// strictly below you (or demote yourself), and only an OWNER can grant OWNER. Super-admins
+// bypass the ladder. The API re-enforces this — the UI just prevents impossible actions.
+const ROLE_RANK: Record<AppUserRole, number> = { OWNER: 3, ORGANISER: 2, VOLUNTEER: 1 };
 
 /** Role badge handling all three AppUserRole values (RoleChip only covers two). */
 function RoleBadge({ role }: { role: AppUserRole }) {
@@ -156,6 +162,8 @@ export default function TeamPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [checkedSession, setCheckedSession] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [myRole, setMyRole] = useState<AppUserRole | null>(null);
 
   // Combined list filter (defaults to "all"; persisted in the URL hash).
   const [pendingFilter, setPendingFilter] = useState<PendingFilter>("all");
@@ -234,6 +242,8 @@ export default function TeamPage() {
     setTenantId(tid);
     setCurrentUserId(session?.id ?? null);
     setCanManage(manage);
+    setIsSuperAdmin(session?.isSuperAdmin === true);
+    setMyRole((session?.role as AppUserRole | undefined) ?? null);
     setCheckedSession(true);
     if (!tid || !manage) return;
     void loadJoinRequests(tid);
@@ -284,6 +294,10 @@ export default function TeamPage() {
     const email = inviteEmail.trim().toLowerCase();
     if (!email) {
       showToast({ tone: "error", title: "Email required" });
+      return;
+    }
+    if (!assignableRoles.some((o) => o.value === inviteRole)) {
+      showToast({ tone: "error", title: "You can't invite someone at that role" });
       return;
     }
     setInviteBusy(true);
@@ -339,6 +353,10 @@ export default function TeamPage() {
       setEditingMember(null);
       return;
     }
+    if (!canManageMember(editingMember) || !roleOptionsFor(editingMember).some((o) => o.value === editRole)) {
+      showToast({ tone: "error", title: "That role change isn't allowed" });
+      return;
+    }
     setBusy(true);
     const res = await tenants.updateMemberRole(tenantId, editingMember.userId, editRole);
     setBusy(false);
@@ -369,6 +387,25 @@ export default function TeamPage() {
 
   // ── No-permission state (whole page) ──
   const noPermission = checkedSession && !canManage;
+
+  // ── Role-hierarchy gating (super-admins bypass) ──
+  const myRank = isSuperAdmin ? 99 : myRole ? ROLE_RANK[myRole] : 0;
+  const isOwner = isSuperAdmin || myRole === "OWNER";
+  // Roles I may grant when inviting or promoting: at or below my own level (only an OWNER
+  // reaches OWNER). Super-admins may grant anything.
+  const assignableRoles = ROLE_OPTIONS.filter((o) => isSuperAdmin || ROLE_RANK[o.value] <= myRank);
+  // Whether I may change/remove this member: anyone strictly below me, or myself (to step down).
+  const canManageMember = (m: TenantMemberSummary) =>
+    isSuperAdmin || m.userId === currentUserId || ROLE_RANK[m.role] < myRank;
+  // The role options when editing a specific member — their current role (a no-op "keep"),
+  // plus: for myself, only lower roles (step down); for others, roles up to my own level.
+  const roleOptionsFor = (m: TenantMemberSummary) => {
+    if (isSuperAdmin) return ROLE_OPTIONS;
+    const isSelf = m.userId === currentUserId;
+    return ROLE_OPTIONS.filter(
+      (o) => o.value === m.role || (isSelf ? ROLE_RANK[o.value] < myRank : ROLE_RANK[o.value] <= myRank),
+    );
+  };
 
   // ── Combined requests + invitations rows ──
   const requestRows: PendingRow[] = (joinRows ?? []).map((r) => ({
@@ -422,6 +459,9 @@ export default function TeamPage() {
         </div>
       </div>
 
+      {/* Settings tab bar — Team is the last tab (mirrors the Data explorer's separate-page tabs). */}
+      <SettingsTabs active="team" isSuperAdmin={isSuperAdmin} isOwner={isOwner} />
+
       {noPermission ? (
         <SectionCard title="Team">
           <EmptyState
@@ -459,7 +499,7 @@ export default function TeamPage() {
                   id="invite-role"
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as AppUserRole)}
-                  options={ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                  options={assignableRoles.map((o) => ({ value: o.value, label: o.label }))}
                   disabled={inviteBusy}
                 />
               </Field>
@@ -670,23 +710,34 @@ export default function TeamPage() {
                   {
                     key: "actions",
                     header: "",
-                    cell: (m) => (
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditRole(m.role);
-                            setEditingMember(m);
-                          }}
-                        >
-                          Change role
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setRemovingMember(m)}>
-                          Remove
-                        </Button>
-                      </div>
-                    ),
+                    cell: (m) => {
+                      const manageable = canManageMember(m);
+                      return (
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!manageable}
+                            title={manageable ? undefined : "Only an owner (or someone senior to this member) can change their role"}
+                            onClick={() => {
+                              setEditRole(m.role);
+                              setEditingMember(m);
+                            }}
+                          >
+                            Change role
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!manageable}
+                            title={manageable ? undefined : "You can't remove a member at your level or above"}
+                            onClick={() => setRemovingMember(m)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      );
+                    },
                   },
                 ]}
               />
@@ -787,7 +838,10 @@ export default function TeamPage() {
             id="edit-role"
             value={editRole}
             onChange={(e) => setEditRole(e.target.value as AppUserRole)}
-            options={ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            options={(editingMember ? roleOptionsFor(editingMember) : ROLE_OPTIONS).map((o) => ({
+              value: o.value,
+              label: o.label,
+            }))}
           />
         </Field>
       </FormDialog>
