@@ -158,7 +158,7 @@ describe("WebhooksController.voiceRecordingCallback", () => {
     expect(out).toBe(TWIML_EMPTY);
     expect(telephonyAuth.tokenForAccountSid).toHaveBeenCalledWith("AC1");
     expect(calls.processRecordingCallback).toHaveBeenCalledWith(
-      { callSid: "CA1", recordingUrl: "https://rec/1" },
+      { callSid: "CA1", recordingUrl: "https://rec/1", recordingStatus: "completed", accountSid: "AC1" },
       undefined,
     );
   });
@@ -226,6 +226,75 @@ describe("WebhooksController.voiceStatusCallback", () => {
     const arg = calls.processStatusCallback.mock.calls[0][0];
     expect(arg).toEqual(
       expect.objectContaining({ callSid: "CA1", status: "completed", durationSeconds: 42, errorCode: undefined }),
+    );
+  });
+});
+
+describe("WebhooksController.voiceDialStatus + recording status", () => {
+  const calls = {
+    processDialOutcome: jest.fn().mockResolvedValue(undefined),
+    processRecordingCallback: jest.fn().mockResolvedValue(undefined),
+  } as any;
+  const telephonyAuth = { tokenForAccountSid: jest.fn().mockResolvedValue("tok") } as any;
+  const req = { headers: {}, protocol: "https", get: () => "example.com", originalUrl: "/hook" } as any;
+
+  function makeController() {
+    const c = new WebhooksController(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      calls,
+      telephonyAuth,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    (c as any).validateTwilioSignature = jest.fn();
+    return c;
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it("threads the <Dial action> verdict (parent SID, child SID, status) to the service", async () => {
+    const out = await makeController().voiceDialStatus(
+      { CallSid: "CA_parent", DialCallSid: "CA_child", DialCallStatus: "no-answer", AccountSid: "AC1" },
+      req,
+      "call1",
+    );
+    expect(calls.processDialOutcome).toHaveBeenCalledWith({
+      callId: "call1",
+      parentCallSid: "CA_parent",
+      dialCallStatus: "no-answer",
+      dialCallSid: "CA_child",
+      accountSid: "AC1",
+    });
+    // Empty TwiML — the parent leg ends cleanly after the verdict.
+    expect(out).toContain("<Response");
+    expect(out).not.toContain("<Dial");
+  });
+
+  it("skips the service call when no callId query is threaded (nothing to bind)", async () => {
+    await makeController().voiceDialStatus(
+      { CallSid: "CA_parent", DialCallStatus: "failed", AccountSid: "AC1" },
+      req,
+      undefined,
+    );
+    expect(calls.processDialOutcome).not.toHaveBeenCalled();
+  });
+
+  it("passes RecordingStatus through to the recording handler", async () => {
+    await makeController().voiceRecordingCallback(
+      { CallSid: "CA1", RecordingUrl: "https://rec/1", RecordingStatus: "absent", AccountSid: "AC1" },
+      req,
+      "call1",
+    );
+    expect(calls.processRecordingCallback).toHaveBeenCalledWith(
+      { callSid: "CA1", recordingUrl: "https://rec/1", recordingStatus: "absent", accountSid: "AC1" },
+      "call1",
     );
   });
 });

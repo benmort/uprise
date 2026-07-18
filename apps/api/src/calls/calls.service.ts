@@ -58,6 +58,8 @@ export interface VoiceStatusCallback {
   errorCode?: string;
   errorMessage?: string;
   sipCode?: string;
+  /** The Twilio account that signed the webhook — checked against the call's tenant. */
+  accountSid?: string;
 }
 
 /** Terminal failure states — the call ended without connecting. */
@@ -66,6 +68,31 @@ const FAILED_STATUSES: ReadonlySet<CallStatus> = new Set([
   CallStatus.BUSY,
   CallStatus.NO_ANSWER,
 ]);
+
+/** Non-terminal states the reconciliation sweep chases. */
+const LIVE_STATUSES: ReadonlyArray<CallStatus> = [
+  CallStatus.INITIATED,
+  CallStatus.RINGING,
+  CallStatus.IN_PROGRESS,
+];
+
+/** What produced a status transition — carried on the status-changed event + logs. */
+type StatusSource = "webhook" | "dial-action" | "reconcile" | "dispatch";
+
+/** `<Dial action>` DialCallStatus → our terminal status. completed → null (child-leg callback owns it). */
+function mapDialCallStatus(raw: string): CallStatus | null {
+  switch (raw) {
+    case "busy":
+      return CallStatus.BUSY;
+    case "no-answer":
+      return CallStatus.NO_ANSWER;
+    case "failed":
+    case "canceled":
+      return CallStatus.FAILED;
+    default:
+      return null;
+  }
+}
 
 @Injectable()
 export class CallsService {
@@ -203,6 +230,8 @@ export class CallsService {
       callId: call.id,
       statusCallbackBase: `${base}/api/v1/voice-status-callback`,
       recordingCallbackBase: `${base}/api/v1/voice-recording-callback`,
+      // The <Dial action> verdict — catches dials that die before the child leg reports.
+      dialActionBase: `${base}/api/v1/voice-dial-status`,
     });
     return { twiml };
   }
@@ -257,9 +286,18 @@ export class CallsService {
       });
       return this.prisma.call.update({ where: { id: call.id }, data: { providerCallId: sid } });
     } catch (err) {
-      await this.prisma.call.update({ where: { id: call.id }, data: { status: CallStatus.FAILED } });
+      // Twilio SDK errors carry a numeric `code` (e.g. 21215 geo-permissions) — keep
+      // it queryable on the row, and emit the FAILED lifecycle event like any other
+      // terminal transition (a dispatch failure is part of the call timeline too).
+      const providerCode = (err as { code?: number | string })?.code;
+      await this.applyCallStatus(call, CallStatus.FAILED, {
+        errorCode: providerCode != null ? String(providerCode) : undefined,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      }, "dispatch");
       this.logger.error("telephony", "placeCall failed", undefined, {
         callId: call.id,
+        tenantId: call.tenantId,
+        errorCode: providerCode ?? null,
         error: String(err),
       });
       throw err;
@@ -283,84 +321,328 @@ export class CallsService {
       const call = callId
         ? await this.prisma.call.findUnique({ where: { id: callId } })
         : await this.prisma.call.findUnique({ where: { providerCallId: cb.callSid } });
-      if (!call) return; // unknown call (e.g. placed outside this system)
+      if (!call) {
+        // Not necessarily a fault (calls placed outside this system), but it must be
+        // visible: a systematic unknown-call stream means a lost callId/SID binding.
+        this.logger.warn("telephony", "status callback for unknown call — dropped", {
+          providerCallId: cb.callSid,
+          status: cb.status,
+          callIdParam: callId ?? null,
+        });
+        return;
+      }
+      if (!(await this.webhookAccountMayTouchCall(call, cb.accountSid))) {
+        await this.refuseForeignWebhook(eventId, call, cb.accountSid, "status callback");
+        return;
+      }
       // Browser calls create the row before the provider SID exists — bind it on the
       // first callback; ignore a callback whose SID contradicts an already-bound call.
       if (!call.providerCallId) {
         await this.prisma.call.update({ where: { id: call.id }, data: { providerCallId: cb.callSid } });
       } else if (call.providerCallId !== cb.callSid) {
+        this.logger.warn("telephony", "status callback SID contradicts the bound call — dropped", {
+          callId: call.id,
+          boundProviderCallId: call.providerCallId,
+          callbackCallSid: cb.callSid,
+          status: cb.status,
+        });
         return;
       }
 
       const target = mapTwilioCallStatus(cb.status);
-      if (!target) return; // queued/initiated — nothing to transition.
-      if (!canTransitionCall(call.status, target)) return; // replayed/terminal — already processed.
-
-      const data: Record<string, unknown> = { status: target };
-      if (target === CallStatus.IN_PROGRESS && cb.startedAt) data.startedAt = cb.startedAt;
-      if (target === CallStatus.COMPLETED) {
-        if (cb.durationSeconds !== undefined) data.durationSeconds = cb.durationSeconds;
-        if (cb.recordingUrl !== undefined) data.recordingUrl = cb.recordingUrl;
-        if (cb.priceCents !== undefined) data.priceCents = cb.priceCents;
-        if (cb.currency !== undefined) data.currency = cb.currency;
-        data.endedAt = cb.endedAt ?? new Date();
-      }
-      // A terminal failure (busy/no-answer/failed) ends the call without connecting: stamp
-      // endedAt and capture the provider's reason so the row says WHY, not just "failed".
-      const isFailure = FAILED_STATUSES.has(target);
-      if (isFailure) {
-        data.endedAt = cb.endedAt ?? new Date();
-        data.errorCode = cb.errorCode ?? null;
-        data.errorMessage = cb.errorMessage ?? null;
-        data.sipCode = cb.sipCode ?? null;
-        // Accurate, queryable failure log — the reason a call never connected. warn (not
-        // error): an unreachable/busy number is an expected outcome, not a system fault.
-        this.logger.warn("telephony", "call ended without connecting", {
-          callId: call.id,
-          tenantId: call.tenantId,
-          status: target,
-          toNumber: call.toNumber,
-          providerCallId: cb.callSid,
-          errorCode: cb.errorCode ?? null,
-          errorMessage: cb.errorMessage ?? null,
-          sipCode: cb.sipCode ?? null,
-        });
-      }
-      await this.prisma.$transaction(async (tx) => {
-        await tx.call.update({ where: { id: call.id }, data });
-        // Durable lifecycle event for every legal transition
-        // (ringing/in-progress/busy/no-answer/failed/completed) so canvassing +
-        // analytics reactions can subscribe to the full call timeline (doc 09).
-        await this.outbox.append(tx, {
-          tenantId: call.tenantId,
-          eventType: "telephony.call.status-changed",
-          aggregateId: call.id,
-          payload: {
+      if (!target) {
+        // queued/initiated are expected no-ops; anything else is a status we don't map.
+        if (cb.status !== "queued" && cb.status !== "initiated") {
+          this.logger.warn("telephony", "unmapped provider call status — dropped", {
             callId: call.id,
-            tenantId: call.tenantId,
-            status: target,
-            ...(isFailure ? { errorCode: cb.errorCode ?? null, errorMessage: cb.errorMessage ?? null } : {}),
-          },
-        });
-        // The completion-specific event carries the billable duration.
-        if (target === CallStatus.COMPLETED) {
-          await this.outbox.append(tx, {
-            tenantId: call.tenantId,
-            eventType: "telephony.call.completed",
-            aggregateId: call.id,
-            payload: {
-              callId: call.id,
-              tenantId: call.tenantId,
-              durationSeconds: cb.durationSeconds ?? null,
-            },
+            providerCallId: cb.callSid,
+            status: cb.status,
           });
         }
-      });
+        return;
+      }
+      if (!canTransitionCall(call.status, target)) {
+        // Replayed or out-of-order delivery — already terminal, or a stale earlier status.
+        this.logger.debug("telephony", "illegal call transition — dropped", {
+          callId: call.id,
+          from: call.status,
+          to: target,
+          providerCallId: cb.callSid,
+        });
+        return;
+      }
+
+      await this.applyCallStatus(call, target, cb, "webhook");
     } catch (err) {
       // Release the claim so Twilio's retry reprocesses a transient failure.
       await this.webhookEvents.release(VOICE_PROVIDER, eventId);
       throw err;
     }
+  }
+
+  /**
+   * A webhook may only touch a call its signing account is entitled to: the
+   * platform account (tenant-agnostic) or a tenant account that owns the call's
+   * tenant. Guards the `callId` query param — a leaked id plus one tenant's own
+   * (BYO) credentials must never move another tenant's call. Defence-in-depth:
+   * call ids are unguessable cuids. No AccountSid means the signature already
+   * validated against the platform token.
+   */
+  private async webhookAccountMayTouchCall(call: Call, accountSid?: string): Promise<boolean> {
+    if (!accountSid) return true;
+    const platform = this.config.get<string>("TWILIO_ACCOUNT_SID", "").trim();
+    if (!platform || accountSid === platform) return true;
+    const account = await this.prisma.telephonyAccount.findFirst({ where: { accountSid } });
+    return !!account && account.tenantId === call.tenantId;
+  }
+
+  /** Shared refusal path: release the claim (it wasn't ours to burn), log, drop. */
+  private async refuseForeignWebhook(
+    eventId: string,
+    call: Call,
+    accountSid: string | undefined,
+    what: string,
+  ): Promise<void> {
+    await this.webhookEvents.release(VOICE_PROVIDER, eventId);
+    this.logger.warn("telephony", `${what} signed by an account outside the call's tenant — dropped`, {
+      callId: call.id,
+      callTenantId: call.tenantId,
+      webhookAccountSid: accountSid ?? null,
+    });
+  }
+
+  /**
+   * The one place a call's status actually changes: row update + the lifecycle
+   * outbox event(s) in a single transaction, shared by every producer of status
+   * (provider webhooks, the <Dial> action callback, the reconciliation sweep and
+   * dispatch failures). Callers have already checked canTransitionCall.
+   */
+  private async applyCallStatus(
+    call: Call,
+    target: CallStatus,
+    cb: Partial<VoiceStatusCallback>,
+    source: StatusSource,
+  ): Promise<void> {
+    const data: Record<string, unknown> = { status: target };
+    if (target === CallStatus.IN_PROGRESS && cb.startedAt) data.startedAt = cb.startedAt;
+    if (target === CallStatus.COMPLETED) {
+      if (cb.durationSeconds !== undefined) data.durationSeconds = cb.durationSeconds;
+      if (cb.recordingUrl !== undefined) data.recordingUrl = cb.recordingUrl;
+      if (cb.priceCents !== undefined) data.priceCents = cb.priceCents;
+      if (cb.currency !== undefined) data.currency = cb.currency;
+      data.endedAt = cb.endedAt ?? new Date();
+    }
+    // A terminal failure (busy/no-answer/failed) ends the call without connecting: stamp
+    // endedAt and capture the provider's reason so the row says WHY, not just "failed".
+    const isFailure = FAILED_STATUSES.has(target);
+    if (isFailure) {
+      data.endedAt = cb.endedAt ?? new Date();
+      data.errorCode = cb.errorCode ?? null;
+      data.errorMessage = cb.errorMessage ?? null;
+      data.sipCode = cb.sipCode ?? null;
+      // Accurate, queryable failure log — the reason a call never connected. warn (not
+      // error): an unreachable/busy number is an expected outcome, not a system fault.
+      this.logger.warn("telephony", "call ended without connecting", {
+        callId: call.id,
+        tenantId: call.tenantId,
+        status: target,
+        source,
+        toNumber: call.toNumber,
+        providerCallId: call.providerCallId ?? cb.callSid ?? null,
+        errorCode: cb.errorCode ?? null,
+        errorMessage: cb.errorMessage ?? null,
+        sipCode: cb.sipCode ?? null,
+      });
+    } else {
+      this.logger.debug("telephony", "call status applied", {
+        callId: call.id,
+        from: call.status,
+        to: target,
+        source,
+      });
+    }
+    await this.prisma.$transaction(async (tx) => {
+      // Compare-and-swap on the status we loaded: two concurrent producers (child-leg
+      // webhook vs the <Dial> verdict vs reconcile) can both pass canTransitionCall on
+      // their own read — only the first write lands; the loser is a logged no-op, so
+      // the row never double-transitions and the timeline never double-emits.
+      const swapped = await tx.call.updateMany({ where: { id: call.id, status: call.status }, data });
+      if (swapped.count === 0) {
+        this.logger.debug("telephony", "call status write lost the race — dropped", {
+          callId: call.id,
+          from: call.status,
+          to: target,
+          source,
+        });
+        return;
+      }
+      // Durable lifecycle event for every legal transition
+      // (ringing/in-progress/busy/no-answer/failed/completed) so canvassing +
+      // analytics reactions can subscribe to the full call timeline (doc 09).
+      await this.outbox.append(tx, {
+        tenantId: call.tenantId,
+        eventType: "telephony.call.status-changed",
+        aggregateId: call.id,
+        payload: {
+          callId: call.id,
+          tenantId: call.tenantId,
+          status: target,
+          source,
+          ...(isFailure
+            ? {
+                errorCode: cb.errorCode ?? null,
+                errorMessage: cb.errorMessage ?? null,
+                sipCode: cb.sipCode ?? null,
+              }
+            : {}),
+        },
+      });
+      // The completion-specific event carries the billable duration.
+      if (target === CallStatus.COMPLETED) {
+        await this.outbox.append(tx, {
+          tenantId: call.tenantId,
+          eventType: "telephony.call.completed",
+          aggregateId: call.id,
+          payload: {
+            callId: call.id,
+            tenantId: call.tenantId,
+            durationSeconds: cb.durationSeconds ?? null,
+          },
+        });
+      }
+    });
+  }
+
+  /**
+   * `<Dial action>` outcome for a browser call (the PARENT leg's verdict on the
+   * bridge). The child `<Number>` leg's own callbacks usually arrive first with
+   * richer detail — this is the safety net for dials that fail before the child
+   * leg reports (blocked caller ID, invalid number, instant rejection), which
+   * otherwise leave the call stuck at INITIATED forever. Idempotent per
+   * (parent SID, DialCallStatus); the FSM guard makes the child/parent race safe.
+   */
+  async processDialOutcome(input: {
+    callId: string;
+    parentCallSid: string;
+    dialCallStatus: string;
+    dialCallSid?: string;
+    accountSid?: string;
+  }): Promise<void> {
+    const eventId = `${input.parentCallSid}:dial:${input.dialCallStatus}`;
+    if (!(await this.webhookEvents.claim(VOICE_PROVIDER, eventId))) return; // duplicate delivery
+    try {
+      const call = await this.prisma.call.findUnique({ where: { id: input.callId } });
+      if (!call) {
+        this.logger.warn("telephony", "dial outcome for unknown call — dropped", {
+          callId: input.callId,
+          parentCallSid: input.parentCallSid,
+          dialCallStatus: input.dialCallStatus,
+        });
+        return;
+      }
+      if (!(await this.webhookAccountMayTouchCall(call, input.accountSid))) {
+        await this.refuseForeignWebhook(eventId, call, input.accountSid, "dial outcome");
+        return;
+      }
+      // Late SID bind: if no child-leg callback ever fired, the row has no provider
+      // SID yet — bind the child SID so reconciliation can find it at Twilio.
+      if (!call.providerCallId && input.dialCallSid) {
+        await this.prisma.call.update({
+          where: { id: call.id },
+          data: { providerCallId: input.dialCallSid },
+        });
+      }
+      const target = mapDialCallStatus(input.dialCallStatus);
+      if (!target) return; // completed/answered — the child-leg callbacks own the happy path.
+      if (!canTransitionCall(call.status, target)) return; // child leg already reported.
+      await this.applyCallStatus(call, target, {
+        callSid: input.dialCallSid ?? input.parentCallSid,
+        errorMessage: `Dial ended without connecting (${input.dialCallStatus})`,
+      }, "dial-action");
+    } catch (err) {
+      await this.webhookEvents.release(VOICE_PROVIDER, eventId);
+      throw err;
+    }
+  }
+
+  /**
+   * Sweep calls stuck in a non-terminal status (missed/undeliverable webhooks —
+   * dev tunnels dying mid-call is the classic): after a grace period, ask Twilio
+   * for the call's real status and apply it through the same FSM path; rows the
+   * provider can't account for are failed after a hard cap so the log never shows
+   * a call "ringing" for days. Runs from the Vercel cron (see calls.controller).
+   */
+  async reconcileStaleCalls(): Promise<{ checked: number; updated: number; abandoned: number }> {
+    const now = Date.now();
+    const graceCutoff = new Date(now - 10 * 60 * 1000); // webhooks get 10 minutes
+    const abandonCutoff = new Date(now - 60 * 60 * 1000); // no SID after an hour → dead
+    const hardCapCutoff = new Date(now - 24 * 60 * 60 * 1000); // nothing lives a day
+
+    const stale = await this.prisma.call.findMany({
+      where: { status: { in: [...LIVE_STATUSES] }, createdAt: { lt: graceCutoff } },
+      orderBy: { createdAt: "asc" },
+      take: 50,
+    });
+
+    let updated = 0;
+    let abandoned = 0;
+    for (const call of stale) {
+      try {
+        if (call.providerCallId) {
+          const remote = await this.twilio.fetchCall(call.providerCallId);
+          if (remote) {
+            const target = mapTwilioCallStatus(remote.status);
+            // No target (still queued/live at Twilio) or an illegal hop → leave it;
+            // the next sweep re-checks.
+            if (target && canTransitionCall(call.status, target)) {
+              await this.applyCallStatus(call, target, {
+                callSid: call.providerCallId,
+                durationSeconds: remote.durationSeconds,
+                priceCents: remote.priceCents,
+                currency: remote.currency,
+                startedAt: remote.startedAt,
+                endedAt: remote.endedAt,
+                errorMessage:
+                  target !== CallStatus.COMPLETED
+                    ? `Recovered by reconciliation (provider status: ${remote.status})`
+                    : undefined,
+              }, "reconcile");
+              updated += 1;
+            }
+          } else if (call.createdAt < hardCapCutoff) {
+            // Unfetchable (404 — e.g. a subaccount-owned SID the platform creds can't
+            // read): don't guess early; fail it only past the hard cap.
+            await this.failStaleCall(call, "No provider updates for 24h — failed by reconciliation");
+            abandoned += 1;
+          }
+        } else if (call.createdAt < abandonCutoff) {
+          // Never got a provider SID: the webhook that binds it never arrived.
+          await this.failStaleCall(call, "No status callback received — failed by reconciliation");
+          abandoned += 1;
+        }
+      } catch (err) {
+        // One bad row must not stall the sweep.
+        this.logger.error("telephony", "reconcile failed for call", undefined, {
+          callId: call.id,
+          providerCallId: call.providerCallId,
+          error: String(err),
+        });
+      }
+    }
+    if (stale.length > 0) {
+      this.logger.log("telephony", "reconciled stale calls", {
+        checked: stale.length,
+        updated,
+        abandoned,
+      });
+    }
+    return { checked: stale.length, updated, abandoned };
+  }
+
+  /** Terminal FAILED for a call reconciliation gave up on (guarded by the FSM). */
+  private async failStaleCall(call: Call, reason: string): Promise<void> {
+    if (!canTransitionCall(call.status, CallStatus.FAILED)) return;
+    await this.applyCallStatus(call, CallStatus.FAILED, { errorMessage: reason }, "reconcile");
   }
 
   /** Shared tenant-scoped filter for the list + stats (status/contact/search/date range). */
@@ -431,20 +713,44 @@ export class CallsService {
   /**
    * Twilio recording status callback → bind the recording URL to its Call. The
    * recording completes separately from the call, so this is its own idempotent
-   * claim (`callSid:recording`); release on throw so a retry reprocesses.
+   * claim, keyed per status (`callSid:recording:<status>`) so a failed/absent
+   * report can never burn the claim a later `completed` needs; release on throw
+   * so a retry reprocesses.
    */
   async processRecordingCallback(
-    cb: { callSid: string; recordingUrl?: string },
+    cb: { callSid: string; recordingUrl?: string; recordingStatus?: string; accountSid?: string },
     callId?: string,
   ): Promise<void> {
+    // Only a completed recording has audio to bind. failed/absent are worth a log —
+    // a recorded call whose audio never materialised is an answer to "where's the
+    // recording?", not a silent nothing. (No status = older config; treat as completed.)
+    const status = cb.recordingStatus || "completed";
+    if (status !== "completed") {
+      this.logger.warn("telephony", "recording did not complete", {
+        providerCallId: cb.callSid,
+        recordingStatus: status,
+        callIdParam: callId ?? null,
+      });
+      return;
+    }
     if (!cb.recordingUrl) return;
-    const eventId = `${cb.callSid}:recording`;
+    const eventId = `${cb.callSid}:recording:${status}`;
     if (!(await this.webhookEvents.claim(VOICE_PROVIDER, eventId))) return; // duplicate delivery
     try {
       const call = callId
         ? await this.prisma.call.findUnique({ where: { id: callId } })
         : await this.prisma.call.findUnique({ where: { providerCallId: cb.callSid } });
-      if (!call) return; // unknown call
+      if (!call) {
+        this.logger.warn("telephony", "recording callback for unknown call — dropped", {
+          providerCallId: cb.callSid,
+          callIdParam: callId ?? null,
+        });
+        return;
+      }
+      if (!(await this.webhookAccountMayTouchCall(call, cb.accountSid))) {
+        await this.refuseForeignWebhook(eventId, call, cb.accountSid, "recording callback");
+        return;
+      }
       await this.prisma.call.update({ where: { id: call.id }, data: { recordingUrl: cb.recordingUrl } });
     } catch (err) {
       await this.webhookEvents.release(VOICE_PROVIDER, eventId);

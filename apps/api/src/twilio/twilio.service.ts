@@ -334,6 +334,8 @@ export class TwilioService {
     callId: string;
     statusCallbackBase: string;
     recordingCallbackBase: string;
+    /** When set, <Dial action> posts the DialCallStatus verdict here after the bridge ends. */
+    dialActionBase?: string;
   }): string {
     const response = new Twilio.twiml.VoiceResponse();
     const q = `callId=${encodeURIComponent(params.callId)}`;
@@ -341,7 +343,10 @@ export class TwilioService {
       callerId: params.callerId,
       record: "record-from-answer-dual",
       recordingStatusCallback: `${params.recordingCallbackBase}?${q}`,
-      recordingStatusCallbackEvent: ["completed"],
+      // "absent" tells us a recorded call produced no audio (worth a log); <Dial>'s
+      // recording events don't include "failed" (that's the REST-API-level event).
+      recordingStatusCallbackEvent: ["completed", "absent"],
+      ...(params.dialActionBase ? { action: `${params.dialActionBase}?${q}`, method: "POST" as const } : {}),
     });
     dial.number(
       {
@@ -738,5 +743,40 @@ export class TwilioService {
     } finally {
       this.releaseSendPermit(bucket);
     }
+  }
+
+  /**
+   * Fetch a call's current state from Twilio (the reconciliation sweep's source of
+   * truth for calls whose webhooks never arrived). Returns null when the platform
+   * account can't see the SID (404 — e.g. a subaccount-owned call); other provider
+   * errors throw so the caller can decide.
+   */
+  async fetchCall(callSid: string): Promise<{
+    status: string;
+    durationSeconds?: number;
+    priceCents?: number;
+    currency?: string;
+    startedAt?: Date;
+    endedAt?: Date;
+  } | null> {
+    const client = this.getClient();
+    let fetched: any;
+    try {
+      fetched = await client.calls(callSid).fetch();
+    } catch (error) {
+      if ((error as { status?: number })?.status === 404) return null;
+      throw error;
+    }
+    const duration = fetched?.duration != null ? Number(fetched.duration) : undefined;
+    const price = fetched?.price != null ? Number(fetched.price) : undefined;
+    return {
+      status: String(fetched?.status ?? ""),
+      durationSeconds: Number.isFinite(duration) ? duration : undefined,
+      // Twilio reports price as a negative decimal in major units; we store positive cents.
+      priceCents: price !== undefined && Number.isFinite(price) ? Math.round(Math.abs(price) * 100) : undefined,
+      currency: fetched?.priceUnit ? String(fetched.priceUnit) : undefined,
+      startedAt: fetched?.startTime ? new Date(fetched.startTime) : undefined,
+      endedAt: fetched?.endTime ? new Date(fetched.endTime) : undefined,
+    };
   }
 }

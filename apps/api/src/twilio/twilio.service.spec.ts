@@ -951,3 +951,66 @@ describe("TwilioService createVoiceApp", () => {
     });
   });
 });
+
+describe("TwilioService fetchCall (reconciliation)", () => {
+  beforeEach(resetMock);
+
+  it("maps the provider call resource — duration, negative major-unit price → positive cents, times", async () => {
+    const service = new TwilioService(config);
+    const c = platformClient() as any;
+    const fetch = jest.fn().mockResolvedValue({
+      status: "completed",
+      duration: "42",
+      price: "-0.35",
+      priceUnit: "USD",
+      startTime: "2026-07-18T01:00:00.000Z",
+      endTime: "2026-07-18T01:00:42.000Z",
+    });
+    c.calls = jest.fn(() => ({ fetch }));
+
+    const res = await service.fetchCall("CA_done");
+
+    expect(c.calls).toHaveBeenCalledWith("CA_done");
+    expect(res).toEqual({
+      status: "completed",
+      durationSeconds: 42,
+      priceCents: 35,
+      currency: "USD",
+      startedAt: new Date("2026-07-18T01:00:00.000Z"),
+      endedAt: new Date("2026-07-18T01:00:42.000Z"),
+    });
+  });
+
+  it("leaves optional fields undefined when the provider omits them (still-live call)", async () => {
+    const service = new TwilioService(config);
+    const c = platformClient() as any;
+    c.calls = jest.fn(() => ({ fetch: jest.fn().mockResolvedValue({ status: "in-progress" }) }));
+
+    const res = await service.fetchCall("CA_live");
+
+    expect(res).toEqual({
+      status: "in-progress",
+      durationSeconds: undefined,
+      priceCents: undefined,
+      currency: undefined,
+      startedAt: undefined,
+      endedAt: undefined,
+    });
+  });
+
+  it("returns null on a 404 (a SID this account can't see, e.g. subaccount-owned)", async () => {
+    const service = new TwilioService(config);
+    const c = platformClient() as any;
+    c.calls = jest.fn(() => ({ fetch: jest.fn().mockRejectedValue({ status: 404 }) }));
+
+    expect(await service.fetchCall("CA_foreign")).toBeNull();
+  });
+
+  it("rethrows non-404 provider errors so the caller can decide", async () => {
+    const service = new TwilioService(config);
+    const c = platformClient() as any;
+    c.calls = jest.fn(() => ({ fetch: jest.fn().mockRejectedValue({ status: 500, message: "boom" }) }));
+
+    await expect(service.fetchCall("CA_err")).rejects.toMatchObject({ status: 500 });
+  });
+});

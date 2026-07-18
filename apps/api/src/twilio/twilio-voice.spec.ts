@@ -41,5 +41,20 @@ describe("TwilioService browser voice (real SDK)", () => {
     expect(xml).toContain("+61400000999");
     expect(xml).toContain("callId=call1");
     expect(xml).toContain("record");
+    // No dialActionBase → no action attribute (the dial verdict callback is opt-in).
+    expect(xml).not.toContain("action=");
+  });
+
+  it("buildDialTwiml threads the <Dial action> verdict URL when given a dialActionBase", () => {
+    const xml = svc.buildDialTwiml({
+      to: "+61400000999",
+      callerId: "+61400000111",
+      callId: "call1",
+      statusCallbackBase: "https://api.test/api/v1/voice-status-callback",
+      recordingCallbackBase: "https://api.test/api/v1/voice-recording-callback",
+      dialActionBase: "https://api.test/api/v1/voice-dial-status",
+    });
+    expect(xml).toContain('action="https://api.test/api/v1/voice-dial-status?callId=call1"');
+    expect(xml).toContain('method="POST"');
   });
 });

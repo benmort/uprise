@@ -185,6 +185,10 @@ export interface DomainEventMap {
     // never connected, for failure-alerting reactions.
     errorCode?: string | null;
     errorMessage?: string | null;
+    sipCode?: string | null;
+    // What produced the transition: a provider webhook, the <Dial> action callback,
+    // the reconciliation sweep, or a dispatch failure at initiate time.
+    source?: "webhook" | "dial-action" | "reconcile" | "dispatch";
   };
   "tenant.org-credential.updated": { orgProfileId: string; tenantId: string };
   "tenant.tenant.created": { tenantId: string; slug: string; name: string; networkId: string | null };

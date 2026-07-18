@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, Res } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, Res } from "@nestjs/common";
 import { Request, Response } from "express";
 import { CallsService } from "./calls.service";
 import { InitiateCallDto, ListCallsDto } from "./dto/call.dto";
@@ -41,6 +41,22 @@ export class CallsController {
   @RequirePermission(OPERATE)
   voiceToken(@TenantId() tenantId: string, @Req() req: Request & { user: AuthUser }) {
     return this.calls.voiceToken(req.user.id, tenantId);
+  }
+
+  /**
+   * Reconciliation sweep for calls stuck non-terminal (missed webhooks). Two
+   * legitimate callers: the Vercel cron (CRON_SECRET bearer — BasicAuthGuard
+   * allowlists the path and attaches no user) and a super-admin poking it
+   * manually; a @RequirePermission decorator would break the user-less cron
+   * path, so the session gate lives here (declared before `:id`).
+   */
+  @Get("reconcile")
+  @Post("reconcile")
+  reconcile(@Req() req: Request & { user?: AuthUser }) {
+    if (req.user && !req.user.isSuperAdmin) {
+      throw new ForbiddenException("Call reconciliation is operator-only");
+    }
+    return this.calls.reconcileStaleCalls();
   }
 
   /**

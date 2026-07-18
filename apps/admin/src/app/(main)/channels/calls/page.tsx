@@ -22,6 +22,7 @@ import { DataTable, KpiTile } from "@uprise/field";
 import { Button } from "@/components/ui/button";
 import { TelephonyStatusCard } from "@/components/telephony/telephony-status-card";
 import { CallRecordingPlayer } from "@/components/channels/call-recording-player";
+import { callErrorText, callErrorTitle } from "@/components/channels/call-error";
 import { NewCallDialog } from "@/components/softphone/new-call-dialog";
 
 const CALL_STATUSES: TransactionalCallStatus[] = [
@@ -189,17 +190,12 @@ export default function CallsPage() {
               key: "status",
               header: "Status",
               cell: (c: TransactionalCall) => {
-                const reason = c.errorMessage || (c.errorCode ? `Error ${c.errorCode}` : null);
+                const reason = callErrorText(c);
                 return (
                   <div className="flex flex-col gap-0.5">
                     <StatusBadge status={c.status} />
                     {reason ? (
-                      <span
-                        className="max-w-[220px] truncate text-xs text-error"
-                        title={[c.errorMessage, c.errorCode && `code ${c.errorCode}`, c.sipCode && `SIP ${c.sipCode}`]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      >
+                      <span className="max-w-[220px] truncate text-xs text-error" title={callErrorTitle(c)}>
                         {reason}
                       </span>
                     ) : null}

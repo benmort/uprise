@@ -25,6 +25,10 @@
     {
       "path": "/api/v1/email-provisioning/poll",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/v1/calls/reconcile",
+      "schedule": "*/10 * * * *"
     }
   ],
   "routes": [

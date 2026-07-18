@@ -107,6 +107,15 @@ describe("BasicAuthGuard", () => {
     expect(guard.canActivate(context)).toBe(true);
   });
 
+  it("allows the <Dial action> verdict webhook (/voice-dial-status) without auth", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/voice-dial-status",
+      headers: {},
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
   it("rejects non-webhook requests without authorization", () => {
     const guard = createGuard();
     const context = executionContextWithRequest({
@@ -181,6 +190,15 @@ describe("BasicAuthGuard", () => {
     const guard = createGuard();
     const context = executionContextWithRequest({
       path: "/api/v1/audiences/dispatch-imports",
+      headers: { authorization: "Bearer cron-secret" },
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it("allows the calls reconciliation sweep with a valid cron bearer token", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/calls/reconcile",
       headers: { authorization: "Bearer cron-secret" },
     });
     expect(guard.canActivate(context)).toBe(true);

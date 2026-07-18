@@ -287,6 +287,7 @@ export class WebhooksController {
         errorCode: body?.ErrorCode ? String(body.ErrorCode) : undefined,
         errorMessage: body?.ErrorMessage ? String(body.ErrorMessage) : undefined,
         sipCode: body?.SipResponseCode ? String(body.SipResponseCode) : undefined,
+        accountSid: body?.AccountSid || undefined,
       },
       callId,
     );
@@ -325,9 +326,44 @@ export class WebhooksController {
   }
 
   /**
+   * `<Dial action>` callback for a browser call — the parent leg's verdict on the
+   * bridge (DialCallStatus). The child leg's own status callbacks carry the rich
+   * detail; this is the safety net for dials that fail before the child leg exists
+   * (blocked caller ID, invalid number), which would otherwise strand the Call row
+   * at INITIATED. Returns empty TwiML so the parent leg ends cleanly.
+   */
+  @Post("voice-dial-status")
+  @Header("Content-Type", "application/xml")
+  async voiceDialStatus(
+    @Body()
+    body: {
+      CallSid?: string; // the PARENT (browser) leg
+      DialCallSid?: string; // the child (callee) leg, when one was created
+      DialCallStatus?: string; // completed | busy | no-answer | failed | canceled
+      AccountSid?: string;
+    },
+    @Req() req: Request,
+    @Query("callId") callId?: string,
+  ): Promise<string> {
+    const token = await this.telephonyAuth.tokenForAccountSid(body?.AccountSid);
+    this.validateTwilioSignature(req, body as Record<string, unknown>, token);
+    if (callId && body?.CallSid && body?.DialCallStatus) {
+      await this.calls.processDialOutcome({
+        callId,
+        parentCallSid: String(body.CallSid),
+        dialCallStatus: String(body.DialCallStatus),
+        dialCallSid: body?.DialCallSid ? String(body.DialCallSid) : undefined,
+        accountSid: body?.AccountSid || undefined,
+      });
+    }
+    return TWIML_EMPTY;
+  }
+
+  /**
    * Twilio recording status callback (meld doc 09). A call's recording finalises
    * after the call ends, so it arrives separately from the status callback; this
-   * binds the RecordingUrl to its Call. Idempotency + the claim live in CallsService.
+   * binds the RecordingUrl to its Call (completed only — failed/absent are logged).
+   * Idempotency + the claim live in CallsService.
    */
   @Post("voice-recording-callback")
   @Header("Content-Type", "application/xml")
@@ -348,6 +384,8 @@ export class WebhooksController {
       {
         callSid: String(body?.CallSid || ""),
         recordingUrl: body?.RecordingUrl || undefined,
+        recordingStatus: body?.RecordingStatus || undefined,
+        accountSid: body?.AccountSid || undefined,
       },
       callId,
     );

@@ -165,6 +165,8 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/email-provisioning/poll",
       "/events/dispatch-due-reminders",
       "/api/v1/events/dispatch-due-reminders",
+      "/calls/reconcile",
+      "/api/v1/calls/reconcile",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
@@ -176,6 +178,7 @@ export class BasicAuthGuard implements CanActivate {
       "/twilio-status-callback",
       "/voice-status-callback",
       "/voice-recording-callback",
+      "/voice-dial-status",
       "/voice-outbound",
       "/email-webhook",
       "/payment-webhook",
@@ -184,6 +187,7 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/twilio-status-callback",
       "/api/v1/voice-status-callback",
       "/api/v1/voice-recording-callback",
+      "/api/v1/voice-dial-status",
       "/api/v1/voice-outbound",
       "/api/v1/email-webhook",
       "/api/v1/payment-webhook",

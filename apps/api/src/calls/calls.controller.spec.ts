@@ -1,3 +1,4 @@
+import { ForbiddenException } from "@nestjs/common";
 import { CallStatus } from "@uprise/db";
 import { CallsController } from "./calls.controller";
 
@@ -9,6 +10,7 @@ describe("CallsController", () => {
     getCall: jest.fn().mockResolvedValue({ id: "c1" }),
     streamRecording: jest.fn().mockResolvedValue({ contentType: "audio/mpeg", body: Buffer.from("x") }),
     voiceToken: jest.fn().mockResolvedValue({ token: "jwt", identity: "uu1.tt1", fromNumber: "+61400000111", expiresAt: "z" }),
+    reconcileStaleCalls: jest.fn().mockResolvedValue({ checked: 0, updated: 0, abandoned: 0 }),
   } as any;
   const c = new CallsController(calls);
 
@@ -48,5 +50,22 @@ describe("CallsController", () => {
   it("get delegates with tenantId and id", () => {
     c.get("t1", "c1");
     expect(calls.getCall).toHaveBeenCalledWith("t1", "c1");
+  });
+
+  describe("reconcile gate", () => {
+    it("runs for the user-less cron request", () => {
+      c.reconcile({} as any);
+      expect(calls.reconcileStaleCalls).toHaveBeenCalled();
+    });
+
+    it("runs for a super-admin", () => {
+      c.reconcile({ user: { id: "admin", isSuperAdmin: true } } as any);
+      expect(calls.reconcileStaleCalls).toHaveBeenCalled();
+    });
+
+    it("forbids a session-authed non-super-admin", () => {
+      expect(() => c.reconcile({ user: { id: "u1", isSuperAdmin: false } } as any)).toThrow(ForbiddenException);
+      expect(calls.reconcileStaleCalls).not.toHaveBeenCalled();
+    });
   });
 });
