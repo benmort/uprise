@@ -29,11 +29,16 @@ export interface BrandedEmailContent {
    */
   logoUrl?: string;
   /**
-   * The tenant's brand colour for the button + links, as a `#rrggbb` hex. Anything that isn't a
-   * 6-digit hex is ignored and the default accent is used (inline style values aren't escaped, so
-   * this MUST be validated before it reaches the markup).
+   * The tenant's brand colour for links (the "paste this link" fallback + autolinked URLs in the
+   * body), as a `#rrggbb` hex. Anything that isn't a 6-digit hex is ignored and the default accent
+   * is used (inline style values aren't escaped, so this MUST be validated before it reaches the markup).
    */
   accentColour?: string;
+  /**
+   * The tenant's SECONDARY brand colour for the call-to-action button fill, as a `#rrggbb` hex.
+   * Falls back to `accentColour`, then the default, when absent/invalid.
+   */
+  buttonColour?: string;
   /** Big title inside the card. */
   heading: string;
   /** Paragraphs before the button. */
@@ -77,8 +82,21 @@ const C = {
   accentText: "#ffffff",
 };
 
-const para = (text: string, color: string): string =>
-  `<p style="margin:0 0 16px;font-size:16px;line-height:1.55;color:${color};">${esc(text)}</p>`;
+// Turn bare URLs in already-escaped text into clickable links, so a transactional email that
+// carries its link in the body (composed invites, tenant-overridden copy) always shows the link
+// as a real link — not naked text a recipient must copy. Operates on escaped text so it never
+// double-escapes; trailing sentence punctuation is kept outside the anchor.
+const URL_RE = /(https?:\/\/[^\s<]+?)([.,;:!?)]*)(?=\s|$)/g;
+function linkify(escaped: string, linkColour: string): string {
+  return escaped.replace(
+    URL_RE,
+    (_m, url: string, trail: string) =>
+      `<a href="${url}" style="color:${linkColour};word-break:break-all;">${url}</a>${trail}`,
+  );
+}
+
+const para = (text: string, color: string, linkColour: string): string =>
+  `<p style="margin:0 0 16px;font-size:16px;line-height:1.55;color:${color};">${linkify(esc(text), linkColour)}</p>`;
 
 /** The branded, email-client-safe HTML document. */
 export function renderBrandedEmail(c: BrandedEmailContent): string {
@@ -87,9 +105,11 @@ export function renderBrandedEmail(c: BrandedEmailContent): string {
     : "";
 
   const accent = safeHex(c.accentColour) ?? C.accent;
+  // The CTA button wears the tenant's SECONDARY colour; links keep the primary accent.
+  const buttonBg = safeHex(c.buttonColour) ?? accent;
 
-  const intro = c.intro.map((p) => para(p, C.ink)).join("");
-  const outro = (c.outro ?? []).map((p) => para(p, C.muted)).join("");
+  const intro = c.intro.map((p) => para(p, C.ink, accent)).join("");
+  const outro = (c.outro ?? []).map((p) => para(p, C.muted, accent)).join("");
 
   // Tenant logo (absolute https only) replaces the text wordmark when present.
   const wordmark =
@@ -101,7 +121,7 @@ export function renderBrandedEmail(c: BrandedEmailContent): string {
     ? `
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 20px;">
         <tr>
-          <td style="border-radius:10px;background:${accent};">
+          <td style="border-radius:10px;background:${buttonBg};">
             <a href="${esc(c.cta.url)}"
                style="display:inline-block;padding:13px 26px;font-size:16px;font-weight:700;color:${C.accentText};text-decoration:none;border-radius:10px;">
               ${esc(c.cta.label)}

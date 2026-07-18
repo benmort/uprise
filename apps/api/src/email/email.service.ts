@@ -93,10 +93,15 @@ export class EmailService implements OnModuleInit {
   private renderHtml(
     template: EmailTemplateDef,
     vars: Record<string, string> | undefined,
-    brand: { brandName: string; logoUrl?: string; accentColour?: string },
+    brand: { brandName: string; logoUrl?: string; accentColour?: string; buttonColour?: string },
   ): string {
     const sub = (s: string) => this.render(s, vars);
-    const frame = { brandName: brand.brandName, logoUrl: brand.logoUrl, accentColour: brand.accentColour };
+    const frame = {
+      brandName: brand.brandName,
+      logoUrl: brand.logoUrl,
+      accentColour: brand.accentColour,
+      buttonColour: brand.buttonColour,
+    };
     let content: BrandedEmailContent;
     if (template.layout) {
       const L = template.layout;
@@ -130,20 +135,31 @@ export class EmailService implements OnModuleInit {
   private async resolveBrand(
     tenantId: string,
     vars: Record<string, string> | undefined,
-  ): Promise<{ brandName: string; logoUrl?: string; accentColour?: string }> {
-    let profile: { name: string; logoLandscapeUrl: string | null; logoBlockUrl: string | null; primaryColour: string | null } | null =
-      null;
+  ): Promise<{ brandName: string; logoUrl?: string; accentColour?: string; buttonColour?: string }> {
+    let profile: {
+      name: string;
+      logoLandscapeUrl: string | null;
+      logoBlockUrl: string | null;
+      primaryColour: string | null;
+      secondaryColour: string | null;
+    } | null = null;
     try {
       profile = await this.prisma.orgProfile.findFirst({
         where: { tenantId },
-        select: { name: true, logoLandscapeUrl: true, logoBlockUrl: true, primaryColour: true },
+        select: { name: true, logoLandscapeUrl: true, logoBlockUrl: true, primaryColour: true, secondaryColour: true },
       });
     } catch {
       profile = null; // never let a branding lookup fail the send
     }
     const brandName = profile?.name || vars?.tenant || vars?.appName || "Uprise";
     const logo = [profile?.logoLandscapeUrl, profile?.logoBlockUrl].find((u) => u && /^https:\/\//i.test(u));
-    return { brandName, logoUrl: logo ?? undefined, accentColour: profile?.primaryColour ?? undefined };
+    return {
+      brandName,
+      logoUrl: logo ?? undefined,
+      // Links use the primary colour; the CTA button wears the secondary (falls back to primary).
+      accentColour: profile?.primaryColour ?? undefined,
+      buttonColour: profile?.secondaryColour ?? profile?.primaryColour ?? undefined,
+    };
   }
 
   /** Transactional email (verification, magic-link, receipts), sent inline. */

@@ -73,6 +73,22 @@ describe("renderBrandedEmail", () => {
     expect(injected).toContain("background:#2f5bd6"); // fell back to the default accent
   });
 
+  it("fills the CTA button with the secondary (buttonColour), keeping links on the accent", () => {
+    const html = renderBrandedEmail({ ...base, accentColour: "#111111", buttonColour: "#22aa22" });
+    expect(html).toContain("background:#22aa22"); // button = secondary
+    expect(html).toContain("color:#111111"); // the "paste this link" fallback stays on the accent
+  });
+
+  it("autolinks a bare URL in the body so the link is always clickable, not naked text", () => {
+    const html = renderBrandedEmail({
+      ...base,
+      cta: undefined,
+      accentColour: "#123456",
+      intro: ["Accept your invite: https://auth.example/invite/abc123"],
+    });
+    expect(html).toContain('<a href="https://auth.example/invite/abc123" style="color:#123456');
+  });
+
   it("escapes HTML in content so injected markup can't break out", () => {
     const html = renderBrandedEmail({
       ...base,
