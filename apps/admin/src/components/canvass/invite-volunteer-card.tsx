@@ -5,7 +5,7 @@ import { Mail, Send, Smartphone } from "lucide-react";
 import { formatAuMobile, toE164 } from "@uprise/ui";
 import { tenants, messageTemplates, type MessageTemplate } from "@uprise/api-client";
 import { SectionCard } from "@uprise/field";
-import { getSession } from "@/lib/session";
+import { getSession, goToLogin } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -86,9 +86,22 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
   );
 
   const submit = useCallback(async () => {
-    const tenantId = (await getSession())?.tenantId;
+    // Two distinct "no tenant" cases, previously conflated into one misleading toast:
+    // a dead session (12h TTL expired under a still-rendered SPA) must re-auth, and only
+    // a genuinely workspace-less principal (super-admin with nothing pinned) is told so.
+    const session = await getSession();
+    if (!session) {
+      showToast({ tone: "warning", title: "Session expired", description: "Sending you to sign in…" });
+      goToLogin();
+      return;
+    }
+    const tenantId = session.tenantId;
     if (!tenantId) {
-      showToast({ tone: "error", title: "No active workspace" });
+      showToast({
+        tone: "error",
+        title: "No active workspace",
+        description: "Pick a workspace from the switcher first — invites are sent from a workspace.",
+      });
       return;
     }
     if (mode === "phone") {
