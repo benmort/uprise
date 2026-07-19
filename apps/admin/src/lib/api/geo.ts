@@ -530,3 +530,9 @@ export async function getPollingPlace(id: string) {
 export async function getDensityScale(kind: string) {
   return request<DensityScale>(`/geo/density/scale?kind=${encodeURIComponent(kind)}`);
 }
+
+/** Loaded elections (booth-metric sources) — the targeting panel's election picker. */
+export type GeoElection = { id: string; jurisdiction: string; name: string; heldOn: string | null };
+export async function listElections() {
+  return request<GeoElection[]>("/geo/elections");
+}

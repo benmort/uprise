@@ -45,6 +45,10 @@ function setup(opts: {
     },
     canvassHeatRun: {
       findUnique: jest.fn(async () => opts.existingRun ?? null),
+      findFirst: jest.fn(async ({ select }: any = {}) =>
+        opts.existingRun ? (select?.id ? { id: "run-live" } : { id: "run-live", ...opts.existingRun }) : null,
+      ),
+      update: jest.fn(async ({ where, data }: any) => ({ id: where.id, ...data })),
       deleteMany: jest.fn(async () => ({ count: 1 })),
       create: jest.fn(async ({ data }: any) => ({ id: "run1", computedAt: new Date("2026-07-19T00:00:00Z"), ...data })),
     },
@@ -76,7 +80,7 @@ describe("HeatService.getForCampaign", () => {
     expect(factors.extract).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: "t1", electionId: "federal-2025", fitIndicator: "seifa_irsd_decile" }),
     );
-    expect(prisma.canvassHeatRun.deleteMany).toHaveBeenCalledWith({ where: { campaignId: "camp1" } });
+    expect(prisma.canvassHeatRun.deleteMany).toHaveBeenCalledWith({ where: { campaignId: "camp1", frozen: false } });
     expect(prisma.canvassHeatCell.createMany).toHaveBeenCalled();
     expect(res.meta.campaignId).toBe("camp1");
     expect(res.meta.preset).toBe("coverage");
@@ -210,6 +214,36 @@ describe("HeatService.setConfig + refresh + worker entry", () => {
   it("the worker entry swallows a vanished campaign", async () => {
     const { svc } = setup({ campaign: null });
     expect(await svc.processHeatJob({ tenantId: "t1", campaignId: "gone" })).toBeNull();
+  });
+
+  it("snapshot freezes the live run; NO_RUN without one", async () => {
+    const frozen = setup({
+      existingRun: {
+        inputsHash: "h",
+        preset: "coverage",
+        weights: {},
+        meta: { breaks: [], factorCoverage: {}, constantFactors: [], lowResolutionFactors: [], sa1Count: 1, weights: {} },
+        computedAt: new Date("2026-07-19T00:00:00Z"),
+        cells: [],
+      },
+    });
+    const res = await frozen.svc.snapshot("t1", "camp1");
+    expect(frozen.prisma.canvassHeatRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { frozen: true } }),
+    );
+    expect(res.frozenRunId).toBeDefined();
+
+    const empty = setup();
+    await expect(empty.svc.snapshot("t1", "camp1")).rejects.toMatchObject({
+      response: { error: { code: "NO_RUN" } },
+    });
+  });
+
+  it("currentRunId returns the live run id (null when none)", async () => {
+    const with_ = setup({ existingRun: { inputsHash: "h", preset: "coverage", weights: {}, meta: {}, computedAt: new Date(), cells: [] } });
+    expect(await with_.svc.currentRunId("camp1")).toBe("run-live");
+    const without = setup();
+    expect(await without.svc.currentRunId("camp1")).toBeNull();
   });
 
   it("day-truncates the tenant watermark so per-knock churn can't thrash the cache", async () => {

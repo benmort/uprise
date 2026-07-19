@@ -8,8 +8,10 @@ import {
   INDICATORS,
   CENSUS_G02_FILES,
   CENSUS_G01_FILE,
+  CENSUS_G33_FILE,
   CENSUS_G37_FILE,
   G01_SHARES,
+  G33_SHARES,
   G37_SHARES,
   SEIFA_FILES,
   SEIFA_SUMMARY_SHEET,
@@ -112,6 +114,7 @@ async function main(): Promise<void> {
     for (const { file, defs, label } of [
       { file: CENSUS_G01_FILE, defs: G01_SHARES, label: "G01 shares" },
       { file: CENSUS_G37_FILE, defs: G37_SHARES, label: "G37 shares" },
+      { file: CENSUS_G33_FILE, defs: G33_SHARES, label: "G33 shares" },
     ]) {
       const path = resolve(DATA_DIR, file);
       if (!existsSync(path)) { log(`  – ${file} not staged; skipping ${label}`); continue; }

@@ -11,6 +11,7 @@ describe("EngagementService", () => {
   beforeEach(() => {
     prisma = {
       disposition: { create: jest.fn(async ({ data }: any) => ({ id: "d1", ...data })) },
+      contact: { updateMany: jest.fn() },
       questionResponse: { create: jest.fn(async ({ data }: any) => ({ id: "qr1", ...data })) },
       questionOption: { findUnique: jest.fn() },
       question: { findUnique: jest.fn().mockResolvedValue({ surveyId: "sv1" }) },
@@ -101,6 +102,45 @@ describe("EngagementService", () => {
         prisma,
         expect.objectContaining({ eventType: "canvass.disposition.set", payload: expect.objectContaining({ code: "moved" }) }),
       );
+    });
+
+    it("stamps consentAt/consentMethod and rolls the consent up onto the contact (APP 5)", async () => {
+      prisma.dispositionDef.findFirst.mockResolvedValue({ layer: DispositionLayer.CONTACT_RESULT });
+
+      const result = await service.recordDisposition("org_1", {
+        contactId: "c1",
+        code: "spoke_to_target",
+        channel: EngagementChannel.DOOR,
+        consentMethod: "verbal_door",
+      });
+
+      expect(result.consentMethod).toBe("verbal_door");
+      expect(result.consentAt).toBeInstanceOf(Date);
+      expect(prisma.disposition.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          consentMethod: "verbal_door",
+          consentAt: expect.any(Date),
+        }),
+      });
+      // Latest-wins roll-up onto the contact spine, in the same transaction.
+      expect(prisma.contact.updateMany).toHaveBeenCalledWith({
+        where: { id: "c1", tenantId: "org_1" },
+        data: { consentAt: expect.any(Date), consentMethod: "verbal_door" },
+      });
+    });
+
+    it("records no consent when consentMethod is absent (consent is affirmative-only)", async () => {
+      prisma.dispositionDef.findFirst.mockResolvedValue({ layer: DispositionLayer.CONTACT_RESULT });
+
+      const result = await service.recordDisposition("org_1", {
+        contactId: "c1",
+        code: "spoke_to_target",
+        channel: EngagementChannel.DOOR,
+      });
+
+      expect(result.consentAt).toBeNull();
+      expect(result.consentMethod).toBeNull();
+      expect(prisma.contact.updateMany).not.toHaveBeenCalled();
     });
 
     it("falls back to CONTACT_RESULT when the code is unknown", async () => {

@@ -24,6 +24,7 @@ export type ValueRow = { level: string; code: string; indicator_key: string; val
 const SEIFA_SOURCE = "ABS SEIFA 2021 (2033.0.55.001)";
 const CENSUS_G02 = "ABS Census 2021 · G02";
 const CENSUS_G01 = "ABS Census 2021 · G01";
+const CENSUS_G33 = "ABS Census 2021 · G33";
 const CENSUS_G37 = "ABS Census 2021 · G37";
 
 // The indicator catalogue seeded into geo.abs_indicator. `polarity` drives the choropleth ramp
@@ -50,6 +51,7 @@ export const INDICATORS: IndicatorDef[] = [
   { key: "age_18_24_share", name: "Young adults 18–24 (est. share)", category: "demographic", unit: "pct", format: "percent", source: CENSUS_G01, polarity: "neutral", levels: ["sa1"], sort: 32, description: "Estimated share aged 18–24: the 20–24 cohort plus two fifths of 15–19 (Census G01 five-year bands don't split at 18)." },
   { key: "renter_share", name: "Renting households (share)", category: "housing", unit: "pct", format: "percent", source: CENSUS_G37, polarity: "neutral", levels: ["sa1"], sort: 24, description: "Share of occupied private dwellings that are rented (Census G37)." },
   { key: "social_housing_share", name: "Social housing (share)", category: "housing", unit: "pct", format: "percent", source: CENSUS_G37, polarity: "neutral", levels: ["sa1"], sort: 25, description: "Share of dwellings rented from a state or territory housing authority (Census G37)." },
+  { key: "low_income_household_share", name: "Low-income households (share)", category: "socioeconomic", unit: "pct", format: "percent", source: CENSUS_G33, polarity: "neutral", levels: ["sa1"], sort: 13, description: "Share of income-stated households under $650/week total household income (Census G33)." },
 ];
 
 // Census G02 DataPack: one small CSV per level (just the G02 table, not the whole DataPack).
@@ -164,6 +166,9 @@ export type ShareDef = {
   numerators: Array<{ cols: string[]; weight?: number }>;
   /** First matching column wins. */
   denominator: string[];
+  /** Columns subtracted from the denominator (e.g. not-stated households). Each entry:
+   *  first matching column wins; a missing subtrahend column makes the def unresolvable. */
+  denominatorSubtract?: Array<string[]>;
 };
 
 /** G01 (selected person characteristics) → person-share indicators. Column names verified
@@ -181,6 +186,26 @@ export const CENSUS_G37_FILE = "2021Census_G37_AUST_SA1.csv";
 export const G37_SHARES: ShareDef[] = [
   { key: "renter_share", numerators: [{ cols: ["R_Tot_Total"] }], denominator: ["Total_Total"] },
   { key: "social_housing_share", numerators: [{ cols: ["R_ST_h_auth_Total"] }], denominator: ["Total_Total"] },
+];
+
+/** G33 (total household income weekly) → low-income share. Denominator is households with a
+ *  STATED income (total minus partial/not-stated), so suppression and non-response can't be
+ *  read as poverty. "Low income" = under $650/week (the bottom six brackets). */
+export const CENSUS_G33_FILE = "2021Census_G33_AUST_SA1.csv";
+export const G33_SHARES: ShareDef[] = [
+  {
+    key: "low_income_household_share",
+    numerators: [
+      { cols: ["Negative_Nil_income_Tot"] },
+      { cols: ["HI_1_149_Tot"] },
+      { cols: ["HI_150_299_Tot"] },
+      { cols: ["HI_300_399_Tot"] },
+      { cols: ["HI_400_499_Tot"] },
+      { cols: ["HI_500_649_Tot"] },
+    ],
+    denominator: ["Tot_Tot"],
+    denominatorSubtract: [["Partial_income_stated_Tot"], ["All_incomes_not_stated_Tot"]],
+  },
 ];
 
 /**
@@ -201,16 +226,22 @@ export function shareRows(
   const find = (cands: string[]): number =>
     header.findIndex((h) => cands.some((c) => h.toLowerCase() === c.toLowerCase()));
 
-  const resolved: Array<{ key: string; terms: Array<{ idx: number; weight: number }>; denIdx: number }> = [];
+  const resolved: Array<{
+    key: string;
+    terms: Array<{ idx: number; weight: number }>;
+    denIdx: number;
+    subIdxs: number[];
+  }> = [];
   const missing: string[] = [];
   for (const def of defs) {
     const denIdx = find(def.denominator);
     const terms = def.numerators.map((t) => ({ idx: find(t.cols), weight: t.weight ?? 1 }));
-    if (denIdx < 0 || terms.some((t) => t.idx < 0)) {
+    const subIdxs = (def.denominatorSubtract ?? []).map((cands) => find(cands));
+    if (denIdx < 0 || terms.some((t) => t.idx < 0) || subIdxs.some((i) => i < 0)) {
       missing.push(def.key);
       continue;
     }
-    resolved.push({ key: def.key, terms, denIdx });
+    resolved.push({ key: def.key, terms, denIdx, subIdxs });
   }
 
   const rows: ValueRow[] = [];
@@ -218,7 +249,14 @@ export function shareRows(
     const code = (r[codeAt] ?? "").trim();
     if (!code) continue;
     for (const def of resolved) {
-      const den = toNum(r[def.denIdx]);
+      let den = toNum(r[def.denIdx]);
+      if (den !== null) {
+        for (const si of def.subIdxs) {
+          const sub = toNum(r[si]);
+          if (sub === null) { den = null; break; }
+          den -= sub;
+        }
+      }
       if (den === null || den < MIN_SHARE_DENOMINATOR) {
         rows.push({ level, code, indicator_key: def.key, value: null });
         continue;

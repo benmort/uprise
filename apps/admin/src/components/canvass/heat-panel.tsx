@@ -12,6 +12,7 @@ import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/lib/use-api";
 import { listIndicators } from "@/lib/api/demographics";
+import { listElections } from "@/lib/api/geo";
 import {
   refreshCampaignHeat,
   setCampaignHeatConfig,
@@ -104,11 +105,13 @@ export function HeatPanel({
   const [weights, setWeights] = useState<Record<HeatFactor, number>>({ ...PRESET_WEIGHTS.coverage });
   const [fitIndicator, setFitIndicator] = useState(DEFAULT_FIT_INDICATOR);
   const [communityIndicator, setCommunityIndicator] = useState(DEFAULT_COMMUNITY_INDICATOR);
+  // "" = latest loaded election (the server default).
+  const [electionId, setElectionId] = useState("");
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Sync the controls to the saved config whenever a run arrives — including the
-  // lens pickers, which hydrate from the effective config echoed in meta.
+  // lens pickers + election, which hydrate from the effective config echoed in meta.
   useEffect(() => {
     if (!data) return;
     setMode(modeFor(data.meta));
@@ -116,6 +119,7 @@ export function HeatPanel({
     if (data.meta.config) {
       setFitIndicator(data.meta.config.fitLens.indicator);
       setCommunityIndicator(data.meta.config.communityLens.indicator);
+      setElectionId(data.meta.config.electionId ?? "");
     }
   }, [data]);
 
@@ -123,8 +127,15 @@ export function HeatPanel({
   const indicators = useApi(enabled ? "/demographics/indicators" : null, () => listIndicators(), {
     ttlMs: 600_000,
   });
+  // Loaded elections for the booth-metric picker (state results beat federal proxies).
+  const elections = useApi(enabled ? "/geo/elections" : null, () => listElections(), { ttlMs: 600_000 });
+  // Ordered by category then catalogue sort, so the pickers read as grouped lists
+  // (socioeconomic incl. incomes + SEIFA, demographic incl. CALD/age, housing incl. renters).
   const sa1Indicators = useMemo(
-    () => (indicators.data ?? []).filter((i) => i.levels.includes("sa1")),
+    () =>
+      (indicators.data ?? [])
+        .filter((i) => i.levels.includes("sa1"))
+        .sort((a, b) => a.category.localeCompare(b.category) || a.sort - b.sort),
     [indicators.data],
   );
 
@@ -141,6 +152,9 @@ export function HeatPanel({
       ...(mode === "custom" ? { weights } : { preset: mode }),
       fitLens: { indicator: fitIndicator },
       communityLens: { indicator: communityIndicator },
+      // Omitted = latest loaded election; an explicit pick pins it (e.g. vic-2022
+      // state results instead of the federal proxy).
+      ...(electionId ? { electionId } : {}),
     });
     setSaving(false);
     if (!res.ok) {
@@ -345,6 +359,30 @@ export function HeatPanel({
                   </Select>
                 </div>
               </div>
+
+              {/* Booth-metric source: state results beat federal proxies for a state campaign. */}
+              {(elections.data?.length ?? 0) > 1 ? (
+                <div className="mt-3">
+                  <label
+                    htmlFor="heat-election"
+                    className="mb-1 block text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground"
+                  >
+                    Election results
+                  </label>
+                  <Select
+                    id="heat-election"
+                    value={electionId || "__latest__"}
+                    onValueChange={(v) => setElectionId(v === "__latest__" ? "" : v)}
+                  >
+                    <SelectItem value="__latest__">Latest loaded (auto)</SelectItem>
+                    {(elections.data ?? []).map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.name}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                </div>
+              ) : null}
 
               {/* Honesty notices: coarse-resolution + non-differentiating signals. */}
               {meta.lowResolutionFactors.length > 0 ? (

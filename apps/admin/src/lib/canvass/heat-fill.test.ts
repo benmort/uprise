@@ -12,6 +12,7 @@ import {
   heatFilter,
   heatLegendBands,
   heatOpacity,
+  withHoldoutOverride,
 } from "./heat-fill";
 
 const RAMP = ["r0", "r1", "r2", "r3", "r4"] as const;
@@ -174,5 +175,20 @@ describe("heatLegendBands", () => {
     expect(bands[0]).toMatchObject({ lo: 0, hi: null });
     expect(bands[4]).toMatchObject({ lo: null, hi: null });
     expect(bands.map((b) => b.label)).toEqual([...HEAT_BAND_LABELS]);
+  });
+});
+
+describe("withHoldoutOverride", () => {
+  it("wraps the base fill so holdout codes paint the override colour", () => {
+    const base = "#123456";
+    const expr = withHoldoutOverride(base, ["A", "B", "A"], "#999") as unknown[];
+    expect(expr[0]).toBe("match");
+    expect(expr[2]).toEqual(["A", "B"]); // deduped
+    expect(expr[3]).toBe("#999");
+    expect(expr[4]).toBe(base);
+  });
+
+  it("returns the base untouched with no holdout", () => {
+    expect(withHoldoutOverride("#123456", [], "#999")).toBe("#123456");
   });
 });

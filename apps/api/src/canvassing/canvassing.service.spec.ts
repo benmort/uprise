@@ -426,6 +426,36 @@ describe("CanvassingService", () => {
       );
     });
 
+    it("passes verbal_door consent to the disposition when the flag is true (APP 5)", async () => {
+      prisma.doorKnock.findUnique.mockResolvedValue(null);
+      prisma.contact.findFirst.mockResolvedValue({ turfId: "t1", turf: { campaignId: "camp1" } });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+
+      await service.recordDoorKnock("org1", {
+        ...baseInput,
+        dispositionCode: "spoke_to_target",
+        consent: true,
+      });
+
+      expect(engagement.recordDisposition).toHaveBeenCalledWith(
+        "org1",
+        expect.objectContaining({ code: "spoke_to_target", consentMethod: "verbal_door" }),
+      );
+    });
+
+    it("records no consent when the flag is absent or false (affirmative-only)", async () => {
+      prisma.doorKnock.findUnique.mockResolvedValue(null);
+      prisma.contact.findFirst.mockResolvedValue({ turfId: "t1", turf: { campaignId: "camp1" } });
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+
+      await service.recordDoorKnock("org1", { ...baseInput, consent: false });
+
+      expect(engagement.recordDisposition).toHaveBeenCalledWith(
+        "org1",
+        expect.objectContaining({ consentMethod: null }),
+      );
+    });
+
     it("persists each survey answer through the engagement layer with the campaign id", async () => {
       prisma.doorKnock.findUnique.mockResolvedValue(null);
       // One mock satisfies both the lock check (.turfId) and the campaign resolve (.turf.campaignId).

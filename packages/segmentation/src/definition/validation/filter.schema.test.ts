@@ -45,6 +45,20 @@ describe("validateAuthoredFilter", () => {
     expect(validateAuthoredFilter(tree)).toEqual({ ok: true });
   });
 
+  it("accepts the contact.consented bool leaf and rejects a malformed one", () => {
+    const ok = {
+      kind: "all",
+      children: [leaf({ type: "contact.consented", op: "is", value: true })],
+    };
+    expect(validateAuthoredFilter(ok)).toEqual({ ok: true });
+    // Bool leaves carry `value: boolean` — an enum-style values set is a shape rejection.
+    const bad = {
+      kind: "all",
+      children: [leaf({ type: "contact.consented", op: "in", values: ["true"] })],
+    };
+    expect(validateAuthoredFilter(bad)).toMatchObject({ ok: false, reason: "shape" });
+  });
+
   it("rejects depth over the authoring bound (depth-bound)", () => {
     const tree = {
       kind: "all",

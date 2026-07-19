@@ -68,7 +68,7 @@ export function SyncCentre() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Link href="/field" className="flex items-center gap-1 text-sm font-medium">
+        <Link href="/" className="flex items-center gap-1 text-sm font-medium">
           <ArrowLeft className="h-4 w-4" />
           Turf
         </Link>
@@ -210,7 +210,7 @@ export function SyncCentre() {
       </SectionCard>
 
       <Link
-        href="/field/wrap"
+        href="/wrap"
         className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-bold text-white"
       >
         Done for the day

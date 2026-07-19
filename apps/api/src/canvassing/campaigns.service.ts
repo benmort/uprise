@@ -38,6 +38,25 @@ function startOfToday(): Date {
   return d;
 }
 
+/** Midnight at the start of the week (Monday, local time) containing `d`. */
+function startOfWeek(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(0, 0, 0, 0);
+  out.setDate(out.getDate() - ((out.getDay() + 6) % 7));
+  return out;
+}
+
+/** Local-date key (YYYY-MM-DD) — stable across DST because it never round-trips through UTC. */
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** num ÷ den as a fraction rounded to 3 dp, or null when the denominator is missing/zero —
+ *  a rate with no denominator is unknown, never a fake 0 %. */
+function ratio(num: number, den: number | null | undefined): number | null {
+  return den != null && den > 0 ? Math.round((num / den) * 1000) / 1000 : null;
+}
+
 export type CreateCampaignInput = {
   name: string;
   status?: CanvassCampaignStatus;
@@ -298,6 +317,185 @@ export class CampaignsService {
         dispositionCode: k.dispositionCode,
         volunteer: k.volunteer?.displayName ?? null,
       })),
+    };
+  }
+
+  /** The five-number weekly field-director review.
+   *
+   *  Definitions (field-ops norms):
+   *  - attempts      = every DoorKnock against the campaign's turf contacts (a re-knock counts);
+   *  - conversations = knocks whose disposition says a human was reached — the seeded
+   *                    CONTACT_CODES mapping ("spoke_to_target" / "spoke_to_other");
+   *  - contactRate   = conversations ÷ attempts;
+   *  - idRate        = support-levelled dispositions ÷ conversations (every conversation
+   *                    should produce an ID — a low rate means the ask is being skipped);
+   *  - qualityProxy  = distinct contacts surveyed ÷ conversations;
+   *  - coverage      = distinct doors attempted ÷ the door universe: the spatial
+   *                    boundaryAddressCount when a boundary is saved, else the sum of the
+   *                    campaign's turf contact counts;
+   *  - accumulation  = new supporter IDs (STRONG_SUPPORT | LEAN_SUPPORT) per week for the
+   *                    last `weeks` (default 8) + a cumulative line seeded with the IDs
+   *                    recorded before the window, against goals.supporters when set.
+   *
+   *  Per-turf rows use a distinct-door basis (contact.groupBy — DoorKnock has no turfId, so
+   *  raw knock counts per turf would need a per-turf query, an N+1): `attempts` there is
+   *  doors attempted, not knocks. Rates are fractions (0–1); null when the denominator is 0.
+   */
+  async getFieldReport(tenantId: string, id: string, opts?: { weeks?: number }) {
+    const campaign = await this.prisma.canvassCampaign.findFirst({
+      where: { id, tenantId },
+      select: { goals: true, boundary: true },
+    });
+    if (!campaign) {
+      throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "Campaign not found", HttpStatus.NOT_FOUND);
+    }
+    const turfs = await this.prisma.turf.findMany({
+      where: { tenantId, campaignId: id },
+      select: { id: true, name: true },
+    });
+    const turfIds = turfs.map((t) => t.id);
+    // Knock/disposition scope (relation filter) + the contact-model equivalent for groupBy.
+    const contactFilter =
+      turfIds.length > 0 ? { contact: { turfId: { in: turfIds } } } : { id: "__none__" };
+    const turfScope = { tenantId, turfId: { in: turfIds } };
+
+    const weeks = Number.isFinite(opts?.weeks)
+      ? Math.min(52, Math.max(1, Math.floor(opts!.weeks!)))
+      : 8;
+    const thisWeek = startOfWeek(new Date());
+    const windowStart = new Date(thisWeek);
+    windowStart.setDate(windowStart.getDate() - 7 * (weeks - 1));
+
+    const supporterWhere: Prisma.DispositionWhereInput = {
+      tenantId,
+      supportLevel: { in: ["STRONG_SUPPORT", "LEAN_SUPPORT"] },
+      ...contactFilter,
+    };
+
+    const [
+      attempts,
+      conversations,
+      idsRecorded,
+      surveysCompleted,
+      attemptedDoors,
+      priorSupporters,
+      supporterRows,
+      doorsByTurf,
+      attemptedByTurf,
+      contactedByTurf,
+      iddByTurf,
+      boundaryCount,
+    ] = await Promise.all([
+      this.prisma.doorKnock.count({ where: { tenantId, ...contactFilter } }),
+      this.prisma.doorKnock.count({
+        where: { tenantId, dispositionCode: { in: CONTACT_CODES }, ...contactFilter },
+      }),
+      this.prisma.disposition.count({
+        where: { tenantId, supportLevel: { not: null }, ...contactFilter },
+      }),
+      // Distinct contacts with at least one survey answer — response counts would exceed
+      // conversations on any multi-question survey and fake a >100 % rate.
+      this.prisma.contact.count({
+        where: { ...turfScope, questionResponses: { some: { tenantId } } },
+      }),
+      this.prisma.contact.count({ where: { ...turfScope, doorKnocks: { some: { tenantId } } } }),
+      this.prisma.disposition.count({
+        where: { ...supporterWhere, createdAt: { lt: windowStart } },
+      }),
+      this.prisma.disposition.findMany({
+        where: { ...supporterWhere, createdAt: { gte: windowStart } },
+        select: { createdAt: true },
+      }),
+      this.prisma.contact.groupBy({
+        by: ["turfId"],
+        where: turfScope,
+        _count: { _all: true },
+      }),
+      this.prisma.contact.groupBy({
+        by: ["turfId"],
+        where: { ...turfScope, doorKnocks: { some: { tenantId } } },
+        _count: { _all: true },
+      }),
+      this.prisma.contact.groupBy({
+        by: ["turfId"],
+        where: { ...turfScope, doorKnocks: { some: { tenantId, dispositionCode: { in: CONTACT_CODES } } } },
+        _count: { _all: true },
+      }),
+      this.prisma.contact.groupBy({
+        by: ["turfId"],
+        where: { ...turfScope, dispositions: { some: { tenantId, supportLevel: { not: null } } } },
+        _count: { _all: true },
+      }),
+      campaign.boundary != null
+        ? this.geo.boundaryAddressCount(campaign.boundary)
+        : Promise.resolve(null),
+    ]);
+
+    // Weekly buckets keyed by local Monday date, oldest first; the current partial week last.
+    const counts = new Map<string, number>();
+    for (const row of supporterRows) {
+      const key = dateKey(startOfWeek(row.createdAt));
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    let cumulative = priorSupporters;
+    const weekly: Array<{ weekStart: string; newSupporters: number; cumulative: number }> = [];
+    for (let i = weeks - 1; i >= 0; i--) {
+      const start = new Date(thisWeek);
+      start.setDate(start.getDate() - 7 * i);
+      const newSupporters = counts.get(dateKey(start)) ?? 0;
+      cumulative += newSupporters;
+      weekly.push({ weekStart: dateKey(start), newSupporters, cumulative });
+    }
+    const goals = (campaign.goals ?? {}) as Record<string, unknown>;
+    const goal =
+      typeof goals.supporters === "number" && goals.supporters > 0 ? goals.supporters : null;
+
+    // Door universe: the campaign boundary's spatial address count when one is saved,
+    // else the loaded turf contact universe. Null (not 0) when neither exists.
+    const turfDoors = doorsByTurf.reduce((sum, r) => sum + r._count._all, 0);
+    const doorUniverse =
+      boundaryCount != null ? boundaryCount.addresses : turfIds.length > 0 ? turfDoors : null;
+    const coverageSource: "boundary" | "turf-contacts" | null =
+      boundaryCount != null ? "boundary" : turfIds.length > 0 ? "turf-contacts" : null;
+
+    const countBy = (rows: Array<{ turfId: string | null; _count: { _all: number } }>) =>
+      new Map(rows.map((r) => [r.turfId, r._count._all]));
+    const doorsMap = countBy(doorsByTurf);
+    const attemptedMap = countBy(attemptedByTurf);
+    const contactedMap = countBy(contactedByTurf);
+    const iddMap = countBy(iddByTurf);
+
+    return {
+      weeks,
+      attempts,
+      conversations,
+      contactRate: ratio(conversations, attempts),
+      idsRecorded,
+      idRate: ratio(idsRecorded, conversations),
+      surveysCompleted,
+      qualityProxy: ratio(surveysCompleted, conversations),
+      coverage: {
+        attemptedDoors,
+        doorUniverse,
+        source: coverageSource,
+        rate: ratio(attemptedDoors, doorUniverse),
+      },
+      accumulation: { goal, priorSupporters, weekly },
+      perTurf: turfs.map((t) => {
+        const doors = doorsMap.get(t.id) ?? 0;
+        const attempted = attemptedMap.get(t.id) ?? 0;
+        const contacted = contactedMap.get(t.id) ?? 0;
+        const idd = iddMap.get(t.id) ?? 0;
+        return {
+          turfId: t.id,
+          name: t.name,
+          doors,
+          attempts: attempted, // distinct doors attempted (see the method comment)
+          contactRate: ratio(contacted, attempted),
+          idRate: ratio(idd, contacted),
+          coverage: ratio(attempted, doors),
+        };
+      }),
     };
   }
 

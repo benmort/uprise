@@ -23,7 +23,7 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), {
   loading: () => <Skeleton className="h-[260px] w-full rounded-lg" />,
 });
 
-export type ApexChartType = "bar" | "donut" | "radialBar" | "heatmap" | "scatter";
+export type ApexChartType = "bar" | "donut" | "radialBar" | "heatmap" | "scatter" | "line";
 
 export function ApexChart({
   bundle,

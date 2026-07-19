@@ -184,6 +184,11 @@ export class RecordDoorKnockDto {
   @IsBoolean()
   safetyFlag?: boolean;
 
+  /** APP 5 door consent — true only when the resident affirmatively agreed. */
+  @IsOptional()
+  @IsBoolean()
+  consent?: boolean;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })

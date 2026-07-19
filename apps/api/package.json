@@ -34,6 +34,7 @@
     "geo:load-referendum": "ts-node src/scripts/geo/load-referendum.ts",
     "geo:load-abs": "ts-node src/scripts/demographics/load-abs.ts",
     "geo:load-election": "ts-node src/scripts/geo/load-election-results.ts",
+    "geo:load-vec": "ts-node src/scripts/geo/load-vec-results.ts",
     "geo:sa1-electorate": "ts-node src/scripts/geo/backfill-sa1-electorate.ts",
     "geo:sa1-election-metrics": "ts-node src/scripts/geo/backfill-sa1-election-metrics.ts",
     "geo:load-gnaf": "bash src/scripts/geo/load-gnaf.sh",

@@ -150,3 +150,23 @@ export function heatLegendBands(breaks: number[], ramp: readonly string[]): Heat
     hi: i === HEAT_BAND_LABELS.length - 1 ? null : Number.isFinite(breaks[i]) ? breaks[i] : null,
   }));
 }
+
+/**
+ * Overlay the evaluation holdout onto a heat fill: holdout SA1s paint a fixed colour
+ * regardless of score, so organisers see at a glance where NOT to cut turf. Wraps the
+ * base expression in a prior ["match"] on the holdout codes.
+ */
+export function withHoldoutOverride(
+  base: ExpressionSpecification | string,
+  holdoutCodes: string[],
+  colour: string,
+): ExpressionSpecification | string {
+  if (holdoutCodes.length === 0) return base;
+  return [
+    "match",
+    ["get", "code"],
+    [...new Set(holdoutCodes)],
+    colour,
+    base,
+  ] as unknown as ExpressionSpecification;
+}

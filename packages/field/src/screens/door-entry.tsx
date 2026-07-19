@@ -15,7 +15,7 @@ import {
   useScripts,
 } from "../hooks/use-canvass";
 import { ScriptAssistPanel } from "../components/script-assist-panel";
-import { getVolunteerId, newLocalId } from "../lib/volunteer";
+import { getTenantBrand, getVolunteerId, newLocalId } from "../lib/volunteer";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { DispositionPad } from "../components/disposition-pad";
@@ -55,6 +55,9 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState("");
   const [safetyFlag, setSafetyFlag] = useState(false);
+  // APP 5 consent for keeping recorded views — default OFF (must be affirmative),
+  // reset per door because the screen mounts fresh for each stop.
+  const [consent, setConsent] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const submittingRef = useRef(false);
@@ -158,6 +161,9 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
           lng: gps?.lng,
           notes: notes.trim() || undefined,
           safetyFlag: safetyFlag || undefined,
+          // Consent only rides with the support-levelled ("spoke to") outcomes it was
+          // asked for — a no-contact knock records no views, so no consent claim.
+          consent: consent && SURVEY_TRIGGER_CODES.has(code) ? true : undefined,
           photoUrl: photoUrl || undefined,
           surveyAnswers: answers?.length ? answers : undefined,
           clientCapturedAt: capturedAt,
@@ -183,7 +189,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
         ? { tone: "success", title: "Conversation + survey logged", description: "Saved offline" }
         : { tone: "success", title: `Logged: ${label}`, description: "Saved offline" },
     );
-    router.push(`/field/${turfId}`);
+    router.push(`/${turfId}`);
   }
 
   if (loading) return <Skeleton className="h-64 w-full" />;
@@ -193,7 +199,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
         <p className="text-sm text-muted-foreground">
           This stop isn’t in your current walk list — the turf may have been reassigned or updated.
         </p>
-        <Button className="w-full" onClick={() => router.push(`/field/${turfId}`)}>
+        <Button className="w-full" onClick={() => router.push(`/${turfId}`)}>
           Back to walk list
         </Button>
       </Card>
@@ -211,7 +217,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
         <button
           type="button"
           aria-label="Back"
-          onClick={() => router.push(`/field/${turfId}`)}
+          onClick={() => router.push(`/${turfId}`)}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -245,6 +251,9 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
             options={dispositions}
             disabled={saving}
             firstName={typeof contact.firstName === "string" ? contact.firstName : null}
+            consent={consent}
+            onConsentChange={setConsent}
+            orgName={getTenantBrand()?.name ?? null}
             onSelect={(code) => {
               // "Spoke to someone" reveals the survey — but only if the campaign has
               // one; otherwise it's a plain disposition-only knock.
@@ -311,7 +320,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
 
       <AddHouseholdMember turfId={turfId} />
 
-      <Button variant="ghost" className="w-full" onClick={() => router.push(`/field/${turfId}`)}>
+      <Button variant="ghost" className="w-full" onClick={() => router.push(`/${turfId}`)}>
         Back to walk list
       </Button>
     </div>

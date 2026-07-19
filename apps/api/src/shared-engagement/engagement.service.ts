@@ -28,6 +28,12 @@ export type RecordDispositionInput = {
   cannedResponseId?: string | null;
   supportLevel?: Disposition["supportLevel"];
   recordedById?: string | null;
+  /**
+   * APP 5 consent capture — set ("verbal_door" | "form" | "digital") only when the
+   * contact affirmatively agreed their views can be kept. Stamps consentAt=now()
+   * on the disposition and rolls the latest consent up onto the Contact.
+   */
+  consentMethod?: string | null;
 };
 
 export type RecordSurveyAnswerInput = {
@@ -155,6 +161,9 @@ export class EngagementService {
 
   async recordDisposition(tenantId: string, input: RecordDispositionInput): Promise<Disposition> {
     const layer = await this.resolveLayer(tenantId, input.code);
+    // Consent is affirmative-only: a consentMethod means the contact agreed at capture
+    // time, so the stamp is now().
+    const consentAt = input.consentMethod ? new Date() : null;
     // The row write and its domain event commit atomically (outbox invariant) so the
     // durable `canvass.disposition.set` event can never diverge from the recorded row.
     const disposition = await this.prisma.$transaction(async (tx) => {
@@ -171,8 +180,18 @@ export class EngagementService {
           cannedResponseId: input.cannedResponseId ?? null,
           supportLevel: input.supportLevel ?? null,
           recordedById: input.recordedById ?? null,
+          consentAt,
+          consentMethod: consentAt ? input.consentMethod : null,
         },
       });
+      if (consentAt) {
+        // Roll the consent up onto the contact spine (latest wins — this stamp is
+        // now(), so an overwrite is always the most recent consent).
+        await tx.contact.updateMany({
+          where: { id: input.contactId, tenantId },
+          data: { consentAt, consentMethod: input.consentMethod },
+        });
+      }
       await this.outbox.append(tx, {
         tenantId,
         eventType: "canvass.disposition.set",

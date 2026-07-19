@@ -114,10 +114,10 @@ function mainRoutes(id) {
 
 function fieldRoutes(id) {
   return [
-    ["A1-field", "/field"],
-    id.turfId && ["A2-walk", `/field/${id.turfId}`],
-    id.turfId && id.stopId && ["A3-door", `/field/${id.turfId}/door/${id.stopId}`],
-    ["A4-me", "/field/me"],
+    ["A1-field", "/"],
+    id.turfId && ["A2-walk", `/${id.turfId}`],
+    id.turfId && id.stopId && ["A3-door", `/${id.turfId}/door/${id.stopId}`],
+    ["A4-me", "/me"],
   ].filter(Boolean);
 }
 

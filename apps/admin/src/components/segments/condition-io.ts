@@ -64,6 +64,7 @@ export function rowToCondition(row: ConditionRowModel): Condition | null {
     }
     case "contact.hasEmail":
     case "contact.hasPhone":
+    case "contact.consented":
       return { type, op: operator === "isNot" ? "isNot" : "is", value: true } as Condition;
     case "contact.emailDomain": {
       const value = values[0]?.trim();

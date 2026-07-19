@@ -21,6 +21,8 @@ import { parseArgs } from "./election-parse";
  *                             (peaks at a 50/50 TCP booth), then weighted per SA1
  *   'fp_share:<party_code>' – weighted booth-level first-preference share, one row per
  *                             party holding ≥ 1% of the election's national FP vote
+ *   'informality01'         – informal / (informal + formal) per booth, weighted per SA1
+ *                             (both paths)
  *
  * Everything is INSERT … SELECT with CTEs (no per-row JS); delete-and-reinsert per election
  * in ONE transaction with SET LOCAL work_mem (mirrors map.ts), so readers never see a
@@ -215,6 +217,38 @@ async function main(): Promise<void> {
                FROM _sa1_knn k
                JOIN share s ON s.polling_place_id = k.polling_place_id
               GROUP BY k.sa1_code, s.party_code`,
+            electionId,
+          );
+          // Informality, IDW-weighted (same booth ratio as the attendance path; elections
+          // without mark-off data – the VEC loads – would otherwise have no informality01).
+          await tx.$executeRawUnsafe(
+            `INSERT INTO geo.sa1_election_metric (sa1_code, election_id, metric_key, value, booth_n, attributed_votes)
+             WITH formal AS (
+               SELECT br.polling_place_id, SUM(br.votes)::float AS formal_votes
+                 FROM geo.booth_result br
+                WHERE br.election_id = $1 AND br.kind = 'fp'
+                GROUP BY br.polling_place_id
+             ),
+             inf AS (
+               SELECT br.polling_place_id, SUM(br.votes)::float AS informal_votes
+                 FROM geo.booth_result br
+                WHERE br.election_id = $1 AND br.kind = 'informal'
+                GROUP BY br.polling_place_id
+             ),
+             booth_inf AS (
+               SELECT f.polling_place_id,
+                      COALESCE(i.informal_votes, 0) / NULLIF(f.formal_votes + COALESCE(i.informal_votes, 0), 0) AS inf01
+                 FROM formal f
+                 LEFT JOIN inf i ON i.polling_place_id = f.polling_place_id
+             )
+             SELECT k.sa1_code, $1, 'informality01',
+                    SUM(k.w * bi.inf01) / NULLIF(SUM(k.w), 0),
+                    COUNT(*)::int,
+                    NULL
+               FROM _sa1_knn k
+               JOIN booth_inf bi ON bi.polling_place_id = k.polling_place_id
+              WHERE bi.inf01 IS NOT NULL
+              GROUP BY k.sa1_code`,
             electionId,
           );
         }

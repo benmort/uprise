@@ -176,3 +176,12 @@ describe("geo api client — density", () => {
     expect(mockReq.mock.calls[0][0]).toBe("/geo/addresses/GAVIC%2042");
   });
 });
+
+describe("geo api client — elections", () => {
+  it("listElections GETs /geo/elections", async () => {
+    const { listElections } = await import("./geo");
+    (request as ReturnType<typeof vi.fn>).mockClear();
+    await listElections();
+    expect((request as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe("/geo/elections");
+  });
+});

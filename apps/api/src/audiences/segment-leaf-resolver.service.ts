@@ -175,6 +175,16 @@ export class SegmentLeafResolverService {
         const positive = condition.value ? has : difference(universe, has);
         return condition.op === "isNot" ? difference(universe, positive) : positive;
       }
+      case "contact.consented": {
+        // APP 5 consent stamp rolled up onto the contact spine (latest disposition wins).
+        const rows = await this.prisma.contact.findMany({
+          where: { tenantId, consentAt: { not: null } },
+          select: { id: true },
+        });
+        const has = new Set(rows.map((r) => r.id));
+        const positive = condition.value ? has : difference(universe, has);
+        return condition.op === "isNot" ? difference(universe, positive) : positive;
+      }
       case "contact.emailDomain": {
         const norm = condition.value.trim().replace(/^@/, "").toLowerCase();
         if (!norm) return new Set();

@@ -23,6 +23,12 @@ export class GeoController {
     return this.geo.referendum();
   }
 
+  // Loaded elections (booth-metric sources) — the targeting panel's election picker.
+  @Get("elections")
+  listElections() {
+    return this.geo.listElections();
+  }
+
   @Get("divisions")
   listDivisions(@Query("type") type = "ced") {
     return this.geo.listDivisions(type);

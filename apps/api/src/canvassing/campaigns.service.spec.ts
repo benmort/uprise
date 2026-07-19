@@ -17,10 +17,11 @@ describe("CampaignsService", () => {
       },
       turf: { findMany: jest.fn() },
       doorKnock: { count: jest.fn(), findMany: jest.fn() },
-      disposition: { groupBy: jest.fn(), count: jest.fn() },
+      disposition: { groupBy: jest.fn(), count: jest.fn(), findMany: jest.fn() },
       questionResponse: { count: jest.fn() },
       walkListItem: { count: jest.fn() },
       turfAssignment: { findMany: jest.fn() },
+      contact: { count: jest.fn(), groupBy: jest.fn() },
     };
     geo = {
       unionSources: jest.fn(async () => null),
@@ -191,6 +192,170 @@ describe("CampaignsService", () => {
         expect.objectContaining({ where: expect.objectContaining({ turf: { tenantId: "org1" } }) }),
       );
       expect(res).toMatchObject({ doorsToday: 0, volunteers: [] });
+    });
+  });
+
+  describe("getFieldReport", () => {
+    const groupRow = (turfId: string, n: number) => ({ turfId, _count: { _all: n } });
+
+    /** Baseline zero-data mocks; individual tests override what they exercise. */
+    function mockZeroData() {
+      prisma.canvassCampaign.findFirst.mockResolvedValue({ goals: null, boundary: null });
+      prisma.turf.findMany.mockResolvedValue([]);
+      prisma.doorKnock.count.mockResolvedValue(0);
+      prisma.disposition.count.mockResolvedValue(0);
+      prisma.disposition.findMany.mockResolvedValue([]);
+      prisma.contact.count.mockResolvedValue(0);
+      prisma.contact.groupBy.mockResolvedValue([]);
+    }
+
+    it("throws for an unknown campaign", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue(null);
+      await expect(service.getFieldReport("org1", "missing")).rejects.toThrow();
+    });
+
+    it("computes the five rates, boundary coverage and per-turf rows", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue({
+        goals: { supporters: 500 },
+        boundary: { type: "MultiPolygon" },
+      });
+      prisma.turf.findMany.mockResolvedValue([
+        { id: "t1", name: "North" },
+        { id: "t2", name: "South" },
+      ]);
+      prisma.doorKnock.count
+        .mockResolvedValueOnce(200) // attempts (raw knocks)
+        .mockResolvedValueOnce(70); // conversations (CONTACT_CODES)
+      prisma.disposition.count
+        .mockResolvedValueOnce(35) // support-levelled IDs
+        .mockResolvedValueOnce(5); // supporters before the window
+      prisma.contact.count
+        .mockResolvedValueOnce(28) // distinct contacts surveyed
+        .mockResolvedValueOnce(150); // distinct doors attempted
+      prisma.disposition.findMany.mockResolvedValue([]);
+      prisma.contact.groupBy
+        .mockResolvedValueOnce([groupRow("t1", 100), groupRow("t2", 60)]) // doors
+        .mockResolvedValueOnce([groupRow("t1", 90), groupRow("t2", 60)]) // attempted
+        .mockResolvedValueOnce([groupRow("t1", 30)]) // contacted
+        .mockResolvedValueOnce([groupRow("t1", 12)]); // ID'd
+      geo.boundaryAddressCount.mockResolvedValue({ addresses: 400 });
+
+      const r = await service.getFieldReport("org1", "c1");
+      expect(r.attempts).toBe(200);
+      expect(r.conversations).toBe(70);
+      expect(r.contactRate).toBe(0.35); // 70/200
+      expect(r.idRate).toBe(0.5); // 35/70
+      expect(r.qualityProxy).toBe(0.4); // 28/70
+      expect(r.coverage).toEqual({
+        attemptedDoors: 150,
+        doorUniverse: 400, // the spatial boundary count wins over turf contacts
+        source: "boundary",
+        rate: 0.375,
+      });
+      expect(geo.boundaryAddressCount).toHaveBeenCalledWith({ type: "MultiPolygon" });
+      expect(r.accumulation.goal).toBe(500);
+
+      expect(r.perTurf).toEqual([
+        {
+          turfId: "t1",
+          name: "North",
+          doors: 100,
+          attempts: 90,
+          contactRate: 0.333, // 30/90 attempted doors
+          idRate: 0.4, // 12/30 contacted doors
+          coverage: 0.9,
+        },
+        {
+          turfId: "t2",
+          name: "South",
+          doors: 60,
+          attempts: 60,
+          contactRate: 0, // 60 doors attempted, nobody reached — a true 0 %
+          idRate: null, // no conversations → unknown, not 0 %
+          coverage: 1,
+        },
+      ]);
+      // Both knock counters are scoped to the campaign's turf contacts.
+      expect(prisma.doorKnock.count).toHaveBeenCalledWith({
+        where: { tenantId: "org1", contact: { turfId: { in: ["t1", "t2"] } } },
+      });
+    });
+
+    it("returns null rates — never fake 0 % — when there is no data at all", async () => {
+      mockZeroData();
+      const r = await service.getFieldReport("org1", "c1");
+      expect(r.attempts).toBe(0);
+      expect(r.contactRate).toBeNull();
+      expect(r.idRate).toBeNull();
+      expect(r.qualityProxy).toBeNull();
+      expect(r.coverage).toEqual({ attemptedDoors: 0, doorUniverse: null, source: null, rate: null });
+      expect(geo.boundaryAddressCount).not.toHaveBeenCalled();
+      expect(r.perTurf).toEqual([]);
+      // The default window still renders: 8 empty weeks, cumulative stuck at 0.
+      expect(r.accumulation.weekly).toHaveLength(8);
+      expect(r.accumulation.weekly.every((w: any) => w.newSupporters === 0 && w.cumulative === 0)).toBe(true);
+      expect(r.accumulation.goal).toBeNull();
+    });
+
+    it("falls back to the turf contact universe when no boundary is saved", async () => {
+      mockZeroData();
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1", name: "North" }]);
+      prisma.contact.count
+        .mockResolvedValueOnce(0) // surveyed
+        .mockResolvedValueOnce(30); // doors attempted
+      prisma.contact.groupBy
+        .mockResolvedValueOnce([groupRow("t1", 120)]) // doors
+        .mockResolvedValueOnce([groupRow("t1", 30)])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      const r = await service.getFieldReport("org1", "c1");
+      expect(r.coverage).toEqual({
+        attemptedDoors: 30,
+        doorUniverse: 120,
+        source: "turf-contacts",
+        rate: 0.25,
+      });
+      expect(geo.boundaryAddressCount).not.toHaveBeenCalled();
+    });
+
+    it("buckets supporters into local Monday weeks and accumulates from the prior count", async () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 6, 15, 10, 0, 0)); // Wed 15 Jul 2026
+      try {
+        mockZeroData();
+        prisma.disposition.count
+          .mockResolvedValueOnce(0) // support-levelled IDs
+          .mockResolvedValueOnce(5); // prior supporters (before the window)
+        prisma.disposition.findMany.mockResolvedValue([
+          { createdAt: new Date(2026, 5, 30, 18, 30) }, // Tue 30 Jun → week of Mon 29 Jun
+          { createdAt: new Date(2026, 6, 1, 9, 0) }, // Wed 1 Jul → week of Mon 29 Jun
+          { createdAt: new Date(2026, 6, 14, 12, 0) }, // Tue 14 Jul → week of Mon 13 Jul
+        ]);
+
+        const r = await service.getFieldReport("org1", "c1", { weeks: 3 });
+        expect(r.accumulation.priorSupporters).toBe(5);
+        expect(r.accumulation.weekly).toEqual([
+          { weekStart: "2026-06-29", newSupporters: 2, cumulative: 7 },
+          { weekStart: "2026-07-06", newSupporters: 0, cumulative: 7 },
+          { weekStart: "2026-07-13", newSupporters: 1, cumulative: 8 },
+        ]);
+        // The window starts at the oldest bucket's Monday midnight (local).
+        expect(prisma.disposition.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ createdAt: { gte: new Date(2026, 5, 29) } }),
+          }),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("clamps the weeks window (0 → 1, non-numeric → the default 8)", async () => {
+      mockZeroData();
+      const clamped = await service.getFieldReport("org1", "c1", { weeks: 0 });
+      expect(clamped.accumulation.weekly).toHaveLength(1);
+      mockZeroData();
+      const defaulted = await service.getFieldReport("org1", "c1", { weeks: Number("nope") });
+      expect(defaulted.accumulation.weekly).toHaveLength(8);
     });
   });
 

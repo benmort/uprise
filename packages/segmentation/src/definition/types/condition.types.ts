@@ -213,8 +213,8 @@ export interface PolicyIsActiveCondition {
 
 /** Contact — enumerated location + canvass support + turf (enum). */
 type ContactEnumType = "contact.state" | "contact.locality" | "contact.turf" | "contact.supportLevel";
-/** Contact — reachability flags (bool). */
-type ContactBoolType = "contact.hasEmail" | "contact.hasPhone";
+/** Contact — reachability flags + APP 5 consent capture (bool). */
+type ContactBoolType = "contact.hasEmail" | "contact.hasPhone" | "contact.consented";
 /** Contact — email-domain match (string). */
 type ContactStringType = "contact.emailDomain";
 /** Contact — tenure (date). */
@@ -270,6 +270,7 @@ export const CONDITION_TYPES = [
   "contact.supportLevel",
   "contact.hasEmail",
   "contact.hasPhone",
+  "contact.consented",
   "contact.emailDomain",
   "contact.createdAt",
   // tag / consent / source — assignments

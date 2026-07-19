@@ -16,7 +16,7 @@ export default function OfflinePage() {
         while online (and downloaded maps for) stays available offline.
       </p>
       <a
-        href="/field"
+        href="/"
         className="mt-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white"
       >
         Back to my turf

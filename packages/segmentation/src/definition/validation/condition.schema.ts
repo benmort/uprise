@@ -63,6 +63,7 @@ export const ConditionSchema: z.ZodType<Condition> = z.union([
   // contact — bools / string / date
   boolVariant("contact.hasEmail"),
   boolVariant("contact.hasPhone"),
+  boolVariant("contact.consented"),
   stringVariant("contact.emailDomain"),
   ...dateVariants("contact.createdAt"),
   // tag / consent / source

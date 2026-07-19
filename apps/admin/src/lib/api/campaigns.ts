@@ -173,6 +173,60 @@ export async function getCampaignLive(id?: string) {
   );
 }
 
+// ── Field report (the five-number weekly field-director review) ─────────────
+
+export type CampaignFieldReport = {
+  /** The accumulation window actually used (server-clamped 1–52; default 8). */
+  weeks: number;
+  /** Raw door knocks against the campaign's turf contacts (a re-knock counts). */
+  attempts: number;
+  /** Knocks whose disposition says a human was reached (spoke_to_target / spoke_to_other). */
+  conversations: number;
+  /** conversations ÷ attempts. Rates are fractions (0–1); null = no denominator, not 0 %. */
+  contactRate: number | null;
+  idsRecorded: number;
+  /** Support-levelled IDs ÷ conversations. */
+  idRate: number | null;
+  /** Distinct contacts with at least one survey answer. */
+  surveysCompleted: number;
+  /** surveysCompleted ÷ conversations. */
+  qualityProxy: number | null;
+  coverage: {
+    /** Distinct doors attempted (not raw knocks). */
+    attemptedDoors: number;
+    /** Boundary spatial count, or the loaded turf contact universe; null when neither exists. */
+    doorUniverse: number | null;
+    source: "boundary" | "turf-contacts" | null;
+    rate: number | null;
+  };
+  accumulation: {
+    /** goals.supporters when set on the campaign. */
+    goal: number | null;
+    /** Supporter IDs recorded before the window — seeds the cumulative line. */
+    priorSupporters: number;
+    /** Oldest week first; weekStart is the local Monday (YYYY-MM-DD). */
+    weekly: Array<{ weekStart: string; newSupporters: number; cumulative: number }>;
+  };
+  /** Per-turf five numbers on a distinct-door basis (attempts = doors attempted). */
+  perTurf: Array<{
+    turfId: string;
+    name: string;
+    doors: number;
+    attempts: number;
+    contactRate: number | null;
+    idRate: number | null;
+    coverage: number | null;
+  }>;
+};
+
+/** The five-number field report for a campaign; `weeks` widens/narrows the accumulation window. */
+export async function getCampaignFieldReport(id: string, opts?: { weeks?: number }) {
+  const qs = opts?.weeks ? `?weeks=${opts.weeks}` : "";
+  return request<CampaignFieldReport>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/field-report${qs}`,
+  );
+}
+
 // ── Targeting heat map (SA1 "where to knock" score) ─────────────────────────
 
 export type HeatFactor =
@@ -265,4 +319,61 @@ export async function previewHeat(sources: BoundarySource[], config?: HeatConfig
     body: JSON.stringify({ sources, ...(config ? { config } : {}) }),
     ...(signal ? { signal } : {}),
   });
+}
+
+// ── Evaluation mode (randomised holdouts) + score snapshots ─────────────────
+
+export type EvaluationPower = {
+  clustersPerArm: number;
+  meanClusterSize: number;
+  designEffect: number;
+  effectivePerArm: number;
+  mdePercentagePoints: number;
+  refusal: string | null;
+  warning: string | null;
+};
+
+export type CampaignEvaluation = {
+  seed: number;
+  icc: number;
+  pairs: Array<{ treatment: string; holdout: string }>;
+  unpaired: string | null;
+  treatmentCodes: string[];
+  holdoutCodes: string[];
+  power: EvaluationPower;
+  enabledAt: string;
+};
+
+export async function getCampaignEvaluation(id: string) {
+  return request<{ evaluation: CampaignEvaluation | null }>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/evaluation`,
+  );
+}
+
+/** Power preview without persisting — "what could this design detect?". */
+export async function getEvaluationPower(id: string, icc?: number) {
+  const q = icc !== undefined ? `?icc=${encodeURIComponent(icc)}` : "";
+  return request<EvaluationPower>(`/canvass/campaigns/${encodeURIComponent(id)}/evaluation/power${q}`);
+}
+
+export async function enableEvaluation(id: string, icc?: number) {
+  return request<CampaignEvaluation>(`/canvass/campaigns/${encodeURIComponent(id)}/evaluation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(icc !== undefined ? { icc } : {}),
+  });
+}
+
+export async function disableEvaluation(id: string) {
+  return request<{ ok: true }>(`/canvass/campaigns/${encodeURIComponent(id)}/evaluation`, {
+    method: "DELETE",
+  });
+}
+
+/** Freeze the current score run as the pre-election snapshot (out-of-sample validation). */
+export async function snapshotCampaignHeat(id: string) {
+  return request<{ frozenRunId: string; computedAt: string }>(
+    `/canvass/campaigns/${encodeURIComponent(id)}/heat/snapshot`,
+    { method: "POST" },
+  );
 }

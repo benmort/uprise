@@ -18,6 +18,8 @@ import { ApiHttpException } from "../common/http/api-response";
 import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
 import { hashPassword } from "../auth/password.util";
 import { EngagementService } from "../shared-engagement/engagement.service";
+import { EvaluationService } from "./evaluation.service";
+import { HeatService } from "./heat.service";
 import {
   GeoService,
   DIVISION_TABLES,
@@ -77,6 +79,8 @@ export type RecordDoorKnockInput = {
   photoUrl?: string | null;
   safetyFlag?: boolean | null;
   surveyAnswers?: SurveyAnswerInput[] | null;
+  /** APP 5 door consent — true only when the resident affirmatively agreed at the door. */
+  consent?: boolean | null;
 };
 
 @Injectable()
@@ -91,6 +95,9 @@ export class CanvassingService {
     private readonly images: ImageUploadService,
     private readonly directions: MapboxDirectionsClient,
     private readonly outbox: OutboxService,
+    /** Optional tail deps (existing specs construct positionally); DI supplies them. */
+    private readonly evaluation?: EvaluationService,
+    private readonly heat?: HeatService,
   ) {}
 
   /**
@@ -271,6 +278,8 @@ export class CanvassingService {
           name: turf.name,
           turfId,
           campaignId: turf.campaignId,
+          // Score provenance: which targeting run ranked the world this list was cut in.
+          heatRunId: turf.campaignId ? await this.heat?.currentRunId(turf.campaignId) : null,
           listType: WalkListItemListType.STATIC,
           items: { create: orderedIds.map((contactId, orderIndex) => ({ contactId, orderIndex })) },
         },
@@ -489,6 +498,9 @@ export class CanvassingService {
         channel: EngagementChannel.DOOR,
         campaignId,
         recordedById: input.volunteerId,
+        // Consent at the door is verbal and affirmative-only (APP 5) — absent/false
+        // records nothing.
+        consentMethod: input.consent === true ? "verbal_door" : null,
       });
     }
 
@@ -1029,6 +1041,9 @@ export class CanvassingService {
   }
 
   async createTurf(tenantId: string, input: { name: string; geometry: unknown; campaignId?: string | null }) {
+    // Evaluation guard: a turf substantially inside a holdout SA1 would break the
+    // campaign's experiment — refuse before anything is written.
+    await this.evaluation?.assertTurfOutsideHoldout(input.campaignId, input.geometry);
     const turf = await this.prisma.turf.create({
       data: {
         tenantId,
@@ -1465,6 +1480,7 @@ export class CanvassingService {
         name: input.name,
         turfId: input.turfId ?? null,
         campaignId: input.campaignId ?? null,
+        heatRunId: input.campaignId ? await this.heat?.currentRunId(input.campaignId) : null,
         listType: input.listType ?? WalkListItemListType.STATIC,
         items: {
           create: input.contactIds.map((contactId, orderIndex) => ({ contactId, orderIndex })),

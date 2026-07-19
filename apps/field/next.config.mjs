@@ -53,13 +53,13 @@ const withPWA = withPWAInit({
       },
     },
     {
-      // Cold offline start: cache the /field navigation DOCUMENTS so reopening a killed
-      // /field/[turfId] tab with no signal serves the last-good shell, boots the SPA, and
-      // renders the turf from the durable IndexedDB cache (@uprise/field api-cache-store).
-      // Scoped strictly to /field navigations — the root "/" MUST stay uncached (see the
+      // Cold offline start: cache the screen navigation DOCUMENTS so reopening a killed
+      // /[turfId] tab with no signal serves the last-good shell, boots the SPA, and renders
+      // the turf from the durable IndexedDB cache (@uprise/field api-cache-store). Scoped to
+      // every in-app screen EXCEPT the root "/" — the root MUST stay uncached (see the
       // dynamicStartUrl note above: caching "/" replays the SSO redirect forever).
       urlPattern: ({ url, request }) =>
-        request.mode === "navigate" && url.pathname.startsWith("/field"),
+        request.mode === "navigate" && url.pathname !== "/",
       handler: "NetworkFirst",
       options: {
         cacheName: "field-shell",

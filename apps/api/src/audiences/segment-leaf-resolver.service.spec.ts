@@ -80,6 +80,23 @@ describe("SegmentLeafResolverService — routing edges", () => {
     expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
   });
 
+  it("contact.consented resolves the APP 5 consent stamp; false/isNot complement the universe", async () => {
+    const { svc, prisma } = setup();
+    // prisma.contact.findMany returns [c1, c2] — the consented set within U = {c1,c2,c3}.
+    const consented = condLeaf({ type: "contact.consented", op: "is", value: true });
+    const notConsented = condLeaf({ type: "contact.consented", op: "is", value: false });
+    const isNot = condLeaf({ type: "contact.consented", op: "isNot", value: true });
+
+    const { resolved } = await svc.resolveLeaves("t1", [consented, notConsented, isNot], U, {});
+    expect(prisma.contact.findMany).toHaveBeenCalledWith({
+      where: { tenantId: "t1", consentAt: { not: null } },
+      select: { id: true },
+    });
+    expect([...resolved.get(consented)!].sort()).toEqual(["c1", "c2"]);
+    expect([...resolved.get(notConsented)!]).toEqual(["c3"]);
+    expect([...resolved.get(isNot)!]).toEqual(["c3"]);
+  });
+
   it("enum sanitisation: off-enum supportLevel values resolve ∅ rather than crashing Prisma", async () => {
     const { svc } = setup();
     const leaf = condLeaf({ type: "contact.supportLevel", op: "in", values: ["MEGA_FAN"] });

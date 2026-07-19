@@ -1,5 +1,6 @@
 import {
   G01_SHARES,
+  G33_SHARES,
   G37_SHARES,
   shareRows, toNum, codeColumn, censusRows, seifaRows, INDICATORS } from "./abs-parse";
 
@@ -176,5 +177,30 @@ describe("shareRows (G01/G37 derived shares)", () => {
     expect(missing).toEqual([]);
     expect(rows.find((r) => r.indicator_key === "renter_share")?.value).toBeCloseTo(40);
     expect(rows.find((r) => r.indicator_key === "social_housing_share")?.value).toBeCloseTo(8);
+  });
+});
+
+describe("shareRows — G33 low-income share (subtractive denominator)", () => {
+  const CSV = [
+    "SA1_CODE_2021,Negative_Nil_income_Tot,HI_1_149_Tot,HI_150_299_Tot,HI_300_399_Tot,HI_400_499_Tot,HI_500_649_Tot,Partial_income_stated_Tot,All_incomes_not_stated_Tot,Tot_Tot",
+    "30101,5,3,10,12,8,12,20,30,150", // stated = 150-20-30 = 100; low = 50 → 50%
+    "30102,0,0,1,1,1,1,2,3,12",      // stated = 7 < floor → null
+  ].join("\n");
+
+  it("subtracts partial/not-stated from the denominator before the share", () => {
+    const { rows, missing } = shareRows("sa1", CSV, G33_SHARES);
+    expect(missing).toEqual([]);
+    expect(rows.find((r) => r.code === "30101")!.value).toBeCloseTo(50);
+  });
+
+  it("floors on the STATED denominator, not the raw total", () => {
+    const { rows } = shareRows("sa1", CSV, G33_SHARES);
+    expect(rows.find((r) => r.code === "30102")!.value).toBeNull();
+  });
+
+  it("a missing subtrahend column makes the indicator unresolvable, not silently wrong", () => {
+    const csv = "SA1_CODE_2021,Negative_Nil_income_Tot,HI_1_149_Tot,HI_150_299_Tot,HI_300_399_Tot,HI_400_499_Tot,HI_500_649_Tot,Tot_Tot\n30101,5,3,10,12,8,12,150";
+    const { missing } = shareRows("sa1", csv, G33_SHARES);
+    expect(missing).toEqual(["low_income_household_share"]);
   });
 });

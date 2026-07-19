@@ -60,7 +60,7 @@ export function GetTurf() {
     setClaiming(turfId);
     const res = await claimExistingTurf(campaignId, turfId);
     setClaiming(null);
-    if (res.ok) router.push(`/field/${turfId}`);
+    if (res.ok) router.push(`/${turfId}`);
     else setError(res.error);
   };
 
@@ -84,7 +84,7 @@ export function GetTurf() {
           <button
             type="button"
             aria-label="Back"
-            onClick={() => router.push("/field")}
+            onClick={() => router.push("/")}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
           >
             <ChevronLeft className="h-5 w-5" />

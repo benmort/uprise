@@ -2,7 +2,7 @@
   "name": "Uprise Field",
   "short_name": "Canvass",
   "description": "Door-knocking for canvassers — offline-first.",
-  "start_url": "/field",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

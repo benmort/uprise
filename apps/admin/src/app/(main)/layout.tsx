@@ -108,6 +108,7 @@ function canvassOps(campaignId: string | null): NavLeaf[] {
     { label: "Cut turf", href: href("turf"), match: onSub("turf") },
     { label: "Live", href: href("live"), match: onSub("live") },
     { label: "Insights", href: href("insights"), match: onSub("insights") },
+    { label: "Field report", href: href("field"), match: onSub("field") },
     { label: "Shifts", href: href("shifts"), match: onSub("shifts") },
     { label: "Volunteers", href: href("volunteers"), match: onSub("volunteers") },
     { label: "Walk lists", href: href("walklists"), match: onSub("walklists") },
@@ -355,7 +356,7 @@ export default function MainLayout({
   const canvassStoreKey = canvassTenantId ? `uprise.canvass.lastCampaignId:${canvassTenantId}` : null;
   const urlCanvassCampaignId = useMemo(() => {
     const m = pathname?.match(
-      /^\/canvass\/([^/]+)\/(?:turf|live|results|goals|shifts|qa|volunteers|walklists|boundary)(?:\/|$)/,
+      /^\/canvass\/([^/]+)\/(?:turf|live|results|goals|shifts|qa|volunteers|walklists|boundary|field)(?:\/|$)/,
     );
     return m?.[1] ?? null;
   }, [pathname]);

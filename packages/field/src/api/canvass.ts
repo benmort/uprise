@@ -76,6 +76,8 @@ export type DoorKnockInput = {
   walkListItemId?: string;
   photoUrl?: string;
   safetyFlag?: boolean;
+  /** APP 5 door consent — true only when the resident affirmatively agreed. */
+  consent?: boolean;
   surveyAnswers?: DoorKnockSurveyAnswer[];
 };
 

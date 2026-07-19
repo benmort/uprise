@@ -179,6 +179,19 @@ export const UPRISE_CATALOGUE: CatalogueEntry[] = [
     accent: "reach",
   }),
   entry({
+    type: "contact.consented",
+    kind: "contact",
+    group: REACH,
+    label: "Consented to be kept on file",
+    description:
+      "Gave affirmative consent (APP 5) for a record of their views to be kept and used across campaigns.",
+    keywords: ["consent", "consented", "privacy", "supporter file", "app 5", "opt in"],
+    operators: BOOL_OPS,
+    dataType: "bool",
+    valueInput: "toggle",
+    accent: "reach",
+  }),
+  entry({
     type: "contact.emailDomain",
     kind: "contact",
     group: REACH,

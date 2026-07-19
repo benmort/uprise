@@ -31,7 +31,7 @@ function makeReq({ hasCookie = false, headers = {}, nextUrl = {} }: ReqShape): N
     nextUrl: {
       host: nextUrl.host ?? "localhost:3005",
       protocol: nextUrl.protocol ?? "http:",
-      pathname: nextUrl.pathname ?? "/field",
+      pathname: nextUrl.pathname ?? "/",
       search: nextUrl.search ?? "",
     },
   } as unknown as NextRequest;
@@ -83,11 +83,11 @@ describe("middleware", () => {
           "x-forwarded-proto": "https",
           host: "localhost:3005",
         },
-        nextUrl: { host: "localhost:3005", protocol: "http:", pathname: "/field/get-turf" },
+        nextUrl: { host: "localhost:3005", protocol: "http:", pathname: "/get-turf" },
       }),
     );
     expect(returnTo(res.headers.get("location") as string)).toBe(
-      "https://canvass.example.org/field/get-turf",
+      "https://canvass.example.org/get-turf",
     );
   });
 
@@ -95,11 +95,11 @@ describe("middleware", () => {
     const res = middleware(
       makeReq({
         headers: { host: "canvass.example.org", "x-forwarded-proto": "https" },
-        nextUrl: { pathname: "/field/abc123", search: "?door=7" },
+        nextUrl: { pathname: "/abc123", search: "?door=7" },
       }),
     );
     expect(returnTo(res.headers.get("location") as string)).toBe(
-      "https://canvass.example.org/field/abc123?door=7",
+      "https://canvass.example.org/abc123?door=7",
     );
   });
 
@@ -107,18 +107,18 @@ describe("middleware", () => {
     const res = middleware(
       makeReq({
         headers: { host: "app.internal:8080" },
-        nextUrl: { host: "localhost:3005", protocol: "http:", pathname: "/field" },
+        nextUrl: { host: "localhost:3005", protocol: "http:", pathname: "/" },
       }),
     );
     // No forwarded proto → derives from nextUrl.protocol ("http:") stripped of the colon.
-    expect(returnTo(res.headers.get("location") as string)).toBe("http://app.internal:8080/field");
+    expect(returnTo(res.headers.get("location") as string)).toBe("http://app.internal:8080/");
   });
 
   it("falls back to nextUrl host/proto when no host headers are present at all", () => {
     const res = middleware(
-      makeReq({ nextUrl: { host: "localhost:3005", protocol: "https:", pathname: "/field" } }),
+      makeReq({ nextUrl: { host: "localhost:3005", protocol: "https:", pathname: "/" } }),
     );
-    expect(returnTo(res.headers.get("location") as string)).toBe("https://localhost:3005/field");
+    expect(returnTo(res.headers.get("location") as string)).toBe("https://localhost:3005/");
   });
 
   it("takes the first entry from comma-joined forwarded header lists", () => {
@@ -129,10 +129,10 @@ describe("middleware", () => {
           "x-forwarded-host": "public.example.org, edge.internal",
           "x-forwarded-proto": "https, http",
         },
-        nextUrl: { pathname: "/field" },
+        nextUrl: { pathname: "/" },
       }),
     );
-    expect(returnTo(res.headers.get("location") as string)).toBe("https://public.example.org/field");
+    expect(returnTo(res.headers.get("location") as string)).toBe("https://public.example.org/");
   });
 
   it("honours a configured NEXT_PUBLIC_AUTH_APP_URL", () => {

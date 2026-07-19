@@ -181,7 +181,7 @@ export function WalkView({
 
   const openDoor = (id: string) => {
     if (readOnly) return;
-    router.push(`/field/${turfId}/door/${id}`);
+    router.push(`/${turfId}/door/${id}`);
   };
 
   // Fetch the server's Mapbox walk route (ordered from `startFix` when set). Online-only — a
@@ -268,7 +268,7 @@ export function WalkView({
           <button
             type="button"
             aria-label="Back"
-            onClick={() => router.push("/field")}
+            onClick={() => router.push("/")}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
           >
             <ChevronLeft className="h-5 w-5" />

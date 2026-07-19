@@ -160,6 +160,16 @@ export; retraining cadence + snapshots; measured-uplift factor with EB shrinkage
 votes-by-SA1 back-history + swing factor; coalition deconfliction; ABS API automation + G-NAF
 quarterly refresh.
 
+## Runbook: MRP seat-prior recalibration (Phase 1.7 — manual, per release)
+
+When YouGov or DemosAU publish a new MRP round (DemosAU posts free PDFs; YouGov publishes per-seat
+estimates with credible intervals): ingest the seat-level primary/2PP estimates into
+`insights.PollEstimate` rows (`geoKind` sed/ced, `geoCode` from `geo.sed`/`geo.ced`, `reportable`
+true, `baseN` from the published effective n) via the existing poll import path; then refresh
+affected campaigns' heat (the reference-data watermark rotates the cache). Watch for changed 2CP
+pairings — where One Nation reaches the final two, 2022-based competitiveness misranks and the MRP
+prior should carry more weight. Cadence: on every published Victorian round through November 2026.
+
 ## Verification
 
 Each phase lands through the standard gates (typecheck, api tests + boot smoke, coverage patch

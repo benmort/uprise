@@ -27,7 +27,8 @@ import {
   type DescribedSource,
 } from "@/lib/api/campaigns";
 import { getApiUrl } from "@/lib/api";
-import { heatFill, heatFilter, heatOpacity } from "@/lib/canvass/heat-fill";
+import { heatFill, heatFilter, heatOpacity, withHoldoutOverride } from "@/lib/canvass/heat-fill";
+import { EvaluationCard } from "@/components/canvass/evaluation-card";
 import { useChartPalette } from "@/components/insights/use-poll-palette";
 import { HeatLegend, HeatPanel } from "@/components/canvass/heat-panel";
 import { HeatCellCard } from "@/components/canvass/heat-cell-card";
@@ -183,6 +184,9 @@ export default function TurfCuttingPage() {
   const heatCells = heatData?.cells;
   const heatCodes = useMemo(() => new Set((heatCells ?? []).map((c) => c.sa1Code)), [heatCells]);
   const heatCell = heatCellCode ? (heatCells?.find((c) => c.sa1Code === heatCellCode) ?? null) : null;
+  // Evaluation holdout SA1s paint over the score (fixed nodata colour) — organisers must
+  // see where NOT to cut turf; the api refuses turf there anyway.
+  const [holdoutCodes, setHoldoutCodes] = useState<string[]>([]);
   // The choropleth rides the shared map's heatOverlay prop: SA1 tiles + a
   // client-join match fill, confidence as opacity, filtered to the run's cells.
   const heatOverlay = useMemo(
@@ -190,12 +194,12 @@ export default function TurfCuttingPage() {
       targeting && palette && heatCells?.length
         ? {
             tilesUrl: `${getApiUrl()}/geo/tiles/sa1/{z}/{x}/{y}?v=4`,
-            fill: heatFill(heatCells, palette.seq, palette.nodata),
+            fill: withHoldoutOverride(heatFill(heatCells, palette.seq, palette.nodata), holdoutCodes, palette.nodata),
             opacity: heatOpacity(heatCells),
             filter: heatFilter(heatCells),
           }
         : undefined,
-    [targeting, palette, heatCells],
+    [targeting, palette, heatCells, holdoutCodes],
   );
 
   const [name, setName] = useState("");
@@ -673,6 +677,13 @@ export default function TurfCuttingPage() {
             />
             {targeting && heatCell && heatData ? (
               <HeatCellCard cell={heatCell} meta={heatData.meta} onCutTurf={cutTurfHere} />
+            ) : null}
+            {targeting ? (
+              <EvaluationCard
+                id="evaluation"
+                campaignId={campaignId}
+                onChanged={(evaluation) => setHoldoutCodes(evaluation?.holdoutCodes ?? [])}
+              />
             ) : null}
           </AutoAccordionGroup>
 

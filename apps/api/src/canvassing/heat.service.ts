@@ -87,10 +87,7 @@ export class HeatService {
     const config = (campaign.heatConfig ?? {}) as HeatConfig;
     const inputsHash = await this.inputsHash(tenantId, campaign.boundary, config);
 
-    const existing = await this.prisma.canvassHeatRun.findUnique({
-      where: { campaignId },
-      include: { cells: true },
-    });
+    const existing = await this.liveRun(campaignId);
     if (existing && existing.inputsHash === inputsHash) {
       return this.assemble(existing, { campaignId, stale: false });
     }
@@ -188,7 +185,7 @@ export class HeatService {
         payload: { tenantId, campaignId },
         removeOnComplete: true,
       });
-      const existing = await this.prisma.canvassHeatRun.findUnique({ where: { campaignId }, include: { cells: true } });
+      const existing = await this.liveRun(campaignId);
       if (existing) return this.assemble(existing, { campaignId, stale: true, queued: true });
       throw new ApiHttpException("HEAT_QUEUED", "Computing in the background", HttpStatus.ACCEPTED);
     }
@@ -213,6 +210,40 @@ export class HeatService {
   }
 
   // ── internals ────────────────────────────────────────────────────────────
+
+  /** The campaign's current (non-frozen) run, newest first. */
+  private liveRun(campaignId: string) {
+    return this.prisma.canvassHeatRun.findFirst({
+      where: { campaignId, frozen: false },
+      include: { cells: true },
+      orderBy: { computedAt: "desc" },
+    });
+  }
+
+  /**
+   * Freeze the current run as a pre-election snapshot: it stops rotating on recompute,
+   * so post-election validation is genuinely out-of-sample. The next heat read computes
+   * a fresh live run alongside it.
+   */
+  async snapshot(tenantId: string, campaignId: string) {
+    await this.loadCampaign(tenantId, campaignId);
+    const run = await this.liveRun(campaignId);
+    if (!run) {
+      throw new ApiHttpException("NO_RUN", "Compute the targeting map before freezing a snapshot", HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+    await this.prisma.canvassHeatRun.update({ where: { id: run.id }, data: { frozen: true } });
+    return { frozenRunId: run.id, computedAt: run.computedAt.toISOString() };
+  }
+
+  /** The current live run's id — stamped onto walklists as score provenance. */
+  async currentRunId(campaignId: string): Promise<string | null> {
+    const run = await this.prisma.canvassHeatRun.findFirst({
+      where: { campaignId, frozen: false },
+      select: { id: true },
+      orderBy: { computedAt: "desc" },
+    });
+    return run?.id ?? null;
+  }
 
   private async loadCampaign(tenantId: string, campaignId: string) {
     const campaign = await this.prisma.canvassCampaign.findFirst({
@@ -280,7 +311,8 @@ export class HeatService {
       config: this.echoConfig(config),
     };
     return this.prisma.$transaction(async (tx) => {
-      await tx.canvassHeatRun.deleteMany({ where: { campaignId } });
+      // Frozen runs (pre-election snapshots) survive recompute — only the live run rotates.
+      await tx.canvassHeatRun.deleteMany({ where: { campaignId, frozen: false } });
       const run = await tx.canvassHeatRun.create({
         data: {
           campaignId,

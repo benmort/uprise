@@ -94,7 +94,7 @@ export function Assignments() {
     setClaiming(turfId);
     const res = await claimExistingTurf(campaignId, turfId);
     setClaiming(null);
-    if (res.ok) router.push(`/field/${turfId}`);
+    if (res.ok) router.push(`/${turfId}`);
   };
 
   const recommended = rec.data ?? [];
@@ -117,7 +117,7 @@ export function Assignments() {
         <button
           type="button"
           aria-label="Menu"
-          onClick={() => router.push("/field/me")}
+          onClick={() => router.push("/me")}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
           <Menu className="h-5 w-5" />
@@ -130,7 +130,7 @@ export function Assignments() {
           <h1 className="text-3xl font-extrabold leading-tight">My turf</h1>
         </div>
         <Link
-          href="/field/me"
+          href="/me"
           aria-label="Profile"
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
@@ -183,7 +183,7 @@ export function Assignments() {
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-extrabold text-foreground">Recommended turf</h2>
                 <Link
-                  href={`/field/get-turf?campaignId=${recommended[0].campaignId}`}
+                  href={`/get-turf?campaignId=${recommended[0].campaignId}`}
                   className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary"
                 >
                   See all turf
@@ -247,7 +247,7 @@ export function Assignments() {
                   <div className="flex gap-3">
                     <Button
                       className="h-14 flex-1 gap-2 text-base"
-                      onClick={() => router.push(`/field/${a.turfId}`)}
+                      onClick={() => router.push(`/${a.turfId}`)}
                     >
                       <PersonStanding className="h-5 w-5" />
                       Start walking
@@ -255,7 +255,7 @@ export function Assignments() {
                     <button
                       type="button"
                       aria-label="Download for offline"
-                      onClick={() => router.push(`/field/${a.turfId}`)}
+                      onClick={() => router.push(`/${a.turfId}`)}
                       className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
                     >
                       <Download className="h-5 w-5" />
@@ -267,12 +267,12 @@ export function Assignments() {
           })}
           {assignments[0]?.turf.campaignId ? (
             <>
-              <Link href={`/field/get-turf?campaignId=${assignments[0].turf.campaignId}`} className="block">
+              <Link href={`/get-turf?campaignId=${assignments[0].turf.campaignId}`} className="block">
                 <Button variant="outline" className="h-12 w-full text-base">
                   Get more turf
                 </Button>
               </Link>
-              <Link href={`/field/shifts?campaignId=${assignments[0].turf.campaignId}`} className="block">
+              <Link href={`/shifts?campaignId=${assignments[0].turf.campaignId}`} className="block">
                 <Button variant="outline" className="h-12 w-full text-base">
                   Pick a shift
                 </Button>

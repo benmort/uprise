@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleX, Clock, Home, MessageSquare, TriangleAlert } from "lucide-react";
+import { CircleX, Clock, Home, MessageSquare, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@uprise/ui";
 import { cn } from "@uprise/ui";
 import type { DispositionDef } from "../api";
@@ -19,12 +19,25 @@ export function DispositionPad({
   onSelect,
   disabled,
   firstName,
+  consent,
+  onConsentChange,
+  orgName,
 }: {
   options: DispositionDef[];
   onSelect: (code: string) => void;
   disabled?: boolean;
   /** The resident's first name, when known — personalises the "Spoke to …" tile. */
   firstName?: string | null;
+  /**
+   * APP 5 consent state for the support-levelled ("Spoke to …") outcomes. Defaults
+   * OFF — consent must be affirmative, never assumed. Passing `onConsentChange`
+   * renders the toggle with the spoke tiles (they submit on tap, so the canvasser
+   * flips it as they ask).
+   */
+  consent?: boolean;
+  onConsentChange?: (value: boolean) => void;
+  /** The tenant's name, spoken in the consent ask ("so {org} can contact you…"). */
+  orgName?: string | null;
 }) {
   // "Spoke to …" is the prominent primary action (reveals the survey); other contact
   // results are the neutral no-contact grid; terminal / data-quality codes sit in a
@@ -57,6 +70,25 @@ export function DispositionPad({
               {spokeLabel(o)}
             </Button>
           ))}
+          {onConsentChange ? (
+            <div className="space-y-1.5 rounded-2xl border border-border bg-surface p-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <input
+                  type="checkbox"
+                  checked={consent ?? false}
+                  disabled={disabled}
+                  onChange={(e) => onConsentChange(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
+                They agreed we can keep a record of their views
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Ask: &ldquo;Can we keep a record of your views so {orgName?.trim() || "we"} can
+                contact you about this campaign? You can ask us to delete it any time.&rdquo;
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
       {noContact.length > 0 && (

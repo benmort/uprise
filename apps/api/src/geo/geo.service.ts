@@ -1827,6 +1827,15 @@ export class GeoService {
     return { region, parents, childGroups };
   }
 
+  /** Loaded elections (geo.election) newest first — the targeting panel's booth-metric picker. */
+  async listElections(): Promise<Array<{ id: string; jurisdiction: string; name: string; heldOn: string | null }>> {
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT e.id, e.jurisdiction, e.name, e.held_on::text AS held_on
+         FROM geo.election e ORDER BY e.held_on DESC NULLS LAST`,
+    )) as Array<{ id: string; jurisdiction: string; name: string; held_on: string | null }>;
+    return rows.map((r) => ({ id: r.id, jurisdiction: r.jurisdiction, name: r.name, heldOn: r.held_on }));
+  }
+
   /**
    * The 2023 Voice-to-Parliament referendum results (AEC), for the referendum explorer: the
    * national total, the eight state/territory rows and the 151 division rows. `geoCode` on each

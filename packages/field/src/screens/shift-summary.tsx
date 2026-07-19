@@ -48,14 +48,14 @@ export function ShiftSummary() {
     }
     invalidateApi("/canvass"); // all turfs released — clear them from every screen's cache
     showToast({ tone: "success", title: "Turf released — see you next shift" });
-    router.push("/field");
+    router.push("/");
   }, [assignments, router, showToast]);
 
   if (loading) return <Skeleton className="h-64 w-full" />;
 
   return (
     <div className="space-y-5">
-      <Link href="/field/me" className="flex items-center gap-1 text-sm font-medium">
+      <Link href="/me" className="flex items-center gap-1 text-sm font-medium">
         <ArrowLeft className="h-4 w-4" />
         Sync &amp; profile
       </Link>
