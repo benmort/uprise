@@ -147,6 +147,7 @@ export function TurfDrawMap({
   selectedBoundaryCode,
   basketCodes,
   onBoundaryClick,
+  heatOverlay,
   stops = [],
   activeStopId,
   onStopTap,
@@ -238,6 +239,22 @@ export function TurfDrawMap({
    */
   boundaryFill?: ExpressionSpecification | string;
   selectedBoundaryCode?: string;
+  /**
+   * Targeting-heat choropleth: an SA1 vector-tile overlay painted per feature by
+   * data-driven fill + opacity expressions (client-join `match` on `code` — see
+   * `lib/canvass/heat-fill.ts`). Drawn in EVERY mode, above the campaign-boundary
+   * wash and beneath the mode's own layers (anchored with `beforeId` in areas mode,
+   * where both consumers live), and never interactive — clicks still land on the
+   * mode's selectable layers. Omit and nothing changes.
+   */
+  heatOverlay?: {
+    tilesUrl: string;
+    fill: ExpressionSpecification | string;
+    /** Value-by-alpha confidence expression (or a flat alpha). */
+    opacity: ExpressionSpecification | number;
+    /** Restrict painting to the scored cells. */
+    filter?: FilterSpecification;
+  } | null;
   /** Codes already in the "My turf" basket for the active kind/level — drawn as a
    *  distinct green dashed overlay (vs the solid `selectedBoundaryCode` highlight)
    *  so it's clear what's banked vs what's currently picked. */
@@ -1033,6 +1050,33 @@ export function TurfDrawMap({
             ) : null}
             {userPosition ? <Marker latitude={userPosition.lat} longitude={userPosition.lng} color="#0ea5e9" /> : null}
           </>
+        ) : null}
+
+        {/* Targeting heat choropleth — declared AFTER the mode layers so that when it
+            mounts (the toggle) its beforeId anchor already exists, then anchored
+            BENEATH the mode's selectable layers so selection highlights, basket
+            overlays and area lines stay legible on top of the heat. mapbox-gl skips
+            addLayer entirely on a missing beforeId, hence the declare-late ordering. */}
+        {heatOverlay ? (
+          <Source
+            key={heatOverlay.tilesUrl}
+            id="heat"
+            type="vector"
+            tiles={[heatOverlay.tilesUrl]}
+            minzoom={0}
+            maxzoom={TILE_MAX_ZOOM}
+          >
+            <Layer
+              id="heat-fill"
+              source-layer="areas"
+              type="fill"
+              beforeId={
+                mode === "areas" ? (useBoundaryAreas ? "boundary-areas-fill" : "areas-fill") : undefined
+              }
+              filter={heatOverlay.filter ?? MATCH_ALL}
+              paint={{ "fill-color": heatOverlay.fill, "fill-opacity": heatOverlay.opacity }}
+            />
+          </Source>
         ) : null}
         <FullscreenControl position="top-right" />
         <AttributionControl position="bottom-right" compact />

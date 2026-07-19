@@ -4,12 +4,16 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { TenantId } from "../auth/tenant-id.decorator";
 import { CampaignsService } from "./campaigns.service";
-import { CreateCampaignDto, SetBoundaryDto, UpdateCampaignDto } from "./dto/campaigns.dto";
+import { HeatService } from "./heat.service";
+import { CreateCampaignDto, HeatConfigDto, SetBoundaryDto, UpdateCampaignDto } from "./dto/campaigns.dto";
 
 @Controller("canvass/campaigns")
 @UseGuards(RolesGuard)
 export class CampaignsController {
-  constructor(private readonly campaigns: CampaignsService) {}
+  constructor(
+    private readonly campaigns: CampaignsService,
+    private readonly heat: HeatService,
+  ) {}
 
   @Get()
   @Roles(AppUserRole.ORGANISER)
@@ -108,5 +112,25 @@ export class CampaignsController {
     @TenantId() tenantId: string,
   ) {
     return this.campaigns.areasInBoundary(tenantId, id, layer);
+  }
+
+  // ── Targeting heat map (SA1 "where to knock" score over the boundary) ──────
+
+  @Get(":id/heat")
+  @Roles(AppUserRole.ORGANISER)
+  async getHeat(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.heat.getForCampaign(tenantId, id);
+  }
+
+  @Put(":id/heat-config")
+  @Roles(AppUserRole.ORGANISER)
+  async setHeatConfig(@Param("id") id: string, @Body() dto: HeatConfigDto, @TenantId() tenantId: string) {
+    return this.heat.setConfig(tenantId, id, dto);
+  }
+
+  @Post(":id/heat/refresh")
+  @Roles(AppUserRole.ORGANISER)
+  async refreshHeat(@Param("id") id: string, @TenantId() tenantId: string) {
+    return this.heat.refresh(tenantId, id);
   }
 }

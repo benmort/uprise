@@ -18,13 +18,20 @@ import {
   type TurfSummary,
 } from "@/lib/api";
 import { Select, SelectItem } from "@/components/ui/select";
-import { createTurfFromAreas, getAreaAddressCount, type AreaLevel } from "@/lib/api/geo";
+import { createTurfFromAreas, getArea, getAreaAddressCount, type AreaLevel } from "@/lib/api/geo";
 import {
   getCampaignBoundary,
   getCampaignAreas,
   getCampaignBoundaryAddressCount,
+  getCampaignHeat,
   type DescribedSource,
 } from "@/lib/api/campaigns";
+import { getApiUrl } from "@/lib/api";
+import { heatFill, heatFilter, heatOpacity } from "@/lib/canvass/heat-fill";
+import { useChartPalette } from "@/components/insights/use-poll-palette";
+import { HeatLegend, HeatPanel } from "@/components/canvass/heat-panel";
+import { HeatCellCard } from "@/components/canvass/heat-cell-card";
+import { AutoAccordionGroup } from "@/components/canvass/geo-panels/collapsible-card";
 import { Spinner } from "@uprise/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -162,6 +169,35 @@ export default function TurfCuttingPage() {
   const boundaryAddresses = boundaryAddr?.addresses ?? null;
   const [hovered, setHovered] = useState<AreaHoverInfo | null>(null);
 
+  // ── Targeting layer (SA1 "where to knock" heat) ────────────────────────────
+  // Toggled from the sidebar HeatPanel; scores fetch only while on (and only once
+  // the campaign has a boundary — targeting scores the SA1s inside one).
+  const [targeting, setTargeting] = useState(false);
+  const [heatCellCode, setHeatCellCode] = useState("");
+  const palette = useChartPalette();
+  const heat = useApi(
+    targeting && campaignBoundary ? `/canvass/campaigns/${campaignId}/heat` : null,
+    () => getCampaignHeat(campaignId),
+  );
+  const heatData = heat.data ?? null;
+  const heatCells = heatData?.cells;
+  const heatCodes = useMemo(() => new Set((heatCells ?? []).map((c) => c.sa1Code)), [heatCells]);
+  const heatCell = heatCellCode ? (heatCells?.find((c) => c.sa1Code === heatCellCode) ?? null) : null;
+  // The choropleth rides the shared map's heatOverlay prop: SA1 tiles + a
+  // client-join match fill, confidence as opacity, filtered to the run's cells.
+  const heatOverlay = useMemo(
+    () =>
+      targeting && palette && heatCells?.length
+        ? {
+            tilesUrl: `${getApiUrl()}/geo/tiles/sa1/{z}/{x}/{y}?v=4`,
+            fill: heatFill(heatCells, palette.seq, palette.nodata),
+            opacity: heatOpacity(heatCells),
+            filter: heatFilter(heatCells),
+          }
+        : undefined,
+    [targeting, palette, heatCells],
+  );
+
   const [name, setName] = useState("");
   // Auto-name from the selection by default; uncheck to type one. `name` holds the
   // manual override (only used when autoName is off).
@@ -269,6 +305,64 @@ export default function TurfCuttingPage() {
       return exists ? cur.filter((a) => `${a.level}:${a.code}` !== key) : [...cur, area];
     });
   }, []);
+
+  // Turning targeting on aligns the selectable layer to SA1 (the heat's unit), so a
+  // map click lands on a scored cell; turning it off clears the open cell card.
+  const setTargetingOn = useCallback((on: boolean) => {
+    setTargeting(on);
+    if (on) setLevel("sa1");
+    else setHeatCellCode("");
+  }, []);
+
+  // While targeting is on, an SA1 click opens its explainability card instead of
+  // toggling turf selection — "Cut turf here" (below) is what selects it, per the
+  // plan. Clicks on unscored areas (or at other levels) keep the normal behaviour.
+  const handleToggleArea = useCallback(
+    (area: SelectedArea) => {
+      if (targeting && area.level === "sa1" && heatCodes.has(area.code)) {
+        setHeatCellCode((cur) => (cur === area.code ? "" : area.code));
+        return;
+      }
+      toggleArea(area);
+    },
+    [targeting, heatCodes, toggleArea],
+  );
+
+  // "Cut turf here": preselect the SA1 in the existing area-based turf-cut flow.
+  // The boundary-clipped GeoJSON already carries its geometry at the sa1 level;
+  // otherwise fetch the true boundary (same as picking a search result).
+  const cutTurfHere = useCallback(
+    (sa1Code: string) => {
+      if (selectedAreas.some((a) => a.level === "sa1" && a.code === sa1Code)) {
+        showToast({ tone: "info", title: "Already in the selection", description: "This SA1 is queued for the next turf — save it below." });
+        return;
+      }
+      const src =
+        level === "sa1"
+          ? boundaryAreas?.features.find((f) => (f.properties as { code?: string } | null)?.code === sa1Code)
+          : undefined;
+      if (src) {
+        const p = src.properties as { name?: string } | null;
+        toggleArea({ level: "sa1", code: sa1Code, name: p?.name ?? sa1Code, geometry: src.geometry as GeoJSON.Geometry });
+        showToast({ tone: "success", title: "SA1 added to the new turf", description: "Save it from the New turf card." });
+        return;
+      }
+      void getArea("sa1", sa1Code).then((res) => {
+        if (!res.ok) {
+          showToast({ tone: "error", title: "Couldn't load the SA1 boundary", description: res.error });
+          return;
+        }
+        toggleArea({
+          level: "sa1",
+          code: res.data.properties.code,
+          name: res.data.properties.name,
+          geometry: res.data.geometry,
+        });
+        showToast({ tone: "success", title: "SA1 added to the new turf", description: "Save it from the New turf card." });
+      });
+    },
+    [selectedAreas, level, boundaryAreas, toggleArea, showToast],
+  );
 
   const hasSelection = selectedAreas.length > 0 || polygons.length > 0;
 
@@ -380,7 +474,9 @@ export default function TurfCuttingPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="h-[60vh] overflow-hidden rounded-2xl border border-border">
+        {/* Left column: the map, with the Turfs list stacked directly beneath it. */}
+        <div className="space-y-4">
+          <div className="relative h-[60vh] overflow-hidden rounded-2xl border border-border">
           <TurfDrawMap
             existing={existing}
             campaignBoundary={campaignBoundary}
@@ -389,11 +485,125 @@ export default function TurfCuttingPage() {
             level={level}
             onLevelChange={setLevel}
             selectedAreas={selectedAreas}
-            onToggleArea={toggleArea}
+            onToggleArea={handleToggleArea}
             onPolygonsChange={setPolygons}
             clearToken={clearToken}
             recenterToken={recenterToken}
+            heatOverlay={heatOverlay}
           />
+          {targeting && palette && heatData ? (
+            <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+              <HeatLegend breaks={heatData.meta.breaks} ramp={palette.seq} nodata={palette.nodata} />
+            </div>
+          ) : null}
+          </div>
+
+          {/* Turfs — stacked directly under the map, styled like the geo areas list. */}
+          <SectionCard
+            title={`Turfs (${turfs.length})`}
+            action={
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={rebuilding || turfs.length === 0}
+                onClick={rebuildAll}
+                title="Backfill a walk list for every turf that has doors"
+              >
+                {rebuilding ? (
+                  <>
+                    <Spinner className="mr-2" />
+                    Rebuilding…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    Rebuild walk lists
+                  </>
+                )}
+              </Button>
+            }
+          >
+            <StateRegion
+              loading={loading}
+              error={error}
+              noPermission={noPermission}
+              onRetry={() => void refetch()}
+              empty={turfs.length === 0}
+              emptyTitle="No turf cut yet"
+              emptyDescription="Draw a polygon or claim areas above to cut your first turf."
+              skeleton={<Skeleton className="h-20 w-full" />}
+            >
+              <ul className="space-y-2">
+                {turfs.map((t, i) => {
+                  const warning = turfWarning(t.estimate);
+                  return (
+                    <li key={t.id} className="text-sm">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: SWATCHES[i % SWATCHES.length] }}
+                        />
+                        <span className="flex items-center gap-1 font-medium text-foreground">
+                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                          {t.name}
+                        </span>
+                        <span className="ml-auto tabular-nums text-muted-foreground">
+                          {t.contactCount} doors
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Rename turf"
+                          onClick={() => openRename(t)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Delete turf"
+                          onClick={() => setDeletingTurf(t)}
+                          className="text-muted-foreground hover:text-error"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {/* The estimate, once the turf has been priced. A straight-line walk
+                          is always optimistic, so it is labelled rather than rounded into
+                          looking like a measurement. */}
+                      {t.estimate && t.estimate.doors > 0 ? (
+                        <div className="ml-5 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <span className="tabular-nums">{describeEstimate(t.estimate)}</span>
+                          <span aria-hidden>·</span>
+                          <span className="tabular-nums">{describeBuildings(t.estimate)}</span>
+                          {isStraightLine(t.estimate) ? (
+                            <span
+                              title="The walk was measured in straight lines, not along footpaths — the real turf is slower."
+                              className="rounded border border-border px-1 py-px text-[10px] font-medium uppercase tracking-wide"
+                            >
+                              straight-line estimate
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {warning ? (
+                        <p
+                          className={cn(
+                            "ml-5 mt-1 flex items-center gap-1 text-xs",
+                            warning.level === "warn" ? "font-medium text-warning" : "text-muted-foreground",
+                          )}
+                        >
+                          {warning.level === "warn" ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                          {warning.text}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            </StateRegion>
+          </SectionCard>
         </div>
 
         <div className="space-y-4">
@@ -442,6 +652,29 @@ export default function TurfCuttingPage() {
               </Button>
             </SectionCard>
           ) : null}
+
+          {/* Targeting: the weights drawer + (on SA1 click) the explainability card,
+              as an accordion — a click opens the cell card and folds the weights,
+              the demographics Indicator ⇄ profile pattern. */}
+          <AutoAccordionGroup defaultOpen="heat" follow={targeting && heatCell ? "heat-cell" : ""}>
+            <HeatPanel
+              campaignId={campaignId}
+              enabled={targeting}
+              onEnabledChange={setTargetingOn}
+              data={heatData}
+              loading={heat.loading}
+              error={heat.error}
+              noPermission={heat.noPermission}
+              onRetry={() => void heat.refetch()}
+              onData={(next) => heat.mutate(next)}
+              noBoundaryHref={
+                boundaryData !== undefined && !campaignBoundary ? `/canvass/${campaignId}/boundary` : null
+              }
+            />
+            {targeting && heatCell && heatData ? (
+              <HeatCellCard cell={heatCell} meta={heatData.meta} onCutTurf={cutTurfHere} />
+            ) : null}
+          </AutoAccordionGroup>
 
           <SectionCard title="New turf">
             {/* Auto-name from the selection so organisers don't have to type one;
@@ -564,113 +797,6 @@ export default function TurfCuttingPage() {
           </SectionCard>
         </div>
       </div>
-
-      {/* Turfs — full-width below the map, styled like the geo areas list. */}
-      <SectionCard
-        title={`Turfs (${turfs.length})`}
-        action={
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={rebuilding || turfs.length === 0}
-            onClick={rebuildAll}
-            title="Backfill a walk list for every turf that has doors"
-          >
-            {rebuilding ? (
-              <>
-                <Spinner className="mr-2" />
-                Rebuilding…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                Rebuild walk lists
-              </>
-            )}
-          </Button>
-        }
-      >
-            <StateRegion
-              loading={loading}
-              error={error}
-              noPermission={noPermission}
-              onRetry={() => void refetch()}
-              empty={turfs.length === 0}
-              emptyTitle="No turf cut yet"
-              emptyDescription="Draw a polygon or claim areas above to cut your first turf."
-              skeleton={<Skeleton className="h-20 w-full" />}
-            >
-              <ul className="space-y-2">
-                {turfs.map((t, i) => {
-                  const warning = turfWarning(t.estimate);
-                  return (
-                    <li key={t.id} className="text-sm">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-3 w-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: SWATCHES[i % SWATCHES.length] }}
-                        />
-                        <span className="flex items-center gap-1 font-medium text-foreground">
-                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                          {t.name}
-                        </span>
-                        <span className="ml-auto tabular-nums text-muted-foreground">
-                          {t.contactCount} doors
-                        </span>
-                        <button
-                          type="button"
-                          aria-label="Rename turf"
-                          onClick={() => openRename(t)}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Delete turf"
-                          onClick={() => setDeletingTurf(t)}
-                          className="text-muted-foreground hover:text-error"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-
-                      {/* The estimate, once the turf has been priced. A straight-line walk
-                          is always optimistic, so it is labelled rather than rounded into
-                          looking like a measurement. */}
-                      {t.estimate && t.estimate.doors > 0 ? (
-                        <div className="ml-5 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                          <span className="tabular-nums">{describeEstimate(t.estimate)}</span>
-                          <span aria-hidden>·</span>
-                          <span className="tabular-nums">{describeBuildings(t.estimate)}</span>
-                          {isStraightLine(t.estimate) ? (
-                            <span
-                              title="The walk was measured in straight lines, not along footpaths — the real turf is slower."
-                              className="rounded border border-border px-1 py-px text-[10px] font-medium uppercase tracking-wide"
-                            >
-                              straight-line estimate
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      {warning ? (
-                        <p
-                          className={cn(
-                            "ml-5 mt-1 flex items-center gap-1 text-xs",
-                            warning.level === "warn" ? "font-medium text-warning" : "text-muted-foreground",
-                          )}
-                        >
-                          {warning.level === "warn" ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
-                          {warning.text}
-                        </p>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </StateRegion>
-          </SectionCard>
 
       <FormDialog
         open={!!editingTurf}

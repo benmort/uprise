@@ -7,10 +7,15 @@ import { PrismaService } from "../../prisma/prisma.service";
 import {
   INDICATORS,
   CENSUS_G02_FILES,
+  CENSUS_G01_FILE,
+  CENSUS_G37_FILE,
+  G01_SHARES,
+  G37_SHARES,
   SEIFA_FILES,
   SEIFA_SUMMARY_SHEET,
   censusRows,
   seifaRows,
+  shareRows,
   type Level,
   type ValueRow,
 } from "./abs-parse";
@@ -101,6 +106,21 @@ async function main(): Promise<void> {
       await upsertValues(prisma, censusValues);
       await upsertMeta(prisma, "abs_census_2021", "ABS Census 2021 (General Community Profile)", "https://www.abs.gov.au/census", censusValues.length);
       log(`  ✓ upserted ${censusValues.length} census values + dataset_meta (abs_census_2021)`);
+    }
+
+    // Derived shares — G01 (persons: CALD / First Nations / 18–24) + G37 (tenure) at SA1.
+    for (const { file, defs, label } of [
+      { file: CENSUS_G01_FILE, defs: G01_SHARES, label: "G01 shares" },
+      { file: CENSUS_G37_FILE, defs: G37_SHARES, label: "G37 shares" },
+    ]) {
+      const path = resolve(DATA_DIR, file);
+      if (!existsSync(path)) { log(`  – ${file} not staged; skipping ${label}`); continue; }
+      const { rows, missing } = shareRows("sa1", readFileSync(path, "utf8"), defs);
+      if (missing.length) log(`  ⚠ ${label}: column(s) missing for ${missing.join(", ")} — check the DataPack vintage`);
+      if (rows.length) {
+        await upsertValues(prisma, rows);
+        log(`  · SA1 ${label}: ${rows.length} values`);
+      }
     }
 
     // SEIFA — one "Indexes" xlsx per level; read the "Table 1" Summary sheet.

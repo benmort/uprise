@@ -308,6 +308,7 @@ model Tenant {
   polls             Poll[]
   turfs             Turf[]
   turfEstimates     TurfEstimate[]
+  heatRuns          CanvassHeatRun[]
   walkLists         WalkList[]
   doorKnocks        DoorKnock[]
   shifts            Shift[]
@@ -1245,14 +1246,61 @@ model CanvassCampaign {
   // an organiser must approve; false ⇒ instant ASSIGNED (the default, existing path).
   turfClaimRequiresApproval Boolean    @default(false)
   priority       Int                   @default(0) // organiser-set rank; lower = higher priority (1 = top)
+  // Targeting heat-map configuration: { preset, weights?, pollRef?, alignedPartyCodes?,
+  // electionId?, fitLens? } — null means the Coverage preset defaults.
+  heatConfig     Json?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
   tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   turfs          Turf[]
   walkLists      WalkList[]
   shifts         Shift[]
+  heatRun        CanvassHeatRun?
 
   @@index([tenantId, status])
+  @@schema("canvass")
+}
+
+/// One cached targeting heat-map run per campaign (TurfEstimate's cached-derived-metric
+/// pattern): `inputsHash` covers the boundary geometry, weights/config, reference-data
+/// version and the day-truncated tenant watermark — any mismatch recomputes.
+model CanvassHeatRun {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  tenantId   String
+  inputsHash String
+  preset     String
+  /// Effective factor weights the run used (after campaign overrides).
+  weights    Json
+  /// { breaks, factorCoverage, constantFactors, lowResolutionFactors, sa1Count, election }
+  meta       Json
+  computedAt DateTime @default(now())
+
+  campaign CanvassCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cells    CanvassHeatCell[]
+
+  @@index([tenantId])
+  @@schema("canvass")
+}
+
+/// One scored SA1 inside a heat run. `score` null = insufficient data (paints as no-data,
+/// never cold); sub-scores/flags ride as Json so factor sets can evolve without migrations.
+model CanvassHeatCell {
+  id               String  @id @default(cuid())
+  runId            String
+  campaignId       String
+  sa1Code          String
+  score            Float?
+  band             Int?
+  subScores        Json
+  flags            Json
+  coverageFraction Float
+
+  run CanvassHeatRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, sa1Code])
+  @@index([runId])
   @@schema("canvass")
 }
 

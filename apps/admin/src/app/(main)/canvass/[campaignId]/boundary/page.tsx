@@ -14,7 +14,18 @@ import { StateRegion } from "@/components/shell/state-region";
 import { SectionCard } from "@uprise/field";
 import { useToast } from "@/components/ui/toast";
 import { listDivisions, type AreaLevel, type Division, type DivisionType, type TurfDivisionType } from "@/lib/api/geo";
-import { getCampaignBoundary, previewCampaignBoundary, setCampaignBoundary, type BoundarySource } from "@/lib/api/campaigns";
+import {
+  getCampaignBoundary,
+  previewCampaignBoundary,
+  previewHeat,
+  setCampaignBoundary,
+  type BoundarySource,
+  type HeatResponse,
+} from "@/lib/api/campaigns";
+import { getApiUrl } from "@/lib/api";
+import { heatFill, heatFilter, heatOpacity } from "@/lib/canvass/heat-fill";
+import { useChartPalette } from "@/components/insights/use-poll-palette";
+import { HeatLegend } from "@/components/canvass/heat-panel";
 import type { SelectedArea } from "@/components/canvass/turf-draw-map";
 
 // mapbox-gl + draw touch window: keep them out of SSR.
@@ -134,6 +145,17 @@ export default function CampaignBoundaryPage() {
     [divisions, areaSources, selectedAreas, polygons],
   );
 
+  // ── Targeting preview (SA1 heat over the in-progress selection) ─────────────
+  // "Show targeting" re-scores the current source union server-side (no persistence,
+  // Coverage preset) so organisers see where the opportunity is BEFORE committing the
+  // boundary. Debounced + latest-wins like the boundary preview below; oversized
+  // unions come back 422 PREVIEW_TOO_LARGE, whose message is shown verbatim.
+  const [showTargeting, setShowTargeting] = useState(false);
+  const [heatPreview, setHeatPreview] = useState<HeatResponse | null>(null);
+  const [heatLoading, setHeatLoading] = useState(false);
+  const [heatNotice, setHeatNotice] = useState("");
+  const palette = useChartPalette();
+
   // Live-preview the unioned boundary as the parts change: debounced server-side union (no save),
   // drawn on the map (which also re-frames + enables Recentre). Latest-wins via AbortController.
   useEffect(() => {
@@ -157,6 +179,56 @@ export default function CampaignBoundaryPage() {
       ac.abort();
     };
   }, [campaignId, sources, loading]);
+
+  // Debounced heat preview over the same sources (400ms, aborting superseded calls).
+  useEffect(() => {
+    if (!showTargeting || loading) {
+      setHeatPreview(null);
+      setHeatNotice("");
+      setHeatLoading(false);
+      return;
+    }
+    if (sources.length === 0) {
+      setHeatPreview(null);
+      setHeatNotice("");
+      setHeatLoading(false);
+      return;
+    }
+    const ac = new AbortController();
+    setHeatLoading(true);
+    const t = setTimeout(() => {
+      void previewHeat(sources, undefined, ac.signal).then((res) => {
+        if (ac.signal.aborted) return;
+        setHeatLoading(false);
+        if (res.ok) {
+          setHeatPreview(res.data);
+          setHeatNotice("");
+        } else {
+          // 422s (PREVIEW_TOO_LARGE / NO_BOUNDARY) carry an actionable message — show it verbatim.
+          setHeatPreview(null);
+          setHeatNotice(res.error);
+        }
+      });
+    }, 400);
+    return () => {
+      clearTimeout(t);
+      ac.abort();
+    };
+  }, [showTargeting, sources, loading]);
+
+  const heatCells = heatPreview?.cells;
+  const heatOverlay = useMemo(
+    () =>
+      showTargeting && palette && heatCells?.length
+        ? {
+            tilesUrl: `${getApiUrl()}/geo/tiles/sa1/{z}/{x}/{y}?v=4`,
+            fill: heatFill(heatCells, palette.seq, palette.nodata),
+            opacity: heatOpacity(heatCells),
+            filter: heatFilter(heatCells),
+          }
+        : undefined,
+    [showTargeting, palette, heatCells],
+  );
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -213,14 +285,20 @@ export default function CampaignBoundaryPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <div className="h-[60vh] overflow-hidden rounded-2xl border border-border">
+        <div className="relative h-[60vh] overflow-hidden rounded-2xl border border-border">
           <TurfDrawMap
             campaignBoundary={previewBoundary}
             selectedAreas={selectedAreas}
             onToggleArea={toggleArea}
             onPolygonsChange={setPolygons}
             clearToken={clearToken}
+            heatOverlay={heatOverlay}
           />
+          {showTargeting && palette && heatPreview ? (
+            <div className="pointer-events-none absolute bottom-3 left-3 z-10">
+              <HeatLegend breaks={heatPreview.meta.breaks} ramp={palette.seq} nodata={palette.nodata} />
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-4">
@@ -317,6 +395,34 @@ export default function CampaignBoundaryPage() {
               </ul>
             </SectionCard>
           ) : null}
+
+          <SectionCard title="Targeting">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showTargeting}
+                onChange={(e) => setShowTargeting(e.target.checked)}
+                className="h-4 w-4 shrink-0"
+              />
+              <span className="font-medium text-foreground">Show targeting</span>
+              {heatLoading ? <Spinner className="ml-auto h-3.5 w-3.5" /> : null}
+            </label>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Shades the selection&rsquo;s SA1s by where to knock first, re-scored as you add or remove
+              parts. Preview uses the Coverage preset.
+            </p>
+            {heatNotice ? (
+              <p className="mt-2 rounded-lg bg-warning-container px-2.5 py-1.5 text-xs font-medium text-warning-foreground">
+                {heatNotice}
+              </p>
+            ) : null}
+            {showTargeting && heatPreview ? (
+              <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+                {heatPreview.meta.sa1Count.toLocaleString()} SA1s scored – bands re-rank within whatever
+                is currently selected.
+              </p>
+            ) : null}
+          </SectionCard>
 
           <SectionCard title="Save">
             <p className="mb-3 text-xs text-muted-foreground">

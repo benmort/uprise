@@ -20,6 +20,8 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { RequirePermission } from "../auth/require-permission.decorator";
 import { TurfEstimateService } from "./turf-estimate.service";
+import { HeatService } from "./heat.service";
+import { HeatPreviewDto } from "./dto/campaigns.dto";
 import { TenantId } from "../auth/tenant-id.decorator";
 import type { AuthUser } from "../auth/auth-user";
 import { CanvassingService } from "./canvassing.service";
@@ -64,7 +66,19 @@ export class CanvassingController {
   constructor(
     private readonly canvassing: CanvassingService,
     private readonly estimates: TurfEstimateService,
+    private readonly heat: HeatService,
   ) {}
+
+  /**
+   * Boundary-editor targeting preview: score an ad-hoc union of sources (no campaign,
+   * no persistence) so the heat map renders WHILE the organiser composes a boundary.
+   * Capped server-side — an oversize selection gets a "narrow it" 422, not a hang.
+   */
+  @Post("heat/preview")
+  @RequirePermission(CANVASS_READ)
+  async heatPreview(@Body() dto: HeatPreviewDto, @TenantId() tenantId: string) {
+    return this.heat.preview(tenantId, dto.sources, dto.config ?? {});
+  }
 
   // Organiser
   @Get("turfs")

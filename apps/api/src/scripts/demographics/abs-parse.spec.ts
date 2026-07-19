@@ -1,4 +1,7 @@
-import { toNum, codeColumn, censusRows, seifaRows, INDICATORS } from "./abs-parse";
+import {
+  G01_SHARES,
+  G37_SHARES,
+  shareRows, toNum, codeColumn, censusRows, seifaRows, INDICATORS } from "./abs-parse";
 
 describe("abs-parse — toNum", () => {
   it("strips thousands/currency and coerces", () => {
@@ -121,5 +124,57 @@ describe("abs-parse — catalogue", () => {
       expect(i.levels.length).toBeGreaterThan(0);
       expect(["advantage", "neutral", "disadvantage"]).toContain(i.polarity);
     }
+  });
+});
+
+describe("shareRows (G01/G37 derived shares)", () => {
+  const G01_CSV = [
+    "SA1_CODE_2021,Tot_P_P,Lang_used_home_Oth_Lang_P,Indigenous_P_Tot_P,Age_15_19_yr_P,Age_20_24_yr_P",
+    "10101,400,120,20,25,30",
+    "10102,8,3,0,1,2", // denominator under the floor → all null
+    "10103,200,,10,10,10", // suppressed numerator → null for that indicator only
+  ].join("\n");
+
+  it("derives percent shares with weighted terms (18–24 = 20–24 + 0.4×15–19)", () => {
+    const { rows, missing } = shareRows("sa1", G01_CSV, G01_SHARES);
+    expect(missing).toEqual([]);
+    const get = (code: string, key: string) => rows.find((r) => r.code === code && r.indicator_key === key)?.value;
+    expect(get("10101", "cald_lote_share")).toBeCloseTo(30);
+    expect(get("10101", "indigenous_share")).toBeCloseTo(5);
+    expect(get("10101", "age_18_24_share")).toBeCloseTo(((30 + 0.4 * 25) / 400) * 100);
+  });
+
+  it("nulls every share when the denominator is under the suppression floor", () => {
+    const { rows } = shareRows("sa1", G01_CSV, G01_SHARES);
+    for (const key of ["cald_lote_share", "indigenous_share", "age_18_24_share"]) {
+      expect(rows.find((r) => r.code === "10102" && r.indicator_key === key)?.value).toBeNull();
+    }
+  });
+
+  it("nulls only the indicator whose numerator cell is suppressed", () => {
+    const { rows } = shareRows("sa1", G01_CSV, G01_SHARES);
+    expect(rows.find((r) => r.code === "10103" && r.indicator_key === "cald_lote_share")?.value).toBeNull();
+    expect(rows.find((r) => r.code === "10103" && r.indicator_key === "indigenous_share")?.value).toBeCloseTo(5);
+  });
+
+  it("reports indicators whose columns are missing instead of silently loading nothing", () => {
+    const { rows, missing } = shareRows("sa1", "SA1_CODE_2021,Tot_P_P\n10101,100", G01_SHARES);
+    expect(missing).toEqual(["cald_lote_share", "indigenous_share", "age_18_24_share"]);
+    expect(rows).toEqual([]);
+  });
+
+  it("accepts legacy column aliases (2016 Lang_spoken_home naming)", () => {
+    const csv = "SA1_CODE_2021,Tot_P_P,Lang_spoken_home_Oth_Lang_P\n10101,100,25";
+    const { rows, missing } = shareRows("sa1", csv, [G01_SHARES[0]]);
+    expect(missing).toEqual([]);
+    expect(rows[0].value).toBeCloseTo(25);
+  });
+
+  it("derives G37 tenure shares and clamps to 0–100", () => {
+    const csv = "SA1_CODE_2021,R_Tot_Total,R_ST_h_auth_Total,Total_Total\n20101,60,12,150";
+    const { rows, missing } = shareRows("sa1", csv, G37_SHARES);
+    expect(missing).toEqual([]);
+    expect(rows.find((r) => r.indicator_key === "renter_share")?.value).toBeCloseTo(40);
+    expect(rows.find((r) => r.indicator_key === "social_housing_share")?.value).toBeCloseTo(8);
   });
 });

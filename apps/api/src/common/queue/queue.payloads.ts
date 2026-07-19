@@ -38,6 +38,12 @@ export type TurfEstimateRunJobPayload = {
   turfId: string;
 };
 
+/** Compute a campaign's targeting heat run (large boundaries + the nightly refresh). */
+export type HeatRunJobPayload = {
+  tenantId: string;
+  campaignId: string;
+};
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -97,4 +103,10 @@ export function isTurfEstimateRunJobPayload(value: unknown): value is TurfEstima
   if (!value || typeof value !== "object") return false;
   const payload = value as Record<string, unknown>;
   return isNonEmptyString(payload.tenantId) && isNonEmptyString(payload.turfId);
+}
+
+export function isHeatRunJobPayload(value: unknown): value is HeatRunJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  return isNonEmptyString(payload.tenantId) && isNonEmptyString(payload.campaignId);
 }

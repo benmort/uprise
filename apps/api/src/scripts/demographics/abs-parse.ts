@@ -23,6 +23,8 @@ export type ValueRow = { level: string; code: string; indicator_key: string; val
 
 const SEIFA_SOURCE = "ABS SEIFA 2021 (2033.0.55.001)";
 const CENSUS_G02 = "ABS Census 2021 · G02";
+const CENSUS_G01 = "ABS Census 2021 · G01";
+const CENSUS_G37 = "ABS Census 2021 · G37";
 
 // The indicator catalogue seeded into geo.abs_indicator. `polarity` drives the choropleth ramp
 // (advantage = high-is-good, disadvantage = low-is-worse, neutral = plain sequential).
@@ -40,6 +42,14 @@ export const INDICATORS: IndicatorDef[] = [
   { key: "median_mortgage_monthly", name: "Median mortgage repayment (monthly)", category: "housing", unit: "aud", format: "currency", source: CENSUS_G02, polarity: "neutral", levels: ["sa1", "sa2", "sa3", "sa4"], sort: 21 },
   { key: "avg_household_size", name: "Average household size", category: "housing", unit: "ratio", format: "number", source: CENSUS_G02, polarity: "neutral", levels: ["sa1", "sa2", "sa3", "sa4"], sort: 22 },
   { key: "avg_persons_per_bedroom", name: "Average persons per bedroom", category: "housing", unit: "ratio", format: "number", source: CENSUS_G02, polarity: "neutral", levels: ["sa1", "sa2", "sa3", "sa4"], sort: 23 },
+  // Derived shares (percent 0–100) from G01/G37 — the CALD / First Nations / tenure signals the
+  // canvass targeting fit lens uses. Denominators under MIN_SHARE_DENOMINATOR are nulled (ABS
+  // small-cell perturbation makes tiny-cell rates meaningless — treat as suppressed).
+  { key: "cald_lote_share", name: "Language other than English at home (share)", category: "demographic", unit: "pct", format: "percent", source: CENSUS_G01, polarity: "neutral", levels: ["sa1"], sort: 30, description: "Share of people using a language other than English at home (Census G01)." },
+  { key: "indigenous_share", name: "Aboriginal and Torres Strait Islander peoples (share)", category: "demographic", unit: "pct", format: "percent", source: CENSUS_G01, polarity: "neutral", levels: ["sa1"], sort: 31, description: "Share of people identifying as Aboriginal and/or Torres Strait Islander (Census G01)." },
+  { key: "age_18_24_share", name: "Young adults 18–24 (est. share)", category: "demographic", unit: "pct", format: "percent", source: CENSUS_G01, polarity: "neutral", levels: ["sa1"], sort: 32, description: "Estimated share aged 18–24: the 20–24 cohort plus two fifths of 15–19 (Census G01 five-year bands don't split at 18)." },
+  { key: "renter_share", name: "Renting households (share)", category: "housing", unit: "pct", format: "percent", source: CENSUS_G37, polarity: "neutral", levels: ["sa1"], sort: 24, description: "Share of occupied private dwellings that are rented (Census G37)." },
+  { key: "social_housing_share", name: "Social housing (share)", category: "housing", unit: "pct", format: "percent", source: CENSUS_G37, polarity: "neutral", levels: ["sa1"], sort: 25, description: "Share of dwellings rented from a state or territory housing authority (Census G37)." },
 ];
 
 // Census G02 DataPack: one small CSV per level (just the G02 table, not the whole DataPack).
@@ -141,6 +151,94 @@ export function censusRows(level: Level, csv: string): ValueRow[] {
     }
   }
   return out;
+}
+
+// ── Derived share tables (G01 persons, G37 tenure) ──────────────────────────
+
+/** Rates from cells this small are perturbation noise — treat as suppressed. */
+export const MIN_SHARE_DENOMINATOR = 10;
+
+export type ShareDef = {
+  key: string;
+  /** Summed numerator terms; each term is the first matching column × weight (default 1). */
+  numerators: Array<{ cols: string[]; weight?: number }>;
+  /** First matching column wins. */
+  denominator: string[];
+};
+
+/** G01 (selected person characteristics) → person-share indicators. Column names verified
+ *  against the 2021 short-header DataPack. */
+export const CENSUS_G01_FILE = "2021Census_G01_AUST_SA1.csv";
+export const G01_SHARES: ShareDef[] = [
+  { key: "cald_lote_share", numerators: [{ cols: ["Lang_used_home_Oth_Lang_P", "Lang_spoken_home_Oth_Lang_P"] }], denominator: ["Tot_P_P"] },
+  { key: "indigenous_share", numerators: [{ cols: ["Indigenous_P_Tot_P"] }], denominator: ["Tot_P_P"] },
+  // 18–24 estimate: whole 20–24 band + 2/5 of the 15–19 band (five-year bands don't split at 18).
+  { key: "age_18_24_share", numerators: [{ cols: ["Age_20_24_yr_P"] }, { cols: ["Age_15_19_yr_P"], weight: 0.4 }], denominator: ["Tot_P_P"] },
+];
+
+/** G37 (tenure and landlord type by dwelling structure) → dwelling-share indicators. */
+export const CENSUS_G37_FILE = "2021Census_G37_AUST_SA1.csv";
+export const G37_SHARES: ShareDef[] = [
+  { key: "renter_share", numerators: [{ cols: ["R_Tot_Total"] }], denominator: ["Total_Total"] },
+  { key: "social_housing_share", numerators: [{ cols: ["R_ST_h_auth_Total"] }], denominator: ["Total_Total"] },
+];
+
+/**
+ * Census share table → percent (0–100) value rows. Suppression-honest: a denominator under
+ * {@link MIN_SHARE_DENOMINATOR} yields null (never a fabricated rate), and an indicator whose
+ * numerator/denominator columns are absent from the header is reported in `missing` rather
+ * than silently loading nothing.
+ */
+export function shareRows(
+  level: Level,
+  csv: string,
+  defs: ShareDef[],
+): { rows: ValueRow[]; missing: string[] } {
+  const parsed = parseCsv(csv).filter((r) => r.some((f) => f.trim() !== ""));
+  if (parsed.length < 2) return { rows: [], missing: defs.map((d) => d.key) };
+  const header = parsed[0].map((h) => h.trim());
+  const codeAt = codeColumn(header);
+  const find = (cands: string[]): number =>
+    header.findIndex((h) => cands.some((c) => h.toLowerCase() === c.toLowerCase()));
+
+  const resolved: Array<{ key: string; terms: Array<{ idx: number; weight: number }>; denIdx: number }> = [];
+  const missing: string[] = [];
+  for (const def of defs) {
+    const denIdx = find(def.denominator);
+    const terms = def.numerators.map((t) => ({ idx: find(t.cols), weight: t.weight ?? 1 }));
+    if (denIdx < 0 || terms.some((t) => t.idx < 0)) {
+      missing.push(def.key);
+      continue;
+    }
+    resolved.push({ key: def.key, terms, denIdx });
+  }
+
+  const rows: ValueRow[] = [];
+  for (const r of parsed.slice(1)) {
+    const code = (r[codeAt] ?? "").trim();
+    if (!code) continue;
+    for (const def of resolved) {
+      const den = toNum(r[def.denIdx]);
+      if (den === null || den < MIN_SHARE_DENOMINATOR) {
+        rows.push({ level, code, indicator_key: def.key, value: null });
+        continue;
+      }
+      let num = 0;
+      let anyNull = false;
+      for (const t of def.terms) {
+        const v = toNum(r[t.idx]);
+        if (v === null) { anyNull = true; break; }
+        num += v * t.weight;
+      }
+      rows.push({
+        level,
+        code,
+        indicator_key: def.key,
+        value: anyNull ? null : Math.max(0, Math.min(100, (num / den) * 100)),
+      });
+    }
+  }
+  return { rows, missing };
 }
 
 /** SEIFA "Table 1" Summary sheet (rows-as-arrays) → value rows. Data rows are those whose first

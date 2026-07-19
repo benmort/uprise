@@ -13,6 +13,7 @@ import type { EventEnvelope } from "@uprise/events";
 import { AudiencesService } from "../../api/src/audiences/audiences.service";
 import { SegmentEvaluatorService } from "../../api/src/audiences/segment-evaluator.service";
 import { TurfEstimateService } from "../../api/src/canvassing/turf-estimate.service";
+import { HeatService } from "../../api/src/canvassing/heat.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { IntegrationsService } from "../../api/src/integrations/integrations.service";
 import { JourneysService } from "../../api/src/journeys/journeys.service";
@@ -28,6 +29,7 @@ import {
   isJourneyRunRungJobPayload,
   isSegmentEvalRunJobPayload,
   isTurfEstimateRunJobPayload,
+  isHeatRunJobPayload,
 } from "../../api/src/common/queue/queue.payloads";
 import { QUEUE_JOB_TYPES, QUEUE_NAMES } from "../../api/src/common/queue/queue.constants";
 
@@ -209,6 +211,7 @@ async function bootstrap(): Promise<void> {
   const audiences = app.get(AudiencesService);
   const segmentEvaluator = app.get(SegmentEvaluatorService);
   const turfEstimates = app.get(TurfEstimateService);
+  const heat = app.get(HeatService);
   const blasts = app.get(BlastsService);
   const integrations = app.get(IntegrationsService);
   const journeys = app.get(JourneysService);
@@ -325,6 +328,19 @@ async function bootstrap(): Promise<void> {
           throw new Error(`Invalid turf estimate job payload for job ${job.id}`);
         }
         return turfEstimates.processEstimateJob(job.data);
+      },
+      { connection, prefix, concurrency: 1 },
+    ),
+    // Targeting heat runs: one big extraction query + a cheap pure score. Serial —
+    // two concurrent multi-thousand-SA1 extractions would fight for the same DB.
+    new Worker(
+      QUEUE_NAMES.HEAT_RUN,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.HEAT_RUN_COMPUTE) return null;
+        if (!isHeatRunJobPayload(job.data)) {
+          throw new Error(`Invalid heat run job payload for job ${job.id}`);
+        }
+        return heat.processHeatJob(job.data);
       },
       { connection, prefix, concurrency: 1 },
     ),

@@ -172,3 +172,97 @@ export async function getCampaignLive(id?: string) {
     id ? `/canvass/campaigns/${encodeURIComponent(id)}/live` : "/canvass/campaigns/live",
   );
 }
+
+// ── Targeting heat map (SA1 "where to knock" score) ─────────────────────────
+
+export type HeatFactor =
+  | "doors"
+  | "persuadability"
+  | "supporter"
+  | "fit"
+  | "efficiency"
+  | "freshness"
+  // Opt-in factors — weight 0 in every preset until a slider moves:
+  | "community"
+  | "progressive"
+  | "informality";
+export type HeatPreset = "persuasion" | "gotv" | "coverage";
+
+export type HeatConfig = {
+  preset?: HeatPreset;
+  weights?: Partial<Record<HeatFactor, number>>;
+  pollRef?: { pollId: string; questionCode: string; responseLabel: string; geoKind?: string } | null;
+  alignedPartyCodes?: string[];
+  electionId?: string | null;
+  fitLens?: { indicator: string; target?: number; span?: number } | null;
+  /** Second demographic lens (default: CALD language-other-than-English share). */
+  communityLens?: { indicator: string; target?: number; span?: number } | null;
+};
+
+export type HeatCell = {
+  sa1Code: string;
+  /** 0–100; null = insufficient data (hatched no-data, never cold). */
+  score: number | null;
+  band: number | null;
+  subScores: Partial<Record<HeatFactor, number>>;
+  available: HeatFactor[];
+  flags: string[];
+  coverageFraction: number;
+};
+
+export type HeatResponse = {
+  meta: {
+    campaignId: string | null;
+    preset: HeatPreset;
+    weights: Record<HeatFactor, number>;
+    sa1Count: number;
+    computedAt: string;
+    stale: boolean;
+    queued?: boolean;
+    breaks: number[];
+    factorCoverage: Record<HeatFactor, number>;
+    constantFactors: HeatFactor[];
+    lowResolutionFactors: Array<{ factor: HeatFactor; component: string; resolution: string }>;
+    election: { id: string; note: string } | null;
+    /** Effective lens/poll config (defaults resolved) — pickers hydrate from this. */
+    config?: {
+      fitLens: { indicator: string; target?: number; span?: number };
+      communityLens: { indicator: string; target?: number; span?: number };
+      pollRef: { pollId: string; questionCode: string; responseLabel: string; geoKind?: string } | null;
+      alignedPartyCodes: string[];
+      electionId: string | null;
+    };
+  };
+  cells: HeatCell[];
+};
+
+/** The campaign targeting heat map (cached server-side; `meta.stale` + `queued` when recomputing). */
+export async function getCampaignHeat(id: string) {
+  return request<HeatResponse>(`/canvass/campaigns/${encodeURIComponent(id)}/heat`);
+}
+
+/** Save the heat config (preset/weights/poll/election/fit) and recompute. */
+export async function setCampaignHeatConfig(id: string, config: HeatConfig) {
+  return request<HeatResponse>(`/canvass/campaigns/${encodeURIComponent(id)}/heat-config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}
+
+/** Force a recompute (the Refresh button). */
+export async function refreshCampaignHeat(id: string) {
+  return request<HeatResponse>(`/canvass/campaigns/${encodeURIComponent(id)}/heat/refresh`, {
+    method: "POST",
+  });
+}
+
+/** Boundary-editor targeting preview: score an ad-hoc source union, no campaign needed. */
+export async function previewHeat(sources: BoundarySource[], config?: HeatConfig, signal?: AbortSignal) {
+  return request<HeatResponse>("/canvass/heat/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sources, ...(config ? { config } : {}) }),
+    ...(signal ? { signal } : {}),
+  });
+}

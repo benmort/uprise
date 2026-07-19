@@ -15,7 +15,12 @@ describe("CampaignsController", () => {
     boundaryAddressCount: jest.fn().mockResolvedValue({ addresses: 0 }),
     setBoundary: jest.fn().mockResolvedValue({}),
   } as any;
-  const c = new CampaignsController(svc);
+  const heat = {
+    getForCampaign: jest.fn().mockResolvedValue({ meta: {}, cells: [] }),
+    setConfig: jest.fn().mockResolvedValue({ meta: {}, cells: [] }),
+    refresh: jest.fn().mockResolvedValue({ meta: {}, cells: [] }),
+  } as any;
+  const c = new CampaignsController(svc, heat);
 
   afterEach(() => jest.clearAllMocks());
 
@@ -82,5 +87,14 @@ describe("CampaignsController", () => {
   it("setBoundary delegates the dto sources with tenantId + id", async () => {
     await c.setBoundary("c1", { sources: [{ kind: "division" }] } as any, "t1");
     expect(svc.setBoundary).toHaveBeenCalledWith("t1", "c1", [{ kind: "division" }]);
+  });
+
+  it("heat endpoints delegate get / config / refresh with tenantId + id", async () => {
+    await c.getHeat("c1", "t1");
+    expect(heat.getForCampaign).toHaveBeenCalledWith("t1", "c1");
+    await c.setHeatConfig("c1", { preset: "gotv" } as any, "t1");
+    expect(heat.setConfig).toHaveBeenCalledWith("t1", "c1", { preset: "gotv" });
+    await c.refreshHeat("c1", "t1");
+    expect(heat.refresh).toHaveBeenCalledWith("t1", "c1");
   });
 });

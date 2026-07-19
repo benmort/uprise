@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
   DOMAIN_EVENTS: "domain-events",
   SEGMENT_EVAL: "segment-eval",
   TURF_ESTIMATE: "turf-estimate",
+  HEAT_RUN: "heat-run",
 } as const;
 
 export const QUEUE_JOB_TYPES = {
@@ -18,6 +19,7 @@ export const QUEUE_JOB_TYPES = {
   DOMAIN_EVENT: "domain.event",
   SEGMENT_EVAL_RUN: "segment.eval.run",
   TURF_ESTIMATE_RUN: "turf.estimate.run",
+  HEAT_RUN_COMPUTE: "heat.run.compute",
 } as const;
 
 export function getAudienceImportJobId(importId: string, chunkKey?: string): string {
@@ -56,4 +58,9 @@ export function getSegmentEvalJobId(segmentId: string): string {
  */
 export function getTurfEstimateJobId(turfId: string): string {
   return `turf-estimate_${turfId}`;
+}
+
+/** Stable per-campaign id — repeated refreshes while one is queued collapse into one run. */
+export function getHeatRunJobId(campaignId: string): string {
+  return `heat-run_${campaignId}`;
 }

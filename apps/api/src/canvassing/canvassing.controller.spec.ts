@@ -54,7 +54,8 @@ describe("CanvassingController", () => {
     get: jest.fn().mockResolvedValue(null),
     requestRefresh: jest.fn().mockResolvedValue({ queued: false, estimate: {} }),
   } as any;
-  const c = new CanvassingController(svc, estimates);
+  const heat = { preview: jest.fn().mockResolvedValue({ meta: {}, cells: [] }) } as any;
+  const c = new CanvassingController(svc, estimates, heat);
   const req = { user: { id: "u1" } } as any;
 
   afterEach(() => jest.clearAllMocks());

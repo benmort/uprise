@@ -6,6 +6,7 @@ export type DispatchQueueName =
   | "journey-run"
   | "segment-eval"
   | "turf-estimate"
+  | "heat-run"
   | "domain-events";
 
 export type DispatchQueueJob<TPayload> = {

@@ -83,3 +83,56 @@ describe("campaigns api client — boundary", () => {
     expect(mockReq.mock.calls[1][0]).toBe("/canvass/campaigns/live");
   });
 });
+
+describe("campaigns api client — targeting heat", () => {
+  beforeEach(() => {
+    mockReq.mockClear();
+    mockReq.mockResolvedValue({ ok: true, data: null });
+  });
+
+  it("getCampaignHeat GETs the encoded heat endpoint", async () => {
+    const { getCampaignHeat } = await import("./campaigns");
+    await getCampaignHeat("c/1");
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c%2F1/heat");
+    expect(opts).toBeUndefined();
+  });
+
+  it("setCampaignHeatConfig PUTs the config as the JSON body", async () => {
+    const { setCampaignHeatConfig } = await import("./campaigns");
+    await setCampaignHeatConfig("c1", { preset: "gotv", weights: { doors: 30 } });
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c1/heat-config");
+    expect(opts?.method).toBe("PUT");
+    expect(JSON.parse(opts?.body as string)).toEqual({ preset: "gotv", weights: { doors: 30 } });
+  });
+
+  it("refreshCampaignHeat POSTs the refresh endpoint", async () => {
+    const { refreshCampaignHeat } = await import("./campaigns");
+    await refreshCampaignHeat("c1");
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c1/heat/refresh");
+    expect(opts?.method).toBe("POST");
+  });
+
+  it("previewHeat POSTs sources (+ optional config) and threads the abort signal", async () => {
+    const { previewHeat } = await import("./campaigns");
+    const ac = new AbortController();
+    await previewHeat([{ kind: "division", type: "sed", code: "X" } as never], { preset: "coverage" }, ac.signal);
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/heat/preview");
+    expect(opts?.method).toBe("POST");
+    expect(JSON.parse(opts?.body as string)).toEqual({
+      sources: [{ kind: "division", type: "sed", code: "X" }],
+      config: { preset: "coverage" },
+    });
+    expect(opts?.signal).toBe(ac.signal);
+  });
+
+  it("previewHeat omits the config key when none is given", async () => {
+    const { previewHeat } = await import("./campaigns");
+    await previewHeat([{ kind: "area", layer: "sa1", code: "20401" } as never]);
+    const [, opts] = mockReq.mock.calls[0];
+    expect(JSON.parse(opts?.body as string)).toEqual({ sources: [{ kind: "area", layer: "sa1", code: "20401" }] });
+  });
+});
