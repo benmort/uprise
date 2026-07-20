@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Bell, BellRing, CloudOff, DoorOpen, LogOut, RefreshCw, X } from "lucide-react";
 import { Button, Skeleton, ConfirmDialog, useToast } from "@uprise/ui";
@@ -11,7 +11,6 @@ import { invalidateApi } from "../hooks/use-api";
 import { getVolunteerId } from "../lib/volunteer";
 import { logout } from "../lib/session";
 import { useSyncQueue } from "../hooks/use-sync-queue";
-import { KpiTile } from "../components/kpi-tile";
 import { SectionCard } from "../components/section-card";
 import { SyncStatusBadge } from "../components/sync-status-badge";
 
@@ -34,14 +33,6 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
   const loading = a.loading;
   const [syncing, setSyncing] = useState(false);
   const [releaseId, setReleaseId] = useState<string | null>(null);
-
-  const tally = useMemo(() => {
-    // The assignments list ships per-list counts (not items) — done = anything no longer pending.
-    const lists = assignments.flatMap((a) => a.walkLists);
-    const total = lists.reduce((n, wl) => n + wl.total, 0);
-    const pending = lists.reduce((n, wl) => n + wl.pending, 0);
-    return { done: total - pending, total };
-  }, [assignments]);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
@@ -81,26 +72,43 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
             Turf
           </Link>
         )}
-        <SyncStatusBadge counts={counts} online={online} />
       </div>
 
-      <h1 className="text-2xl font-extrabold">Sync &amp; profile</h1>
+      <h1 className="text-2xl font-extrabold">Menu</h1>
 
-      <div className="grid grid-cols-3 gap-2">
-        <KpiTile label="Doors done" value={tally.done} />
-        <KpiTile label="To sync" value={unsynced} />
-        <KpiTile label="Conflicts" value={counts.CONFLICT} />
-      </div>
+      <SectionCard title="Turf">
+        {loading ? (
+          <Skeleton className="h-16 w-full" />
+        ) : assignments.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No turf currently assigned to you.</p>
+        ) : (
+          <ul className="space-y-2">
+            {assignments.map((a) => (
+              <li key={a.turfId} className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                  <DoorOpen className="h-4 w-4 text-primary" />
+                  {a.turf.name}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-error/40 text-error"
+                  onClick={() => setReleaseId(a.turfId)}
+                >
+                  Release
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
 
       <SectionCard
-        title="Unsynced records"
+        title="Data Sync"
         action={
           <div className="flex items-center gap-2">
-            {unsynced > 0 ? (
-              <span className="rounded-full bg-[hsl(var(--warning-container))] px-2.5 py-1 text-xs font-bold text-[hsl(var(--warning-foreground))]">
-                {unsynced} pending
-              </span>
-            ) : null}
+            {/* The sync-state chip (Synced / N pending / Offline) lives here now, not the header. */}
+            <SyncStatusBadge counts={counts} online={online} />
             <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing || unsynced === 0}>
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
               {syncing ? "Syncing…" : "Sync now"}
@@ -191,33 +199,6 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
         </SectionCard>
       ) : null}
 
-      <SectionCard title="Turf">
-        {loading ? (
-          <Skeleton className="h-16 w-full" />
-        ) : assignments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No turf currently assigned to you.</p>
-        ) : (
-          <ul className="space-y-2">
-            {assignments.map((a) => (
-              <li key={a.turfId} className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  <DoorOpen className="h-4 w-4 text-primary" />
-                  {a.turf.name}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-error/40 text-error"
-                  onClick={() => setReleaseId(a.turfId)}
-                >
-                  Release
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </SectionCard>
-
       <Link
         href="/wrap"
         className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-bold text-white"
@@ -225,17 +206,16 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
         Done for the day
       </Link>
 
-      <div className="flex justify-center">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-muted-foreground"
-          onClick={() => void logout()}
-        >
-          <LogOut className="h-4 w-4" />
-          Log out
-        </Button>
-      </div>
+      {/* Same full-width pill as "Done for the day", bordered so it doesn't read as a second
+          primary action but shares its shape/size. */}
+      <button
+        type="button"
+        onClick={() => void logout()}
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-border text-base font-bold text-foreground"
+      >
+        <LogOut className="h-4 w-4" />
+        Log out
+      </button>
 
       <ConfirmDialog
         open={releaseId !== null}
