@@ -64,10 +64,24 @@ export function hexToHslChannels(input: string): string | null {
 }
 
 /**
- * The `:root { … }` rule that maps the brand colours onto the DS tokens. Overrides
- * `--primary` (the headline brand fill) from `primaryColour` when it converts cleanly,
- * and always exposes both colours as `--brand-primary`/`--brand-secondary` hex vars for
- * custom CSS. Returns "" when nothing is set (so callers can skip the `<style>`).
+ * Perceived-luminance pick of a readable foreground (DS HSL channels) for a solid `hex`
+ * background: dark ink on light brand colours, white on dark ones. Uses the YIQ approximation
+ * (0-255). Null when the input isn't a hex we can parse.
+ */
+export function readableForegroundChannels(input: string): string | null {
+  const rgb = parseHex(input);
+  if (!rgb) return null;
+  const yiq = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+  return yiq >= 140 ? "222 47% 11%" : "0 0% 100%";
+}
+
+/**
+ * The `:root { … }` rule that maps the brand colours onto the DS tokens. Overrides `--primary`
+ * from `primaryColour` and `--secondary` (+ a contrast-picked `--secondary-foreground`) from
+ * `secondaryColour` when they convert cleanly, and always exposes both as `--brand-primary`/
+ * `--brand-secondary` hex vars for custom CSS. So `bg-primary` / `bg-secondary` on a tenant's
+ * own surface (field, poll viewer, join) wear the tenant's brand colours. Returns "" when
+ * nothing is set (so callers can skip the `<style>`).
  */
 export function brandVarsCss(brand: {
   primaryColour?: string | null;
@@ -81,7 +95,15 @@ export function brandVarsCss(brand: {
     const channels = hexToHslChannels(primary);
     if (channels) decls.push(`--primary: ${channels};`);
   }
-  if (secondary) decls.push(`--brand-secondary: ${secondary};`);
+  if (secondary) {
+    decls.push(`--brand-secondary: ${secondary};`);
+    const channels = hexToHslChannels(secondary);
+    if (channels) {
+      decls.push(`--secondary: ${channels};`);
+      const fg = readableForegroundChannels(secondary);
+      if (fg) decls.push(`--secondary-foreground: ${fg};`);
+    }
+  }
   return decls.length ? `:root{${decls.join("")}}` : "";
 }
 

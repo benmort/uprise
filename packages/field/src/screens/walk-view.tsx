@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DownloadCloud, Home, Loader2, Navigation, Route } from "lucide-react";
-import { Button, EmptyState, Skeleton, cn, useToast } from "@uprise/ui";
+import { BrandLoadingScreen, Button, EmptyState, Skeleton, cn, useToast } from "@uprise/ui";
 import { getWalkRoute, type CanvassAssignment, type WalkRoute } from "../api";
 import { useAssignment } from "../hooks/use-canvass";
-import { getVolunteerId } from "../lib/volunteer";
+import { getTenantBrand, getVolunteerId } from "../lib/volunteer";
 import { optimiseRoute, type Stop } from "../lib/route";
 import { estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
 import { formatDistance, type LatLng } from "../lib/directions";
@@ -220,7 +220,23 @@ export function WalkView({
   // load its doors) BEFORE they respond, and the per-turf fetch above asks the server for
   // this exact turf — which also self-heals a missing walk list before answering. So the
   // first fetch after navigation is authoritative: data → walk, error → genuinely not ours.
-  if (loading) return <Skeleton className="h-64 w-full" />;
+  // Same branded loading as the homepage/FieldShell — the tenant logo + "Loading your turf…"
+  // over the skeleton stack, so the dashboard→turf hop keeps one consistent loading look.
+  if (loading) {
+    const brand = getTenantBrand();
+    return (
+      <div className="space-y-4">
+        <BrandLoadingScreen
+          logoUrl={brand?.logoUrl ?? undefined}
+          name={brand?.name}
+          message="Loading your turf…"
+        />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-56 w-full" />
+      </div>
+    );
+  }
   if (!assignment) {
     return <EmptyState title="Turf not found" description="This turf isn't assigned to you." />;
   }

@@ -56,6 +56,7 @@ describe("CanvassingService", () => {
         count: jest.fn(),
       },
       questionResponse: { groupBy: jest.fn() },
+      disposition: { groupBy: jest.fn(async () => []) },
       canvassCampaign: { findFirst: jest.fn(), findMany: jest.fn() },
       walkListItem: {
         updateMany: jest.fn(),
@@ -74,7 +75,7 @@ describe("CanvassingService", () => {
       },
       shift: {
         findFirst: jest.fn(),
-        findMany: jest.fn(),
+        findMany: jest.fn(async () => []),
         create: jest.fn(async ({ data }: any) => ({ id: "s_new", ...data })),
         deleteMany: jest.fn(),
         update: jest.fn(async ({ data }: any) => ({ id: "s1", ...data })),
@@ -226,7 +227,10 @@ describe("CanvassingService", () => {
         bbox: [1, 2, 3, 4],
       });
       expect(res[1].bbox).toBeNull();
-      expect(res[0]).not.toHaveProperty("geometry"); // bbox replaces the boundary GeoJSON
+      // The geometry (already fetched to derive the bbox) now rides along so the homepage card
+      // draws the real turf outline, not just its bounding box.
+      expect(res[0].geometry).toEqual({ type: "Polygon", coordinates: [[[1, 2], [3, 4], [1, 2]]] });
+      expect(res[1].geometry).toBeNull();
     });
 
     it("returns [] (without querying turf) when no campaign allows claiming a ready turf", async () => {
@@ -938,7 +942,7 @@ describe("CanvassingService", () => {
       ],
     };
 
-    it("maps each locked turf to a bbox + walk-list counts — never geometry or items (boot payload)", async () => {
+    it("maps each locked turf to bbox + geometry + self-claim flag + walk-list counts (counts, not items)", async () => {
       prisma.turfAssignment.findMany.mockResolvedValue([
         {
           turfId: "t1",
@@ -948,6 +952,8 @@ describe("CanvassingService", () => {
             name: "Turf 1",
             geometry: square,
             campaignId: "c1",
+            campaign: { volunteerCanSelfClaimTurf: true },
+            estimate: { doorsPerHour: 30 },
             walkLists: [
               {
                 id: "w1",
@@ -958,16 +964,48 @@ describe("CanvassingService", () => {
           },
         },
       ]);
+      prisma.shift.findMany.mockResolvedValue([{ campaignId: "c1" }]); // campaign c1 has shifts
       const res = await service.listAssignments("org1", "u1");
       expect(res).toEqual([
         {
           turfId: "t1",
           lockedUntil: null,
-          turf: { id: "t1", name: "Turf 1", campaignId: "c1", bbox: [144.9, -37.8, 145.0, -37.7] },
+          turf: {
+            id: "t1",
+            name: "Turf 1",
+            campaignId: "c1",
+            bbox: [144.9, -37.8, 145.0, -37.7],
+            // The boundary geometry IS shipped now — the homepage card draws the real turf outline.
+            geometry: square,
+            canSelfClaim: true,
+            // Campaign c1 has shifts → the "Pick a shift" link shows.
+            hasShifts: true,
+            // Density estimate → the card's "time remaining" from the pending door count.
+            doorsPerHour: 30,
+          },
           walkLists: [{ id: "w1", name: "Walk 1", total: 3, pending: 1, visited: 1 }],
         },
       ]);
-      expect(JSON.stringify(res)).not.toContain("coordinates"); // no boundary GeoJSON on the list
+      // Walk lists still ship COUNTS, not their items.
+      expect(res[0].walkLists[0]).not.toHaveProperty("items");
+    });
+
+    it("defaults canSelfClaim to false when the turf has no campaign", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([
+        {
+          turfId: "t1",
+          lockedUntil: null,
+          turf: {
+            id: "t1",
+            name: "Turf 1",
+            geometry: square,
+            campaignId: null,
+            walkLists: [{ id: "w1", name: "Walk 1", items: [{ status: "PENDING" }] }],
+          },
+        },
+      ]);
+      const res = await service.listAssignments("org1", "u1");
+      expect(res[0].turf.canSelfClaim).toBe(false);
     });
 
     it("materialises a walk-list from the turf's contacts when an assigned turf has none", async () => {
@@ -1077,7 +1115,7 @@ describe("CanvassingService", () => {
   });
 
   describe("getVolunteerMetrics", () => {
-    it("tallies doors, conversations and distinct surveyed residents", async () => {
+    it("tallies doors, conversations, distinct surveyed residents and persuasion IDs", async () => {
       prisma.doorKnock.count
         .mockResolvedValueOnce(3) // doorsToday
         .mockResolvedValueOnce(30) // doorsTotal
@@ -1086,6 +1124,9 @@ describe("CanvassingService", () => {
       prisma.questionResponse.groupBy
         .mockResolvedValueOnce([{ contactId: "a" }]) // surveysToday → 1 distinct
         .mockResolvedValueOnce([{ contactId: "a" }, { contactId: "b" }]); // surveysTotal → 2 distinct
+      prisma.disposition.groupBy
+        .mockResolvedValueOnce([{ contactId: "a" }, { contactId: "b" }]) // persuasionToday → 2 distinct
+        .mockResolvedValueOnce([{ contactId: "a" }, { contactId: "b" }, { contactId: "c" }]); // persuasionTotal → 3
 
       const res = await service.getVolunteerMetrics("org1", "u1");
       expect(res).toEqual({
@@ -1095,9 +1136,12 @@ describe("CanvassingService", () => {
         conversationsTotal: 12,
         surveysToday: 1,
         surveysTotal: 2,
+        persuasionToday: 2,
+        persuasionTotal: 3,
       });
       expect(prisma.doorKnock.count).toHaveBeenCalledTimes(4);
       expect(prisma.questionResponse.groupBy).toHaveBeenCalledTimes(2);
+      expect(prisma.disposition.groupBy).toHaveBeenCalledTimes(2);
     });
   });
 

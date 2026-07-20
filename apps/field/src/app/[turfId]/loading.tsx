@@ -1,17 +1,16 @@
 import { Skeleton } from "@uprise/ui";
 
-/** Walk-view route skeleton — a big map/list block over the stop list, matching the
- *  turf screen's shape so the dashboard→turf transition never flashes blank. */
+/**
+ * Walk-view route skeleton. Matches the homepage's route skeleton (app/loading.tsx) so the
+ * dashboard→turf transition shows one consistent loading shape; the branded "Loading your
+ * turf…" screen then takes over inside WalkView while the assignment fetches.
+ */
 export default function TurfLoading() {
   return (
     <div className="space-y-4">
-      <Skeleton className="h-8 w-40" />
-      <Skeleton className="h-64 w-full" />
-      <div className="space-y-2">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-      </div>
+      <Skeleton className="h-12 w-full" />
+      <Skeleton className="h-24 w-full" />
+      <Skeleton className="h-56 w-full" />
     </div>
   );
 }

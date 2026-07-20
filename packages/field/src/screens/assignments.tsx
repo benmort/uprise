@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  CircleUser,
   Download,
   Loader2,
   LocateFixed,
@@ -16,20 +15,14 @@ import {
 import { Button, EmptyState, Skeleton } from "@uprise/ui";
 import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hooks/use-canvass";
 import { claimExistingTurf } from "../api/canvass";
-import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
+import { getVolunteerId, getTenantBrand } from "../lib/volunteer";
 import { reverseGeocode } from "../lib/geocode";
 import { useMeDrawer } from "./me-drawer";
 import { MapThumbnail } from "../components/map-thumbnail";
 import { bboxRing } from "../lib/geo";
+import { formatMinutes } from "../lib/walk-estimate";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useOnlineStatus } from "../hooks/use-online-status";
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
-}
 
 /** Per-turf swatch — the map thumbnail's outline/tint, cycled by position (blue, purple, …). */
 const TURF_SWATCHES = ["#2f5bd6", "#7c3aed", "#0e9488", "#b45309", "#dc2626", "#16a34a"];
@@ -88,7 +81,8 @@ export function Assignments() {
   const error = !volunteerId
     ? "No volunteer identity on this device. Log in as a volunteer."
     : a.error ?? "";
-  const name = getVolunteerName();
+  // The campaign brand for the header — a landscape logo (falls back to the org name).
+  const brand = getTenantBrand();
 
   // One-tap claim of a recommended turf, then straight into the walk view. Mirrors get-turf.
   const claimRecommended = async (campaignId: string, turfId: string) => {
@@ -119,25 +113,23 @@ export function Assignments() {
           type="button"
           aria-label="Menu"
           onClick={openMe}
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
+          className="flex h-12 shrink-0 items-center gap-2 rounded-2xl border border-border bg-surface px-4 font-semibold text-foreground"
         >
           <Menu className="h-5 w-5" />
+          Menu
         </button>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-muted-foreground">
-            {greeting()}
-            {name ? `, ${name}` : ""}
-          </p>
-          <h1 className="text-3xl font-extrabold leading-tight">My turf</h1>
+        <div className="flex min-w-0 flex-1 items-center justify-end">
+          {brand?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- tenant logo is a runtime URL
+            <img
+              src={brand.logoUrl}
+              alt={brand.name ? `${brand.name} logo` : "Organisation"}
+              className="h-10 w-auto max-w-full object-contain"
+            />
+          ) : (
+            <h1 className="truncate text-3xl font-extrabold leading-tight">{brand?.name || "My turf"}</h1>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={openMe}
-          aria-label="Profile"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
-        >
-          <CircleUser className="h-6 w-6" />
-        </button>
       </div>
 
       {/* Location — acquired on entry so nearest-turf features can use the volunteer's position */}
@@ -171,7 +163,7 @@ export function Assignments() {
       <div className="grid grid-cols-3 gap-2.5">
         <StatCard label="doors today" value={metrics?.doorsToday ?? 0} />
         <StatCard label="conversations" value={metrics?.conversationsToday ?? 0} />
-        <StatCard label="surveys" value={metrics?.surveysToday ?? 0} />
+        <StatCard label="persuasion" value={metrics?.persuasionToday ?? 0} />
       </div>
 
       {assignments.length === 0 ? (
@@ -198,7 +190,11 @@ export function Assignments() {
                     key={t.id}
                     className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-card"
                   >
-                    <MapThumbnail polygon={bboxRing(t.bbox)} className="h-14 w-14 shrink-0 rounded-xl" />
+                    <MapThumbnail
+                      geometry={t.geometry}
+                      polygon={bboxRing(t.bbox)}
+                      className="h-14 w-14 shrink-0 rounded-xl"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-bold text-foreground">{t.name}</p>
                       <p className="truncate text-xs text-muted-foreground">{t.campaignName}</p>
@@ -224,12 +220,18 @@ export function Assignments() {
             // (one tap away) fetches the full turf and shows the real route + time.
             const onList = a.walkLists.reduce((n, wl) => n + wl.total, 0);
             const done = a.walkLists.reduce((n, wl) => n + (wl.total - wl.pending), 0);
+            // Rough time left on the remaining (pending) doors from the turf's density estimate
+            // (reachable doors/hour). Omitted until the turf is priced or when nothing's pending.
+            const pending = onList - done;
+            const dph = a.turf.doorsPerHour ?? 0;
+            const remainingMin = dph > 0 && pending > 0 ? Math.round((pending / dph) * 60) : null;
             return (
               <div key={a.turfId} className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
                 {/* Per-turf offline state isn't known at this level — the real offline-download
                     control lives inside each turf's walk view (OfflineMapsControl). */}
                 <div className="relative">
                   <MapThumbnail
+                    geometry={a.turf.geometry}
                     polygon={bboxRing(a.turf.bbox)}
                     color={TURF_SWATCHES[i % TURF_SWATCHES.length]}
                     className="h-40 w-full"
@@ -240,6 +242,7 @@ export function Assignments() {
                     <h2 className="text-xl font-extrabold text-foreground">{a.turf.name}</h2>
                     <p className="mt-1 text-sm text-muted-foreground tabular-nums">
                       {onList} on your walk list · {done} done
+                      {remainingMin != null ? ` · ~${formatMinutes(remainingMin)} left` : ""}
                     </p>
                   </div>
                   <div className="flex gap-3">
@@ -265,16 +268,23 @@ export function Assignments() {
           })}
           {assignments[0]?.turf.campaignId ? (
             <>
-              <Link href={`/get-turf?campaignId=${assignments[0].turf.campaignId}`} className="block">
-                <Button variant="outline" className="h-12 w-full text-base">
-                  Get more turf
-                </Button>
-              </Link>
-              <Link href={`/shifts?campaignId=${assignments[0].turf.campaignId}`} className="block">
-                <Button variant="outline" className="h-12 w-full text-base">
-                  Pick a shift
-                </Button>
-              </Link>
+              {/* Only when the campaign allows volunteer self-serve — else the link dead-ends on
+                  a get-turf page with nothing claimable. */}
+              {assignments[0].turf.canSelfClaim ? (
+                <Link href={`/get-turf?campaignId=${assignments[0].turf.campaignId}`} className="block">
+                  <Button variant="outline" className="h-12 w-full text-base">
+                    Get more turf
+                  </Button>
+                </Link>
+              ) : null}
+              {/* Only when the campaign actually has shifts to pick from. */}
+              {assignments[0].turf.hasShifts ? (
+                <Link href={`/shifts?campaignId=${assignments[0].turf.campaignId}`} className="block">
+                  <Button variant="outline" className="h-12 w-full text-base">
+                    Pick a shift
+                  </Button>
+                </Link>
+              ) : null}
             </>
           ) : null}
         </div>

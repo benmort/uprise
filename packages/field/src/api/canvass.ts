@@ -24,12 +24,26 @@ export type TurfBBox = [number, number, number, number];
  *  single-turf payload (getCanvassAssignment) only. */
 export type WalkListCounts = { id: string; name: string; total: number; pending: number; visited: number };
 
-/** One row of GET /canvass/assignments — the field BOOT payload. Deliberately slim:
- *  bbox (not geometry) + walk-list counts (not items). */
+/** One row of GET /canvass/assignments — the field BOOT payload. Slim on walk lists
+ *  (counts, not items), but carries the turf's boundary `geometry` so the homepage card
+ *  can draw the real turf outline, plus `canSelfClaim` (the campaign's self-serve flag) so
+ *  the "Get more turf" link is hidden when self-claim is off. */
 export type CanvassAssignmentSummary = {
   turfId: string;
   lockedUntil: string | null;
-  turf: { id: string; name: string; bbox: TurfBBox | null; campaignId: string | null };
+  turf: {
+    id: string;
+    name: string;
+    bbox: TurfBBox | null;
+    geometry?: unknown;
+    campaignId: string | null;
+    canSelfClaim?: boolean;
+    /** Whether this turf's campaign has any shifts — gates the homepage "Pick a shift" link. */
+    hasShifts?: boolean;
+    /** Reachable doors/hour from the turf's density estimate — the card turns this + the
+     *  pending door count into a "time left" estimate. Null until the turf has been priced. */
+    doorsPerHour?: number | null;
+  };
   walkLists: WalkListCounts[];
 };
 
@@ -127,6 +141,9 @@ export type VolunteerMetrics = {
   conversationsTotal: number;
   surveysToday: number;
   surveysTotal: number;
+  // Persuasion = distinct residents given a support level at the door (voter IDs).
+  persuasionToday: number;
+  persuasionTotal: number;
 };
 
 /** Day + all-time tallies for the "My turf" header tiles. */
@@ -189,6 +206,8 @@ export type RecommendedTurf = {
   id: string;
   name: string;
   bbox: TurfBBox | null;
+  // The turf's boundary GeoJSON, so the card draws the real turf shape (not just its bbox).
+  geometry?: unknown;
   contactCount: number;
   campaignId: string;
   campaignName: string;

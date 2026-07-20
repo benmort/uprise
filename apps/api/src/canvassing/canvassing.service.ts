@@ -202,6 +202,11 @@ export class CanvassingService {
           walkLists: {
             select: { id: true, name: true, items: { select: { status: true } } },
           },
+          // The campaign's self-serve flag gates the homepage "Get more turf" link.
+          campaign: { select: { volunteerCanSelfClaimTurf: true } },
+          // Density estimate (reachable doors/hour) → the card's "time remaining" from the
+          // pending count. Null until the turf is priced; the UI just omits the estimate then.
+          estimate: { select: { doorsPerHour: true } },
         },
       },
     };
@@ -221,6 +226,23 @@ export class CanvassingService {
       assignments = await load();
     }
 
+    // Which of these turfs' campaigns actually have shifts — gates the homepage "Pick a shift"
+    // link so it only shows when there's something to pick. One narrow query over the campaigns.
+    const campaignIds = [
+      ...new Set(assignments.map((a) => a.turf.campaignId).filter((id): id is string => !!id)),
+    ];
+    const withShifts = campaignIds.length
+      ? new Set(
+          (
+            await this.prisma.shift.findMany({
+              where: { tenantId, campaignId: { in: campaignIds } },
+              select: { campaignId: true },
+              distinct: ["campaignId"],
+            })
+          ).map((s) => s.campaignId),
+        )
+      : new Set<string>();
+
     return assignments.map((a) => ({
       turfId: a.turfId,
       lockedUntil: a.lockedUntil,
@@ -228,8 +250,15 @@ export class CanvassingService {
         id: a.turf.id,
         name: a.turf.name,
         campaignId: a.turf.campaignId,
-        // Enough for the assignment card's SVG thumbnail; the real boundary rides on getAssignment.
+        // bbox for back-compat; geometry so the homepage card draws the real turf outline.
         bbox: geometryBbox(a.turf.geometry),
+        geometry: a.turf.geometry,
+        // Self-serve on this turf's campaign — false when the campaign has it off (or no campaign).
+        canSelfClaim: a.turf.campaign?.volunteerCanSelfClaimTurf ?? false,
+        // Whether this turf's campaign has any shifts — gates the "Pick a shift" link.
+        hasShifts: a.turf.campaignId ? withShifts.has(a.turf.campaignId) : false,
+        // Reachable doors/hour (null until priced) → the card estimates time left from pending doors.
+        doorsPerHour: a.turf.estimate?.doorsPerHour ?? null,
       },
       walkLists: a.turf.walkLists.map((w) => {
         const total = w.items.length;
@@ -422,16 +451,37 @@ export class CanvassingService {
     // Surveys = distinct residents with door responses (group by contact), not raw answers.
     const surveyContacts = (today: boolean) =>
       this.prisma.questionResponse.groupBy({ by: ["contactId"], where: resp(today) });
+    // Persuasion = distinct residents this volunteer captured a support level for at the door
+    // (a voter ID / persuasion conversation). Grouped by contact so re-knocks don't double-count.
+    const persuasion = (today: boolean): Prisma.DispositionWhereInput => ({
+      tenantId,
+      recordedById: volunteerId,
+      channel: EngagementChannel.DOOR,
+      supportLevel: { not: null },
+      ...(today ? { createdAt: { gte: since } } : {}),
+    });
+    const persuasionContacts = (today: boolean) =>
+      this.prisma.disposition.groupBy({ by: ["contactId"], where: persuasion(today) });
 
-    const [doorsToday, doorsTotal, conversationsToday, conversationsTotal, surveysTodayRows, surveysTotalRows] =
-      await Promise.all([
-        this.prisma.doorKnock.count({ where: knock(true) }),
-        this.prisma.doorKnock.count({ where: knock(false) }),
-        this.prisma.doorKnock.count({ where: convo(true) }),
-        this.prisma.doorKnock.count({ where: convo(false) }),
-        surveyContacts(true),
-        surveyContacts(false),
-      ]);
+    const [
+      doorsToday,
+      doorsTotal,
+      conversationsToday,
+      conversationsTotal,
+      surveysTodayRows,
+      surveysTotalRows,
+      persuasionTodayRows,
+      persuasionTotalRows,
+    ] = await Promise.all([
+      this.prisma.doorKnock.count({ where: knock(true) }),
+      this.prisma.doorKnock.count({ where: knock(false) }),
+      this.prisma.doorKnock.count({ where: convo(true) }),
+      this.prisma.doorKnock.count({ where: convo(false) }),
+      surveyContacts(true),
+      surveyContacts(false),
+      persuasionContacts(true),
+      persuasionContacts(false),
+    ]);
 
     return {
       doorsToday,
@@ -440,6 +490,8 @@ export class CanvassingService {
       conversationsTotal,
       surveysToday: surveysTodayRows.length,
       surveysTotal: surveysTotalRows.length,
+      persuasionToday: persuasionTodayRows.length,
+      persuasionTotal: persuasionTotalRows.length,
     };
   }
 
@@ -1290,8 +1342,14 @@ export class CanvassingService {
       where: { id: { in: ranked.map((t) => t.id) } },
       select: { id: true, geometry: true },
     });
-    const bboxById = new Map(geoms.map((g) => [g.id, geometryBbox(g.geometry)]));
-    return ranked.map((t) => ({ ...t, bbox: bboxById.get(t.id) ?? null }));
+    // The geometry query already ran (for the bbox) — return the geometry too so the card
+    // draws the real turf outline, not just its bounding box.
+    const geomById = new Map(geoms.map((g) => [g.id, g.geometry]));
+    return ranked.map((t) => ({
+      ...t,
+      bbox: geometryBbox(geomById.get(t.id) ?? null),
+      geometry: geomById.get(t.id) ?? null,
+    }));
   }
 
   /** Mode A: claim unclaimed ASGS areas within the campaign boundary. */

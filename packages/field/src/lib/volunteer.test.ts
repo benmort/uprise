@@ -6,6 +6,7 @@ import {
   setVolunteerName,
   getTenantBrand,
   setTenantBrand,
+  greeting,
   newLocalId,
 } from "./volunteer";
 
@@ -73,5 +74,23 @@ describe("volunteer local store", () => {
     const b = newLocalId();
     expect(a).not.toBe(b);
     expect(a.length).toBeGreaterThan(0);
+  });
+
+  describe("greeting", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("says good morning before noon, afternoon before 6pm, evening after", () => {
+      const at = (hour: number) => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 0, 1, hour, 0, 0));
+        return greeting();
+      };
+      expect(at(8)).toBe("Good morning");
+      expect(at(11)).toBe("Good morning");
+      expect(at(12)).toBe("Good afternoon");
+      expect(at(17)).toBe("Good afternoon");
+      expect(at(18)).toBe("Good evening");
+      expect(at(23)).toBe("Good evening");
+    });
   });
 });

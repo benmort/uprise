@@ -24,18 +24,33 @@ describe("hexToHslChannels", () => {
 });
 
 describe("brandVarsCss", () => {
-  it("maps a hex primary onto --primary channels AND exposes the raw hex", () => {
+  it("maps a hex primary + secondary onto their DS tokens AND exposes the raw hexes", () => {
     const css = brandVarsCss({ primaryColour: "#465fff", secondaryColour: "#123456" });
     expect(css).toContain("--brand-primary: #465fff;");
     expect(css).toContain("--primary: 232 100% 64%;");
     expect(css).toContain("--brand-secondary: #123456;");
+    // Secondary maps onto --secondary too, with a contrast-picked foreground (dark #123456 → white).
+    expect(css).toContain("--secondary: 210 65% 20%;");
+    expect(css).toContain("--secondary-foreground: 0 0% 100%;");
     expect(css.startsWith(":root{")).toBe(true);
+  });
+
+  it("picks dark ink as the secondary foreground for a light brand colour", () => {
+    const css = brandVarsCss({ secondaryColour: "#facc15" });
+    expect(css).toContain("--secondary: 48 96% 53%;");
+    expect(css).toContain("--secondary-foreground: 222 47% 11%;");
   });
 
   it("exposes a non-hex primary as a var but does not override --primary channels", () => {
     const css = brandVarsCss({ primaryColour: "rebeccapurple" });
     expect(css).toContain("--brand-primary: rebeccapurple;");
     expect(css).not.toContain("--primary:");
+  });
+
+  it("exposes a non-hex secondary as a var but does not override --secondary channels", () => {
+    const css = brandVarsCss({ secondaryColour: "rebeccapurple" });
+    expect(css).toContain("--brand-secondary: rebeccapurple;");
+    expect(css).not.toContain("--secondary:");
   });
 
   it("returns empty string when nothing is set", () => {

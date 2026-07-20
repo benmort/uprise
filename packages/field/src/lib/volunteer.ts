@@ -30,6 +30,15 @@ export function setVolunteerName(name: string): void {
   window.localStorage.setItem(NAME_KEY, name);
 }
 
+/** Time-of-day greeting ("Good morning/afternoon/evening") — shared by the field homepage
+ *  header and the drawer title so they read the same. */
+export function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 const TENANT_KEY = "uprise.volunteerTenant";
 
 /** The current tenant the volunteer is canvassing for ({id,name,logoUrl}) — for the brand badge. */

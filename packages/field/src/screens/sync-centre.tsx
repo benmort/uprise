@@ -2,13 +2,13 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Bell, BellRing, CloudOff, DoorOpen, LogOut, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, BellRing, CheckCircle2, CloudOff, DoorOpen, LogOut, RefreshCw, X } from "lucide-react";
 import { Button, Skeleton, ConfirmDialog, useToast } from "@uprise/ui";
 import { useFieldPush } from "../hooks/use-field-push";
 import { releaseTurf } from "../api";
 import { useAssignments } from "../hooks/use-canvass";
 import { invalidateApi } from "../hooks/use-api";
-import { getVolunteerId } from "../lib/volunteer";
+import { getVolunteerId, getVolunteerName, greeting } from "../lib/volunteer";
 import { logout } from "../lib/session";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { SectionCard } from "../components/section-card";
@@ -28,6 +28,7 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
   const { showToast } = useToast();
   const push = useFieldPush();
   const [volunteerId] = useState(() => getVolunteerId());
+  const name = getVolunteerName();
   const a = useAssignments(volunteerId ?? null);
   const assignments = a.data ?? [];
   const loading = a.loading;
@@ -74,7 +75,10 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
         )}
       </div>
 
-      <h1 className="text-2xl font-extrabold">Menu</h1>
+      <h1 className="text-2xl font-extrabold">
+        {greeting()}
+        {name ? `, ${name}` : ""}
+      </h1>
 
       <SectionCard title="Turf">
         {loading ? (
@@ -201,13 +205,13 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
 
       <Link
         href="/wrap"
-        className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-bold text-white"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-secondary text-base font-bold text-secondary-foreground transition-colors hover:bg-secondary/90"
       >
+        <CheckCircle2 className="h-4 w-4" />
         Done for the day
       </Link>
 
-      {/* Same full-width pill as "Done for the day", bordered so it doesn't read as a second
-          primary action but shares its shape/size. */}
+      {/* Same full-width pill as "Done for the day", bordered so it reads quieter than it. */}
       <button
         type="button"
         onClick={() => void logout()}
