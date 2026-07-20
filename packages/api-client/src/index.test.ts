@@ -4,6 +4,7 @@ import {
   getApiUrl,
   getAuthAppUrl,
   getActionAppUrl,
+  loginRedirectUrl,
   request,
   auth,
   profile,
@@ -68,6 +69,23 @@ describe("environment URL helpers", () => {
   it("auth + action app URLs fall back to their local dev origins", () => {
     expect(getAuthAppUrl()).toBe("http://localhost:3002");
     expect(getActionAppUrl()).toBe("http://localhost:3004");
+  });
+});
+
+describe("loginRedirectUrl", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("defaults to the organiser /sign-in with just return_to", () => {
+    expect(loginRedirectUrl("https://field.test/x")).toBe(
+      "http://localhost:3002/sign-in?return_to=" + encodeURIComponent("https://field.test/x"),
+    );
+  });
+
+  it("honours a runtime login path + org (the field volunteer flow)", () => {
+    vi.stubGlobal("window", { __LOGIN_PATH__: "/volunteer/sign-in", __LOGIN_ORG__: "acme" });
+    expect(loginRedirectUrl("https://field.test/")).toBe(
+      "http://localhost:3002/volunteer/sign-in?org=acme&return_to=" + encodeURIComponent("https://field.test/"),
+    );
   });
 });
 

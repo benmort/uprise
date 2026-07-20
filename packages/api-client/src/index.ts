@@ -64,10 +64,40 @@ export function getActionAppUrl(): string {
   return process.env.NEXT_PUBLIC_ACTION_APP_URL || "http://localhost:3004";
 }
 
+/** Login path on the auth app. Defaults to the organiser `/sign-in`; an app can override it at
+ *  runtime (`window.__LOGIN_PATH__`) — e.g. the field PWA points volunteers at the branded
+ *  `/volunteer/sign-in`. */
+function getLoginPath(): string {
+  if (typeof window !== "undefined") {
+    const runtime = (window as unknown as { __LOGIN_PATH__?: string }).__LOGIN_PATH__;
+    if (runtime) return runtime;
+  }
+  return "/sign-in";
+}
+
+/** Tenant slug to brand the login page, when the app knows which org the caller belongs to
+ *  (`window.__LOGIN_ORG__`). The auth volunteer flow reads `?org=<slug>` to brand the sign-in. */
+function getLoginOrg(): string | null {
+  if (typeof window !== "undefined") {
+    const runtime = (window as unknown as { __LOGIN_ORG__?: string }).__LOGIN_ORG__;
+    if (runtime) return runtime;
+  }
+  return null;
+}
+
+/** Build the auth-app login URL: `<auth>/<path>?[org=<slug>&]return_to=<url>`. Shared by the
+ *  401 auto-redirect here and the apps' own logout/session-expiry redirects. */
+export function loginRedirectUrl(returnTo: string): string {
+  const org = getLoginOrg();
+  const params = new URLSearchParams();
+  if (org) params.set("org", org);
+  params.set("return_to", returnTo);
+  return `${getAuthAppUrl()}${getLoginPath()}?${params.toString()}`;
+}
+
 function redirectToLogin(): void {
   if (typeof window === "undefined") return;
-  const returnTo = encodeURIComponent(window.location.href);
-  window.location.assign(`${getAuthAppUrl()}/sign-in?return_to=${returnTo}`);
+  window.location.assign(loginRedirectUrl(window.location.href));
 }
 
 /**

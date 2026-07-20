@@ -54,7 +54,13 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className={outfit.variable}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};`,
+            // Runtime config for the api-client. __LOGIN_PATH__ points an expired-session bounce at
+            // the branded volunteer sign-in; __LOGIN_ORG__ is seeded (before hydration, so even an
+            // early 401 carries it) from the persisted tenant brand (volunteer.ts TENANT_KEY).
+            __html:
+              `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};` +
+              `window.__LOGIN_PATH__="/volunteer/sign-in";` +
+              `try{var b=JSON.parse(localStorage.getItem("uprise.volunteerTenant")||"null");if(b&&b.slug)window.__LOGIN_ORG__=b.slug;}catch(e){}`,
           }}
         />
         <ServiceWorkerCleanup />

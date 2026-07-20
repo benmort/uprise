@@ -38,6 +38,9 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
     let alive = true;
     const cached = getTenantBrand();
     if (cached) setBootBrand({ name: cached.name, logoUrl: cached.logoUrl });
+    // Persisted tenant slug drives the org-branded login bounce on session expiry. The layout
+    // script seeds this pre-hydration; re-assert it here in case that ran before the cache existed.
+    if (cached?.slug) (window as unknown as { __LOGIN_ORG__?: string }).__LOGIN_ORG__ = cached.slug;
     if (getVolunteerId()) setReady(true); // optimistic — don't block on /auth/check
     // Ask the OS to keep this origin's storage — the offline map pack + knock outbox must
     // survive storage pressure across a shift. Best-effort; fire-and-forget.
@@ -52,11 +55,20 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
       }
       setVolunteerId(session.id);
       setVid(session.id);
-      // Stash the current tenant so My turf can show the campaign brand badge.
+      // Stash the current tenant so My turf can show the campaign brand badge, and persist the
+      // slug so an expired session bounces to that tenant's branded volunteer sign-in.
       const current =
         session.memberships?.find((m) => m.tenantId === session.tenantId) ?? session.memberships?.[0];
-      if (current)
-        setTenantBrand({ id: current.tenantId, name: current.tenantName, logoUrl: current.logoUrl ?? null });
+      if (current) {
+        setTenantBrand({
+          id: current.tenantId,
+          name: current.tenantName,
+          logoUrl: current.logoUrl ?? null,
+          slug: current.tenantSlug ?? null,
+        });
+        if (current.tenantSlug)
+          (window as unknown as { __LOGIN_ORG__?: string }).__LOGIN_ORG__ = current.tenantSlug;
+      }
       setReady(true);
       // The membership carries only the logo; fetch the tenant's colours + custom CSS so the
       // whole field PWA wears the campaign brand. Best-effort — a miss just leaves defaults.

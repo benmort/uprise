@@ -6,7 +6,9 @@ vi.mock("@uprise/api-client", () => ({
     checkSession: vi.fn(async () => ({ ok: true, data: { user: null } })),
     logout: vi.fn(async () => ({ ok: true, data: {} })),
   },
-  getAuthAppUrl: () => "http://auth.test",
+  // The shared builder is exercised in api-client's own tests; here we just assert goToLogin
+  // hands it the current URL and navigates to the result.
+  loginRedirectUrl: (returnTo: string) => `http://auth.test/login?return_to=${encodeURIComponent(returnTo)}`,
 }));
 
 import { auth } from "@uprise/api-client";
@@ -42,12 +44,12 @@ describe("goToLogin", () => {
     expect(() => goToLogin()).not.toThrow();
   });
 
-  it("bounces to the auth app preserving the current URL", () => {
+  it("bounces to the login URL preserving the current URL", () => {
     const assign = vi.fn();
     vi.stubGlobal("window", { location: { href: "https://field.test/turf?x=1", assign } });
     goToLogin();
     expect(assign).toHaveBeenCalledWith(
-      "http://auth.test/sign-in?return_to=" + encodeURIComponent("https://field.test/turf?x=1"),
+      "http://auth.test/login?return_to=" + encodeURIComponent("https://field.test/turf?x=1"),
     );
   });
 });
@@ -63,6 +65,6 @@ describe("logout", () => {
     vi.stubGlobal("window", { location: { href: "https://field.test/", assign } });
     await logout();
     expect(mockLogout).toHaveBeenCalledTimes(1);
-    expect(assign).toHaveBeenCalledWith("http://auth.test/sign-in?return_to=" + encodeURIComponent("https://field.test/"));
+    expect(assign).toHaveBeenCalledWith("http://auth.test/login?return_to=" + encodeURIComponent("https://field.test/"));
   });
 });
