@@ -79,37 +79,45 @@ async function drainOutbox(
 ): Promise<number> {
   let published = 0;
   try {
-    await prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<OutboxRow[]>`
-        SELECT "id", "tenantId", "eventType", "aggregateId", "payload", "metadata", "occurredAt"
-        FROM "events"."OutboxEvent"
-        WHERE "publishedAt" IS NULL
-        ORDER BY "seq" ASC
-        LIMIT ${batchSize}
-        FOR UPDATE SKIP LOCKED`;
-      for (const row of rows) {
-        const envelope: EventEnvelope = {
-          id: row.id,
-          eventType: row.eventType,
-          tenantId: row.tenantId,
-          aggregateId: row.aggregateId,
-          payload: row.payload,
-          metadata: (row.metadata ?? {}) as EventEnvelope["metadata"],
-          occurredAt:
-            row.occurredAt instanceof Date ? row.occurredAt.toISOString() : String(row.occurredAt),
-        };
-        await queue.add(QUEUE_JOB_TYPES.DOMAIN_EVENT, envelope, {
-          jobId: row.id,
-          removeOnComplete: true,
-          removeOnFail: 1000,
-        });
-        await tx.outboxEvent.update({
-          where: { id: row.id },
+    await prisma.$transaction(
+      async (tx) => {
+        const rows = await tx.$queryRaw<OutboxRow[]>`
+          SELECT "id", "tenantId", "eventType", "aggregateId", "payload", "metadata", "occurredAt"
+          FROM "events"."OutboxEvent"
+          WHERE "publishedAt" IS NULL
+          ORDER BY "seq" ASC
+          LIMIT ${batchSize}
+          FOR UPDATE SKIP LOCKED`;
+        if (rows.length === 0) return;
+        // ONE Redis round trip + ONE update for the whole batch. The per-row loop this
+        // replaces made ~2×batch sequential round trips inside the interactive
+        // transaction and blew Prisma's tx window against any real backlog — the tx
+        // died ("Transaction not found") and the relay wedged permanently. jobId =
+        // event id keeps the re-enqueue after a crash-mid-batch deduplicated.
+        await queue.addBulk(
+          rows.map((row) => ({
+            name: QUEUE_JOB_TYPES.DOMAIN_EVENT,
+            data: {
+              id: row.id,
+              eventType: row.eventType,
+              tenantId: row.tenantId,
+              aggregateId: row.aggregateId,
+              payload: row.payload,
+              metadata: (row.metadata ?? {}) as EventEnvelope["metadata"],
+              occurredAt:
+                row.occurredAt instanceof Date ? row.occurredAt.toISOString() : String(row.occurredAt),
+            } satisfies EventEnvelope,
+            opts: { jobId: row.id, removeOnComplete: true, removeOnFail: 1000 },
+          })),
+        );
+        await tx.outboxEvent.updateMany({
+          where: { id: { in: rows.map((r) => r.id) } },
           data: { publishedAt: new Date(), attempts: { increment: 1 } },
         });
-        published += 1;
-      }
-    });
+        published = rows.length;
+      },
+      { timeout: 30_000, maxWait: 10_000 },
+    );
   } catch (err) {
     logger.error("worker", "Outbox relay drain failed", undefined, { error: String(err) });
   }
