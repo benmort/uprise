@@ -39,7 +39,7 @@ const SUPPORT_PILL: Record<SupportLevel, { label: string; className: string }> =
 export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }) {
   const router = useRouter();
   const { showToast } = useToast();
-  const { capture } = useGeolocation();
+  const { capture, permission } = useGeolocation();
   const { enqueue } = useSyncQueue();
 
   // The turf's full payload (walk-list items) comes from the SAME per-turf cache entry the
@@ -262,10 +262,17 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
               else void record(code);
             }}
           />
-          <p className="flex items-center justify-center gap-1.5 pt-1 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 shrink-0" />
-            GPS captured automatically · one tap logs &amp; advances
-          </p>
+          {permission === "denied" ? (
+            <p className="flex items-center justify-center gap-1.5 pt-1 text-xs font-medium text-warning-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              Location is off — knocks won&apos;t be pinned. Enable it in Settings.
+            </p>
+          ) : (
+            <p className="flex items-center justify-center gap-1.5 pt-1 text-xs text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              GPS captured automatically · one tap logs &amp; advances
+            </p>
+          )}
         </div>
       ) : (
         <SurveyRunner

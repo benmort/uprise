@@ -11,6 +11,7 @@ export * from "./components/campaign-nav-cards";
 export * from "./components/data-table";
 export * from "./components/disposition-pad";
 export * from "./components/kpi-tile";
+export * from "./components/location-gate";
 export * from "./components/map-gesture-toggle";
 export * from "./components/map-size-control";
 export * from "./components/map-thumbnail";
@@ -59,6 +60,7 @@ export * from "./lib/use-theme";
 export * from "./lib/volunteer";
 export * from "./lib/directions";
 export * from "./lib/vitals";
+export * from "./lib/storage-persist";
 
 // ── Field-facing API ─────────────────────────────────────────────────────────
 export * from "./api";

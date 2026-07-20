@@ -6,7 +6,9 @@ import { tenants } from "@uprise/api-client";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { getSession, goToLogin } from "../lib/session";
 import { getTenantBrand, getVolunteerId, setTenantBrand, setVolunteerId } from "../lib/volunteer";
+import { requestPersistentStorage } from "../lib/storage-persist";
 import { OfflineBanner } from "../components/offline-banner";
+import { LocationGate } from "../components/location-gate";
 import { MeDrawerProvider } from "./me-drawer";
 
 /**
@@ -32,6 +34,9 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
     const cached = getTenantBrand();
     if (cached) setBootBrand({ name: cached.name, logoUrl: cached.logoUrl });
     if (getVolunteerId()) setReady(true); // optimistic — don't block on /auth/check
+    // Ask the OS to keep this origin's storage — the offline map pack + knock outbox must
+    // survive storage pressure across a shift. Best-effort; fire-and-forget.
+    void requestPersistentStorage();
 
     void (async () => {
       const session = await getSession();
@@ -87,6 +92,8 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
         <OfflineBanner pending={counts.PENDING ?? 0} />
         <main className="flex-1 overflow-auto p-4">{children}</main>
       </div>
+      {/* Shift-start location prompt — blocks over the content until granted or dismissed. */}
+      <LocationGate />
     </MeDrawerProvider>
   );
 }

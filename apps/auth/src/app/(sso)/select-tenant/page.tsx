@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQueryParams } from "@/lib/use-query";
-import { Alert, Button, Input, Spinner } from "@uprise/ui";
+import { Alert, Button, Input, Spinner, TenantAvatar } from "@uprise/ui";
 import { auth, type Membership } from "@uprise/api-client";
 import { validateReturnTo } from "@/lib/return-to";
 
@@ -25,7 +25,7 @@ export default function SelectTenantPage() {
   const [error, setError] = useState<string | null>(null);
   // The workspace being loaded — drives the blocking loading modal + disables the list.
   // Stays set through the full-page redirect so the modal covers the whole transition.
-  const [selecting, setSelecting] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState<{ name: string; logoUrl: string | null; tenantId: string } | null>(null);
   const busy = selecting !== null;
 
   useEffect(() => {
@@ -44,10 +44,10 @@ export default function SelectTenantPage() {
     })();
   }, [returnTo]);
 
-  async function choose(tenantId: string, tenantName: string) {
-    setSelecting(tenantName);
+  async function choose(m: Membership) {
+    setSelecting({ name: m.tenantName, logoUrl: m.logoUrl ?? null, tenantId: m.tenantId });
     setError(null);
-    const res = await auth.selectTenant(tenantId);
+    const res = await auth.selectTenant(m.tenantId);
     if (!res.ok) {
       setSelecting(null);
       setError(res.error);
@@ -87,9 +87,12 @@ export default function SelectTenantPage() {
               <ul className="space-y-2">
                 {filtered.map((m) => (
                   <li key={m.tenantId}>
-                    <Button variant="outline" className="w-full justify-between" disabled={busy} onClick={() => choose(m.tenantId, m.tenantName)}>
-                      <span>{m.tenantName}</span>
-                      <span className="text-xs text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
+                    <Button variant="outline" className="w-full justify-between gap-3" disabled={busy} onClick={() => choose(m)}>
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <TenantAvatar seed={m.tenantId} logoUrl={m.logoUrl} name={m.tenantName} className="h-7 w-7" />
+                        <span className="truncate">{m.tenantName}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
                     </Button>
                   </li>
                 ))}
@@ -117,10 +120,20 @@ export default function SelectTenantPage() {
           aria-label="Loading workspace"
         >
           <div className="flex w-full max-w-xs flex-col items-center gap-3 rounded-2xl border border-border bg-surface p-6 text-center shadow-elevated animate-pop-in">
-            <Spinner className="h-6 w-6 text-primary" />
+            <div className="relative">
+              <TenantAvatar
+                seed={selecting.tenantId}
+                logoUrl={selecting.logoUrl}
+                name={selecting.name}
+                className="h-16 w-16"
+              />
+              <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface">
+                <Spinner className="h-4 w-4 text-primary" />
+              </span>
+            </div>
             <div className="min-w-0">
               <p className="font-semibold text-foreground">Loading your workspace</p>
-              <p className="mt-1 truncate text-sm text-muted-foreground">{selecting}</p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">{selecting.name}</p>
             </div>
           </div>
         </div>

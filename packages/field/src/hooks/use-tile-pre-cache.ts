@@ -9,6 +9,7 @@ import {
   type ZoomRange,
 } from "../lib/map-cache";
 import { getManifest, putManifest, type TileManifestStatus } from "../lib/tile-cache-store";
+import { requestPersistentStorage } from "../lib/storage-persist";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 
@@ -74,6 +75,9 @@ export function useTilePreCache(
       // from when start() was called (the classic stale-closure trap).
       let liveTotal = 0;
       let liveDone = 0;
+      // A download is exactly when durable storage matters — ask the OS not to evict the
+      // pack we're about to write. Best-effort; never blocks the download.
+      void requestPersistentStorage();
       try {
         const plan = await planRegionDownload(geometry, TOKEN, zoom, controller.signal);
         liveTotal = plan.urls.length;
