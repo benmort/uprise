@@ -8,6 +8,9 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET(): Response {
+export function GET(req: Request): Response {
+  // One line per hit (cron = every 5 min) so the warming is observable in `vercel logs` —
+  // without it the 204 emits nothing and the cron's firing can't be verified from outside.
+  console.log(`warm ping (ua: ${req.headers.get("user-agent") ?? "unknown"})`);
   return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
 }
