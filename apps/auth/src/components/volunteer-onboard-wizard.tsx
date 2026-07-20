@@ -359,7 +359,7 @@ export function VolunteerOnboardWizard({
           turf — it&apos;ll show up here.
         </p>
         <dl className="mt-7 w-full space-y-0 rounded-2xl bg-surface-variant/60 px-5 text-sm">
-          <Row label="Signed in as" value={`+61 ${formatAuMobile(phone)}`} />
+          <Row label="Signed in as" value={formatAuMobile(phone)} />
           <Row label="Role" value={role ? ROLE_TITLE[role] : "Volunteer"} border />
           <Row
             label="Status"
@@ -444,9 +444,9 @@ export function VolunteerOnboardWizard({
         <div className="flex flex-1 flex-col">
           <h1 className="text-3xl font-extrabold text-foreground">Enter your code</h1>
           <p className="mt-2 text-muted-foreground">
-            We texted a 6-digit code to <span className="font-bold text-foreground">+61 {formatAuMobile(phone)}</span>.
+            We texted a 6-digit code to <span className="font-bold text-foreground">{formatAuMobile(phone)}</span>.
           </p>
-          <OtpInput value={code} onChange={setCode} length={6} className="mt-7" />
+          <OtpInput value={code} onChange={setCode} length={6} autoFocus className="mt-7" />
           {checking || busy ? (
             <p className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner /> {busy ? "Signing you in…" : "Checking your code…"}

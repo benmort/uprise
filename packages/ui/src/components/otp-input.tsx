@@ -9,6 +9,8 @@ export interface OtpInputProps {
   onChange: (value: string) => void;
   length?: number;
   disabled?: boolean;
+  /** Focus the first box on mount (e.g. landing directly on the verify step). */
+  autoFocus?: boolean;
   /** Fired when all boxes are filled. */
   onComplete?: (value: string) => void;
   className?: string;
@@ -20,8 +22,15 @@ export interface OtpInputProps {
  * callers pass it straight to the verify call.
  */
 const OtpInput = React.forwardRef<HTMLInputElement, OtpInputProps>(
-  ({ value, onChange, length = 6, disabled, onComplete, className }, _ref) => {
+  ({ value, onChange, length = 6, disabled, autoFocus, onComplete, className }, _ref) => {
     const refs = React.useRef<(HTMLInputElement | null)[]>([]);
+
+    // Land with the cursor in the first box (deep-linking straight to the code step).
+    React.useEffect(() => {
+      if (autoFocus && !disabled) refs.current[0]?.focus();
+      // Once on mount — a later value change shouldn't yank focus back to the first box.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const digits = React.useMemo(() => {
       const arr = value.split("").slice(0, length);
       return Array.from({ length }, (_, i) => arr[i] ?? "");
