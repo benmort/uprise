@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  Check,
   Download,
   Loader2,
   LocateFixed,
@@ -23,6 +24,7 @@ import { bboxRing } from "../lib/geo";
 import { formatMinutes } from "../lib/walk-estimate";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useOnlineStatus } from "../hooks/use-online-status";
+import { useTurfDownload } from "../hooks/use-turf-download";
 
 /** Per-turf swatch — the map thumbnail's outline/tint, cycled by position (blue, purple, …). */
 const TURF_SWATCHES = ["#2f5bd6", "#7c3aed", "#0e9488", "#b45309", "#dc2626", "#16a34a"];
@@ -253,14 +255,7 @@ export function Assignments() {
                       <PersonStanding className="h-5 w-5" />
                       Start walking
                     </Button>
-                    <button
-                      type="button"
-                      aria-label="Download for offline"
-                      onClick={() => router.push(`/${a.turfId}`)}
-                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-border text-foreground"
-                    >
-                      <Download className="h-5 w-5" />
-                    </button>
+                    <TurfDownloadButton turfId={a.turfId} geometry={a.turf.geometry} />
                   </div>
                 </div>
               </div>
@@ -290,5 +285,84 @@ export function Assignments() {
         </div>
       )}
     </div>
+  );
+}
+
+/** A determinate circular progress ring with the percent inside — the "downloading" face of
+ *  the turf card's download button. */
+function CircularProgress({ pct }: { pct: number }) {
+  const r = 9;
+  const circumference = 2 * Math.PI * r;
+  const clamped = Math.min(100, Math.max(0, pct));
+  const offset = circumference * (1 - clamped / 100);
+  return (
+    <span className="relative flex h-9 w-9 items-center justify-center text-primary">
+      <svg viewBox="0 0 24 24" className="h-9 w-9 -rotate-90">
+        <circle cx="12" cy="12" r={r} fill="none" stroke="currentColor" strokeOpacity={0.2} strokeWidth={2.5} />
+        <circle
+          cx="12"
+          cy="12"
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="absolute text-[9px] font-bold tabular-nums">{clamped}</span>
+    </span>
+  );
+}
+
+/**
+ * The per-turf offline-download control on the My turf card. Shares the turf-download manager
+ * with the walk-view control and the installed app's background auto-downloader, so it shows a
+ * live circular indicator while downloading and a tick once the pack is saved locally — no
+ * matter who started the download. Idle taps start the download in place (no navigation).
+ */
+function TurfDownloadButton({ turfId, geometry }: { turfId: string; geometry: unknown }) {
+  const { available, status, done, total, start } = useTurfDownload(
+    turfId,
+    geometry as GeoJSON.Geometry | undefined,
+  );
+  if (!available) return null; // no Mapbox token — nothing to download
+
+  if (status === "done") {
+    return (
+      <div
+        aria-label="Saved for offline"
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-success/40 text-success"
+      >
+        <Check className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  if (status === "running") {
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    return (
+      <div
+        aria-label={`Downloading maps ${pct}%`}
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-border"
+      >
+        {total > 0 ? <CircularProgress pct={pct} /> : <Loader2 className="h-6 w-6 animate-spin text-primary" />}
+      </div>
+    );
+  }
+
+  const failed = status === "error" || status === "incomplete";
+  return (
+    <button
+      type="button"
+      aria-label={failed ? "Retry offline download" : "Download for offline"}
+      onClick={start}
+      className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border ${
+        failed ? "border-error/50 text-error" : "border-border text-foreground"
+      }`}
+    >
+      <Download className="h-5 w-5" />
+    </button>
   );
 }

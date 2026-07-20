@@ -44,6 +44,9 @@ export * from "./hooks/use-local-storage";
 export * from "./hooks/use-online-status";
 export * from "./hooks/use-sync-queue";
 export * from "./hooks/use-tile-pre-cache";
+export * from "./hooks/use-turf-download";
+export * from "./hooks/use-turf-auto-download";
+export * from "./hooks/use-is-installed";
 export * from "./hooks/use-walking-directions";
 
 // ── Libs (offline, geo, route, sync queue) ───────────────────────────────────
@@ -61,6 +64,9 @@ export * from "./lib/volunteer";
 export * from "./lib/directions";
 export * from "./lib/vitals";
 export * from "./lib/storage-persist";
+export * from "./lib/pwa";
+export * from "./lib/connection";
+export * from "./lib/turf-download-manager";
 
 // ── Field-facing API ─────────────────────────────────────────────────────────
 export * from "./api";

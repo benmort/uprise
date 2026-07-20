@@ -87,4 +87,41 @@ describe("SyncQueue", () => {
     expect(await store.get("k1")).toBeUndefined();
     expect(await queue.listConflicts()).toHaveLength(0);
   });
+
+  it("persists the submit result on DONE (photo url / contact id for later refs)", async () => {
+    await queue.enqueue("p1", { blobKey: "p1" }, "2026-06-16T10:00:00Z", "DOOR_PHOTO");
+    await queue.flush(async () => ({ ok: true, result: { url: "https://cdn/p.jpg" } }));
+    const rec = await store.get("p1");
+    expect(rec?.status).toBe("DONE");
+    expect(rec?.result).toEqual({ url: "https://cdn/p.jpg" });
+  });
+
+  it("drains mixed record types in FIFO order by clientCapturedAt", async () => {
+    await queue.enqueue("photo", {}, "2026-06-16T10:00:00Z", "DOOR_PHOTO");
+    await queue.enqueue("contact", {}, "2026-06-16T10:00:01Z", "ADD_CONTACT");
+    await queue.enqueue("knock", {}, "2026-06-16T10:00:02Z", "DOOR_KNOCK");
+    const order: string[] = [];
+    await queue.flush(async (r) => {
+      order.push(r.type);
+      return { ok: true };
+    });
+    expect(order).toEqual(["DOOR_PHOTO", "ADD_CONTACT", "DOOR_KNOCK"]);
+  });
+
+  it("guards against a concurrent flush (mutex) so a record is never submitted twice", async () => {
+    await queue.enqueue("k1", {}, "2026-06-16T10:00:00Z");
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const submit = vi.fn(async (): Promise<SubmitResult> => {
+      await gate;
+      return { ok: true };
+    });
+    const p1 = queue.flush(submit); // starts draining, suspends on the gate
+    const second = await queue.flush(submit); // mutex → immediate no-op
+    expect(second.synced).toBe(0);
+    release();
+    const first = await p1;
+    expect(first.synced).toBe(1);
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
 });

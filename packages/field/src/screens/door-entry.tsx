@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ChevronLeft, MapPin, ShieldAlert, UserPlus } from "lucide-react";
 import { Card, Button, Skeleton, cn, useToast } from "@uprise/ui";
-import { createDoorContact, uploadDoorPhoto, type CanvassAssignment } from "../api";
+import { type CanvassAssignment } from "../api";
 import {
   useAssignment,
   useContactProfile,
@@ -26,6 +26,30 @@ import { SurveyRunner, type SurveyAnswer, type SurveySchema } from "../component
 // "Spoke to someone" codes reveal the survey; everything else is a 1-tap knock.
 const SURVEY_TRIGGER_CODES = new Set(["spoke_to_target", "spoke_to_other"]);
 
+/**
+ * Downscale + re-encode a camera photo to a modest JPEG before it's queued offline, so a shift's
+ * worth of photos doesn't blow the device's IndexedDB quota (raw phone JPEGs are multi-MB).
+ * Best-effort: any failure returns the original file — a photo must NEVER block recording a knock.
+ */
+async function compressImage(file: File, maxEdge = 1600, quality = 0.7): Promise<Blob> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    return blob ?? file;
+  } catch {
+    return file;
+  }
+}
+
 // Header support chip — soft green for supporters, soft red for opposers, neutral
 // for undecided. Label carries a +/– polarity marker (e.g. "Lean +").
 const SUPPORT_PILL: Record<SupportLevel, { label: string; className: string }> = {
@@ -40,7 +64,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   const router = useRouter();
   const { showToast } = useToast();
   const { capture, permission } = useGeolocation();
-  const { enqueue } = useSyncQueue();
+  const { enqueue, enqueuePhoto } = useSyncQueue();
 
   // The turf's full payload (walk-list items) comes from the SAME per-turf cache entry the
   // walk view populated — arriving here from it is instant (no refetch), and the entry is
@@ -59,7 +83,9 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   // APP 5 consent for keeping recorded views — default OFF (must be affirmative),
   // reset per door because the screen mounts fresh for each stop.
   const [consent, setConsent] = useState(false);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  // The queued photo's outbox localId (a `photoRef`), not a URL — the photo uploads on sync and
+  // the knock's photoUrl is resolved from it then. Offline-safe: no upload at the door.
+  const [photoRef, setPhotoRef] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const submittingRef = useRef(false);
 
@@ -165,7 +191,9 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
           // Consent only rides with the support-levelled ("spoke to") outcomes it was
           // asked for — a no-contact knock records no views, so no consent claim.
           consent: consent && SURVEY_TRIGGER_CODES.has(code) ? true : undefined,
-          photoUrl: photoUrl || undefined,
+          // Reference the queued photo by its outbox localId; the dispatcher swaps in the real
+          // photoUrl once the photo record has uploaded (FIFO guarantees it flushes first).
+          photoRef: photoRef || undefined,
           surveyAnswers: answers?.length ? answers : undefined,
           clientCapturedAt: capturedAt,
         },
@@ -302,7 +330,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
         </label>
         <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
           <Camera className="h-4 w-4 text-muted-foreground" />
-          {photoBusy ? "Uploading…" : photoUrl ? "Photo attached ✓" : "Add photo"}
+          {photoBusy ? "Saving…" : photoRef ? "Photo attached ✓" : "Add photo"}
           <input
             type="file"
             accept="image/*"
@@ -312,15 +340,15 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
               const file = e.target.files?.[0];
               if (!file) return;
               setPhotoBusy(true);
-              const res = await uploadDoorPhoto(file);
+              // Compress + queue offline (no upload at the door — it syncs with the knock).
+              const blob = await compressImage(file);
+              const localId = await enqueuePhoto(blob, {
+                filename: file.name.replace(/\.[^.]+$/, "") + ".jpg",
+                mimeType: blob.type || "image/jpeg",
+              });
               setPhotoBusy(false);
-              if (res.ok) setPhotoUrl(res.data.url);
-              else
-                showToast({
-                  tone: "error",
-                  title: "Photo not saved",
-                  description: res.error.includes("not configured") ? "Photo storage isn't set up yet." : res.error,
-                });
+              if (localId) setPhotoRef(localId);
+              else showToast({ tone: "error", title: "Photo not saved", description: "Couldn't save the photo on this device." });
             }}
           />
         </label>
@@ -338,6 +366,7 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
 /** G2: add an extra resident at this door (cold "addresses without contacts" universe). */
 function AddHouseholdMember({ turfId }: { turfId: string }) {
   const { showToast } = useToast();
+  const { enqueueContact } = useSyncQueue();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -347,20 +376,16 @@ function AddHouseholdMember({ turfId }: { turfId: string }) {
     if (!volunteerId || !name.trim()) return;
     setBusy(true);
     const [firstName, ...rest] = name.trim().split(/\s+/);
-    const res = await createDoorContact({
-      volunteerId,
-      turfId,
-      firstName,
-      lastName: rest.join(" ") || undefined,
-    });
+    // Queue offline — created on the server at sync, so this works with no signal.
+    const localId = await enqueueContact({ volunteerId, turfId, firstName, lastName: rest.join(" ") || undefined });
     setBusy(false);
-    if (!res.ok) {
-      showToast({ tone: "error", title: "Couldn't add resident", description: res.error });
+    if (!localId) {
+      showToast({ tone: "error", title: "Couldn't add resident", description: "Try again." });
       return;
     }
     setName("");
     setOpen(false);
-    showToast({ tone: "success", title: "Resident added to this turf" });
+    showToast({ tone: "success", title: "Resident added", description: "Saved offline" });
   }
 
   if (!open) {

@@ -109,6 +109,11 @@ export type DoorKnockInput = {
   clientCapturedAt?: string;
   walkListItemId?: string;
   photoUrl?: string;
+  /** Offline outbox reference to a queued DOOR_PHOTO record (its localId); the dispatcher
+   *  resolves it to `photoUrl` once the photo uploads. Stripped before the knock is POSTed. */
+  photoRef?: string;
+  /** Offline outbox reference to a queued ADD_CONTACT record, resolved to `contactId` on sync. */
+  contactRef?: string;
   safetyFlag?: boolean;
   /** APP 5 door consent — true only when the resident affirmatively agreed. */
   consent?: boolean;
@@ -177,6 +182,8 @@ export async function createDoorContact(input: {
   phoneE164?: string;
   lat?: number;
   lng?: number;
+  /** Client id for server-side idempotency on retry (mirrors door-knocks). */
+  localId?: string;
 }) {
   return request<{ id: string; firstName: string | null; lastName: string | null; address: string | null }>(
     "/canvass/door-contacts",
@@ -255,10 +262,14 @@ export async function subscribePush(sub: {
   });
 }
 
-export async function uploadDoorPhoto(file: File): Promise<{ ok: true; data: { url: string } } | { ok: false; error: string }> {
+export type PhotoUploadResult = { ok: true; data: { url: string } } | { ok: false; error: string };
+
+/** Core multipart upload — accepts a Blob (+ filename) so it works for both a live `File` at
+ *  the door AND a Blob replayed from the offline outbox (the Blob carries its own MIME type). */
+export async function uploadDoorPhotoBlob(blob: Blob, filename: string): Promise<PhotoUploadResult> {
   const apiUrl = getApiUrl();
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", blob, filename);
   try {
     const res = await fetch(`${apiUrl}/canvass/door-photos`, {
       method: "POST",
@@ -273,4 +284,8 @@ export async function uploadDoorPhoto(file: File): Promise<{ ok: true; data: { u
   } catch (err) {
     return { ok: false as const, error: err instanceof Error ? err.message : "Upload failed" };
   }
+}
+
+export async function uploadDoorPhoto(file: File): Promise<PhotoUploadResult> {
+  return uploadDoorPhotoBlob(file, file.name);
 }

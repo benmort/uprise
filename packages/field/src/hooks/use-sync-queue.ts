@@ -1,37 +1,34 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { submitDoorKnock, type DoorKnockInput } from "../api";
-import { IndexedDbOutboxStore } from "../lib/idb-store";
-import { SyncQueue, type OutboxRecord, type OutboxStatus, type SubmitResult } from "../lib/sync-queue";
+import { createDoorContact, submitDoorKnock, uploadDoorPhotoBlob, type DoorKnockInput } from "../api";
+import { IndexedDbOutboxStore, IndexedDbPhotoBlobStore, type PhotoBlobStore } from "../lib/idb-store";
+import { SyncQueue, type OutboxRecord, type OutboxStatus } from "../lib/sync-queue";
+import { makeOutboxSubmit } from "../lib/outbox-dispatch";
+import { newLocalId } from "../lib/volunteer";
 import { useOnlineStatus } from "./use-online-status";
 
 const EMPTY: Record<OutboxStatus, number> = { PENDING: 0, SYNCING: 0, DONE: 0, CONFLICT: 0 };
 
-// Errors we treat as transient (retry) vs terminal (CONFLICT). The door-knock
-// endpoint returns "TURF_NOT_ASSIGNED"/"CONTACT_NOT_FOUND" as terminal; anything
-// that looks like a network/timeout/5xx is retriable.
-function classify(error: string): SubmitResult {
-  const transient = /network|fetch|timeout|Failed to fetch|Not authenticated|50\d/i.test(error);
-  return { ok: false, retriable: transient, error };
-}
-
 /**
- * Wires the offline outbox: enqueue door knocks instantly, auto-flush when
- * online (on reconnect, tab focus, and a 30s interval). Returns live counts for
- * the SyncStatusBadge.
+ * Wires the offline outbox. Every interaction — a door knock, its photo, an added household
+ * member — is written locally at capture (nothing needs signal), then auto-flushed when online
+ * (reconnect, tab focus, a 30s interval, and right after each enqueue). A knock references its
+ * photo/contact by their localId; the dispatcher (outbox-dispatch) resolves those to the server
+ * url/id at flush. Returns live counts for the SyncStatusBadge.
  */
 export function useSyncQueue() {
   const online = useOnlineStatus();
   const queueRef = useRef<SyncQueue | null>(null);
+  const photoStoreRef = useRef<PhotoBlobStore | null>(null);
   const [counts, setCounts] = useState<Record<OutboxStatus, number>>(EMPTY);
   const [pending, setPending] = useState<OutboxRecord[]>([]);
+  const [conflicts, setConflicts] = useState<OutboxRecord[]>([]);
 
   if (queueRef.current === null && typeof window !== "undefined") {
     queueRef.current = new SyncQueue(new IndexedDbOutboxStore());
+    photoStoreRef.current = new IndexedDbPhotoBlobStore();
   }
-
-  const [conflicts, setConflicts] = useState<OutboxRecord[]>([]);
 
   const refreshCounts = useCallback(async () => {
     if (!queueRef.current) return;
@@ -47,12 +44,17 @@ export function useSyncQueue() {
 
   const flush = useCallback(async () => {
     const queue = queueRef.current;
-    if (!queue) return;
-    await queue.flush(async (record: OutboxRecord): Promise<SubmitResult> => {
-      const res = await submitDoorKnock(record.payload as unknown as DoorKnockInput);
-      if (res.ok) return { ok: true };
-      return classify(res.error);
+    const photos = photoStoreRef.current;
+    if (!queue || !photos) return;
+    const submit = makeOutboxSubmit({
+      uploadPhoto: (blob, filename) => uploadDoorPhotoBlob(blob, filename),
+      createContact: (input) => createDoorContact(input as Parameters<typeof createDoorContact>[0]),
+      submitKnock: (input) => submitDoorKnock(input as DoorKnockInput),
+      getBlob: (key) => photos.get(key),
+      deleteBlob: (key) => photos.remove(key),
+      lookup: (localId) => queue.get(localId),
     });
+    await queue.flush(submit);
     await refreshCounts();
   }, [refreshCounts]);
 
@@ -63,6 +65,43 @@ export function useSyncQueue() {
       await queue.enqueue(localId, payload as unknown as Record<string, unknown>, clientCapturedAt);
       await refreshCounts();
       if (online) void flush();
+    },
+    [online, flush, refreshCounts],
+  );
+
+  /** Queue a door photo offline. Stores the (compressed) bytes on-device and returns the
+   *  record's localId so the knock can reference it via `photoRef`. */
+  const enqueuePhoto = useCallback(
+    async (blob: Blob, meta: { filename: string; mimeType: string }): Promise<string | null> => {
+      const queue = queueRef.current;
+      const photos = photoStoreRef.current;
+      if (!queue || !photos) return null;
+      const localId = newLocalId();
+      await photos.put(localId, blob);
+      await queue.enqueue(
+        localId,
+        { blobKey: localId, filename: meta.filename, mimeType: meta.mimeType },
+        new Date().toISOString(),
+        "DOOR_PHOTO",
+      );
+      await refreshCounts();
+      if (online) void flush();
+      return localId;
+    },
+    [online, flush, refreshCounts],
+  );
+
+  /** Queue an added household member offline; returns the record's localId for a knock's
+   *  `contactRef`. */
+  const enqueueContact = useCallback(
+    async (input: Record<string, unknown>): Promise<string | null> => {
+      const queue = queueRef.current;
+      if (!queue) return null;
+      const localId = newLocalId();
+      await queue.enqueue(localId, { ...input, localId }, new Date().toISOString(), "ADD_CONTACT");
+      await refreshCounts();
+      if (online) void flush();
+      return localId;
     },
     [online, flush, refreshCounts],
   );
@@ -96,7 +135,13 @@ export function useSyncQueue() {
   const discardConflict = useCallback(
     async (localId: string) => {
       const queue = queueRef.current;
+      const photos = photoStoreRef.current;
       if (!queue) return;
+      // A discarded photo record leaves its bytes behind — free them too.
+      const rec = await queue.get(localId);
+      if (rec?.type === "DOOR_PHOTO" && photos) {
+        await photos.remove((rec.payload as { blobKey?: string }).blobKey ?? localId);
+      }
       await queue.discard(localId);
       await refreshCounts();
     },
@@ -109,6 +154,8 @@ export function useSyncQueue() {
     conflicts,
     online,
     enqueue,
+    enqueuePhoto,
+    enqueueContact,
     flush,
     retryConflict,
     discardConflict,

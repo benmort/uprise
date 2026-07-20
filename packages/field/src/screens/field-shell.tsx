@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BrandLoadingScreen, BrandStyle, Skeleton, type BrandStyleFields } from "@uprise/ui";
 import { tenants } from "@uprise/api-client";
 import { useSyncQueue } from "../hooks/use-sync-queue";
+import { useTurfAutoDownload } from "../hooks/use-turf-auto-download";
 import { getSession, goToLogin } from "../lib/session";
 import { getTenantBrand, getVolunteerId, setTenantBrand, setVolunteerId } from "../lib/volunteer";
 import { requestPersistentStorage } from "../lib/storage-persist";
@@ -20,6 +21,10 @@ import { MeDrawerProvider } from "./me-drawer";
 export function FieldShell({ children }: { children: React.ReactNode }) {
   const { counts } = useSyncQueue();
   const [ready, setReady] = useState(false);
+  // Volunteer id in React state so the installed-app auto-downloader fires once the session
+  // resolves (the lib getter is set imperatively; state makes the hook react to it).
+  const [volunteerId, setVid] = useState<string | null>(() => getVolunteerId());
+  useTurfAutoDownload(volunteerId);
   const [brandStyle, setBrandStyle] = useState<BrandStyleFields | null>(null);
   // Cached tenant brand (logo/name) for the boot loader — instant on a returning device.
   const [bootBrand, setBootBrand] = useState<{ name?: string; logoUrl?: string | null } | null>(null);
@@ -46,6 +51,7 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
         return;
       }
       setVolunteerId(session.id);
+      setVid(session.id);
       // Stash the current tenant so My turf can show the campaign brand badge.
       const current =
         session.memberships?.find((m) => m.tenantId === session.tenantId) ?? session.memberships?.[0];
