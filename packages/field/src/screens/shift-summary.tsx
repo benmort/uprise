@@ -32,12 +32,16 @@ export function ShiftSummary() {
   const [releasing, setReleasing] = useState(false);
 
   const releaseEverything = useCallback(async () => {
-    setConfirmRelease(false);
     const volunteerId = getVolunteerId();
-    if (!volunteerId) return;
+    if (!volunteerId) {
+      setConfirmRelease(false);
+      return;
+    }
+    // Keep the confirm dialog open with its in-button spinner until the releases resolve.
     setReleasing(true);
     const results = await Promise.all(assignments.map((a) => releaseTurf(a.turfId, volunteerId)));
     setReleasing(false);
+    setConfirmRelease(false);
     if (results.some((r) => !r.ok)) {
       showToast({
         tone: "error",
@@ -105,6 +109,8 @@ export function ShiftSummary() {
         confirmLabel="Release & end shift"
         onConfirm={releaseEverything}
         onCancel={() => setConfirmRelease(false)}
+        busy={releasing}
+        busyLabel="Releasing…"
       />
     </div>
   );

@@ -1,5 +1,11 @@
+"use client";
+
 import * as React from "react";
 import { cn } from "@uprise/ui";
+
+const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+// Brand primary (Mapbox static overlays need a literal hex, can't read CSS tokens).
+const PRIMARY = "#465fff";
 
 export type MapThumbnailProps = {
   /** A turf's GeoJSON Polygon / MultiPolygon — drawn as its EXACT outline (all rings, north-up,
@@ -22,6 +28,13 @@ const STOCK_POLYGON = "20,30 70,18 110,40 96,82 40,90 14,62";
  * where loading mapbox would be wasteful. Pass `children` to wrap a real TurfMap.
  */
 export function MapThumbnail({ geometry, polygon, className, children, color }: MapThumbnailProps) {
+  const [mapLoaded, setMapLoaded] = React.useState(false);
+  const [mapError, setMapError] = React.useState(false);
+  // A real map layer for the turf: a Mapbox static image (map tiles + the turf overlaid),
+  // rendered OVER the hashed placeholder and faded in on load. Falls back to the placeholder
+  // when there's no token, no geometry, offline (image errors), or the URL is too long.
+  const mapUrl = React.useMemo(() => staticTurfMapUrl(geometry, polygon, color), [geometry, polygon, color]);
+
   if (children) {
     return <div className={cn("overflow-hidden rounded-xl bg-surface", className)}>{children}</div>;
   }
@@ -79,8 +92,81 @@ export function MapThumbnail({ geometry, polygon, className, children, color }: 
           />
         )}
       </svg>
+      {/* Real map layer — a Mapbox static image over the placeholder, faded in on load. */}
+      {mapUrl && !mapError ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={mapUrl}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          onLoad={() => setMapLoaded(true)}
+          onError={() => setMapError(true)}
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
+            mapLoaded ? "opacity-100" : "opacity-0",
+          )}
+        />
+      ) : null}
     </div>
   );
+}
+
+/** Close a ring if it isn't already — Mapbox expects closed polygons. */
+function closeRing(ring: Array<[number, number]>): Array<[number, number]> {
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  return first && last && (first[0] !== last[0] || first[1] !== last[1]) ? [...ring, first] : ring;
+}
+
+/** Bounding box [minLng,minLat,maxLng,maxLat] from geometry rings, else a polygon ring. */
+function boundsOf(geometry: unknown, polygon?: Array<[number, number]>): [number, number, number, number] | null {
+  const rings = geometry ? geometryRings(geometry) : polygon && polygon.length >= 3 ? [polygon] : [];
+  const pts = rings.flat();
+  if (pts.length === 0) return null;
+  const lngs = pts.map((p) => p[0]);
+  const lats = pts.map((p) => p[1]);
+  return [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)];
+}
+
+/**
+ * A Mapbox Static Images URL — real map tiles with the turf drawn as a coloured overlay,
+ * auto-framed. Rendered as a plain <img> (no mapbox-gl runtime). The URL is deterministic per
+ * (turf, colour), so the browser + service-worker cache it and the same image is reused wherever
+ * the turf appears across the campaign. Null when there's no token or usable geometry.
+ */
+function staticTurfMapUrl(
+  geometry: unknown,
+  polygon: Array<[number, number]> | undefined,
+  color?: string,
+): string | null {
+  if (!TOKEN) return null;
+  const stroke = color ?? PRIMARY;
+  const properties = { stroke, "stroke-width": 3, "stroke-opacity": 1, fill: stroke, "fill-opacity": 0.18 };
+
+  let geom: unknown = null;
+  if (geometry && typeof geometry === "object" && "type" in (geometry as object)) geom = geometry;
+  else if (polygon && polygon.length >= 3) geom = { type: "Polygon", coordinates: [closeRing(polygon)] };
+  if (!geom) return null;
+
+  const build = (g: unknown) => {
+    const feature = { type: "Feature", properties, geometry: g };
+    const enc = encodeURIComponent(JSON.stringify(feature));
+    return `https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/geojson(${enc})/auto/320x224@2x?access_token=${TOKEN}&attribution=false&logo=false&padding=18`;
+  };
+
+  let url = build(geom);
+  // Mapbox caps the static URL (~8192 chars). A dense turf polygon can exceed it — fall back to a
+  // rectangle of the turf's bounding box (still a real map of the right area).
+  if (url.length > 8000) {
+    const b = boundsOf(geometry, polygon);
+    if (!b) return null;
+    const rect: Array<[number, number]> = [
+      [b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]], [b[0], b[1]],
+    ];
+    url = build({ type: "Polygon", coordinates: [rect] });
+  }
+  return url;
 }
 
 function toViewBoxPoints(polygon: Array<[number, number]>): string {

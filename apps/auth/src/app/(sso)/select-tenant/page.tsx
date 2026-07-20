@@ -87,9 +87,9 @@ export default function SelectTenantPage() {
               <ul className="space-y-2">
                 {filtered.map((m) => (
                   <li key={m.tenantId}>
-                    <Button variant="outline" className="w-full justify-between gap-3" disabled={busy} onClick={() => choose(m)}>
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <TenantAvatar seed={m.tenantId} logoUrl={m.logoUrl} name={m.tenantName} className="h-7 w-7" />
+                    <Button variant="outline" className="h-auto w-full justify-between gap-3 py-3" disabled={busy} onClick={() => choose(m)}>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <TenantAvatar seed={m.tenantId} logoUrl={m.logoUrl} name={m.tenantName} className="h-[4.375rem] w-[4.375rem]" />
                         <span className="truncate">{m.tenantName}</span>
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
@@ -106,10 +106,15 @@ export default function SelectTenantPage() {
           );
         })()
       ) : (
-        <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+          <Spinner className="h-5 w-5 text-primary" />
+          Loading your workspaces…
+        </div>
       )}
-      <div className="mt-5 text-sm text-muted-foreground">
-        <Link className="text-primary hover:underline" href="/sign-in">Sign in as someone else</Link>
+      <div className="mt-5">
+        <Button asChild variant="secondary" className="w-full">
+          <Link href="/sign-in">Sign in as someone else</Link>
+        </Button>
       </div>
 
       {selecting ? (

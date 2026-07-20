@@ -1,6 +1,7 @@
 "use client";
 
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import { Loader2 } from "lucide-react";
 import { Button } from "./button";
 
 type ConfirmDialogProps = {
@@ -12,6 +13,8 @@ type ConfirmDialogProps = {
   onConfirm: () => void;
   onCancel: () => void;
   busy?: boolean;
+  /** In-button text while the confirmed action runs (alongside a spinner). */
+  busyLabel?: string;
 };
 
 /**
@@ -28,6 +31,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   busy = false,
+  busyLabel = "Working…",
 }: ConfirmDialogProps) {
   return (
     <AlertDialog.Root open={open}>
@@ -49,7 +53,14 @@ export function ConfirmDialog({
               {cancelLabel}
             </Button>
             <Button variant="destructive" onClick={onConfirm} disabled={busy}>
-              {busy ? "Working..." : confirmLabel}
+              {busy ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  {busyLabel}
+                </>
+              ) : (
+                confirmLabel
+              )}
             </Button>
           </div>
         </AlertDialog.Content>

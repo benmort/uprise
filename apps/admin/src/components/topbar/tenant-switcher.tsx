@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronsUpDown, Loader2, Plus, Search, X } from "lucide-react";
+import { Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { Dropdown, useDropdownClose } from "@uprise/ui";
 import { auth, orgProfile, tenants, tenantLogoUrl, type Membership, type TenantSearchRow } from "@uprise/api-client";
 import { cn } from "@/lib/utils";
+import { WorkspaceLoadingOverlay } from "@/components/shell/workspace-loading-overlay";
 import { TenantAvatar } from "./tenant-avatar";
 import { CreateTenantDialog } from "./create-tenant-dialog";
 
@@ -418,41 +419,21 @@ function SwitchingModal({
   open: boolean;
   tenant: { tenantId: string; name: string; logoUrl: string | null } | null;
 }) {
-  if (!open || typeof document === "undefined") return null;
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-      role="alertdialog"
-      aria-busy="true"
-      aria-label="Switching workspace"
-    >
-      <div className="flex w-full max-w-xs flex-col items-center gap-4 rounded-2xl border border-border bg-surface p-8 text-center shadow-elevated">
-        <div className="relative">
-          {tenant ? (
-            <TenantAvatar
-              tenantId={tenant.tenantId}
-              logoUrl={tenant.logoUrl}
-              name={tenant.name}
-              className="h-16 w-16 text-xl"
-            />
-          ) : (
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          )}
-          {tenant ? (
-            <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            </span>
-          ) : null}
-        </div>
-        <div>
-          <p className="text-base font-bold text-foreground">
-            Switching to {tenant?.name ?? "your workspace"}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">Loading your workspace…</p>
-        </div>
-      </div>
-    </div>,
-    document.body,
+  if (!open) return null;
+  return (
+    <WorkspaceLoadingOverlay
+      title={`Switching to ${tenant?.name ?? "your workspace"}`}
+      mark={
+        tenant ? (
+          <TenantAvatar
+            tenantId={tenant.tenantId}
+            logoUrl={tenant.logoUrl}
+            name={tenant.name}
+            className="h-16 w-16 text-xl"
+          />
+        ) : undefined
+      }
+    />
   );
 }
 

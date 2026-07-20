@@ -34,6 +34,7 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
   const loading = a.loading;
   const [syncing, setSyncing] = useState(false);
   const [releaseId, setReleaseId] = useState<string | null>(null);
+  const [releasing, setReleasing] = useState(false);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
@@ -44,11 +45,18 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
 
   const handleRelease = useCallback(async () => {
     const turfId = releaseId;
-    setReleaseId(null);
     if (!turfId) return;
     const volunteerId = getVolunteerId();
-    if (!volunteerId) return;
+    if (!volunteerId) {
+      setReleaseId(null);
+      return;
+    }
+    // Hold the confirm dialog open + show the in-button spinner while the release is in flight,
+    // then dismiss — the canvasser sees it working, not a dialog that vanishes with no feedback.
+    setReleasing(true);
     const res = await releaseTurf(turfId, volunteerId);
+    setReleasing(false);
+    setReleaseId(null);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't release turf", description: res.error });
       return;
@@ -228,6 +236,8 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
         confirmLabel="Release turf"
         onConfirm={handleRelease}
         onCancel={() => setReleaseId(null)}
+        busy={releasing}
+        busyLabel="Releasing…"
       />
     </div>
   );

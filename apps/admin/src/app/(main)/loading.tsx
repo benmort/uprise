@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { DelayedWorkspaceLoader } from "@/components/shell/delayed-workspace-loader";
 
 export default function MainLoading() {
   return (
@@ -12,6 +13,8 @@ export default function MainLoading() {
         </div>
         <Skeleton className="h-80" />
       </div>
+      {/* If the load runs past 2s, the branded workspace dialogue takes over from the skeletons. */}
+      <DelayedWorkspaceLoader />
     </div>
   );
 }
