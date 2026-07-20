@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Bell, BellRing, CloudOff, DoorOpen, LogOut, RefreshCw } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, BellRing, CloudOff, DoorOpen, LogOut, RefreshCw, X } from "lucide-react";
 import { Button, Skeleton, ConfirmDialog, useToast } from "@uprise/ui";
 import { useFieldPush } from "../hooks/use-field-push";
 import { releaseTurf } from "../api";
@@ -22,7 +22,9 @@ function ago(iso: string): string {
   return hrs < 24 ? `${hrs}h ago` : `${Math.round(hrs / 24)}d ago`;
 }
 
-export function SyncCentre() {
+/** `onClose`, when given, renders this inside the fullscreen "me" drawer — the header's
+ *  back-to-turf link becomes a Close button that dismisses the drawer. */
+export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
   const { counts, pending, conflicts, online, flush, retryConflict, discardConflict } = useSyncQueue();
   const { showToast } = useToast();
   const push = useFieldPush();
@@ -34,11 +36,11 @@ export function SyncCentre() {
   const [releaseId, setReleaseId] = useState<string | null>(null);
 
   const tally = useMemo(() => {
-    const items = assignments.flatMap((a) => a.walkLists.flatMap((wl) => wl.items));
-    return {
-      done: items.filter((i) => i.status !== "PENDING").length,
-      total: items.length,
-    };
+    // The assignments list ships per-list counts (not items) — done = anything no longer pending.
+    const lists = assignments.flatMap((a) => a.walkLists);
+    const total = lists.reduce((n, wl) => n + wl.total, 0);
+    const pending = lists.reduce((n, wl) => n + wl.pending, 0);
+    return { done: total - pending, total };
   }, [assignments]);
 
   const handleSync = useCallback(async () => {
@@ -68,10 +70,17 @@ export function SyncCentre() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-1 text-sm font-medium">
-          <ArrowLeft className="h-4 w-4" />
-          Turf
-        </Link>
+        {onClose ? (
+          <button type="button" onClick={onClose} className="flex items-center gap-1 text-sm font-medium">
+            <X className="h-4 w-4" />
+            Close
+          </button>
+        ) : (
+          <Link href="/" className="flex items-center gap-1 text-sm font-medium">
+            <ArrowLeft className="h-4 w-4" />
+            Turf
+          </Link>
+        )}
         <SyncStatusBadge counts={counts} online={online} />
       </div>
 

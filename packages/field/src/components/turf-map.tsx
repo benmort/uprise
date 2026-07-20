@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Map, { AttributionControl, FullscreenControl, Layer, Marker, Popup, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { FullscreenControl, Layer, Marker, Popup, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification } from "mapbox-gl";
-import { bbox } from "@turf/turf";
+import bbox from "@turf/bbox";
 import { Crosshair, Globe, Loader2, LocateFixed } from "lucide-react";
 import { useTheme } from "../lib/use-theme";
 import { installMoonlitDark } from "../lib/moonlit-dark";
@@ -588,7 +588,6 @@ export function TurfMap({
         )}
       </div>
       <FullscreenControl position="top-left" />
-      <AttributionControl position="bottom-right" compact />
     </Map>
   );
 }

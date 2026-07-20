@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  getCanvassAssignment,
   getCanvassAssignments,
   getRecommendedTurf,
   getVolunteerMetrics,
   listDispositions,
   type CanvassAssignment,
+  type CanvassAssignmentSummary,
   type DispositionDef,
   type RecommendedTurf,
   type VolunteerMetrics,
@@ -31,9 +33,25 @@ import { useApi } from "./use-api";
  * full payload on every mount.
  */
 export function useAssignments(volunteerId: string | null) {
-  return useApi<CanvassAssignment[]>(
+  return useApi<CanvassAssignmentSummary[]>(
     volunteerId ? `/canvass/assignments?volunteerId=${volunteerId}` : null,
     (signal) => getCanvassAssignments(volunteerId as string, signal),
+    { ttlMs: 30_000 },
+  );
+}
+
+/**
+ * The ONE turf being walked, in full (boundary geometry + walk-list items). Keyed by its
+ * own per-turf URL so it lands in the durable IndexedDB api-cache AND the service worker's
+ * `/canvass/` StaleWhileRevalidate cache — a walk list opened online still renders on a
+ * cold offline start. Shared by the walk view and the door screen (one fetch, both screens).
+ */
+export function useAssignment(turfId: string | null, volunteerId: string | null) {
+  return useApi<CanvassAssignment>(
+    turfId && volunteerId
+      ? `/canvass/assignments/${encodeURIComponent(turfId)}?volunteerId=${volunteerId}`
+      : null,
+    (signal) => getCanvassAssignment(turfId as string, volunteerId as string, signal),
     { ttlMs: 30_000 },
   );
 }

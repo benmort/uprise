@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import MapGL, { AttributionControl, FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
-import { bbox } from "@turf/turf";
+import MapGL, { FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
+import bbox from "@turf/bbox";
 import { Loader2, LocateFixed } from "lucide-react";
 import { MapSizeControl, installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -216,8 +216,6 @@ export function CampaignBoundaryMap({
         <FullscreenControl position="top-left" />
         <MapSizeControl large={large} onToggle={() => setLarge((v) => !v)} position="top-left" />
         <MapGestureToggle />
-        {/* Compact attribution, tucked bottom-right with the logo (out of the legend's way). */}
-        <AttributionControl position="bottom-right" compact />
       </MapGL>
 
       {loadingBoundaries ? (

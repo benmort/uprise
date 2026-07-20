@@ -319,6 +319,19 @@ export class CanvassingController {
     return this.canvassing.listAssignments(tenantId, volunteerId);
   }
 
+  // ONE turf in full (boundary geometry + walk-list items) for the walk view — the list
+  // endpoint above ships only bbox + counts. Own-turf is enforced in the service (404 when
+  // the turf isn't locked to this volunteer).
+  @Get("assignments/:turfId")
+  @RequirePermission(CANVASS_READ)
+  async assignment(
+    @Param("turfId") turfId: string,
+    @Query("volunteerId") volunteerId: string,
+    @TenantId() tenantId: string,
+  ) {
+    return this.canvassing.getAssignment(tenantId, turfId, volunteerId);
+  }
+
   @Get("volunteer-metrics")
   @RequirePermission(CANVASS_READ)
   async volunteerMetrics(@Query("volunteerId") volunteerId: string, @TenantId() tenantId: string) {

@@ -43,3 +43,36 @@ export function pointInGeometry(
   }
   return false;
 }
+
+/** [west, south, east, north] — the slim bounds list endpoints ship instead of full GeoJSON. */
+export type GeoBBox = [number, number, number, number];
+
+/**
+ * Bounding box of a GeoJSON geometry's coordinates ([w,s,e,n]), or null when there are
+ * none. Walks any Polygon/MultiPolygon nesting depth, so it doesn't care which of the
+ * two turf geometry shapes it's given. Pure TS over the JSON source of truth — no
+ * PostGIS round-trip, and immune to a missing `geom` mirror.
+ */
+export function geometryBbox(geometry: unknown): GeoBBox | null {
+  const g = geometry as { coordinates?: unknown } | null | undefined;
+  if (!g || typeof g !== "object" || g.coordinates === undefined) return null;
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+  const walk = (node: unknown): void => {
+    if (!Array.isArray(node)) return;
+    if (node.length >= 2 && typeof node[0] === "number" && typeof node[1] === "number") {
+      const [lng, lat] = node as [number, number];
+      if (lng < west) west = lng;
+      if (lat < south) south = lat;
+      if (lng > east) east = lng;
+      if (lat > north) north = lat;
+      return;
+    }
+    for (const child of node) walk(child);
+  };
+  walk(g.coordinates);
+  if (!Number.isFinite(west) || !Number.isFinite(south)) return null;
+  return [west, south, east, north];
+}

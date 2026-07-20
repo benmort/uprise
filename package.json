@@ -25,6 +25,7 @@
     "build": "pnpm -r run build",
     "check:ai-guides": "node scripts/check-ai-guides.mjs",
     "coverage:check": "node scripts/coverage-check.mjs",
+    "bundle:check": "node scripts/check-bundle-size.mjs",
     "gen:sitemap": "node scripts/gen-sitemap.mjs"
   },
   "devDependencies": {

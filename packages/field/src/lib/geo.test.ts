@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundingBox, pointInGeometry, pointInPolygon, type Polygon } from "./geo";
+import { bboxRing, boundingBox, pointInGeometry, pointInPolygon, type Polygon } from "./geo";
 
 const square: Polygon = [
   [
@@ -59,5 +59,25 @@ describe("boundingBox", () => {
 
   it("returns null for no points", () => {
     expect(boundingBox([])).toBeNull();
+  });
+});
+
+describe("bboxRing", () => {
+  it("builds a closed [w,s,e,n] rectangle ring", () => {
+    expect(bboxRing([144.9, -37.8, 145.0, -37.7])).toEqual([
+      [144.9, -37.8],
+      [145.0, -37.8],
+      [145.0, -37.7],
+      [144.9, -37.7],
+      [144.9, -37.8],
+    ]);
+  });
+
+  it("returns undefined for null / malformed / non-finite bboxes", () => {
+    expect(bboxRing(null)).toBeUndefined();
+    expect(bboxRing(undefined)).toBeUndefined();
+    expect(bboxRing([1, 2, 3])).toBeUndefined();
+    expect(bboxRing([1, 2, 3, Number.NaN])).toBeUndefined();
+    expect(bboxRing("not-a-bbox")).toBeUndefined();
   });
 });

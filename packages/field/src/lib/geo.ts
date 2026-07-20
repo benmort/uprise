@@ -44,6 +44,26 @@ export function pointInGeometry(
   return false;
 }
 
+/**
+ * Closed outer ring [[lng,lat],…] for a server [w,s,e,n] bbox — the assignments /
+ * recommended / self-serve lists ship a bbox instead of boundary GeoJSON, and this feeds
+ * MapThumbnail (a pure SVG polygon) the rectangle to draw. Undefined for a missing or
+ * malformed bbox so the thumbnail falls back to its stock shape.
+ */
+export function bboxRing(bbox: unknown): LngLat[] | undefined {
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every((n) => typeof n === "number" && Number.isFinite(n))) {
+    return undefined;
+  }
+  const [w, s, e, n] = bbox as [number, number, number, number];
+  return [
+    [w, s],
+    [e, s],
+    [e, n],
+    [w, n],
+    [w, s],
+  ];
+}
+
 export type BBox = { minLng: number; minLat: number; maxLng: number; maxLat: number };
 
 /** Bounding box of a set of points — used to enumerate offline tiles for a turf. */

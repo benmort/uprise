@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, PartyPopper } from "lucide-react";
 import { Button, ConfirmDialog, Skeleton, useToast } from "@uprise/ui";
@@ -11,6 +10,7 @@ import { invalidateApi } from "../hooks/use-api";
 import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { KpiTile } from "../components/kpi-tile";
 import { SectionCard } from "../components/section-card";
+import { useMeDrawer } from "./me-drawer";
 
 /**
  * End-of-shift wrap-up (Gap G5): today's tally, a "nice work" note, and release
@@ -19,6 +19,7 @@ import { SectionCard } from "../components/section-card";
  */
 export function ShiftSummary() {
   const router = useRouter();
+  const { openMe } = useMeDrawer();
   const { showToast } = useToast();
   const name = getVolunteerName();
   const [volunteerId] = useState(() => getVolunteerId());
@@ -55,10 +56,10 @@ export function ShiftSummary() {
 
   return (
     <div className="space-y-5">
-      <Link href="/me" className="flex items-center gap-1 text-sm font-medium">
+      <button type="button" onClick={openMe} className="flex items-center gap-1 text-sm font-medium">
         <ArrowLeft className="h-4 w-4" />
         Sync &amp; profile
-      </Link>
+      </button>
 
       <div className="flex items-center gap-3">
         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">

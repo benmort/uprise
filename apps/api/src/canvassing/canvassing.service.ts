@@ -15,7 +15,7 @@ import { ImageUploadService } from "../common/storage/image-upload.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { ApiHttpException } from "../common/http/api-response";
-import { pointInGeometry, type LngLat } from "../common/utils/geo.utils";
+import { geometryBbox, pointInGeometry, type LngLat } from "../common/utils/geo.utils";
 import { hashPassword } from "../auth/password.util";
 import { EngagementService } from "../shared-engagement/engagement.service";
 import { EvaluationService } from "./evaluation.service";
@@ -164,36 +164,43 @@ export class CanvassingService {
     });
   }
 
-  /** The turfs (and their walk lists) currently locked to a volunteer.
-   *  The per-item contact is narrowed to only the fields the field UI renders — the
-   *  full Contact row (esp. the `metadata` JSON blob) times up to ~2000 doors/turf was
-   *  the dominant payload cost on the canvasser's hot path. */
+  /** The walk-list item include shared by the single-turf payload: the per-item contact is
+   *  narrowed to only the fields the field UI renders — the full Contact row (esp. the
+   *  `metadata` JSON blob) times up to ~2000 doors/turf was the dominant payload cost on the
+   *  canvasser's hot path. */
+  private static readonly WALK_ITEMS_INCLUDE = {
+    items: {
+      orderBy: { orderIndex: "asc" as const },
+      include: {
+        contact: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            address: true,
+            lat: true,
+            lng: true,
+            phoneE164: true,
+            // gnafPid lets the canvasser-preview / field door popover fetch the
+            // address's containing regions (null for non-cold-door contacts).
+            gnafPid: true,
+          },
+        },
+      },
+    },
+  };
+
+  /** The turfs (and their walk lists) currently locked to a volunteer — the field BOOT payload.
+   *  Deliberately slim: the turf ships a [w,s,e,n] bbox instead of its boundary GeoJSON, and
+   *  each walk list ships door COUNTS instead of its items — the items (one narrowed contact
+   *  each, up to ~2000 doors/turf) were still the dominant boot cost. The walk view fetches
+   *  the ONE turf being walked in full via getAssignment (geometry + items). */
   async listAssignments(tenantId: string, volunteerId: string) {
     const include = {
       turf: {
         include: {
           walkLists: {
-            include: {
-              items: {
-                orderBy: { orderIndex: "asc" as const },
-                include: {
-                  contact: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                      address: true,
-                      lat: true,
-                      lng: true,
-                      phoneE164: true,
-                      // gnafPid lets the canvasser-preview / field door popover fetch the
-                      // address's containing regions (null for non-cold-door contacts).
-                      gnafPid: true,
-                    },
-                  },
-                },
-              },
-            },
+            select: { id: true, name: true, items: { select: { status: true } } },
           },
         },
       },
@@ -217,9 +224,59 @@ export class CanvassingService {
     return assignments.map((a) => ({
       turfId: a.turfId,
       lockedUntil: a.lockedUntil,
-      turf: { id: a.turf.id, name: a.turf.name, geometry: a.turf.geometry, campaignId: a.turf.campaignId },
-      walkLists: a.turf.walkLists,
+      turf: {
+        id: a.turf.id,
+        name: a.turf.name,
+        campaignId: a.turf.campaignId,
+        // Enough for the assignment card's SVG thumbnail; the real boundary rides on getAssignment.
+        bbox: geometryBbox(a.turf.geometry),
+      },
+      walkLists: a.turf.walkLists.map((w) => {
+        const total = w.items.length;
+        const pending = w.items.filter((i) => i.status === WalkListItemStatus.PENDING).length;
+        const visited = w.items.filter((i) => i.status === WalkListItemStatus.VISITED).length;
+        return { id: w.id, name: w.name, total, pending, visited };
+      }),
     }));
+  }
+
+  /** ONE assigned turf in full — boundary geometry + walk lists WITH their items — for the
+   *  walk view and door screen. Split from listAssignments so the boot path stays light and
+   *  the heavy payload is fetched (and offline-cached under its own per-turf URL) only for
+   *  the turf actually being walked. Self-heals a missing walk list like the list endpoint.
+   *  404s when the turf isn't currently locked to this volunteer. */
+  async getAssignment(tenantId: string, turfId: string, volunteerId: string) {
+    const include = {
+      turf: { include: { walkLists: { include: CanvassingService.WALK_ITEMS_INCLUDE } } },
+    };
+    const load = () =>
+      this.prisma.turfAssignment.findFirst({
+        where: { turfId, volunteerId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
+        include,
+      });
+    let assignment = await load();
+    if (!assignment) {
+      throw new ApiHttpException(
+        "TURF_NOT_ASSIGNED",
+        "This turf is not assigned to you",
+        HttpStatus.NOT_FOUND,
+      );
+    }
+    if (assignment.turf.walkLists.length === 0) {
+      await this.rebuildTurfWalkList(tenantId, turfId).catch(() => undefined);
+      assignment = (await load()) ?? assignment;
+    }
+    return {
+      turfId: assignment.turfId,
+      lockedUntil: assignment.lockedUntil,
+      turf: {
+        id: assignment.turf.id,
+        name: assignment.turf.name,
+        geometry: assignment.turf.geometry,
+        campaignId: assignment.turf.campaignId,
+      },
+      walkLists: assignment.turf.walkLists,
+    };
   }
 
   /** Contacts of a turf ordered as a walking route — server nearest-neighbour + 2-opt via
@@ -1151,7 +1208,9 @@ export class CanvassingService {
   }
 
   /** What a volunteer can self-claim in a campaign: the boundary (for the map), the allowed
-   *  modes, and the ready-made unassigned turfs (mode C). */
+   *  modes, and the ready-made unassigned turfs (mode C). The boundary GeoJSON stays (the
+   *  get-turf map draws it), but each ready turf ships only a bbox + door count — its card
+   *  is a small SVG thumbnail, and 100 full boundary geometries dwarfed the payload. */
   async selfServeAvailable(tenantId: string, campaignId: string) {
     const c = await this.assertSelfClaim(tenantId, campaignId);
     const turfs = await this.prisma.turf.findMany({
@@ -1170,7 +1229,7 @@ export class CanvassingService {
       readyTurfs: turfs.map((t) => ({
         id: t.id,
         name: t.name,
-        geometry: t.geometry,
+        bbox: geometryBbox(t.geometry),
         contactCount: t._count.contacts,
       })),
     };
@@ -1179,7 +1238,10 @@ export class CanvassingService {
   /** Recommended ready-made turf for a volunteer across the tenant's self-serve campaigns —
    *  the field homepage surfaces these when the volunteer has no assignment yet. Unassigned
    *  turfs only, each carrying its own campaign (the empty state has no campaign context),
-   *  ranked by the volunteer's advisory canvass prefs (walk wants + session length). */
+   *  ranked by the volunteer's advisory canvass prefs (walk wants + session length).
+   *  Ranking needs only the door count, so the candidate query never loads geometry — a
+   *  [w,s,e,n] bbox (for the card thumbnail) is resolved by a second narrow query over just
+   *  the returned rows, never 100 boundary geometries on the boot path. */
   async recommendedTurf(tenantId: string, volunteerId: string, limit = 6) {
     const [member, campaigns] = await Promise.all([
       this.prisma.tenantMember.findFirst({
@@ -1207,7 +1269,6 @@ export class CanvassingService {
       select: {
         id: true,
         name: true,
-        geometry: true,
         campaignId: true,
         _count: { select: { contacts: true } },
       },
@@ -1218,13 +1279,19 @@ export class CanvassingService {
       .map((t) => ({
         id: t.id,
         name: t.name,
-        geometry: t.geometry,
         contactCount: t._count.contacts,
         campaignId: t.campaignId,
         campaignName: nameById.get(t.campaignId) ?? "",
       }));
     const prefs = (member?.canvassPrefs ?? null) as CanvassPrefs | null;
-    return rankTurfsByPrefs(mapped, prefs).slice(0, limit);
+    const ranked = rankTurfsByPrefs(mapped, prefs).slice(0, limit);
+    if (ranked.length === 0) return [];
+    const geoms = await this.prisma.turf.findMany({
+      where: { id: { in: ranked.map((t) => t.id) } },
+      select: { id: true, geometry: true },
+    });
+    const bboxById = new Map(geoms.map((g) => [g.id, geometryBbox(g.geometry)]));
+    return ranked.map((t) => ({ ...t, bbox: bboxById.get(t.id) ?? null }));
   }
 
   /** Mode A: claim unclaimed ASGS areas within the campaign boundary. */

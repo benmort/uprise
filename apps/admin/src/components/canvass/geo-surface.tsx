@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { FilterSpecification } from "mapbox-gl";
-import { bbox } from "@turf/turf";
+import bbox from "@turf/bbox";
 import { AU_BOUNDS, type WalkMode } from "@uprise/field";
 import { getApiUrl } from "@/lib/api";
 import type { AreaLevel, DivisionType } from "@/lib/api/geo";

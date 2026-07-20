@@ -6,7 +6,7 @@ import { Camera, ChevronLeft, MapPin, ShieldAlert, UserPlus } from "lucide-react
 import { Card, Button, Skeleton, cn, useToast } from "@uprise/ui";
 import { createDoorContact, uploadDoorPhoto, type CanvassAssignment } from "../api";
 import {
-  useAssignments,
+  useAssignment,
   useContactProfile,
   useDispositions,
   useSurvey,
@@ -42,13 +42,14 @@ export function DoorEntry({ turfId, stopId }: { turfId: string; stopId: string }
   const { capture } = useGeolocation();
   const { enqueue } = useSyncQueue();
 
-  // Assignment + dispositions come from the SHARED cache — arriving here from the walk
-  // view is instant (the turf is already cached), and the disposition catalogue is
+  // The turf's full payload (walk-list items) comes from the SAME per-turf cache entry the
+  // walk view populated — arriving here from it is instant (no refetch), and the entry is
+  // durable so a door opened offline still resolves its stop. The disposition catalogue is
   // reference data cached across doors. Survey + profile are per-door (below).
   const [volunteerId] = useState(() => getVolunteerId());
-  const a = useAssignments(volunteerId ?? null);
+  const a = useAssignment(turfId, volunteerId ?? null);
   const d = useDispositions("DOOR");
-  const assignment: CanvassAssignment | null = a.data?.find((x) => x.turfId === turfId) ?? null;
+  const assignment: CanvassAssignment | null = a.data ?? null;
   const dispositions = d.data ?? [];
   const loading = a.loading;
   const [chosenCode, setChosenCode] = useState<string | null>(null);

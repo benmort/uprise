@@ -18,20 +18,11 @@ import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hook
 import { claimExistingTurf } from "../api/canvass";
 import { getVolunteerId, getVolunteerName } from "../lib/volunteer";
 import { reverseGeocode } from "../lib/geocode";
+import { useMeDrawer } from "./me-drawer";
 import { MapThumbnail } from "../components/map-thumbnail";
-import { estimateWalk, formatMinutes } from "../lib/walk-estimate";
+import { bboxRing } from "../lib/geo";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useOnlineStatus } from "../hooks/use-online-status";
-
-/** Outer ring [lng,lat][] from a GeoJSON Polygon/MultiPolygon for the thumbnail. */
-function outerRing(geometry: unknown): Array<[number, number]> | undefined {
-  const g = geometry as { type?: string; coordinates?: unknown } | null;
-  if (!g || typeof g.type !== "string") return undefined;
-  if (g.type === "Polygon") return (g.coordinates as Array<Array<[number, number]>>)?.[0];
-  if (g.type === "MultiPolygon")
-    return (g.coordinates as Array<Array<Array<[number, number]>>>)?.[0]?.[0];
-  return undefined;
-}
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -55,6 +46,7 @@ function StatCard({ value, label }: { value: number; label: string }) {
 
 export function Assignments() {
   const router = useRouter();
+  const { openMe } = useMeDrawer();
   const online = useOnlineStatus();
   // Volunteer identity is device-local; read once. The shared cache means the
   // assignments/metrics payload is fetched once across every screen and served
@@ -82,6 +74,15 @@ export function Assignments() {
   }, [fix?.lat, fix?.lng]);
   const [claiming, setClaiming] = useState<string | null>(null);
   const assignments = a.data ?? [];
+
+  // Prefetch the walk view for the volunteer's turfs the moment assignments land, so
+  // tapping a turf swaps in a warm route chunk instead of loading it on the spot.
+  useEffect(() => {
+    for (const asg of assignments.slice(0, 3)) {
+      if (asg.turf?.id) router.prefetch(`/${asg.turf.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignments.length]);
   const metrics = m.data ?? null;
   const loading = a.loading;
   const error = !volunteerId
@@ -117,7 +118,7 @@ export function Assignments() {
         <button
           type="button"
           aria-label="Menu"
-          onClick={() => router.push("/me")}
+          onClick={openMe}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
           <Menu className="h-5 w-5" />
@@ -129,13 +130,14 @@ export function Assignments() {
           </p>
           <h1 className="text-3xl font-extrabold leading-tight">My turf</h1>
         </div>
-        <Link
-          href="/me"
+        <button
+          type="button"
+          onClick={openMe}
           aria-label="Profile"
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
         >
           <CircleUser className="h-6 w-6" />
-        </Link>
+        </button>
       </div>
 
       {/* Location — acquired on entry so nearest-turf features can use the volunteer's position */}
@@ -196,7 +198,7 @@ export function Assignments() {
                     key={t.id}
                     className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-card"
                   >
-                    <MapThumbnail polygon={outerRing(t.geometry)} className="h-14 w-14 shrink-0 rounded-xl" />
+                    <MapThumbnail polygon={bboxRing(t.bbox)} className="h-14 w-14 shrink-0 rounded-xl" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-bold text-foreground">{t.name}</p>
                       <p className="truncate text-xs text-muted-foreground">{t.campaignName}</p>
@@ -218,21 +220,17 @@ export function Assignments() {
       ) : (
         <div className="space-y-5">
           {assignments.map((a, i) => {
-            const items = a.walkLists.flatMap((wl) => wl.items);
-            const onList = items.length;
-            const walkMin = estimateWalk(
-              items.map((it) => {
-                const c = it.contact as Record<string, unknown>;
-                return { id: it.id, lat: Number(c.lat), lng: Number(c.lng) };
-              }),
-            ).minutes;
+            // The list payload is slim — per-list counts, not door items. The walk view
+            // (one tap away) fetches the full turf and shows the real route + time.
+            const onList = a.walkLists.reduce((n, wl) => n + wl.total, 0);
+            const done = a.walkLists.reduce((n, wl) => n + (wl.total - wl.pending), 0);
             return (
               <div key={a.turfId} className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
                 {/* Per-turf offline state isn't known at this level — the real offline-download
                     control lives inside each turf's walk view (OfflineMapsControl). */}
                 <div className="relative">
                   <MapThumbnail
-                    polygon={outerRing(a.turf.geometry)}
+                    polygon={bboxRing(a.turf.bbox)}
                     color={TURF_SWATCHES[i % TURF_SWATCHES.length]}
                     className="h-40 w-full"
                   />
@@ -241,7 +239,7 @@ export function Assignments() {
                   <div>
                     <h2 className="text-xl font-extrabold text-foreground">{a.turf.name}</h2>
                     <p className="mt-1 text-sm text-muted-foreground tabular-nums">
-                      {onList} on your walk list · ~{formatMinutes(walkMin)} walk
+                      {onList} on your walk list · {done} done
                     </p>
                   </div>
                   <div className="flex gap-3">

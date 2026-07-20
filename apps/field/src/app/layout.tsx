@@ -1,5 +1,7 @@
 import "./globals.css";
-import "mapbox-gl/dist/mapbox-gl.css";
+// Note: mapbox-gl CSS is imported by the map component itself (components/turf-map.tsx), so it
+// loads only on the map screens — not here, where it would weigh down the home/Assignments
+// screen (which renders no map).
 import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
 import { FieldShell } from "@uprise/field";
@@ -37,8 +39,15 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
+  const apiOrigin = new URL(apiUrl).origin;
   return (
     <html lang="en">
+      <head>
+        {/* Boot fetches hit the api the moment the shell hydrates, and map screens hit
+            mapbox — pay the DNS+TLS handshakes during HTML parse, not on first fetch. */}
+        <link rel="preconnect" href={apiOrigin} crossOrigin="use-credentials" />
+        <link rel="preconnect" href="https://api.mapbox.com" crossOrigin="anonymous" />
+      </head>
       <body className={outfit.variable}>
         <script
           dangerouslySetInnerHTML={{

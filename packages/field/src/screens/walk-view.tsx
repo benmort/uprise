@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronLeft, ChevronUp, Clock, DownloadCloud, Home, Loader2, Navigation, Route } from "lucide-react";
 import { Button, EmptyState, Skeleton, cn, useToast } from "@uprise/ui";
 import { getWalkRoute, type CanvassAssignment, type WalkRoute } from "../api";
-import { useAssignments } from "../hooks/use-canvass";
+import { useAssignment } from "../hooks/use-canvass";
 import { getVolunteerId } from "../lib/volunteer";
 import { optimiseRoute, type Stop } from "../lib/route";
 import { estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
@@ -80,14 +80,15 @@ export function WalkView({
   const [routing, setRouting] = useState(false);
 
   // Organiser preview (apps/admin) supplies the assignment directly; the volunteer app
-  // reads it from the SHARED assignments cache — so arriving from the dashboard is
-  // instant (no refetch), the turf just being found in the already-cached list.
+  // fetches the ONE turf being walked in full (boundary + walk-list items) — the boot-path
+  // assignments LIST is deliberately slim (bbox + counts) and no longer carries the doors.
+  // Keyed per-turf URL, the payload lands in the durable api-cache + the SW's /canvass/
+  // cache, so a walk list opened online still renders on a cold offline start. Shared with
+  // the door screen, so opening a door is instant (same cache entry).
   const isPreview = assignmentProp !== undefined;
   const [volunteerId] = useState(() => (isPreview ? null : getVolunteerId()));
-  const a = useAssignments(isPreview ? null : volunteerId);
-  const assignment: CanvassAssignment | null = isPreview
-    ? assignmentProp ?? null
-    : a.data?.find((x) => x.turfId === turfId) ?? null;
+  const a = useAssignment(isPreview ? null : turfId, isPreview ? null : volunteerId);
+  const assignment: CanvassAssignment | null = isPreview ? assignmentProp ?? null : a.data ?? null;
   const loading = isPreview ? false : a.loading;
 
   // Locate the volunteer once when the map opens (battery: not a continuous watch).
@@ -215,49 +216,12 @@ export function WalkView({
     setStartFix({ lat: gps.lat, lng: gps.lng });
   }, [readOnly, capture, showToast, setStartFix]);
 
-  // A just-claimed turf (or one whose walk list the server is still building) isn't in the
-  // cached assignments payload yet — and a <30s-old cache won't auto-revalidate. Rather than
-  // flash "Turf not found", force a refetch and poll for a short grace window, showing a
-  // loading state meanwhile. `settled` flips true once the turf appears or the window elapses,
-  // so a genuine miss still reaches the empty state.
-  const hasAssignment = !isPreview && Boolean(assignment);
-  const refetchAssignments = a.refetch;
-  const [settled, setSettled] = useState(false);
-  useEffect(() => {
-    if (isPreview || hasAssignment) {
-      setSettled(true);
-      return;
-    }
-    setSettled(false);
-    let tries = 0;
-    void refetchAssignments();
-    const id = setInterval(() => {
-      tries += 1;
-      if (tries >= 12) {
-        setSettled(true);
-        clearInterval(id);
-        return;
-      }
-      void refetchAssignments();
-    }, 2000);
-    return () => clearInterval(id);
-  }, [isPreview, hasAssignment, turfId, refetchAssignments]);
-
+  // No post-claim polling needed any more: the claim endpoints commit the assignment (and
+  // load its doors) BEFORE they respond, and the per-turf fetch above asks the server for
+  // this exact turf — which also self-heals a missing walk list before answering. So the
+  // first fetch after navigation is authoritative: data → walk, error → genuinely not ours.
   if (loading) return <Skeleton className="h-64 w-full" />;
   if (!assignment) {
-    if (!settled) {
-      return (
-        <div className="flex h-64 flex-col items-center justify-center gap-3 px-6 text-center">
-          <Loader2 className="h-7 w-7 animate-spin text-primary" />
-          <div className="space-y-1">
-            <p className="font-bold text-foreground">Getting your turf ready…</p>
-            <p className="text-sm text-muted-foreground">
-              Setting up your walk list — this can take a moment after claiming.
-            </p>
-          </div>
-        </div>
-      );
-    }
     return <EmptyState title="Turf not found" description="This turf isn't assigned to you." />;
   }
 

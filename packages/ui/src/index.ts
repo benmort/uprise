@@ -43,6 +43,7 @@ export * from "./components/brand-style";
 export * from "./lib/brand-css";
 export * from "./components/skeleton";
 export * from "./components/spinner";
+export * from "./components/brand-loading-screen";
 export * from "./components/status-badge";
 export * from "./components/event-status-badge";
 export * from "./components/capacity-meter";

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import MapGL, { AttributionControl, FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
-import { bbox } from "@turf/turf";
+import MapGL, { FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
+import bbox from "@turf/bbox";
 import { LocateFixed } from "lucide-react";
 import { installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -144,7 +144,6 @@ export function CampaignsMap({ campaigns, height = 340 }: { campaigns: CampaignS
         </Source>
         <FullscreenControl position="top-left" />
         <MapGestureToggle />
-        <AttributionControl position="bottom-right" compact />
       </MapGL>
 
       {/* Per-campaign colour legend (click a turf to open that campaign). */}

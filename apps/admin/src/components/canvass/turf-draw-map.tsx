@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import Map, { AttributionControl, FullscreenControl, Layer, Marker, Popup, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import Map, { FullscreenControl, Layer, Marker, Popup, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
-import { bbox } from "@turf/turf";
+import bbox from "@turf/bbox";
 import { Crosshair, Loader2, MapPin, Search, X } from "lucide-react";
 import { AU_BOUNDS, AddressInfoCard, installMoonlitDark, useScrollToZoom } from "@uprise/field";
 import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
@@ -1079,7 +1079,6 @@ export function TurfDrawMap({
           </Source>
         ) : null}
         <FullscreenControl position="top-right" />
-        <AttributionControl position="bottom-right" compact />
       </Map>
 
       {/* On-map recentre — snaps back to the campaign boundary (or picked state / country). */}

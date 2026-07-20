@@ -17,30 +17,35 @@ tunnels:
   product-marketing:
     addr: 3003
     proto: http
+    compression: true
     domain: dev.uprise.org.au
 
   # Auth / SSO identity app → auth.dev.uprise.org.au
   auth:
     addr: 3002
     proto: http
+    compression: true
     domain: auth.dev.uprise.org.au
 
   # Organiser admin app → admin.dev.uprise.org.au (under the *.dev.uprise.org.au reservation)
   admin:
     addr: 3000
     proto: http
+    compression: true
     domain: admin.dev.uprise.org.au
 
   # API → api.dev.uprise.org.au (frontend calls + provider webhooks)
   api:
     addr: 3001
     proto: http
+    compression: true
     domain: api.dev.uprise.org.au
 
   # Canvasser field PWA → field.dev.uprise.org.au (under the *.dev.uprise.org.au reservation)
   field:
     addr: 3005
     proto: http
+    compression: true
     domain: field.dev.uprise.org.au
 
   # Public action app → action.dev.uprise.org.au (under the *.dev.uprise.org.au reservation).
@@ -49,6 +54,7 @@ tunnels:
   action:
     addr: 3004
     proto: http
+    compression: true
     domain: action.dev.uprise.org.au
 
   # Uprise Labs organisation site → labs.dev.uprise.org.au (under the *.dev.uprise.org.au
@@ -56,4 +62,5 @@ tunnels:
   organisation-marketing:
     addr: 3006
     proto: http
+    compression: true
     domain: labs.dev.uprise.org.au

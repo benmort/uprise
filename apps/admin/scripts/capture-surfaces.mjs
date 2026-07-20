@@ -117,7 +117,7 @@ function fieldRoutes(id) {
     ["A1-field", "/"],
     id.turfId && ["A2-walk", `/${id.turfId}`],
     id.turfId && id.stopId && ["A3-door", `/${id.turfId}/door/${id.stopId}`],
-    ["A4-me", "/me"],
+    // "me" (sync & profile) is a fullscreen drawer now, not a route — no standalone URL to capture.
   ].filter(Boolean);
 }
 

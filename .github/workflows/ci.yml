@@ -74,6 +74,12 @@ jobs:
         run: pnpm --filter product-marketing run build
       - name: Build - organisation-marketing
         run: pnpm --filter organisation-marketing run build
+      - name: Build - field
+        run: NEXT_DIST_DIR=.next-validate pnpm --filter field run build
+      # A barrel import on the field boot path once put the whole package (mapbox
+      # included) in every route chunk; this gate catches the next one cold.
+      - name: Bundle budget - field
+        run: node scripts/check-bundle-size.mjs
 
   e2e:
     runs-on: ubuntu-latest

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Dedicated dev entrypoint. Frees the dev ports (3000-3009) via kill-ports.sh,
-# then brings up the whole local stack (apps + worker + tunnel) via `dev:all`.
+# Dedicated dev entrypoint. Reaps any stale dev orchestrator + ngrok agent, frees the
+# dev ports (3000-3009) via kill-ports.sh, then brings up the whole local stack
+# (apps + worker + tunnel) via `dev:all`.
 #
 # Use: `pnpm dev:fresh`
 set -uo pipefail
@@ -16,6 +17,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "▶ Reaping any stale dev orchestrator..."
 pkill -f 'concurrently -n apps,worker,tunnel' 2>/dev/null || true
 pkill -f 'pnpm -r --parallel --filter=!worker run dev' 2>/dev/null || true
+# Also reap a stale ngrok agent. It reserves the fixed dev endpoint (dev.uprise.org.au)
+# and often ends up orphaned (PPID 1) when its parent dies, so reaping the orchestrator
+# above misses it — the fresh tunnel then fails with ERR_NGROK_334 ("endpoint already
+# online"). Killing it here only ever hits a previous run (our own ngrok starts at the
+# exec below).
+pkill -f 'ngrok start' 2>/dev/null || true
 sleep 1
 
 echo "▶ Freeing dev ports 3000-3009 before startup..."

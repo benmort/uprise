@@ -85,6 +85,15 @@ const nextConfig = {
     "@uprise/flags",
     "@uprise/field",
   ],
+  experimental: {
+    // The workspace barrels (@uprise/field re-exports every screen incl. the
+    // mapbox-carrying map; @uprise/ui re-exports 57 components) defeat per-route
+    // code-splitting under transpilePackages: importing FieldShell in the layout
+    // dragged the ENTIRE package into every chunk (measured 15.6MB of route JS in
+    // dev; ~12MB per route in the build manifest). This rewrites barrel imports to
+    // direct file imports at compile time, in dev and prod.
+    optimizePackageImports: ["@uprise/field", "@uprise/ui", "@uprise/api-client"],
+  },
 };
 
 export default withPWA(nextConfig);

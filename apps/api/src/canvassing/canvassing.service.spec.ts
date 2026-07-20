@@ -183,26 +183,50 @@ describe("CanvassingService", () => {
         { id: "camp2", name: "Brunswick", selfClaimModes: ["existing"] },
         { id: "camp3", name: "Richmond", selfClaimModes: ["area"] }, // mode C off ⇒ excluded
       ]);
-      prisma.turf.findMany.mockResolvedValue([
-        { id: "t_big", name: "Big", geometry: {}, campaignId: "camp1", _count: { contacts: 90 } },
-        { id: "t_mid", name: "Mid", geometry: {}, campaignId: "camp2", _count: { contacts: 45 } },
-        { id: "t_small", name: "Small", geometry: {}, campaignId: "camp1", _count: { contacts: 10 } },
-      ]);
+      prisma.turf.findMany
+        .mockResolvedValueOnce([
+          { id: "t_big", name: "Big", campaignId: "camp1", _count: { contacts: 90 } },
+          { id: "t_mid", name: "Mid", campaignId: "camp2", _count: { contacts: 45 } },
+          { id: "t_small", name: "Small", campaignId: "camp1", _count: { contacts: 10 } },
+        ])
+        // Second narrow query: bbox geometry for ONLY the returned rows.
+        .mockResolvedValueOnce([
+          { id: "t_mid", name: "Mid", geometry: { type: "Polygon", coordinates: [[[1, 2], [3, 4], [1, 2]]] } },
+          { id: "t_small", name: "Small", geometry: null },
+          { id: "t_big", name: "Big", geometry: null },
+        ]);
 
       const res = await service.recommendedTurf("org1", "u1");
 
-      expect(prisma.turf.findMany).toHaveBeenCalledWith(
+      // Candidate query ranks on counts alone — geometry is never selected for the 100.
+      expect(prisma.turf.findMany).toHaveBeenNthCalledWith(
+        1,
         expect.objectContaining({
           where: expect.objectContaining({
             tenantId: "org1",
             campaignId: { in: ["camp1", "camp2"] },
             assignments: { none: { status: TurfAssignmentStatus.ASSIGNED } },
           }),
+          select: expect.not.objectContaining({ geometry: true }),
+        }),
+      );
+      expect(prisma.turf.findMany).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: { in: ["t_mid", "t_small", "t_big"] } },
+          select: { id: true, geometry: true },
         }),
       );
       // target 40 → 45 closest, then 10, then 90; campaign name resolved from the eligible map.
       expect(res.map((t) => t.id)).toEqual(["t_mid", "t_small", "t_big"]);
-      expect(res[0]).toMatchObject({ campaignId: "camp2", campaignName: "Brunswick", contactCount: 45 });
+      expect(res[0]).toMatchObject({
+        campaignId: "camp2",
+        campaignName: "Brunswick",
+        contactCount: 45,
+        bbox: [1, 2, 3, 4],
+      });
+      expect(res[1].bbox).toBeNull();
+      expect(res[0]).not.toHaveProperty("geometry"); // bbox replaces the boundary GeoJSON
     });
 
     it("returns [] (without querying turf) when no campaign allows claiming a ready turf", async () => {
@@ -901,12 +925,37 @@ describe("CanvassingService", () => {
   });
 
   describe("listAssignments", () => {
-    it("maps each locked turf to its walk lists", async () => {
+    const square = {
+      type: "Polygon",
+      coordinates: [
+        [
+          [144.9, -37.8],
+          [144.9, -37.7],
+          [145.0, -37.7],
+          [145.0, -37.8],
+          [144.9, -37.8],
+        ],
+      ],
+    };
+
+    it("maps each locked turf to a bbox + walk-list counts — never geometry or items (boot payload)", async () => {
       prisma.turfAssignment.findMany.mockResolvedValue([
         {
           turfId: "t1",
           lockedUntil: null,
-          turf: { id: "t1", name: "Turf 1", geometry: { type: "Polygon" }, campaignId: "c1", walkLists: [{ id: "w1" }] },
+          turf: {
+            id: "t1",
+            name: "Turf 1",
+            geometry: square,
+            campaignId: "c1",
+            walkLists: [
+              {
+                id: "w1",
+                name: "Walk 1",
+                items: [{ status: "PENDING" }, { status: "VISITED" }, { status: "SKIPPED" }],
+              },
+            ],
+          },
         },
       ]);
       const res = await service.listAssignments("org1", "u1");
@@ -914,10 +963,11 @@ describe("CanvassingService", () => {
         {
           turfId: "t1",
           lockedUntil: null,
-          turf: { id: "t1", name: "Turf 1", geometry: { type: "Polygon" }, campaignId: "c1" },
-          walkLists: [{ id: "w1" }],
+          turf: { id: "t1", name: "Turf 1", campaignId: "c1", bbox: [144.9, -37.8, 145.0, -37.7] },
+          walkLists: [{ id: "w1", name: "Walk 1", total: 3, pending: 1, visited: 1 }],
         },
       ]);
+      expect(JSON.stringify(res)).not.toContain("coordinates"); // no boundary GeoJSON on the list
     });
 
     it("materialises a walk-list from the turf's contacts when an assigned turf has none", async () => {
@@ -928,7 +978,10 @@ describe("CanvassingService", () => {
       };
       const healed = {
         ...bare,
-        turf: { ...bare.turf, walkLists: [{ id: "wl_turf_t1", items: [{ id: "i1" }, { id: "i2" }] }] },
+        turf: {
+          ...bare.turf,
+          walkLists: [{ id: "wl_turf_t1", name: "Turf 1", items: [{ status: "PENDING" }, { status: "PENDING" }] }],
+        },
       };
       prisma.turfAssignment.findMany.mockResolvedValueOnce([bare]).mockResolvedValueOnce([healed]);
       prisma.contact.findMany.mockResolvedValue([{ id: "c1" }, { id: "c2" }]);
@@ -947,7 +1000,7 @@ describe("CanvassingService", () => {
           }),
         }),
       );
-      expect(res[0].walkLists[0].items).toHaveLength(2);
+      expect(res[0].walkLists[0]).toEqual({ id: "wl_turf_t1", name: "Turf 1", total: 2, pending: 2, visited: 0 });
     });
 
     it("does not build a walk-list for a turf with no contacts", async () => {
@@ -966,6 +1019,60 @@ describe("CanvassingService", () => {
       prisma.contact.findMany.mockResolvedValue([{ id: "c1" }]);
       prisma.walkList.create.mockRejectedValueOnce(p2002());
       await expect(service.listAssignments("org1", "u1")).resolves.toBeDefined();
+    });
+  });
+
+  describe("getAssignment", () => {
+    const items = [
+      { id: "i1", orderIndex: 0, status: "PENDING", contact: { id: "c1", address: "1 Test St" } },
+    ];
+
+    it("returns the ONE turf in full — geometry + walk-list items", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({
+        turfId: "t1",
+        lockedUntil: null,
+        turf: {
+          id: "t1",
+          name: "Turf 1",
+          geometry: { type: "Polygon" },
+          campaignId: "c1",
+          walkLists: [{ id: "w1", name: "Walk 1", items }],
+        },
+      });
+      const res = await service.getAssignment("org1", "t1", "u1");
+      expect(prisma.turfAssignment.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { turfId: "t1", volunteerId: "u1", status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId: "org1" } },
+        }),
+      );
+      expect(res.turf).toEqual({ id: "t1", name: "Turf 1", geometry: { type: "Polygon" }, campaignId: "c1" });
+      expect(res.walkLists[0].items).toEqual(items);
+    });
+
+    it("throws TURF_NOT_ASSIGNED when the turf isn't locked to this volunteer", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue(null);
+      await expect(service.getAssignment("org1", "t1", "u1")).rejects.toThrow();
+    });
+
+    it("self-heals a missing walk list, then reloads", async () => {
+      const bare = {
+        turfId: "t1",
+        lockedUntil: null,
+        turf: { id: "t1", name: "Turf 1", geometry: {}, campaignId: "c1", walkLists: [] },
+      };
+      const healed = {
+        ...bare,
+        turf: { ...bare.turf, walkLists: [{ id: "wl_turf_t1", name: "Turf 1", items }] },
+      };
+      prisma.turfAssignment.findFirst.mockResolvedValueOnce(bare).mockResolvedValueOnce(healed);
+      prisma.turf.findFirst.mockResolvedValue({ id: "t1", name: "Turf 1", tenantId: "org1", campaignId: "c1" });
+      prisma.contact.findMany.mockResolvedValue([{ id: "c1" }]);
+      prisma.walkList.findFirst.mockResolvedValue(null);
+
+      const res = await service.getAssignment("org1", "t1", "u1");
+
+      expect(prisma.walkList.create).toHaveBeenCalled();
+      expect(res.walkLists[0].items).toHaveLength(1);
     });
   });
 
@@ -1446,15 +1553,24 @@ describe("CanvassingService", () => {
     const square = { type: "Polygon", coordinates: [] };
 
     describe("selfServeAvailable", () => {
-      it("returns the boundary, modes and ready turfs", async () => {
+      it("returns the boundary, modes and ready turfs (bbox + counts, no geometry)", async () => {
         prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
         prisma.turf.findMany.mockResolvedValue([
-          { id: "t1", name: "Ready", geometry: square, _count: { contacts: 4 } },
+          {
+            id: "t1",
+            name: "Ready",
+            geometry: { type: "Polygon", coordinates: [[[144.9, -37.8], [145.0, -37.7], [144.9, -37.8]]] },
+            _count: { contacts: 4 },
+          },
+          { id: "t2", name: "Unmapped", geometry: null, _count: { contacts: 2 } },
         ]);
         const res = await service.selfServeAvailable("org1", "camp1");
-        expect(res.boundary).toEqual(campaign.boundary);
+        expect(res.boundary).toEqual(campaign.boundary); // the map still draws the campaign boundary
         expect(res.modes).toEqual(["area", "draw", "existing"]); // default when unset
-        expect(res.readyTurfs).toEqual([{ id: "t1", name: "Ready", geometry: square, contactCount: 4 }]);
+        expect(res.readyTurfs).toEqual([
+          { id: "t1", name: "Ready", bbox: [144.9, -37.8, 145.0, -37.7], contactCount: 4 },
+          { id: "t2", name: "Unmapped", bbox: null, contactCount: 2 },
+        ]);
       });
 
       it("throws CAMPAIGN_NOT_FOUND when the campaign is missing", async () => {

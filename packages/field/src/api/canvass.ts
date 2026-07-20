@@ -17,6 +17,26 @@ export type DispositionDef = {
   orderIndex: number;
 };
 
+/** [west, south, east, north] — the slim bounds list endpoints ship instead of boundary GeoJSON. */
+export type TurfBBox = [number, number, number, number];
+
+/** Per-list door tallies on the assignments LIST — the items themselves ride on the
+ *  single-turf payload (getCanvassAssignment) only. */
+export type WalkListCounts = { id: string; name: string; total: number; pending: number; visited: number };
+
+/** One row of GET /canvass/assignments — the field BOOT payload. Deliberately slim:
+ *  bbox (not geometry) + walk-list counts (not items). */
+export type CanvassAssignmentSummary = {
+  turfId: string;
+  lockedUntil: string | null;
+  turf: { id: string; name: string; bbox: TurfBBox | null; campaignId: string | null };
+  walkLists: WalkListCounts[];
+};
+
+/** The FULL single-turf payload (GET /canvass/assignments/:turfId) — boundary geometry +
+ *  every walk-list item — fetched only for the turf being walked, and cached per-turf URL
+ *  so the walk view still renders offline. Also the shape the admin organiser preview
+ *  synthesises for the embedded WalkView. */
 export type CanvassAssignment = {
   turfId: string;
   lockedUntil: string | null;
@@ -88,7 +108,16 @@ export async function listDispositions(channel?: "DOOR" | "SMS", signal?: AbortS
 
 export async function getCanvassAssignments(volunteerId: string, signal?: AbortSignal) {
   const q = new URLSearchParams({ volunteerId });
-  return request<CanvassAssignment[]>(`/canvass/assignments?${q}`, signal ? { signal } : undefined);
+  return request<CanvassAssignmentSummary[]>(`/canvass/assignments?${q}`, signal ? { signal } : undefined);
+}
+
+/** The ONE turf being walked, in full (geometry + walk-list items). */
+export async function getCanvassAssignment(turfId: string, volunteerId: string, signal?: AbortSignal) {
+  const q = new URLSearchParams({ volunteerId });
+  return request<CanvassAssignment>(
+    `/canvass/assignments/${encodeURIComponent(turfId)}?${q}`,
+    signal ? { signal } : undefined,
+  );
 }
 
 export type VolunteerMetrics = {
@@ -146,7 +175,7 @@ export async function createDoorContact(input: {
 export type SelfServeAvailable = {
   boundary: unknown | null;
   modes: string[];
-  readyTurfs: Array<{ id: string; name: string; geometry: unknown; contactCount: number }>;
+  readyTurfs: Array<{ id: string; name: string; bbox: TurfBBox | null; contactCount: number }>;
 };
 
 export async function getSelfServeAvailable(campaignId: string) {
@@ -159,7 +188,7 @@ export async function getSelfServeAvailable(campaignId: string) {
 export type RecommendedTurf = {
   id: string;
   name: string;
-  geometry: unknown;
+  bbox: TurfBBox | null;
   contactCount: number;
   campaignId: string;
   campaignName: string;

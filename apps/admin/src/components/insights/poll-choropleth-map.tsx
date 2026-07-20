@@ -159,6 +159,7 @@ export function PollChoroplethMap({
         initialViewState={{ bounds, fitBoundsOptions: { padding: 24 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
+        attributionControl={false}
         // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
         cooperativeGestures={!scrollZoom}
         interactiveLayerIds={["poll-fill"]}

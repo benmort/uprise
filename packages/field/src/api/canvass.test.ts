@@ -12,6 +12,7 @@ import {
   claimDraw,
   claimExistingTurf,
   createDoorContact,
+  getCanvassAssignment,
   getCanvassAssignments,
   getRecommendedTurf,
   getSelfServeAvailable,
@@ -52,6 +53,11 @@ describe("canvass api client — reads", () => {
   it("getCanvassAssignments encodes the volunteerId into the query", async () => {
     await getCanvassAssignments("v1");
     expect(mockReq.mock.calls[0][0]).toBe("/canvass/assignments?volunteerId=v1");
+  });
+
+  it("getCanvassAssignment encodes the turfId into the path (per-turf cache key)", async () => {
+    await getCanvassAssignment("t/1", "v1");
+    expect(mockReq.mock.calls[0][0]).toBe("/canvass/assignments/t%2F1?volunteerId=v1");
   });
 
   it("getVolunteerMetrics hits the volunteer-metrics endpoint", async () => {

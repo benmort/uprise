@@ -68,6 +68,7 @@ export function AustraliaMap({ focusState }: { focusState?: string }) {
       initialViewState={AUSTRALIA_VIEW}
       mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
+      attributionControl={false}
       // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
       cooperativeGestures={!scrollZoom}
       onLoad={() => {

@@ -7,19 +7,12 @@ import { ChevronLeft, Loader2, MapPin, PencilLine, Squircle } from "lucide-react
 import { Button, EmptyState, Skeleton } from "@uprise/ui";
 import { getSelfServeAvailable, claimExistingTurf, type SelfServeAvailable } from "../api";
 import { MapThumbnail } from "../components/map-thumbnail";
+import { bboxRing } from "../lib/geo";
 
 const TurfMap = dynamic(() => import("../components/turf-map").then((m) => m.TurfMap), {
   ssr: false,
   loading: () => <Skeleton className="h-40 w-full" />,
 });
-
-function outerRing(geometry: unknown): Array<[number, number]> | undefined {
-  const g = geometry as { type?: string; coordinates?: unknown } | null;
-  if (!g || typeof g.type !== "string") return undefined;
-  if (g.type === "Polygon") return (g.coordinates as Array<Array<[number, number]>>)?.[0];
-  if (g.type === "MultiPolygon") return (g.coordinates as Array<Array<Array<[number, number]>>>)?.[0]?.[0];
-  return undefined;
-}
 
 /**
  * "Get turf" — volunteer self-serve, gated by the campaign's `volunteerCanSelfClaimTurf`.
@@ -108,7 +101,7 @@ export function GetTurf() {
             <div className="space-y-2">
               {data.readyTurfs.map((t) => (
                 <div key={t.id} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3">
-                  <MapThumbnail polygon={outerRing(t.geometry)} className="h-12 w-12 shrink-0 rounded-lg" />
+                  <MapThumbnail polygon={bboxRing(t.bbox)} className="h-12 w-12 shrink-0 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-foreground">{t.name}</p>
                     <p className="text-xs text-muted-foreground">{t.contactCount} doors</p>

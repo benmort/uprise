@@ -54,6 +54,12 @@ const nextConfig = {
   // @uprise/ui ships TS/TSX source (the shared design system); api-client/contracts
   // ship built dist but are listed so Next resolves the workspace packages (meld doc 14).
   transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts", "@uprise/flags", "@uprise/field"],
+  experimental: {
+    // Rewrite workspace-barrel imports to direct file imports at compile time —
+    // without this, one symbol from a barrel drags the whole package into every
+    // chunk under transpilePackages (see apps/field/next.config.mjs for the numbers).
+    optimizePackageImports: ["@uprise/field", "@uprise/ui", "@uprise/api-client"],
+  },
   // The prog sandbox became /future/* (with /inbox and /journeys parked under it).
   // Keep old bookmarks/deep links working.
   async redirects() {

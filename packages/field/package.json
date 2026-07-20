@@ -31,8 +31,7 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@mapbox/mapbox-gl-draw": "^1.5.1",
-    "@turf/turf": "^7.3.5",
+    "@turf/bbox": "^7.3.5",
     "@uprise/api-client": "workspace:*",
     "@uprise/ui": "workspace:*",
     "clsx": "^2.1.1",

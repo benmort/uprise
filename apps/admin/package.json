@@ -25,7 +25,7 @@
     "@fullcalendar/timegrid": "^6.1.21",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@radix-ui/react-slot": "^1.1.1",
-    "@turf/turf": "^7.3.5",
+    "@turf/bbox": "^7.3.5",
     "@twilio/voice-sdk": "^2.18.3",
     "@uprise/api-client": "workspace:*",
     "@uprise/contracts": "workspace:*",

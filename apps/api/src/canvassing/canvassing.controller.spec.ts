@@ -25,6 +25,7 @@ describe("CanvassingController", () => {
     updateWalkList: jest.fn().mockResolvedValue({}),
     assignTurf: jest.fn().mockResolvedValue({}),
     listAssignments: jest.fn().mockResolvedValue([]),
+    getAssignment: jest.fn().mockResolvedValue({}),
     getVolunteerMetrics: jest.fn().mockResolvedValue({}),
     releaseTurf: jest.fn().mockResolvedValue({}),
     recordDoorKnock: jest.fn().mockResolvedValue({}),
@@ -184,6 +185,11 @@ describe("CanvassingController", () => {
   it("assignments delegates to listAssignments with tenantId + volunteerId", async () => {
     await c.assignments("v1", "t1");
     expect(svc.listAssignments).toHaveBeenCalledWith("t1", "v1");
+  });
+
+  it("assignment (single turf) delegates to getAssignment with tenantId + turfId + volunteerId", async () => {
+    await c.assignment("turf1", "v1", "t1");
+    expect(svc.getAssignment).toHaveBeenCalledWith("t1", "turf1", "v1");
   });
 
   it("volunteerMetrics delegates to getVolunteerMetrics with tenantId + volunteerId", async () => {
