@@ -2,8 +2,10 @@ import { randomBytes } from "crypto";
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 
-/** Default session lifetime: 12 hours (matches the analytics stream-token TTL default). */
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+/** Default session lifetime: 24 hours — a full day so a canvasser's session doesn't drop
+ *  mid-shift. Applies to every role (volunteer/organiser/owner/super-admin); absolute from
+ *  login, not sliding. */
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface ResolvedSession {
   userId: string;
