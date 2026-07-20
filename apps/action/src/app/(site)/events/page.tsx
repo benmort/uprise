@@ -1,10 +1,25 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { CalendarClock, MapPin, Users } from "lucide-react";
 import { BrandStyle, EventStatusBadge, LogoMark } from "@uprise/ui";
 import { tenantLogoUrl } from "@uprise/api-client";
 import { listPublicEvents, whenRange } from "@/lib/events";
 
-export const metadata = { title: "Events" };
+/** Per-tenant tab title + favicon (square block logo) for an org's public events board. */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: { org?: string; tenant?: string };
+}): Promise<Metadata> {
+  const slug = searchParams.org || searchParams.tenant || null;
+  if (!slug) return { title: "Events" };
+  const board = await listPublicEvents(slug);
+  const tenant = board?.tenant ?? null;
+  return {
+    title: tenant?.name ? `Events · ${tenant.name}` : "Events",
+    icons: tenant?.logoBlockUrl ? { icon: tenant.logoBlockUrl } : undefined,
+  };
+}
 
 /** Public events board for one org — reached with `?org=<slug>`. Branded with the org's colours;
  *  lists its published, public, not-yet-ended events. Mirrors the volunteer board's shape. */

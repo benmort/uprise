@@ -1,10 +1,19 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { CalendarClock, MapPin } from "lucide-react";
 import { BrandStyle } from "@uprise/ui";
 import { getManageRsvp, whenRange } from "@/lib/events";
 import { ManageRsvpPanel } from "@/components/manage-rsvp-panel";
 
-export const metadata = { title: "Manage your RSVP" };
+/** Keep the RSVP title, add the org's favicon (square block logo). */
+export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
+  const data = await getManageRsvp(params.token);
+  const tenant = data?.event.tenant ?? null;
+  return {
+    title: "Manage your RSVP",
+    icons: tenant?.logoBlockUrl ? { icon: tenant.logoBlockUrl } : undefined,
+  };
+}
 
 /** Attendee self-manage — authorised by the unguessable manage token in the URL. Change party
  *  size or cancel; branded with the event's org colours. */

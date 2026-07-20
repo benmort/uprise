@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BrandLoadingScreen, BrandStyle, Skeleton, type BrandStyleFields } from "@uprise/ui";
+import { BrandLoadingScreen, BrandStyle, Skeleton, TenantHead, type BrandStyleFields } from "@uprise/ui";
 import { tenants } from "@uprise/api-client";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { useTurfAutoDownload } from "../hooks/use-turf-auto-download";
@@ -28,6 +28,12 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
   const [brandStyle, setBrandStyle] = useState<BrandStyleFields | null>(null);
   // Cached tenant brand (logo/name) for the boot loader — instant on a returning device.
   const [bootBrand, setBootBrand] = useState<{ name?: string; logoUrl?: string | null } | null>(null);
+  // Tenant tab title + favicon — seeded from the cache, refreshed from the brand fetch. The PWA
+  // manifest/install icon stays Uprise (install-time, tenant-blind); this is just the browser tab.
+  const [head, setHead] = useState<{ title: string | null; faviconUrl: string | null }>(() => {
+    const c = getTenantBrand();
+    return { title: c?.name ?? null, faviconUrl: c?.logoUrl ?? null };
+  });
 
   // The httpOnly session cookie is the proof of auth (meld doc 14). We validate it via
   // /auth/check — but for a RETURNING canvasser (a volunteer id already cached), render
@@ -66,6 +72,7 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
           logoUrl: current.logoUrl ?? null,
           slug: current.tenantSlug ?? null,
         });
+        setHead((h) => ({ title: current.tenantName, faviconUrl: current.logoUrl ?? h.faviconUrl }));
         if (current.tenantSlug)
           (window as unknown as { __LOGIN_ORG__?: string }).__LOGIN_ORG__ = current.tenantSlug;
       }
@@ -74,7 +81,12 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
       // whole field PWA wears the campaign brand. Best-effort — a miss just leaves defaults.
       if (current?.tenantSlug) {
         const res = await tenants.brandBySlug(current.tenantSlug);
-        if (alive && res.ok && res.data) setBrandStyle(res.data);
+        if (alive && res.ok && res.data) {
+          const brand = res.data;
+          setBrandStyle(brand);
+          // Prefer the square block logo for the browser-tab favicon.
+          if (brand.logoBlockUrl) setHead((h) => ({ ...h, faviconUrl: brand.logoBlockUrl }));
+        }
       }
     })();
     return () => {
@@ -105,6 +117,7 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
 
   return (
     <MeDrawerProvider>
+      <TenantHead title={head.title} faviconUrl={head.faviconUrl} />
       <div className="flex min-h-screen flex-col bg-background">
         <BrandStyle brand={brandStyle} />
         <OfflineBanner pending={counts.PENDING ?? 0} />

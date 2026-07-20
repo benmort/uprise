@@ -196,7 +196,6 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
   const [instagramUrl, setInstagramUrl] = useState("");
   const [logoBlockUrl, setLogoBlockUrl] = useState<string | null>(null);
   const [logoLandscapeUrl, setLogoLandscapeUrl] = useState<string | null>(null);
-  const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   const [primaryColour, setPrimaryColour] = useState("#3B82F6");
   const [secondaryColour, setSecondaryColour] = useState("#6366F1");
@@ -223,7 +222,6 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
     setInstagramUrl(p.instagramUrl ?? "");
     setLogoBlockUrl(p.logoBlockUrl);
     setLogoLandscapeUrl(p.logoLandscapeUrl);
-    setFaviconUrl(p.faviconUrl);
     setHeroImageUrl(p.heroImageUrl);
     setPrimaryColour(p.primaryColour ?? "#3B82F6");
     setSecondaryColour(p.secondaryColour ?? "#6366F1");
@@ -304,7 +302,6 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
     const res = await orgProfile.update({
       logoBlockUrl,
       logoLandscapeUrl,
-      faviconUrl,
       heroImageUrl,
       primaryColour: primaryColour || null,
       secondaryColour: secondaryColour || null,
@@ -320,7 +317,7 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
   // this just writes the URL onto the org profile. updateProfile is a partial PATCH, so
   // saving one field leaves colours/CSS (and the other images) untouched.
   const autoSaveImage =
-    (field: "logoBlockUrl" | "logoLandscapeUrl" | "faviconUrl" | "heroImageUrl", setLocal: (v: string | null) => void) =>
+    (field: "logoBlockUrl" | "logoLandscapeUrl" | "heroImageUrl", setLocal: (v: string | null) => void) =>
     async (url: string | null) => {
       setLocal(url);
       const res = await orgProfile.update({ [field]: url });
@@ -518,7 +515,6 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
                   <div className="grid gap-6 sm:grid-cols-2">
                     <ImageCropUpload label="Block logo" helpText="Square, for tight spaces." value={logoBlockUrl} onChange={autoSaveImage("logoBlockUrl", setLogoBlockUrl)} aspect={1} boxClassName="h-40" />
                     <ImageCropUpload label="Landscape logo" helpText="Wide, for headers and email." value={logoLandscapeUrl} onChange={autoSaveImage("logoLandscapeUrl", setLogoLandscapeUrl)} aspect={3} boxClassName="h-24" />
-                    <ImageCropUpload label="Favicon" helpText="Square, browser tab icon." value={faviconUrl} onChange={autoSaveImage("faviconUrl", setFaviconUrl)} aspect={1} boxClassName="h-28" />
                     <ImageCropUpload label="Hero image" helpText="Wide banner (JPEG)." value={heroImageUrl} onChange={autoSaveImage("heroImageUrl", setHeroImageUrl)} aspect={16 / 9} mimeType="image/jpeg" boxClassName="h-40" />
                   </div>
                 </FormSectionCard>

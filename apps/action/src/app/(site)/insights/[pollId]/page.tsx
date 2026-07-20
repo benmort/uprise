@@ -7,7 +7,11 @@ import { InsightsEmbed } from "@/components/insights-embed";
 
 export async function generateMetadata({ params }: { params: { pollId: string } }): Promise<Metadata> {
   const poll = await getPublicPoll(params.pollId);
-  return { title: poll?.title ?? "Poll", description: poll ? provenanceLine(poll) : undefined };
+  return {
+    title: poll?.title ?? "Poll",
+    description: poll ? provenanceLine(poll) : undefined,
+    icons: poll?.tenant?.logoBlockUrl ? { icon: poll.tenant.logoBlockUrl } : undefined,
+  };
 }
 
 /** First letters of the first two words — "Common Threads" → "CT". */

@@ -15,6 +15,7 @@ export async function generateMetadata({ params }: { params: { eventId: string }
   return {
     title: event.title,
     description: desc,
+    icons: event.tenant?.logoBlockUrl ? { icon: event.tenant.logoBlockUrl } : undefined,
     openGraph: { title: event.title, description: desc, type: "website", images },
     twitter: { card: "summary_large_image", title: event.title, description: desc, images },
   };

@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQueryParams } from "@/lib/use-query";
-import { BrandStyle, LogoMark, TenantAvatar, type BrandStyleFields } from "@uprise/ui";
+import { BrandStyle, LogoMark, TenantAvatar, TenantHead, type BrandStyleFields } from "@uprise/ui";
 import { auth, tenants, tenantLogoUrl } from "@uprise/api-client";
 import { GridShape } from "./grid-shape";
 
-type Brand = { name: string; seed: string; logoUrl: string | null } & BrandStyleFields;
+// `favicon` is the SQUARE (block) logo — the right shape for a browser-tab icon — kept separate
+// from `logoUrl` (landscape-preferred, for the hero lockup).
+type Brand = { name: string; seed: string; logoUrl: string | null; favicon: string | null } & BrandStyleFields;
 
 // App subdomains that are NOT tenants (so we don't treat field/auth/etc. as a tenant slug).
 const APP_SUBDOMAINS = new Set(["field", "auth", "admin", "www", "api", "action", "app", "marketing"]);
@@ -54,6 +56,7 @@ export function VolunteerBrandSidebar() {
             name: res.data.name,
             seed: res.data.id,
             logoUrl: tenantLogoUrl(res.data),
+            favicon: res.data.logoBlockUrl ?? tenantLogoUrl(res.data),
             primaryColour: res.data.primaryColour,
             secondaryColour: res.data.secondaryColour,
             customCss: res.data.customCss,
@@ -66,7 +69,7 @@ export function VolunteerBrandSidebar() {
       if (m) {
         const res = await auth.previewInvite(decodeURIComponent(m[1]));
         if (alive && res.ok && res.data.tenantName) {
-          setBrand({ name: res.data.tenantName, seed: res.data.tenantName, logoUrl: res.data.logoUrl });
+          setBrand({ name: res.data.tenantName, seed: res.data.tenantName, logoUrl: res.data.logoUrl, favicon: res.data.logoUrl });
           return;
         }
       }
@@ -79,6 +82,9 @@ export function VolunteerBrandSidebar() {
 
   return (
     <>
+      {/* Tenant tab title + favicon for the client volunteer pages (sign-in/join/code/invite),
+          which can't set per-tenant metadata server-side. */}
+      <TenantHead title={brand?.name ?? null} faviconUrl={brand?.favicon ?? null} />
       {/* Brand colours + custom CSS apply to the whole volunteer flow (all viewports), so this
           lives OUTSIDE the desktop-only panel below. */}
       <BrandStyle brand={brand} />

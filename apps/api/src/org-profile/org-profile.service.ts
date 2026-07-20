@@ -56,7 +56,6 @@ export interface OrgBrandingInput {
   instagramUrl?: string | null;
   logoBlockUrl?: string | null;
   logoLandscapeUrl?: string | null;
-  faviconUrl?: string | null;
   heroImageUrl?: string | null;
   primaryColour?: string | null;
   secondaryColour?: string | null;
@@ -71,7 +70,6 @@ const BRAND_KEYS = [
   "instagramUrl",
   "logoBlockUrl",
   "logoLandscapeUrl",
-  "faviconUrl",
   "heroImageUrl",
   "primaryColour",
   "secondaryColour",
@@ -123,7 +121,6 @@ export class OrgProfileService {
       instagramUrl: profile.instagramUrl,
       logoBlockUrl: profile.logoBlockUrl,
       logoLandscapeUrl: profile.logoLandscapeUrl,
-      faviconUrl: profile.faviconUrl,
       heroImageUrl: profile.heroImageUrl,
       primaryColour: profile.primaryColour,
       secondaryColour: profile.secondaryColour,

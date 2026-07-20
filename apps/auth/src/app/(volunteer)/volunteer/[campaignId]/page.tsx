@@ -1,6 +1,24 @@
+import type { Metadata } from "next";
 import { auth } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { OpenJoinClient } from "./open-join-client";
+
+/** Per-tenant tab title + favicon (the campaign's block logo) for the open-join entry. */
+export async function generateMetadata({ params }: { params: { campaignId: string } }): Promise<Metadata> {
+  try {
+    const res = await auth.openJoinPreview(String(params.campaignId ?? ""));
+    if (res.ok) {
+      const p = res.data;
+      return {
+        title: p.tenantName ?? p.campaignName,
+        ...(p.logoUrl ? { icons: { icon: p.logoUrl } } : {}),
+      };
+    }
+  } catch {
+    /* fall back to the app default metadata */
+  }
+  return {};
+}
 
 /**
  * Tokenless open-join entry — a per-campaign public link (`/volunteer/[campaignId]`).

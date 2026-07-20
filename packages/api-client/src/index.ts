@@ -326,7 +326,6 @@ export interface OrgProfileRecord {
   instagramUrl: string | null;
   logoBlockUrl: string | null;
   logoLandscapeUrl: string | null;
-  faviconUrl: string | null;
   heroImageUrl: string | null;
   primaryColour: string | null;
   secondaryColour: string | null;
@@ -346,7 +345,6 @@ export type OrgProfileUpdate = Partial<{
   instagramUrl: string | null;
   logoBlockUrl: string | null;
   logoLandscapeUrl: string | null;
-  faviconUrl: string | null;
   heroImageUrl: string | null;
   primaryColour: string | null;
   secondaryColour: string | null;

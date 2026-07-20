@@ -11,7 +11,6 @@ export class UpdateOrgProfileDto {
   @IsOptional() @IsString() @MaxLength(2048) instagramUrl?: string | null;
   @IsOptional() @IsString() @MaxLength(2048) logoBlockUrl?: string | null;
   @IsOptional() @IsString() @MaxLength(2048) logoLandscapeUrl?: string | null;
-  @IsOptional() @IsString() @MaxLength(2048) faviconUrl?: string | null;
   @IsOptional() @IsString() @MaxLength(2048) heroImageUrl?: string | null;
   @IsOptional() @IsString() @MaxLength(20) primaryColour?: string | null;
   @IsOptional() @IsString() @MaxLength(20) secondaryColour?: string | null;

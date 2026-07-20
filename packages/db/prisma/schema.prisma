@@ -2427,7 +2427,6 @@ model OrgProfile {
   instagramUrl     String?
   logoBlockUrl     String?
   logoLandscapeUrl String?
-  faviconUrl       String?
   heroImageUrl     String?
   primaryColour    String?
   secondaryColour  String?

@@ -1,5 +1,28 @@
+import type { Metadata } from "next";
 import { tenants, type TenantBrand } from "@uprise/api-client";
 import { VolunteerBoardClient } from "./volunteer-board-client";
+
+/** Per-tenant tab title + favicon (square block logo) when the board is org-scoped (`?org=`). */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: { org?: string; tenant?: string };
+}): Promise<Metadata> {
+  const orgSlug = searchParams.org || searchParams.tenant || null;
+  if (!orgSlug) return {};
+  try {
+    const res = await tenants.brandBySlug(orgSlug);
+    if (res.ok && res.data) {
+      return {
+        title: res.data.name,
+        ...(res.data.logoBlockUrl ? { icons: { icon: res.data.logoBlockUrl } } : {}),
+      };
+    }
+  } catch {
+    /* fall back to the app default metadata */
+  }
+  return {};
+}
 
 /**
  * Volunteer landing (`/volunteer`) — the SAME two-column join hero as the per-campaign page

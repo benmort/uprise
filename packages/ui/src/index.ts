@@ -39,6 +39,7 @@ export * from "./components/step-progress";
 export * from "./components/wizard";
 export * from "./lib/wizard-steps";
 export * from "./components/tenant-brand";
+export * from "./components/tenant-head";
 export * from "./components/brand-style";
 export * from "./lib/brand-css";
 export * from "./components/skeleton";
