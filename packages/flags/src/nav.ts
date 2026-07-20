@@ -18,6 +18,7 @@ export const NAV_FLAGS = [
   { key: "FEATURE_NAV_CHANNELS", label: "Channels", section: "Channels", level: 1 },
   { key: "FEATURE_NAV_CANVASS", label: "Canvass", section: "Canvass", level: 1 },
   { key: "FEATURE_NAV_CALENDAR", label: "Calendar", section: "Calendar", level: 1 },
+  { key: "FEATURE_NAV_EVENTS", label: "Events", section: "Events", level: 1 },
   { key: "FEATURE_NAV_ANALYTICS", label: "Analytics", section: "Analytics", level: 1 },
   { key: "FEATURE_NAV_ENGAGEMENT", label: "Engagement", section: "Engagement", level: 1 },
   { key: "FEATURE_NAV_INSIGHTS", label: "Polling", section: "Insights", level: 1 },
@@ -37,7 +38,6 @@ export const NAV_FLAGS = [
   { key: "FEATURE_NAV_CANVASS_ADDRESSES", label: "Addresses", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_DEMOGRAPHICS", label: "Demographics", section: "Canvass", level: 2 },
   { key: "FEATURE_NAV_CANVASS_RESULTS", label: "Results", section: "Canvass", level: 2 },
-  { key: "FEATURE_NAV_EVENTS", label: "Events", section: "Canvass", level: 2 },
 
   // ── Second level: Engagement ──────────────────────────────────────────
   { key: "FEATURE_NAV_ENGAGEMENT_AUDIENCE", label: "Audience", section: "Engagement", level: 2 },

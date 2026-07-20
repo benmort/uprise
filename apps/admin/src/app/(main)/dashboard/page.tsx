@@ -285,7 +285,7 @@ export default function DashboardPage() {
         onPick={(ch) => {
           if (ch === "sms") void newBlast("SMS");
           else if (ch === "call") router.push("/channels/calls?new=1");
-          else if (ch === "event") router.push("/canvass/events");
+          else if (ch === "event") router.push("/events");
         }}
       />
 
@@ -491,7 +491,7 @@ export default function DashboardPage() {
         <OverviewModuleCard
           title="Events"
           description="Organising & RSVPs"
-          href="/canvass/events"
+          href="/events"
           hidden={hideCard("FEATURE_NAV_EVENTS")}
           locked={lockCard("FEATURE_NAV_EVENTS")}
           icon={<CalendarClock className="h-4 w-4" />}

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
+  CalendarClock,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -130,6 +131,8 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
     { type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
     // First-tier generic calendar — plots shifts + events + ad-hoc entries tenant-wide.
     { type: "leaf", key: "calendar", label: "Calendar", href: "/calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar"), flag: "FEATURE_NAV_CALENDAR" },
+    // Events are a tenant-wide surface (not campaign-scoped), so they live at the top level.
+    { type: "leaf", key: "events", label: "Events", href: "/events", icon: CalendarClock, match: (p) => p.startsWith("/events"), flag: "FEATURE_NAV_EVENTS" },
 
     // ── Engage: the campaigning work — reach out, canvass, organise, target ──
     { type: "section", key: "sec-engage", label: "Engage" },
@@ -154,7 +157,6 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
       children: [
         { label: "Campaigns", href: "/canvass", match: (p) => p === "/canvass" || p.startsWith("/canvass/campaigns") },
         ...canvassOps(canvassCampaignId),
-        { label: "Events", href: "/canvass/events", match: (p) => p.startsWith("/canvass/events"), flag: "FEATURE_NAV_EVENTS" },
         { label: "Turf planner", href: "/canvass/planner", match: (p) => p.startsWith("/canvass/planner") },
       ],
     },

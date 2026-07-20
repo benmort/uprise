@@ -106,7 +106,7 @@ export default function EventsPage() {
             Export
           </Button>
           <Button asChild size="sm">
-            <Link href="/canvass/events/new">
+            <Link href="/events/new">
               <Plus className="mr-1.5 h-4 w-4" />
               Create event
             </Link>
@@ -174,7 +174,7 @@ export default function EventsPage() {
                     </div>
                   )}
                   <div className="min-w-0">
-                    <Link href={`/canvass/events/${e.id}`} className="font-semibold text-foreground hover:underline">
+                    <Link href={`/events/${e.id}`} className="font-semibold text-foreground hover:underline">
                       {e.title}
                     </Link>
                     {e.description ? (

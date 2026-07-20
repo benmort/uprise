@@ -79,7 +79,7 @@ export default function NewEventPage() {
       return;
     }
     showToast({ tone: "success", title: "Event created" });
-    router.push(`/canvass/events/${res.data.id}`);
+    router.push(`/events/${res.data.id}`);
   };
 
   const steps: WizardStep[] = [
@@ -199,7 +199,7 @@ export default function NewEventPage() {
       icon={CalendarClock}
       title="Create event"
       description="Rallies, town halls, launches and phone banks — the public happenings your volunteers staff and your supporters RSVP to."
-      backHref="/canvass/events"
+      backHref="/events"
       backLabel="Events"
     >
       <div className="max-w-3xl">

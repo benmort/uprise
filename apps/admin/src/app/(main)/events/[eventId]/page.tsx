@@ -156,7 +156,7 @@ export default function EventDetailPage() {
     <PageShell
       icon={CalendarClock}
       title={event?.title ?? "Event"}
-      backHref="/canvass/events"
+      backHref="/events"
       backLabel="Events"
       actions={
         event ? (

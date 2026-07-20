@@ -210,7 +210,7 @@ export default function CalendarPage() {
   const openItem = useCallback(
     (item: CalendarItem) => {
       if (item.kind === "event") {
-        router.push(`/canvass/events/${item.id}`);
+        router.push(`/events/${item.id}`);
         return;
       }
       if (item.kind === "shift") {
