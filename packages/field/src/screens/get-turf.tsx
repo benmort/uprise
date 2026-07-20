@@ -4,10 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Loader2, MapPin, PencilLine, Squircle } from "lucide-react";
-import { Button, EmptyState, Skeleton } from "@uprise/ui";
+import { Button, EmptyState, PaginationControls, Skeleton } from "@uprise/ui";
 import { getSelfServeAvailable, claimExistingTurf, type SelfServeAvailable } from "../api";
 import { MapThumbnail } from "../components/map-thumbnail";
 import { bboxRing } from "../lib/geo";
+import { formatMinutes } from "../lib/walk-estimate";
+
+// Ready-turf rows carry a door count but no per-turf pace, so estimate time from a typical
+// canvassing rate (~25 reachable doors/hour incl. walking + short conversations). Shown as "~".
+const DOORS_PER_HOUR = 25;
+const READY_PAGE_SIZE = 5;
 
 const TurfMap = dynamic(() => import("../components/turf-map").then((m) => m.TurfMap), {
   ssr: false,
@@ -29,6 +35,7 @@ export function GetTurf() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
+  const [readyPage, setReadyPage] = useState(0);
 
   useEffect(() => {
     if (!campaignId) {
@@ -86,7 +93,7 @@ export function GetTurf() {
         </div>
 
         {data?.boundary ? (
-          <div className="h-40 overflow-hidden rounded-xl border border-border">
+          <div className="h-80 overflow-hidden rounded-xl border border-border">
             <TurfMap mode="edit" turfGeometry={data.boundary as GeoJSON.Geometry} stops={[]} />
           </div>
         ) : null}
@@ -99,18 +106,33 @@ export function GetTurf() {
           <h2 className="text-sm font-bold text-foreground">Claim a ready turf</h2>
           {data && data.readyTurfs.length > 0 ? (
             <div className="space-y-2">
-              {data.readyTurfs.map((t) => (
+              {data.readyTurfs
+                .slice(readyPage * READY_PAGE_SIZE, readyPage * READY_PAGE_SIZE + READY_PAGE_SIZE)
+                .map((t) => (
                 <div key={t.id} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3">
                   <MapThumbnail polygon={bboxRing(t.bbox)} className="h-12 w-12 shrink-0 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-foreground">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.contactCount} doors</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      {t.contactCount} doors · ~{formatMinutes(Math.round((t.contactCount / DOORS_PER_HOUR) * 60))}
+                    </p>
                   </div>
                   <Button className="h-9 shrink-0" disabled={claiming === t.id} onClick={() => claimReady(t.id)}>
                     {claiming === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Claim"}
                   </Button>
                 </div>
               ))}
+              {data.readyTurfs.length > READY_PAGE_SIZE ? (
+                <div className="flex justify-center pt-1">
+                  <PaginationControls
+                    page={readyPage}
+                    pageSize={READY_PAGE_SIZE}
+                    total={data.readyTurfs.length}
+                    onPrev={() => setReadyPage((p) => Math.max(0, p - 1))}
+                    onNext={() => setReadyPage((p) => p + 1)}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : (
             <p className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">

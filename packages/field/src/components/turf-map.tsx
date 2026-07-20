@@ -223,6 +223,25 @@ export function TurfMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bounds, fitToBounds, focusPoint?.lat, focusPoint?.lng, focusBounds, defaultBounds]);
 
+  // Entering/leaving fullscreen (the native FullscreenControl) changes the container size but
+  // leaves the camera where it was, so the turf ends up off-centre. Re-fit to whatever the map
+  // frames once the fullscreen transition has settled (both on enter AND exit). No-ops when
+  // there's nothing to frame (recenter early-returns).
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      window.setTimeout(() => {
+        mapRef.current?.getMap()?.resize();
+        recenter();
+      }, 200);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
+  }, [recenter]);
+
   const recenterNational = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (map && defaultBounds) {
