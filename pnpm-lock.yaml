@@ -615,6 +615,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.112.1
+        version: 0.112.1(zod@3.25.76)
       '@bull-board/api':
         specifier: ^6.7.10
         version: 6.21.3(@bull-board/ui@6.21.3)
@@ -639,6 +642,9 @@ importers:
       '@uprise/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../../packages/domains
       '@uprise/events':
         specifier: workspace:*
         version: link:../../packages/events
@@ -672,12 +678,18 @@ importers:
       express:
         specifier: ^4.21.2
         version: 4.21.2
+      geojson-vt:
+        specifier: ^3.2.1
+        version: 3.2.1
       handlebars:
         specifier: ^4.7.8
         version: 4.7.9
       ioredis:
         specifier: ^5.10.1
         version: 5.10.1
+      pgsql-ast-parser:
+        specifier: ^12.0.2
+        version: 12.0.2
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
@@ -690,9 +702,15 @@ importers:
       uuid:
         specifier: ^11.0.3
         version: 11.1.1
+      vt-pbf:
+        specifier: ^3.1.3
+        version: 3.1.3
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/express':
         specifier: ^4.17.25
