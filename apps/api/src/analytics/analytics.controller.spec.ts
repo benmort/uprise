@@ -9,6 +9,8 @@ describe("AnalyticsController", () => {
     statusDistribution: jest.fn().mockResolvedValue([]),
     dashboardPerformance: jest.fn().mockResolvedValue({}),
     recentBlasts: jest.fn().mockResolvedValue([]),
+    recordVitals: jest.fn().mockResolvedValue({ accepted: 1 }),
+    vitalsSummary: jest.fn().mockResolvedValue({ days: 7, rows: [] }),
   } as any;
   // realtime.stream is consumed as an rxjs Observable; a Subject that never emits is fine.
   const realtime = { stream: new Observable(() => {}) } as any;
@@ -52,6 +54,19 @@ describe("AnalyticsController", () => {
   it("recent parses limit and delegates with tenantId", () => {
     c.recent("t1", "5", "sms");
     expect(analytics.recentBlasts).toHaveBeenCalledWith("t1", 5, "sms");
+  });
+
+  it("vitals passes the raw beacon body through (sanitisation lives in the service)", () => {
+    const body = { vitals: [{ metric: "lcp", value: 1 }] };
+    c.vitals("t1", body);
+    expect(analytics.recordVitals).toHaveBeenCalledWith("t1", body);
+  });
+
+  it("vitalsSummary parses days and falls back to 7", () => {
+    c.vitalsSummary("t1", "30");
+    expect(analytics.vitalsSummary).toHaveBeenCalledWith("t1", 30);
+    c.vitalsSummary("t1", "not-a-number");
+    expect(analytics.vitalsSummary).toHaveBeenLastCalledWith("t1", 7);
   });
 
   it("stream returns an Observable bound to the request tenant", () => {

@@ -175,6 +175,21 @@ describe("defineAbilityFor — role resolution and .all expansion", () => {
     expect(ability.can("read", "audience.audience")).toBe(false);
   });
 
+  it("lets volunteer and organiser post web-vitals beacons but not read analytics", () => {
+    const volunteer = defineAbilityFor(actor({ roles: ["volunteer"] }));
+    expect(volunteer.can("create", "analytics.vital")).toBe(true);
+    expect(volunteer.can("read", "analytics.snapshot")).toBe(false);
+    const organiser = defineAbilityFor(actor({ roles: ["organiser"] }));
+    expect(organiser.can("create", "analytics.vital")).toBe(true);
+    // owner's manage analytics.all expands over the concrete vital resource too.
+    const owner = defineAbilityFor(actor({ roles: ["owner"] }));
+    expect(owner.can("create", "analytics.vital")).toBe(true);
+    // member stays strictly read-only — a stray beacon just 403s harmlessly.
+    const member = defineAbilityFor(actor({ roles: ["member"] }));
+    expect(member.can("create", "analytics.vital")).toBe(false);
+    expect(member.can("read", "analytics.vital")).toBe(true); // via read analytics.all
+  });
+
   it("gives member read but not write across granted domains", () => {
     const ability = defineAbilityFor(actor({ roles: ["member"] }));
     expect(ability.can("read", "audience.audience")).toBe(true);

@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { BlastRecipientStatus, MessageChannel } from "@uprise/db";
+import { BlastRecipientStatus, MessageChannel, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
+import { sanitiseVitals } from "./vitals.util";
 
 @Injectable()
 export class AnalyticsService {
@@ -185,5 +186,47 @@ export class AnalyticsService {
       ...blast,
       awaitingResponseCount: awaitingByBlastId.get(blast.id) || 0,
     }));
+  }
+
+  /** Ingest a web-vitals beacon batch from the field/admin apps. Untrusted browser
+   *  input — sanitiseVitals allowlists metric names/labels and clamps values; invalid
+   *  entries are silently dropped (a beacon has no user to report an error to). */
+  async recordVitals(tenantId: string, body: unknown) {
+    const vitals = sanitiseVitals(body);
+    if (vitals.length === 0) return { accepted: 0 };
+    await this.prisma.analyticsSnapshot.createMany({
+      data: vitals.map((v) => ({
+        tenantId,
+        metricName: v.metricName,
+        metricValue: v.metricValue,
+        labels: v.labels,
+        bucketAt: new Date(),
+      })),
+    });
+    return { accepted: vitals.length };
+  }
+
+  /** p50/p75/p95 per metric per route over the window — p75 is the web-vitals
+   *  convention for "typical worst" real-user experience. */
+  async vitalsSummary(tenantId: string, days = 7) {
+    const window = Math.min(Math.max(1, Math.trunc(days)), 90);
+    const since = new Date(Date.now() - window * 24 * 60 * 60 * 1000);
+    const rows = await this.prisma.$queryRaw<
+      Array<{ metricName: string; route: string; samples: number; p50: number; p75: number; p95: number }>
+    >(Prisma.sql`
+      SELECT "metricName",
+             COALESCE("labels"->>'route', '/') AS route,
+             COUNT(*)::int AS samples,
+             percentile_cont(0.5)  WITHIN GROUP (ORDER BY "metricValue") AS p50,
+             percentile_cont(0.75) WITHIN GROUP (ORDER BY "metricValue") AS p75,
+             percentile_cont(0.95) WITHIN GROUP (ORDER BY "metricValue") AS p95
+      FROM "analytics"."AnalyticsSnapshot"
+      WHERE "tenantId" = ${tenantId}
+        AND "metricName" LIKE 'webvital.%'
+        AND "bucketAt" >= ${since}
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    `);
+    return { days: window, since, rows };
   }
 }

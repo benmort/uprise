@@ -7,11 +7,14 @@ import { Outfit } from "next/font/google";
 import { FieldShell } from "@uprise/field";
 import { ToastProvider } from "@uprise/ui";
 import { ServiceWorkerCleanup } from "@/components/sw-cleanup";
+import { WebVitalsReporter } from "@/components/web-vitals";
 
+// No `weight` list — Outfit is a Google variable font, so this loads ONE woff2 covering
+// 100–900 instead of five static files (and font-extrabold renders a true 800).
 const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-outfit",
-  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -55,6 +58,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           }}
         />
         <ServiceWorkerCleanup />
+        <WebVitalsReporter />
         <ToastProvider>
           <FieldShell>{children}</FieldShell>
         </ToastProvider>

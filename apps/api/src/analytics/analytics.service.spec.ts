@@ -4,6 +4,8 @@ describe("AnalyticsService", () => {
   const prisma = {
     blast: { findFirst: jest.fn() },
     blastRecipient: { count: jest.fn() },
+    analyticsSnapshot: { createMany: jest.fn() },
+    $queryRaw: jest.fn(),
   } as any;
 
   let service: AnalyticsService;
@@ -55,5 +57,50 @@ describe("AnalyticsService", () => {
     for (const call of prisma.blastRecipient.count.mock.calls) {
       expect(call[0].where).not.toHaveProperty("channel");
     }
+  });
+
+  it("recordVitals writes sanitised snapshot rows stamped with the caller's tenant", async () => {
+    prisma.analyticsSnapshot.createMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.recordVitals("tenant-a", {
+      vitals: [
+        { metric: "lcp", value: 1800, route: "/", connection: "4g", device: "mobile" },
+        { metric: "bogus", value: 1 },
+      ],
+    });
+
+    expect(result).toEqual({ accepted: 1 });
+    const { data } = prisma.analyticsSnapshot.createMany.mock.calls[0][0];
+    expect(data).toHaveLength(1);
+    expect(data[0]).toMatchObject({
+      tenantId: "tenant-a",
+      metricName: "webvital.lcp",
+      metricValue: 1800,
+      labels: { route: "/", connection: "4g", device: "mobile" },
+    });
+    expect(data[0].bucketAt).toBeInstanceOf(Date);
+  });
+
+  it("recordVitals skips the write entirely when nothing survives sanitisation", async () => {
+    const result = await service.recordVitals("tenant-a", { vitals: [{ metric: "nope", value: 1 }] });
+    expect(result).toEqual({ accepted: 0 });
+    expect(prisma.analyticsSnapshot.createMany).not.toHaveBeenCalled();
+  });
+
+  it("vitalsSummary clamps the window to 1–90 days and returns the percentile rows", async () => {
+    const rows = [{ metricName: "webvital.lcp", route: "/", samples: 3, p50: 1, p75: 2, p95: 3 }];
+    prisma.$queryRaw.mockResolvedValue(rows);
+
+    const result = await service.vitalsSummary("tenant-a", 10_000);
+
+    expect(result.days).toBe(90);
+    expect(result.rows).toBe(rows);
+    expect(result.since).toBeInstanceOf(Date);
+    // The raw query is tenant-scoped and windowed on bucketAt.
+    const sql = prisma.$queryRaw.mock.calls[0][0];
+    expect(sql.values).toContain("tenant-a");
+
+    await service.vitalsSummary("tenant-a", -3);
+    expect((await service.vitalsSummary("tenant-a", -3)).days).toBe(1);
   });
 });

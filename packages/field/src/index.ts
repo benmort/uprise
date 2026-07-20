@@ -58,6 +58,7 @@ export * from "./lib/tile-cache-store";
 export * from "./lib/use-theme";
 export * from "./lib/volunteer";
 export * from "./lib/directions";
+export * from "./lib/vitals";
 
 // ── Field-facing API ─────────────────────────────────────────────────────────
 export * from "./api";

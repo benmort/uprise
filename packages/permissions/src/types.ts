@@ -100,6 +100,9 @@ export const UPRISE_RESOURCES = [
 
   // analytics
   "analytics.snapshot",
+  // Real-user web-vitals beacons — `create` is granted broadly (incl. volunteer) so the
+  // field PWA can report load metrics; reads stay behind `read analytics.all`.
+  "analytics.vital",
   "analytics.all",
 
   // compliance / suppression

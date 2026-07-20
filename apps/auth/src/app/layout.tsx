@@ -2,10 +2,12 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 
+// No `weight` list — Outfit is a Google variable font, so this loads ONE woff2 covering
+// 100–900 instead of five static files (and font-extrabold renders a true 800).
 const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-outfit",
-  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

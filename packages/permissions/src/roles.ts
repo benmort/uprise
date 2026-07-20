@@ -72,6 +72,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "manage", resource: "tenant.files" },
     { action: "read", resource: "tenant.tenant" },
     { action: "read", resource: "analytics.all" },
+    { action: "create", resource: "analytics.vital" },
     { action: "read", resource: "audit.log" },
     { action: "read", resource: "system.feature-flags" },
   ],
@@ -89,6 +90,8 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "read", resource: "events.calendar" },
     { action: "read", resource: "contacts.contact" },
     { action: "read", resource: "contacts.tag" },
+    // The field PWA's web-vitals beacon posts load metrics for the volunteer's tenant.
+    { action: "create", resource: "analytics.vital" },
   ],
 
   member: [

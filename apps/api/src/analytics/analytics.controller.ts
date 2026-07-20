@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Req, Sse } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, Req, Sse } from "@nestjs/common";
 import type { Request } from "express";
 import { filter, from, map, Observable, switchMap, takeUntil, timer } from "rxjs";
 import { AnalyticsService } from "./analytics.service";
@@ -10,6 +10,9 @@ import { TenantId } from "../auth/tenant-id.decorator";
 // Analytics is an organiser/owner surface (member: read). Every route reads analytics.all;
 // blast-scoped reads additionally verify the blast belongs to the caller's tenant (service).
 const READ = { action: "read", resource: "analytics.all" } as const;
+// The web-vitals beacon is the one WRITE volunteers hold — the field PWA posts real-user
+// load metrics (see roles.ts); the payload is sanitised/allowlisted in the service.
+const CREATE_VITAL = { action: "create", resource: "analytics.vital" } as const;
 
 @Controller("analytics")
 export class AnalyticsController {
@@ -77,6 +80,19 @@ export class AnalyticsController {
   recent(@TenantId() tenantId: string, @Query("limit") limit?: string, @Query("channel") channel?: string) {
     const lim = Number(limit || "20");
     return this.analytics.recentBlasts(tenantId, Number.isFinite(lim) ? lim : 20, channel);
+  }
+
+  @Post("vitals")
+  @RequirePermission(CREATE_VITAL)
+  vitals(@TenantId() tenantId: string, @Body() body: unknown) {
+    return this.analytics.recordVitals(tenantId, body);
+  }
+
+  @Get("vitals/summary")
+  @RequirePermission(READ)
+  vitalsSummary(@TenantId() tenantId: string, @Query("days") days?: string) {
+    const d = Number(days || "7");
+    return this.analytics.vitalsSummary(tenantId, Number.isFinite(d) ? d : 7);
   }
 
   @Sse("stream")

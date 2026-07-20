@@ -35,9 +35,10 @@ export function middleware(req: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Gate everything except Next internals, the PWA service-worker assets, and
-  // static files (so the login bounce never blocks JS/CSS/icons).
+  // Gate everything except Next internals, the PWA service-worker assets, static
+  // files (so the login bounce never blocks JS/CSS/icons), and the keep-warm cron
+  // target (unauthenticated by design — must reach the lambda, not bounce at the edge).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|workbox-|worker-|fallback-|images/|icons/|.*\\.(?:png|jpg|jpeg|svg|gif|ico|json|js|css|woff2?)).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|workbox-|worker-|fallback-|images/|icons/|api/warm|.*\\.(?:png|jpg|jpeg|svg|gif|ico|json|js|css|woff2?)).*)",
   ],
 };
