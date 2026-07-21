@@ -875,6 +875,13 @@ export class CanvassingService {
       totalM = priced.legs.reduce((sum, l) => sum + l.distance, 0);
       totalS = priced.legs.reduce((sum, l) => sum + l.duration, 0);
     } else {
+      // One line that answers "why is the walk line straight?" in prod logs: the fallback with
+      // Mapbox CONFIGURED means requests failed/leg-counts mismatched, not a missing token.
+      if (this.directions.enabled && waypoints.length >= 2) {
+        this.logger.warn(
+          `turfRoute ${turfId}: Mapbox directions unavailable for ${waypoints.length} waypoints — straight-line fallback`,
+        );
+      }
       // Straight-line fallback at the model's walking pace (1.25 m/s), so the list still shows a leg.
       for (let i = 1; i < located.length; i += 1) {
         const distanceM = haversineM(located[i - 1], located[i]);

@@ -70,6 +70,53 @@ export async function fetchWalkingDirections(
   }
 }
 
+/** The Directions API's hard limit: 25 coordinates per request. */
+const MAX_WAYPOINTS = 25;
+
+/**
+ * The street-following walk line through EVERY point, in order — the client-side twin of
+ * the server's windowed `routeLegsAndGeometry`, on the public token. Used when the server
+ * walk-route didn't deliver geometry, so the map's full-route line still follows footpaths
+ * instead of drawing beelines. Windows of 25 coordinates overlapping by one; each window's
+ * first geometry point after the first window duplicates the seam and is dropped. Null on
+ * any failure (no token, <2 points, any window failing) — a partial line must not
+ * masquerade as the route; the caller falls back to the dashed beeline.
+ */
+export async function fetchWalkingRouteGeometry(
+  points: LatLng[],
+  signal?: AbortSignal,
+): Promise<GeoJSON.LineString | null> {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return null;
+  const located = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  if (located.length < 2) return null;
+
+  const windows: LatLng[][] = [];
+  for (let i = 0; i < located.length - 1; i += MAX_WAYPOINTS - 1) {
+    windows.push(located.slice(i, i + MAX_WAYPOINTS));
+  }
+
+  const coordinates: [number, number][] = [];
+  for (const window of windows) {
+    const coords = window.map((p) => `${p.lng},${p.lat}`).join(";");
+    const url = `${MAPBOX_DIRECTIONS}/${coords}?overview=full&geometries=geojson&access_token=${token}`;
+    try {
+      const res = await fetch(url, { signal });
+      if (!res.ok) return null;
+      const json = (await res.json()) as { routes?: Array<{ geometry?: GeoJSON.LineString }> };
+      const line = json.routes?.[0]?.geometry;
+      if (line?.type !== "LineString" || !Array.isArray(line.coordinates) || line.coordinates.length < 2) {
+        return null;
+      }
+      const pts = coordinates.length ? line.coordinates.slice(1) : line.coordinates;
+      coordinates.push(...(pts as [number, number][]));
+    } catch {
+      return null;
+    }
+  }
+  return coordinates.length >= 2 ? { type: "LineString", coordinates } : null;
+}
+
 /** "120 m" / "1.4 km" */
 export function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   coordKey,
   fetchWalkingDirections,
+  fetchWalkingRouteGeometry,
   formatDistance,
   formatDuration,
   type LatLng,
@@ -128,5 +129,79 @@ describe("fetchWalkingDirections", () => {
   it("returns null on a network error", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
     expect(await fetchWalkingDirections(FROM, TO)).toBeNull();
+  });
+});
+
+describe("fetchWalkingRouteGeometry", () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_MAPBOX_TOKEN = "pk.test";
+  });
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_MAPBOX_TOKEN = OLD_TOKEN;
+    vi.restoreAllMocks();
+  });
+
+  const pt = (i: number): LatLng => ({ lat: -33.8 - i * 0.001, lng: 151.2 + i * 0.001 });
+
+  it("returns null with no token or fewer than two finite points", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.NEXT_PUBLIC_MAPBOX_TOKEN = "";
+    expect(await fetchWalkingRouteGeometry([pt(0), pt(1)])).toBeNull();
+    process.env.NEXT_PUBLIC_MAPBOX_TOKEN = "pk.test";
+    expect(await fetchWalkingRouteGeometry([])).toBeNull();
+    expect(await fetchWalkingRouteGeometry([pt(0)])).toBeNull();
+    expect(await fetchWalkingRouteGeometry([pt(0), { lat: NaN, lng: NaN }])).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fetches one window for ≤25 points and returns the street line", async () => {
+    const line = { type: "LineString", coordinates: [[151.2, -33.8], [151.201, -33.801], [151.202, -33.802]] };
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ routes: [{ geometry: line }] }) }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await fetchWalkingRouteGeometry([pt(0), pt(1), pt(2)]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("/directions/v5/mapbox/walking/");
+    expect(url).toContain("overview=full");
+    expect(url).toContain("geometries=geojson");
+    expect(res).toEqual(line);
+  });
+
+  it("windows >25 points (overlap by one) and stitches, dropping each seam's duplicate point", async () => {
+    const win1 = { type: "LineString", coordinates: [[0, 0], [1, 1], [2, 2]] };
+    const win2 = { type: "LineString", coordinates: [[2, 2], [3, 3]] }; // starts at the seam
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ routes: [{ geometry: win1 }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ routes: [{ geometry: win2 }] }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const points = Array.from({ length: 26 }, (_, i) => pt(i)); // 26 → two windows (25 + 2)
+    const res = await fetchWalkingRouteGeometry(points);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Window 2 shares its first waypoint with window 1's last.
+    const url1 = String(fetchMock.mock.calls[0][0]);
+    const url2 = String(fetchMock.mock.calls[1][0]);
+    expect(url1.split(";")).toHaveLength(25);
+    expect(url2.split(";")).toHaveLength(2);
+    expect(res).toEqual({ type: "LineString", coordinates: [[0, 0], [1, 1], [2, 2], [3, 3]] });
+  });
+
+  it("returns null when any window fails — a partial line must not pose as the route", async () => {
+    const win1 = { type: "LineString", coordinates: [[0, 0], [1, 1]] };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ routes: [{ geometry: win1 }] }) })
+      .mockResolvedValueOnce({ ok: false, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const points = Array.from({ length: 26 }, (_, i) => pt(i));
+    expect(await fetchWalkingRouteGeometry(points)).toBeNull();
+  });
+
+  it("returns null on a network error or an empty/absent geometry", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
+    expect(await fetchWalkingRouteGeometry([pt(0), pt(1)])).toBeNull();
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ routes: [{}] }) })));
+    expect(await fetchWalkingRouteGeometry([pt(0), pt(1)])).toBeNull();
   });
 });

@@ -10,7 +10,7 @@ import { useAssignment } from "../hooks/use-canvass";
 import { getTenantBrand, getVolunteerId } from "../lib/volunteer";
 import { optimiseRoute, walkLineThrough, type Stop } from "../lib/route";
 import { estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
-import { formatDistance, type LatLng } from "../lib/directions";
+import { coordKey, fetchWalkingRouteGeometry, formatDistance, type LatLng } from "../lib/directions";
 import { useLocalStorage } from "../hooks/use-local-storage";
 import { useGeolocation } from "../hooks/use-geolocation";
 import { useTilePreCache } from "../hooks/use-tile-pre-cache";
@@ -209,15 +209,44 @@ export function WalkView({
 
   // Live GPS wins; else the preview's sample position (organiser preview has no GPS).
   const userPosition = fix ? { lat: fix.lat, lng: fix.lng } : (sampleUserPosition ?? null);
-  // The FULL route line, always: the caller override (preview walk-order line), else the
-  // server's street-following geometry, else a straight-line thread through the remaining
-  // doors from where the volunteer stands — the offline fallback, drawn dashed (approximate).
+
+  // Client-side street-following full-route line — the second tier, fetched with the
+  // public token straight from the phone when the server route didn't deliver geometry.
+  // Keyed on the pending stops' order + a ~1m-rounded origin, so it refetches after a
+  // knock or re-order, never on render-identity churn.
+  const [clientRoute, setClientRoute] = useState<GeoJSON.LineString | null>(null);
+  const clientRouteKey =
+    !routeGeometryProp && !serverRoute?.geometry && mode === "map" && pending.length > 0
+      ? `${turfId}|${userPosition ? coordKey(userPosition) : ""}|${pending.map((s) => s.id).join(",")}`
+      : "";
+  const clientRoutePoints = useRef<LatLng[]>([]);
+  clientRoutePoints.current = [...(userPosition ? [userPosition] : []), ...pending];
+  useEffect(() => {
+    if (!clientRouteKey) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      // Offline: drop any stale street line so the dashed beeline (honest about being
+      // approximate) takes over instead of an out-of-date path.
+      setClientRoute(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchWalkingRouteGeometry(clientRoutePoints.current).then((line) => {
+      if (!cancelled) setClientRoute(line);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [clientRouteKey]);
+
+  // The FULL route line, always: the caller override (preview walk-order line) → the
+  // server's street-following geometry → the client-fetched street line → a straight-line
+  // thread through the remaining doors — the offline last resort, drawn dashed (approximate).
   const beeline = useMemo(
     () => walkLineThrough([...(userPosition ? [userPosition] : []), ...pending]),
     [userPosition, pending],
   );
-  const mapRoute = routeGeometryProp ?? serverRoute?.geometry ?? beeline;
-  const mapRouteApproximate = !routeGeometryProp && !serverRoute?.geometry && !!beeline;
+  const mapRoute = routeGeometryProp ?? serverRoute?.geometry ?? clientRoute ?? beeline;
+  const mapRouteApproximate = mapRoute === beeline && !!beeline;
 
   const openDoor = (id: string) => {
     if (readOnly) return;
@@ -227,13 +256,21 @@ export function WalkView({
   // Fetch the server's Mapbox walk route, ordered from the volunteer's position by default
   // (the live fix, else a persisted "start from here"). Waits for the mount GPS capture to
   // settle so the first fetch already carries the origin. Online-only — a failure/offline
-  // just leaves the client crow-flies fallback in place. Not run in the organiser preview
-  // (no volunteer / it's fed a route line directly).
+  // just leaves the client fallbacks in place. Not run in the organiser preview (no
+  // volunteer / it's fed a route line directly). Deps are STABLE PRIMITIVES — the origin
+  // rounded to ~1m and the pending count — so an SWR revalidation swapping the assignment's
+  // identity can't cancel a multi-second route fetch mid-flight; a knock (pending count
+  // drops) or a real move still refetches.
+  const hasAssignment = Boolean(assignment);
+  const pendingCount = pending.length;
+  const originKey = routeOrigin ? coordKey(routeOrigin) : "";
+  const routeOriginRef = useRef(routeOrigin);
+  routeOriginRef.current = routeOrigin;
   useEffect(() => {
-    if (readOnly || isPreview || !assignment || !volunteerId || !gpsReady) return;
+    if (readOnly || isPreview || !hasAssignment || !volunteerId || !gpsReady) return;
     let cancelled = false;
     setRouting(true);
-    void getWalkRoute(turfId, volunteerId, routeOrigin).then((res) => {
+    void getWalkRoute(turfId, volunteerId, routeOriginRef.current).then((res) => {
       if (cancelled) return;
       setRouting(false);
       if (res.ok) setServerRoute(res.data);
@@ -241,7 +278,8 @@ export function WalkView({
     return () => {
       cancelled = true;
     };
-  }, [turfId, volunteerId, routeOrigin, assignment, readOnly, isPreview, gpsReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turfId, volunteerId, originKey, pendingCount, hasAssignment, readOnly, isPreview, gpsReady]);
 
   // "Start from my location" — capture GPS once and pin it as the route origin. The fetch effect
   // above then re-orders the list + line + totals in place from where the volunteer is standing.
