@@ -178,7 +178,7 @@ export default function TenantTelephonyPage() {
         <Button asChild variant="ghost" size="sm">
           <Link href={`/super/tenants/${tenantId}`}>
             <ArrowLeft className="mr-1 h-4 w-4" />
-            {tenant?.name ?? 'Workspace'}
+            {tenant?.name ?? 'Tenant'}
           </Link>
         </Button>
         <h1 className="text-2xl font-bold">Telephony</h1>
@@ -352,7 +352,7 @@ export default function TenantTelephonyPage() {
                         className="flex w-full items-center gap-3 rounded-lg border border-border p-3 text-left hover:bg-surface-variant"
                       >
                         <span className="text-sm font-semibold">
-                          {run.campaignId ? 'Campaign number' : 'Workspace number'}
+                          {run.campaignId ? 'Campaign number' : 'Tenant number'}
                         </span>
                         <span className="rounded-full bg-surface-variant px-2 py-0.5 text-xs font-bold uppercase text-muted-foreground">
                           {run.status.replaceAll('_', ' ')}

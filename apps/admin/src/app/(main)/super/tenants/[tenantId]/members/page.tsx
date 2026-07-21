@@ -107,7 +107,7 @@ export default function TenantMembersPage() {
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Workspace Members</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tenant Members</h1>
           <p className="text-gray-600 dark:text-gray-400">Manage members for this tenant</p>
         </div>
 

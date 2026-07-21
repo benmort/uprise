@@ -183,7 +183,7 @@ function TreeRow({ node, app, depth, forceOpen, res }: { node: TreeNode; app: Si
             })
           ) : (
             <div className="py-1.5 text-xs text-muted-foreground" style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}>
-              No instances in this workspace.
+              No instances in this tenant.
             </div>
           )}
         </div>

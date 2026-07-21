@@ -188,7 +188,7 @@ export default function FeatureFlagsPage() {
           </div>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Per-tenant and per-network overrides on top of each target&apos;s plan. Pick a
-            workspace or network, then force a feature on or off, or leave it to inherit
+            tenant or network, then force a feature on or off, or leave it to inherit
             from the plan. Base entitlements live on the{" "}
             <Link href="/super/plans" className="text-primary hover:underline">
               Plans

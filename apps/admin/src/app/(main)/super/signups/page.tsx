@@ -10,7 +10,7 @@ import { getSession } from '@/lib/session';
 import { approveSignup, listPendingSignups, rejectSignup, type PendingSignup } from '@/lib/api';
 
 /**
- * Super-admin Signups queue. New self-service workspaces (gated /auth/register when
+ * Super-admin Signups queue. New self-service tenants (gated /auth/register when
  * SIGNUP_APPROVAL_REQUIRED) land here awaiting review. Approving mints the OWNER membership and
  * emails the owner "you're in"; rejecting soft-deletes the member-less tenant, freeing its slug.
  * The API enforces @SuperAdmin; this page also gates the view + shows the four feedback states.
@@ -61,7 +61,7 @@ export default function SuperSignupsPage() {
 
   const reject = async (row: PendingSignup) => {
     if (pending) return;
-    if (!window.confirm(`Reject "${row.orgName}"? This soft-deletes the workspace and frees its URL.`)) return;
+    if (!window.confirm(`Reject "${row.orgName}"? This soft-deletes the tenant and frees its URL.`)) return;
     setPending(`reject:${row.requestId}`);
     const res = await rejectSignup(row.requestId);
     setPending(null);
@@ -93,7 +93,7 @@ export default function SuperSignupsPage() {
             <h1 className="text-2xl font-extrabold">Signups</h1>
           </div>
           <p className="text-gray-600 dark:text-gray-400">
-            New workspaces awaiting approval. Approve to grant access, or reject to remove.
+            New tenants awaiting approval. Approve to grant access, or reject to remove.
           </p>
         </div>
         {rows && rows.length > 0 ? <Badge variant="info">{rows.length} pending</Badge> : null}
@@ -117,7 +117,7 @@ export default function SuperSignupsPage() {
               No signups awaiting approval
             </h3>
             <p className="max-w-sm text-center text-sm text-gray-600 dark:text-gray-400">
-              New self-service workspaces will appear here for review.
+              New self-service tenants will appear here for review.
             </p>
           </CardContent>
         </Card>

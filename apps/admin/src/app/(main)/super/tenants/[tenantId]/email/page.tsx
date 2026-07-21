@@ -143,7 +143,7 @@ export default function TenantEmailPage() {
   };
 
   const declineRequest = async (id: string) => {
-    const reason = window.prompt("Reason (shown to the workspace owner):") ?? undefined;
+    const reason = window.prompt("Reason (shown to the tenant owner):") ?? undefined;
     const res = await emailProvisioning.declineRequest(id, reason);
     if (!res.ok) setActionError(res.error);
     await load();
@@ -220,7 +220,7 @@ export default function TenantEmailPage() {
           <Button asChild variant="ghost" size="sm">
             <Link href={`/super/tenants/${tenantId}`}>
               <ArrowLeft className="mr-1 h-4 w-4" />
-              {tenant?.name ?? 'Workspace'}
+              {tenant?.name ?? 'Tenant'}
             </Link>
           </Button>
           <h1 className="text-2xl font-bold">Email identities</h1>
@@ -281,7 +281,7 @@ export default function TenantEmailPage() {
         <Button asChild variant="ghost" size="sm">
           <Link href={`/super/tenants/${tenantId}`}>
             <ArrowLeft className="mr-1 h-4 w-4" />
-            {tenant?.name ?? 'Workspace'}
+            {tenant?.name ?? 'Tenant'}
           </Link>
         </Button>
         <h1 className="text-2xl font-bold">Email identities</h1>

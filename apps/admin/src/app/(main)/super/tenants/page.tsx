@@ -166,18 +166,16 @@ export default function TenantsPage() {
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-6 w-6 shrink-0 text-primary" />
-            <h1 className="text-2xl font-extrabold">{isSuperAdmin ? 'Tenants' : 'Workspaces'}</h1>
+            <h1 className="text-2xl font-extrabold">Tenants</h1>
           </div>
           <p className="text-gray-600 dark:text-gray-400">
-            {isSuperAdmin
-              ? 'Manage every tenant on the platform.'
-              : 'Manage the brands you own.'}
+            Manage every tenant on the platform.
           </p>
         </div>
         {canCreate ? (
           <Button onClick={() => setCreateOpen(true)} disabled={!!pending}>
             <Plus className="h-4 w-4 mr-2" />
-            {isSuperAdmin ? 'Create Tenant' : 'Create Workspace'}
+            Create Tenant
           </Button>
         ) : null}
       </div>
@@ -185,7 +183,7 @@ export default function TenantsPage() {
       <SearchInput
         value={query}
         onValueChange={setQuery}
-        placeholder={isSuperAdmin ? 'Search all tenants…' : 'Search your workspaces…'}
+        placeholder='Search all tenants…'
         wrapperClassName="max-w-sm"
       />
 
@@ -197,18 +195,18 @@ export default function TenantsPage() {
 
       {rows === null ? (
         <div className="flex items-center justify-center gap-2 h-64 text-gray-600 dark:text-gray-400">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading workspaces…
+          <Loader2 className="h-5 w-5 animate-spin" /> Loading tenants…
         </div>
       ) : rows.length === 0 ? (
         <Card className="border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03]">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-              {query ? 'No workspaces match' : 'No workspaces yet'}
+              {query ? 'No tenants match' : 'No tenants yet'}
             </h3>
             {canCreate && !query ? (
               <Button onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" /> Create Workspace
+                <Plus className="h-4 w-4 mr-2" /> Create Tenant
               </Button>
             ) : null}
           </CardContent>

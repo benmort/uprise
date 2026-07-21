@@ -302,7 +302,7 @@ export default function PlansPage() {
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Subscription plans: pricing and limits for the public page, plus the features each one
             grants. A plan&apos;s key must match the network&apos;s plan name. Tenants inherit a
-            plan&apos;s entitlements unless a workspace or env override says otherwise.
+            plan&apos;s entitlements unless a tenant or env override says otherwise.
           </p>
         </div>
         {!denied && !loading && !error ? headerActions : null}
