@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uprise Onboarding — Design Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300..800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   Uprise Onboarding prototype — tokens mirror @uprise/ui (Tailwind v4 CSS-first).
+   Recreate with token utilities (bg-primary, bg-warning-container, border-border,
+   shadow-card, animate-fade-up) — never these raw hexes. See README.md.
+   ========================================================================== */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+:root{
+  --primary:#465fff;            /* --primary / brand-500 */
+  --primary-container:#e8ecff;  /* --primary-container */
+  --ink:#16181d;                /* --foreground */
+  --ink2:#3a3f4a;
+  --muted:#6b7280;              /* --muted-foreground */
+  --faint:#8b909c;
+  --border:#e6e8ec;             /* --border */
+  --hairline:#f3f4f6;
+  --bg:#f5f6f8;                 /* --background */
+  --surface:#ffffff;            /* --surface */
+  --surface-variant:#eef0f3;    /* --surface-variant */
+  --success:#16a34a;            /* --success */
+  --success-container:#e7f6ec;  /* --success-container */
+  --warning-fg:#92600e;         /* --warning-foreground */
+  --warning-container:#fef3e2;  /* --warning-container */
+  --error:#dc2626;              /* --error */
+  --error-container:#fdeaea;    /* --error-container */
+  --secondary-container:#eef0f3;
+  --shadow-card:0 1px 2px rgba(16,24,40,.08),0 1px 3px rgba(16,24,40,.1);
+  --shadow-elevated:0 12px 32px rgba(16,24,40,.16);
+}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f1115;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#cfd4dc;border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-track{background:transparent}
+@keyframes fadeUp{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes celebrate{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+@keyframes ringFill{from{stroke-dashoffset:56.5}to{}}
+
+.app{height:100vh;display:flex;flex-direction:column;overflow:hidden;background:#0f1115}
+/* ---- prototype strip ---- */
+.strip{flex:0 0 auto;background:#16181d;color:#e7e9ee;display:flex;align-items:center;gap:14px;padding:0 16px;height:48px;border-bottom:1px solid #2a2d35;overflow-x:auto;white-space:nowrap}
+.strip .brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;color:#fff;flex:0 0 auto}
+.strip .brand .tag{font-weight:400;font-size:11px;color:#8b909c;letter-spacing:.04em;text-transform:uppercase;border-left:1px solid #3a3e48;padding-left:10px;margin-left:2px}
+.strip .grp{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.strip .grp .lbl{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#6b7180;font-weight:700}
+.strip button{font-family:inherit;font-size:12px;font-weight:600;color:#c9cdd6;background:#22252d;border:1px solid #2f333d;border-radius:8px;padding:6px 10px;cursor:pointer}
+.strip button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.stage{flex:1 1 auto;overflow:hidden;position:relative;background:var(--surface-variant)}
+.screen{position:absolute;inset:0;display:none}
+.screen.on{display:flex}
+
+/* ---- admin shell ---- */
+.shell{height:100%;display:flex;background:var(--bg);width:100%}
+.side{flex:0 0 220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 12px;gap:2px}
+.side .logo{display:flex;align-items:center;gap:8px;padding:6px 8px 18px;font-weight:700;font-size:22px}
+.side .logo .mark{width:26px;height:26px;border-radius:8px;background:var(--primary);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:800}
+.side a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;color:var(--ink2);font-size:13.5px;font-weight:500;text-decoration:none}
+.side a.on{background:var(--primary-container);color:var(--primary);font-weight:700}
+.side .sec{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:700;padding:14px 10px 4px}
+.main{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
+.topbar{flex:0 0 auto;height:60px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:space-between;padding:0 26px;color:var(--muted);font-size:13px}
+.content{flex:1 1 auto;overflow-y:auto;padding:28px 32px 120px}
+.pagehead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.pagehead h1{font-size:24px;font-weight:800;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+.pagehead p{margin:0;color:var(--muted);font-size:14px}
+
+/* ---- cards / sections ---- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-card);animation:fadeUp .35s ease both}
+.flow{margin-bottom:18px}
+.flow .fh{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 20px 12px}
+.flow .fh h2{margin:0;font-size:16px;font-weight:800;display:flex;align-items:center;gap:9px}
+.flow .fh .sub{color:var(--muted);font-size:13px;margin-top:2px}
+.flow .fh .prog{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.nofm{font-size:12px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar{display:flex;gap:4px}
+.bar i{width:26px;height:6px;border-radius:4px;background:var(--surface-variant)}
+.bar i.f{background:var(--primary)}
+.rows{padding:4px 8px 10px}
+.row{display:flex;align-items:center;gap:14px;padding:12px 12px;border-radius:12px}
+.row:hover{background:var(--bg)}
+.row.locked{opacity:.6}
+.row .ic{flex:0 0 auto;width:22px;height:22px}
+.row .tx{flex:1 1 auto;min-width:0}
+.row .tt{font-size:14px;font-weight:700}
+.row .tt.done{text-decoration:line-through;color:var(--muted);font-weight:600}
+.row .bb{font-size:12.5px;color:var(--muted);margin-top:1px}
+.row .rr{font-size:12.5px;color:var(--warning-fg);margin-top:2px;font-weight:600}
+.row .cta{flex:0 0 auto;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 12px;cursor:pointer}
+.row .cta.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+
+/* ---- chips ---- */
+.chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:4px 10px}
+.chip.done{background:var(--success-container);color:var(--success)}
+.chip.todo{background:var(--secondary-container);color:var(--muted)}
+.chip.rec{background:var(--primary-container);color:var(--primary)}
+.chip.prog{background:var(--primary-container);color:var(--primary)}
+.chip.act{background:var(--warning-container);color:var(--warning-fg)}
+.chip.req{background:var(--secondary-container);color:var(--muted)}
+.chip.plan{background:var(--surface-variant);color:var(--muted)}
+.chip.fail{background:var(--error-container);color:var(--error)}
+
+/* ---- svg icons ---- */
+.i{display:inline-block;vertical-align:middle}
+
+/* ---- overall strip ---- */
+.overall{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-card);padding:16px 20px;margin-bottom:18px;animation:fadeUp .3s ease both}
+.overall .big{font-size:15px;font-weight:800}
+.overall .sub{font-size:13px;color:var(--muted)}
+
+/* ---- telephony embed ---- */
+.embed{margin:6px 14px 14px;border:1px solid var(--border);border-radius:14px;padding:16px}
+.embed h3{margin:0 0 10px;font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px}
+.numrow{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px}
+.numrow .mono{font-family:ui-monospace,Menlo,monospace;font-weight:700}
+.timeline{margin-top:12px;border-top:1px solid var(--hairline);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.tstep{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink2)}
+.tstep .dot{width:10px;height:10px;border-radius:99px;background:var(--success)}
+.tstep.now .dot{background:var(--primary);box-shadow:0 0 0 4px var(--primary-container)}
+.tstep.wait .dot{background:var(--surface-variant);border:1px solid var(--border)}
+.tstep.wait{color:var(--faint)}
+
+/* ---- upgrade banner ---- */
+.upgrade{display:flex;align-items:flex-start;gap:12px;background:var(--surface-variant);border:1px dashed var(--border);border-radius:14px;padding:14px 16px;margin:6px 14px 14px;font-size:13px;color:var(--muted)}
+.upgrade b{color:var(--ink)}
+.upgrade .cta{margin-left:auto;flex:0 0 auto;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--primary);background:var(--primary-container);border:none;border-radius:9px;padding:8px 14px;cursor:pointer}
+
+/* ---- tracker ---- */
+.dashwrap{position:relative;flex:1;overflow:hidden}
+.pill{position:absolute;left:calc(220px + 16px);bottom:16px;display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);border-radius:999px;box-shadow:var(--shadow-elevated);padding:8px 14px 8px 9px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;color:var(--ink);animation:fadeUp .35s ease both;z-index:40}
+.pill .count{font-variant-numeric:tabular-nums;color:var(--muted);font-weight:600}
+.tracker{position:absolute;left:calc(220px + 16px);bottom:16px;width:320px;max-height:70vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-elevated);animation:popIn .22s ease both;z-index:40}
+.tracker .th{padding:16px 16px 10px;border-bottom:1px solid var(--hairline)}
+.tracker .th .t1{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:800}
+.tracker .th .dismiss{font-family:inherit;background:none;border:none;font-size:12px;color:var(--muted);cursor:pointer;font-weight:600}
+.tracker .grp2{padding:10px 8px 2px}
+.tracker .gl{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);padding:4px 10px}
+.trow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;text-decoration:none}
+.trow:hover{background:var(--bg)}
+.trow .grow{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tracker .tf{padding:10px 16px 14px;border-top:1px solid var(--hairline);display:flex;justify-content:center}
+.tracker .tf button{font-family:inherit;font-size:13px;font-weight:700;color:#fff;background:var(--primary);border:none;border-radius:10px;padding:9px 16px;cursor:pointer;width:100%}
+
+/* ---- locked action + popover ---- */
+.lockbtn{display:inline-flex;align-items:center;gap:8px;font-family:inherit;font-size:13px;font-weight:700;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 14px;cursor:pointer;opacity:.6}
+.pop{position:absolute;width:290px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-elevated);padding:14px 16px;animation:popIn .18s ease both;z-index:50}
+.pop h4{margin:0 0 6px;font-size:13.5px;font-weight:800}
+.pop p{margin:0 0 8px;font-size:12.5px;color:var(--muted)}
+.pop ul{margin:0 0 10px;padding:0 0 0 4px;list-style:none;display:flex;flex-direction:column;gap:5px}
+.pop li{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);font-weight:600}
+.pop a{display:inline-flex;font-size:12.5px;font-weight:700;color:var(--primary);text-decoration:none}
+.dlgerr{display:flex;gap:10px;background:var(--error-container);border:1px solid #f6c8c8;border-radius:12px;padding:12px 14px;font-size:13px;color:var(--error);align-items:flex-start}
+.dlgerr a{color:var(--error);font-weight:800}
+
+/* celebration */
+.celebrate-ic{animation:celebrate .5s ease both}
+.note{font-size:11.5px;color:var(--faint);margin-top:8px}
+.annot{position:absolute;background:#16181d;color:#e7e9ee;font-size:11px;padding:6px 10px;border-radius:8px;max-width:230px;line-height:1.45;z-index:60;opacity:.94}
+.annot b{color:#8fb0ff}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ PROTOTYPE SWITCHER STRIP ============ -->
+  <div class="strip">
+    <div class="brand"><span style="display:inline-flex;width:22px;height:22px;border-radius:7px;background:var(--primary);color:#fff;align-items:center;justify-content:center;font-size:12px;font-weight:800">U</span>Uprise<span class="tag">Onboarding prototype</span></div>
+    <div class="grp"><span class="lbl">Getting started</span>
+      <button data-s="s1" class="on">S1 Owner</button>
+      <button data-s="s2">S2 Organiser</button>
+      <button data-s="s3">S3 All set</button>
+      <button data-s="s4">S4 Grassroots</button>
+    </div>
+    <div class="grp"><span class="lbl">Tracker</span>
+      <button data-s="s5">S5 Pill</button>
+      <button data-s="s6">S6 Expanded</button>
+      <button data-s="s7">S7 Celebration</button>
+    </div>
+    <div class="grp"><span class="lbl">Gating</span>
+      <button data-s="s8">S8 Locked controls</button>
+      <button data-s="s9">S9 Email request</button>
+    </div>
+  </div>
+
+  <div class="stage">
+
+  <!-- ================= S1 — GETTING STARTED (OWNER) ================= -->
+  <section class="screen on" id="s1">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="mark">U</span>Uprise</div>
+        <a href="#">▦ Dashboard</a>
+        <a class="on" href="#">🚀 Getting Started</a>
+        <a href="#">📅 Calendar</a>
+        <div class="sec">Engage</div>
+        <a href="#">💬 Channels</a>
+        <a href="#">📍 Canvass</a>
+        <a href="#">✨ Content</a>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span>Getting Started</span><span>Common Threads · Owner</span></div>
+        <div class="content" style="max-width:860px">
+          <div class="pagehead">
+            <div>
+              <h1>🚀 Getting started</h1>
+              <p>Set up your account, your organisation, and your own channels. You can send on shared Uprise numbers from day one.</p>
+            </div>
+          </div>
+
+          <div class="overall">
+            <div style="flex:1">
+              <div class="big">4 of 9 steps done</div>
+              <div class="sub">Finish Business &amp; legal details to unlock your own phone number.</div>
+            </div>
+            <div class="bar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i></div>
+            <span class="nofm">4/9</span>
+          </div>
+
+          <!-- SELF SETUP -->
+          <div class="card flow">
+            <div class="fh">
+              <div><h2>👤 Self setup</h2><div class="sub">Your own account — secure and recognisable.</div></div>
+              <div class="prog"><span class="nofm">1/2 + 2 recommended</span><div class="bar"><i class="f"></i><i></i></div></div>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span class="ic" style="color:var(--success)">✔</span>
+                <div class="tx"><div class="tt done">Verify your email</div><div class="bb">Confirmed as owner@commonthreads.org.au</div></div>
+                <span class="chip done">Done</span>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Confirm your mobile</div><div class="bb">A verified mobile secures account recovery.</div></div>
+                <span class="chip rec">Recommended</span>
+                <button class="cta">Confirm</button>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Turn on two-factor authentication</div><div class="bb">Protects the account that holds billing and compliance powers.</div></div>
+                <span class="chip rec">Recommended</span>
+                <button class="cta">Enable</button>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--success)">✔</span>
+                <div class="tx"><div class="tt done">Complete your profile</div><div class="bb">Name and photo shown to your team.</div></div>
+                <span class="chip done">Done</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ORGANISATION SETUP -->
+          <div class="card flow">
+            <div class="fh">
+              <div><h2>🏛 Organisation setup</h2><div class="sub">Who you are — brand, legal identity, and the people who sign.</div></div>
+              <div class="prog"><span class="nofm">2/4 + 1 recommended</span><div class="bar"><i class="f"></i><i class="f"></i><i></i><i></i></div></div>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span class="ic" style="color:var(--success)">✔</span>
+                <div class="tx"><div class="tt done">Organisation profile</div><div class="bb">Name, logo and brand colour.</div></div>
+                <span class="chip done">Done</span>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--warning-fg)">⚠</span>
+                <div class="tx">
+                  <div class="tt">Business &amp; legal details</div>
+                  <div class="bb">Legal trading name, ABN/ACN and entity type — needed for your own phone number.</div>
+                  <div class="rr">Compliance was rejected — the ABN didn't match the legal name. Update and resubmit.</div>
+                </div>
+                <span class="chip act">Action required</span>
+                <button class="cta primary">Fix details</button>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Organisation contacts</div><div class="bb">A primary contact (and ideally an authorised signatory).</div></div>
+                <span class="chip todo">To do</span>
+                <button class="cta">Add contact</button>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--success)">✔</span>
+                <div class="tx"><div class="tt done">Registered address</div><div class="bb">Street, suburb, state and postcode.</div></div>
+                <span class="chip done">Done</span>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Branding extras</div><div class="bb">Secondary colour and hero image for your public pages.</div></div>
+                <span class="chip rec">Recommended</span>
+                <button class="cta">Add branding</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- CHANNELS -->
+          <div class="card flow">
+            <div class="fh">
+              <div><h2>📡 Your channels</h2><div class="sub">Text, call and email from numbers and addresses your org owns. Until then, you're sending on shared Uprise channels.</div></div>
+              <div class="prog"><span class="nofm">0/2</span><div class="bar"><i></i><i></i></div></div>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span class="ic" style="color:var(--primary)">◔</span>
+                <div class="tx"><div class="tt">Your phone number</div><div class="bb">A dedicated local number for calls and texts.</div></div>
+                <span class="chip prog">In progress</span>
+              </div>
+            </div>
+            <div class="embed">
+              <h3>📞 Phone numbers <span class="chip prog" style="margin-left:auto">Step 3 of 6</span></h3>
+              <div class="numrow"><span class="mono">+61 2 5838 5569</span><span class="chip prog">Pending</span><span style="color:var(--muted);font-size:12px">Local · calls + SMS</span></div>
+              <div class="timeline">
+                <div class="tstep"><span class="dot"></span>Subaccount created</div>
+                <div class="tstep"><span class="dot"></span>Compliance drafted from your business details</div>
+                <div class="tstep now"><span class="dot"></span>Compliance submitted — Twilio is reviewing (usually &lt; 1 business day)</div>
+                <div class="tstep wait"><span class="dot"></span>Number purchased</div>
+                <div class="tstep wait"><span class="dot"></span>Webhooks configured</div>
+                <div class="tstep wait"><span class="dot"></span>Active</div>
+              </div>
+            </div>
+            <div class="rows" style="padding-top:0">
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Your email identity</div><div class="bb">Send from you@commonthreads.org.au — the Uprise team sets this up.</div></div>
+                <span class="chip todo">To do</span>
+                <button class="cta">Request email setup</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S1 — Owner.</b> Three role-layered flows with chips. Business &amp; legal shows the server <b>reason</b> line (compliance rejected → action_required). The telephony card is the existing TelephonyStatusCard embedded, not a rebuild.</div>
+  </section>
+
+  <!-- ================= S2 — GETTING STARTED (ORGANISER) ================= -->
+  <section class="screen" id="s2">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="mark">U</span>Uprise</div>
+        <a href="#">▦ Dashboard</a>
+        <a class="on" href="#">🚀 Getting Started</a>
+        <a href="#">📅 Calendar</a>
+        <div class="sec">Engage</div>
+        <a href="#">💬 Channels</a>
+        <a href="#">📍 Canvass</a>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span>Getting Started</span><span>Common Threads · Organiser</span></div>
+        <div class="content" style="max-width:860px">
+          <div class="pagehead">
+            <div><h1>🚀 Getting started</h1><p>Your account, ready to organise.</p></div>
+          </div>
+          <div class="overall">
+            <div style="flex:1"><div class="big">1 of 2 steps done</div><div class="sub">Verify your email to finish.</div></div>
+            <div class="bar"><i class="f"></i><i></i></div><span class="nofm">1/2</span>
+          </div>
+          <div class="card flow">
+            <div class="fh">
+              <div><h2>👤 Self setup</h2><div class="sub">Your own account — secure and recognisable.</div></div>
+              <div class="prog"><span class="nofm">1/2 + 2 recommended</span><div class="bar"><i class="f"></i><i></i></div></div>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Verify your email</div><div class="bb">We sent a link to jess@commonthreads.org.au.</div></div>
+                <span class="chip todo">To do</span>
+                <button class="cta primary">Resend link</button>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--success)">✔</span>
+                <div class="tx"><div class="tt done">Complete your profile</div><div class="bb">Name and photo shown to your team.</div></div>
+                <span class="chip done">Done</span>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Confirm your mobile</div><div class="bb">A verified mobile secures account recovery.</div></div>
+                <span class="chip rec">Recommended</span>
+                <button class="cta">Confirm</button>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Turn on two-factor authentication</div><div class="bb">Keep your account safe.</div></div>
+                <span class="chip rec">Recommended</span>
+                <button class="cta">Enable</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S2 — Organiser.</b> Self setup only — Organisation and Channels flows are absent entirely (hidden, not locked). The org's setup belongs to the owner.</div>
+  </section>
+
+  <!-- ================= S3 — ALL SET (OWNER) ================= -->
+  <section class="screen" id="s3">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="mark">U</span>Uprise</div>
+        <a href="#">▦ Dashboard</a>
+        <a class="on" href="#">🚀 Getting Started</a>
+        <a href="#">📅 Calendar</a>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span>Getting Started</span><span>Common Threads · Owner</span></div>
+        <div class="content" style="max-width:860px">
+          <div class="card" style="padding:44px 24px;text-align:center;margin-bottom:18px">
+            <div class="celebrate-ic" style="font-size:52px">🎉</div>
+            <h1 style="margin:10px 0 6px;font-size:22px;font-weight:800">You're all set up</h1>
+            <p style="margin:0 auto 18px;color:var(--muted);font-size:14px;max-width:420px">Your organisation is verified, your number is live, and your team can get to work. This page (and its menu item) retires itself now.</p>
+            <button class="cta primary" style="font-size:14px;padding:11px 20px;border-radius:11px;background:var(--primary);color:#fff;border:none;font-weight:700;cursor:pointer">Go to dashboard</button>
+          </div>
+          <div class="card flow">
+            <div class="fh"><div><h2>Everything done</h2></div><div class="prog"><span class="nofm">9/9</span></div></div>
+            <div class="rows">
+              <div class="row"><span class="ic" style="color:var(--success)">✔</span><div class="tx"><div class="tt done">Self setup — 4 steps</div></div><span class="chip done">Done</span></div>
+              <div class="row"><span class="ic" style="color:var(--success)">✔</span><div class="tx"><div class="tt done">Organisation setup — 5 steps</div></div><span class="chip done">Done</span></div>
+              <div class="row"><span class="ic" style="color:var(--success)">✔</span><div class="tx"><div class="tt done">Your channels — +61 2 5838 5569 active · email identity live</div></div><span class="chip done">Done</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S3 — Complete.</b> Persistent all-set state (the one-time animated celebration lives in the tracker, S7). Flows collapse to done rows.</div>
+  </section>
+
+  <!-- ================= S4 — GRASSROOTS (PLAN-LOCKED CHANNELS) ================= -->
+  <section class="screen" id="s4">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="mark">U</span>Uprise</div>
+        <a href="#">▦ Dashboard</a>
+        <a class="on" href="#">🚀 Getting Started</a>
+      </aside>
+      <div class="main">
+        <div class="topbar"><span>Getting Started</span><span>Riverbend Collective · Owner · Grassroots plan</span></div>
+        <div class="content" style="max-width:860px">
+          <div class="pagehead"><div><h1>🚀 Getting started</h1><p>Set up your account and your organisation.</p></div></div>
+          <div class="card flow">
+            <div class="fh"><div><h2>👤 Self setup</h2></div><div class="prog"><span class="nofm">2/2</span><div class="bar"><i class="f"></i><i class="f"></i></div></div></div>
+            <div class="rows">
+              <div class="row"><span class="ic" style="color:var(--success)">✔</span><div class="tx"><div class="tt done">Verify your email</div></div><span class="chip done">Done</span></div>
+              <div class="row"><span class="ic" style="color:var(--success)">✔</span><div class="tx"><div class="tt done">Complete your profile</div></div><span class="chip done">Done</span></div>
+            </div>
+          </div>
+          <div class="card flow">
+            <div class="fh">
+              <div><h2>📡 Your channels</h2><div class="sub">Dedicated numbers and email identities.</div></div>
+            </div>
+            <div class="rows">
+              <div class="row locked">
+                <span class="ic" style="color:var(--muted)">🔒</span>
+                <div class="tx"><div class="tt">Your phone number</div><div class="bb">Text and call from a number your org owns.</div></div>
+                <span class="chip plan">🔒 Plan</span>
+              </div>
+              <div class="row locked">
+                <span class="ic" style="color:var(--muted)">🔒</span>
+                <div class="tx"><div class="tt">Your email identity</div><div class="bb">Send from your own domain.</div></div>
+                <span class="chip plan">🔒 Plan</span>
+              </div>
+            </div>
+            <div class="upgrade">
+              <span style="font-size:16px">🔒</span>
+              <div><b>Dedicated channels aren't part of the Grassroots plan.</b><br>You're sending on shared Uprise numbers and addresses — that keeps working exactly as it does today. Upgrade to Starter or above to text, call and email from numbers your organisation owns.</div>
+              <button class="cta">Talk to us about upgrading</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S4 — Grassroots.</b> Channel steps render plan-locked (greyed, Lock chip, no CTA) + the upgrade banner. Key copy: shared-channel sending is unaffected.</div>
+  </section>
+
+  <!-- ================= S5 — TRACKER PILL ================= -->
+  <section class="screen" id="s5">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="mark">U</span>Uprise</div>
+        <a class="on" href="#">▦ Dashboard</a>
+        <a href="#">🚀 Getting Started</a>
+        <a href="#">📅 Calendar</a>
+        <div class="sec">Engage</div>
+        <a href="#">💬 Channels</a>
+        <a href="#">📍 Canvass</a>
+      </aside>
+      <div class="main dashwrap">
+        <div class="topbar"><span>Dashboard</span><span>Common Threads · Owner</span></div>
+        <div class="content">
+          <div class="pagehead"><div><h1>Good morning, Alex</h1><p>Here's how your campaigns are tracking.</p></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;opacity:.55">
+            <div class="card" style="height:110px"></div><div class="card" style="height:110px"></div><div class="card" style="height:110px"></div>
+            <div class="card" style="grid-column:1/-1;height:260px"></div>
+          </div>
+        </div>
+        <button class="pill" data-goto="s6">
+          <svg width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--surface-variant)" stroke-width="3"/><circle cx="12" cy="12" r="9" fill="none" stroke="var(--primary)" stroke-width="3" stroke-linecap="round" stroke-dasharray="56.5" stroke-dashoffset="31.4" transform="rotate(-90 12 12)" style="animation:ringFill .8s ease both"/></svg>
+          Set up <span class="count">· 4/9</span>
+          <span style="color:var(--faint)">▴</span>
+        </button>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S5 — Tracker pill.</b> Fixed bottom-left, offset past the sidebar (left: var(--sidebar-w) + 16px), z-40 under the tour. Progress ring + count. Replaces the dashboard nudge cards. Click it →</div>
+  </section>
+
+  <!-- ================= S6 — TRACKER EXPANDED ================= -->
+  <section class="screen" id="s6">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="mark">U</span>Uprise</div>
+        <a class="on" href="#">▦ Dashboard</a>
+        <a href="#">🚀 Getting Started</a>
+        <div class="sec">Engage</div>
+        <a href="#">💬 Channels</a>
+        <a href="#">📍 Canvass</a>
+      </aside>
+      <div class="main dashwrap">
+        <div class="topbar"><span>Dashboard</span><span>Common Threads · Owner</span></div>
+        <div class="content">
+          <div class="pagehead"><div><h1>Good morning, Alex</h1><p>Here's how your campaigns are tracking.</p></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;opacity:.4">
+            <div class="card" style="height:110px"></div><div class="card" style="height:110px"></div><div class="card" style="height:110px"></div>
+            <div class="card" style="grid-column:1/-1;height:260px"></div>
+          </div>
+        </div>
+        <div class="tracker" role="dialog" aria-label="Workspace setup">
+          <div class="th">
+            <div class="t1">Finish setting up <button class="dismiss" data-goto="s5">Dismiss</button></div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+              <div class="bar" style="flex:1"><i class="f" style="flex:1"></i><i class="f" style="flex:1"></i><i class="f" style="flex:1"></i><i class="f" style="flex:1"></i><i style="flex:1"></i><i style="flex:1"></i><i style="flex:1"></i><i style="flex:1"></i><i style="flex:1"></i></div>
+              <span class="nofm">4/9</span>
+            </div>
+          </div>
+          <div class="grp2">
+            <div class="gl">Self setup <span>1/2</span></div>
+            <a class="trow"><span style="color:var(--success)">✔</span><span class="grow" style="text-decoration:line-through;color:var(--muted)">Verify your email</span><span class="chip done">Done</span></a>
+            <a class="trow"><span style="color:var(--faint)">◌</span><span class="grow">Confirm your mobile</span><span class="chip rec">Rec</span></a>
+          </div>
+          <div class="grp2">
+            <div class="gl">Organisation <span>2/4</span></div>
+            <a class="trow"><span style="color:var(--warning-fg)">⚠</span><span class="grow">Business &amp; legal details</span><span class="chip act">Action</span></a>
+            <a class="trow"><span style="color:var(--faint)">◌</span><span class="grow">Organisation contacts</span><span class="chip todo">To do</span></a>
+          </div>
+          <div class="grp2">
+            <div class="gl">Channels <span>0/2</span></div>
+            <a class="trow"><span style="color:var(--primary)">◔</span><span class="grow">Your phone number</span><span class="chip prog">In progress</span></a>
+            <a class="trow"><span style="color:var(--faint)">◌</span><span class="grow">Your email identity</span><span class="chip todo">To do</span></a>
+          </div>
+          <div class="tf"><button data-goto="s1">Open setup page</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S6 — Tracker expanded.</b> role="dialog", flow groups with compact rows + chips; rows deep-link (and collapse). Dismiss stores a per-user snapshot — it resurfaces if a blocking step (re)appears.</div>
+  </section>
+
+  <!-- ================= S7 — TRACKER CELEBRATION ================= -->
+  <section class="screen" id="s7">
+    <div class="shell">
+      <aside class="side">
+        <div class="logo"><span class="mark">U</span>Uprise</div>
+        <a class="on" href="#">▦ Dashboard</a>
+        <div class="sec">Engage</div>
+        <a href="#">💬 Channels</a>
+      </aside>
+      <div class="main dashwrap">
+        <div class="topbar"><span>Dashboard</span><span>Common Threads · Owner</span></div>
+        <div class="content">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;opacity:.4;margin-top:40px">
+            <div class="card" style="height:110px"></div><div class="card" style="height:110px"></div><div class="card" style="height:110px"></div>
+          </div>
+        </div>
+        <div class="tracker" style="text-align:center;padding:8px 0">
+          <div style="padding:22px 20px 6px">
+            <div class="celebrate-ic" style="font-size:42px">✅</div>
+            <div style="font-size:15px;font-weight:800;margin-top:8px">You're all set — nice work.</div>
+            <div style="font-size:12.5px;color:var(--muted);margin-top:4px">Everything's verified and your channels are live.</div>
+          </div>
+          <div class="tf" style="border-top:none"><button data-goto="s5">Done</button></div>
+          <div class="note" style="padding:0 16px 12px">Fires once (per user, per workspace), then the tracker retires itself.</div>
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S7 — Celebration.</b> Auto-expands once when setup completes; "Done" retires the tracker forever (localStorage celebrated flag).</div>
+  </section>
+
+  <!-- ================= S8 — LOCKED CONTROLS ================= -->
+  <section class="screen" id="s8">
+    <div class="shell">
+      <div class="main">
+        <div class="topbar"><span>Gating patterns — LockedAction</span><span>visible-but-disabled + affordance (never hidden)</span></div>
+        <div class="content" style="max-width:900px">
+
+          <div class="card" style="padding:20px;margin-bottom:16px;position:relative">
+            <h3 style="margin:0 0 4px;font-size:15px;font-weight:800">1 · Setup-locked (org identification incomplete)</h3>
+            <p style="margin:0 0 14px;color:var(--muted);font-size:13px">The control stays visible and disabled; clicking explains and deep-links. Server enforces the same rule (422).</p>
+            <button class="lockbtn" id="lock1">🔒 Get a local number for calls</button>
+            <div class="pop" id="pop1" style="display:none;left:24px;top:118px">
+              <h4>Finish organisation setup first</h4>
+              <p>Your own number needs these completed:</p>
+              <ul>
+                <li>◌ Business &amp; legal details</li>
+                <li>◌ Organisation contacts</li>
+              </ul>
+              <a href="#" data-goto="s1">Finish setup →</a>
+            </div>
+          </div>
+
+          <div class="card" style="padding:20px;margin-bottom:16px;position:relative">
+            <h3 style="margin:0 0 4px;font-size:15px;font-weight:800">2 · Plan-locked (Grassroots)</h3>
+            <p style="margin:0 0 14px;color:var(--muted);font-size:13px">Same silhouette, upgrade copy instead of a checklist.</p>
+            <button class="lockbtn" id="lock2">🔒 Get a local number for calls</button>
+            <div class="pop" id="pop2" style="display:none;left:24px;top:118px">
+              <h4>Not part of your plan</h4>
+              <p>Dedicated numbers are available on Starter and above. You're sending on shared Uprise numbers meanwhile.</p>
+              <a href="mailto:support@uprise.org.au">Talk to us about upgrading →</a>
+            </div>
+          </div>
+
+          <div class="card" style="padding:20px">
+            <h3 style="margin:0 0 4px;font-size:15px;font-weight:800">3 · Server truth — the 422 fallback in the provision dialog</h3>
+            <p style="margin:0 0 14px;color:var(--muted);font-size:13px">If a stale client races the gate, the server's SETUP_INCOMPLETE lands inline; the UI refetches setup state.</p>
+            <div style="border:1px solid var(--border);border-radius:14px;padding:18px;max-width:520px">
+              <div style="font-size:15px;font-weight:800;margin-bottom:10px">Get a local number</div>
+              <div style="display:flex;flex-direction:column;gap:8px;opacity:.55">
+                <div style="height:38px;border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13px;color:var(--faint)">Legal trading name — Common Threads Inc.</div>
+                <div style="height:38px;border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:13px;color:var(--faint)">ABN — 12 345 678 901</div>
+              </div>
+              <div class="dlgerr" style="margin-top:12px">
+                <span>⚠</span>
+                <div>Complete your organisation's business, contact and address details first.<br><a href="#" data-goto="s1">Finish organisation setup →</a></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S8 — LockedAction.</b> Click the locked buttons — non-modal popovers (Esc/outside close). Hide for permission; disable-with-affordance for precondition; server always enforces.</div>
+  </section>
+
+  <!-- ================= S9 — EMAIL REQUEST FLOW ================= -->
+  <section class="screen" id="s9">
+    <div class="shell">
+      <div class="main">
+        <div class="topbar"><span>Your channels — Email identity (request-based)</span><span>Owner</span></div>
+        <div class="content" style="max-width:760px">
+          <div class="card" style="padding:20px" id="emailcard">
+            <h3 style="margin:0 0 4px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:8px">✉️ Your email identity <span class="chip todo" id="emailchip">To do</span></h3>
+            <p style="margin:0 0 16px;color:var(--muted);font-size:13.5px" id="emailblurb">
+              Send from your own address — like <b>team@commonthreads.org.au</b> — instead of the shared Uprise sender.
+              The Uprise team sets this up for you.
+            </p>
+            <button class="cta primary" id="reqbtn" style="font-size:13px;padding:10px 16px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">Request email setup</button>
+            <div id="reqdone" style="display:none">
+              <div style="display:flex;align-items:center;gap:10px;background:var(--secondary-container);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--ink2)">
+                <span class="chip req">Requested</span>
+                Got it — the Uprise team sets this up and we'll email you when it's live. You can keep sending on the shared Uprise address meanwhile.
+              </div>
+              <div class="note">Withdrawing the request is available from this card; a super-admin fulfils or declines it from their console.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="annot" style="right:18px;top:64px"><b>S9 — Email request.</b> Click the button — the chip flips to REQUESTED live. One open request per tenant (server-enforced); super-admin queue on the platform email console.</div>
+  </section>
+
+  </div>
+</div>
+
+<script>
+// ---- tiny prototype state machine ----
+const buttons = document.querySelectorAll(".strip button[data-s]");
+function show(id){
+  document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+  buttons.forEach(b => b.classList.toggle("on", b.dataset.s === id));
+}
+buttons.forEach(b => b.addEventListener("click", () => show(b.dataset.s)));
+document.querySelectorAll("[data-goto]").forEach(el =>
+  el.addEventListener("click", (e) => { e.preventDefault(); show(el.dataset.goto); }));
+
+// S8 locked-action popovers (non-modal disclosure: click toggles, Esc/outside closes)
+function wireLock(btnId, popId){
+  const btn = document.getElementById(btnId), pop = document.getElementById(popId);
+  btn.addEventListener("click", (e) => { e.stopPropagation(); pop.style.display = pop.style.display === "none" ? "block" : "none"; });
+}
+wireLock("lock1","pop1"); wireLock("lock2","pop2");
+document.addEventListener("click", () => { ["pop1","pop2"].forEach(id => document.getElementById(id).style.display = "none"); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") ["pop1","pop2"].forEach(id => document.getElementById(id).style.display = "none"); });
+
+// S9 email request flip
+document.getElementById("reqbtn").addEventListener("click", () => {
+  document.getElementById("reqbtn").style.display = "none";
+  document.getElementById("reqdone").style.display = "block";
+  const chip = document.getElementById("emailchip");
+  chip.className = "chip req"; chip.textContent = "Requested";
+});
+</script>
+</body>
+</html>
