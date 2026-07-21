@@ -117,7 +117,31 @@ function canvassOps(campaignId: string | null): NavLeaf[] {
   ];
 }
 
-function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavNode[] {
+/** The tenant-scoped super-admin sub-pages, rendered as Super Admin nav children pointed at the
+ *  tenant being managed (`tenantId`, from the URL / last visited). Mirrors `canvassOps`: `match`
+ *  highlights on the sub-path for ANY tenant, so the item stays active as the tenant switches;
+ *  `href` bakes in the active id. Overview is the bare `/super/tenants/[id]` (exact match). */
+function tenantOps(tenantId: string | null): NavLeaf[] {
+  const href = (sub: string) => (tenantId ? `/super/tenants/${tenantId}/${sub}` : "/super/tenants");
+  const onSub = (sub: string): NavMatch => (p) => new RegExp(`^/super/tenants/[^/]+/${sub}(?:/|$)`).test(p);
+  return [
+    {
+      label: "Overview",
+      href: tenantId ? `/super/tenants/${tenantId}` : "/super/tenants",
+      match: (p) => /^\/super\/tenants\/[^/]+$/.test(p),
+    },
+    { label: "Members", href: href("members"), match: onSub("members") },
+    { label: "Email", href: href("email"), match: onSub("email") },
+    { label: "Telephony", href: href("telephony"), match: onSub("telephony") },
+    { label: "Feature flags", href: href("flags"), match: onSub("flags") },
+  ];
+}
+
+function buildNav(
+  isSuperAdmin: boolean,
+  canvassCampaignId: string | null,
+  superTenantId: string | null,
+): NavNode[] {
   // Prefix matcher for the parked future routes (all under /future/*).
   const px = (s: string): NavMatch => (p) => p.startsWith(`/future/${s}`);
   // Prefix matcher for the super-admin routes (all under /super/*).
@@ -258,10 +282,20 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
             type: "group", key: "super-admin", label: "Super Admin", icon: ShieldCheck,
             match: (p) => p.startsWith("/super/"),
             children: [
-              { label: "Tenants", href: "/super/tenants", match: sp("tenants") },
-              { label: "Signups", href: "/super/signups", match: sp("signups") },
+              // Tenants is an expandable branch: the list plus the tenant-scoped ops nested
+              // one tier deeper, so managing a tenant expands into Overview / Members / Email /
+              // Telephony / Feature flags rather than flattening them beside the list.
+              {
+                label: "Tenants",
+                match: (p) => p.startsWith("/super/tenants"),
+                children: [
+                  { label: "All tenants", href: "/super/tenants", match: (p) => p === "/super/tenants" },
+                  ...tenantOps(superTenantId),
+                ],
+              },
               { label: "Plans", href: "/super/plans", match: sp("plans") },
-              { label: "Feature flags", href: "/super/flags", match: (p) => p === "/super/flags" },
+              // Global/network feature-flag overrides (per-tenant flags live in the tenant sub-nav above).
+              { label: "Network flags", href: "/super/flags", match: (p) => p === "/super/flags" },
               // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version
               // lives on /settings ("Tenant Queue & Redis Stats").
               { label: "Queue & Redis Stats", href: "/super/queues", match: sp("queues") },
@@ -700,6 +734,40 @@ export default function MainLayout({
     if (storedCanvassCampaignId && ids.has(storedCanvassCampaignId)) return storedCanvassCampaignId;
     return canvassCampaignList[0]?.id ?? null;
   }, [urlCanvassCampaignId, storedCanvassCampaignId, canvassCampaignList]);
+
+  // Active tenant for the Super Admin tenant-scoped sub-nav (mirrors canvassCampaignId): URL id on
+  // a /super/tenants/[id]/* page wins; else the last-visited (super-admin-only, so not namespaced);
+  // else the first tenant from the cached search. Only fetched for super-admins.
+  const urlSuperTenantId = useMemo(() => pathname?.match(/^\/super\/tenants\/([^/]+)(?:\/|$)/)?.[1] ?? null, [pathname]);
+  const [storedSuperTenantId, setStoredSuperTenantId] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      setStoredSuperTenantId(window.localStorage.getItem("uprise.super.lastTenantId"));
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  useEffect(() => {
+    if (!urlSuperTenantId) return;
+    setStoredSuperTenantId(urlSuperTenantId);
+    try {
+      window.localStorage.setItem("uprise.super.lastTenantId", urlSuperTenantId);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [urlSuperTenantId]);
+  const { data: superTenantList } = useApi(
+    isSuperAdmin ? "/tenants/search" : null,
+    () => tenants.search(),
+    { ttlMs: 60_000 },
+  );
+  const superTenantId = useMemo(() => {
+    if (urlSuperTenantId) return urlSuperTenantId;
+    if (!superTenantList) return storedSuperTenantId;
+    const ids = new Set(superTenantList.map((t) => t.id));
+    if (storedSuperTenantId && ids.has(storedSuperTenantId)) return storedSuperTenantId;
+    return superTenantList[0]?.id ?? null;
+  }, [urlSuperTenantId, storedSuperTenantId, superTenantList]);
   // A nav item the current tenant's PLAN doesn't include: a plan-driven flag that
   // resolves off for this tenant. Non-super-admins have these filtered out
   // entirely; super-admins keep them in the sidebar rendered greyed + still
@@ -726,7 +794,7 @@ export default function MainLayout({
         (e, i) => !("subheading" in e) || (i + 1 < kept.length && !("subheading" in kept[i + 1])),
       );
     };
-    const built = buildNav(isSuperAdmin, canvassCampaignId)
+    const built = buildNav(isSuperAdmin, canvassCampaignId, superTenantId)
       .filter((n) => flagOn(n.flag))
       .filter((n) => !(onboardingDone && n.key === "getting-started"))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
@@ -746,7 +814,7 @@ export default function MainLayout({
       if (!("href" in only)) return n; // sole child isn't a direct link → keep the group
       return { type: "leaf", key: n.key, label: n.label, icon: n.icon, href: only.href, match: n.match, flag: n.flag };
     });
-  }, [isSuperAdmin, flagOn, onboardingDone, canvassCampaignId]);
+  }, [isSuperAdmin, flagOn, onboardingDone, canvassCampaignId, superTenantId]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
@@ -773,8 +841,8 @@ export default function MainLayout({
         if (ge.flag && !flagOn(ge.flag) && ge.match(p)) return true;
         return ge.children ? blocked(ge.children) : false;
       });
-    if (blocked(buildNav(isSuperAdmin, canvassCampaignId))) router.replace("/dashboard");
-  }, [ready, isSuperAdmin, p, flagOn, router, canvassCampaignId]);
+    if (blocked(buildNav(isSuperAdmin, canvassCampaignId, superTenantId))) router.replace("/dashboard");
+  }, [ready, isSuperAdmin, p, flagOn, router, canvassCampaignId, superTenantId]);
   // Groups toggle independently (prototype: openGroups array). Default-open is the
   // active group only; an explicit user toggle overrides the default.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
