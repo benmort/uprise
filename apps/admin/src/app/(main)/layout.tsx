@@ -36,7 +36,7 @@ import { tenants, type AuthPrincipal } from "@uprise/api-client";
 import { tenantSlugFromPlatformHost } from "@uprise/domains";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, getSessionOutcome, goToLogin, logout } from "@/lib/session";
-import { ONBOARDING_STEPS, deriveOnboardingSteps } from "@/lib/onboarding";
+import { setupComplete } from "@/lib/setup/setup-state";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search";
 import { NotificationsDropdown } from "@/components/topbar/notifications-dropdown";
@@ -48,7 +48,8 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { TourMenuButton, TourRoot } from "@/components/tour/tour-provider";
-import { OnboardingLauncher } from "@/components/overview/onboarding-launcher";
+import { SetupTracker } from "@/components/setup/setup-tracker";
+import { useSetupState } from "@/components/setup/use-setup-state";
 import { FlagsProvider } from "@/components/flags/flags-provider";
 import { SoftphoneProvider } from "@/components/softphone/softphone-provider";
 import { CallBar } from "@/components/softphone/call-bar";
@@ -131,8 +132,6 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
     { type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
     // First-tier generic calendar — plots shifts + events + ad-hoc entries tenant-wide.
     { type: "leaf", key: "calendar", label: "Calendar", href: "/calendar", icon: CalendarDays, match: (p) => p.startsWith("/calendar"), flag: "FEATURE_NAV_CALENDAR" },
-    // Events are a tenant-wide surface (not campaign-scoped), so they live at the top level.
-    { type: "leaf", key: "events", label: "Events", href: "/events", icon: CalendarClock, match: (p) => p.startsWith("/events"), flag: "FEATURE_NAV_EVENTS" },
 
     // ── Engage: the campaigning work — reach out, canvass, organise, target ──
     { type: "section", key: "sec-engage", label: "Engage" },
@@ -160,6 +159,8 @@ function buildNav(isSuperAdmin: boolean, canvassCampaignId: string | null): NavN
         { label: "Turf planner", href: "/canvass/planner", match: (p) => p.startsWith("/canvass/planner") },
       ],
     },
+    // Events are tenant-wide (not campaign-scoped), but sit under Canvass in the Engage section.
+    { type: "leaf", key: "events", label: "Events", href: "/events", icon: CalendarClock, match: (p) => p.startsWith("/events"), flag: "FEATURE_NAV_EVENTS" },
     {
       // "Content" section (routes /content/*). Flag keys keep their FEATURE_NAV_ENGAGEMENT_*
       // names — they're internal identifiers wired to plans/overrides, not user-visible.
@@ -392,9 +393,10 @@ export default function MainLayout({
     [],
   );
   // True once every getting-started step is done — hides the "Getting started" nav
-  // item. Same signal the dashboard nudge uses (persisted OR live-derived), so the
-  // two stay consistent.
-  const [onboardingDone, setOnboardingDone] = useState(false);
+  // item. One shared server signal (GET /tenants/:id/setup) — the same read the
+  // getting-started page and the setup tracker use, via the use-api cache.
+  const { state: setupState } = useSetupState();
+  const onboardingDone = setupState ? setupComplete(setupState) : false;
   const [creatingBlast, setCreatingBlast] = useState(false);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [pendingJoinCount, setPendingJoinCount] = useState(0);
@@ -503,30 +505,8 @@ export default function MainLayout({
     };
   }, [ready, principal]);
 
-  // Resolve onboarding completion once the session is ready, mirroring the dashboard
-  // nudge: persisted step cache OR live-derived. When all steps are done the
-  // "Getting started" nav item is dropped (see the nav memo).
-  useEffect(() => {
-    if (!ready) return;
-    let alive = true;
-    void (async () => {
-      const session = await getSession();
-      const tid = session?.tenantId ?? null;
-      const canManage = (session?.role === "OWNER" || session?.role === "ORGANISER") && Boolean(tid);
-      if (!alive || !session || !canManage || !tid) return;
-      const [persistedRes, derived] = await Promise.all([
-        tenants.getOnboarding(tid).catch(() => null),
-        deriveOnboardingSteps(tid, session),
-      ]);
-      if (!alive) return;
-      const persisted = persistedRes?.ok ? persistedRes.data.steps : null;
-      const complete = ONBOARDING_STEPS.every((s) => derived[s.key] || Boolean(persisted?.[s.key]));
-      setOnboardingDone(complete);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [ready]);
+  // Onboarding completion now comes straight from useSetupState above — no separate
+  // derive pass; the nav memo reads `onboardingDone` as before.
 
   useEffect(() => {
     if (!ready) return;
@@ -1076,7 +1056,12 @@ export default function MainLayout({
         onClick={() => setMobileOpen(false)}
         aria-hidden
       />
-      <div className="flex h-full w-full">
+      {/* --sidebar-w feeds the setup tracker's bottom-left offset (0 on mobile via the
+          lg-only calc; 76/220px matching the rail) so the pill clears the sidebar. */}
+      <div
+        className="flex h-full w-full"
+        style={{ "--sidebar-w": collapsed ? "76px" : "220px" } as React.CSSProperties}
+      >
         <aside
           className={cn(
             "fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col overflow-y-auto border-r border-border bg-surface p-4 transition-[width,transform] duration-300 ease-in-out lg:static lg:translate-x-0",
@@ -1298,9 +1283,9 @@ export default function MainLayout({
           </main>
         </div>
       </div>
-      {/* Global onboarding launcher — hovers bottom-right across the shell (hidden on
-          the dashboard + getting-started, which own their own onboarding UI). */}
-      <OnboardingLauncher />
+      {/* Floating setup tracker — bottom-left pill/popover tracking the role-layered
+          setup flows (hidden on getting-started, which owns the full surface). */}
+      <SetupTracker />
       {/* Global in-call widget for the browser softphone (shown only during a call). */}
       <CallBar />
       {flyout ? (

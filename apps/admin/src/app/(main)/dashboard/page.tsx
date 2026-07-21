@@ -46,7 +46,6 @@ import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
 import { QuickActions } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 import { OverviewModuleCard } from "@/components/overview/overview-module-card";
-import { OnboardingNudge } from "@/components/overview/onboarding-nudge";
 import { MiniBar } from "@/components/overview/mini-bar";
 import { NewConversationMenu } from "@/components/inbox/new-conversation-menu";
 import { getSession } from "@/lib/session";
@@ -289,7 +288,6 @@ export default function DashboardPage() {
         }}
       />
 
-      <OnboardingNudge />
 
       {/* Domain module grid */}
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">

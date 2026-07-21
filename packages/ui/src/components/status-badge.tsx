@@ -5,6 +5,7 @@ import {
   CircleDashed,
   Clock3,
   CloudOff,
+  Lock,
   MessageCircleMore,
   PhoneCall,
   PhoneMissed,
@@ -12,6 +13,7 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 
@@ -61,6 +63,12 @@ const STATUS_STYLES: Record<string, string> = {
   NUMBER_PURCHASED: "bg-primary-container text-foreground",
   WEBHOOKS_CONFIGURED: "bg-primary-container text-foreground",
   RELEASED: "bg-surface-variant text-foreground",
+  // Setup / getting-started chips (chipStatus() in the admin maps setup states here)
+  DONE: "bg-success-container text-success",
+  TODO: "bg-secondary-container text-secondary-foreground",
+  RECOMMENDED: "bg-primary-container text-primary",
+  ACTION_REQUIRED: "bg-warning-container text-warning-foreground",
+  PLAN_LOCKED: "bg-surface-variant text-muted-foreground",
 };
 
 const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -104,22 +112,32 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   NUMBER_PURCHASED: PhoneCall,
   WEBHOOKS_CONFIGURED: Clock3,
   RELEASED: PhoneOff,
+  DONE: CheckCircle2,
+  TODO: CircleDashed,
+  RECOMMENDED: Sparkles,
+  ACTION_REQUIRED: AlertCircle,
+  PLAN_LOCKED: Lock,
 };
 
 export function StatusBadge({
   status,
+  label: labelOverride,
   className,
   children,
 }: {
   status: string;
+  /** Overrides the auto-derived Title Case label (e.g. "Action needed" for ACTION_REQUIRED). */
+  label?: string;
   className?: string;
   children?: React.ReactNode;
 }) {
   const Icon = STATUS_ICONS[status] || CircleDashed;
-  const label = status
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const label =
+    labelOverride ??
+    status
+      .replaceAll("_", " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
   return (
     <span
       className={cn(

@@ -16,6 +16,8 @@ import { getSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { ProvisioningTimeline, telephonyStepIndex } from "./provisioning-timeline";
 import { ProvisionNumberDialog } from "./provision-number-dialog";
+import { LockedAction } from "@/components/setup/locked-action";
+import { useSetupGate } from "@/components/setup/use-setup-state";
 
 type RunWithSteps = TelephonyProvisioningRun & { steps: TelephonyProvisioningStep[] };
 
@@ -128,11 +130,22 @@ export function TelephonyStatusCard({
     else setError(res.error);
   };
 
+  // Advisory mirror of the server's provisioning gate: the CTA stays visible but locked
+  // (with the missing-steps popover) until org identification is complete. The dialog's
+  // 422 branch remains the server-truth fallback.
+  const gate = useSetupGate("canProvisionTelephony");
   const provisionCta = canProvision ? (
-    <Button size="sm" variant="outline" onClick={() => setProvisionOpen(true)}>
-      <Plus className="mr-1.5 h-4 w-4" />
-      Get a local number for calls
-    </Button>
+    <LockedAction
+      locked={gate.locked}
+      planLocked={gate.planLocked}
+      missing={gate.missing}
+      label="Get a local number for calls"
+    >
+      <Button size="sm" variant="outline" onClick={() => setProvisionOpen(true)}>
+        <Plus className="mr-1.5 h-4 w-4" />
+        Get a local number for calls
+      </Button>
+    </LockedAction>
   ) : null;
 
   // Something meaningful to render — but only when the feature is on for this tenant.

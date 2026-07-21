@@ -8,6 +8,7 @@ import {
   emailProvisioning,
   tenants as tenantsApi,
   type AuthPrincipal,
+  type EmailProvisioningRequest,
   type EmailProvisioningRun,
   type EmailProvisioningStep,
   type EmailSenderIdentity,
@@ -90,6 +91,9 @@ export default function TenantEmailPage() {
   const [tenant, setTenant] = useState<TenantRecord | null>(null);
   const [runs, setRuns] = useState<EmailProvisioningRun[]>([]);
   const [identities, setIdentities] = useState<EmailSenderIdentity[]>([]);
+  const [requests, setRequests] = useState<EmailProvisioningRequest[]>([]);
+  // The OPEN request a started run fulfils (set by its "Provision" button).
+  const [fulfillingRequestId, setFulfillingRequestId] = useState<string | null>(null);
   const [selectedRun, setSelectedRun] = useState<RunWithSteps | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,12 +104,13 @@ export default function TenantEmailPage() {
 
   const load = useCallback(async () => {
     setError(null);
-    const [flags, session, tenantRes, runsRes, idsRes] = await Promise.all([
+    const [flags, session, tenantRes, runsRes, idsRes, reqRes] = await Promise.all([
       getFeatureFlags(),
       getSession(),
       tenantsApi.get(tenantId),
       emailProvisioning.listRuns(tenantId),
       emailProvisioning.listIdentities(tenantId),
+      emailProvisioning.listRequests({ tenantId }),
     ]);
     setEnabled(flags.ok ? Boolean(flags.data.FEATURE_TENANT_EMAIL_ENABLED) : false);
     setPrincipal(session);
@@ -113,6 +118,7 @@ export default function TenantEmailPage() {
     if (runsRes.ok) setRuns(runsRes.data);
     else setError(runsRes.error);
     if (idsRes.ok) setIdentities(idsRes.data);
+    if (reqRes.ok) setRequests(reqRes.data);
     setLoading(false);
   }, [tenantId]);
 
@@ -136,6 +142,13 @@ export default function TenantEmailPage() {
     else setActionError(res.error);
   };
 
+  const declineRequest = async (id: string) => {
+    const reason = window.prompt("Reason (shown to the workspace owner):") ?? undefined;
+    const res = await emailProvisioning.declineRequest(id, reason);
+    if (!res.ok) setActionError(res.error);
+    await load();
+  };
+
   const startRun = async () => {
     if (busy) return;
     setBusy(true);
@@ -149,6 +162,8 @@ export default function TenantEmailPage() {
       fromLocalPart: form.fromLocalPart,
       fromName: form.fromName || tenant?.name || 'Uprise',
       ...(form.mode === 'BYO' ? { byoApiKey: form.byoApiKey } : {}),
+      // Fulfils the owner's open setup request atomically with run creation.
+      ...(fulfillingRequestId ? { requestId: fulfillingRequestId } : {}),
     });
     setBusy(false);
     if (!res.ok) {
@@ -157,6 +172,7 @@ export default function TenantEmailPage() {
     }
     setShowForm(false);
     setForm(EMPTY_FORM);
+    setFulfillingRequestId(null);
     await load();
     await openRun(res.data.id);
   };
@@ -273,6 +289,56 @@ export default function TenantEmailPage() {
 
       {error ? <p className="text-sm text-error">{error}</p> : null}
       {actionError ? <p className="text-sm text-error">{actionError}</p> : null}
+
+      {/* Owner setup requests — the queue this console exists to serve. "Provision" opens the
+          run form bound to the request (fulfilled atomically with run creation); Decline
+          resolves it with a reason the owner sees. */}
+      {requests.filter((r) => r.status === 'OPEN').length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AtSign className="h-4 w-4" />
+              Open setup requests
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {requests
+                .filter((r) => r.status === 'OPEN')
+                .map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        {r.kind ?? 'Any identity'}
+                        {r.domain ? <span className="ml-2 font-mono text-xs">{r.domain}</span> : null}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Requested {new Date(r.createdAt).toLocaleString('en-AU')}
+                        {r.notes ? ` — “${r.notes}”` : ''}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setFulfillingRequestId(r.id);
+                        setShowForm(true);
+                      }}
+                    >
+                      Provision
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void declineRequest(r.id)}
+                    >
+                      Decline
+                    </Button>
+                  </li>
+                ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">

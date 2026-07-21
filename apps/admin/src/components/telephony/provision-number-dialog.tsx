@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { FormDialog, Field, Input } from "@uprise/ui";
 import {
@@ -9,6 +10,8 @@ import {
   type TelephonyProvisioningRun,
 } from "@uprise/api-client";
 import { cn } from "@/lib/utils";
+import { getSession } from "@/lib/session";
+import { invalidateSetupState } from "@/components/setup/use-setup-state";
 
 type NumberType = "local" | "mobile";
 
@@ -46,6 +49,7 @@ export function ProvisionNumberDialog({
   const [prefilling, setPrefilling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [setupIncomplete, setSetupIncomplete] = useState(false);
 
   // Prefill from the org profile each time the dialog opens (fields stay editable).
   useEffect(() => {
@@ -82,6 +86,7 @@ export function ProvisionNumberDialog({
     if (!complete || busy) return;
     setBusy(true);
     setError(null);
+    setSetupIncomplete(false);
     const res = await telephony.startRun({
       mode: "SUBACCOUNT",
       numberType,
@@ -92,9 +97,19 @@ export function ProvisionNumberDialog({
     });
     setBusy(false);
     if (!res.ok) {
+      // Server truth beats the advisory gate: a 422 SETUP_INCOMPLETE means the org's
+      // identification changed under us — refresh the shared setup state so the locked
+      // CTA re-engages, and point at the fix.
+      if (res.status === 422) {
+        setSetupIncomplete(true);
+        const session = await getSession();
+        if (session?.tenantId) invalidateSetupState(session.tenantId);
+      }
       setError(res.error);
       return;
     }
+    const session = await getSession();
+    if (session?.tenantId) invalidateSetupState(session.tenantId);
     onStarted(res.data);
     onClose();
   };
@@ -220,7 +235,19 @@ export function ProvisionNumberDialog({
         </Field>
       </div>
 
-      {error ? <p className="text-sm text-error">{error}</p> : null}
+      {error ? (
+        <p className="text-sm text-error">
+          {error}
+          {setupIncomplete ? (
+            <>
+              {" "}
+              <Link href="/getting-started#organisation" className="font-bold underline" onClick={onClose}>
+                Finish organisation setup
+              </Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
     </FormDialog>
   );
 }

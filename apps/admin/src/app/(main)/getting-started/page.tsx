@@ -1,171 +1,112 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { CheckCircle2, Circle, Rocket } from "lucide-react";
+import { PartyPopper, Rocket } from "lucide-react";
 import { Button, EmptyState, StepProgress } from "@uprise/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@uprise/field";
+import { StateRegion } from "@/components/shell/state-region";
 import { TelephonyStatusCard } from "@/components/telephony/telephony-status-card";
-import { tenants } from "@uprise/api-client";
-import { getSession } from "@/lib/session";
-import {
-  ONBOARDING_STEPS,
-  deriveOnboardingSteps,
-  newlyCompleted,
-  type OnboardingSteps,
-} from "@/lib/onboarding";
+import { EmailSetupCard } from "@/components/email/email-setup-card";
+import { SetupFlowSection } from "@/components/setup/setup-flow-section";
+import { useSetupState } from "@/components/setup/use-setup-state";
+import { nextStep, overallProgress, setupComplete } from "@/lib/setup/setup-state";
+import { stepTitle, STEP_META } from "@/lib/setup/step-registry";
 
-const EMPTY_STEPS: OnboardingSteps = {
-  verifyEmail: false,
-  orgProfile: false,
-  inviteTeammate: false,
-  connectAudience: false,
-  firstCampaign: false,
-};
-
+/**
+ * Getting started — the role-layered setup surface. Flows come server-derived from
+ * GET /tenants/:id/setup: everyone sees Self setup; owners (and super-admins) also see
+ * Organisation setup + Channels. Sending on shared Uprise channels works from day one —
+ * this page is about unlocking the org's OWN identity and channels.
+ */
 export default function GettingStartedPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [noPermission, setNoPermission] = useState(false);
-  const [steps, setSteps] = useState<OnboardingSteps>(EMPTY_STEPS);
+  const { state, session, loading, error, noPermission, refetch } = useSetupState();
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
-    setNoPermission(false);
-
-    const session = await getSession();
-    if (!session) {
-      setError(true);
-      setLoading(false);
-      return;
-    }
-    const tenantId = session.tenantId;
-    const canManage = (session.role === "OWNER" || session.role === "ORGANISER") && Boolean(tenantId);
-    if (!canManage || !tenantId) {
-      setNoPermission(true);
-      setLoading(false);
-      return;
-    }
-
-    const [persistedRes, derived] = await Promise.all([
-      tenants.getOnboarding(tenantId).catch(() => null),
-      deriveOnboardingSteps(tenantId, session),
-    ]);
-    const persisted = persistedRes?.ok ? persistedRes.data.steps : EMPTY_STEPS;
-    // Live derivation is the truth; OR the persisted cache so a completed step never regresses.
-    const merged: OnboardingSteps = { ...EMPTY_STEPS };
-    for (const s of ONBOARDING_STEPS) merged[s.key] = derived[s.key] || Boolean(persisted[s.key]);
-    setSteps(merged);
-    setLoading(false);
-
-    // Persist any newly-completed steps (fire-and-forget; the server merges monotonically).
-    const toPersist = newlyCompleted(derived, persisted);
-    if (toPersist.length > 0) {
-      const patch: Record<string, boolean> = {};
-      for (const k of toPersist) patch[k] = true;
-      void tenants.updateOnboarding(tenantId, { steps: patch });
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const completedCount = ONBOARDING_STEPS.filter((s) => steps[s.key]).length;
-  const total = ONBOARDING_STEPS.length;
-  const allDone = completedCount === total;
+  const complete = state ? setupComplete(state) : false;
+  const progress = state ? overallProgress(state) : { done: 0, total: 0 };
+  const next = state ? nextStep(state) : null;
+  const ownerView = Boolean(state?.flows.organisation.applicable);
 
   return (
-    <div className="page-stack">
+    <div className="mx-auto w-full max-w-3xl page-stack">
       <PageHeader
-        title="Getting Started"
         icon={Rocket}
-        description="A few quick steps to get your workspace ready."
+        title="Getting started"
+        description={
+          ownerView
+            ? "Set up your account, your organisation, and your own channels. You can send on shared Uprise numbers from day one."
+            : "Your account, ready to organise."
+        }
       />
 
-      {loading ? (
-        <SectionCard title="Your setup">
-          <div className="space-y-3">
-            <Skeleton className="h-2 w-full" />
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-        </SectionCard>
-      ) : error ? (
-        <SectionCard title="Getting Started">
-          <EmptyState
-            title="Couldn't load your setup"
-            description="Something went wrong resolving your session. Try again."
-            ctaLabel="Retry"
-            onCta={() => void load()}
-          />
-        </SectionCard>
-      ) : noPermission ? (
-        <SectionCard title="Getting Started">
-          <EmptyState
-            title="Organisers only"
-            description="You need organiser access to set up this workspace."
-          />
-        </SectionCard>
-      ) : (
-        <>
-        <SectionCard
-          title="Your setup"
-          description={allDone ? "You're all set up." : `${completedCount} of ${total} done`}
-        >
+      <StateRegion
+        loading={loading}
+        error={error}
+        noPermission={noPermission}
+        onRetry={() => void refetch()}
+        skeleton={
           <div className="space-y-4">
-            <StepProgress current={completedCount} total={total} />
-            {allDone ? (
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-56 w-full" />
+            <Skeleton className="h-56 w-full" />
+          </div>
+        }
+      >
+        {state ? (
+          <div className="space-y-5">
+            {complete ? (
               <EmptyState
-                title="You're all set up 🎉"
-                description="Your workspace is ready. Head to the dashboard to see what's happening."
-                ctaLabel="Go to dashboard"
-                onCta={() => router.push("/dashboard")}
+                icon={PartyPopper}
+                title="You're all set up"
+                description="Everything's verified and ready. This page retires itself from the menu now."
+                action={
+                  <Button asChild>
+                    <Link href="/dashboard">Go to dashboard</Link>
+                  </Button>
+                }
               />
             ) : (
-              <ul className="space-y-3">
-                {ONBOARDING_STEPS.map((s) => {
-                  const done = steps[s.key];
-                  return (
-                    <li
-                      key={s.key}
-                      className="flex items-start gap-3 rounded-lg border border-border p-4"
-                    >
-                      {done ? (
-                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
-                      ) : (
-                        <Circle className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p
-                          className={
-                            done ? "font-semibold text-muted-foreground line-through" : "font-semibold"
-                          }
-                        >
-                          {s.title}
-                        </p>
-                        <p className="text-sm text-muted-foreground">{s.blurb}</p>
-                      </div>
-                      {!done ? (
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={s.href}>{s.cta}</Link>
-                        </Button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-surface p-5 shadow-card animate-fade-up">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-foreground tabular-nums">
+                    {progress.done} of {progress.total} steps done
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {next
+                      ? `Next: ${stepTitle(next.step.key)}${
+                          next.step.key === "businessLegal" ? " — it unlocks your own phone number." : ""
+                        }`
+                      : "Only recommended touches left."}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <StepProgress current={progress.done} total={progress.total} className="w-36" />
+                  {next && STEP_META[next.step.key] ? (
+                    <Button asChild size="sm">
+                      <Link href={STEP_META[next.step.key].href}>Continue</Link>
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             )}
+
+            <SetupFlowSection flow="self" steps={state.flows.self.steps} />
+
+            {state.flows.organisation.applicable ? (
+              <SetupFlowSection flow="organisation" steps={state.flows.organisation.steps} />
+            ) : null}
+
+            {state.flows.channels.applicable ? (
+              <SetupFlowSection flow="channels" steps={state.flows.channels.steps}>
+                <TelephonyStatusCard onboarding tenantId={session?.tenantId ?? undefined} />
+                <EmailSetupCard />
+              </SetupFlowSection>
+            ) : null}
           </div>
-        </SectionCard>
-        <TelephonyStatusCard onboarding />
-        </>
-      )}
+        ) : (
+          <EmptyState title="No workspace" description="Open this page from a workspace to see its setup." />
+        )}
+      </StateRegion>
     </div>
   );
 }
