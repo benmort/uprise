@@ -32,6 +32,7 @@ const STYLE = [
   { id: "poll-fill", type: "fill" },
   { id: "boundaries-line", type: "line" },
   { id: "walk-route-line", type: "line" },
+  { id: "walk-next-leg-line", type: "line" },
 ];
 
 describe("applyMoonlitDark", () => {
@@ -60,6 +61,7 @@ describe("applyMoonlitDark", () => {
     expect(painted).not.toContain("poll-fill");
     expect(painted).not.toContain("boundaries-line");
     expect(painted).not.toContain("walk-route-line");
+    expect(painted).not.toContain("walk-next-leg-line");
   });
 
   it("does nothing in the light theme", () => {

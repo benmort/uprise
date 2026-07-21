@@ -64,6 +64,7 @@ describe("CanvassingService", () => {
         create: jest.fn(async ({ data }: any) => ({ id: "wli_new", ...data })),
         createMany: jest.fn(async ({ data }: any) => ({ count: data.length })),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       walkList: {
         findMany: jest.fn(),
@@ -1350,6 +1351,46 @@ describe("CanvassingService", () => {
       const res = await service.walkRouteForVolunteer("org1", "t1", "u1", { lat: 0, lng: 0 });
       expect(res.ordered).toHaveLength(2);
       expect(prisma.turfAssignment.findFirst).toHaveBeenCalled();
+      // Without pendingOnly, the knocked-doors lookup never runs.
+      expect(prisma.walkListItem.findMany).not.toHaveBeenCalled();
+    });
+
+    it("pendingOnly excludes knocked doors from the ordering, waypoints and geometry", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+      prisma.$queryRaw.mockResolvedValue([
+        { id: "a", lat: 0, lng: 0 },
+        { id: "b", lat: 0, lng: 0.001 },
+        { id: "c", lat: 0, lng: 0.002 },
+      ]);
+      // "b" is already VISITED — its walk-list item is no longer PENDING.
+      prisma.walkListItem.findMany.mockResolvedValue([{ contactId: "b" }]);
+      directions.routeLegsAndGeometry.mockResolvedValue({
+        legs: [{ distance: 100, duration: 80 }],
+        geometry: { type: "LineString", coordinates: [[0, 0], [0, 0.002]] },
+        requests: 1,
+      });
+      const res = await service.walkRouteForVolunteer("org1", "t1", "u1", undefined, true);
+      expect(prisma.walkListItem.findMany).toHaveBeenCalledWith({
+        where: { walkList: { turfId: "t1" }, status: { not: "PENDING" } },
+        select: { contactId: true },
+      });
+      expect(res.ordered).toEqual(expect.arrayContaining(["a", "c"]));
+      expect(res.ordered).not.toContain("b");
+      // The Mapbox waypoints thread the remaining doors only.
+      const waypoints = directions.routeLegsAndGeometry.mock.calls[0][0];
+      expect(waypoints).toHaveLength(2);
+    });
+
+    it("pendingOnly with nothing knocked routes every door (empty exclude set)", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+      prisma.$queryRaw.mockResolvedValue([
+        { id: "a", lat: 0, lng: 0 },
+        { id: "b", lat: 0, lng: 0.001 },
+      ]);
+      prisma.walkListItem.findMany.mockResolvedValue([]);
+      directions.routeLegsAndGeometry.mockResolvedValue(null);
+      const res = await service.walkRouteForVolunteer("org1", "t1", "u1", undefined, true);
+      expect(res.ordered).toHaveLength(2);
     });
   });
 

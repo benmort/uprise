@@ -78,14 +78,16 @@ export type WalkRoute = {
   geometry: GeoJSON.LineString | null;
 };
 
-/** The volunteer's own walk route for a turf, optionally ordered from their GPS `origin`. */
+/** The volunteer's own walk route for a turf, optionally ordered from their GPS `origin`.
+ *  Always `pending=1`: the field route threads the un-knocked doors only, so a mid-walk
+ *  re-optimise never routes back through doors already done. */
 export async function getWalkRoute(
   turfId: string,
   volunteerId: string,
   origin?: { lat: number; lng: number },
   signal?: AbortSignal,
 ) {
-  const q = new URLSearchParams({ volunteerId });
+  const q = new URLSearchParams({ volunteerId, pending: "1" });
   if (origin && Number.isFinite(origin.lat) && Number.isFinite(origin.lng)) {
     q.set("lat", String(origin.lat));
     q.set("lng", String(origin.lng));

@@ -818,17 +818,24 @@ export class CanvassingService {
    * straight-line legs (haversine ÷ 1.25 m/s) when Mapbox is unconfigured, flagged in `source` so
    * the UI can say so. Unlocated contacts (no coords) sort to the end and get no leg.
    */
-  async turfRoute(tenantId: string, turfId: string, origin?: { lat: number; lng: number }) {
+  async turfRoute(
+    tenantId: string,
+    turfId: string,
+    origin?: { lat: number; lng: number },
+    excludeContactIds?: ReadonlySet<string>,
+  ) {
     const contacts = (await this.listTurfContacts(tenantId, turfId)) as Array<{
       id: string;
       lat: number | null;
       lng: number | null;
     }>;
-    const stops: Stop[] = contacts.map((c) => ({
-      id: c.id,
-      lat: typeof c.lat === "number" ? c.lat : Number.NaN,
-      lng: typeof c.lng === "number" ? c.lng : Number.NaN,
-    }));
+    const stops: Stop[] = contacts
+      .filter((c) => !excludeContactIds?.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        lat: typeof c.lat === "number" ? c.lat : Number.NaN,
+        lng: typeof c.lng === "number" ? c.lng : Number.NaN,
+      }));
     // When the volunteer sends their GPS, order from where they're standing (route-math starts at
     // the door nearest the origin) and price the from-here first leg below.
     const start = origin && Number.isFinite(origin.lat) && Number.isFinite(origin.lng) ? origin : undefined;
@@ -889,12 +896,15 @@ export class CanvassingService {
   /**
    * Walk route for a field volunteer, ordered from their current GPS (`origin`). Gated the same
    * way as the door-knock path: the turf must be ASSIGNED to this volunteer, else TURF_NOT_ASSIGNED.
+   * With `pendingOnly`, doors already knocked (walk-list item no longer PENDING) are excluded from
+   * the ordering, legs and geometry — a mid-walk re-optimise routes the REMAINING doors only.
    */
   async walkRouteForVolunteer(
     tenantId: string,
     turfId: string,
     volunteerId: string,
     origin?: { lat: number; lng: number },
+    pendingOnly = false,
   ) {
     const lock = await this.prisma.turfAssignment.findFirst({
       where: { turfId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
@@ -902,7 +912,15 @@ export class CanvassingService {
     if (!lock || lock.volunteerId !== volunteerId) {
       throw new ApiHttpException("TURF_NOT_ASSIGNED", "This turf is not assigned to you");
     }
-    return this.turfRoute(tenantId, turfId, origin);
+    let exclude: ReadonlySet<string> | undefined;
+    if (pendingOnly) {
+      const done = await this.prisma.walkListItem.findMany({
+        where: { walkList: { turfId }, status: { not: WalkListItemStatus.PENDING } },
+        select: { contactId: true },
+      });
+      exclude = new Set(done.map((d) => d.contactId));
+    }
+    return this.turfRoute(tenantId, turfId, origin, exclude);
   }
 
   // ── Authoring (organiser) ───────────────────────────────────────

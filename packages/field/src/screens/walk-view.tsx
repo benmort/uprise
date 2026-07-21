@@ -8,7 +8,7 @@ import { BrandLoadingScreen, Button, EmptyState, Skeleton, cn, useToast } from "
 import { getWalkRoute, type CanvassAssignment, type WalkRoute } from "../api";
 import { useAssignment } from "../hooks/use-canvass";
 import { getTenantBrand, getVolunteerId } from "../lib/volunteer";
-import { optimiseRoute, type Stop } from "../lib/route";
+import { optimiseRoute, walkLineThrough, type Stop } from "../lib/route";
 import { estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
 import { formatDistance, type LatLng } from "../lib/directions";
 import { useLocalStorage } from "../hooks/use-local-storage";
@@ -91,10 +91,34 @@ export function WalkView({
   const assignment: CanvassAssignment | null = isPreview ? assignmentProp ?? null : a.data ?? null;
   const loading = isPreview ? false : a.loading;
 
-  // Locate the volunteer once when the map opens (battery: not a continuous watch).
+  // Locate the volunteer once on entry (battery: one shot, not a continuous watch) so the
+  // route is ordered from where they're standing BY DEFAULT — list and map mode alike. The
+  // route fetch below waits for this to settle (gpsReady) so it runs once, with the origin,
+  // instead of once without and again with (each fetch is Mapbox Directions spend). A denial
+  // just resolves null and the route falls back to first-door ordering, as before.
+  const [gpsReady, setGpsReady] = useState(false);
   useEffect(() => {
-    if (mode === "map" && !readOnly) void capture();
-  }, [mode, capture, readOnly]);
+    if (readOnly || isPreview) {
+      setGpsReady(true);
+      return;
+    }
+    let cancelled = false;
+    void capture().finally(() => {
+      if (!cancelled) setGpsReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately once per turf — not per mode toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turfId, capture, readOnly, isPreview]);
+
+  // The route origin: the live fix from this visit beats a persisted "start from here" from
+  // an earlier one (you've moved since); the persisted origin still covers a failed capture.
+  const routeOrigin = useMemo(
+    () => (fix ? { lat: fix.lat, lng: fix.lng } : startFix ?? undefined),
+    [fix, startFix],
+  );
 
   const stops = useMemo<FullStop[]>(() => {
     if (!assignment) return [];
@@ -114,7 +138,8 @@ export function WalkView({
         lng: num(c.lng),
       } satisfies FullStop;
     });
-    // Prefer the server's Mapbox-ordered route (matched by contactId); fall back to the client
+    // Prefer the server's Mapbox-ordered route (matched by contactId — pending doors only, so
+    // knocked doors sink to the end via the missing-rank fallback); fall back to the client
     // crow-flies optimiser offline or before it loads. Field stays offline-first either way.
     if (serverRoute && serverRoute.ordered.length > 0) {
       const rank = new Map(serverRoute.ordered.map((cid, i) => [cid, i]));
@@ -124,9 +149,16 @@ export function WalkView({
       );
       return sorted.map((s, i) => ({ ...s, orderIndex: i }));
     }
-    const ordered = optimiseRoute(mapped as Stop[], startFix ?? undefined) as unknown as FullStop[];
+    // Client fallback mirrors the server: optimise the PENDING doors from the origin, knocked
+    // doors after (they're done — the route shouldn't thread back through them).
+    const pendingStops = mapped.filter((s) => s.status === "PENDING");
+    const doneStops = mapped.filter((s) => s.status !== "PENDING");
+    const ordered = [
+      ...(optimiseRoute(pendingStops as Stop[], routeOrigin) as unknown as FullStop[]),
+      ...doneStops,
+    ];
     return ordered.map((s, i) => ({ ...s, orderIndex: i }));
-  }, [assignment, startFix, serverRoute]);
+  }, [assignment, routeOrigin, serverRoute]);
 
   const nextStop = stops.find((s) => s.status === "PENDING");
   const doneCount = stops.filter((s) => s.status !== "PENDING").length;
@@ -175,24 +207,33 @@ export function WalkView({
   const dest = nextStop ? finite({ lat: nextStop.lat, lng: nextStop.lng }) : null;
   const { directions, online: directionsOnline } = useWalkingDirections(origin, dest, mode === "map");
 
-  // Live GPS wins; else the preview's sample position (organiser preview has no GPS). The map
-  // route is the caller override (preview walk-order line) if given, else the live directions.
+  // Live GPS wins; else the preview's sample position (organiser preview has no GPS).
   const userPosition = fix ? { lat: fix.lat, lng: fix.lng } : (sampleUserPosition ?? null);
-  const mapRoute = routeGeometryProp ?? serverRoute?.geometry ?? directions?.geometry ?? null;
+  // The FULL route line, always: the caller override (preview walk-order line), else the
+  // server's street-following geometry, else a straight-line thread through the remaining
+  // doors from where the volunteer stands — the offline fallback, drawn dashed (approximate).
+  const beeline = useMemo(
+    () => walkLineThrough([...(userPosition ? [userPosition] : []), ...pending]),
+    [userPosition, pending],
+  );
+  const mapRoute = routeGeometryProp ?? serverRoute?.geometry ?? beeline;
+  const mapRouteApproximate = !routeGeometryProp && !serverRoute?.geometry && !!beeline;
 
   const openDoor = (id: string) => {
     if (readOnly) return;
     router.push(`/${turfId}/door/${id}`);
   };
 
-  // Fetch the server's Mapbox walk route (ordered from `startFix` when set). Online-only — a
-  // failure/offline just leaves the client crow-flies fallback in place. Not run in the organiser
-  // preview (no volunteer / it's fed a route line directly).
+  // Fetch the server's Mapbox walk route, ordered from the volunteer's position by default
+  // (the live fix, else a persisted "start from here"). Waits for the mount GPS capture to
+  // settle so the first fetch already carries the origin. Online-only — a failure/offline
+  // just leaves the client crow-flies fallback in place. Not run in the organiser preview
+  // (no volunteer / it's fed a route line directly).
   useEffect(() => {
-    if (readOnly || isPreview || !assignment || !volunteerId) return;
+    if (readOnly || isPreview || !assignment || !volunteerId || !gpsReady) return;
     let cancelled = false;
     setRouting(true);
-    void getWalkRoute(turfId, volunteerId, startFix ?? undefined).then((res) => {
+    void getWalkRoute(turfId, volunteerId, routeOrigin).then((res) => {
       if (cancelled) return;
       setRouting(false);
       if (res.ok) setServerRoute(res.data);
@@ -200,7 +241,7 @@ export function WalkView({
     return () => {
       cancelled = true;
     };
-  }, [turfId, volunteerId, startFix, assignment, readOnly, isPreview]);
+  }, [turfId, volunteerId, routeOrigin, assignment, readOnly, isPreview, gpsReady]);
 
   // "Start from my location" — capture GPS once and pin it as the route origin. The fetch effect
   // above then re-orders the list + line + totals in place from where the volunteer is standing.
@@ -288,7 +329,7 @@ export function WalkView({
             ? "Getting your location…"
             : routing
               ? "Optimising from your location…"
-              : startFix
+              : fix || startFix
                 ? "Re-optimise from my location"
                 : "Start from my location"}
         </button>
@@ -326,6 +367,8 @@ export function WalkView({
               stopPopup
               buildDetailHref={readOnly ? (pid) => `/data/addresses/${encodeURIComponent(pid)}` : undefined}
               routeGeometry={mapRoute}
+              routeApproximate={mapRouteApproximate}
+              nextLegGeometry={directions?.geometry ?? null}
             />
           </div>
           {nextStop ? (

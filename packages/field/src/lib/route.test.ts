@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { optimiseRoute, routeLength, type Stop } from "./route";
+import { optimiseRoute, routeLength, walkLineThrough, type Stop } from "./route";
 
 describe("optimiseRoute", () => {
   it("returns a no-better-than-input-or-shorter route and keeps every stop", () => {
@@ -36,5 +36,41 @@ describe("optimiseRoute", () => {
     ];
     const optimised = optimiseRoute(stops);
     expect(optimised[optimised.length - 1].id).toBe("nocoord");
+  });
+});
+
+describe("walkLineThrough", () => {
+  it("threads the points in order as GeoJSON [lng, lat]", () => {
+    const line = walkLineThrough([
+      { lat: -33.9, lng: 151.2 },
+      { lat: -33.91, lng: 151.21 },
+      { lat: -33.92, lng: 151.22 },
+    ]);
+    expect(line).toEqual({
+      type: "LineString",
+      coordinates: [
+        [151.2, -33.9],
+        [151.21, -33.91],
+        [151.22, -33.92],
+      ],
+    });
+  });
+
+  it("drops non-finite points but keeps the line through the rest", () => {
+    const line = walkLineThrough([
+      { lat: -33.9, lng: 151.2 },
+      { lat: NaN, lng: NaN },
+      { lat: -33.92, lng: 151.22 },
+    ]);
+    expect(line?.coordinates).toEqual([
+      [151.2, -33.9],
+      [151.22, -33.92],
+    ]);
+  });
+
+  it("returns null when fewer than two usable points remain", () => {
+    expect(walkLineThrough([])).toBeNull();
+    expect(walkLineThrough([{ lat: -33.9, lng: 151.2 }])).toBeNull();
+    expect(walkLineThrough([{ lat: -33.9, lng: 151.2 }, { lat: NaN, lng: 151.2 }])).toBeNull();
   });
 });

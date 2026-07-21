@@ -145,7 +145,9 @@ export class CanvassingController {
   }
 
   // Field volunteers' own walk route — ordered from their GPS (?lat=&lng=), with real Mapbox
-  // walking legs + geometry. Gated on the canvasser read perm; own-turf enforced in the service.
+  // walking legs + geometry. `?pending=1` routes through the un-knocked doors only (the field
+  // app always sends it — a mid-walk re-optimise must not thread doors already done). Gated on
+  // the canvasser read perm; own-turf enforced in the service.
   @Get("turfs/:turfId/walk-route")
   @RequirePermission(CANVASS_READ)
   async walkRoute(
@@ -154,6 +156,7 @@ export class CanvassingController {
     @Query("volunteerId") volunteerId: string,
     @Query("lat") lat?: string,
     @Query("lng") lng?: string,
+    @Query("pending") pending?: string,
   ) {
     const latN = Number(lat);
     const lngN = Number(lng);
@@ -161,7 +164,7 @@ export class CanvassingController {
       lat != null && lng != null && Number.isFinite(latN) && Number.isFinite(lngN)
         ? { lat: latN, lng: lngN }
         : undefined;
-    return this.canvassing.walkRouteForVolunteer(tenantId, turfId, volunteerId, origin);
+    return this.canvassing.walkRouteForVolunteer(tenantId, turfId, volunteerId, origin, pending === "1");
   }
 
   @Post("turfs")

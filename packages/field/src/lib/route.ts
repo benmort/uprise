@@ -90,3 +90,16 @@ export function optimiseRoute(stops: Stop[], start?: { lat: number; lng: number 
 
   return [...twoOpt(nearestNeighbour(located, startIndex)), ...unlocated];
 }
+
+/**
+ * A straight-line GeoJSON walk line through the given points, in order — the offline /
+ * Mapbox-down fallback for drawing the WHOLE route on the map (the server's street-following
+ * geometry is preferred when available). Non-finite points are dropped; needs at least two
+ * to make a line. Coordinates are GeoJSON [lng, lat].
+ */
+export function walkLineThrough(points: Array<{ lat: number; lng: number }>): GeoJSON.LineString | null {
+  const coordinates = points
+    .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+    .map((p) => [p.lng, p.lat] as [number, number]);
+  return coordinates.length >= 2 ? { type: "LineString", coordinates } : null;
+}

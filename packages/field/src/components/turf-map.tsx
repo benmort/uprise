@@ -57,6 +57,8 @@ export function TurfMap({
   buildDetailHref,
   knockLabel,
   routeGeometry,
+  routeApproximate = false,
+  nextLegGeometry,
   defaultBounds,
   focusBounds,
   focusPoint,
@@ -82,8 +84,15 @@ export function TurfMap({
   buildDetailHref?: (gnafPid: string) => string;
   /** Label for the popover's knock button (default "Knock at this door"). */
   knockLabel?: string;
-  /** Walking route line (user → next stop) from the Mapbox Directions API. */
+  /** The FULL walk-route line threading every stop (server street-following geometry,
+   *  or the client's straight-line fallback when offline / Mapbox is down). */
   routeGeometry?: GeoJSON.LineString | null;
+  /** True when `routeGeometry` is the straight-line fallback — drawn dashed so it reads
+   *  as approximate (matching the dashed offline turf boundary). */
+  routeApproximate?: boolean;
+  /** The user → next-stop walking leg (Mapbox Directions) — drawn stronger, on top of
+   *  the full-route line. */
+  nextLegGeometry?: GeoJSON.LineString | null;
   /** Viewport when there's no geometry/stops/position to focus (e.g. AU_BOUNDS). */
   defaultBounds?: [number, number, number, number];
   /** `[w,s,e,n]` to frame the viewport to on change (e.g. the geo explorer's shared
@@ -472,15 +481,38 @@ export function TurfMap({
         </Source>
       )}
 
-      {/* Smooth translucent-blue route threading the stops in order (drawn under the
-          pins). Solid + round-joined for the soft curved look, not a dashed trail. */}
+      {/* Smooth translucent-blue route threading ALL the stops in order (drawn under the
+          pins). Solid + round-joined when it's real street geometry; dashed when it's the
+          straight-line fallback, so an approximate route never reads as a footpath. */}
       {routeGeometry && (
         <Source id="walk-route" type="geojson" data={{ type: "Feature", geometry: routeGeometry, properties: {} }}>
           <Layer
             id="walk-route-line"
             type="line"
             layout={{ "line-cap": "round", "line-join": "round" }}
-            paint={{ "line-color": PRIMARY, "line-width": 4.5, "line-opacity": 0.4 }}
+            paint={{
+              "line-color": PRIMARY,
+              "line-width": 4.5,
+              "line-opacity": 0.4,
+              ...(routeApproximate ? { "line-dasharray": [1.5, 1.5] as [number, number] } : {}),
+            }}
+          />
+        </Source>
+      )}
+
+      {/* The user → next-stop walking leg, stronger and on top of the full route so the
+          immediate path stands out from the rest of the walk. */}
+      {nextLegGeometry && (
+        <Source
+          id="walk-next-leg"
+          type="geojson"
+          data={{ type: "Feature", geometry: nextLegGeometry, properties: {} }}
+        >
+          <Layer
+            id="walk-next-leg-line"
+            type="line"
+            layout={{ "line-cap": "round", "line-join": "round" }}
+            paint={{ "line-color": PRIMARY, "line-width": 5, "line-opacity": 0.85 }}
           />
         </Source>
       )}
