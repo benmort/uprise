@@ -97,7 +97,7 @@ export const FLOW_META: Record<SetupFlowKey, { label: string; blurb: string; ico
   },
   account: {
     label: "Account setup",
-    blurb: "Recommended extras — two-factor and your profile.",
+    blurb: "Recommended extras — two-factor, your profile and branding.",
     icon: ShieldCheck,
   },
   organisation: {

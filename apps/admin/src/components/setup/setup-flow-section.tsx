@@ -1,7 +1,7 @@
 "use client";
 
 import { Lock } from "lucide-react";
-import { StepProgress } from "@uprise/ui";
+import { StatusBadge, StepProgress } from "@uprise/ui";
 import type { ChannelSetupStep, SetupStep } from "@uprise/api-client";
 import { FLOW_META, type SetupFlowKey } from "@/lib/setup/step-registry";
 import { flowProgress } from "@/lib/setup/setup-state";
@@ -43,7 +43,10 @@ export function SetupFlowSection({
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">{meta.blurb}</p>
         </div>
-        {progress.total > 0 && !allPlanLocked ? (
+        {flow === "account" ? (
+          // Account setup is a recommended extra, not counted setup work — a chip, not a score.
+          <StatusBadge status="RECOMMENDED" label="Recommended" className="shrink-0" />
+        ) : progress.total > 0 && !allPlanLocked ? (
           <div className="flex shrink-0 items-center gap-2.5">
             <span className="text-xs font-semibold text-muted-foreground tabular-nums">
               {progress.done}/{progress.total}

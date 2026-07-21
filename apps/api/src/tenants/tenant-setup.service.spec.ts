@@ -93,6 +93,15 @@ describe("TenantSetupService", () => {
       expect(state.flows.identity.complete).toBe(true);
       expect(state.flows.account.complete).toBe(true);
     });
+
+    it("branding is an owner-only account step, recommended until done", async () => {
+      const owner = await setup({ orgProfile: { ...completeOrgProfile(), heroImageUrl: null } })
+        .service.getSetupState("t1", OWNER);
+      expect(stepOf(owner.flows.account.steps, "branding").status).toBe("recommended");
+
+      const organiser = await setup().service.getSetupState("t1", ORGANISER);
+      expect(stepOf(organiser.flows.account.steps, "branding")).toBeUndefined();
+    });
   });
 
   describe("role layering", () => {
@@ -128,11 +137,12 @@ describe("TenantSetupService", () => {
       expect(state.gates.canProvisionTelephony.missing!.length).toBeGreaterThan(0);
     });
 
-    it("a complete org profile completes the flow (branding done) and opens the gate", async () => {
+    it("a complete org profile completes the flow and opens the gate; branding lives under account", async () => {
       const { service } = setup();
       const state = await service.getSetupState("t1", OWNER);
       expect(state.flows.organisation.complete).toBe(true);
-      expect(stepOf(state.flows.organisation.steps, "branding").status).toBe("done");
+      expect(stepOf(state.flows.organisation.steps, "branding")).toBeUndefined();
+      expect(stepOf(state.flows.account.steps, "branding").status).toBe("done");
       expect(state.gates.canProvisionTelephony).toEqual({ allowed: true });
     });
   });

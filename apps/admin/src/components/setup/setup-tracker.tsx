@@ -170,7 +170,7 @@ export function SetupTracker() {
                     {FLOW_META[f.key].label}
                   </span>
                   <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
-                    {p.done}/{p.total}
+                    {f.key === "account" ? "Recommended" : `${p.done}/${p.total}`}
                   </span>
                 </div>
                 {f.steps.map((s) => (

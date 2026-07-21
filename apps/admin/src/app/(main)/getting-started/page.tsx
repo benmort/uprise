@@ -28,13 +28,13 @@ export default function GettingStartedPage() {
   const ownerView = Boolean(state?.flows.organisation.applicable);
 
   return (
-    <div className="mx-auto w-full max-w-3xl page-stack">
+    <div className="page-stack">
       <PageHeader
         icon={Rocket}
         title="Getting started"
         description={
           ownerView
-            ? "Set up your account, your organisation, and your own channels. You can send on shared Uprise numbers from day one."
+            ? "Set up your account, your organisation, and your own channels. You can send on shared Uprise numbers and use Uprise email domains from day one."
             : "Your account, ready to organise."
         }
       />

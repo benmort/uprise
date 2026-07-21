@@ -434,10 +434,10 @@ export type ChannelSetupState =
 
 /** Identity-setup step keys (every admin role) — both REQUIRED: who you sign in as. */
 export const IDENTITY_SETUP_KEYS = ["verifyEmail", "confirmMobile"] as const;
-/** Account-setup step keys (every admin role) — recommended polish, never blocking. */
-export const ACCOUNT_SETUP_KEYS = ["enableTwofa", "completeProfile"] as const;
-/** Organisation step keys (owner). branding is recommended; the rest are required. */
-export const ORG_SETUP_KEYS = ["orgIdentity", "businessLegal", "contacts", "address", "branding"] as const;
+/** Account-setup step keys — recommended polish, never blocking. branding is owner-only. */
+export const ACCOUNT_SETUP_KEYS = ["enableTwofa", "completeProfile", "branding"] as const;
+/** Organisation step keys (owner) — all required. */
+export const ORG_SETUP_KEYS = ["orgIdentity", "businessLegal", "contacts", "address"] as const;
 /** Channel step keys (owner). */
 export const CHANNEL_SETUP_KEYS = ["phoneNumber", "emailIdentity"] as const;
 export type SetupStepKey =

@@ -106,15 +106,6 @@ export class TenantSetupService {
     ];
     const identityComplete = Boolean(user?.emailVerified && user?.mobileVerified);
 
-    // ── Account setup (recommended polish — never blocks completion) ──────────
-    const displayName = profile?.displayName?.trim() || user?.displayName?.trim() || "";
-    const profileDone = Boolean(displayName && profile?.avatarUrl?.trim());
-    const accountSteps: SetupStep[] = [
-      { key: "enableTwofa", status: user?.twofaEnabled ? "done" : "recommended" },
-      { key: "completeProfile", status: profileDone ? "done" : "recommended" },
-    ];
-    const accountComplete = Boolean(user?.twofaEnabled && profileDone);
-
     // ── Organisation setup (owner view only) ──────────────────────────────────
     const org = evaluateOrgSetup({
       profile: orgProfile
@@ -137,10 +128,22 @@ export class TenantSetupService {
       { key: "businessLegal", status: required(org.steps.businessLegal) },
       { key: "contacts", status: required(org.steps.contacts) },
       { key: "address", status: required(org.steps.address) },
-      { key: "branding", status: org.steps.branding ? "done" : "recommended" },
     ];
     const orgComplete =
       org.steps.orgIdentity && org.steps.businessLegal && org.steps.contacts && org.steps.address;
+
+    // ── Account setup (recommended polish — never blocks completion) ──────────
+    // branding lives here rather than under Organisation: it's an extra, and the
+    // settings route is owner-only, so organisers don't get the step at all.
+    const displayName = profile?.displayName?.trim() || user?.displayName?.trim() || "";
+    const profileDone = Boolean(displayName && profile?.avatarUrl?.trim());
+    const recommended = (done: boolean): SetupStepStatus => (done ? "done" : "recommended");
+    const accountSteps: SetupStep[] = [
+      { key: "enableTwofa", status: recommended(Boolean(user?.twofaEnabled)) },
+      { key: "completeProfile", status: recommended(profileDone) },
+      ...(ownerView ? [{ key: "branding", status: recommended(org.steps.branding) } as SetupStep] : []),
+    ];
+    const accountComplete = accountSteps.every((s) => s.status === "done");
 
     // ── Channels (owner view; per-step plan locks) ────────────────────────────
     const telFlagOn = Boolean(flags.FEATURE_TENANT_TELEPHONY_ENABLED);
