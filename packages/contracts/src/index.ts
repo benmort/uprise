@@ -432,14 +432,17 @@ export type ChannelSetupState =
   | "failed"
   | "active";
 
-/** Self-setup step keys (every admin role). Only verifyEmail is required. */
-export const SELF_SETUP_KEYS = ["verifyEmail", "confirmMobile", "enableTwofa", "completeProfile"] as const;
+/** Identity-setup step keys (every admin role) — both REQUIRED: who you sign in as. */
+export const IDENTITY_SETUP_KEYS = ["verifyEmail", "confirmMobile"] as const;
+/** Account-setup step keys (every admin role) — recommended polish, never blocking. */
+export const ACCOUNT_SETUP_KEYS = ["enableTwofa", "completeProfile"] as const;
 /** Organisation step keys (owner). branding is recommended; the rest are required. */
 export const ORG_SETUP_KEYS = ["orgIdentity", "businessLegal", "contacts", "address", "branding"] as const;
 /** Channel step keys (owner). */
 export const CHANNEL_SETUP_KEYS = ["phoneNumber", "emailIdentity"] as const;
 export type SetupStepKey =
-  | (typeof SELF_SETUP_KEYS)[number]
+  | (typeof IDENTITY_SETUP_KEYS)[number]
+  | (typeof ACCOUNT_SETUP_KEYS)[number]
   | (typeof ORG_SETUP_KEYS)[number]
   | (typeof CHANNEL_SETUP_KEYS)[number];
 
@@ -470,7 +473,10 @@ export interface SetupGate {
 
 export interface TenantSetupState {
   flows: {
-    self: { steps: SetupStep[]; complete: boolean };
+    /** Required for everyone: verified email + mobile. */
+    identity: { steps: SetupStep[]; complete: boolean };
+    /** Recommended account polish (2FA, profile) — never blocks completion. */
+    account: { steps: SetupStep[]; complete: boolean };
     organisation: { applicable: boolean; steps: SetupStep[]; complete: boolean };
     channels: { applicable: boolean; steps: ChannelSetupStep[]; complete: boolean };
   };

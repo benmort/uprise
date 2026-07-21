@@ -75,22 +75,23 @@ function setup(over: {
 const stepOf = (steps: Array<{ key: string }>, key: string) => steps.find((s) => s.key === key) as any;
 
 describe("TenantSetupService", () => {
-  describe("self flow", () => {
-    it("derives self steps from the caller's account (email required, rest recommended)", async () => {
-      const { service } = setup({ user: { emailVerified: false, mobileVerified: true, twofaEnabled: false } });
+  describe("identity + account flows", () => {
+    it("identity requires BOTH verified email and mobile", async () => {
+      const { service } = setup({ user: { emailVerified: true, mobileVerified: false, twofaEnabled: false } });
       const state = await service.getSetupState("t1", OWNER);
-      expect(stepOf(state.flows.self.steps, "verifyEmail").status).toBe("todo");
-      expect(stepOf(state.flows.self.steps, "confirmMobile").status).toBe("done");
-      expect(stepOf(state.flows.self.steps, "enableTwofa").status).toBe("recommended");
-      expect(stepOf(state.flows.self.steps, "completeProfile").status).toBe("done");
-      expect(state.flows.self.complete).toBe(false);
+      expect(stepOf(state.flows.identity.steps, "verifyEmail").status).toBe("done");
+      expect(stepOf(state.flows.identity.steps, "confirmMobile").status).toBe("todo");
+      expect(state.flows.identity.complete).toBe(false);
+      // Account polish stays recommended and non-blocking.
+      expect(stepOf(state.flows.account.steps, "enableTwofa").status).toBe("recommended");
+      expect(stepOf(state.flows.account.steps, "completeProfile").status).toBe("done");
     });
 
-    it("self is complete on email verification alone", async () => {
-      const { service } = setup({ user: { emailVerified: true }, profile: null });
+    it("identity completes with email + mobile; account tracks 2FA + profile", async () => {
+      const { service } = setup({ user: { emailVerified: true, mobileVerified: true, twofaEnabled: true } });
       const state = await service.getSetupState("t1", ORGANISER);
-      expect(state.flows.self.complete).toBe(true);
-      expect(stepOf(state.flows.self.steps, "completeProfile").status).toBe("recommended");
+      expect(state.flows.identity.complete).toBe(true);
+      expect(state.flows.account.complete).toBe(true);
     });
   });
 

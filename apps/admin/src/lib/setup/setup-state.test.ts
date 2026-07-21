@@ -21,8 +21,9 @@ const channel = (key: string, state: ChannelSetupStep["state"], over: Partial<Ch
 });
 
 function state(over: {
-  self?: SetupStep[];
-  selfComplete?: boolean;
+  identity?: SetupStep[];
+  identityComplete?: boolean;
+  account?: SetupStep[];
   org?: SetupStep[] | null; // null → not applicable
   orgComplete?: boolean;
   channels?: ChannelSetupStep[] | null;
@@ -30,7 +31,11 @@ function state(over: {
 } = {}): TenantSetupState {
   return {
     flows: {
-      self: { steps: over.self ?? [step("verifyEmail", "done")], complete: over.selfComplete ?? true },
+      identity: {
+        steps: over.identity ?? [step("verifyEmail", "done"), step("confirmMobile", "done")],
+        complete: over.identityComplete ?? true,
+      },
+      account: { steps: over.account ?? [step("enableTwofa", "recommended")], complete: false },
       organisation: {
         applicable: over.org !== null,
         steps: over.org ?? [step("orgIdentity", "done")],
@@ -64,28 +69,41 @@ describe("flowProgress / overallProgress", () => {
     });
   });
 
-  it("overallProgress skips non-applicable flows (organiser sees self only)", () => {
-    const s = state({ self: [step("verifyEmail", "todo")], org: null, channels: null });
-    expect(overallProgress(s)).toEqual({ done: 0, total: 1 });
+  it("overallProgress counts identity + organisation only — account/channels are extras", () => {
+    const s = state({
+      identity: [step("verifyEmail", "todo"), step("confirmMobile", "done")],
+      account: [step("enableTwofa", "recommended"), step("completeProfile", "recommended")],
+      org: [step("businessLegal", "todo")],
+      channels: [channel("phoneNumber", "none")],
+    });
+    // identity 1/2 + organisation 0/1; account (2) and channels (1) excluded.
+    expect(overallProgress(s)).toEqual({ done: 1, total: 3 });
+  });
+
+  it("overallProgress skips non-applicable flows (organiser: identity only)", () => {
+    const s = state({ identity: [step("verifyEmail", "todo"), step("confirmMobile", "todo")], org: null, channels: null });
+    expect(overallProgress(s)).toEqual({ done: 0, total: 2 });
   });
 });
 
 describe("setupComplete", () => {
-  it("combines the server's per-flow complete flags", () => {
+  it("combines identity + applicable org/channel complete flags; account never blocks", () => {
     expect(setupComplete(state())).toBe(true);
-    expect(setupComplete(state({ selfComplete: false }))).toBe(false);
+    expect(setupComplete(state({ identityComplete: false }))).toBe(false);
     expect(setupComplete(state({ orgComplete: false }))).toBe(false);
+    // Account flow incomplete by default in the factory — still complete overall.
+    expect(setupComplete(state({ account: [step("enableTwofa", "recommended")] }))).toBe(true);
   });
 
   it("ignores non-applicable flows", () => {
-    expect(setupComplete(state({ org: null, channels: null, selfComplete: true }))).toBe(true);
+    expect(setupComplete(state({ org: null, channels: null, identityComplete: true }))).toBe(true);
   });
 });
 
 describe("nextStep", () => {
   it("returns the first attention step in flow order", () => {
     const s = state({
-      self: [step("verifyEmail", "done")],
+      identity: [step("verifyEmail", "done"), step("confirmMobile", "done")],
       org: [step("orgIdentity", "done"), step("businessLegal", "todo")],
       channels: [channel("phoneNumber", "none")],
     });
@@ -94,7 +112,8 @@ describe("nextStep", () => {
 
   it("skips in-flight, requested, recommended and plan-locked steps", () => {
     const s = state({
-      self: [step("verifyEmail", "done"), step("enableTwofa", "recommended")],
+      identity: [step("verifyEmail", "done"), step("confirmMobile", "done")],
+      account: [step("enableTwofa", "recommended")],
       org: [step("orgIdentity", "done")],
       channels: [
         channel("phoneNumber", "in_progress"),

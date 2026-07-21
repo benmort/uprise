@@ -90,11 +90,15 @@ export default function GettingStartedPage() {
               </div>
             )}
 
-            <SetupFlowSection flow="self" steps={state.flows.self.steps} />
+            {/* Order: Identity (required) → Organisation → Account (recommended extras,
+                between the org and channel cards) → Channels. */}
+            <SetupFlowSection flow="identity" steps={state.flows.identity.steps} />
 
             {state.flows.organisation.applicable ? (
               <SetupFlowSection flow="organisation" steps={state.flows.organisation.steps} />
             ) : null}
+
+            <SetupFlowSection flow="account" steps={state.flows.account.steps} />
 
             {state.flows.channels.applicable ? (
               <SetupFlowSection flow="channels" steps={state.flows.channels.steps}>

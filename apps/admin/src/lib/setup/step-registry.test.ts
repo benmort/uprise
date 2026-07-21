@@ -25,8 +25,8 @@ describe("STEP_META", () => {
 });
 
 describe("FLOW_META", () => {
-  it("covers the three flows", () => {
-    expect(Object.keys(FLOW_META).sort()).toEqual(["channels", "organisation", "self"]);
+  it("covers the four flows", () => {
+    expect(Object.keys(FLOW_META).sort()).toEqual(["account", "channels", "identity", "organisation"]);
   });
 });
 

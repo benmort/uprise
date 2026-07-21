@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Building2, Radio, UserRound } from "lucide-react";
+import { Building2, Radio, ShieldCheck, UserRound } from "lucide-react";
 import type { SetupStepKey } from "@uprise/api-client";
 
 /**
@@ -87,10 +87,19 @@ export const STEP_META: Record<SetupStepKey, StepMeta> = {
   },
 };
 
-export type SetupFlowKey = "self" | "organisation" | "channels";
+export type SetupFlowKey = "identity" | "account" | "organisation" | "channels";
 
 export const FLOW_META: Record<SetupFlowKey, { label: string; blurb: string; icon: LucideIcon }> = {
-  self: { label: "Self setup", blurb: "Your own account — secure and recognisable.", icon: UserRound },
+  identity: {
+    label: "Identity setup",
+    blurb: "Who you sign in as — verified email and mobile.",
+    icon: UserRound,
+  },
+  account: {
+    label: "Account setup",
+    blurb: "Recommended extras — two-factor and your profile.",
+    icon: ShieldCheck,
+  },
   organisation: {
     label: "Organisation setup",
     blurb: "Who you are — brand, legal identity, and the people who sign.",

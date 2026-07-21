@@ -29,35 +29,44 @@ function isDone(step: AnyStep): boolean {
   return isChannel(step) ? step.state === "active" : step.status === "done";
 }
 
-function flowsOf(state: TenantSetupState): Array<{ key: SetupFlowKey; steps: AnyStep[] }> {
+/** Display order: Identity → Organisation → Account → Channels (account sits between the
+ *  org and channel cards). Only applicable flows appear. */
+export function flowsOf(state: TenantSetupState): Array<{ key: SetupFlowKey; steps: AnyStep[] }> {
   const out: Array<{ key: SetupFlowKey; steps: AnyStep[] }> = [
-    { key: "self", steps: state.flows.self.steps },
+    { key: "identity", steps: state.flows.identity.steps },
   ];
   if (state.flows.organisation.applicable) out.push({ key: "organisation", steps: state.flows.organisation.steps });
+  out.push({ key: "account", steps: state.flows.account.steps });
   if (state.flows.channels.applicable) out.push({ key: "channels", steps: state.flows.channels.steps });
   return out;
 }
+
+/** Flows in the HEADLINE "n of m" count — account and channels are extras, not steps. */
+const COUNTED_FLOWS = new Set<SetupFlowKey>(["identity", "organisation"]);
 
 export function flowProgress(steps: AnyStep[]): { done: number; total: number } {
   const countable = steps.filter(counted);
   return { done: countable.filter(isDone).length, total: countable.length };
 }
 
+/** Headline "n of m": identity + organisation only — account/channels are tracked extras. */
 export function overallProgress(state: TenantSetupState): { done: number; total: number } {
-  return flowsOf(state).reduce(
-    (acc, f) => {
-      const p = flowProgress(f.steps);
-      return { done: acc.done + p.done, total: acc.total + p.total };
-    },
-    { done: 0, total: 0 },
-  );
+  return flowsOf(state)
+    .filter((f) => COUNTED_FLOWS.has(f.key))
+    .reduce(
+      (acc, f) => {
+        const p = flowProgress(f.steps);
+        return { done: acc.done + p.done, total: acc.total + p.total };
+      },
+      { done: 0, total: 0 },
+    );
 }
 
-/** Complete = every applicable flow's server-computed `complete` flag. Recommended steps,
- *  requested email and plan-locked channels never block. */
+/** Complete = identity + (organisation + channels when applicable). The account flow is
+ *  recommended-only and never blocks; requested email and plan-locked channels don't either. */
 export function setupComplete(state: TenantSetupState): boolean {
   return (
-    state.flows.self.complete &&
+    state.flows.identity.complete &&
     (!state.flows.organisation.applicable || state.flows.organisation.complete) &&
     (!state.flows.channels.applicable || state.flows.channels.complete)
   );

@@ -99,16 +99,21 @@ export class TenantSetupService {
         this.flags.resolveAll({ tenantId }),
       ]);
 
-    // ── Self setup (every admin role; derived from the CALLER's account) ──────
+    // ── Identity setup (every admin role; REQUIRED — who you sign in as) ──────
+    const identitySteps: SetupStep[] = [
+      { key: "verifyEmail", status: user?.emailVerified ? "done" : "todo" },
+      { key: "confirmMobile", status: user?.mobileVerified ? "done" : "todo" },
+    ];
+    const identityComplete = Boolean(user?.emailVerified && user?.mobileVerified);
+
+    // ── Account setup (recommended polish — never blocks completion) ──────────
     const displayName = profile?.displayName?.trim() || user?.displayName?.trim() || "";
     const profileDone = Boolean(displayName && profile?.avatarUrl?.trim());
-    const selfSteps: SetupStep[] = [
-      { key: "verifyEmail", status: user?.emailVerified ? "done" : "todo" },
-      { key: "confirmMobile", status: user?.mobileVerified ? "done" : "recommended" },
+    const accountSteps: SetupStep[] = [
       { key: "enableTwofa", status: user?.twofaEnabled ? "done" : "recommended" },
       { key: "completeProfile", status: profileDone ? "done" : "recommended" },
     ];
-    const selfComplete = Boolean(user?.emailVerified);
+    const accountComplete = Boolean(user?.twofaEnabled && profileDone);
 
     // ── Organisation setup (owner view only) ──────────────────────────────────
     const org = evaluateOrgSetup({
@@ -204,7 +209,8 @@ export class TenantSetupService {
 
     return {
       flows: {
-        self: { steps: selfSteps, complete: selfComplete },
+        identity: { steps: identitySteps, complete: identityComplete },
+        account: { steps: accountSteps, complete: accountComplete },
         organisation: { applicable: ownerView, steps: orgSteps, complete: orgComplete },
         channels: { applicable: ownerView, steps: channelSteps, complete: channelsComplete },
       },

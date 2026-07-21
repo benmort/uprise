@@ -7,10 +7,11 @@ import { CheckCircle2, ChevronUp, X } from "lucide-react";
 import { StepProgress } from "@uprise/ui";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { FLOW_META, type SetupFlowKey } from "@/lib/setup/step-registry";
+import { FLOW_META } from "@/lib/setup/step-registry";
 import {
   attentionKeys,
   flowProgress,
+  flowsOf,
   overallProgress,
   setupComplete,
   shouldResurface,
@@ -122,15 +123,7 @@ export function SetupTracker() {
 
   // ── Expanded checklist popover ────────────────────────────────────────────
   if (open) {
-    const flows: Array<{ key: SetupFlowKey; steps: typeof state.flows.self.steps }> = [
-      { key: "self", steps: state.flows.self.steps },
-      ...(state.flows.organisation.applicable
-        ? [{ key: "organisation" as const, steps: state.flows.organisation.steps }]
-        : []),
-      ...(state.flows.channels.applicable
-        ? [{ key: "channels" as const, steps: state.flows.channels.steps }]
-        : []),
-    ];
+    const flows = flowsOf(state);
     return (
       <div
         ref={panelRef}

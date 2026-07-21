@@ -218,7 +218,7 @@ body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f11
 
           <div class="overall">
             <div style="flex:1">
-              <div class="big">4 of 9 steps done</div>
+              <div class="big">3 of 7 steps done</div>
               <div class="sub">Finish Business &amp; legal details to unlock your own phone number.</div>
             </div>
             <div class="bar"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -228,8 +228,8 @@ body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f11
           <!-- SELF SETUP -->
           <div class="card flow">
             <div class="fh">
-              <div><h2>👤 Self setup</h2><div class="sub">Your own account — secure and recognisable.</div></div>
-              <div class="prog"><span class="nofm">1/2 + 2 recommended</span><div class="bar"><i class="f"></i><i></i></div></div>
+              <div><h2>👤 Identity setup</h2><div class="sub">Who you sign in as — verified email and mobile (required).</div></div>
+              <div class="prog"><span class="nofm">1/2</span><div class="bar"><i class="f"></i><i></i></div></div>
             </div>
             <div class="rows">
               <div class="row">
@@ -240,19 +240,8 @@ body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f11
               <div class="row">
                 <span class="ic" style="color:var(--faint)">◌</span>
                 <div class="tx"><div class="tt">Confirm your mobile</div><div class="bb">A verified mobile secures account recovery.</div></div>
-                <span class="chip rec">Recommended</span>
-                <button class="cta">Confirm</button>
-              </div>
-              <div class="row">
-                <span class="ic" style="color:var(--faint)">◌</span>
-                <div class="tx"><div class="tt">Turn on two-factor authentication</div><div class="bb">Protects the account that holds billing and compliance powers.</div></div>
-                <span class="chip rec">Recommended</span>
-                <button class="cta">Enable</button>
-              </div>
-              <div class="row">
-                <span class="ic" style="color:var(--success)">✔</span>
-                <div class="tx"><div class="tt done">Complete your profile</div><div class="bb">Name and photo shown to your team.</div></div>
-                <span class="chip done">Done</span>
+                <span class="chip todo">To do</span>
+                <button class="cta primary">Confirm</button>
               </div>
             </div>
           </div>
@@ -299,6 +288,27 @@ body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f11
             </div>
           </div>
 
+          <!-- ACCOUNT SETUP (recommended extras — outside the headline count, like Channels) -->
+          <div class="card flow">
+            <div class="fh">
+              <div><h2>🛡 Account setup</h2><div class="sub">Recommended extras — never blocks your setup count.</div></div>
+              <div class="prog"><span class="nofm">1/2 recommended</span></div>
+            </div>
+            <div class="rows">
+              <div class="row">
+                <span class="ic" style="color:var(--faint)">◌</span>
+                <div class="tx"><div class="tt">Turn on two-factor authentication</div><div class="bb">Protects the account that holds billing and compliance powers.</div></div>
+                <span class="chip rec">Recommended</span>
+                <button class="cta">Enable</button>
+              </div>
+              <div class="row">
+                <span class="ic" style="color:var(--success)">✔</span>
+                <div class="tx"><div class="tt done">Complete your profile</div><div class="bb">Name and photo shown to your team.</div></div>
+                <span class="chip done">Done</span>
+              </div>
+            </div>
+          </div>
+
           <!-- CHANNELS -->
           <div class="card flow">
             <div class="fh">
@@ -337,7 +347,7 @@ body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f11
         </div>
       </div>
     </div>
-    <div class="annot" style="right:18px;top:64px"><b>S1 — Owner.</b> Three role-layered flows with chips. Business &amp; legal shows the server <b>reason</b> line (compliance rejected → action_required). The telephony card is the existing TelephonyStatusCard embedded, not a rebuild.</div>
+    <div class="annot" style="right:18px;top:64px"><b>S1 — Owner.</b> Identity (required) → Organisation → Account (recommended) → Channels; the headline count covers Identity + Organisation only. Business &amp; legal shows the server <b>reason</b> line (compliance rejected → action_required). The telephony card is the existing TelephonyStatusCard embedded, not a rebuild.</div>
   </section>
 
   <!-- ================= S2 — GETTING STARTED (ORGANISER) ================= -->
@@ -364,8 +374,8 @@ body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f11
           </div>
           <div class="card flow">
             <div class="fh">
-              <div><h2>👤 Self setup</h2><div class="sub">Your own account — secure and recognisable.</div></div>
-              <div class="prog"><span class="nofm">1/2 + 2 recommended</span><div class="bar"><i class="f"></i><i></i></div></div>
+              <div><h2>👤 Identity setup</h2><div class="sub">Who you sign in as — verified email and mobile (required).</div></div>
+              <div class="prog"><span class="nofm">1/2</span><div class="bar"><i class="f"></i><i></i></div></div>
             </div>
             <div class="rows">
               <div class="row">
@@ -396,7 +406,7 @@ body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#0f11
         </div>
       </div>
     </div>
-    <div class="annot" style="right:18px;top:64px"><b>S2 — Organiser.</b> Self setup only — Organisation and Channels flows are absent entirely (hidden, not locked). The org's setup belongs to the owner.</div>
+    <div class="annot" style="right:18px;top:64px"><b>S2 — Organiser.</b> Identity + Account setup only — Organisation and Channels flows are absent entirely (hidden, not locked). The org's setup belongs to the owner.</div>
   </section>
 
   <!-- ================= S3 — ALL SET (OWNER) ================= -->
