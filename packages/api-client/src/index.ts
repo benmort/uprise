@@ -449,11 +449,17 @@ export function tenantLogoUrl(
   return b?.logoLandscapeUrl ?? b?.logoBlockUrl ?? null;
 }
 
+/** Super-admin-set tenant lifecycle (see the API's TenantStatus enum). */
+export type TenantStatus = "ACTIVE" | "SUSPENDED" | "ARCHIVED";
+
 export interface TenantSearchRow {
   id: string;
   slug: string;
   name: string;
   networkId: string | null;
+  /** Lifecycle status + the network's plan — the status pill in the super-admin listing. */
+  status: TenantStatus;
+  planName: string | null;
   logoLandscapeUrl: string | null;
   logoBlockUrl: string | null;
 }
@@ -463,6 +469,7 @@ export interface TenantRecord {
   id: string;
   slug: string;
   name: string;
+  status: TenantStatus;
   networkId: string | null;
   createdAt: string;
   /** Free-form settings blob (e.g. access-control policy under `accessControl`). */
@@ -508,7 +515,10 @@ export const tenants = {
   get: (tenantId: string) => request<TenantRecord>(`/tenants/${encodeURIComponent(tenantId)}`),
 
   /** Rename / re-slug / re-configure a tenant (manage tenant.tenant: owner or super-admin). */
-  update: (tenantId: string, body: { name?: string; slug?: string; settings?: Record<string, unknown> }) =>
+  update: (
+    tenantId: string,
+    body: { name?: string; slug?: string; status?: TenantStatus; settings?: Record<string, unknown> },
+  ) =>
     request<TenantRecord>(`/tenants/${encodeURIComponent(tenantId)}`, {
       method: "PATCH",
       body: JSON.stringify(body),
