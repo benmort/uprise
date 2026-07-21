@@ -99,7 +99,9 @@ function setup() {
       update: jest.fn(async (args: any) => ({ ...makeNumber(), ...args.data })),
     },
     tenant: { findUnique: jest.fn(async () => ({ id: TENANT_ID, name: "Test Tenant" })) },
-    orgProfile: { findFirst: jest.fn().mockResolvedValue(null) },
+    // Complete org identification by default so startRun's provisioning gate passes;
+    // gate/prefill tests override this per-case (null / incomplete).
+    orgProfile: { findFirst: jest.fn().mockResolvedValue(makeCompleteOrgProfile()) },
     $queryRaw: jest.fn().mockResolvedValue([]),
   };
   prisma.$transaction = jest.fn((cb: any) => cb(prisma));
@@ -123,6 +125,7 @@ function setup() {
   const outbox = { append: jest.fn(async () => undefined) };
   const logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn(), debug: jest.fn() };
   const senderResolver = { invalidate: jest.fn() };
+  const flags = { isEnabled: jest.fn(async () => true) };
 
   const service = new TelephonyProvisioningService(
     prisma,
@@ -133,8 +136,41 @@ function setup() {
     logger as any,
     senderResolver as any,
     new ImageUploadService(),
+    flags as any,
   );
-  return { prisma, config, crypto, twilio, outbox, logger, senderResolver, service };
+  return { prisma, config, crypto, twilio, outbox, logger, senderResolver, service, flags };
+}
+
+/** OrgProfile row (include-shape) whose identification satisfies evaluateOrgSetup. */
+function makeCompleteOrgProfile() {
+  return {
+    id: "op1",
+    tenantId: TENANT_ID,
+    name: "Test Tenant",
+    logoBlockUrl: "https://cdn/logo.png",
+    logoLandscapeUrl: null,
+    primaryColour: "#465fff",
+    secondaryColour: null,
+    heroImageUrl: null,
+    credential: {
+      legalTradingName: "Test Tenant Incorporated",
+      australianBusinessNumber: "12345678901",
+      australianCompanyNumber: null,
+      entityType: "incorporated_association",
+    },
+    contacts: [
+      {
+        firstName: "Pat",
+        lastName: "Chairperson",
+        email: "pat@test.org",
+        isPrimaryContact: true,
+        isAuthorisedSignatory: true,
+      },
+    ],
+    addresses: [
+      { line1: "1 Main St", line2: null, suburb: "Newtown", city: null, state: "NSW", postcode: "2042" },
+    ],
+  };
 }
 
 // ApiHttpException carries its code/message in a wrapped response object, not
@@ -607,6 +643,54 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
         expect.objectContaining({ data: expect.objectContaining({ numberType: "mobile" }) }),
       );
     });
+
+    it("403s PLAN_UPGRADE_REQUIRED when the tenant telephony flag is off", async () => {
+      const { service, flags, prisma } = setup();
+      flags.isEnabled.mockResolvedValueOnce(false);
+
+      await expectApiError(
+        service.startRun({ tenantId: TENANT_ID, mode: "SUBACCOUNT", complianceInput: makeRun().complianceInput as any }),
+        "PLAN_UPGRADE_REQUIRED",
+      );
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+    });
+
+    it("422s SETUP_INCOMPLETE with machine-readable missing[] when org identification is incomplete", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue(null); // fresh tenant — nothing filled
+
+      const promise = service.startRun({
+        tenantId: TENANT_ID,
+        mode: "SUBACCOUNT",
+        complianceInput: makeRun().complianceInput as any,
+      });
+      await expect(promise).rejects.toMatchObject({
+        response: {
+          error: {
+            code: "SETUP_INCOMPLETE",
+            details: {
+              missing: expect.arrayContaining([
+                expect.objectContaining({ step: "businessLegal", field: "legalTradingName" }),
+                expect.objectContaining({ step: "contacts" }),
+                expect.objectContaining({ step: "address" }),
+              ]),
+            },
+          },
+        },
+      });
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+    });
+
+    it("retry is NOT gated — a mid-flight run survives later org-profile edits/plan changes", async () => {
+      const { service, prisma, flags } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue(null);
+      flags.isEnabled.mockResolvedValue(false);
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        makeRun({ status: S.FAILED, resumeStatus: S.COMPLIANCE_DRAFT }),
+      );
+
+      await expect(service.retry(RUN_ID)).resolves.toBeDefined();
+    });
   });
 
   describe("retry", () => {
@@ -806,7 +890,8 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
     });
 
     it("returns empty fields when the tenant has no org profile", async () => {
-      const { service } = setup();
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue(null);
 
       const prefill = await service.compliancePrefill(TENANT_ID);
 

@@ -3,6 +3,7 @@ import { TenantsController } from "./tenants.controller";
 import { RegistrationController } from "./registration.controller";
 import { NetworksController } from "./networks.controller";
 import { TenantsService } from "./tenants.service";
+import { TenantSetupService } from "./tenant-setup.service";
 import { RegistrationService } from "./registration.service";
 import { IamModule } from "../auth/iam.module";
 import { FlagsModule } from "../common/flags/flags.module";
@@ -16,7 +17,7 @@ import { FlagsModule } from "../common/flags/flags.module";
 @Module({
   imports: [IamModule, FlagsModule],
   controllers: [TenantsController, RegistrationController, NetworksController],
-  providers: [TenantsService, RegistrationService],
+  providers: [TenantsService, TenantSetupService, RegistrationService],
   exports: [TenantsService],
 })
 export class TenantsModule {}

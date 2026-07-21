@@ -415,3 +415,169 @@ export interface TenantOnboardingPatch {
   dismissed?: boolean;
   steps?: Partial<Record<OnboardingStep, boolean>>;
 }
+
+// ── Tenant setup (role-layered getting-started; GET /tenants/:id/setup) ───────
+// The successor to the flat onboarding checklist: server-computed, role-aware flows.
+// The legacy TenantOnboarding endpoints stay untouched; this is pure derivation.
+
+/** Non-channel step statuses. `recommended` counts toward polish, never blocks. */
+export type SetupStepStatus = "done" | "todo" | "recommended";
+
+/** Channel provisioning progress, derived from runs/numbers/identities/requests. */
+export type ChannelSetupState =
+  | "none"
+  | "requested"
+  | "in_progress"
+  | "action_required"
+  | "failed"
+  | "active";
+
+/** Self-setup step keys (every admin role). Only verifyEmail is required. */
+export const SELF_SETUP_KEYS = ["verifyEmail", "confirmMobile", "enableTwofa", "completeProfile"] as const;
+/** Organisation step keys (owner). branding is recommended; the rest are required. */
+export const ORG_SETUP_KEYS = ["orgIdentity", "businessLegal", "contacts", "address", "branding"] as const;
+/** Channel step keys (owner). */
+export const CHANNEL_SETUP_KEYS = ["phoneNumber", "emailIdentity"] as const;
+export type SetupStepKey =
+  | (typeof SELF_SETUP_KEYS)[number]
+  | (typeof ORG_SETUP_KEYS)[number]
+  | (typeof CHANNEL_SETUP_KEYS)[number];
+
+export interface SetupStep {
+  key: SetupStepKey;
+  status: SetupStepStatus;
+}
+
+export interface ChannelSetupStep extends SetupStep {
+  state: ChannelSetupState;
+  /** The tenant's plan doesn't include this channel — render locked w/ upgrade affordance. */
+  planLocked: boolean;
+  /** Human sentence behind action_required (e.g. why compliance was rejected). */
+  reason?: string | null;
+}
+
+/** A field the caller must complete before a gate opens, keyed for UI deep-linking. */
+export interface SetupMissing {
+  step: SetupStepKey;
+  field: string;
+}
+
+export interface SetupGate {
+  allowed: boolean;
+  reason?: "PLAN_UPGRADE_REQUIRED" | "SETUP_INCOMPLETE" | "OPEN_REQUEST";
+  missing?: SetupMissing[];
+}
+
+export interface TenantSetupState {
+  flows: {
+    self: { steps: SetupStep[]; complete: boolean };
+    organisation: { applicable: boolean; steps: SetupStep[]; complete: boolean };
+    channels: { applicable: boolean; steps: ChannelSetupStep[]; complete: boolean };
+  };
+  gates: {
+    canProvisionTelephony: SetupGate;
+    canRequestEmail: SetupGate;
+  };
+  dismissed: boolean;
+  updatedAt: string | null;
+}
+
+// ── Org-identification completeness (single source of truth) ─────────────────
+// Shared by the tenants setup endpoint, the telephony provisioning gate, and the
+// admin UI. Pure — callers load the snapshot themselves and pass plain data.
+
+export interface OrgSetupSnapshot {
+  profile: {
+    name: string | null;
+    logoBlockUrl: string | null;
+    logoLandscapeUrl: string | null;
+    primaryColour: string | null;
+    secondaryColour: string | null;
+    heroImageUrl: string | null;
+  } | null;
+  credential: {
+    legalTradingName: string | null;
+    australianBusinessNumber: string | null;
+    australianCompanyNumber: string | null;
+    entityType: string | null;
+  } | null;
+  contacts: Array<{
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+    isPrimaryContact: boolean;
+    isAuthorisedSignatory: boolean;
+  }>;
+  addresses: Array<{
+    line1: string | null;
+    suburb: string | null;
+    city: string | null;
+    state: string | null;
+    postcode: string | null;
+  }>;
+}
+
+export interface OrgSetupResult {
+  steps: {
+    orgIdentity: boolean;
+    businessLegal: boolean;
+    contacts: boolean;
+    address: boolean;
+    branding: boolean;
+  };
+  /** True when the AU regulatory bundle can be filled: businessLegal + contacts + address.
+   *  orgIdentity/branding are brand polish, not identification. */
+  provisionReady: boolean;
+  missing: SetupMissing[];
+}
+
+const filled = (v: string | null | undefined): boolean => Boolean(v && v.trim());
+
+/**
+ * Evaluate org-identification completeness from a plain snapshot. Rules mirror what the
+ * Twilio AU regulatory bundle (and its compliance prefill) actually consume:
+ * - orgIdentity: name + a logo + primary colour (today's "org profile" heuristic)
+ * - businessLegal: legal trading name + (ABN or ACN) + entity type
+ * - contacts: a primary contact with first + last + email
+ * - address: line1 + (suburb or city) + state + postcode
+ * - branding (recommended, never blocks): secondary colour + hero image
+ */
+export function evaluateOrgSetup(snapshot: OrgSetupSnapshot): OrgSetupResult {
+  const missing: SetupMissing[] = [];
+  const p = snapshot.profile;
+  const c = snapshot.credential;
+
+  const orgIdentity = Boolean(
+    p && filled(p.name) && (filled(p.logoBlockUrl) || filled(p.logoLandscapeUrl)) && filled(p.primaryColour),
+  );
+
+  const businessLegal = Boolean(
+    c &&
+      filled(c.legalTradingName) &&
+      (filled(c.australianBusinessNumber) || filled(c.australianCompanyNumber)) &&
+      filled(c.entityType),
+  );
+  if (!c || !filled(c.legalTradingName)) missing.push({ step: "businessLegal", field: "legalTradingName" });
+  if (!c || (!filled(c.australianBusinessNumber) && !filled(c.australianCompanyNumber)))
+    missing.push({ step: "businessLegal", field: "australianBusinessNumber" });
+  if (!c || !filled(c.entityType)) missing.push({ step: "businessLegal", field: "entityType" });
+
+  const primary = snapshot.contacts.find(
+    (x) => x.isPrimaryContact && filled(x.firstName) && filled(x.lastName) && filled(x.email),
+  );
+  const contacts = Boolean(primary);
+  if (!primary) missing.push({ step: "contacts", field: "primaryContact" });
+
+  const address = snapshot.addresses.some(
+    (a) => filled(a.line1) && (filled(a.suburb) || filled(a.city)) && filled(a.state) && filled(a.postcode),
+  );
+  if (!address) missing.push({ step: "address", field: "address" });
+
+  const branding = Boolean(p && filled(p.secondaryColour) && filled(p.heroImageUrl));
+
+  return {
+    steps: { orgIdentity, businessLegal, contacts, address, branding },
+    provisionReady: businessLegal && contacts && address,
+    missing,
+  };
+}

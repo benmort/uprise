@@ -14,6 +14,7 @@ import {
 import type { Request } from "express";
 import { AppUserRole } from "@uprise/db";
 import { TenantsService, TENANT_CREATE_PLANS } from "./tenants.service";
+import { TenantSetupService } from "./tenant-setup.service";
 import { IamFlowsService } from "../auth/iam-flows.service";
 import type { AuthUser } from "../auth/auth-user";
 import { RequirePermission } from "../auth/require-permission.decorator";
@@ -50,6 +51,7 @@ const ORG_PROFILE_MANAGE = { action: "manage", resource: "tenant.org-profile" } 
 export class TenantsController {
   constructor(
     private readonly tenants: TenantsService,
+    private readonly setup: TenantSetupService,
     private readonly flows: IamFlowsService,
   ) {}
 
@@ -191,6 +193,15 @@ export class TenantsController {
   getOnboarding(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
     this.assertOwnTenant(req, id);
     return this.tenants.getOnboarding(id);
+  }
+
+  // Role-layered setup state (the getting-started successor): server-derived flows,
+  // channel provisioning progress and the gating truth the UI mirrors.
+  @Get(":id/setup")
+  @RequirePermission(ORG_PROFILE_READ)
+  getSetup(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    this.assertOwnTenant(req, id);
+    return this.setup.getSetupState(id, req.user!);
   }
 
   @Patch(":id/onboarding")

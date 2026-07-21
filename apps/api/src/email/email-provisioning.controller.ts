@@ -7,12 +7,20 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { AppUserRole, type EmailProvisioningRequestStatus } from "@uprise/db";
 import { RequirePermission } from "../auth/require-permission.decorator";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
 import type { AuthUser } from "../auth/auth-user";
 import { EmailProvisioningService } from "./email-provisioning.service";
-import { StartEmailProvisioningRunDto } from "./dto/email-provisioning.dto";
+import {
+  DeclineEmailSetupRequestDto,
+  RequestEmailSetupDto,
+  StartEmailProvisioningRunDto,
+} from "./dto/email-provisioning.dto";
 
 // NOTE: deliberately NOT under @Controller("email") — email.controller.ts has a
 // GET ":id" catch-all that would swallow these routes.
@@ -22,6 +30,10 @@ import { StartEmailProvisioningRunDto } from "./dto/email-provisioning.dto";
 const PROVISION = { action: "manage", resource: "system.email-provisioning" } as const;
 // Reads are owner-visible (the tenant-settings timeline); scoped in-controller.
 const READ = { action: "read", resource: "email.provisioning" } as const;
+// Setup REQUESTS are the one owner-reachable write: an ask, not provisioning. Organisers
+// also hold `manage email.all`, so the stacked @Roles(OWNER) (org-profile credential
+// pattern) is what actually narrows these to owners.
+const REQUEST = { action: "manage", resource: "email.identity" } as const;
 
 @Controller("email-provisioning")
 export class EmailProvisioningController {
@@ -53,7 +65,63 @@ export class EmailProvisioningController {
       purpose: dto.purpose,
       byoApiKey: dto.byoApiKey,
       requestedById: req.user?.id ?? null,
+      requestId: dto.requestId,
     });
+  }
+
+  // ── Setup requests: the owner ask → operator queue ─────────────────────────
+
+  /** Owner asks for email setup; always their own tenant. Plan-gated in the service. */
+  @Post("requests")
+  @RequirePermission(REQUEST)
+  @UseGuards(RolesGuard)
+  @Roles(AppUserRole.OWNER)
+  async createRequest(@Body() dto: RequestEmailSetupDto, @Req() req: Request & { user?: AuthUser }) {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) throw new ForbiddenException("No active workspace");
+    return this.provisioning.createSetupRequest({
+      tenantId,
+      requestedById: req.user?.id ?? null,
+      kind: dto.kind,
+      domain: dto.domain ?? null,
+      notes: dto.notes ?? null,
+    });
+  }
+
+  /** Operator queue (all tenants, filterable) or a tenant's own requests. */
+  @Get("requests")
+  @RequirePermission(READ)
+  async listRequests(
+    @Req() req: Request & { user?: AuthUser },
+    @Query("status") status?: EmailProvisioningRequestStatus,
+    @Query("tenantId") tenantId?: string,
+  ) {
+    return this.provisioning.listSetupRequests({
+      tenantId: this.scopeTenant(req, tenantId),
+      status,
+    });
+  }
+
+  /** Owner withdraws their own OPEN request. */
+  @Post("requests/:id/withdraw")
+  @RequirePermission(REQUEST)
+  @UseGuards(RolesGuard)
+  @Roles(AppUserRole.OWNER)
+  async withdrawRequest(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    const tenantId = req.user?.tenantId;
+    if (!tenantId) throw new ForbiddenException("No active workspace");
+    return this.provisioning.withdrawSetupRequest(id, tenantId);
+  }
+
+  /** Operator declines an OPEN request. */
+  @Post("requests/:id/decline")
+  @RequirePermission(PROVISION)
+  async declineRequest(
+    @Param("id") id: string,
+    @Body() dto: DeclineEmailSetupRequestDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    return this.provisioning.declineSetupRequest(id, req.user?.id ?? null, dto.reason);
   }
 
   @Post("runs/:id/retry")

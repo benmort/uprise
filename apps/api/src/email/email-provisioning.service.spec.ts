@@ -33,6 +33,13 @@ function setup() {
       update: jest.fn(async ({ data }: any) => ({ id: "acc1", ...data })),
     },
     tenant: { findUnique: jest.fn(async () => ({ id: "t1", name: "Acme", slug: "acme" })) },
+    emailProvisioningRequest: {
+      findUnique: jest.fn(async () => null),
+      findFirst: jest.fn(async () => null),
+      findMany: jest.fn(async () => []),
+      create: jest.fn(async ({ data }: any) => ({ id: "req1", status: "OPEN", ...data })),
+      update: jest.fn(async ({ data }: any) => ({ id: "req1", ...data })),
+    },
     $queryRaw: jest.fn(async () => []),
     // callback seam: tx === prisma so code under test runs against the same mock
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
@@ -68,6 +75,7 @@ function setup() {
   const outbox: any = { append: jest.fn(async () => undefined) };
   const logger: any = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() };
   const senderResolver: any = { invalidate: jest.fn(), resolve: jest.fn() };
+  const flags: any = { isEnabled: jest.fn(async () => true) };
   const svc = new EmailProvisioningService(
     prisma,
     config,
@@ -77,8 +85,9 @@ function setup() {
     outbox,
     logger,
     senderResolver,
+    flags,
   );
-  return { svc, prisma, config, crypto, sendgrid, dnsimple, outbox, logger, senderResolver };
+  return { svc, prisma, config, crypto, sendgrid, dnsimple, outbox, logger, senderResolver, flags };
 }
 
 const emitted = (outbox: any): string[] => outbox.append.mock.calls.map((c: any[]) => c[1].eventType);
@@ -677,5 +686,157 @@ describe("validateNow / reads", () => {
     prisma.emailProvisioningRun.findUnique.mockResolvedValue({ ...makeRun(), steps: [] });
     const run = await svc.getRunWithTimeline("run1");
     expect(run.id).toBe("run1");
+  });
+
+  // ── Setup requests (owner ask → operator queue) ──────────────────────────
+
+  describe("createSetupRequest", () => {
+    const input = { tenantId: "t1", requestedById: "u1", notes: "please" };
+
+    it("creates the request and emits email.setup.requested in the SAME tx", async () => {
+      const { svc, prisma, outbox } = setup();
+      const req = await svc.createSetupRequest(input);
+      expect(req.tenantId).toBe("t1");
+      expect(prisma.emailProvisioningRequest.create).toHaveBeenCalled();
+      // Outbox append receives the tx client (=== prisma in the callback seam).
+      expect(outbox.append).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ eventType: "email.setup.requested", tenantId: "t1" }),
+      );
+    });
+
+    it("403s PLAN_UPGRADE_REQUIRED when the tenant email flag is off", async () => {
+      const { svc, flags } = setup();
+      flags.isEnabled.mockResolvedValueOnce(false);
+      await expect(svc.createSetupRequest(input)).rejects.toMatchObject({
+        response: { error: { code: "PLAN_UPGRADE_REQUIRED" } },
+      });
+    });
+
+    it("409s when a request is already OPEN", async () => {
+      const { svc, prisma } = setup();
+      prisma.emailProvisioningRequest.findFirst.mockResolvedValueOnce({ id: "req0", status: "OPEN" });
+      await expect(svc.createSetupRequest(input)).rejects.toMatchObject({
+        response: { error: { code: "EMAIL_REQUEST_ALREADY_OPEN" } },
+      });
+    });
+
+    it("maps the partial-unique P2002 race to the same 409", async () => {
+      const { svc, prisma } = setup();
+      const p2002 = Object.assign(new Error("unique"), { code: "P2002", clientVersion: "x" });
+      Object.setPrototypeOf(p2002, (await import("@uprise/db")).Prisma.PrismaClientKnownRequestError.prototype);
+      prisma.emailProvisioningRequest.create.mockRejectedValueOnce(p2002);
+      await expect(svc.createSetupRequest(input)).rejects.toMatchObject({
+        response: { error: { code: "EMAIL_REQUEST_ALREADY_OPEN" } },
+      });
+    });
+  });
+
+  describe("decline / withdraw", () => {
+    it("declines an OPEN request and emits email.setup.resolved", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.emailProvisioningRequest.findUnique.mockResolvedValueOnce({
+        id: "req1",
+        tenantId: "t1",
+        status: "OPEN",
+      });
+      const res = await svc.declineSetupRequest("req1", "admin1", "no domain yet");
+      expect(res.status).toBe("DECLINED");
+      expect(outbox.append).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          eventType: "email.setup.resolved",
+          payload: expect.objectContaining({ outcome: "DECLINED" }),
+        }),
+      );
+    });
+
+    it("409s on declining an already-resolved request (terminal FSM)", async () => {
+      const { svc, prisma } = setup();
+      prisma.emailProvisioningRequest.findUnique.mockResolvedValueOnce({
+        id: "req1",
+        tenantId: "t1",
+        status: "DECLINED",
+      });
+      await expect(svc.declineSetupRequest("req1", "admin1")).rejects.toMatchObject({
+        response: { error: { code: "INVALID_REQUEST_TRANSITION" } },
+      });
+    });
+
+    it("withdraw is tenant-scoped — another tenant's request 404s", async () => {
+      const { svc, prisma } = setup();
+      prisma.emailProvisioningRequest.findUnique.mockResolvedValueOnce({
+        id: "req1",
+        tenantId: "OTHER",
+        status: "OPEN",
+      });
+      await expect(svc.withdrawSetupRequest("req1", "t1")).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("withdraws an own OPEN request", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.emailProvisioningRequest.findUnique.mockResolvedValueOnce({
+        id: "req1",
+        tenantId: "t1",
+        status: "OPEN",
+      });
+      const res = await svc.withdrawSetupRequest("req1", "t1");
+      expect(res.status).toBe("WITHDRAWN");
+      expect(outbox.append).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({ payload: expect.objectContaining({ outcome: "WITHDRAWN" }) }),
+      );
+    });
+  });
+
+  describe("startRun fulfilment (requestId)", () => {
+    it("fulfils the OPEN request atomically with run creation", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.emailProvisioningRequest.findUnique.mockResolvedValueOnce({
+        id: "req1",
+        tenantId: "t1",
+        status: "OPEN",
+      });
+      await svc.startRun({
+        tenantId: "t1",
+        mode: "SUBUSER",
+        kind: "UPRISE_SUBDOMAIN",
+        fromLocalPart: "team",
+        fromName: "Acme",
+        requestId: "req1",
+      });
+      expect(prisma.emailProvisioningRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "req1" },
+          data: expect.objectContaining({ status: "FULFILLED", runId: "run1" }),
+        }),
+      );
+      expect(outbox.append).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          eventType: "email.setup.resolved",
+          payload: expect.objectContaining({ outcome: "FULFILLED", runId: "run1" }),
+        }),
+      );
+    });
+
+    it("404s when the request belongs to a different tenant", async () => {
+      const { svc, prisma } = setup();
+      prisma.emailProvisioningRequest.findUnique.mockResolvedValueOnce({
+        id: "req1",
+        tenantId: "OTHER",
+        status: "OPEN",
+      });
+      await expect(
+        svc.startRun({
+          tenantId: "t1",
+          mode: "SUBUSER",
+          kind: "UPRISE_SUBDOMAIN",
+          fromLocalPart: "team",
+          fromName: "Acme",
+          requestId: "req1",
+        }),
+      ).rejects.toMatchObject({ response: { error: { code: "REQUEST_NOT_FOUND" } } });
+    });
   });
 });

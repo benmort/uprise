@@ -435,6 +435,41 @@ describe("marketing + plans", () => {
 });
 
 describe("telephony + email provisioning", () => {
+  it("tenants.getSetup GETs the encoded setup path", async () => {
+    await tenants.getSetup("t 1");
+    expect(call()[0]).toBe(`${BASE}/tenants/t%201/setup`);
+  });
+
+  it("emailProvisioning.requestSetup POSTs the (optional) body to /requests", async () => {
+    await emailProvisioning.requestSetup({ domain: "acme.org.au", notes: "please" });
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/email-provisioning/requests`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual({ domain: "acme.org.au", notes: "please" });
+    fetchMock.mockClear();
+    await emailProvisioning.requestSetup();
+    expect(bodyOf(call()[1])).toEqual({});
+  });
+
+  it("emailProvisioning.listRequests appends only the provided filters", async () => {
+    await emailProvisioning.listRequests({ status: "OPEN", tenantId: "t/1" });
+    expect(call()[0]).toBe(`${BASE}/email-provisioning/requests?status=OPEN&tenantId=t%2F1`);
+    fetchMock.mockClear();
+    await emailProvisioning.listRequests();
+    expect(call()[0]).toBe(`${BASE}/email-provisioning/requests`);
+  });
+
+  it("emailProvisioning.withdrawRequest / declineRequest POST to the encoded action paths", async () => {
+    await emailProvisioning.withdrawRequest("r 1");
+    expect(call()[0]).toBe(`${BASE}/email-provisioning/requests/r%201/withdraw`);
+    expect(call()[1].method).toBe("POST");
+    fetchMock.mockClear();
+    await emailProvisioning.declineRequest("r 1", "no domain");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/email-provisioning/requests/r%201/decline`);
+    expect(bodyOf(init)).toEqual({ reason: "no domain" });
+  });
+
   it("telephony.startRun POSTs the provisioning body", async () => {
     await telephony.startRun({
       tenantId: "t1",

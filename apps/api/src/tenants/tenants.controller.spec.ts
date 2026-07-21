@@ -27,7 +27,8 @@ describe("TenantsController", () => {
     approveJoinRequest: jest.fn().mockResolvedValue({ id: "jr1" }),
     rejectJoinRequest: jest.fn().mockResolvedValue({ id: "jr1" }),
   } as any;
-  const c = new TenantsController(tenants, flows);
+  const setupSvc = { getSetupState: jest.fn().mockResolvedValue({ flows: {}, gates: {} }) } as any;
+  const c = new TenantsController(tenants, setupSvc, flows);
 
   const reqFor = (user: any) => ({ user }) as any;
   const ownReq = reqFor({ id: "u1", tenantId: "t1", isSuperAdmin: false });
@@ -137,6 +138,16 @@ describe("TenantsController", () => {
   it("getOnboarding lets a super-admin cross tenants", () => {
     c.getOnboarding("t1", reqFor({ id: "sa", tenantId: "other", isSuperAdmin: true }));
     expect(tenants.getOnboarding).toHaveBeenCalledWith("t1");
+  });
+
+  it("getSetup delegates with the caller as the actor (own tenant)", () => {
+    c.getSetup("t1", ownReq);
+    expect(setupSvc.getSetupState).toHaveBeenCalledWith("t1", ownReq.user);
+  });
+
+  it("getSetup throws for a mismatched tenant", () => {
+    expect(() => c.getSetup("t1", otherReq)).toThrow(ForbiddenException);
+    expect(setupSvc.getSetupState).not.toHaveBeenCalled();
   });
 
   it("updateOnboarding delegates when acting on own tenant", () => {

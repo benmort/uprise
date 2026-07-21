@@ -44,4 +44,34 @@ export class StartEmailProvisioningRunDto {
   @IsOptional()
   @IsString()
   byoApiKey?: string;
+
+  /** An OPEN EmailProvisioningRequest this run fulfils (operator queue → run). */
+  @IsOptional()
+  @IsString()
+  requestId?: string;
+}
+
+/** Tenant-owner ask for email setup (provisioning stays super-admin-executed). */
+export class RequestEmailSetupDto {
+  @IsOptional()
+  @IsIn(["UPRISE_SUBDOMAIN", "CUSTOM_DOMAIN", "SINGLE_ADDRESS"])
+  kind?: "UPRISE_SUBDOMAIN" | "CUSTOM_DOMAIN" | "SINGLE_ADDRESS";
+
+  /** The tenant-owned domain they'd like to send from, if they have one in mind. */
+  @IsOptional()
+  @Matches(/^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i)
+  @MaxLength(253)
+  domain?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  notes?: string;
+}
+
+export class DeclineEmailSetupRequestDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  reason?: string;
 }

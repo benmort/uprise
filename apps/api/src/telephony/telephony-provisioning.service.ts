@@ -11,11 +11,13 @@ import {
   TelephonyStepStatus,
 } from "@uprise/db";
 import type { DomainEventMap } from "@uprise/events";
+import { evaluateOrgSetup } from "@uprise/contracts";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService, type AppendInput } from "../common/outbox/outbox.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";
+import { FeatureFlagsService } from "../common/flags/feature-flags.service";
 import { TelephonySenderResolver } from "./telephony-sender.resolver";
 import { assertValidProvisioningTransition } from "./telephony-provisioning-state.machine";
 import {
@@ -84,7 +86,79 @@ export class TelephonyProvisioningService {
     private readonly logger: DomainLogger,
     private readonly senderResolver: TelephonySenderResolver,
     private readonly images: ImageUploadService,
+    private readonly flags: FeatureFlagsService,
   ) {}
+
+  /**
+   * Gate on the start of a provisioning run (NOT retry/resubmit — a mid-flight run whose
+   * data was complete at start must not strand on later edits): the tenant's plan must
+   * include dedicated telephony, and the org identification the AU regulatory bundle is
+   * built from must be complete. 422 carries machine-readable `missing[]` for the UI.
+   */
+  private async assertProvisioningAllowed(tenantId: string): Promise<void> {
+    const enabled = await this.flags.isEnabled("FEATURE_TENANT_TELEPHONY_ENABLED", { tenantId });
+    if (!enabled) {
+      throw new ApiHttpException(
+        "PLAN_UPGRADE_REQUIRED",
+        "Your plan does not include a dedicated phone number",
+        403,
+      );
+    }
+    const profile = await this.prisma.orgProfile.findFirst({
+      where: { tenantId },
+      select: {
+        name: true,
+        logoBlockUrl: true,
+        logoLandscapeUrl: true,
+        primaryColour: true,
+        secondaryColour: true,
+        heroImageUrl: true,
+        credential: {
+          select: {
+            legalTradingName: true,
+            australianBusinessNumber: true,
+            australianCompanyNumber: true,
+            entityType: true,
+          },
+        },
+        contacts: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            isPrimaryContact: true,
+            isAuthorisedSignatory: true,
+          },
+        },
+        addresses: {
+          select: { line1: true, suburb: true, city: true, state: true, postcode: true },
+        },
+      },
+    });
+    const result = evaluateOrgSetup({
+      profile: profile
+        ? {
+            name: profile.name,
+            logoBlockUrl: profile.logoBlockUrl,
+            logoLandscapeUrl: profile.logoLandscapeUrl,
+            primaryColour: profile.primaryColour,
+            secondaryColour: profile.secondaryColour,
+            heroImageUrl: profile.heroImageUrl,
+          }
+        : null,
+      credential: profile?.credential ?? null,
+      contacts: profile?.contacts ?? [],
+      addresses: profile?.addresses ?? [],
+    });
+    if (!result.provisionReady) {
+      throw new ApiHttpException(
+        "SETUP_INCOMPLETE",
+        "Complete your organisation's business, contact and address details first",
+        422,
+        { missing: result.missing },
+      );
+    }
+  }
 
   // ── URLs ────────────────────────────────────────────────────────────
   private apiBaseUrl(): string {
@@ -246,6 +320,8 @@ export class TelephonyProvisioningService {
   }
 
   async startRun(input: StartRunInput) {
+    // Read-only gate BEFORE the transaction (no external calls in tx): plan + org KYC.
+    await this.assertProvisioningAllowed(input.tenantId);
     const friendlyName = input.friendlyName?.trim() || `uprise ${input.tenantId}`;
     return this.prisma.$transaction(async (tx) => {
       let accountId: string | null = null;

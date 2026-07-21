@@ -2009,6 +2009,39 @@ model EmailProvisioningRun {
   @@schema("email")
 }
 
+enum EmailProvisioningRequestStatus {
+  OPEN
+  FULFILLED
+  DECLINED
+  WITHDRAWN
+
+  @@schema("email")
+}
+
+// A tenant-owner ask for email setup while provisioning stays super-admin-executed
+// (SendGrid Pro pending). runId is an id-only ref to the EmailProvisioningRun created
+// on fulfilment. "One OPEN per tenant" is a hand-written partial unique in the migration
+// (migrate deploy only — migrate dev would drop it).
+model EmailProvisioningRequest {
+  id               String                         @id @default(cuid())
+  tenantId         String
+  status           EmailProvisioningRequestStatus @default(OPEN)
+  kind             EmailIdentityKind?
+  domain           String?
+  notes            String?
+  requestedById    String?
+  resolvedById     String?
+  resolvedAt       DateTime?
+  resolutionReason String?
+  runId            String?
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+
+  @@index([status, createdAt])
+  @@index([tenantId, status])
+  @@schema("email")
+}
+
 // Append-only timeline the admin/owner UI reads. detail must never contain
 // credentials.
 model EmailProvisioningStep {

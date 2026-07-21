@@ -26,6 +26,7 @@ import type {
   SessionSummaryResponse,
   TenantOnboarding,
   TenantOnboardingPatch,
+  TenantSetupState,
   UpdateProfileRequest,
   UserAvatarResponse,
   UserProfileResponse,
@@ -581,6 +582,10 @@ export const tenants = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  /** Role-layered setup state (the getting-started successor) — flows, chips and gates. */
+  getSetup: (tenantId: string) =>
+    request<TenantSetupState>(`/tenants/${encodeURIComponent(tenantId)}/setup`),
 };
 
 // ── Public marketing-site form intake (meld doc 12) ──────────────────
@@ -921,6 +926,23 @@ export interface EmailProvisioningRun {
   updatedAt: string;
 }
 
+/** A tenant-owner ask for email setup (provisioning stays super-admin-executed). */
+export interface EmailProvisioningRequest {
+  id: string;
+  tenantId: string;
+  status: "OPEN" | "FULFILLED" | "DECLINED" | "WITHDRAWN";
+  kind: "UPRISE_SUBDOMAIN" | "CUSTOM_DOMAIN" | "SINGLE_ADDRESS" | null;
+  domain: string | null;
+  notes: string | null;
+  requestedById: string | null;
+  resolvedById: string | null;
+  resolvedAt: string | null;
+  resolutionReason: string | null;
+  runId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EmailProvisioningStep {
   id: string;
   runId: string;
@@ -944,7 +966,38 @@ export const emailProvisioning = {
     fromName: string;
     purpose?: string;
     byoApiKey?: string;
+    /** An OPEN setup request this run fulfils. */
+    requestId?: string;
   }) => request<EmailProvisioningRun>("/email-provisioning/runs", { method: "POST", body: JSON.stringify(body) }),
+
+  /** Owner: ask the platform team to set up the org's email identity. */
+  requestSetup: (body: { kind?: string; domain?: string; notes?: string } = {}) =>
+    request<EmailProvisioningRequest>("/email-provisioning/requests", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** Operator queue (all tenants) / a tenant's own requests. */
+  listRequests: (opts: { status?: string; tenantId?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.status) q.set("status", opts.status);
+    if (opts.tenantId) q.set("tenantId", opts.tenantId);
+    const qs = q.toString();
+    return request<EmailProvisioningRequest[]>(`/email-provisioning/requests${qs ? `?${qs}` : ""}`);
+  },
+
+  /** Owner: withdraw their own OPEN request. */
+  withdrawRequest: (id: string) =>
+    request<EmailProvisioningRequest>(`/email-provisioning/requests/${encodeURIComponent(id)}/withdraw`, {
+      method: "POST",
+    }),
+
+  /** Operator: decline an OPEN request (reason shown to the owner). */
+  declineRequest: (id: string, reason?: string) =>
+    request<EmailProvisioningRequest>(`/email-provisioning/requests/${encodeURIComponent(id)}/decline`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
 
   retryRun: (runId: string) =>
     request<EmailProvisioningRun>(`/email-provisioning/runs/${encodeURIComponent(runId)}/retry`, { method: "POST" }),

@@ -6,6 +6,7 @@ import {
   EmailAccountStatus,
   EmailIdentityKind,
   EmailIdentityStatus,
+  EmailProvisioningRequestStatus,
   EmailProvisioningStatus,
   EmailStepStatus,
   Prisma,
@@ -16,8 +17,10 @@ import { OutboxService, type AppendInput } from "../common/outbox/outbox.service
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";
+import { FeatureFlagsService } from "../common/flags/feature-flags.service";
 import { EmailSenderResolver } from "./email-sender.resolver";
 import { assertValidEmailProvisioningTransition } from "./email-provisioning-state.machine";
+import { assertValidEmailSetupRequestTransition } from "./email-setup-request-state.machine";
 import {
   SendGridProvisioningClient,
   type DomainAuthDnsRecord,
@@ -41,6 +44,8 @@ export type StartEmailRunInput = {
   purpose?: string;
   byoApiKey?: string;
   requestedById?: string | null;
+  /** An OPEN EmailProvisioningRequest this run fulfils — resolved atomically with run creation. */
+  requestId?: string;
 };
 
 type RunInput = StartEmailRunInput;
@@ -77,6 +82,7 @@ export class EmailProvisioningService {
     private readonly outbox: OutboxService,
     private readonly logger: DomainLogger,
     private readonly senderResolver: EmailSenderResolver,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
   private emailWebhookUrl(): string {
@@ -258,7 +264,151 @@ export class EmailProvisioningService {
           kind: input.kind,
         },
       });
+      // Fulfil the owner's setup request atomically with run creation, so the operator
+      // queue can never show an OPEN request alongside its live run.
+      if (input.requestId) {
+        await tx.$queryRaw`SELECT "id" FROM "email"."EmailProvisioningRequest" WHERE "id" = ${input.requestId} FOR UPDATE`;
+        const request = await tx.emailProvisioningRequest.findUnique({ where: { id: input.requestId } });
+        if (!request || request.tenantId !== input.tenantId) {
+          throw new ApiHttpException("REQUEST_NOT_FOUND", "Email setup request not found for this tenant", 404);
+        }
+        assertValidEmailSetupRequestTransition(request.status, EmailProvisioningRequestStatus.FULFILLED);
+        await tx.emailProvisioningRequest.update({
+          where: { id: request.id },
+          data: {
+            status: EmailProvisioningRequestStatus.FULFILLED,
+            runId: run.id,
+            resolvedById: input.requestedById ?? null,
+            resolvedAt: new Date(),
+          },
+        });
+        await this.outbox.append(tx, {
+          tenantId: input.tenantId,
+          eventType: "email.setup.resolved",
+          aggregateId: request.id,
+          payload: { requestId: request.id, tenantId: input.tenantId, outcome: "FULFILLED", runId: run.id },
+        });
+      }
       return run;
+    });
+  }
+
+  // ── Setup requests (owner ask → operator queue; provisioning stays super-admin) ──
+
+  /** Owner asks for email setup. Plan-gated; one OPEN request per tenant (409 on a second). */
+  async createSetupRequest(input: {
+    tenantId: string;
+    requestedById: string | null;
+    kind?: EmailIdentityKind;
+    domain?: string | null;
+    notes?: string | null;
+  }) {
+    const enabled = await this.flags.isEnabled("FEATURE_TENANT_EMAIL_ENABLED", { tenantId: input.tenantId });
+    if (!enabled) {
+      throw new ApiHttpException(
+        "PLAN_UPGRADE_REQUIRED",
+        "Your plan does not include a dedicated email identity",
+        403,
+      );
+    }
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const open = await tx.emailProvisioningRequest.findFirst({
+          where: { tenantId: input.tenantId, status: EmailProvisioningRequestStatus.OPEN },
+        });
+        if (open) {
+          throw new ApiHttpException("EMAIL_REQUEST_ALREADY_OPEN", "An email setup request is already open", 409);
+        }
+        const request = await tx.emailProvisioningRequest.create({
+          data: {
+            tenantId: input.tenantId,
+            kind: input.kind ?? null,
+            domain: input.domain?.trim() || null,
+            notes: input.notes?.trim() || null,
+            requestedById: input.requestedById,
+          },
+        });
+        // A real domain signal (unlike the advisory onboarding JSON) — emitted in the SAME tx.
+        await this.outbox.append(tx, {
+          tenantId: input.tenantId,
+          eventType: "email.setup.requested",
+          aggregateId: request.id,
+          payload: {
+            requestId: request.id,
+            tenantId: input.tenantId,
+            requestedById: input.requestedById,
+            kind: input.kind ?? null,
+            domain: input.domain?.trim() || null,
+          },
+        });
+        return request;
+      });
+    } catch (error) {
+      // Race backstop: the partial unique (one OPEN per tenant) maps to the same 409.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new ApiHttpException("EMAIL_REQUEST_ALREADY_OPEN", "An email setup request is already open", 409);
+      }
+      throw error;
+    }
+  }
+
+  /** Operator queue (all tenants) or a tenant's own requests. Newest first. */
+  listSetupRequests(opts: { tenantId?: string; status?: EmailProvisioningRequestStatus } = {}) {
+    return this.prisma.emailProvisioningRequest.findMany({
+      where: {
+        ...(opts.tenantId ? { tenantId: opts.tenantId } : {}),
+        ...(opts.status ? { status: opts.status } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  /** Operator declines an OPEN request (with an optional reason the owner sees). */
+  async declineSetupRequest(id: string, resolvedById: string | null, reason?: string | null) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "email"."EmailProvisioningRequest" WHERE "id" = ${id} FOR UPDATE`;
+      const request = await tx.emailProvisioningRequest.findUnique({ where: { id } });
+      if (!request) throw new NotFoundException("Email setup request not found");
+      assertValidEmailSetupRequestTransition(request.status, EmailProvisioningRequestStatus.DECLINED);
+      const updated = await tx.emailProvisioningRequest.update({
+        where: { id },
+        data: {
+          status: EmailProvisioningRequestStatus.DECLINED,
+          resolvedById,
+          resolvedAt: new Date(),
+          resolutionReason: reason?.trim() || null,
+        },
+      });
+      await this.outbox.append(tx, {
+        tenantId: request.tenantId,
+        eventType: "email.setup.resolved",
+        aggregateId: request.id,
+        payload: { requestId: request.id, tenantId: request.tenantId, outcome: "DECLINED", runId: null },
+      });
+      return updated;
+    });
+  }
+
+  /** Owner withdraws their own OPEN request (tenant-scoped). */
+  async withdrawSetupRequest(id: string, tenantId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "email"."EmailProvisioningRequest" WHERE "id" = ${id} FOR UPDATE`;
+      const request = await tx.emailProvisioningRequest.findUnique({ where: { id } });
+      if (!request || request.tenantId !== tenantId) {
+        throw new NotFoundException("Email setup request not found");
+      }
+      assertValidEmailSetupRequestTransition(request.status, EmailProvisioningRequestStatus.WITHDRAWN);
+      const updated = await tx.emailProvisioningRequest.update({
+        where: { id },
+        data: { status: EmailProvisioningRequestStatus.WITHDRAWN, resolvedAt: new Date() },
+      });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "email.setup.resolved",
+        aggregateId: request.id,
+        payload: { requestId: request.id, tenantId, outcome: "WITHDRAWN", runId: null },
+      });
+      return updated;
     });
   }
 

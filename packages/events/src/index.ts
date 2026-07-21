@@ -84,6 +84,10 @@ export const EVENT_TYPES = {
   EMAIL_PROVISIONING_ACTIVATED: "email.provisioning.activated",
   EMAIL_PROVISIONING_FAILED: "email.provisioning.failed",
   EMAIL_PROVISIONING_RETRY_REQUESTED: "email.provisioning.retry-requested",
+  // Tenant-owner ask for email setup while provisioning stays super-admin-executed.
+  // Deliberately NO reactions — the queue is pulled by operators, nothing auto-drives SendGrid.
+  EMAIL_SETUP_REQUESTED: "email.setup.requested",
+  EMAIL_SETUP_RESOLVED: "email.setup.resolved",
   POLL_INGESTED: "insights.poll.ingested",
   POLL_PUBLISHED: "insights.poll.published",
   DISPOSITION_SET: "canvass.disposition.set",
@@ -271,6 +275,19 @@ export interface DomainEventMap {
   "email.provisioning.activated": { runId: string; tenantId: string; identityId: string; fromEmail: string };
   "email.provisioning.failed": { runId: string; tenantId: string; step: string; error: string };
   "email.provisioning.retry-requested": { runId: string; tenantId: string; resumeStatus: string };
+  "email.setup.requested": {
+    requestId: string;
+    tenantId: string;
+    requestedById: string | null;
+    kind: string | null;
+    domain: string | null;
+  };
+  "email.setup.resolved": {
+    requestId: string;
+    tenantId: string;
+    outcome: "FULFILLED" | "DECLINED" | "WITHDRAWN";
+    runId: string | null;
+  };
 }
 
 export interface EventMetadata {
