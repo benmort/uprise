@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
+import { CHEVRON_LAYOUT } from "./turf-map";
 import { History, Loader2, Pause, Play, X } from "lucide-react";
 import { getTurfKnocks } from "../api";
 import { fetchWalkingRouteGeometry } from "../lib/directions";
@@ -260,17 +261,7 @@ export function useRouteReplay({
   };
 }
 
-const CHEVRON_LAYOUT: Record<string, unknown> = {
-  "symbol-placement": "line",
-  "symbol-spacing": 60,
-  "text-field": "›",
-  "text-size": 15,
-  "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
-  "text-keep-upright": false,
-  "text-rotation-alignment": "map",
-  "text-allow-overlap": true,
-  "text-ignore-placement": true,
-};
+
 
 /** Map-content half: the past/future trails (chevroned), the walking person marker
  *  (solid, then ghost past NOW) and the transient knock popup. Render as TurfMap children. */

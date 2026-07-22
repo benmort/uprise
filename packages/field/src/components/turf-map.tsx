@@ -41,8 +41,16 @@ const AMBER = "#c9781a";
 const POINT_ZOOM = 16.5;
 
 /** Direction chevrons riding the route lines: "›" glyphs rotated along the line, spaced
- *  so they read as flow without cluttering. Shared by every route/trail layer. */
-const CHEVRON_LAYOUT: {
+ *  so they read as flow without cluttering. Shared by every route/trail layer (the replay
+ *  trails import this), and pulsed every ~10s by the effect in TurfMap. */
+export const CHEVRON_SIZE = 48;
+export const CHEVRON_LAYER_IDS = [
+  "walk-route-chevrons",
+  "walk-next-leg-chevrons",
+  "replay-past-chevrons",
+  "replay-future-chevrons",
+] as const;
+export const CHEVRON_LAYOUT: {
   "symbol-placement": "line";
   "symbol-spacing": number;
   "text-field": string;
@@ -54,9 +62,10 @@ const CHEVRON_LAYOUT: {
   "text-ignore-placement": boolean;
 } = {
   "symbol-placement": "line",
-  "symbol-spacing": 60,
+  // Spacing scales with the big glyphs so arrows read as flow, not a picket fence.
+  "symbol-spacing": 130,
   "text-field": "›",
-  "text-size": 16,
+  "text-size": CHEVRON_SIZE,
   "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
   "text-keep-upright": false,
   "text-rotation-alignment": "map",
@@ -319,6 +328,37 @@ export function TurfMap({
       map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
     }
   }, [follow]);
+
+  // Chevron pulse: every ~10s the direction arrows swell and settle (a sine ease over
+  // ~900ms), nudging the eye along the route. Animated via setLayoutProperty — symbol
+  // layers can't be CSS-animated — against whichever chevron layers currently exist.
+  useEffect(() => {
+    let raf = 0;
+    const swell = () => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+      const t0 = performance.now();
+      const DURATION = 900;
+      const tick = (t: number) => {
+        const f = Math.min(1, (t - t0) / DURATION);
+        const scale = 1 + 0.5 * Math.sin(Math.PI * f);
+        for (const id of CHEVRON_LAYER_IDS) {
+          try {
+            if (map.getLayer(id)) map.setLayoutProperty(id, "text-size", CHEVRON_SIZE * scale);
+          } catch {
+            // Style mid-swap (theme change) — skip this frame.
+          }
+        }
+        if (f < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    };
+    const interval = setInterval(swell, 10_000);
+    return () => {
+      clearInterval(interval);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   // "My location" — centre the map on the viewer's current GPS position + drop the marker.
   // Works standalone (doesn't need the parent's `userPosition` prop), so it also locates the
