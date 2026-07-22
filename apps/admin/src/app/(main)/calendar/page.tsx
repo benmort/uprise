@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import EventModal, { type EventColor, type EventFormData } from "@/components/prog/calendar/EventModal";
-import { AddItemPanel, draftWindow, type AddItemDraft } from "@/components/prog/calendar/AddItemPanel";
+import { AddItemPanel, type AddItemDraft } from "@/components/prog/calendar/AddItemPanel";
 import {
   listCalendar,
   createCalendarEntry,
@@ -113,17 +113,20 @@ export default function CalendarPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [editing, setEditing] = useState<EventFormData | undefined>();
-  // The "New event" add panel — opened from any add gesture, pinned to the gesture's day so
-  // the new entry records at that date. Declared here (above the mouseup effect that opens it).
+  // The "New event" add panel — opened from any add gesture, seeded with the gesture's day
+  // RANGE (start→finish) so the panel's Starts/Finish datetimes are pre-populated. Declared
+  // here (above the mouseup effect that opens it).
   const [addOpen, setAddOpen] = useState(false);
-  const [addDate, setAddDate] = useState<YMD>(today);
+  const [addStart, setAddStart] = useState<YMD>(today);
+  const [addEnd, setAddEnd] = useState<YMD>(today);
   const [addBusy, setAddBusy] = useState(false);
-  // Click-a-date / drag-across-days on the month grid → open the add panel for the day the
-  // gesture started on. `sel` is the [anchor, head] cell-index range being dragged (for the
-  // live highlight); `dragging` gates the window mouseup that commits it; `dragStartDay`
-  // remembers which day to pin the new entry to.
+  // Click-a-date / drag-across-days on the month grid → open the add panel seeded with the
+  // dragged range. `sel` is the [anchor, head] cell-index range (for the live highlight);
+  // `dragging` gates the window mouseup that commits it; `dragStartDay`/`dragEndDay` remember
+  // the range's endpoints (in date order) to seed the panel's Starts/Finish.
   const dragging = useRef(false);
   const dragStartDay = useRef<YMD | null>(null);
+  const dragEndDay = useRef<YMD | null>(null);
   const [sel, setSel] = useState<[number, number] | null>(null);
   // Persistent (mount-once) listener — gated on the `dragging` ref, NOT on `sel`. If it
   // were tied to `sel` (set async via setSel), a very fast click could release before the
@@ -133,9 +136,13 @@ export default function CalendarPage() {
       if (!dragging.current) return;
       dragging.current = false;
       setSel(null);
-      const day = dragStartDay.current;
-      if (day) {
-        setAddDate(day);
+      const a = dragStartDay.current;
+      const b = dragEndDay.current ?? a;
+      if (a && b) {
+        // Order the endpoints so a backwards drag still yields start ≤ finish.
+        const [s, e] = beforeDay(b, a) ? [b, a] : [a, b];
+        setAddStart(s);
+        setAddEnd(e);
         setAddOpen(true);
       }
     };
@@ -161,7 +168,14 @@ export default function CalendarPage() {
   const eventsOn = useCallback(
     (y: number, m: number, d: number) =>
       items
-        .filter((i) => sameDay(toYMD(new Date(i.startsAt)), { y, m, d }))
+        // A multi-day item shows on EVERY day it spans, not just its start: the cell day must
+        // fall within [start day, end day] inclusive (end defaults to the start day when absent).
+        .filter((i) => {
+          const cell = { y, m, d };
+          const startDay = toYMD(new Date(i.startsAt));
+          const endDay = i.endsAt ? toYMD(new Date(i.endsAt)) : startDay;
+          return !beforeDay(cell, startDay) && !beforeDay(endDay, cell);
+        })
         .sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
     [items],
   );
@@ -234,24 +248,27 @@ export default function CalendarPage() {
   // Day-level quick-adds (the per-day + and the toolbar button) open the add panel with the
   // day pinned; Type picks Event / Shift / Reminder and Add creates the real object.
   const openAddPanel = useCallback((day?: YMD) => {
-    setAddDate(day ?? focus);
+    const d = day ?? focus;
+    setAddStart(d);
+    setAddEnd(d);
     setAddOpen(true);
   }, [focus]);
 
   const handleAddItem = useCallback(
     async (draft: AddItemDraft) => {
       setAddBusy(true);
-      const { startsAt, endsAt, allDay } = draftWindow(draft);
+      // The panel emits ISO start/finish + allDay directly (no free-text parsing).
+      const { startsAt, endsAt, allDay } = draft;
       const res =
         draft.kind === "event"
-          ? await createEvent({ title: draft.title, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() })
+          ? await createEvent({ title: draft.title, startsAt, endsAt })
           : draft.kind === "shift"
-            ? await createShift({ type: "GENERAL", name: draft.title, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() })
+            ? await createShift({ type: "GENERAL", name: draft.title, startsAt, endsAt })
             : await createCalendarEntry({
                 title: draft.title,
                 color: "danger",
-                startsAt: startsAt.toISOString(),
-                endsAt: allDay ? undefined : endsAt.toISOString(),
+                startsAt,
+                endsAt: allDay ? undefined : endsAt,
                 allDay,
               });
       setAddBusy(false);
@@ -499,11 +516,15 @@ export default function CalendarPage() {
                           if (e.button !== 0 || past) return;
                           dragging.current = true;
                           dragStartDay.current = day;
+                          dragEndDay.current = day;
                           setSel([i, i]);
                           e.preventDefault();
                         }}
                         onMouseEnter={() => {
-                          if (dragging.current && !past) setSel((s) => (s ? [s[0], i] : [i, i]));
+                          if (dragging.current && !past) {
+                            dragEndDay.current = day;
+                            setSel((s) => (s ? [s[0], i] : [i, i]));
+                          }
                         }}
                         className={cn(
                           "cal-cell min-h-[118px] select-none",
@@ -695,7 +716,8 @@ export default function CalendarPage() {
 
       <AddItemPanel
         open={addOpen}
-        date={addDate}
+        start={addStart}
+        end={addEnd}
         busy={addBusy}
         onClose={() => setAddOpen(false)}
         onAdd={handleAddItem}

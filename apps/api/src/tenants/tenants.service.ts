@@ -16,6 +16,7 @@ import {
   TenantInvitation,
   TenantJoinRequest,
   TenantMember,
+  TenantStatus,
 } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
@@ -192,11 +193,12 @@ export class TenantsService {
 
   async updateTenant(
     id: string,
-    input: { name?: string; slug?: string; settings?: Record<string, unknown> },
+    input: { name?: string; slug?: string; status?: "ACTIVE" | "SUSPENDED" | "ARCHIVED"; settings?: Record<string, unknown> },
   ): Promise<Tenant> {
     const current = await this.getTenant(id);
     const data: Prisma.TenantUpdateInput = {};
     let renamedTo: string | null = null;
+    if (input.status !== undefined) data.status = input.status as TenantStatus;
     if (input.name !== undefined && input.name.trim()) {
       const name = input.name.trim();
       data.name = name;
@@ -653,7 +655,16 @@ export class TenantsService {
             }
           : {}),
       },
-      select: { id: true, slug: true, name: true, networkId: true },
+      // `status` (lifecycle) + the network's plan power the status pill in the super-admin
+      // tenants listing ("Active · Scale"); the logos below feed the switcher rows.
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        networkId: true,
+        status: true,
+        network: { select: { planName: true } },
+      },
       orderBy: { name: "asc" },
       take: 50,
     });
@@ -665,7 +676,13 @@ export class TenantsService {
     const logoByTenant = new Map(profiles.map((p) => [p.tenantId, p]));
     return tenants.map((t) => {
       const p = logoByTenant.get(t.id);
-      return { ...t, logoLandscapeUrl: p?.logoLandscapeUrl ?? null, logoBlockUrl: p?.logoBlockUrl ?? null };
+      const { network, ...rest } = t;
+      return {
+        ...rest,
+        planName: network?.planName ?? null,
+        logoLandscapeUrl: p?.logoLandscapeUrl ?? null,
+        logoBlockUrl: p?.logoBlockUrl ?? null,
+      };
     });
   }
 

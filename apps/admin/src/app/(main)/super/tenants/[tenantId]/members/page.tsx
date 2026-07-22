@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { Users, ArrowLeft, Loader2, UserPlus, X } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { Users, Loader2, UserPlus, X } from 'lucide-react';
 import {
   tenants as tenantsApi,
   type AppUserRole,
@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/c
 import { Button } from '@/components/prog/ui/button';
 import { Input } from '@/components/prog/ui/input';
 import { Label } from '@/components/prog/ui/label';
+import { TenantPageHeader } from '@/components/super/tenant-page-header';
 
 const ROLES: AppUserRole[] = ['OWNER', 'ORGANISER', 'VOLUNTEER'];
 
@@ -42,7 +43,6 @@ function RoleSelect({
 
 export default function TenantMembersPage() {
   const params = useParams();
-  const router = useRouter();
   const tenantId = params?.tenantId as string;
 
   const [members, setMembers] = useState<TenantMemberSummary[] | null>(null);
@@ -101,15 +101,9 @@ export default function TenantMembersPage() {
   };
 
   return (
-    <section className="page-stack">
+    <div className="page-stack">
+      <TenantPageHeader title="Members" icon={Users} description="Manage members for this tenant." />
       <div className="space-y-6 max-w-2xl">
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/super/tenants/${tenantId}`)}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tenant Members</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage members for this tenant</p>
-        </div>
 
         {actionError ? (
           <div className="rounded-md border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/15 px-4 py-3 text-sm text-red-800 dark:text-red-400">
@@ -211,6 +205,6 @@ export default function TenantMembersPage() {
           </CardContent>
         </Card>
       </div>
-    </section>
+    </div>
   );
 }

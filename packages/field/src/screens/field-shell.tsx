@@ -28,8 +28,8 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
   const [brandStyle, setBrandStyle] = useState<BrandStyleFields | null>(null);
   // Cached tenant brand (logo/name) for the boot loader — instant on a returning device.
   const [bootBrand, setBootBrand] = useState<{ name?: string; logoUrl?: string | null } | null>(null);
-  // Tenant tab title + favicon — seeded from the cache, refreshed from the brand fetch. The PWA
-  // manifest/install icon stays Uprise (install-time, tenant-blind); this is just the browser tab.
+  // Tenant tab title + favicon — seeded from the cache, refreshed from the brand fetch. (The PWA
+  // install name/icon is branded separately, per-tenant, by app/manifest.webmanifest/route.ts.)
   const [head, setHead] = useState<{ title: string | null; faviconUrl: string | null }>(() => {
     const c = getTenantBrand();
     return { title: c?.name ?? null, faviconUrl: c?.logoUrl ?? null };

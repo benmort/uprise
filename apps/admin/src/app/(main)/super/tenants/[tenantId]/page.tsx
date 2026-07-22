@@ -2,13 +2,20 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { AtSign, Building2, Users, ArrowLeft, Loader2, Phone, Trash2 } from 'lucide-react';
-import { tenants as tenantsApi, type AuthPrincipal, type TenantRecord } from '@uprise/api-client';
+import { Building2, Loader2, Trash2 } from 'lucide-react';
+import { tenants as tenantsApi, type AuthPrincipal, type TenantRecord, type TenantStatus } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/card';
 import { Button } from '@/components/prog/ui/button';
 import { Input } from '@/components/prog/ui/input';
 import { Label } from '@/components/prog/ui/label';
 import { getSession } from '@/lib/session';
+import { TenantPageHeader } from '@/components/super/tenant-page-header';
+
+const STATUS_OPTIONS: { value: TenantStatus; label: string }[] = [
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'SUSPENDED', label: 'Suspended' },
+  { value: 'ARCHIVED', label: 'Archived' },
+];
 
 export default function TenantDetailPage() {
   const params = useParams();
@@ -21,6 +28,7 @@ export default function TenantDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
+  const [status, setStatus] = useState<TenantStatus>('ACTIVE');
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -35,6 +43,7 @@ export default function TenantDetailPage() {
       setTenant(res.data);
       setName(res.data.name);
       setSlug(res.data.slug);
+      setStatus(res.data.status);
     } else {
       setError(res.error);
     }
@@ -49,14 +58,15 @@ export default function TenantDetailPage() {
     if (saving || !tenant) return;
     setSaving(true);
     setActionError(null);
-    // Super-admin may re-slug; a customer owner edits the name only.
-    const body = isSuperAdmin ? { name, slug } : { name };
+    // Super-admin may re-slug + set the lifecycle status; a customer owner edits the name only.
+    const body = isSuperAdmin ? { name, slug, status } : { name };
     const res = await tenantsApi.update(tenant.id, body);
     setSaving(false);
     if (res.ok) {
       setTenant(res.data);
       setName(res.data.name);
       setSlug(res.data.slug);
+      setStatus(res.data.status);
     } else {
       setActionError(res.error);
     }
@@ -75,38 +85,41 @@ export default function TenantDetailPage() {
 
   if (loading) {
     return (
-      <section className="page-stack">
-        <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+      <div className="page-stack">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" /> Loading…
         </div>
-      </section>
+      </div>
     );
   }
 
   if (error || !tenant) {
     return (
-      <section className="page-stack">
-        <p className="text-red-600 dark:text-red-400">{error ?? 'Tenant not found.'}</p>
-        <Button variant="outline" className="mt-4" onClick={() => router.push('/super/tenants')}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tenants
-        </Button>
-      </section>
+      <div className="page-stack">
+        <TenantPageHeader title="Overview" icon={Building2} />
+        <p className="text-sm text-error">{error ?? 'Tenant not found.'}</p>
+      </div>
     );
   }
 
   return (
-    <section className="page-stack">
-      <div className="space-y-6 max-w-2xl">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/super/tenants')}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{tenant.name}</h1>
-          <p className="text-gray-600 dark:text-gray-400">Tenant details</p>
-        </div>
+    <div className="page-stack">
+      <TenantPageHeader
+        title="Overview"
+        icon={Building2}
+        description="The tenant's identity, lifecycle status and plan."
+        actions={
+          isSuperAdmin ? (
+            <Button variant="outline" className="text-red-600 dark:text-red-400" onClick={() => void remove()} disabled={saving}>
+              <Trash2 className="h-4 w-4 mr-2" /> Delete tenant
+            </Button>
+          ) : null
+        }
+      />
 
+      <div className="max-w-2xl space-y-6">
         {actionError ? (
-          <div className="rounded-md border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/15 px-4 py-3 text-sm text-red-800 dark:text-red-400">
+          <div className="rounded-md border border-error/30 bg-error-container/40 px-4 py-3 text-sm text-error">
             {actionError}
           </div>
         ) : null}
@@ -123,6 +136,28 @@ export default function TenantDetailPage() {
               <Input id="t-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
             </div>
             <div>
+              <Label htmlFor="t-status">Status</Label>
+              {isSuperAdmin ? (
+                <select
+                  id="t-status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as TenantStatus)}
+                  className="mt-1 h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground"
+                >
+                  {STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Input id="t-status" value={status} readOnly className="mt-1 read-only:bg-gray-50 dark:read-only:bg-gray-900" />
+              )}
+              {tenant.network?.planName ? (
+                <p className="mt-1 text-xs text-muted-foreground">Plan: {tenant.network.planName}</p>
+              ) : null}
+            </div>
+            <div>
               <Label htmlFor="t-slug">Subdomain</Label>
               <Input
                 id="t-slug"
@@ -132,9 +167,7 @@ export default function TenantDetailPage() {
                 className="mt-1 read-only:bg-gray-50 dark:read-only:bg-gray-900"
               />
               {!isSuperAdmin ? (
-                <p className="text-xs text-gray-500 mt-1">
-                  Only a super-admin can change the subdomain.
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Only a super-admin can change the subdomain.</p>
               ) : null}
             </div>
             <div className="flex justify-end">
@@ -145,28 +178,7 @@ export default function TenantDetailPage() {
             </div>
           </CardContent>
         </Card>
-
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => router.push(`/super/tenants/${tenantId}/members`)}>
-            <Users className="h-4 w-4 mr-2" /> Manage Members
-          </Button>
-          {isSuperAdmin ? (
-            <Button variant="outline" onClick={() => router.push(`/super/tenants/${tenantId}/telephony`)}>
-              <Phone className="h-4 w-4 mr-2" /> Telephony
-            </Button>
-          ) : null}
-          {isSuperAdmin ? (
-            <Button variant="outline" onClick={() => router.push(`/super/tenants/${tenantId}/email`)}>
-              <AtSign className="h-4 w-4 mr-2" /> Email
-            </Button>
-          ) : null}
-          {isSuperAdmin ? (
-            <Button variant="outline" className="text-red-600 dark:text-red-400" onClick={() => void remove()} disabled={saving}>
-              <Trash2 className="h-4 w-4 mr-2" /> Delete tenant
-            </Button>
-          ) : null}
-        </div>
       </div>
-    </section>
+    </div>
   );
 }

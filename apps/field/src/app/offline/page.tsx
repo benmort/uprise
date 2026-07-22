@@ -4,7 +4,7 @@
  * cold start on a page that was never opened online. Deliberately static and dependency-free so
  * it renders with no session, no data and no map.
  */
-export const metadata = { title: "Offline — Uprise Field" };
+export const metadata = { title: "Offline — Field" };
 
 export default function OfflinePage() {
   return (

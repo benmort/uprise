@@ -18,9 +18,12 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Uprise Field",
+  // Neutral default; the tenant's name replaces it client-side via TenantHead once branding loads.
+  title: "Field",
   description: "Door-knocking for canvassers — offline-first.",
-  manifest: "/manifest.webmanifest",
+  // NB: the manifest link is declared manually in <head> (not here) so it can carry
+  // crossOrigin="use-credentials" — the dynamic per-tenant manifest route needs the session
+  // cookie sent with the fetch. Next's metadata `manifest` can't set that attribute.
   icons: {
     icon: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/uprise-icon.svg", type: "image/svg+xml" }],
@@ -46,6 +49,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <head>
+        {/* Per-tenant PWA manifest (app/manifest.webmanifest/route.ts). use-credentials so the
+            session cookie rides along and the route can brand it "{Tenant} — Field". */}
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         {/* Boot fetches hit the api the moment the shell hydrates, and map screens hit
             mapbox — pay the DNS+TLS handshakes during HTML parse, not on first fetch. */}
         <link rel="preconnect" href={apiOrigin} crossOrigin="use-credentials" />

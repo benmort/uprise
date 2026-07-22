@@ -2,27 +2,30 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CalendarDays, X } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * The "New event" slide-over — replicated from the approved calendar mock: a
- * right-hand panel over a dimmed calendar with Title, a three-chip Type picker
- * (Event / Shift / Reminder in the category colours), the pinned Date and an
- * optional free-text Time ("10:00 – 12:00"). The host owns persistence: on Add
- * it receives the draft and creates the matching real object (events.Event,
- * a GENERAL Shift, or a CalendarEntry reminder).
+ * The "New event" slide-over — a right-hand panel over a dimmed calendar with Title, a
+ * three-chip Type picker (Event / Shift / Reminder), an All-day toggle, and explicit
+ * **Starts** and **Finish** datetime inputs. Opened from the calendar: a click seeds a 1-hour
+ * window on that day; a drag across days seeds Starts on the first day and Finish on the last.
+ * The host owns persistence: on Add it receives the draft (ISO start/end) and creates the
+ * matching real object (events.Event, a GENERAL Shift, or a CalendarEntry reminder).
  */
 
 export type AddItemKind = "event" | "shift" | "entry";
 
+type YMD = { y: number; m: number; d: number };
+
 export interface AddItemDraft {
   kind: AddItemKind;
   title: string;
-  /** The calendar day the add was launched from. */
-  date: { y: number; m: number; d: number };
-  /** Raw optional time text, e.g. "10:00 – 12:00" (empty = all day). */
-  time: string;
+  /** ISO start instant. */
+  startsAt: string;
+  /** ISO finish instant. */
+  endsAt: string;
+  allDay: boolean;
 }
 
 const TYPES: Array<{ kind: AddItemKind; label: string; accent: string }> = [
@@ -31,31 +34,54 @@ const TYPES: Array<{ kind: AddItemKind; label: string; accent: string }> = [
   { kind: "entry", label: "Reminder", accent: "#f43f5e" },
 ];
 
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** Date → the value a <input type="datetime-local"> expects (local, no seconds). */
+function toLocalInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** Seed a start/finish window from the dragged day range: same day → 09:00–10:00; a
+ *  multi-day drag → 09:00 on the first day to 17:00 on the last. */
+function seedWindow(start: YMD, end: YMD): { startsAt: string; endsAt: string } {
+  const sameDay = start.y === end.y && start.m === end.m && start.d === end.d;
+  const s = new Date(start.y, start.m, start.d, 9, 0);
+  const e = sameDay ? new Date(start.y, start.m, start.d, 10, 0) : new Date(end.y, end.m, end.d, 17, 0);
+  return { startsAt: toLocalInput(s), endsAt: toLocalInput(e) };
+}
 
 export function AddItemPanel({
   open,
-  date,
+  start,
+  end,
   busy,
   onClose,
   onAdd,
 }: {
   open: boolean;
-  date: { y: number; m: number; d: number };
+  /** First day of the add gesture (drag anchor, or the clicked day). */
+  start: YMD;
+  /** Last day of the add gesture (drag head, or the clicked day). */
+  end: YMD;
   busy?: boolean;
   onClose: () => void;
   onAdd: (draft: AddItemDraft) => void;
 }) {
   const [kind, setKind] = useState<AddItemKind>("event");
   const [title, setTitle] = useState("");
-  const [time, setTime] = useState("");
+  const [allDay, setAllDay] = useState(false);
+  // datetime-local strings ("YYYY-MM-DDTHH:mm"); the date-only slice drives the all-day inputs.
+  const [startsAt, setStartsAt] = useState("");
+  const [endsAt, setEndsAt] = useState("");
 
-  // Fresh draft each open; Escape closes; lock body scroll while up.
+  // Fresh draft each open, seeded from the dragged range; Escape closes; lock body scroll.
   useEffect(() => {
     if (!open) return;
     setKind("event");
     setTitle("");
-    setTime("");
+    setAllDay(false);
+    const seed = seedWindow(start, end);
+    setStartsAt(seed.startsAt);
+    setEndsAt(seed.endsAt);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -66,14 +92,32 @@ export function AddItemPanel({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+    // Re-seed whenever the panel (re)opens or the gesture's range changes.
+  }, [open, start.y, start.m, start.d, end.y, end.m, end.d, onClose]);
 
   if (!open || typeof document === "undefined") return null;
 
+  // A finish before the start is invalid (native inputs can't express "after start" as a min
+  // across an all-day toggle, so guard it here).
+  const invalidRange = Boolean(startsAt && endsAt && new Date(endsAt) < new Date(startsAt));
+  const canSubmit = Boolean(title.trim()) && Boolean(startsAt) && Boolean(endsAt) && !invalidRange && !busy;
+
   const submit = () => {
-    if (!title.trim() || busy) return;
-    onAdd({ kind, title: title.trim(), date, time: time.trim() });
+    if (!canSubmit) return;
+    // All-day: snap to the day's bounds (00:00 → 23:59) regardless of any time component.
+    const startDate = allDay ? new Date(`${startsAt.slice(0, 10)}T00:00`) : new Date(startsAt);
+    const endDate = allDay ? new Date(`${endsAt.slice(0, 10)}T23:59`) : new Date(endsAt);
+    onAdd({
+      kind,
+      title: title.trim(),
+      startsAt: startDate.toISOString(),
+      endsAt: endDate.toISOString(),
+      allDay,
+    });
   };
+
+  const inputClass =
+    "h-12 w-full rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
 
   return createPortal(
     <div
@@ -112,7 +156,7 @@ export function AddItemPanel({
               onKeyDown={(e) => {
                 if (e.key === "Enter") submit();
               }}
-              className="h-12 w-full rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+              className={inputClass}
             />
           </div>
 
@@ -149,29 +193,46 @@ export function AddItemPanel({
             </div>
           </div>
 
-          <div>
-            <span className="mb-2 block text-sm font-semibold text-foreground">Date</span>
-            <div className="flex h-12 items-center gap-2.5 rounded-xl bg-surface-variant px-4 text-[15px] text-foreground">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              {date.d} {MONTHS[date.m]} {date.y}
+          <label className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+            <input
+              type="checkbox"
+              checked={allDay}
+              onChange={(e) => setAllDay(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            All day
+          </label>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="add-item-start" className="mb-2 block text-sm font-semibold text-foreground">
+                Starts
+              </label>
+              <input
+                id="add-item-start"
+                type={allDay ? "date" : "datetime-local"}
+                value={allDay ? startsAt.slice(0, 10) : startsAt}
+                onChange={(e) => setStartsAt(allDay ? `${e.target.value}T00:00` : e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="add-item-end" className="mb-2 block text-sm font-semibold text-foreground">
+                Finish
+              </label>
+              <input
+                id="add-item-end"
+                type={allDay ? "date" : "datetime-local"}
+                value={allDay ? endsAt.slice(0, 10) : endsAt}
+                min={allDay ? startsAt.slice(0, 10) : startsAt}
+                onChange={(e) => setEndsAt(allDay ? `${e.target.value}T23:59` : e.target.value)}
+                className={inputClass}
+              />
             </div>
           </div>
-
-          <div>
-            <label htmlFor="add-item-time" className="mb-2 block text-sm font-semibold text-foreground">
-              Time <span className="font-normal text-muted-foreground">(optional)</span>
-            </label>
-            <input
-              id="add-item-time"
-              value={time}
-              placeholder="e.g. 10:00 – 12:00"
-              onChange={(e) => setTime(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-              }}
-              className="h-12 w-full rounded-xl border border-border bg-background px-4 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-            />
-          </div>
+          {invalidRange ? (
+            <p className="text-sm text-error">Finish must be after the start.</p>
+          ) : null}
         </div>
 
         <div className="flex justify-end gap-2.5 border-t border-border px-7 py-5">
@@ -184,7 +245,7 @@ export function AddItemPanel({
           </button>
           <button
             type="button"
-            disabled={!title.trim() || busy}
+            disabled={!canSubmit}
             onClick={submit}
             className="h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50"
           >
@@ -195,32 +256,4 @@ export function AddItemPanel({
     </div>,
     document.body,
   );
-}
-
-/**
- * Parse the optional free-text time ("10:00 – 12:00", "10:00-12", "10am") into
- * start/end Dates on the given day. Empty/unparseable → all-day (00:00–23:59).
- */
-export function draftWindow(draft: AddItemDraft): { startsAt: Date; endsAt: Date; allDay: boolean } {
-  const { y, m, d } = draft.date;
-  const parseOne = (raw: string): { h: number; min: number } | null => {
-    const t = raw.trim().toLowerCase();
-    const match = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/.exec(t);
-    if (!match) return null;
-    let h = Number(match[1]);
-    const min = Number(match[2] ?? 0);
-    if (match[3] === "pm" && h < 12) h += 12;
-    if (match[3] === "am" && h === 12) h = 0;
-    if (h > 23 || min > 59) return null;
-    return { h, min };
-  };
-  const parts = draft.time.split(/[–—-]|to/i).map((p) => p.trim()).filter(Boolean);
-  const start = parts[0] ? parseOne(parts[0]) : null;
-  if (!start) {
-    return { startsAt: new Date(y, m, d, 0, 0), endsAt: new Date(y, m, d, 23, 59), allDay: true };
-  }
-  const end = parts[1] ? parseOne(parts[1]) : null;
-  const startsAt = new Date(y, m, d, start.h, start.min);
-  const endsAt = end ? new Date(y, m, d, end.h, end.min) : new Date(y, m, d, start.h + 1, start.min);
-  return { startsAt, endsAt, allDay: false };
 }

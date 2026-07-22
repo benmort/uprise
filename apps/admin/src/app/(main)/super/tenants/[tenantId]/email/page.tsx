@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, AtSign, Copy, Loader2, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { AtSign, Copy, Loader2, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import {
   emailProvisioning,
   tenants as tenantsApi,
@@ -20,6 +19,7 @@ import { Input } from '@/components/prog/ui/input';
 import { Label } from '@/components/prog/ui/label';
 import { getSession } from '@/lib/session';
 import { getFeatureFlags } from '@/lib/api';
+import { TenantPageHeader } from '@/components/super/tenant-page-header';
 import {
   EMAIL_TIMELINE_CURRENT_STEP,
   EMAIL_TIMELINE_STEPS,
@@ -215,19 +215,17 @@ export default function TenantEmailPage() {
     // Deliberately parked: the engine is built and reviewed, but enabling it
     // needs the platform SendGrid account upgraded (subusers are a Pro feature).
     return (
-      <div className="space-y-6 p-6">
-        <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" size="sm">
-            <Link href={`/super/tenants/${tenantId}`}>
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              {tenant?.name ?? 'Tenant'}
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-bold">Email identities</h1>
-          <span className="rounded-full bg-surface-variant px-2.5 py-1 text-xs font-bold uppercase text-muted-foreground">
-            Coming soon
-          </span>
-        </div>
+      <div className="page-stack">
+        <TenantPageHeader
+          title="Email"
+          icon={AtSign}
+          description="Per-tenant sender identities."
+          actions={
+            <span className="rounded-full bg-surface-variant px-2.5 py-1 text-xs font-bold uppercase text-muted-foreground">
+              Coming soon
+            </span>
+          }
+        />
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -276,16 +274,8 @@ export default function TenantEmailPage() {
     (selectedRun.status === 'DNS_CONFIGURED' || selectedRun.status === 'VALIDATION_FAILED');
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={`/super/tenants/${tenantId}`}>
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            {tenant?.name ?? 'Tenant'}
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-bold">Email identities</h1>
-      </div>
+    <div className="page-stack">
+      <TenantPageHeader title="Email" icon={AtSign} description="Provision + manage this tenant's sender identities." />
 
       {error ? <p className="text-sm text-error">{error}</p> : null}
       {actionError ? <p className="text-sm text-error">{actionError}</p> : null}

@@ -382,6 +382,14 @@ describe("TenantsService", () => {
     await expect(svc.updateTenant("t1", { slug: "Bad Slug!" })).rejects.toThrow("invalid_slug");
   });
 
+  it("updateTenant writes the lifecycle status", async () => {
+    const { svc, prisma } = setup();
+    await svc.updateTenant("t1", { status: "SUSPENDED" });
+    expect(prisma.tenant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "t1" }, data: expect.objectContaining({ status: "SUSPENDED" }) }),
+    );
+  });
+
   it("deleteTenant soft-deletes + emits tenant.tenant.deleted", async () => {
     const { svc, prisma, outbox } = setup();
     await svc.deleteTenant("t1");
@@ -445,18 +453,20 @@ describe("TenantsService brand payloads", () => {
     expect(await svc.tenantBrandBySlug("nope")).toBeNull();
   });
 
-  it("searchTenants batches each tenant's logo onto its row", async () => {
+  it("searchTenants batches each tenant's logo + status + plan onto its row", async () => {
     const { svc, prisma } = setup();
     prisma.tenant.findMany.mockResolvedValueOnce([
-      { id: "t1", slug: "a", name: "A", networkId: null },
-      { id: "t2", slug: "b", name: "B", networkId: null },
+      { id: "t1", slug: "a", name: "A", networkId: "n1", status: "ACTIVE", network: { planName: "Scale" } },
+      { id: "t2", slug: "b", name: "B", networkId: null, status: "SUSPENDED", network: null },
     ]);
     prisma.orgProfile.findMany.mockResolvedValueOnce([
       { tenantId: "t1", logoLandscapeUrl: null, logoBlockUrl: "https://b/a.png" },
     ]);
     const rows = await svc.searchTenants();
-    expect(rows[0]).toMatchObject({ id: "t1", logoBlockUrl: "https://b/a.png", logoLandscapeUrl: null });
-    expect(rows[1]).toMatchObject({ id: "t2", logoBlockUrl: null, logoLandscapeUrl: null });
+    expect(rows[0]).toMatchObject({ id: "t1", status: "ACTIVE", planName: "Scale", logoBlockUrl: "https://b/a.png" });
+    expect(rows[1]).toMatchObject({ id: "t2", status: "SUSPENDED", planName: null, logoBlockUrl: null });
+    // The joined `network` object is flattened away — only planName is surfaced.
+    expect(rows[0]).not.toHaveProperty("network");
   });
 });
 

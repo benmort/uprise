@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Building2,
   Plus,
@@ -13,14 +13,17 @@ import {
   Trash2,
   ArrowRightLeft,
 } from 'lucide-react';
-import { auth, tenants as tenantsApi, type AuthPrincipal } from '@uprise/api-client';
+import { auth, tenants as tenantsApi, type AuthPrincipal, type TenantStatus } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/card';
 import { Button } from '@/components/prog/ui/button';
 import { Badge } from '@/components/prog/ui/badge';
 import { SearchInput } from '@/components/ui/search-input';
 import { useFlag } from '@/components/flags/flags-provider';
 import { getSession } from '@/lib/session';
+import { cn } from '@/lib/utils';
 import { CreateTenantDialog } from '@/components/topbar/create-tenant-dialog';
+import { TenantStatusPill } from '@/components/super/tenant-switcher';
+import { SignupsPanel } from '@/components/super/signups-panel';
 
 /** A unified row for the list — sourced from the all-tenants search (super-admin)
  * or the caller's own memberships (customer owner). */
@@ -31,13 +34,20 @@ type TenantRow = {
   networkId?: string | null;
   role?: string;
   planName?: string | null;
+  status?: TenantStatus;
 };
+
+type Tab = 'tenants' | 'signups';
 
 const TENANT_CREATE_PLANS_UI = ['starter', 'growth', 'scale'];
 
 export default function TenantsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const canMultibrand = useFlag('FEATURE_MULTIBRAND_ENABLED');
+  // The Signups tab is deep-linkable (?tab=signups) so the old /super/signups route can redirect in.
+  const [tab, setTab] = useState<Tab>(searchParams.get('tab') === 'signups' ? 'signups' : 'tenants');
+  const [signupCount, setSignupCount] = useState<number | null>(null);
 
   const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
   const [resolved, setResolved] = useState(false);
@@ -180,6 +190,35 @@ export default function TenantsPage() {
         ) : null}
       </div>
 
+      {/* Tenants | Signups tabs — the signups queue folds in here (super-admin only). */}
+      {isSuperAdmin ? (
+        <div className="flex w-fit rounded-xl border border-border p-0.5">
+          {(['tenants', 'signups'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              aria-pressed={tab === t}
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold capitalize transition',
+                tab === t ? 'bg-primary text-white' : 'text-foreground hover:bg-surface-variant',
+              )}
+            >
+              {t}
+              {t === 'signups' && signupCount ? (
+                <span className="rounded-full bg-warning-container px-1.5 text-[11px] font-bold text-warning-foreground">
+                  {signupCount}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === 'signups' && isSuperAdmin ? (
+        <SignupsPanel onCount={setSignupCount} />
+      ) : (
+        <>
       <SearchInput
         value={query}
         onValueChange={setQuery}
@@ -249,6 +288,12 @@ export default function TenantsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="space-y-3">
+                    {t.status ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium text-gray-600 dark:text-gray-400">Status:</span>
+                        <TenantStatusPill status={t.status} planName={t.planName} />
+                      </div>
+                    ) : null}
                     {t.slug ? (
                       <div className="text-sm text-gray-600 dark:text-gray-400">
                         <span className="font-medium">Subdomain:</span> {t.slug}
@@ -307,6 +352,8 @@ export default function TenantsPage() {
             );
           })}
         </div>
+      )}
+        </>
       )}
 
       <CreateTenantDialog

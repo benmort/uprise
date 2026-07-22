@@ -1,24 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Loader2, Phone, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { Loader2, Phone, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
 import {
   telephony,
-  tenants as tenantsApi,
   type AuthPrincipal,
   type TelephonyComplianceInput,
   type TelephonyPhoneNumber,
   type TelephonyProvisioningRun,
   type TelephonyProvisioningStep,
-  type TenantRecord,
 } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/card';
 import { Button } from '@/components/prog/ui/button';
 import { Input } from '@/components/prog/ui/input';
 import { Label } from '@/components/prog/ui/label';
 import { getSession } from '@/lib/session';
+import { TenantPageHeader } from '@/components/super/tenant-page-header';
 import { getFeatureFlags } from '@/lib/api';
 import { ProvisioningTimeline } from '@/components/telephony/provisioning-timeline';
 
@@ -50,7 +48,6 @@ export default function TenantTelephonyPage() {
 
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
-  const [tenant, setTenant] = useState<TenantRecord | null>(null);
   const [runs, setRuns] = useState<TelephonyProvisioningRun[]>([]);
   const [numbers, setNumbers] = useState<TelephonyPhoneNumber[]>([]);
   const [selectedRun, setSelectedRun] = useState<RunWithSteps | null>(null);
@@ -64,16 +61,14 @@ export default function TenantTelephonyPage() {
 
   const load = useCallback(async () => {
     setError(null);
-    const [flags, session, tenantRes, runsRes, numbersRes] = await Promise.all([
+    const [flags, session, runsRes, numbersRes] = await Promise.all([
       getFeatureFlags(),
       getSession(),
-      tenantsApi.get(tenantId),
       telephony.listRuns(tenantId),
       telephony.listNumbers(tenantId),
     ]);
     setEnabled(flags.ok ? Boolean(flags.data.FEATURE_TENANT_TELEPHONY_ENABLED) : false);
     setPrincipal(session);
-    if (tenantRes.ok) setTenant(tenantRes.data);
     if (runsRes.ok) setRuns(runsRes.data);
     else setError(runsRes.error);
     if (numbersRes.ok) setNumbers(numbersRes.data);
@@ -173,16 +168,8 @@ export default function TenantTelephonyPage() {
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center gap-3">
-        <Button asChild variant="ghost" size="sm">
-          <Link href={`/super/tenants/${tenantId}`}>
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            {tenant?.name ?? 'Tenant'}
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-bold">Telephony</h1>
-      </div>
+    <div className="page-stack">
+      <TenantPageHeader title="Telephony" icon={Phone} description="Provision + manage this tenant's voice numbers." />
 
       {error ? <p className="text-sm text-error">{error}</p> : null}
       {actionError ? <p className="text-sm text-error">{actionError}</p> : null}

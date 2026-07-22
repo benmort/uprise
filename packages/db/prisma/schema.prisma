@@ -270,10 +270,21 @@ enum WalkListItemListType {
   @@schema("canvass")
 }
 
+// Super-admin-set tenant lifecycle (distinct from `deletedAt`, the soft-delete). ACTIVE is
+// the default; SUSPENDED pauses a tenant (kept for the platform team's judgement, shown in
+// the admin listing alongside the plan); ARCHIVED is a wound-down tenant retained for records.
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+  @@schema("tenant")
+}
+
 model Tenant {
   id                String                  @id @default(cuid())
   slug              String                  @unique
   name              String
+  status            TenantStatus            @default(ACTIVE)
   networkId         String?
   settings          Json?
   // Per-tenant organiser onboarding progress (advisory). Dedicated column rather than a

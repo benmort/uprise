@@ -21,6 +21,8 @@ export class CreateSelfServeTenantDto {
 export class UpdateTenantDto {
   @IsOptional() @IsString() @MaxLength(200) name?: string;
   @IsOptional() @IsString() @MaxLength(64) slug?: string;
+  // Super-admin-set lifecycle (see TenantStatus). Shown in the super-admin tenants listing.
+  @IsOptional() @IsIn(["ACTIVE", "SUSPENDED", "ARCHIVED"]) status?: "ACTIVE" | "SUSPENDED" | "ARCHIVED";
   // Free-form tenant settings blob (e.g. access-control policy under settings.accessControl).
   @IsOptional() @IsObject() settings?: Record<string, unknown>;
 }
