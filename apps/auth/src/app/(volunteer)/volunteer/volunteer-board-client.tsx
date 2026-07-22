@@ -100,10 +100,12 @@ export function VolunteerBoardClient({
                   href={withOrg(`/volunteer/${o.campaignId}?step=phone`)}
                   className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03] dark:bg-white/[0.05] dark:hover:bg-primary/[0.12]"
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl">
+                  {/* Off-white plate behind the logo in dark mode — tenant logos are drawn
+                      for light backgrounds and vanish on the dark card without it. */}
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl dark:bg-[#f4f3f0] dark:p-1">
                     {o.logoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={o.logoUrl} alt={o.tenantName} className="h-full w-full object-cover" />
+                      <img src={o.logoUrl} alt={o.tenantName} className="h-full w-full rounded-lg object-cover" />
                     ) : (
                       <span
                         className="flex h-full w-full items-center justify-center text-base font-extrabold text-white"
