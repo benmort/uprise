@@ -4,3 +4,18 @@
 /* Scan the shared design system for class strings (this app's own files are
    auto-detected by Tailwind v4). */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
+/* "Ink" — the volunteer flow's text colour. It was referenced (text-ink, border-ink/10)
+   without ever being defined, so those utilities emitted nothing and the text inherited
+   the body colour: near-white in dark mode, on the flow's warm-cream panels — invisible.
+   Defined here as a THEMED token: near-black on the light panels, near-white in dark
+   (where the panels also flip dark via their dark: variants). */
+@theme inline {
+  --color-ink: var(--ink);
+}
+:root {
+  --ink: #16181d;
+}
+.dark {
+  --ink: #eef0f4;
+}

@@ -98,7 +98,7 @@ export function VolunteerBoardClient({
                   // Deep-link straight into the wizard's phone step — the volunteer already chose
                   // this campaign from the board, so skip its "Get started" hero.
                   href={withOrg(`/volunteer/${o.campaignId}?step=phone`)}
-                  className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03]"
+                  className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03] dark:bg-white/[0.05] dark:hover:bg-primary/[0.12]"
                 >
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl">
                     {o.logoUrl ? (

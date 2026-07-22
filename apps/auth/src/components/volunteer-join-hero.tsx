@@ -232,7 +232,7 @@ export function VolunteerJoinHero({
           "Change happens…" section reads as a clean light panel; brand-tinted icon tiles + a
           secondary-coloured CTA carry the brand. */}
       <section
-        className={`flex flex-1 flex-col bg-[#faf8f5] px-7 pb-8 pt-8 lg:w-1/2 lg:px-14 lg:py-16 ${
+        className={`flex flex-1 flex-col bg-[#faf8f5] dark:bg-[#111318] px-7 pb-8 pt-8 lg:w-1/2 lg:px-14 lg:py-16 ${
           rightOverride ? "lg:justify-start" : "lg:justify-center"
         }`}
       >

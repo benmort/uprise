@@ -89,7 +89,7 @@ export function OpenJoinClient({
         <section className="flex min-h-[45vh] items-center justify-center rounded-b-[1.625rem] bg-primary text-white lg:min-h-screen lg:w-1/2 lg:rounded-none">
           <Spinner className="text-white" />
         </section>
-        <section aria-hidden className="hidden flex-1 bg-[#faf8f5] lg:block lg:w-1/2" />
+        <section aria-hidden className="hidden flex-1 bg-[#faf8f5] dark:bg-[#111318] lg:block lg:w-1/2" />
       </div>
     );
   }
