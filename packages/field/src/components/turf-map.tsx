@@ -40,6 +40,30 @@ const AMBER = "#c9781a";
 // read the individual doors around the pin (vs the coarser stop/GPS focus at 14).
 const POINT_ZOOM = 16.5;
 
+/** Direction chevrons riding the route lines: "›" glyphs rotated along the line, spaced
+ *  so they read as flow without cluttering. Shared by every route/trail layer. */
+const CHEVRON_LAYOUT: {
+  "symbol-placement": "line";
+  "symbol-spacing": number;
+  "text-field": string;
+  "text-size": number;
+  "text-font": string[];
+  "text-keep-upright": boolean;
+  "text-rotation-alignment": "map";
+  "text-allow-overlap": boolean;
+  "text-ignore-placement": boolean;
+} = {
+  "symbol-placement": "line",
+  "symbol-spacing": 60,
+  "text-field": "›",
+  "text-size": 16,
+  "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
+  "text-keep-upright": false,
+  "text-rotation-alignment": "map",
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+};
+
 /**
  * Volunteer/organiser map. `mode="view"` renders walk stops (clustered) + the
  * volunteer position; `mode="edit"` shows the turf polygon for organisers.
@@ -59,6 +83,9 @@ export function TurfMap({
   routeGeometry,
   routeApproximate = false,
   nextLegGeometry,
+  follow,
+  userHeading,
+  children,
   defaultBounds,
   focusBounds,
   focusPoint,
@@ -93,6 +120,15 @@ export function TurfMap({
   /** The user → next-stop walking leg (Mapbox Directions) — drawn stronger, on top of
    *  the full-route line. */
   nextLegGeometry?: GeoJSON.LineString | null;
+  /** Street walk view: nav-style follow camera. While set, the camera keeps this position
+   *  centred, rotates so the bearing is up, and pitches low over the street; clearing it
+   *  eases back to the flat north-up map. */
+  follow?: { position: LngLat; bearing: number | null } | null;
+  /** Compass heading (0–360°) for the GPS dot — when known it renders as a direction
+   *  arrow rotated with the map instead of a plain dot. */
+  userHeading?: number | null;
+  /** Extra map content (Sources/Layers/Markers) — e.g. the shift-replay trails. */
+  children?: React.ReactNode;
   /** Viewport when there's no geometry/stops/position to focus (e.g. AU_BOUNDS). */
   defaultBounds?: [number, number, number, number];
   /** `[w,s,e,n]` to frame the viewport to on change (e.g. the geo explorer's shared
@@ -260,6 +296,29 @@ export function TurfMap({
       });
     }
   }, [defaultBounds]);
+
+  // Street walk view: follow camera. Ease to each new fix with the heading up and a low
+  // pitch over the street; when follow clears (leaving street mode), ease back to the
+  // flat, north-up map so the ordinary map mode isn't left tilted.
+  const wasFollowing = useRef(false);
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    if (follow) {
+      wasFollowing.current = true;
+      map.easeTo({
+        center: [follow.position.lng, follow.position.lat],
+        bearing: follow.bearing ?? map.getBearing(),
+        pitch: 62,
+        zoom: Math.max(map.getZoom(), 17),
+        duration: 900,
+        essential: true,
+      });
+    } else if (wasFollowing.current) {
+      wasFollowing.current = false;
+      map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+    }
+  }, [follow]);
 
   // "My location" — centre the map on the viewer's current GPS position + drop the marker.
   // Works standalone (doesn't need the parent's `userPosition` prop), so it also locates the
@@ -483,7 +542,9 @@ export function TurfMap({
 
       {/* Smooth translucent-blue route threading ALL the stops in order (drawn under the
           pins). Solid + round-joined when it's real street geometry; dashed when it's the
-          straight-line fallback, so an approximate route never reads as a footpath. */}
+          straight-line fallback, so an approximate route never reads as a footpath.
+          Chevron glyphs ride each line ("›" symbols rotated along it) so the walking
+          DIRECTION is readable at a glance. */}
       {routeGeometry && (
         <Source id="walk-route" type="geojson" data={{ type: "Feature", geometry: routeGeometry, properties: {} }}>
           <Layer
@@ -496,6 +557,12 @@ export function TurfMap({
               "line-opacity": 0.4,
               ...(routeApproximate ? { "line-dasharray": [1.5, 1.5] as [number, number] } : {}),
             }}
+          />
+          <Layer
+            id="walk-route-chevrons"
+            type="symbol"
+            layout={CHEVRON_LAYOUT}
+            paint={{ "text-color": PRIMARY, "text-opacity": 0.55, "text-halo-color": "#ffffff", "text-halo-width": 1 }}
           />
         </Source>
       )}
@@ -514,8 +581,17 @@ export function TurfMap({
             layout={{ "line-cap": "round", "line-join": "round" }}
             paint={{ "line-color": PRIMARY, "line-width": 5, "line-opacity": 0.85 }}
           />
+          <Layer
+            id="walk-next-leg-chevrons"
+            type="symbol"
+            layout={CHEVRON_LAYOUT}
+            paint={{ "text-color": "#ffffff", "text-opacity": 0.95, "text-halo-color": PRIMARY, "text-halo-width": 1.2 }}
+          />
         </Source>
       )}
+
+      {/* Caller-supplied map content (e.g. the shift-replay trails + person marker). */}
+      {children}
 
       {/* Stops as coloured teardrop pins (DOM markers, so they sit above the route +
           boundary). The active/next stop gets its own emphasised pin below. */}
@@ -592,12 +668,27 @@ export function TurfMap({
         </Popup>
       )}
       {gpsPosition && (
-        <Marker latitude={gpsPosition.lat} longitude={gpsPosition.lng} anchor="center">
-          {/* Live GPS position: solid brand dot + white ring, soft primary glow. */}
-          <div className="relative flex h-6 w-6 items-center justify-center">
-            <span className="absolute inset-0 rounded-full bg-primary/25" />
-            <span className="h-4 w-4 rounded-full border-[3px] border-white bg-primary shadow-[0_1px_4px_rgba(0,0,0,0.35)]" />
-          </div>
+        <Marker
+          latitude={gpsPosition.lat}
+          longitude={gpsPosition.lng}
+          anchor="center"
+          rotation={userHeading ?? 0}
+          rotationAlignment={userHeading != null ? "map" : "viewport"}
+        >
+          {userHeading != null ? (
+            // Street mode: a heading arrow that rotates with the map, so "which way am I
+            // facing" is always visible even when the camera itself is heading-up.
+            <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))" }}>
+              <circle cx="15" cy="15" r="13" fill="rgba(70,95,255,0.18)" />
+              <path d="M15 5 L21.5 21.5 L15 17.5 L8.5 21.5 Z" fill={PRIMARY} stroke="#ffffff" strokeWidth="1.6" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            // Live GPS position: solid brand dot + white ring, soft primary glow.
+            <div className="relative flex h-6 w-6 items-center justify-center">
+              <span className="absolute inset-0 rounded-full bg-primary/25" />
+              <span className="h-4 w-4 rounded-full border-[3px] border-white bg-primary shadow-[0_1px_4px_rgba(0,0,0,0.35)]" />
+            </div>
+          )}
         </Marker>
       )}
 

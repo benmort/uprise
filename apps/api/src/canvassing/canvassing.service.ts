@@ -930,6 +930,50 @@ export class CanvassingService {
     return this.turfRoute(tenantId, turfId, origin, exclude);
   }
 
+  /**
+   * A volunteer's door-knocks on a turf, oldest first — the shift-replay's "where you've
+   * been" half: each knock's GPS + when it happened (client capture time beats server
+   * receipt, so offline knocks replay at their real moment). Gated like the walk route:
+   * the turf must be ASSIGNED to the given volunteer.
+   */
+  async turfKnocksForVolunteer(tenantId: string, turfId: string, volunteerId: string) {
+    const lock = await this.prisma.turfAssignment.findFirst({
+      where: { turfId, status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId } },
+    });
+    if (!lock || lock.volunteerId !== volunteerId) {
+      throw new ApiHttpException("TURF_NOT_ASSIGNED", "This turf is not assigned to you");
+    }
+    const items = await this.prisma.walkListItem.findMany({
+      where: { walkList: { turfId } },
+      select: { id: true },
+    });
+    const itemIds = items.map((i) => i.id);
+    if (itemIds.length === 0) return [];
+    const knocks = await this.prisma.doorKnock.findMany({
+      where: { tenantId, volunteerId, walkListItemId: { in: itemIds } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        walkListItemId: true,
+        contactId: true,
+        lat: true,
+        lng: true,
+        dispositionCode: true,
+        clientCapturedAt: true,
+        createdAt: true,
+      },
+    });
+    return knocks
+      .map((k) => ({
+        walkListItemId: k.walkListItemId,
+        contactId: k.contactId,
+        lat: k.lat,
+        lng: k.lng,
+        dispositionCode: k.dispositionCode,
+        at: (k.clientCapturedAt ?? k.createdAt).toISOString(),
+      }))
+      .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
   // ── Authoring (organiser) ───────────────────────────────────────
   /** Turfs for an org with their active assignment + door counts. */
   async listTurfs(tenantId: string, campaignId?: string) {

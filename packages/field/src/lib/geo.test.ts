@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bboxRing, boundingBox, pointInGeometry, pointInPolygon, type Polygon } from "./geo";
+import { bboxRing, bearingBetween, bearingIfMoved, boundingBox, metresBetween, pointInGeometry, pointInPolygon, type Polygon } from "./geo";
 
 const square: Polygon = [
   [
@@ -79,5 +79,29 @@ describe("bboxRing", () => {
     expect(bboxRing([1, 2, 3])).toBeUndefined();
     expect(bboxRing([1, 2, 3, Number.NaN])).toBeUndefined();
     expect(bboxRing("not-a-bbox")).toBeUndefined();
+  });
+});
+
+describe("bearing helpers", () => {
+  const HOME = { lat: -33.9, lng: 151.2 };
+
+  it("bearingBetween gives compass bearings for the four cardinal moves", () => {
+    expect(bearingBetween(HOME, { lat: -33.89, lng: 151.2 })).toBeCloseTo(0, 0); // north
+    expect(bearingBetween(HOME, { lat: -33.9, lng: 151.21 })).toBeCloseTo(90, 0); // east
+    expect(bearingBetween(HOME, { lat: -33.91, lng: 151.2 })).toBeCloseTo(180, 0); // south
+    expect(bearingBetween(HOME, { lat: -33.9, lng: 151.19 })).toBeCloseTo(270, 0); // west
+  });
+
+  it("metresBetween approximates street-scale distances", () => {
+    // ~1.11km per 0.01° latitude.
+    expect(metresBetween(HOME, { lat: -33.91, lng: 151.2 })).toBeGreaterThan(1050);
+    expect(metresBetween(HOME, { lat: -33.91, lng: 151.2 })).toBeLessThan(1170);
+  });
+
+  it("bearingIfMoved suppresses jitter below the movement gate", () => {
+    // ~1m north: below the default 5m gate.
+    expect(bearingIfMoved(HOME, { lat: HOME.lat + 0.00001, lng: HOME.lng })).toBeNull();
+    // ~110m north: a real move.
+    expect(bearingIfMoved(HOME, { lat: HOME.lat + 0.001, lng: HOME.lng })).toBeCloseTo(0, 0);
   });
 });

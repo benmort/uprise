@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { bearingIfMoved } from "../lib/geo";
 
 export type GpsFix = { lat: number; lng: number; accuracy: number };
 
@@ -89,4 +90,47 @@ export function useGeolocation(opts: { auto?: boolean } = {}) {
   }, [auto, capture]);
 
   return { fix, error, locating, permission, capture };
+}
+
+/**
+ * Continuous GPS — ONLY while `enabled` (the street walk view). The watch is cleared the
+ * moment the caller leaves the mode, so the battery cost is scoped to active navigation.
+ * `heading` comes from the device (`coords.heading`) when it reports one while moving,
+ * else it's derived from the last two fixes ≥5m apart — jitter while standing still never
+ * spins the camera (bearingIfMoved gate).
+ */
+export function useGeolocationWatch(enabled: boolean): { fix: GpsFix | null; heading: number | null } {
+  const [fix, setFix] = useState<GpsFix | null>(null);
+  const [heading, setHeading] = useState<number | null>(null);
+  const lastRef = useRef<GpsFix | null>(null);
+
+  useEffect(() => {
+    if (!enabled || typeof navigator === "undefined" || !navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const next: GpsFix = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        };
+        const device = pos.coords.heading;
+        const derived = lastRef.current ? bearingIfMoved(lastRef.current, next) : null;
+        const h = typeof device === "number" && Number.isFinite(device) ? device : derived;
+        if (h != null) setHeading(h);
+        lastRef.current = next;
+        setFix(next);
+      },
+      () => {
+        // Denial/timeout: leave the last fix in place; the street view falls back to
+        // the recentre-less map rather than erroring mid-walk.
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+    );
+    return () => {
+      navigator.geolocation.clearWatch(id);
+      lastRef.current = null;
+    };
+  }, [enabled]);
+
+  return { fix: enabled ? fix : null, heading: enabled ? heading : null };
 }

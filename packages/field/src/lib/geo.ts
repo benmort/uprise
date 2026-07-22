@@ -64,6 +64,33 @@ export function bboxRing(bbox: unknown): LngLat[] | undefined {
   ];
 }
 
+/** Approximate metres between two points (equirectangular — fine at street scale). */
+export function metresBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = (b.lat - a.lat) * (Math.PI / 180);
+  const dLng = (b.lng - a.lng) * (Math.PI / 180) * Math.cos(((a.lat + b.lat) / 2) * (Math.PI / 180));
+  return Math.sqrt(dLat * dLat + dLng * dLng) * 6371000;
+}
+
+/** Compass bearing (0–360°, 0 = north) from `a` to `b` — the street-view camera heading. */
+export function bearingBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const φ1 = a.lat * (Math.PI / 180);
+  const φ2 = b.lat * (Math.PI / 180);
+  const Δλ = (b.lng - a.lng) * (Math.PI / 180);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360;
+}
+
+/** Bearing a→b, but null unless they're at least `minMetres` apart — GPS jitter while
+ *  standing still must not spin the follow camera. */
+export function bearingIfMoved(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+  minMetres = 5,
+): number | null {
+  return metresBetween(a, b) >= minMetres ? bearingBetween(a, b) : null;
+}
+
 export type BBox = { minLng: number; minLat: number; maxLng: number; maxLat: number };
 
 /** Bounding box of a set of points — used to enumerate offline tiles for a turf. */

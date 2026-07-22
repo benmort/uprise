@@ -717,6 +717,8 @@ export default function WalkListBuilderPage() {
                   // Prefer the real Mapbox street-following walk line; fall back to the
                   // straight beeline through stops only when Mapbox is unavailable.
                   routeGeometry={route?.geometry ?? previewSample.route}
+                  // Shift replay of the assigned canvasser (hidden while unassigned).
+                  replayVolunteerId={activeTurf?.assignedTo?.volunteerId ?? null}
                 />
               </div>
             </div>

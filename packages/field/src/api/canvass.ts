@@ -98,6 +98,26 @@ export async function getWalkRoute(
   );
 }
 
+/** One historical door-knock on a turf — GPS + when it happened. Feeds the shift replay. */
+export type TurfKnock = {
+  walkListItemId: string | null;
+  contactId: string;
+  lat: number | null;
+  lng: number | null;
+  dispositionCode: string | null;
+  /** ISO time the door was actually knocked (client capture beats server receipt). */
+  at: string;
+};
+
+/** The volunteer's own knock history on a turf, oldest first (shift replay's past half). */
+export async function getTurfKnocks(turfId: string, volunteerId: string, signal?: AbortSignal) {
+  const q = new URLSearchParams({ volunteerId });
+  return request<TurfKnock[]>(
+    `/canvass/turfs/${encodeURIComponent(turfId)}/knocks?${q}`,
+    signal ? { signal } : undefined,
+  );
+}
+
 export type DoorKnockSurveyAnswer = { questionId: string; optionId?: string; valueText?: string };
 
 export type DoorKnockInput = {

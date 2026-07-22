@@ -167,6 +167,18 @@ export class CanvassingController {
     return this.canvassing.walkRouteForVolunteer(tenantId, turfId, volunteerId, origin, pending === "1");
   }
 
+  // The volunteer's own knock history on a turf (GPS + timestamps, oldest first) — feeds
+  // the shift-replay's "where you've been" half. Same gate as the walk route.
+  @Get("turfs/:turfId/knocks")
+  @RequirePermission(CANVASS_READ)
+  async turfKnocks(
+    @Param("turfId") turfId: string,
+    @TenantId() tenantId: string,
+    @Query("volunteerId") volunteerId: string,
+  ) {
+    return this.canvassing.turfKnocksForVolunteer(tenantId, turfId, volunteerId);
+  }
+
   @Post("turfs")
   @Roles(AppUserRole.ORGANISER)
   async createTurf(@Body() dto: CreateTurfDto, @TenantId() tenantId: string) {

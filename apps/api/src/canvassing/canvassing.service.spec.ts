@@ -1394,6 +1394,59 @@ describe("CanvassingService", () => {
     });
   });
 
+  describe("turfKnocksForVolunteer", () => {
+    it("throws TURF_NOT_ASSIGNED for someone else's turf", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "someone_else" });
+      await expect(service.turfKnocksForVolunteer("org1", "t1", "u1")).rejects.toThrow();
+    });
+
+    it("returns the volunteer's knocks oldest-first, client capture time beating server receipt", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+      prisma.walkListItem.findMany.mockResolvedValue([{ id: "i1" }, { id: "i2" }]);
+      prisma.doorKnock = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            walkListItemId: "i2",
+            contactId: "c2",
+            lat: -33.9,
+            lng: 151.2,
+            dispositionCode: "no_answer",
+            clientCapturedAt: null,
+            createdAt: new Date("2026-07-22T02:00:00Z"),
+          },
+          {
+            // Synced later (bigger createdAt) but KNOCKED earlier — clientCapturedAt wins,
+            // so the replay plays it first.
+            walkListItemId: "i1",
+            contactId: "c1",
+            lat: -33.91,
+            lng: 151.21,
+            dispositionCode: "meaningful_conversation",
+            clientCapturedAt: new Date("2026-07-22T01:00:00Z"),
+            createdAt: new Date("2026-07-22T03:00:00Z"),
+          },
+        ]),
+      };
+      const res = await service.turfKnocksForVolunteer("org1", "t1", "u1");
+      expect(res.map((k) => k.walkListItemId)).toEqual(["i1", "i2"]);
+      expect(res[0].at).toBe("2026-07-22T01:00:00.000Z");
+      expect(res[1].at).toBe("2026-07-22T02:00:00.000Z");
+      expect(prisma.doorKnock.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: "org1", volunteerId: "u1", walkListItemId: { in: ["i1", "i2"] } },
+        }),
+      );
+    });
+
+    it("returns [] for a turf with no walk-list items (no knock query)", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+      prisma.walkListItem.findMany.mockResolvedValue([]);
+      prisma.doorKnock = { findMany: jest.fn() };
+      expect(await service.turfKnocksForVolunteer("org1", "t1", "u1")).toEqual([]);
+      expect(prisma.doorKnock.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe("listTurfs", () => {
     it("summarises stop progress and the active assignee", async () => {
       prisma.turf.findMany.mockResolvedValue([

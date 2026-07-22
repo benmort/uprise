@@ -33,6 +33,10 @@ const STYLE = [
   { id: "boundaries-line", type: "line" },
   { id: "walk-route-line", type: "line" },
   { id: "walk-next-leg-line", type: "line" },
+  { id: "walk-route-chevrons", type: "symbol" },
+  { id: "walk-next-leg-chevrons", type: "symbol" },
+  { id: "replay-past-line", type: "line" },
+  { id: "replay-future-line", type: "line" },
 ];
 
 describe("applyMoonlitDark", () => {
@@ -62,6 +66,9 @@ describe("applyMoonlitDark", () => {
     expect(painted).not.toContain("boundaries-line");
     expect(painted).not.toContain("walk-route-line");
     expect(painted).not.toContain("walk-next-leg-line");
+    expect(painted).not.toContain("walk-route-chevrons");
+    expect(painted).not.toContain("replay-past-line");
+    expect(painted).not.toContain("replay-future-line");
   });
 
   it("does nothing in the light theme", () => {

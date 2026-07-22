@@ -19,11 +19,20 @@ export function useWalkingDirections(
   from: LatLng | null | undefined,
   to: LatLng | null | undefined,
   enabled = true,
+  opts: { minMoveM?: number } = {},
 ): { directions: WalkingDirections | null; loading: boolean; online: boolean } {
   const online = useOnlineStatus();
   const [directions, setDirections] = useState<WalkingDirections | null>(null);
   const [loading, setLoading] = useState(false);
-  const key = from && to ? `${coordKey(from)}>${coordKey(to)}` : null;
+  // With `minMoveM` (street mode's continuous fixes) the origin is quantised to that grid
+  // so a walking canvasser refetches every ~25m, not every metre of GPS drift.
+  const { minMoveM = 0 } = opts;
+  const originKey = (p: LatLng): string => {
+    if (minMoveM <= 0) return coordKey(p);
+    const step = minMoveM / 111_320; // ≈ degrees per metre of latitude
+    return `${(Math.round(p.lat / step) * step).toFixed(6)},${(Math.round(p.lng / step) * step).toFixed(6)}`;
+  };
+  const key = from && to ? `${originKey(from)}>${coordKey(to)}` : null;
 
   useEffect(() => {
     if (!enabled || !online || !from || !to) {

@@ -12,9 +12,11 @@ import { optimiseRoute, walkLineThrough, type Stop } from "../lib/route";
 import { estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
 import { coordKey, fetchWalkingRouteGeometry, formatDistance, type LatLng } from "../lib/directions";
 import { useLocalStorage } from "../hooks/use-local-storage";
-import { useGeolocation } from "../hooks/use-geolocation";
+import { useGeolocation, useGeolocationWatch } from "../hooks/use-geolocation";
 import { useTilePreCache } from "../hooks/use-tile-pre-cache";
 import { useWalkingDirections } from "../hooks/use-walking-directions";
+import { metresBetween } from "../lib/geo";
+import { ReplayControls, ReplayMapContent, useRouteReplay } from "../components/route-replay";
 import { WalkStopCard, type WalkStop } from "../components/walk-stop-card";
 import { WalkModeToggle, type WalkMode } from "../components/walk-mode-toggle";
 import { MarqueeText } from "../components/marquee-text";
@@ -48,6 +50,7 @@ export function WalkView({
   assignment: assignmentProp,
   sampleUserPosition,
   routeGeometry: routeGeometryProp,
+  replayVolunteerId,
 }: {
   turfId: string;
   readOnly?: boolean;
@@ -61,11 +64,19 @@ export function WalkView({
    *  walk-order LineString through all stops here, because the live turn-by-turn fetch
    *  is only origin→next-stop and needs a connection. Falls back to the live directions. */
   routeGeometry?: GeoJSON.LineString | null;
+  /** Enables "Replay shift" for this volunteer's knock history. The live app defaults to
+   *  the signed-in volunteer; the admin preview passes the active assignment's volunteer. */
+  replayVolunteerId?: string | null;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [mode, setMode] = useLocalStorage<WalkMode>("uprise.walkMode", "list");
+  // Street = the map with a nav-style follow camera; both map-ish modes share the branch.
+  const showMap = mode === "map" || mode === "street";
   const [showSteps, setShowSteps] = useState(false);
+  // Continuous GPS ONLY while street view is open (battery scoped to navigation); the
+  // heading comes from the device or the last two fixes, and drives the follow camera.
+  const streetWatch = useGeolocationWatch(mode === "street" && !readOnly);
   const { fix, capture } = useGeolocation();
   // The applied "start from here" origin — persisted per turf so an accepted re-order
   // survives visiting a door and coming back. When set, the route optimises from it.
@@ -162,6 +173,15 @@ export function WalkView({
 
   const nextStop = stops.find((s) => s.status === "PENDING");
   const doneCount = stops.filter((s) => s.status !== "PENDING").length;
+  // Street mode: pin the turn-by-turn list open and pop the Knock button on arrival.
+  const stepsOpen = showSteps || mode === "street";
+  const arrived = Boolean(
+    mode === "street" &&
+      streetWatch.fix &&
+      nextStop &&
+      Number.isFinite(nextStop.lat) &&
+      metresBetween(streetWatch.fix, nextStop) <= 15,
+  );
 
   // Walk-time estimate for the turf + an optional "how long can you walk" budget that
   // trims the pending stops to those that fit (client-side view trim, offline).
@@ -177,7 +197,7 @@ export function WalkView({
     setVisibleCount(STOPS_PAGE);
   }, [stops.length]);
   useEffect(() => {
-    if (mode === "map" || visibleCount >= stops.length) return;
+    if (showMap || visibleCount >= stops.length) return;
     const el = loadMoreRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
@@ -202,13 +222,16 @@ export function WalkView({
   const finite = (p: LatLng | null): LatLng | null =>
     p && Number.isFinite(p.lat) && Number.isFinite(p.lng) ? p : null;
   const origin =
-    finite(fix ? { lat: fix.lat, lng: fix.lng } : null) ??
+    finite(streetWatch.fix ? { lat: streetWatch.fix.lat, lng: streetWatch.fix.lng } : fix ? { lat: fix.lat, lng: fix.lng } : null) ??
     (readOnly && stops[0] ? finite({ lat: stops[0].lat, lng: stops[0].lng }) : null);
   const dest = nextStop ? finite({ lat: nextStop.lat, lng: nextStop.lng }) : null;
-  const { directions, online: directionsOnline } = useWalkingDirections(origin, dest, mode === "map");
+  const { directions, online: directionsOnline } = useWalkingDirections(origin, dest, showMap, {
+    minMoveM: mode === "street" ? 25 : 0,
+  });
 
-  // Live GPS wins; else the preview's sample position (organiser preview has no GPS).
-  const userPosition = fix ? { lat: fix.lat, lng: fix.lng } : (sampleUserPosition ?? null);
+  // Live GPS wins (the street watch is the freshest); else the preview's sample position.
+  const liveFix = streetWatch.fix ?? fix;
+  const userPosition = liveFix ? { lat: liveFix.lat, lng: liveFix.lng } : (sampleUserPosition ?? null);
 
   // Client-side street-following full-route line — the second tier, fetched with the
   // public token straight from the phone when the server route didn't deliver geometry.
@@ -216,7 +239,7 @@ export function WalkView({
   // knock or re-order, never on render-identity churn.
   const [clientRoute, setClientRoute] = useState<GeoJSON.LineString | null>(null);
   const clientRouteKey =
-    !routeGeometryProp && !serverRoute?.geometry && mode === "map" && pending.length > 0
+    !routeGeometryProp && !serverRoute?.geometry && showMap && pending.length > 0
       ? `${turfId}|${userPosition ? coordKey(userPosition) : ""}|${pending.map((s) => s.id).join(",")}`
       : "";
   const clientRoutePoints = useRef<LatLng[]>([]);
@@ -247,6 +270,26 @@ export function WalkView({
   );
   const mapRoute = routeGeometryProp ?? serverRoute?.geometry ?? clientRoute ?? beeline;
   const mapRouteApproximate = mapRoute === beeline && !!beeline;
+
+  // Shift replay — plays the real knocks (street-routed between their GPS points) then the
+  // projected rest of the walk at 360×. The live app replays the signed-in volunteer; the
+  // admin preview passes the assignment's volunteer via `replayVolunteerId`.
+  const locatedStops = useMemo(
+    () =>
+      stops
+        .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+        .map((s) => ({ id: s.id, contactId: s.contactId, lat: s.lat, lng: s.lng, status: s.status })),
+    [stops],
+  );
+  const locatedPending = useMemo(() => locatedStops.filter((s) => s.status === "PENDING"), [locatedStops]);
+  const replay = useRouteReplay({
+    turfId,
+    volunteerId: replayVolunteerId ?? volunteerId,
+    stops: locatedStops,
+    pendingStops: locatedPending,
+    origin: userPosition,
+    futureLine: mapRoute,
+  });
 
   const openDoor = (id: string) => {
     if (readOnly) return;
@@ -321,7 +364,18 @@ export function WalkView({
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div
+      className="flex h-full flex-col gap-3"
+      // In map mode (field app), pin the column to the viewport (minus the shell's p-4 = 2rem) so
+      // the map's flex-1 grows to the bottom with no dead space on tall screens. FieldShell is
+      // min-h-screen (indefinite height), so h-full alone gives flex-1 nothing definite to grow
+      // into. Inline, not a Tailwind arbitrary class — @uprise/field is also built by admin's
+      // Tailwind, which won't emit a field-only h-[calc(...)] utility (see the map min-height note).
+      // List mode keeps natural height + page scroll; the admin preview (readOnly) keeps h-full.
+      style={
+        !readOnly && !isPreview && showMap ? { height: "calc(100dvh - 2rem)" } : undefined
+      }
+    >
       <div className="flex items-center gap-3">
         {!readOnly ? (
           <button
@@ -342,7 +396,7 @@ export function WalkView({
             {doneCount} of {stops.length} stops done
           </p>
         </div>
-        <WalkModeToggle value={mode} onChange={setMode} />
+        <WalkModeToggle value={mode} onChange={setMode} modes={readOnly ? ["list", "map"] : ["list", "map", "street"]} />
       </div>
 
       <ProgressBar value={doneCount} max={stops.length || 1} tone="success" />
@@ -373,7 +427,7 @@ export function WalkView({
         </button>
       ) : null}
 
-      {mode === "map" ? (
+      {showMap ? (
         <div
           className="relative flex-1 overflow-hidden rounded-xl border border-border"
           // Inline min-height (not a Tailwind arbitrary class): the height must not depend on
@@ -389,14 +443,16 @@ export function WalkView({
                 id: s.id,
                 lat: s.lat,
                 lng: s.lng,
-                status: s.status,
+                // During a replay the pins tell the replay's story: blue until their
+                // moment, then flipping to the real (or projected) outcome.
+                status: replay.active ? replay.displayStatus(s) : s.status,
                 gnafPid: s.gnafPid,
                 address: s.address,
                 contactId: s.contactId,
                 contactName: s.name,
               }))}
               turfGeometry={assignment.turf.geometry as GeoJSON.Geometry}
-              activeStopId={nextStop?.id}
+              activeStopId={replay.active ? undefined : nextStop?.id}
               userPosition={userPosition}
               // Tap a door → info popover. Live app: its "Knock at this door" button runs
               // openDoor (the knock flow, now fronted by the bubble). Read-only preview:
@@ -404,12 +460,21 @@ export function WalkView({
               onStopTap={readOnly ? undefined : (id) => openDoor(id)}
               stopPopup
               buildDetailHref={readOnly ? (pid) => `/data/addresses/${encodeURIComponent(pid)}` : undefined}
-              routeGeometry={mapRoute}
+              routeGeometry={replay.active ? null : mapRoute}
               routeApproximate={mapRouteApproximate}
-              nextLegGeometry={directions?.geometry ?? null}
-            />
+              nextLegGeometry={replay.active ? null : directions?.geometry ?? null}
+              follow={
+                mode === "street" && streetWatch.fix
+                  ? { position: { lat: streetWatch.fix.lat, lng: streetWatch.fix.lng }, bearing: streetWatch.heading }
+                  : null
+              }
+              userHeading={mode === "street" ? streetWatch.heading : null}
+            >
+              <ReplayMapContent replay={replay} />
+            </TurfMap>
           </div>
-          {nextStop ? (
+          <ReplayControls replay={replay} totalStops={locatedStops.length} />
+          {nextStop && !replay.active ? (
             <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-4 shadow-float">
               <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--success))]">
                 <Route className="h-3.5 w-3.5" />
@@ -422,9 +487,13 @@ export function WalkView({
                   <p className="truncate text-sm text-muted-foreground">{nextStop.name || "Resident"}</p>
                 </div>
                 {!readOnly ? (
-                  <Button variant="secondary" className="h-11 shrink-0 gap-2 px-5 text-base" onClick={() => openDoor(nextStop.id)}>
+                  <Button
+                    variant={arrived ? "success" : "secondary"}
+                    className="h-11 shrink-0 gap-2 px-5 text-base"
+                    onClick={() => openDoor(nextStop.id)}
+                  >
                     <Home className="h-5 w-5" />
-                    Knock
+                    {arrived ? "Arrived — Knock" : "Knock"}
                   </Button>
                 ) : null}
               </div>
@@ -434,15 +503,16 @@ export function WalkView({
                   <button
                     type="button"
                     onClick={() => setShowSteps((v) => !v)}
+                    disabled={mode === "street"}
                     className="flex w-full items-center justify-between rounded-lg bg-surface-variant px-2.5 py-1.5 text-xs font-semibold text-foreground"
                   >
                     <span className="flex items-center gap-1.5">
                       <Navigation className="h-3.5 w-3.5 text-primary" />
                       Walking directions
                     </span>
-                    {showSteps ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                    {mode === "street" ? null : showSteps ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
                   </button>
-                  {showSteps ? (
+                  {stepsOpen ? (
                     <ol className="mt-1.5 max-h-32 space-y-1 overflow-auto pr-1 text-xs text-muted-foreground">
                       {directions.steps.map((s, i) => (
                         <li key={i} className="flex gap-2">
