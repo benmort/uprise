@@ -7,7 +7,7 @@ describe("STEP_META", () => {
       expect(meta.title, key).toBeTruthy();
       expect(meta.blurb, key).toBeTruthy();
       expect(meta.cta, key).toBeTruthy();
-      expect(meta.href, key).toMatch(/^\/[a-z-]+(\/[a-z-]+)?(#[a-z-]+)?$/);
+      expect(meta.href, key).toMatch(/^\/[a-z-]+(\/[a-z-]+)?(\?[a-z-]+=[a-z-]+)?(#[a-z-]+)?$/);
     }
   });
 
