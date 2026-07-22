@@ -63,10 +63,20 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             // Runtime config for the api-client. __LOGIN_PATH__ points an expired-session bounce at
             // the branded volunteer sign-in; __LOGIN_ORG__ is seeded (before hydration, so even an
             // early 401 carries it) from the persisted tenant brand (volunteer.ts TENANT_KEY).
+            // The same brand (else the parent-domain `uprise_brand` cookie the auth app wrote at
+            // sign-in) carries the PRECOMPUTED colour CSS + logos: inject the `:root{--primary…}`
+            // rule, swap the favicon and preload the header logo BEFORE FIRST PAINT — the tenant
+            // brand shows from the very first frame instead of flashing Uprise blue.
             __html:
               `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};` +
               `window.__LOGIN_PATH__="/volunteer/sign-in";` +
-              `try{var b=JSON.parse(localStorage.getItem("uprise.volunteerTenant")||"null");if(b&&b.slug)window.__LOGIN_ORG__=b.slug;}catch(e){}`,
+              `try{var b=JSON.parse(localStorage.getItem("uprise.volunteerTenant")||"null");` +
+              `if(!b){var m=document.cookie.match(/(?:^|;\\s*)uprise_brand=([^;]+)/);if(m)b=JSON.parse(decodeURIComponent(m[1]));}` +
+              `if(b){if(b.slug)window.__LOGIN_ORG__=b.slug;` +
+              `if(b.css){var s=document.createElement("style");s.setAttribute("data-tenant-brand-boot","");s.textContent=b.css;document.head.appendChild(s);}` +
+              `var ic=b.logoBlockUrl||b.logoUrl;if(ic){var l=document.querySelector('link[rel~="icon"]');if(!l){l=document.createElement("link");l.rel="icon";document.head.appendChild(l);}l.href=ic;}` +
+              `if(b.logoUrl){var p=document.createElement("link");p.rel="preload";p.as="image";p.href=b.logoUrl;document.head.appendChild(p);}}` +
+              `}catch(e){}`,
           }}
         />
         <ServiceWorkerCleanup />

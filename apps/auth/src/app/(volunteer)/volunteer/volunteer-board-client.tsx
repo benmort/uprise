@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { Alert, Spinner } from "@uprise/ui";
+import { Alert, Spinner, brandVarsCss, writeBrandCookie } from "@uprise/ui";
 import { auth, tenantLogoUrl, type TenantBrand } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { withReturnTo } from "@/lib/return-to";
@@ -38,6 +38,19 @@ export function VolunteerBoardClient({
   // Brand comes from the server (SSR) — a fixed prop, never re-fetched client-side, so there's
   // no null→brand transition to flash. Only the opportunities list loads on the client.
   const brand = initialBrand;
+  // Seed the parent-domain brand cookie so the field app's first paint after sign-up is
+  // already in this org's colours + logo (it reads the cookie pre-hydration).
+  useEffect(() => {
+    if (!brand) return;
+    writeBrandCookie({
+      slug: orgSlug ?? null,
+      name: brand.name,
+      logoUrl: tenantLogoUrl(brand),
+      logoBlockUrl: brand.logoBlockUrl ?? null,
+      css: brandVarsCss(brand) || null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [opportunities, setOpportunities] = useState<OpenJoinPreview[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

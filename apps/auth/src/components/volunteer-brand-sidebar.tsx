@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQueryParams } from "@/lib/use-query";
-import { BrandStyle, LogoMark, TenantAvatar, TenantHead, type BrandStyleFields } from "@uprise/ui";
+import { BrandStyle, LogoMark, TenantAvatar, TenantHead, type BrandStyleFields, brandVarsCss, writeBrandCookie } from "@uprise/ui";
 import { auth, tenants, tenantLogoUrl } from "@uprise/api-client";
 import { GridShape } from "./grid-shape";
 
@@ -60,6 +60,16 @@ export function VolunteerBrandSidebar() {
             primaryColour: res.data.primaryColour,
             secondaryColour: res.data.secondaryColour,
             customCss: res.data.customCss,
+          });
+          // Seed the parent-domain brand cookie: the field app (different subdomain) reads
+          // it pre-paint, so the volunteer's FIRST landing after sign-in is already branded
+          // — colours, favicon and logo, no Uprise-blue flash.
+          writeBrandCookie({
+            slug,
+            name: res.data.name,
+            logoUrl: tenantLogoUrl(res.data),
+            logoBlockUrl: res.data.logoBlockUrl ?? null,
+            css: brandVarsCss(res.data) || null,
           });
           return;
         }

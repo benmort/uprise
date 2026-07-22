@@ -9,20 +9,49 @@ import { logout } from "@/lib/session";
 import { onProfileUpdated } from "@/lib/profile-events";
 import { UserAvatar } from "@/components/user-profile/user-avatar";
 
+type ProfileBadge = { avatarUrl?: string | null; displayName?: string | null };
+
+function readBadge(key: string): ProfileBadge | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as ProfileBadge) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeBadge(key: string, patch: ProfileBadge): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ ...readBadge(key), ...patch }));
+  } catch {
+    // Best-effort cache — quota errors just mean a pop-in next load.
+  }
+}
+
 /**
  * Topbar user dropdown (prog parity): avatar (selected avatar, else email initials) +
  * name, opening to Profile / Account / Sign out.
  */
 export function UserDropdown({ email }: { email: string | null }) {
   const router = useRouter();
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string | null>(null);
+  // Seed from the last-known badge (per email) so the avatar + name render on the FIRST
+  // frame instead of popping in after two profile fetches; the fetches then self-correct
+  // and write the cache through for next load.
+  const badgeKey = `uprise.profileBadge:${email ?? ""}`;
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(() => readBadge(badgeKey)?.avatarUrl ?? null);
+  const [displayName, setDisplayName] = useState<string | null>(() => readBadge(badgeKey)?.displayName ?? null);
 
   useEffect(() => {
     let alive = true;
     const refresh = () => {
       void profile.listAvatars().then((res) => {
-        if (alive && res.ok) setAvatarUrl(res.data.find((a) => a.isSelected)?.url ?? null);
+        if (alive && res.ok) {
+          const url = res.data.find((a) => a.isSelected)?.url ?? null;
+          setAvatarUrl(url);
+          writeBadge(badgeKey, { avatarUrl: url });
+        }
       });
       void profile.get().then((res) => {
         if (!alive || !res.ok) return;
@@ -30,6 +59,7 @@ export function UserDropdown({ email }: { email: string | null }) {
           res.data.displayName?.trim() ||
           [res.data.givenName, res.data.familyName].filter(Boolean).join(" ").trim();
         setDisplayName(composed || null);
+        writeBadge(badgeKey, { displayName: composed || null });
       });
     };
     refresh();
@@ -40,6 +70,7 @@ export function UserDropdown({ email }: { email: string | null }) {
       alive = false;
       off();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const name = displayName?.trim() || email?.split("@")[0] || "Account";

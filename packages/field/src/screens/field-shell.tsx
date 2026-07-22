@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BrandLoadingScreen, BrandStyle, Skeleton, TenantHead, type BrandStyleFields } from "@uprise/ui";
-import { tenants } from "@uprise/api-client";
+import {
+  BrandLoadingScreen,
+  BrandStyle,
+  Skeleton,
+  TenantHead,
+  brandVarsCss,
+  writeBrandCookie,
+  type BrandStyleFields,
+} from "@uprise/ui";
+import { tenants, type TenantBrand as ApiTenantBrand } from "@uprise/api-client";
 import { useSyncQueue } from "../hooks/use-sync-queue";
 import { useTurfAutoDownload } from "../hooks/use-turf-auto-download";
 import { getSession, goToLogin } from "../lib/session";
@@ -44,6 +52,11 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
     let alive = true;
     const cached = getTenantBrand();
     if (cached) setBootBrand({ name: cached.name, logoUrl: cached.logoUrl });
+    // The pre-hydration layout script already injected the persisted `css` (no flash); mirror
+    // it into React state so <BrandStyle> owns it from the first render onward.
+    if (cached?.primaryColour || cached?.secondaryColour) {
+      setBrandStyle({ primaryColour: cached.primaryColour, secondaryColour: cached.secondaryColour });
+    }
     // Persisted tenant slug drives the org-branded login bounce on session expiry. The layout
     // script seeds this pre-hydration; re-assert it here in case that ran before the cache existed.
     if (cached?.slug) (window as unknown as { __LOGIN_ORG__?: string }).__LOGIN_ORG__ = cached.slug;
@@ -51,6 +64,37 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
     // Ask the OS to keep this origin's storage — the offline map pack + knock outbox must
     // survive storage pressure across a shift. Best-effort; fire-and-forget.
     void requestPersistentStorage();
+
+    // Apply a freshly fetched brand everywhere: live styles + head, the persisted cache
+    // (with the PRECOMPUTED css the pre-paint script injects next boot) and the
+    // parent-domain cookie (so auth/field first-paints stay branded).
+    const applyBrand = (brand: ApiTenantBrand, ids: { id: string; name: string; slug: string; logoUrl: string | null }) => {
+      setBrandStyle(brand);
+      if (brand.logoBlockUrl) setHead((h) => ({ ...h, faviconUrl: brand.logoBlockUrl }));
+      const css = brandVarsCss(brand) || null;
+      setTenantBrand({
+        id: ids.id,
+        name: ids.name,
+        logoUrl: ids.logoUrl,
+        slug: ids.slug,
+        logoBlockUrl: brand.logoBlockUrl ?? null,
+        primaryColour: brand.primaryColour ?? null,
+        secondaryColour: brand.secondaryColour ?? null,
+        css,
+      });
+      writeBrandCookie({
+        slug: ids.slug,
+        name: ids.name,
+        logoUrl: ids.logoUrl,
+        logoBlockUrl: brand.logoBlockUrl ?? null,
+        css,
+      });
+    };
+
+    // Colours refresh in PARALLEL with the session check when we already know the slug —
+    // one round-trip to a fully branded shell instead of two serial ones.
+    const cachedSlug = cached?.slug ?? null;
+    const brandPromise = cachedSlug ? tenants.brandBySlug(cachedSlug) : null;
 
     void (async () => {
       const session = await getSession();
@@ -66,7 +110,10 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
       const current =
         session.memberships?.find((m) => m.tenantId === session.tenantId) ?? session.memberships?.[0];
       if (current) {
+        const prior = getTenantBrand();
         setTenantBrand({
+          // Keep the cached colours/css until the fresh brand lands — never regress to blue.
+          ...(prior && prior.slug === (current.tenantSlug ?? null) ? prior : {}),
           id: current.tenantId,
           name: current.tenantName,
           logoUrl: current.logoUrl ?? null,
@@ -77,16 +124,20 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
           (window as unknown as { __LOGIN_ORG__?: string }).__LOGIN_ORG__ = current.tenantSlug;
       }
       setReady(true);
-      // The membership carries only the logo; fetch the tenant's colours + custom CSS so the
-      // whole field PWA wears the campaign brand. Best-effort — a miss just leaves defaults.
-      if (current?.tenantSlug) {
-        const res = await tenants.brandBySlug(current.tenantSlug);
-        if (alive && res.ok && res.data) {
-          const brand = res.data;
-          setBrandStyle(brand);
-          // Prefer the square block logo for the browser-tab favicon.
-          if (brand.logoBlockUrl) setHead((h) => ({ ...h, faviconUrl: brand.logoBlockUrl }));
-        }
+      const ids = current
+        ? {
+            id: current.tenantId,
+            name: current.tenantName,
+            slug: current.tenantSlug ?? "",
+            logoUrl: current.logoUrl ?? null,
+          }
+        : null;
+      // The membership carries only the logo; the brand fetch carries colours + custom CSS.
+      // Use the parallel fetch when its slug still matches the session; else refetch.
+      if (ids?.slug) {
+        const res =
+          brandPromise && cachedSlug === ids.slug ? await brandPromise : await tenants.brandBySlug(ids.slug);
+        if (alive && res.ok && res.data) applyBrand(res.data, ids);
       }
     })();
     return () => {

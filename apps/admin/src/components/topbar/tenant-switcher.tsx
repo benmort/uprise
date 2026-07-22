@@ -79,15 +79,34 @@ export function TenantSwitcher({
   // The current session tenant's uploaded block logo, shown as the top-left brand
   // mark. `/org-profile` is session-tenant-scoped, and switching reloads the page,
   // so this always reflects whichever tenant the session is on (null → gradient).
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  // Seeded from the last-known value (per tenant) so the mark renders on the first
+  // frame instead of popping in after the fetch; the fetch self-corrects + re-caches.
+  const logoCacheKey = `uprise.tenantLogo:${currentTenantId ?? activeTenant?.id ?? ""}`;
+  const [logoUrl, setLogoUrl] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return window.localStorage.getItem(logoCacheKey);
+    } catch {
+      return null;
+    }
+  });
   useEffect(() => {
     let active = true;
     void orgProfile.get().then((res) => {
-      if (active && res.ok) setLogoUrl(res.data.logoBlockUrl);
+      if (active && res.ok) {
+        setLogoUrl(res.data.logoBlockUrl);
+        try {
+          if (res.data.logoBlockUrl) window.localStorage.setItem(logoCacheKey, res.data.logoBlockUrl);
+          else window.localStorage.removeItem(logoCacheKey);
+        } catch {
+          // Best-effort cache.
+        }
+      }
     });
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const current = memberships.find((m) => m.tenantId === currentTenantId) ?? memberships[0];

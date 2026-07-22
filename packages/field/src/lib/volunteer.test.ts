@@ -67,6 +67,45 @@ describe("volunteer local store", () => {
       window.localStorage.setItem("uprise.volunteerTenant", "{not json");
       expect(getTenantBrand()).toBeNull();
     });
+
+    it("round-trips the brand colours + precomputed css (the pre-paint payload)", () => {
+      const brand = {
+        id: "t3",
+        name: "Org Three",
+        logoUrl: "wide.png",
+        logoBlockUrl: "block.png",
+        slug: "org-three",
+        primaryColour: "#147454",
+        secondaryColour: "#ffd166",
+        css: ":root{--brand-primary: #147454;--primary: 160 70% 27%;}",
+      };
+      setTenantBrand(brand);
+      expect(getTenantBrand()).toEqual(brand);
+    });
+
+    it("falls back to the parent-domain brand cookie on an empty cache (first land from auth)", () => {
+      const cookieBrand = {
+        slug: "common-threads",
+        name: "Common Threads",
+        logoUrl: "https://cdn/logo.png",
+        logoBlockUrl: "https://cdn/block.png",
+        css: ":root{--primary: 160 70% 27%;}",
+      };
+      vi.stubGlobal("document", {
+        cookie: `uprise_brand=${encodeURIComponent(JSON.stringify(cookieBrand))}`,
+      });
+      expect(getTenantBrand()).toEqual({
+        id: "",
+        name: "Common Threads",
+        logoUrl: "https://cdn/logo.png",
+        slug: "common-threads",
+        logoBlockUrl: "https://cdn/block.png",
+        css: ":root{--primary: 160 70% 27%;}",
+      });
+      // A stored brand still wins over the cookie.
+      setTenantBrand({ id: "t1", name: "Stored Org" });
+      expect(getTenantBrand()).toEqual({ id: "t1", name: "Stored Org" });
+    });
   });
 
   it("newLocalId returns a stable-looking unique id", () => {

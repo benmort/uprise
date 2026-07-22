@@ -21,6 +21,17 @@ const withPWA = withPWAInit({
   // sync queue in @uprise/field (lib/sync-queue).
   runtimeCaching: [
     {
+      // Tenant logos + brand images (Vercel Blob) — cached so the header logo, loading
+      // screen and favicon render instantly on repeat loads and keep working offline.
+      urlPattern: /^https:\/\/[^/]+\.public\.blob\.vercel-storage\.com\/.*/i,
+      handler: "CacheFirst",
+      options: {
+        cacheName: "field-brand-images",
+        expiration: { maxEntries: 48, maxAgeSeconds: 60 * 60 * 24 * 30 },
+        cacheableResponse: { statuses: [0, 200] },
+      },
+    },
+    {
       // Mapbox tiles, styles, glyphs, sprites — the offline tile pack + directions.
       urlPattern: /^https:\/\/(api|[abcd]\.tiles)\.mapbox\.com\/.*/i,
       handler: "CacheFirst",

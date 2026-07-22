@@ -1,5 +1,7 @@
 "use client";
 
+import { readBrandCookie } from "@uprise/ui";
+
 // The authenticated volunteer's AppUser id. The login flow should set this from
 // the /auth/check response (which now returns the principal); until then it can
 // be seeded manually for testing. Kept tiny + storage-backed so the field pages
@@ -41,19 +43,46 @@ export function greeting(): string {
 
 const TENANT_KEY = "uprise.volunteerTenant";
 
-/** The current tenant the volunteer is canvassing for — for the brand badge, and `slug` so an
- *  expired session can bounce to the tenant-branded volunteer sign-in (`?org=<slug>`). */
-export type TenantBrand = { id: string; name: string; logoUrl?: string | null; slug?: string | null };
+/** The current tenant the volunteer is canvassing for — brand badge + `slug` for the branded
+ *  login bounce, PLUS the colours and precomputed `css` (brandVarsCss output) so the layout's
+ *  pre-hydration script can paint the tenant brand before any network — no Uprise-blue flash. */
+export type TenantBrand = {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+  slug?: string | null;
+  logoBlockUrl?: string | null;
+  primaryColour?: string | null;
+  secondaryColour?: string | null;
+  /** The `:root{--primary…}` rule, precomputed so pre-paint injection is a verbatim copy. */
+  css?: string | null;
+};
 
 export function getTenantBrand(): TenantBrand | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(TENANT_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as TenantBrand;
-  } catch {
-    return null;
+  if (raw) {
+    try {
+      return JSON.parse(raw) as TenantBrand;
+    } catch {
+      return null;
+    }
   }
+  // First land from the auth app (different origin — it can't seed our localStorage, but it
+  // wrote the parent-domain brand cookie during sign-in): adopt it so even the very first
+  // paint of the loading screen is branded.
+  const fromCookie = readBrandCookie();
+  if (fromCookie && (fromCookie.name || fromCookie.logoUrl || fromCookie.css)) {
+    return {
+      id: "",
+      name: fromCookie.name ?? "",
+      logoUrl: fromCookie.logoUrl ?? null,
+      slug: fromCookie.slug ?? null,
+      logoBlockUrl: fromCookie.logoBlockUrl ?? null,
+      css: fromCookie.css ?? null,
+    };
+  }
+  return null;
 }
 
 export function setTenantBrand(tenant: TenantBrand): void {

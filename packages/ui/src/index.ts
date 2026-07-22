@@ -42,6 +42,7 @@ export * from "./components/tenant-brand";
 export * from "./components/tenant-head";
 export * from "./components/brand-style";
 export * from "./lib/brand-css";
+export * from "./lib/brand-cookie";
 export * from "./components/skeleton";
 export * from "./components/spinner";
 export * from "./components/brand-loading-screen";

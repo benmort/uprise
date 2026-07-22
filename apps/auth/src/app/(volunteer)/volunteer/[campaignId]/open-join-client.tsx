@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Alert, BrandStyle, Spinner } from "@uprise/ui";
+import { Alert, BrandStyle, Spinner, brandVarsCss, writeBrandCookie } from "@uprise/ui";
 import { auth, getActionAppUrl } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { completeAuth } from "@/lib/session";
@@ -34,6 +34,18 @@ export function OpenJoinClient({
   const { step, goTo, canGoBack } = useWizardStep();
   // SSR-provided — used as the initial (and only) preview so the brand is present on first paint.
   const [preview] = useState<OpenJoinPreview | null>(initialPreview);
+  // Seed the parent-domain brand cookie: the field app reads it pre-hydration, so a brand-new
+  // volunteer's very first field paint (right after this sign-up) is already in org colours.
+  useEffect(() => {
+    if (!preview) return;
+    writeBrandCookie({
+      name: preview.tenantName,
+      logoUrl: preview.logoUrl,
+      logoBlockUrl: preview.logoUrl,
+      css: brandVarsCss(preview) || null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [error] = useState<string | null>(initialError);
   const [loading, setLoading] = useState(true);
   const campaignName = preview?.campaignName ?? null;
