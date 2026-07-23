@@ -6,19 +6,20 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Check,
-  ChevronRight,
   Download,
   Loader2,
   LocateFixed,
   MapPin,
+  Inbox,
   Menu,
   MessagesSquare,
   PersonStanding,
+  Send,
 } from "lucide-react";
-import { Button, EmptyState, Skeleton } from "@uprise/ui";
+import { Button, EmptyState, Skeleton, useToast } from "@uprise/ui";
 import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hooks/use-canvass";
 import { useApi } from "../hooks/use-api";
-import { listTextBanks, type TextBank } from "../api/texting";
+import { claimTextingBatch, listTextBanks, type TextBank } from "../api/texting";
 import { claimExistingTurf } from "../api/canvass";
 import { getVolunteerId, getTenantBrand } from "../lib/volunteer";
 import { reverseGeocode } from "../lib/geocode";
@@ -99,6 +100,11 @@ export function Assignments() {
   };
 
   const recommended = rec.data ?? [];
+  // Text banks share the dashboard with turf — same cadence as the rest of the home
+  // (30s, no polling). Empty (or feature off) ⇒ the Messaging section hides itself.
+  const { data: banks } = useApi<TextBank[]>("/texting/banks", (signal) => listTextBanks(signal), {
+    ttlMs: 30_000,
+  });
 
   if (loading) {
     return (
@@ -172,8 +178,9 @@ export function Assignments() {
         <StatCard label="persuasion" value={metrics?.persuasionToday ?? 0} />
       </div>
 
-      <TextBanksEntry />
-
+      {/* The two volunteer activities share the dashboard 50-50 — Canvass first, Messaging
+          second — each under the same polished icon header (the admin nav's icons). */}
+      <SectionHeader icon={MapPin} label="Canvass" />
       {assignments.length === 0 ? (
         <div className="space-y-4">
           <EmptyState
@@ -290,6 +297,8 @@ export function Assignments() {
           ) : null}
         </div>
       )}
+
+      <TextingSection banks={banks ?? []} />
     </div>
   );
 }
@@ -374,32 +383,89 @@ function TurfDownloadButton({ turfId, geometry }: { turfId: string; geometry: un
 }
 
 
-/** "Text banks" home entry — shown only when this volunteer's tenant has workable text
- *  banks (the API reads empty when FEATURE_FIELD_TEXTING is off, so no client flag). */
-function TextBanksEntry() {
-  const { data: banks } = useApi<TextBank[]>("/texting/banks", (signal) => listTextBanks(signal), {
-    ttlMs: 30_000,
-  });
-  if (!banks || banks.length === 0) return null;
-  const waiting = banks.reduce(
-    (sum, b) => sum + b.myUnreadConversations + b.blasts.reduce((s, x) => s + x.myAssignedUnsent, 0),
-    0,
-  );
+/** The polished section header both dashboard halves wear — the admin nav's icon in a
+ *  tinted tile beside the heading, so Canvass and Messaging read as equals. */
+function SectionHeader({ icon: Icon, label }: { icon: typeof MapPin; label: string }) {
   return (
-    <Link
-      href="/texts"
-      className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 shadow-card"
-    >
-      <span className="flex items-center gap-2.5">
-        <MessagesSquare className="h-5 w-5 text-primary" />
-        <span>
-          <span className="block font-bold text-foreground">Text banks</span>
-          <span className="block text-sm text-muted-foreground">
-            {waiting > 0 ? `${waiting} waiting for you` : "Text voters one-to-one"}
-          </span>
-        </span>
+    <div className="flex items-center gap-2.5 pt-1">
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+        <Icon className="h-5 w-5 text-primary" />
       </span>
-      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-    </Link>
+      <h2 className="text-lg font-extrabold text-foreground">{label}</h2>
+    </div>
+  );
+}
+
+/** The Messaging half of the dashboard: each text-bank wave as a full-weight card —
+ *  assigned sends + waiting replies shown just like a turf's walk-list counts. Hidden
+ *  entirely when the tenant has no text banks (the API reads empty when the feature's off). */
+function TextingSection({ banks }: { banks: TextBank[] }) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  const [claiming, setClaiming] = useState<string | null>(null);
+  const waves = banks.flatMap((bank) =>
+    bank.blasts.map((b) => ({ ...b, bankName: bank.name })),
+  );
+  const unread = banks[0]?.myUnreadConversations ?? 0;
+  if (waves.length === 0) return null;
+
+  const claim = async (blastId: string, kind: "initial" | "replies") => {
+    setClaiming(`${blastId}:${kind}`);
+    const res = await claimTextingBatch(blastId, kind, 10);
+    setClaiming(null);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Couldn't claim texts", description: res.error });
+      return;
+    }
+    if (res.data.claimed === 0 && kind === "initial") {
+      showToast({ tone: "info", title: "Nothing left to send" });
+      return;
+    }
+    router.push(kind === "initial" ? `/texts/session?blastId=${blastId}` : `/texts/inbox?blastId=${blastId}`);
+  };
+
+  return (
+    <>
+      <SectionHeader icon={MessagesSquare} label="Messaging" />
+      <div className="space-y-5">
+        {waves.map((w) => (
+          <div key={w.id} className="overflow-hidden rounded-3xl border border-border bg-surface shadow-card">
+            <div className="space-y-4 p-5">
+              <div>
+                <h3 className="text-xl font-extrabold text-foreground">{w.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground tabular-nums">
+                  {w.myAssignedUnsent > 0 ? `${w.myAssignedUnsent} assigned to you` : `${w.availableToClaim} available`}
+                  {unread > 0 ? ` · ${unread} ${unread === 1 ? "reply" : "replies"} waiting` : ""}
+                  <span className="text-muted-foreground/70"> · {w.bankName}</span>
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  className="h-14 flex-1 gap-2 text-base"
+                  disabled={claiming !== null || (w.myAssignedUnsent === 0 && w.availableToClaim === 0)}
+                  onClick={() =>
+                    w.myAssignedUnsent > 0
+                      ? router.push(`/texts/session?blastId=${w.id}`)
+                      : void claim(w.id, "initial")
+                  }
+                >
+                  <Send className="h-5 w-5" />
+                  {w.myAssignedUnsent > 0 ? `Send my ${w.myAssignedUnsent} texts` : "Get 10 texts"}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-14 shrink-0 gap-2"
+                  disabled={claiming !== null}
+                  onClick={() => void claim(w.id, "replies")}
+                >
+                  <Inbox className="h-5 w-5" />
+                  Replies
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
