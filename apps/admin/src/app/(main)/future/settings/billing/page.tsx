@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Suspense } from 'react';
 import { CanManageBilling } from '@/components/prog/protected-route';
-import Alert from '@/components/prog/ui/alert';
+import { Alert } from "@uprise/ui";
 
 interface PaymentMethod {
   id: string;

@@ -8,7 +8,7 @@ import { Button } from "@/components/prog/ui/button";
 import { Input } from "@uprise/ui";
 import { Label } from "@/components/prog/ui/label";
 import { Skeleton } from "@uprise/ui";
-import Alert from "@/components/prog/ui/alert";
+import { Alert } from "@uprise/ui";
 import { logout } from "@/lib/session";
 
 type Feedback = { error?: string; success?: string };

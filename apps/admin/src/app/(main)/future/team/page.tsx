@@ -19,7 +19,7 @@ import {
   FormSelect,
   type FormSelectOption,
 } from '@/components/prog/shared/forms';
-import Alert from '@/components/prog/ui/alert';
+import { Alert } from "@uprise/ui";
 
 // --- Inlined role model (was the schema-types + rbac modules) ----------------
 type UserRole = 'owner' | 'admin' | 'member' | 'viewer';

@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/prog/ui/button';
-import Alert from '@/components/prog/ui/alert';
+import { Alert } from "@uprise/ui";
 import {
   FormBillingDetails,
   FormCheckoutPaymentMethod,

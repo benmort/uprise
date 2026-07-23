@@ -8,7 +8,7 @@ import {
   CardTitle,
 } from '@/components/prog/ui/card';
 import { Skeleton } from '@uprise/ui';
-import Alert from '@/components/prog/ui/alert';
+import { Alert } from "@uprise/ui";
 import {
   Send,
   CheckCircle2,

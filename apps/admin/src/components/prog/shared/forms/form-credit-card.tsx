@@ -4,7 +4,7 @@ import * as React from 'react';
 import cardValidator from 'card-validator';
 import { FormInput } from './form-input';
 import { FormPaymentInput, type CardType } from './form-payment-input';
-import Alert from '@/components/prog/ui/alert';
+import { Alert } from "@uprise/ui";
 
 export interface CreditCardFormValues {
   cardNumber: string;
