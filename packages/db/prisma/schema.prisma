@@ -619,6 +619,9 @@ model Blast {
   contentSid     String?        // WhatsApp: approved Content template SID (HX...)
   contentVariableMap Json?      // WhatsApp: template slot -> personalization key
   fromNumberId   String?        // chosen TelephonyPhoneNumber id (id-only, cross-schema); null ⇒ default sender
+  // The canvass campaign this blast belongs to (id-only, cross-schema) — an SMS-channel
+  // campaign with linked blasts IS a "text bank" that volunteers work P2P.
+  campaignId     String?
   status         BlastStatus  @default(DRAFTED)
   scheduledFor   DateTime?
   proofedAt      DateTime?
@@ -637,6 +640,7 @@ model Blast {
   snapshots      AnalyticsSnapshot[]
 
   @@index([tenantId, status])
+  @@index([campaignId])
   @@schema("messaging")
 }
 
@@ -668,6 +672,10 @@ model BlastRecipient {
   errorCode       String?
   errorMessage    String?
   metadata        Json?
+  // P2P claiming: the volunteer this recipient's INITIAL send is assigned to. Claimed in
+  // race-safe batches (updateMany WHERE assigneeId IS NULL); the volunteer press-sends each.
+  assigneeId      String?
+  assignedAt      DateTime?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   blast           Blast                @relation(fields: [blastId], references: [id], onDelete: Cascade)
@@ -675,6 +683,7 @@ model BlastRecipient {
 
   @@unique([blastId, phoneE164])
   @@index([blastId, status])
+  @@index([blastId, assigneeId])
   @@index([phoneE164])
   @@index([contactId])
   @@schema("messaging")
@@ -1621,6 +1630,10 @@ model TenantInvitation {
   email     String?
   phone     String?
   role      AppUserRole
+  // What the volunteer is being invited to do: "DOOR" | "SMS" | "BOTH" (contract-typed
+  // string, not the canvass-schema enum — invitations live in the tenant schema). Null ⇒
+  // legacy invite, treated as BOTH by the wizard.
+  invitedChannel String?
   status    String
   token     String?     @unique
   expiresAt DateTime?

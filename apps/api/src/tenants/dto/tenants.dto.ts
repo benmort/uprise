@@ -58,6 +58,8 @@ export class CreateInvitationDto {
   @IsOptional() @IsString() @MaxLength(200) subject?: string;
   // Recipient's first name — fills the `{{firstname}}` merge tag in the composed message.
   @IsOptional() @IsString() @MaxLength(100) firstName?: string;
+  // What the volunteer is invited to do — branches the onboarding wizard.
+  @IsOptional() @IsIn(["DOOR", "SMS", "BOTH"]) invitedChannel?: "DOOR" | "SMS" | "BOTH";
 }
 
 export class RegisterDto {

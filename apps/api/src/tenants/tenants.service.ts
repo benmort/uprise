@@ -82,6 +82,9 @@ export interface CreateInvitationInput {
   subject?: string;
   // Recipient's first name — personalises the invite via the `{{firstname}}` merge tag.
   firstName?: string;
+  // What the volunteer is invited to do: "DOOR" | "SMS" | "BOTH". Branches the onboarding
+  // wizard (texting invites default the p2p-texter role and skip the doorknock step).
+  invitedChannel?: string;
 }
 
 /**
@@ -500,12 +503,20 @@ export class TenantsService {
           email: email ?? null,
           phone: phone ?? null,
           role: input.role,
+          invitedChannel: input.invitedChannel ?? null,
           status: "pending",
           token,
           expiresAt,
           invitedBy: input.invitedBy ?? null,
         },
-        update: { role: input.role, status: "pending", token, expiresAt, invitedBy: input.invitedBy ?? null },
+        update: {
+          role: input.role,
+          invitedChannel: input.invitedChannel ?? null,
+          status: "pending",
+          token,
+          expiresAt,
+          invitedBy: input.invitedBy ?? null,
+        },
       });
       // Kept for audit/observability (doc 05); delivery is the inline send below, not a reaction.
       await this.outbox.append(tx, {

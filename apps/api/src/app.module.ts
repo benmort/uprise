@@ -20,6 +20,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { AudiencesModule } from "./audiences/audiences.module";
 import { BlastsModule } from "./blasts/blasts.module";
+import { TextingModule } from "./texting/texting.module";
 import { AnalyticsModule } from "./analytics/analytics.module";
 import { InboxModule } from "./inbox/inbox.module";
 import { ContactsModule } from "./contacts/contacts.module";
@@ -92,6 +93,7 @@ import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
     IntegrationsModule,
     AudiencesModule,
     BlastsModule,
+    TextingModule,
     AnalyticsModule,
     ContactsModule,
     JourneysModule,

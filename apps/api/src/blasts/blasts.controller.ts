@@ -78,7 +78,7 @@ export class BlastsController {
 
   @Get()
   @RequirePermission(READ)
-  list(@TenantId() tenantId: string, @Query() _dto: ListBlastsDto) {
-    return this.blasts.listBlasts(tenantId);
+  list(@TenantId() tenantId: string, @Query() dto: ListBlastsDto) {
+    return this.blasts.listBlasts(tenantId, dto.campaignId ? { campaignId: dto.campaignId } : undefined);
   }
 }

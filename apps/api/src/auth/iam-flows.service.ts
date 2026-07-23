@@ -794,6 +794,7 @@ export class IamFlowsService {
     tenantName: string;
     logoUrl: string | null;
     role: AppUserRole;
+    invitedChannel: string | null;
   }> {
     const invite = await this.loadValidInvite(token);
     const [tenant, profile] = await Promise.all([
@@ -809,6 +810,7 @@ export class IamFlowsService {
       tenantName: tenant?.name ?? "",
       logoUrl: profile?.logoLandscapeUrl ?? profile?.logoBlockUrl ?? null,
       role: invite.role,
+      invitedChannel: invite.invitedChannel ?? null,
     };
   }
 

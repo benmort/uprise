@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { HttpStatus, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
   AudienceKind,
   AudienceSegmentType,
@@ -22,6 +22,7 @@ import { ConsentService } from "../messaging/consent.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { RealtimeEventsService } from "../common/events/realtime-events.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
+import { ApiHttpException } from "../common/http/api-response";
 import { BlastStatus as FlowBlastStatus } from "../common/enums/blast-status.enum";
 import { classifyFailureScope, scopeFromStoredFailure } from "./twilio-failure-scope";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
@@ -191,6 +192,8 @@ export class BlastsService {
           contentSid: dto.contentSid ?? null,
           contentVariableMap: (dto.contentVariableMap ?? Prisma.JsonNull) as Prisma.InputJsonValue,
           fromNumberId: dto.fromNumberId || null,
+          campaignId: dto.campaignId || null,
+          ...(dto.p2p ? { metadata: { p2p: true } as Prisma.InputJsonValue } : {}),
           status: BlastStatus.DRAFTED,
         },
       });
@@ -231,6 +234,17 @@ export class BlastsService {
         audienceId: dto.audienceId ?? blast.audienceId,
         bodyTemplate: dto.bodyTemplate ?? blast.bodyTemplate,
         ...(dto.channel ? { channel: dto.channel as MessageChannel } : {}),
+        ...(dto.campaignId !== undefined ? { campaignId: dto.campaignId || null } : {}),
+        ...(dto.p2p !== undefined
+          ? {
+              metadata: {
+                ...(blast.metadata && typeof blast.metadata === "object" && !Array.isArray(blast.metadata)
+                  ? (blast.metadata as Record<string, unknown>)
+                  : {}),
+                p2p: dto.p2p,
+              } as Prisma.InputJsonValue,
+            }
+          : {}),
         ...(dto.contentSid !== undefined ? { contentSid: dto.contentSid || null } : {}),
         ...(dto.contentVariableMap !== undefined
           ? {
@@ -1313,6 +1327,165 @@ export class BlastsService {
     };
   }
 
+  /** True when the blast is a P2P text bank (volunteers press-send each initial message). */
+  isP2pBlast(metadata: Prisma.JsonValue | null | undefined): boolean {
+    return Boolean(metadata && typeof metadata === "object" && !Array.isArray(metadata) && (metadata as Record<string, unknown>).p2p === true);
+  }
+
+  /**
+   * Ready a P2P text bank for volunteer work: materialise the recipient rows from the
+   * audience (same routine the batch sender uses) and move the blast into SENDING so its
+   * status reflects in-flight P2P work. The dispatch cron skips P2P blasts, so SENDING
+   * here never triggers an auto-batch. Idempotent — safe to call on every claim.
+   */
+  async prepareP2pBlast(tenantId: string, blastId: string) {
+    const blast = await this.getBlastForTenant(tenantId, blastId);
+    if (!this.isP2pBlast(blast.metadata)) {
+      throw new ApiHttpException("BLAST_NOT_P2P", "This blast is not a P2P text bank");
+    }
+    await this.ensureBlastRecipientRecords({
+      id: blast.id,
+      audienceId: blast.audienceId,
+      bodyTemplate: blast.bodyTemplate,
+      tenantId: blast.tenantId,
+      channel: blast.channel,
+    });
+    if (blast.status !== BlastStatus.SENDING && blast.status !== BlastStatus.SENT) {
+      assertValidBlastTransition(
+        blast.status as unknown as FlowBlastStatus,
+        FlowBlastStatus.SENDING,
+      );
+      await this.prisma.blast.update({
+        where: { id: blast.id },
+        data: { status: BlastStatus.SENDING, startedAt: blast.startedAt ?? new Date() },
+      });
+    }
+    return this.prisma.blast.findUniqueOrThrow({ where: { id: blast.id } });
+  }
+
+  /**
+   * Send ONE recipient's scripted initial message — the volunteer P2P press-send. The
+   * recipient must be assigned to `assigneeId` and still unsent. Mirrors the batch loop's
+   * per-recipient behaviour (duplicate skip, dry-run, SENT + OutboundMessage, FAILED
+   * classification) without its batching bookkeeping.
+   */
+  async sendSingleRecipient(tenantId: string, recipientId: string, assigneeId: string) {
+    const recipient = await this.prisma.blastRecipient.findFirst({
+      where: { id: recipientId, blast: { tenantId } },
+      include: { blast: true },
+    });
+    if (!recipient) throw new ApiHttpException("RECIPIENT_NOT_FOUND", "Recipient not found", HttpStatus.NOT_FOUND);
+    if (recipient.assigneeId !== assigneeId) {
+      throw new ApiHttpException("RECIPIENT_NOT_ASSIGNED", "This message is not assigned to you", HttpStatus.FORBIDDEN);
+    }
+    if (
+      recipient.status !== BlastRecipientStatus.PENDING &&
+      recipient.status !== BlastRecipientStatus.QUEUED
+    ) {
+      throw new ApiHttpException("RECIPIENT_ALREADY_SENT", "This message has already been handled", HttpStatus.CONFLICT);
+    }
+    const blast = recipient.blast;
+
+    // Same-blast duplicate-phone guard as the batch path.
+    const alreadySent = await this.prisma.blastRecipient.findFirst({
+      where: {
+        blastId: blast.id,
+        phoneE164: recipient.phoneE164,
+        status: { in: SENT_RECIPIENT_STATUSES },
+        NOT: { id: recipient.id },
+      },
+      select: { id: true },
+    });
+    if (alreadySent) {
+      await this.prisma.blastRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: BlastRecipientStatus.SKIPPED,
+          failureCategory: "EXTERNAL_DUPLICATE_RECIPIENT",
+          errorMessage: SKIPPED_DUPLICATE_ERROR,
+          metadata: this.appendRecipientTrace(recipient.metadata, {
+            status: BlastRecipientStatus.SKIPPED,
+            source: "p2p_send",
+            scope: "EXTERNAL",
+            category: "EXTERNAL_DUPLICATE_RECIPIENT",
+            reason: "Skipped duplicate phone in P2P send",
+            detail: SKIPPED_DUPLICATE_ERROR,
+          }),
+        },
+      });
+      return { outcome: "skipped_duplicate" as const, recipientId: recipient.id };
+    }
+
+    const dryRunEnabled = await this.isBlastDryRunEnabled();
+    try {
+      const sendOptions = await this.sendOptionsFor(
+        blast,
+        this.extractRecipientContext(recipient.metadata),
+      );
+      const message = dryRunEnabled
+        ? this.createDryRunMessage(
+            recipient.phoneE164,
+            recipient.renderedBody,
+            `p2p-${recipient.id}`,
+            blast.channel,
+          )
+        : await this.twilio.sendMessage(recipient.phoneE164, recipient.renderedBody, sendOptions);
+      await this.prisma.blastRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: BlastRecipientStatus.SENT,
+          twilioMessageSid: message.sid,
+          sentAt: new Date(message.dateSent || message.dateCreated),
+          metadata: this.appendRecipientTrace(recipient.metadata, {
+            status: BlastRecipientStatus.SENT,
+            source: "p2p_send",
+            reason: dryRunEnabled
+              ? "Dry run: simulated Twilio acceptance"
+              : "Message accepted by Twilio for delivery",
+            detail: message.sid,
+          }),
+        },
+      });
+      await this.prisma.outboundMessage.create({
+        data: {
+          tenantId: blast.tenantId,
+          blastId: blast.id,
+          recipientId: recipient.id,
+          toPhone: normalizePhoneE164(message.to),
+          fromPhone: normalizePhoneE164(message.from),
+          body: message.body || recipient.renderedBody,
+          status: BlastRecipientStatus.SENT,
+          twilioMessageSid: message.sid,
+          sentAt: new Date(message.dateSent || message.dateCreated),
+        },
+      });
+      await this.recalculateBlastStatus(blast.id);
+      return { outcome: "sent" as const, recipientId: recipient.id, sid: message.sid };
+    } catch (error) {
+      const failureText = String(error);
+      const classification = classifyFailureScope({ error: failureText, errorMessage: failureText });
+      await this.prisma.blastRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: BlastRecipientStatus.FAILED,
+          failureCategory: classification.normalizedCategory,
+          ...(classification.code ? { errorCode: classification.code } : {}),
+          errorMessage: failureText,
+          metadata: this.appendRecipientTrace(recipient.metadata, {
+            status: BlastRecipientStatus.FAILED,
+            source: "p2p_send",
+            scope: classification.scope,
+            category: classification.normalizedCategory,
+            code: classification.code,
+            reason: "P2P send attempt failed before delivery callback",
+          }),
+        },
+      });
+      await this.recalculateBlastStatus(blast.id);
+      return { outcome: "failed" as const, recipientId: recipient.id, error: failureText };
+    }
+  }
+
   async dispatchDueScheduled(limit?: number) {
     const effectiveLimit = limit ?? this.getDispatchLimit();
     const boundedLimit = Math.min(Math.max(1, Math.trunc(effectiveLimit || 1)), 100);
@@ -1335,6 +1508,12 @@ export class BlastsService {
 
     const results: Array<Record<string, unknown>> = [];
     for (const blast of due) {
+      // P2P text-bank blasts are press-sent one at a time by volunteers (sendSingleRecipient);
+      // the cron must never batch-send their remaining recipients.
+      if (this.isP2pBlast(blast.metadata)) {
+        results.push({ blastId: blast.id, ok: true, skippedP2p: true });
+        continue;
+      }
       if (await this.isBullmqBlastEnabled()) {
         const queued = await this.enqueueBlastSendBatch(
           { blastId: blast.id, requestedBatchSize: dispatchBatchSize },

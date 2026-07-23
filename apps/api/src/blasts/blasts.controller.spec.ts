@@ -71,6 +71,11 @@ describe("BlastsController", () => {
 
   it("list delegates to listBlasts with tenantId", async () => {
     await c.list("t1", {} as any);
-    expect(svc.listBlasts).toHaveBeenCalledWith("t1");
+    expect(svc.listBlasts).toHaveBeenCalledWith("t1", undefined);
+  });
+
+  it("list passes the campaignId filter through as a where clause", async () => {
+    await c.list("t1", { campaignId: "c1" } as any);
+    expect(svc.listBlasts).toHaveBeenCalledWith("t1", { campaignId: "c1" });
   });
 });

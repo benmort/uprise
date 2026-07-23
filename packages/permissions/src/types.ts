@@ -62,6 +62,10 @@ export const UPRISE_RESOURCES = [
   "messaging.template",
   "messaging.consent",
   "messaging.conversation",
+  // The volunteer P2P texting slice: text banks, batch claims, scripted initial sends and
+  // owned-conversation replies — its OWN resource so volunteers never gain the tenant-wide
+  // inbox (messaging.conversation stays organiser+). Scoping is enforced in the service.
+  "messaging.texting",
   "messaging.suppression",
   "messaging.all",
 

@@ -92,6 +92,10 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlyArray<PermissionRule>> = {
     { action: "read", resource: "contacts.tag" },
     // The field PWA's web-vitals beacon posts load metrics for the volunteer's tenant.
     { action: "create", resource: "analytics.vital" },
+    // P2P texting: the volunteer-scoped /texting/* endpoints only (bank list, batch claim,
+    // scripted sends, replies on OWNED conversations). Deliberately NOT
+    // messaging.conversation — that would open the tenant-wide admin inbox.
+    { action: "manage", resource: "messaging.texting" },
   ],
 
   member: [
