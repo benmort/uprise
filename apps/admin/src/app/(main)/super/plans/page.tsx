@@ -13,7 +13,7 @@ import {
   type PlanEditable,
   type PlanFeatureRow,
 } from "@/lib/api/flags";
-import { Badge } from "@/components/prog/ui/badge";
+import { Badge } from "@uprise/ui";
 import { Button } from "@uprise/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@uprise/ui";
 import { Input } from "@uprise/ui";
