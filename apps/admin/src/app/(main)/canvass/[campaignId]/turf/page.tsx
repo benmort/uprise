@@ -40,7 +40,7 @@ import { Field } from "@/components/ui/field";
 import { FormDialog } from "@/components/ui/form-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SectionCard, KpiTile } from "@uprise/field";
+import { DataTable, SectionCard, KpiTile } from "@uprise/field";
 import { useApi } from "@/lib/use-api";
 import { StateRegion } from "@/components/shell/state-region";
 import { useToast } from "@/components/ui/toast";
@@ -537,23 +537,83 @@ export default function TurfCuttingPage() {
               emptyDescription="Draw a polygon or claim areas above to cut your first turf."
               skeleton={<Skeleton className="h-20 w-full" />}
             >
-              <ul className="space-y-2">
-                {turfs.map((t, i) => {
-                  const warning = turfWarning(t.estimate);
-                  return (
-                    <li key={t.id} className="text-sm">
-                      <div className="flex items-center gap-2">
+              {/* Standard table + pagination (10/page). Swatch colours key on the turf's
+                  index in the FULL list so they keep matching the map layers across pages. */}
+              <DataTable
+                rows={turfs}
+                rowKey={(t) => t.id}
+                empty="No turf cut yet."
+                columns={[
+                  {
+                    key: "name",
+                    header: "Turf",
+                    cell: (t) => (
+                      <span className="flex items-center gap-2">
                         <span
                           className="h-3 w-3 shrink-0 rounded-full"
-                          style={{ backgroundColor: SWATCHES[i % SWATCHES.length] }}
+                          style={{ backgroundColor: SWATCHES[turfs.indexOf(t) % SWATCHES.length] }}
                         />
                         <span className="flex items-center gap-1 font-medium text-foreground">
-                          <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                          <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                           {t.name}
                         </span>
-                        <span className="ml-auto tabular-nums text-muted-foreground">
-                          {t.contactCount} doors
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "doors",
+                    header: "Doors",
+                    numeric: true,
+                    cell: (t) => <span className="tabular-nums">{t.contactCount}</span>,
+                  },
+                  {
+                    key: "estimate",
+                    header: "Estimate",
+                    cell: (t) =>
+                      t.estimate && t.estimate.doors > 0 ? (
+                        // A straight-line walk is always optimistic, so it is labelled rather
+                        // than rounded into looking like a measurement.
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                          <span className="tabular-nums">{describeEstimate(t.estimate)}</span>
+                          <span aria-hidden>·</span>
+                          <span className="tabular-nums">{describeBuildings(t.estimate)}</span>
+                          {isStraightLine(t.estimate) ? (
+                            <span
+                              title="The walk was measured in straight lines, not along footpaths — the real turf is slower."
+                              className="rounded border border-border px-1 py-px text-[10px] font-medium uppercase tracking-wide"
+                            >
+                              straight-line
+                            </span>
+                          ) : null}
                         </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ),
+                  },
+                  {
+                    key: "health",
+                    header: "",
+                    cell: (t) => {
+                      const warning = turfWarning(t.estimate);
+                      if (!warning) return null;
+                      return (
+                        <span
+                          className={cn(
+                            "flex items-center gap-1 text-xs",
+                            warning.level === "warn" ? "font-medium text-warning" : "text-muted-foreground",
+                          )}
+                        >
+                          {warning.level === "warn" ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
+                          {warning.text}
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    key: "actions",
+                    header: "",
+                    cell: (t) => (
+                      <span className="flex items-center justify-end gap-2">
                         <button
                           type="button"
                           aria-label="Rename turf"
@@ -570,42 +630,11 @@ export default function TurfCuttingPage() {
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </div>
-
-                      {/* The estimate, once the turf has been priced. A straight-line walk
-                          is always optimistic, so it is labelled rather than rounded into
-                          looking like a measurement. */}
-                      {t.estimate && t.estimate.doors > 0 ? (
-                        <div className="ml-5 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                          <span className="tabular-nums">{describeEstimate(t.estimate)}</span>
-                          <span aria-hidden>·</span>
-                          <span className="tabular-nums">{describeBuildings(t.estimate)}</span>
-                          {isStraightLine(t.estimate) ? (
-                            <span
-                              title="The walk was measured in straight lines, not along footpaths — the real turf is slower."
-                              className="rounded border border-border px-1 py-px text-[10px] font-medium uppercase tracking-wide"
-                            >
-                              straight-line estimate
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      {warning ? (
-                        <p
-                          className={cn(
-                            "ml-5 mt-1 flex items-center gap-1 text-xs",
-                            warning.level === "warn" ? "font-medium text-warning" : "text-muted-foreground",
-                          )}
-                        >
-                          {warning.level === "warn" ? <AlertTriangle className="h-3 w-3 shrink-0" /> : null}
-                          {warning.text}
-                        </p>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+                      </span>
+                    ),
+                  },
+                ]}
+              />
             </StateRegion>
           </SectionCard>
         </div>
