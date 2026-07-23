@@ -1072,7 +1072,7 @@ export class IamFlowsService {
   private async loadOpenCampaign(campaignId: string) {
     const campaign = await this.prisma.canvassCampaign.findUnique({
       where: { id: campaignId },
-      select: { id: true, name: true, tenantId: true, openJoinEnabled: true, status: true },
+      select: { id: true, name: true, tenantId: true, openJoinEnabled: true, status: true, channel: true },
     });
     if (!campaign || !campaign.openJoinEnabled || campaign.status !== CanvassCampaignStatus.ACTIVE) {
       throw new BadRequestException("This campaign isn't open for sign-ups.");
@@ -1082,6 +1082,7 @@ export class IamFlowsService {
 
   /** Public preview for the `/volunteer/[campaignId]` landing – campaign + org name, gated. */
   async openJoinPreview(campaignId: string): Promise<{
+    channel: string;
     campaignId: string;
     tenantId: string;
     campaignName: string;
@@ -1104,6 +1105,7 @@ export class IamFlowsService {
       this.campaignJoinStats(campaign.tenantId, campaign.id),
     ]);
     return {
+      channel: campaign.channel,
       campaignId: campaign.id,
       tenantId: campaign.tenantId,
       campaignName: campaign.name,

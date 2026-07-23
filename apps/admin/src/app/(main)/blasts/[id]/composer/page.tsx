@@ -38,8 +38,12 @@ import { useToast } from "@/components/ui/toast";
 import { useLocalStorage } from "@uprise/ui";
 import { profile } from "@uprise/api-client";
 import { FromNumberSelector } from "@/components/blasts/from-number-selector";
+import { listCampaigns } from "@/lib/api/campaigns";
 
-const FALLBACK_PERSONALIZATION_TAGS = ["{{first_name}}"];
+// Always-available personalization tags, independent of the audience's columns: first name and
+// the recipient's suburb ({{location}}). Both are derived server-side (with graceful fallbacks)
+// in the blasts TemplateRendererService, so they resolve for every recipient.
+const STANDARD_PERSONALIZATION_TAGS = ["{{first_name}}", "{{location}}"];
 const PERSONALIZATION_SAMPLE_LIMIT = 150;
 
 // Opt-out detection for the SMS compliance check. A message is compliant if it tells recipients
@@ -87,11 +91,27 @@ function normalizePreviewContext(context: Record<string, unknown>): Record<strin
       nestedActionNetworkPerson?.given_name,
       nestedActionNetworkPerson?.first_name,
     ) ?? "friend";
+  // Mirror the server-side {{location}} derivation (blasts TemplateRendererService) so the live
+  // preview matches what recipients receive: the suburb from any of these columns, else "your area".
+  const anAddress =
+    nestedActionNetworkPerson && Array.isArray(nestedActionNetworkPerson.postal_addresses)
+      ? (nestedActionNetworkPerson.postal_addresses[0] as Record<string, unknown> | undefined)
+      : undefined;
+  const location =
+    pickFirstNonEmptyString(
+      context.location,
+      context.suburb,
+      context.locality,
+      context.city,
+      context.town,
+      anAddress?.locality,
+    ) ?? "your area";
   return {
     ...context,
     first_name: firstName,
     firstname: firstName,
     firstName,
+    location,
   };
 }
 
@@ -110,9 +130,11 @@ function deriveAudiencePersonalization(
       sampleMetadata = metadata;
     }
   }
-  const tags = Array.from(metadataKeys)
+  const metaTags = Array.from(metadataKeys)
     .sort((a, b) => a.localeCompare(b))
     .map((key) => `{{${key}}}`);
+  // Standard tags first (first name, location), then the audience's own columns — deduped.
+  const tags = Array.from(new Set([...STANDARD_PERSONALIZATION_TAGS, ...metaTags]));
   return {
     tags,
     previewContext: normalizePreviewContext(sampleMetadata || {}),
@@ -130,6 +152,11 @@ export default function BlastComposerPage() {
   const [audienceId, setAudienceId] = useState("");
   const [template, setTemplate] = useState("");
   const [channel, setChannel] = useState<MessageChannel>("SMS");
+  // Text-bank linkage: the canvass campaign this blast belongs to + P2P mode (volunteers
+  // press-send each initial message; the dispatch cron never auto-batches a P2P wave).
+  const [linkedCampaignId, setLinkedCampaignId] = useState("");
+  const [p2p, setP2p] = useState(false);
+  const [smsCampaigns, setSmsCampaigns] = useState<Array<{ id: string; name: string }>>([]);
   const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [waReach, setWaReach] = useState<{ total: number; reachable: number } | null>(null);
   const [newWaAudienceOpen, setNewWaAudienceOpen] = useState(false);
@@ -150,7 +177,7 @@ export default function BlastComposerPage() {
   const [complianceWarnings, setComplianceWarnings] = useState<string[]>([]);
   // Per-user default for whether the privacy-compliance checks run (persisted on this device).
   const [complianceEnabled, setComplianceEnabled] = useLocalStorage("uprise.blast.complianceChecks", true);
-  const [availableTags, setAvailableTags] = useState<string[]>(FALLBACK_PERSONALIZATION_TAGS);
+  const [availableTags, setAvailableTags] = useState<string[]>(STANDARD_PERSONALIZATION_TAGS);
   const [previewContext, setPreviewContext] = useState<Record<string, unknown>>(() =>
     normalizePreviewContext({}),
   );
@@ -234,6 +261,8 @@ export default function BlastComposerPage() {
       setChannel((blast.channel as MessageChannel) || "SMS");
       setContentSid(String(blast.contentSid || ""));
       setFromNumberId((blast.fromNumberId as string) || null);
+      setLinkedCampaignId(String(blast.campaignId || ""));
+      setP2p(Boolean((blast.metadata as Record<string, unknown> | null)?.p2p));
       setContentVariableMap(
         blast.contentVariableMap && typeof blast.contentVariableMap === "object"
           ? (blast.contentVariableMap as Record<string, string>)
@@ -246,7 +275,7 @@ export default function BlastComposerPage() {
   useEffect(() => {
     let cancelled = false;
     if (!audienceId) {
-      setAvailableTags(FALLBACK_PERSONALIZATION_TAGS);
+      setAvailableTags(STANDARD_PERSONALIZATION_TAGS);
       setPreviewContext(normalizePreviewContext({}));
       return;
     }
@@ -254,7 +283,7 @@ export default function BlastComposerPage() {
       .then((res) => {
         if (cancelled) return;
         if (!res.ok) {
-          setAvailableTags(FALLBACK_PERSONALIZATION_TAGS);
+          setAvailableTags(STANDARD_PERSONALIZATION_TAGS);
           setPreviewContext(normalizePreviewContext({}));
           return;
         }
@@ -263,13 +292,13 @@ export default function BlastComposerPage() {
           : [];
         const personalization = deriveAudiencePersonalization(rows);
         setAvailableTags(
-          personalization.tags.length > 0 ? personalization.tags : FALLBACK_PERSONALIZATION_TAGS,
+          personalization.tags.length > 0 ? personalization.tags : STANDARD_PERSONALIZATION_TAGS,
         );
         setPreviewContext(personalization.previewContext);
       })
       .catch(() => {
         if (cancelled) return;
-        setAvailableTags(FALLBACK_PERSONALIZATION_TAGS);
+        setAvailableTags(STANDARD_PERSONALIZATION_TAGS);
         setPreviewContext(normalizePreviewContext({}));
       });
     return () => {
@@ -415,12 +444,30 @@ export default function BlastComposerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blastId, campaignName, audienceId, template, channel, contentSid, contentVariableMap, fromNumberId]);
 
+  useEffect(() => {
+    let alive = true;
+    void listCampaigns().then((res) => {
+      if (alive && res.ok) {
+        setSmsCampaigns(
+          res.data
+            .filter((c) => c.channel === "SMS" || c.channel === "BOTH")
+            .map((c) => ({ id: c.id, name: c.name })),
+        );
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const blastPayload = () => ({
     title: campaignName,
     audienceId: audienceId || undefined,
     bodyTemplate: template,
     channel,
     fromNumberId: fromNumberId || undefined,
+    campaignId: linkedCampaignId || undefined,
+    p2p,
     ...(channel === "WHATSAPP"
       ? { contentSid: contentSid || undefined, contentVariableMap }
       : {}),
@@ -916,6 +963,35 @@ export default function BlastComposerPage() {
               <div className="mt-3 space-y-3">
                 {channel !== "WHATSAPP" ? (
                   <FromNumberSelector value={fromNumberId} onChange={setFromNumberId} />
+                ) : null}
+                {channel === "SMS" ? (
+                  <div className="max-w-sm space-y-2">
+                    <label className="mb-1 block text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
+                      Text bank (canvass campaign)
+                    </label>
+                    <select
+                      value={linkedCampaignId}
+                      onChange={(e) => setLinkedCampaignId(e.target.value)}
+                      className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground"
+                    >
+                      <option value="">Not linked — standalone blast</option>
+                      {smsCampaigns.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={p2p}
+                        disabled={!linkedCampaignId}
+                        onChange={(e) => setP2p(e.target.checked)}
+                        className="h-4 w-4 accent-[#465fff]"
+                      />
+                      P2P text bank — volunteers press-send each message (never auto-blasted)
+                    </label>
+                  </div>
                 ) : null}
                 <div className="max-w-sm">
                   <label className="mb-1 block text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">

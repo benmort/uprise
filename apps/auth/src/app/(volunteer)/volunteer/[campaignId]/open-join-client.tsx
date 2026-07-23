@@ -126,6 +126,7 @@ export function OpenJoinClient({
             tenantName={tenantName ?? undefined}
             tenantLogoUrl={logoUrl}
             invitedPhone={null}
+            invitedChannel={preview?.channel ?? null}
             returnTo={returnTo}
             step={step}
             goTo={goTo}

@@ -21,6 +21,7 @@ type Mode = "phone" | "email";
 const LINK_TOKEN = "{{invite_link}}";
 const NAME_TOKEN = "{{firstname}}";
 const DEFAULT_SMS = `Hi ${NAME_TOKEN}, you're invited to become a volunteer. Tap to accept: ${LINK_TOKEN}`;
+const DEFAULT_SMS_TEXTING = `Hi ${NAME_TOKEN}, you're invited to text voters with us — one-to-one, from home. Tap to join: ${LINK_TOKEN}`;
 const DEFAULT_EMAIL = `Hi ${NAME_TOKEN},\n\nWe'd love your help. Tap the link below to join as a volunteer — it takes a minute.\n\n${LINK_TOKEN}\n\nThank you!`;
 // Radix forbids an empty-string item value, so the "Default invite" option uses a sentinel.
 const NO_TEMPLATE = "__default__";
@@ -38,6 +39,9 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
   const [phone, setPhone] = useState(""); // national digits
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("VOLUNTEER");
+  // What the volunteer is invited to DO — branches the onboarding wizard (texting invites
+  // default the p2p-texter role + skip the doorknock step) and the default invite copy.
+  const [channel, setChannel] = useState<"DOOR" | "SMS" | "BOTH">("BOTH");
   const [subject, setSubject] = useState("You're invited to volunteer");
   const [body, setBody] = useState(DEFAULT_SMS);
   const [templateId, setTemplateId] = useState(NO_TEMPLATE);
@@ -131,6 +135,7 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
       const res = await tenants.createInvitation(tenantId, {
         phone: toE164(digits),
         role,
+        invitedChannel: channel,
         message: body,
         firstName: firstName.trim() || undefined,
       });
@@ -147,6 +152,7 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
       }
       setBusy(true);
       const res = await tenants.createInvitation(tenantId, {
+        invitedChannel: channel,
         email: email.trim(),
         role,
         subject: subject.trim(),
@@ -225,6 +231,26 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
           <Select id="iv-role" value={role} onValueChange={(v) => setRole(v as Role)}>
             <SelectItem value="VOLUNTEER">Volunteer</SelectItem>
             <SelectItem value="ORGANISER">Organiser</SelectItem>
+          </Select>
+        </Field>
+        <Field label="Inviting them to" htmlFor="iv-channel">
+          <Select
+            id="iv-channel"
+            value={channel}
+            onValueChange={(v) => {
+              const next = v as "DOOR" | "SMS" | "BOTH";
+              setChannel(next);
+              // Swap the default copy in step with the choice — never clobber edited text.
+              setBody((cur) => {
+                if (next === "SMS" && cur === DEFAULT_SMS) return DEFAULT_SMS_TEXTING;
+                if (next !== "SMS" && cur === DEFAULT_SMS_TEXTING) return DEFAULT_SMS;
+                return cur;
+              });
+            }}
+          >
+            <SelectItem value="BOTH">Door-knocking + texting</SelectItem>
+            <SelectItem value="DOOR">Door-knocking</SelectItem>
+            <SelectItem value="SMS">Texting</SelectItem>
           </Select>
         </Field>
       </div>

@@ -104,6 +104,7 @@ export function VolunteerOnboardWizard({
   canGoBack,
   onComplete,
   completeLabel = "Start canvassing",
+  invitedChannel,
 }: {
   token?: string;
   campaignId?: string;
@@ -121,6 +122,10 @@ export function VolunteerOnboardWizard({
   onComplete?: (memberships: Parameters<typeof completeAuth>[0]) => void;
   /** Label on the final button — the entry point names the destination. */
   completeLabel?: string;
+  /** What the volunteer was invited to do ("DOOR" | "SMS" | "BOTH") — from the invite or
+   *  the campaign's channel. SMS defaults the p2p-texter role and skips the doorknock
+   *  step; DOOR defaults doorknocker; BOTH/absent keeps the full role choice. */
+  invitedChannel?: string | null;
 }) {
   const [phone, setPhone] = useState(invitedPhone ? invitedPhone.replace(/^\+61/, "0").replace(/\D/g, "") : "");
   const [challengeId, setChallengeId] = useState<string | null>(null);
@@ -129,7 +134,9 @@ export function VolunteerOnboardWizard({
   const [smsSent, setSmsSent] = useState(false);
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
-  const [role, setRole] = useState<string | null>(DEFAULT_ROLE);
+  const [role, setRole] = useState<string | null>(
+    invitedChannel === "SMS" ? "p2p-texter" : DEFAULT_ROLE,
+  );
   const [days, setDays] = useState<string[]>([]);
   const [walking, setWalking] = useState<WalkingCapability | null>(null);
   const [sessionLen, setSessionLen] = useState<SessionLength | null>(null);
@@ -355,8 +362,9 @@ export function VolunteerOnboardWizard({
           You&apos;re on the team{first.trim() ? `, ${first.trim()}` : ""}
         </h1>
         <p className="mt-3 text-muted-foreground">
-          Your number is verified and you&apos;re ready to knock. Your organiser will assign you
-          turf — it&apos;ll show up here.
+          {role === "p2p-texter"
+            ? "Your number is verified and you're ready to text voters. Your text banks will show up here."
+            : "Your number is verified and you're ready to knock. Your organiser will assign you turf — it'll show up here."}
         </p>
         <dl className="mt-7 w-full space-y-0 rounded-2xl bg-surface-variant/60 px-5 text-sm">
           <Row label="Signed in as" value={formatAuMobile(phone)} />

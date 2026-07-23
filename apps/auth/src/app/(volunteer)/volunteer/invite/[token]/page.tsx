@@ -23,6 +23,7 @@ export default function VolunteerInvitePage() {
   const [tenantName, setTenantName] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [invitedPhone, setInvitedPhone] = useState<string | null>(null);
+  const [invitedChannel, setInvitedChannel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,6 +38,7 @@ export default function VolunteerInvitePage() {
       setTenantName(res.data.tenantName);
       setLogoUrl(res.data.logoUrl);
       setInvitedPhone(res.data.phone ?? null);
+      setInvitedChannel(res.data.invitedChannel ?? null);
     })();
   }, [token]);
 
@@ -69,6 +71,7 @@ export default function VolunteerInvitePage() {
             tenantName={tenantName ?? ""}
             tenantLogoUrl={logoUrl}
             invitedPhone={invitedPhone}
+            invitedChannel={invitedChannel}
             returnTo={returnTo}
             step={step}
             goTo={goTo}

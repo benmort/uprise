@@ -401,6 +401,10 @@ export async function createBlast(input: {
   contentSid?: string;
   contentVariableMap?: Record<string, string>;
   fromNumberId?: string;
+  /** Canvass campaign this blast belongs to — an SMS campaign with blasts is a text bank. */
+  campaignId?: string;
+  /** P2P: volunteers press-send each initial message; the cron never auto-batches it. */
+  p2p?: boolean;
 }) {
   return request<Record<string, unknown>>("/blasts", {
     method: "POST",
@@ -419,6 +423,8 @@ export async function updateBlast(
     contentSid?: string;
     contentVariableMap?: Record<string, string>;
     fromNumberId?: string;
+    campaignId?: string;
+    p2p?: boolean;
   },
 ) {
   return request<Record<string, unknown>>(`/blasts/${blastId}`, {

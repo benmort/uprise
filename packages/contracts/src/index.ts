@@ -152,6 +152,8 @@ export interface JoinBrand {
 }
 
 export type OpenJoinPreview = JoinBrand & {
+  /** The campaign's outreach medium — drives the wizard's door/texting branching. */
+  channel?: "DOOR" | "SMS" | "BOTH";
   campaignId: string;
   /** The campaign's tenant id — keys the deterministic fallback avatar gradient when
    *  the org has no logo (same as the tenant selector). */
@@ -304,6 +306,8 @@ export interface InvitePreview {
   /** The tenant's logo (landscape preferred, block fallback); null when the org has none. */
   logoUrl: string | null;
   role: AppRole;
+  /** What the volunteer was invited to do — "DOOR" | "SMS" | "BOTH"; null = legacy (BOTH). */
+  invitedChannel?: string | null;
 }
 
 export interface OkResponse {
