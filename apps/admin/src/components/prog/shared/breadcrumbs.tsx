@@ -1,7 +1,15 @@
 'use client';
 
+import { Fragment } from 'react';
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import {
+  Breadcrumb,
+  BreadcrumbItem as UIBreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@uprise/ui';
 
 export interface BreadcrumbItem {
   label: string;
@@ -13,26 +21,33 @@ interface BreadcrumbsProps {
   className?: string;
 }
 
-export default function Breadcrumbs({ items, className = '' }: BreadcrumbsProps) {
+/**
+ * Data-driven breadcrumb trail on the shared @uprise/ui Breadcrumb primitives (retokenised off
+ * the old raw gray-* palette). Items with an href render as links (next/link via asChild), the
+ * rest as the current page. The items API is unchanged for the future/* consumers.
+ */
+export default function Breadcrumbs({ items, className }: BreadcrumbsProps) {
   return (
-    <nav className={className} aria-label="Breadcrumb">
-      <ol className="flex flex-wrap items-center gap-1.5">
-        {items.map((item, index) => (
-          <li key={index} className="inline-flex items-center gap-1.5">
-            {index > 0 ? <ChevronRight className="size-4 shrink-0 text-gray-400 dark:text-gray-500" aria-hidden /> : null}
-            {item.href ? (
-              <Link
-                className="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                href={item.href}
-              >
-                {item.label}
-              </Link>
-            ) : (
-              <span className="text-sm text-gray-800 dark:text-white/90">{item.label}</span>
-            )}
-          </li>
-        ))}
-      </ol>
-    </nav>
+    <Breadcrumb className={className}>
+      <BreadcrumbList>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          return (
+            <Fragment key={index}>
+              <UIBreadcrumbItem>
+                {item.href ? (
+                  <BreadcrumbLink asChild>
+                    <Link href={item.href}>{item.label}</Link>
+                  </BreadcrumbLink>
+                ) : (
+                  <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                )}
+              </UIBreadcrumbItem>
+              {!isLast ? <BreadcrumbSeparator /> : null}
+            </Fragment>
+          );
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }
