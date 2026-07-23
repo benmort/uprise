@@ -4,8 +4,9 @@
 // separate "branding" mock + the standalone /settings cards). Each tab saves on its own.
 // Org/brand tabs persist via orgProfile.*; Tenant & Access via tenants.update; the last
 // three tabs are the former /settings sections (shared from components/settings).
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Lock, Save, Settings } from "lucide-react";
+import { Lock, Save, Settings } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { OriginBackLink } from "@/components/setup/origin-deep-link";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
@@ -426,7 +427,7 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
       <Button onClick={onClick} disabled={savingTab !== null}>
         {savingTab === tabKey ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
+            <Spinner className="mr-2 h-4 w-4 animate-spin" /> Saving…
           </>
         ) : (
           <>

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Spinner } from "@uprise/ui";
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Phone, PhoneOff, Search } from "lucide-react";
+import { Phone, PhoneOff, Search } from "lucide-react";
 import { FormDialog, Field, Input, FormSelect, StatusBadge, StepProgress, formatAuMobile, isAuMobile, toE164 } from "@uprise/ui";
 import {
   telephony,
@@ -186,7 +187,7 @@ export function NewCallDialog({ open, onClose }: { open: boolean; onClose: () =>
               autoFocus
             />
             {searching ? (
-              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              <Spinner className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
             ) : null}
           </div>
           {!picked && results.length > 0 ? (

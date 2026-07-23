@@ -1,8 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Spinner } from "@uprise/ui";
 import { createPortal } from "react-dom";
-import { Loader2 } from "lucide-react";
 
 /**
  * The branded full-screen loading dialogue — a centred card with a brand mark, a spinning
@@ -37,7 +37,7 @@ export function WorkspaceLoadingOverlay({
             <img src="/images/uprise-icon.svg" alt="" aria-hidden className="h-16 w-16" />
           )}
           <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <Spinner className="h-4 w-4 animate-spin text-primary" />
           </span>
         </div>
         <div>

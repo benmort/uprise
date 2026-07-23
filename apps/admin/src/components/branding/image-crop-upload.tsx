@@ -4,10 +4,11 @@
 // to the tenant-scoped /files store → store the returned public URL. A generalised
 // sibling of the profile-photo flow (AvatarEditCard), but NOT circle-locked: logos come
 // in block (≈square) and landscape shapes, and default to PNG so transparency survives.
+import { Spinner } from "@uprise/ui";
 import { useCallback, useRef, useState } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
-import { Loader2, Trash2, Upload } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { Button } from "@uprise/ui";
 import { getCroppedImg } from "@/lib/crop-image";
 import { uploadFile } from "@/lib/api/files";
@@ -154,7 +155,7 @@ export function ImageCropUpload({
             <Button type="button" size="sm" onClick={() => void save()} disabled={busy || !areaPixels}>
               {busy ? (
                 <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Uploading…
+                  <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Uploading…
                 </>
               ) : (
                 "Crop & upload"

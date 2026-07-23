@@ -1,8 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
 import { FormDialog, Field, Input } from "@uprise/ui";
 import {
   telephony,
@@ -155,7 +155,7 @@ export function ProvisionNumberDialog({
 
       {prefilling ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Spinner className="h-4 w-4 animate-spin" />
           Prefilling from your organisation profile…
         </p>
       ) : null}

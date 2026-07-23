@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { auth, tenants } from "@uprise/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@uprise/ui";
 import { Button } from "@uprise/ui";
@@ -142,7 +143,7 @@ export function DeleteWorkspaceCard({
                   >
                     {pending ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Spinner className="mr-2 h-4 w-4 animate-spin" />
                         Deleting…
                       </>
                     ) : (
