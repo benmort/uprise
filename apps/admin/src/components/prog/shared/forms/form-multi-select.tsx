@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
 import { FormField } from './form-field';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 import { ChevronDown, X } from 'lucide-react';
 
 export interface FormMultiSelectOption {

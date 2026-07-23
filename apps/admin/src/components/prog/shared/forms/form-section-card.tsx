@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { ChevronDown, Check } from 'lucide-react';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 export interface FormSectionCardProps {
   title: string;

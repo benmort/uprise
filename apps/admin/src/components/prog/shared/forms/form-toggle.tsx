@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 export interface FormToggleProps {
   id: string;

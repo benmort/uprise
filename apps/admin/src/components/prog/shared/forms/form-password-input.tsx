@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { FormField, inputBaseClasses } from './form-field';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 import { Eye, EyeOff } from 'lucide-react';
 
 export interface FormPasswordInputProps extends Omit<React.ComponentProps<'input'>, 'type' | 'className'> {

@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@uprise/ui';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 export interface PaginationProps {
   /** Current page (1-based) */

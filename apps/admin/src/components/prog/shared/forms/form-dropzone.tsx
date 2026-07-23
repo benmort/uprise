@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useCallback, useState } from 'react';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 import { Upload } from 'lucide-react';
 
 export interface FormDropzoneProps {

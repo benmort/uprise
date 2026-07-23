@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { CreditCard } from 'lucide-react';
 import { FormField, inputBaseClasses } from './form-field';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 export type CardType = 'visa' | 'mastercard' | 'amex' | 'discover';
 

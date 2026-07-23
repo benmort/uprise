@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { FormField } from './form-field';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 export interface FormFileInputProps extends Omit<React.ComponentProps<'input'>, 'type' | 'className'> {
   label: string;

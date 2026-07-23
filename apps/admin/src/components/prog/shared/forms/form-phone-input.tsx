@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { FormField, inputBaseClasses } from './form-field';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 const countryCodes: Record<string, string> = {
   US: '+1',

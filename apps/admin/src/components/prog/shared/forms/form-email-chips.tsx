@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useState, useRef, useCallback } from 'react';
 import { FormField } from './form-field';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

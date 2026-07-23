@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { FormField, inputBaseClasses } from './form-field';
-import { cn } from '@/components/prog/cn';
+import { cn } from "@uprise/ui";
 
 function CalendarIcon() {
   return (
