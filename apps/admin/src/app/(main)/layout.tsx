@@ -308,6 +308,8 @@ function buildNav(
               { label: "Queue & Redis Stats", href: "/super/queues", match: sp("queues") },
               // Every route across all six frontend apps (generated manifest).
               { label: "Sitemap", href: "/super/sitemap", match: sp("sitemap") },
+              // Live catalogue of the @uprise/ui design system (in-app companion to Storybook).
+              { label: "Kitchen Sink", href: "/super/kitchen-sink", match: sp("kitchen-sink") },
             ],
           },
           {
@@ -318,7 +320,7 @@ function buildNav(
               px("transactions")(p) || px("invoices")(p) || px("products")(p) ||
               px("support-tickets")(p) || px("checkout")(p) || px("api-keys")(p) ||
               px("chats")(p) || px("tasks")(p) ||
-              px("ai-assistant")(p) || px("form-elements")(p) ||
+              px("ai-assistant")(p) ||
               px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
             flag: "FEATURE_NAV_PROG",
             children: [
@@ -375,7 +377,7 @@ function buildNav(
                 ],
               },
               { label: "AI Assistant", href: "/future/ai-assistant", match: px("ai-assistant") },
-              { label: "Form Elements", href: "/future/form-elements", match: px("form-elements") },
+              // Form Elements now live in the Kitchen Sink (Super Admin → Kitchen Sink → Forms).
             ],
           },
         ] as NavNode[])
