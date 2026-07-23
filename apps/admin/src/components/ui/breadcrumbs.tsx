@@ -1,31 +1,48 @@
+import { Fragment } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import {
+  Breadcrumb,
+  BreadcrumbItem as UIBreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@uprise/ui";
 
 export type BreadcrumbItem = {
   label: string;
   href?: string;
 };
 
+/**
+ * Data-driven breadcrumb trail, rendered on the shared @uprise/ui `Breadcrumb` primitives
+ * (which are compositional + link-agnostic). Passes `next/link` through `BreadcrumbLink asChild`;
+ * the last item is the current page. Consumers keep the `items` API.
+ */
 export function Breadcrumbs({ items, className }: { items: BreadcrumbItem[]; className?: string }) {
   return (
-    <nav aria-label="Breadcrumb" className={className}>
-      <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+    <Breadcrumb className={className}>
+      <BreadcrumbList>
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           return (
-            <li key={`${item.label}-${index}`} className="inline-flex items-center gap-1">
-              {item.href && !isLast ? (
-                <Link href={item.href} className="hover:text-foreground hover:underline">
-                  {item.label}
-                </Link>
-              ) : (
-                <span className={isLast ? "font-medium text-foreground" : undefined}>{item.label}</span>
-              )}
-              {!isLast ? <ChevronRight className="h-3.5 w-3.5" /> : null}
-            </li>
+            <Fragment key={`${item.label}-${index}`}>
+              <UIBreadcrumbItem>
+                {item.href && !isLast ? (
+                  <BreadcrumbLink asChild>
+                    <Link href={item.href}>{item.label}</Link>
+                  </BreadcrumbLink>
+                ) : isLast ? (
+                  <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                ) : (
+                  <span>{item.label}</span>
+                )}
+              </UIBreadcrumbItem>
+              {!isLast ? <BreadcrumbSeparator /> : null}
+            </Fragment>
           );
         })}
-      </ol>
-    </nav>
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }
