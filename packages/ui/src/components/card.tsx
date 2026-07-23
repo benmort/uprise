@@ -41,3 +41,16 @@ export function CardContent({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("px-5 pb-5", className)} {...props} />;
 }
+
+/** Footer row — actions or meta, divided from the content above. */
+export function CardFooter({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn("flex items-center gap-2 border-t border-border px-5 py-3", className)}
+      {...props}
+    />
+  );
+}

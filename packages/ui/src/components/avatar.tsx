@@ -3,14 +3,27 @@
 import * as React from "react";
 import { cn } from "../lib/utils";
 
-/** Avatar with an image and an initials fallback (used by the topbar user dropdown). */
+export type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
+
+const AVATAR_SIZES: Record<AvatarSize, string> = {
+  xs: "h-6 w-6 text-[10px]",
+  sm: "h-8 w-8 text-xs",
+  md: "h-10 w-10 text-sm",
+  lg: "h-12 w-12 text-base",
+  xl: "h-16 w-16 text-xl",
+};
+
+/** Avatar with an image and an initials fallback. `size` sets a preset; `className` still
+ *  wins if you need a bespoke dimension. `computeInitials` is the one shared initials util. */
 export function Avatar({
   src,
   name,
+  size = "md",
   className,
 }: {
   src?: string | null;
   name?: string | null;
+  size?: AvatarSize;
   className?: string;
 }) {
   const [errored, setErrored] = React.useState(false);
@@ -19,7 +32,8 @@ export function Avatar({
   return (
     <span
       className={cn(
-        "inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-variant text-sm font-semibold text-muted-foreground",
+        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-variant font-semibold text-muted-foreground",
+        AVATAR_SIZES[size],
         className,
       )}
     >

@@ -32,7 +32,8 @@ export const STEP_META: Record<SetupStepKey, StepMeta> = {
   enableTwofa: {
     title: "Turn on two-factor authentication",
     blurb: "Protects the account that holds billing and compliance powers.",
-    href: "/account",
+    // origin + hash: the account page scrolls to and pulses the 2FA card, and offers a back link.
+    href: "/account?origin=getting-started#two-factor",
     cta: "Enable",
   },
   completeProfile: {

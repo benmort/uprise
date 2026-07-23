@@ -63,7 +63,7 @@ class SizeToggleControl {
 export function MapSizeControl({
   large,
   onToggle,
-  position = "top-right",
+  position = "top-left",
 }: {
   large: boolean;
   onToggle: () => void;

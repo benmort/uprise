@@ -16,13 +16,14 @@ export function useScrollToZoom() {
 /**
  * The small on-map checkbox that sits under Mapbox's "Use ⌘ + scroll to zoom" notice.
  * Ticking it flips the shared preference so scrolling zooms directly — no modifier held.
- * Rendered as an absolutely-positioned overlay inside a map; defaults to bottom-left.
+ * Position-agnostic: it renders as a self-sized pill; the caller places it (drop it inside a
+ * `<MapCorner corner="top-right">` per the shared map-placement scheme).
  */
 export function MapGestureToggle({ className }: { className?: string }) {
   const [scrollZoom, setScrollZoom] = useScrollToZoom();
   return (
     <label
-      className={`absolute bottom-2 left-2 z-10 flex cursor-pointer select-none items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2 py-1 text-[11px] font-semibold text-foreground shadow-card backdrop-blur ${className ?? ""}`}
+      className={`flex cursor-pointer select-none items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2 py-1 text-[11px] font-semibold text-foreground shadow-card backdrop-blur ${className ?? ""}`}
       title="Scroll to zoom the map without holding ⌘/Ctrl"
     >
       <input

@@ -12,6 +12,7 @@ export * from "./components/data-table";
 export * from "./components/disposition-pad";
 export * from "./components/kpi-tile";
 export * from "./components/location-gate";
+export * from "./components/map-chrome";
 export * from "./components/map-gesture-toggle";
 export * from "./components/map-size-control";
 export * from "./components/map-thumbnail";

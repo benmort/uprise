@@ -405,12 +405,34 @@
   }
 }
 
+/* Deep-link attention pulse — a primary-colour border + expanding ring, two cycles, settling
+   back to the resting border. Applied to a card a hash-link scrolled to (e.g. #two-factor), so
+   the target announces itself without a permanent highlight. */
+@keyframes pulseRing {
+  0% {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.45);
+  }
+  70% {
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 6px hsl(var(--primary) / 0);
+  }
+  100% {
+    border-color: hsl(var(--border));
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
+}
+.animate-pulse-ring {
+  animation: pulseRing 0.9s ease-out 2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-stack,
   .animate-fade-up,
   .animate-pop-in,
   .animate-overlay-in,
-  .animate-dialog-pop {
+  .animate-dialog-pop,
+  .animate-pulse-ring {
     animation: none !important;
   }
 }

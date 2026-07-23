@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Laptop, Lock, Mail, ShieldCheck, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, Laptop, Lock, Mail, ShieldCheck, Trash2 } from "lucide-react";
 import {
   Alert,
   Button,
@@ -32,6 +34,9 @@ type Flags = {
 /** Self-service account (prog parity, uprise conventions): email, password, 2FA, danger zone. */
 export default function AccountPage() {
   const { showToast } = useToast();
+  const searchParams = useSearchParams();
+  // Where the user came from (e.g. the getting-started checklist's 2FA step) — drives a back link.
+  const origin = searchParams.get("origin");
   const [flags, setFlags] = useState<Flags | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -55,6 +60,25 @@ export default function AccountPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Deep-link: a #two-factor hash (from the getting-started 2FA step) scrolls to and briefly
+  // pulses the 2FA card. Runs once the cards are mounted (flags loaded), not before.
+  useEffect(() => {
+    if (!flags || typeof window === "undefined") return;
+    if (window.location.hash !== "#two-factor") return;
+    const el = document.getElementById("two-factor");
+    if (!el) return;
+    // A frame's delay so layout has settled, then a quick smooth scroll + the primary pulse.
+    const raf = requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("animate-pulse-ring");
+    });
+    const done = setTimeout(() => el.classList.remove("animate-pulse-ring"), 2200);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(done);
+    };
+  }, [flags]);
 
   if (loadError && !flags) {
     return (
@@ -81,6 +105,15 @@ export default function AccountPage() {
 
   return (
     <div className="page-stack">
+      {origin === "getting-started" ? (
+        <Link
+          href="/getting-started"
+          className="inline-flex w-fit items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Getting started
+        </Link>
+      ) : null}
       <div>
         <h1 className="text-3xl font-semibold">Account</h1>
         <p className="text-sm text-muted-foreground">Sign-in, security and account controls.</p>
@@ -298,7 +331,7 @@ export default function AccountPage() {
     };
 
     return (
-      <Card>
+      <Card id="two-factor" className="scroll-mt-24">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Two-factor authentication

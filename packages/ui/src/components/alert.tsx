@@ -1,18 +1,23 @@
 "use client";
 
 import * as React from "react";
+import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export type AlertVariant = "success" | "error" | "warning" | "info";
 
 export interface AlertProps {
   variant: AlertVariant;
-  title: string;
+  /** Optional heading. Omit for a single-line callout (title-less body). */
+  title?: string;
   message?: string;
   children?: React.ReactNode;
   showLink?: boolean;
   linkHref?: string;
   linkText?: string;
+  /** Render a dismiss (×) button; hides the alert and fires `onDismiss`. */
+  dismissible?: boolean;
+  onDismiss?: () => void;
   className?: string;
 }
 
@@ -86,16 +91,22 @@ export function Alert({
   showLink = false,
   linkHref = "#",
   linkText = "Learn more",
+  dismissible = false,
+  onDismiss,
   className,
 }: AlertProps) {
   const { container, icon } = variantClasses[variant];
+  const [dismissed, setDismissed] = React.useState(false);
+  if (dismissed) return null;
 
   return (
-    <div className={cn("rounded-xl border p-4", container, className)}>
+    <div role="alert" className={cn("rounded-xl border p-4", container, className)}>
       <div className="flex items-start gap-3">
         <div className={cn("-mt-0.5 shrink-0", icon)}>{icons[variant]}</div>
         <div className="min-w-0 flex-1">
-          <h4 className="mb-1 text-sm font-semibold text-gray-800 dark:text-white/90">{title}</h4>
+          {title ? (
+            <h4 className="mb-1 text-sm font-semibold text-gray-800 dark:text-white/90">{title}</h4>
+          ) : null}
           {children ??
             (message != null && <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>)}
           {showLink && (
@@ -107,6 +118,19 @@ export function Alert({
             </a>
           )}
         </div>
+        {dismissible ? (
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => {
+              setDismissed(true);
+              onDismiss?.();
+            }}
+            className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/10 dark:hover:text-white/90"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
     </div>
   );
