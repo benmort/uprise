@@ -99,6 +99,15 @@ const CORE_FLAGS = [
     envVar: "FEATURE_TENANT_EMAIL_ENABLED",
   },
   {
+    key: "FEATURE_FIELD_TEXTING",
+    description:
+      "Volunteer P2P texting in the field app: text banks, claimed batches, press-send sessions and the reply inbox. Kill-switch per tenant; the /texting API stays permission-gated regardless.",
+    default: true,
+    kind: "release",
+    controllableBy: PLAN_DRIVEN,
+    envVar: "FEATURE_FIELD_TEXTING",
+  },
+  {
     key: "FEATURE_TENANT_TELEPHONY_ENABLED",
     description:
       "Per-tenant Twilio numbers: subaccount provisioning, AU regulatory compliance and tenant-scoped senders. Off ⇒ every send uses the platform TWILIO_* env credentials.",

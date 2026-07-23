@@ -32,7 +32,8 @@ function setup(over: Partial<Record<string, any>> = {}) {
     reply: jest.fn(async () => ({ ok: true })),
     markConversation: jest.fn(async () => ({ resolved: true })),
   };
-  return { service: new TextingService(prisma, blasts, inbox), prisma, blasts, inbox };
+  const flags: any = { isEnabled: jest.fn(async () => over.flagOn ?? true) };
+  return { service: new TextingService(prisma, blasts, inbox, flags), prisma, blasts, inbox, flags };
 }
 
 describe("listBanks", () => {
@@ -165,5 +166,23 @@ describe("sendInitial", () => {
     const { service, blasts } = setup();
     await service.sendInitial("t1", VOL, "r1");
     expect(blasts.sendSingleRecipient).toHaveBeenCalledWith("t1", "r1", "vol1");
+  });
+});
+
+describe("FEATURE_FIELD_TEXTING kill-switch", () => {
+  it("listBanks reads empty when the flag is off (UI hides quietly)", async () => {
+    const { service, prisma } = setup({ flagOn: false, campaigns: [{ id: "c1" }] });
+    expect(await service.listBanks("t1", VOL)).toEqual([]);
+    expect(prisma.canvassCampaign.findMany).not.toHaveBeenCalled();
+  });
+
+  it("claim and send hard-403 when the flag is off", async () => {
+    const { service } = setup({ flagOn: false });
+    await expect(service.claimBatch("t1", VOL, "b1", "initial")).rejects.toMatchObject({
+      response: { error: { code: "FEATURE_DISABLED" } },
+    });
+    await expect(service.sendInitial("t1", VOL, "r1")).rejects.toMatchObject({
+      response: { error: { code: "FEATURE_DISABLED" } },
+    });
   });
 });

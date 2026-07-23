@@ -71,6 +71,8 @@ export * from "./lib/turf-download-manager";
 
 // ── Field-facing API ─────────────────────────────────────────────────────────
 export * from "./api";
+export * from "./hooks/use-texting";
+export { TextingMenu } from "./components/texting-menu";
 
 // ── Session helper ───────────────────────────────────────────────────────────
 export * from "./lib/session";

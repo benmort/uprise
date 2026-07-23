@@ -6,15 +6,19 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Check,
+  ChevronRight,
   Download,
   Loader2,
   LocateFixed,
   MapPin,
   Menu,
+  MessagesSquare,
   PersonStanding,
 } from "lucide-react";
 import { Button, EmptyState, Skeleton } from "@uprise/ui";
 import { useAssignments, useRecommendedTurf, useVolunteerMetrics } from "../hooks/use-canvass";
+import { useApi } from "../hooks/use-api";
+import { listTextBanks, type TextBank } from "../api/texting";
 import { claimExistingTurf } from "../api/canvass";
 import { getVolunteerId, getTenantBrand } from "../lib/volunteer";
 import { reverseGeocode } from "../lib/geocode";
@@ -167,6 +171,8 @@ export function Assignments() {
         <StatCard label="conversations" value={metrics?.conversationsToday ?? 0} />
         <StatCard label="persuasion" value={metrics?.persuasionToday ?? 0} />
       </div>
+
+      <TextBanksEntry />
 
       {assignments.length === 0 ? (
         <div className="space-y-4">
@@ -364,5 +370,36 @@ function TurfDownloadButton({ turfId, geometry }: { turfId: string; geometry: un
     >
       <Download className="h-5 w-5" />
     </button>
+  );
+}
+
+
+/** "Text banks" home entry — shown only when this volunteer's tenant has workable text
+ *  banks (the API reads empty when FEATURE_FIELD_TEXTING is off, so no client flag). */
+function TextBanksEntry() {
+  const { data: banks } = useApi<TextBank[]>("/texting/banks", (signal) => listTextBanks(signal), {
+    ttlMs: 30_000,
+  });
+  if (!banks || banks.length === 0) return null;
+  const waiting = banks.reduce(
+    (sum, b) => sum + b.myUnreadConversations + b.blasts.reduce((s, x) => s + x.myAssignedUnsent, 0),
+    0,
+  );
+  return (
+    <Link
+      href="/texts"
+      className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-surface p-4 shadow-card"
+    >
+      <span className="flex items-center gap-2.5">
+        <MessagesSquare className="h-5 w-5 text-primary" />
+        <span>
+          <span className="block font-bold text-foreground">Text banks</span>
+          <span className="block text-sm text-muted-foreground">
+            {waiting > 0 ? `${waiting} waiting for you` : "Text voters one-to-one"}
+          </span>
+        </span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+    </Link>
   );
 }

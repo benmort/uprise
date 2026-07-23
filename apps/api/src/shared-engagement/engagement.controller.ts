@@ -11,6 +11,10 @@ import { TenantId } from "../auth/tenant-id.decorator";
 const CANVASS_READ = { action: "read", resource: "canvass.script" } as const;
 const DISPOSITION = { action: "create", resource: "canvass.disposition" } as const;
 const INBOX_READ = { action: "read", resource: "messaging.conversation" } as const;
+// Canned responses are read by texting volunteers too (their composer). messaging.texting
+// preserves all existing access (organiser/owner manage + member read messaging.all expand
+// over it) while adding the volunteer role's explicit grant.
+const CANNED_READ = { action: "read", resource: "messaging.texting" } as const;
 const INBOX_MANAGE = { action: "manage", resource: "messaging.conversation" } as const;
 import { EngagementService } from "./engagement.service";
 import { CannedResponsesService } from "./canned-responses.service";
@@ -79,7 +83,7 @@ export class EngagementController {
   }
 
   @Get("canned-responses")
-  @RequirePermission(INBOX_READ)
+  @RequirePermission(CANNED_READ)
   async listCanned(
     @TenantId() tenantId: string,
     @Query("channel") channel?: EngagementChannel,
@@ -113,7 +117,7 @@ export class EngagementController {
   }
 
   @Post("canned-responses/use")
-  @RequirePermission(INBOX_MANAGE)
+  @RequirePermission({ action: "manage", resource: "messaging.texting" } as const)
   async useCanned(@TenantId() tenantId: string, @Body() dto: UseCannedResponseDto) {
     return this.engagement.useCannedResponse(tenantId, {
       cannedResponseId: dto.cannedResponseId,

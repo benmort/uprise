@@ -6,3 +6,6 @@ export * from "./walk-view";
 export * from "./door-entry";
 export * from "./sync-centre";
 export * from "./shift-summary";
+export * from "./text-banks";
+export * from "./text-session";
+export * from "./text-inbox";

@@ -4,6 +4,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { BlastsService } from "../blasts/blasts.service";
 import { InboxService } from "../inbox/inbox.service";
 import { ApiHttpException } from "../common/http/api-response";
+import { FeatureFlagsService } from "../common/flags/feature-flags.service";
 import type { AuthUser } from "../auth/auth-user";
 
 /**
@@ -20,7 +21,15 @@ export class TextingService {
     private readonly prisma: PrismaService,
     private readonly blasts: BlastsService,
     private readonly inbox: InboxService,
+    private readonly flags: FeatureFlagsService,
   ) {}
+
+  /** Tenant kill-switch: FEATURE_FIELD_TEXTING off ⇒ the whole slice reads empty/403. */
+  private async assertEnabled(tenantId: string): Promise<void> {
+    if (!(await this.flags.isEnabled("FEATURE_FIELD_TEXTING", { tenantId }))) {
+      throw new ApiHttpException("FEATURE_DISABLED", "Texting is not enabled for this workspace", HttpStatus.FORBIDDEN);
+    }
+  }
 
   private isOrganiser(actor: AuthUser): boolean {
     return actor.isSuperAdmin === true || actor.role === AppUserRole.ORGANISER || actor.role === AppUserRole.OWNER;
@@ -31,6 +40,7 @@ export class TextingService {
    * caller's own workload counts. Organisers additionally see every blast's live status.
    */
   async listBanks(tenantId: string, actor: AuthUser) {
+    if (!(await this.flags.isEnabled("FEATURE_FIELD_TEXTING", { tenantId }))) return [];
     const campaigns = await this.prisma.canvassCampaign.findMany({
       where: { tenantId, channel: { in: [EngagementChannel.SMS, EngagementChannel.BOTH] } },
       orderBy: { createdAt: "desc" },
@@ -115,6 +125,7 @@ export class TextingService {
    * keeps two volunteers claiming simultaneously from ever double-assigning.
    */
   async claimBatch(tenantId: string, actor: AuthUser, blastId: string, kind: "initial" | "replies", count = 10) {
+    await this.assertEnabled(tenantId);
     const blast = await this.prisma.blast.findFirst({
       where: { id: blastId, tenantId },
       select: { id: true, metadata: true, campaignId: true },
@@ -261,6 +272,7 @@ export class TextingService {
 
   /** Press-send one assigned scripted initial message. Assignee binding enforced downstream. */
   async sendInitial(tenantId: string, actor: AuthUser, recipientId: string) {
+    await this.assertEnabled(tenantId);
     return this.blasts.sendSingleRecipient(tenantId, recipientId, actor.id);
   }
 }
