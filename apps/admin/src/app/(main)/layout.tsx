@@ -19,6 +19,8 @@ import {
   MapPin,
   Menu,
   MessageSquareText,
+  MessagesSquare,
+  PersonStanding,
   Rocket,
   Settings,
   ShieldCheck,
@@ -277,6 +279,11 @@ function buildNav(
     // out of Future as they ship.
     ...(isSuperAdmin
       ? ([
+          // The embedded volunteer app ("Yarns") — the live field app inside admin, for
+          // dogfooding canvassing + texting. Super-admin only while it bakes.
+          { type: "section", key: "sec-app", label: "App" },
+          { type: "leaf", key: "yarns-canvass", label: "Yarns Canvass", href: "/app/canvass", icon: PersonStanding, match: (p) => p.startsWith("/app/canvass") },
+          { type: "leaf", key: "yarns-texting", label: "Yarns Texting", href: "/app/texting", icon: MessagesSquare, match: (p) => p.startsWith("/app/texting") },
           { type: "section", key: "sec-superadmin", label: "Super Admin" },
           {
             type: "group", key: "super-admin", label: "Super Admin", icon: ShieldCheck,
