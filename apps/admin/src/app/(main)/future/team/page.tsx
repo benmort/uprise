@@ -1,13 +1,13 @@
 'use client';
 
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import { Avatar, AvatarFallback } from '@/components/prog/ui/avatar';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from '@/components/prog/ui/card';
+} from '@uprise/ui';
 import { Modal } from '@/components/prog/ui/modal';
 import { useState, useCallback } from 'react';
 import { Suspense } from 'react';

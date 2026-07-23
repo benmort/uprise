@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { Loader2, Trash2, Upload } from "lucide-react";
-import { Button } from "@/components/prog/ui/button";
+import { Button } from "@uprise/ui";
 import { getCroppedImg } from "@/lib/crop-image";
 import { uploadFile } from "@/lib/api/files";
 

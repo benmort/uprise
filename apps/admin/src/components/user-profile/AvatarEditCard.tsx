@@ -4,7 +4,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/prog/ui/button";
+import { Button } from "@uprise/ui";
 import { Skeleton } from "@uprise/ui";
 import { getCroppedImg } from "@/lib/crop-image";
 import { profile, type UserAvatarResponse } from "@uprise/api-client";

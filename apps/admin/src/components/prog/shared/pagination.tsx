@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import { cn } from '@/components/prog/cn';
 
 export interface PaginationProps {

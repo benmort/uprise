@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import {
   Mail,
   Send,

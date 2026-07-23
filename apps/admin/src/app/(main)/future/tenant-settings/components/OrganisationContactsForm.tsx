@@ -10,7 +10,7 @@ import {
 } from '@/components/prog/shared/forms';
 import { OrganisationContactFormValues } from '../types';
 import { Users, Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 
 const CONTACT_TYPE_OPTIONS = [
   { value: 'general', label: 'General' },

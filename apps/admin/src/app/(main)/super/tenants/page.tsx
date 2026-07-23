@@ -14,8 +14,8 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { auth, tenants as tenantsApi, type AuthPrincipal, type TenantStatus } from '@uprise/api-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/card';
-import { Button } from '@/components/prog/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
+import { Button } from '@uprise/ui';
 import { Badge } from '@/components/prog/ui/badge';
 import { SearchInput } from '@/components/ui/search-input';
 import { useFlag } from '@/components/flags/flags-provider';

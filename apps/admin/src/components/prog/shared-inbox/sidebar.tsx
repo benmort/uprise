@@ -6,7 +6,7 @@
 // are decorative placeholders until the backend models them.
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import { Mail, Send, Inbox, Trash2, Star, AlertCircle, Archive as ArchiveIcon } from 'lucide-react';
 
 interface SharedInboxSidebarProps {

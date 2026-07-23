@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Building2, Check, Loader2, X } from "lucide-react";
-import { Card, CardContent } from "@/components/prog/ui/card";
-import { Button } from "@/components/prog/ui/button";
+import { Card, CardContent } from "@uprise/ui";
+import { Button } from "@uprise/ui";
 import { approveSignup, listPendingSignups, rejectSignup, type PendingSignup } from "@/lib/api";
 
 /**

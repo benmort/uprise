@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import {
   Printer
 } from 'lucide-react';

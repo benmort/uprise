@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
 import {
   Search,

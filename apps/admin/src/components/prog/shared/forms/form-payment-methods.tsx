@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { FormSectionCard } from './form-section-card';
 import { FormCreditCard } from './form-credit-card';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import { Plus } from 'lucide-react';
 import type { CreditCardFormValues } from './form-credit-card';
 

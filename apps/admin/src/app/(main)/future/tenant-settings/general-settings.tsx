@@ -18,7 +18,7 @@ import {
 } from "@uprise/api-client";
 import { AdminOrHigher } from "@/components/prog/protected-route";
 import { FormSectionCard, FormInput, FormTextarea } from "@/components/prog/shared/forms";
-import { Button } from "@/components/prog/ui/button";
+import { Button } from "@uprise/ui";
 import { ImageCropUpload } from "@/components/branding/image-crop-upload";
 import {
   NetworkForm,

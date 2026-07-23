@@ -14,8 +14,8 @@ import {
   type PlanFeatureRow,
 } from "@/lib/api/flags";
 import { Badge } from "@/components/prog/ui/badge";
-import { Button } from "@/components/prog/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/prog/ui/card";
+import { Button } from "@uprise/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@uprise/ui";
 import { Input } from "@uprise/ui";
 import { Label } from "@/components/prog/ui/label";
 import { Modal } from "@/components/prog/ui/modal";

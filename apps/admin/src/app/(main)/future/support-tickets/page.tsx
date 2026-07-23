@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/prog/ui/button';
+import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
 import Checkbox from '@/components/prog/ui/form-elements/Checkbox';
 import Breadcrumbs from '@/components/prog/shared/breadcrumbs';

@@ -8,7 +8,7 @@ import {
   type EmailProvisioningStep,
   type EmailSenderIdentity,
 } from "@uprise/api-client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/prog/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@uprise/ui";
 import { getFeatureFlags } from "@/lib/api";
 import { getSession } from "@/lib/session";
 import {

@@ -11,8 +11,8 @@ import {
   type TelephonyProvisioningRun,
   type TelephonyProvisioningStep,
 } from '@uprise/api-client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/prog/ui/card';
-import { Button } from '@/components/prog/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
+import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
 import { Label } from '@/components/prog/ui/label';
 import { getSession } from '@/lib/session';

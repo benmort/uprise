@@ -6,7 +6,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from '@/components/prog/ui/card';
+} from '@uprise/ui';
 import { Skeleton } from '@uprise/ui';
 import { Alert } from "@uprise/ui";
 import {
