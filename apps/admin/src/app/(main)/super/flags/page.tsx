@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
+import { FlagSourceBadge } from "@/components/super/flag-source-badge";
 import {
   getFlagAdminFor,
   searchNetworks,
@@ -43,15 +44,6 @@ function flagLabel(f: string) {
     .replaceAll("_", " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
-const SOURCE_STYLES: Record<string, string> = {
-  env: "bg-warning/15 text-warning-foreground",
-  tenant: "bg-primary/15 text-primary",
-  network: "bg-accent/15 text-accent-foreground",
-  plan: "bg-accent/15 text-accent-foreground",
-  global: "bg-info/15 text-info",
-  default: "bg-surface-variant text-muted-foreground",
-};
 
 type SelTarget = { type: "tenant" | "network"; id: string; label: string; sub?: string };
 
@@ -330,9 +322,7 @@ export default function FeatureFlagsPage() {
                               >
                                 {f.effective ? "On" : "Off"}
                               </span>
-                              <span className={cn("rounded-full px-2 py-0.5 text-[11px]", SOURCE_STYLES[f.source] ?? SOURCE_STYLES.default)}>
-                                via {f.source}
-                              </span>
+                              <FlagSourceBadge source={f.source} />
                             </div>
                             <p className="mt-0.5 truncate text-xs text-muted-foreground">{f.description}</p>
                           </div>

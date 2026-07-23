@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Check, Loader2, Minus, ShieldAlert, X } from "lucide-react";
 import { NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
+import { FlagSourceBadge } from "@/components/super/flag-source-badge";
 import { getFlagAdminFor, setTargetFlag, type FlagAdminEntry } from "@/lib/api/flags";
 import { TenantPageHeader } from "@/components/super/tenant-page-header";
 
@@ -23,15 +24,6 @@ function flagLabel(f: string) {
     .replaceAll("_", " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
-const SOURCE_STYLES: Record<string, string> = {
-  env: "bg-warning/15 text-warning-foreground",
-  tenant: "bg-primary/15 text-primary",
-  network: "bg-accent/15 text-accent-foreground",
-  plan: "bg-accent/15 text-accent-foreground",
-  global: "bg-info/15 text-info",
-  default: "bg-surface-variant text-muted-foreground",
-};
 
 /** Tri-state override: Inherit (clear) / On / Off — the /super/flags control, unchanged. */
 function TriState({
@@ -172,9 +164,7 @@ export default function TenantFlagsPage() {
                         >
                           {f.effective ? "On" : "Off"}
                         </span>
-                        <span className={cn("rounded-full px-2 py-0.5 text-[11px]", SOURCE_STYLES[f.source] ?? SOURCE_STYLES.default)}>
-                          via {f.source}
-                        </span>
+                        <FlagSourceBadge source={f.source} />
                       </div>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{f.description}</p>
                     </div>
