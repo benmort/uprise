@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Input } from '@/components/prog/ui/input';
+import { Input } from '@uprise/ui';
 import { StateRegion } from '@/components/shell/state-region';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRealtimeInbox } from '@/lib/inbox/use-realtime-inbox';

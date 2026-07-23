@@ -16,7 +16,7 @@ import {
 import { Badge } from "@/components/prog/ui/badge";
 import { Button } from "@/components/prog/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/prog/ui/card";
-import { Input } from "@/components/prog/ui/input";
+import { Input } from "@uprise/ui";
 import { Label } from "@/components/prog/ui/label";
 import { Modal } from "@/components/prog/ui/modal";
 import {
@@ -26,7 +26,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/prog/ui/table";
+} from "@uprise/ui";
 
 // Only flags that declare the "plan" layer can be granted per plan.
 const PLAN_FLAGS: FeatureFlagKey[] = FEATURE_FLAG_KEYS.filter((k) =>

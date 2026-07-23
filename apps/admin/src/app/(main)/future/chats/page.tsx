@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Input } from '@/components/prog/ui/input';
+import { Input } from '@uprise/ui';
 import {
   Search,
   MoreHorizontal,

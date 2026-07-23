@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/prog/ui/button';
-import { Input } from '@/components/prog/ui/input';
+import { Input } from '@uprise/ui';
 import {
   Search,
   Download,

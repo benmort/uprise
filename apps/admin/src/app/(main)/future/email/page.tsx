@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Input } from '@/components/prog/ui/input';
+import { Input } from '@uprise/ui';
 import Checkbox from '@/components/prog/ui/form-elements/Checkbox';
 import EmailSidebar from '@/components/prog/email/sidebar';
 import {
