@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Lock, Save, Settings } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
+import { OriginBackLink } from "@/components/setup/origin-deep-link";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import {
   orgProfile,
@@ -446,6 +447,8 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
   return (
     <AdminOrHigher>
       <section className="page-stack">
+        {/* Shown only when arriving from a getting-started step (?origin=getting-started). */}
+        <OriginBackLink />
         <PageHeader
           icon={Settings}
           title="General settings"

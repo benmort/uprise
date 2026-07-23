@@ -11,11 +11,21 @@ describe("STEP_META", () => {
     }
   });
 
-  it("routes self steps to /account and org steps to their settings tabs", () => {
-    expect(STEP_META.verifyEmail.href).toBe("/account");
-    expect(STEP_META.businessLegal.href).toBe("/settings/business");
-    expect(STEP_META.contacts.href).toBe("/settings/contacts");
-    expect(STEP_META.address.href).toBe("/settings/addresses");
+  it("every step href carries the getting-started origin (back link on the target page)", () => {
+    for (const [key, meta] of Object.entries(STEP_META)) {
+      // The two channel steps anchor within /getting-started itself — no origin round-trip.
+      if (meta.href.startsWith("/getting-started")) continue;
+      expect(meta.href, key).toContain("origin=getting-started");
+    }
+  });
+
+  it("routes self steps to /account (anchored) and org steps to their settings tabs", () => {
+    expect(STEP_META.verifyEmail.href).toBe("/account?origin=getting-started#verify-email");
+    expect(STEP_META.confirmMobile.href).toBe("/account?origin=getting-started#two-factor");
+    expect(STEP_META.completeProfile.href).toBe("/profile?origin=getting-started");
+    expect(STEP_META.businessLegal.href).toBe("/settings/business?origin=getting-started");
+    expect(STEP_META.contacts.href).toBe("/settings/contacts?origin=getting-started");
+    expect(STEP_META.address.href).toBe("/settings/addresses?origin=getting-started");
   });
 
   it("routes channel steps to the getting-started card anchors", () => {

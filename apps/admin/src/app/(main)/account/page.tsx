@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Laptop, Lock, Mail, ShieldCheck, Trash2 } from "lucide-react";
+import { Laptop, Lock, Mail, ShieldCheck, Trash2 } from "lucide-react";
 import {
   Alert,
   Button,
@@ -21,6 +21,7 @@ import {
 import { auth, profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
+import { OriginBackLink, useDeepLinkPulse } from "@/components/setup/origin-deep-link";
 import { getSession, logout } from "@/lib/session";
 
 type Flags = {
@@ -61,24 +62,9 @@ export default function AccountPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Deep-link: a #two-factor hash (from the getting-started 2FA step) scrolls to and briefly
-  // pulses the 2FA card. Runs once the cards are mounted (flags loaded), not before.
-  useEffect(() => {
-    if (!flags || typeof window === "undefined") return;
-    if (window.location.hash !== "#two-factor") return;
-    const el = document.getElementById("two-factor");
-    if (!el) return;
-    // A frame's delay so layout has settled, then a quick smooth scroll + the primary pulse.
-    const raf = requestAnimationFrame(() => {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("animate-pulse-ring");
-    });
-    const done = setTimeout(() => el.classList.remove("animate-pulse-ring"), 2200);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(done);
-    };
-  }, [flags]);
+  // Deep-link: a hash (from a getting-started step) scrolls to and briefly pulses the
+  // matching card — #two-factor (2FA / mobile) or #verify-email. Runs once mounted.
+  useDeepLinkPulse(Boolean(flags));
 
   if (loadError && !flags) {
     return (
@@ -105,22 +91,16 @@ export default function AccountPage() {
 
   return (
     <div className="page-stack">
-      {origin === "getting-started" ? (
-        <Link
-          href="/getting-started"
-          className="inline-flex w-fit items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Getting started
-        </Link>
-      ) : null}
+      <OriginBackLink />
       <div>
         <h1 className="text-3xl font-semibold">Account</h1>
         <p className="text-sm text-muted-foreground">Sign-in, security and account controls.</p>
       </div>
 
       {!flags.emailVerified && flags.email ? (
-        <EmailVerificationBanner email={flags.email} onVerified={() => void load()} />
+        <div id="verify-email" className="scroll-mt-24">
+          <EmailVerificationBanner email={flags.email} onVerified={() => void load()} />
+        </div>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">

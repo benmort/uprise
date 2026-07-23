@@ -86,7 +86,7 @@ export function EmailSetupCard({ tenantId: tenantIdProp }: { tenantId?: string }
   };
 
   return (
-    <Card id="email">
+    <Card id="email" className="scroll-mt-24">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <AtSign className="h-4 w-4" />

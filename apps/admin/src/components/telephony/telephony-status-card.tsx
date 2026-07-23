@@ -166,7 +166,7 @@ export function TelephonyStatusCard({
     // Nothing to show: onboarding placement prompts setup; elsewhere it self-hides.
     if (!visible || !onboarding) return null;
     return (
-      <Card id="numbers">
+      <Card id="numbers" className="scroll-mt-24">
         {dialog}
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -186,7 +186,7 @@ export function TelephonyStatusCard({
   }
 
   return (
-    <Card id="numbers">
+    <Card id="numbers" className="scroll-mt-24">
       {dialog}
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="flex items-center gap-2">

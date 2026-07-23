@@ -10,6 +10,7 @@ import { TelephonyStatusCard } from "@/components/telephony/telephony-status-car
 import { EmailSetupCard } from "@/components/email/email-setup-card";
 import { SetupFlowSection } from "@/components/setup/setup-flow-section";
 import { useSetupState } from "@/components/setup/use-setup-state";
+import { useDeepLinkPulse } from "@/components/setup/origin-deep-link";
 import { nextStep, overallProgress, setupComplete } from "@/lib/setup/setup-state";
 import { stepTitle, STEP_META } from "@/lib/setup/step-registry";
 
@@ -21,6 +22,8 @@ import { stepTitle, STEP_META } from "@/lib/setup/step-registry";
  */
 export default function GettingStartedPage() {
   const { state, session, loading, error, noPermission, refetch } = useSetupState();
+  // A #numbers / #email hash (e.g. from a tracker deep link) pulses the channel card.
+  useDeepLinkPulse(Boolean(state));
 
   const complete = state ? setupComplete(state) : false;
   const progress = state ? overallProgress(state) : { done: 0, total: 0 };

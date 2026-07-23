@@ -21,6 +21,7 @@ import { emitProfileUpdated } from "@/lib/profile-events";
 import { Modal } from "@/components/ui/modal";
 import UserProfileCard from "@/components/user-profile/UserProfileCard";
 import AvatarEditCard from "@/components/user-profile/AvatarEditCard";
+import { OriginBackLink } from "@/components/setup/origin-deep-link";
 
 type Form = {
   displayName: string;
@@ -137,6 +138,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="page-stack">
+      <OriginBackLink />
         <Skeleton className="h-9 w-48" />
         <Skeleton className="h-40 w-full" />
         <Skeleton className="h-64 w-full" />

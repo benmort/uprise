@@ -5,6 +5,7 @@ import { StatusBadge, StepProgress } from "@uprise/ui";
 import type { ChannelSetupStep, SetupStep } from "@uprise/api-client";
 import { FLOW_META, type SetupFlowKey } from "@/lib/setup/step-registry";
 import { flowProgress } from "@/lib/setup/setup-state";
+import { Button } from "@/components/ui/button";
 import { SetupStepRow } from "./setup-step-row";
 
 type AnyStep = SetupStep | ChannelSetupStep;
@@ -67,12 +68,11 @@ export function SetupFlowSection({
               You&apos;re sending on shared Uprise numbers and addresses — that keeps working exactly as
               it does today. Upgrade to text, call and email from numbers your organisation owns.
             </p>
-            <a
-              href="mailto:support@uprise.org.au?subject=Upgrading%20our%20plan"
-              className="shrink-0 rounded-lg bg-primary-container px-3.5 py-2 text-xs font-bold text-primary"
-            >
-              Talk to us about upgrading
-            </a>
+            <Button asChild size="sm" variant="outline" className="shrink-0">
+              <a href="mailto:support@uprise.org.au?subject=Upgrading%20our%20plan">
+                Talk to us about upgrading
+              </a>
+            </Button>
           </div>
         </div>
       ) : (

@@ -20,13 +20,15 @@ export const STEP_META: Record<SetupStepKey, StepMeta> = {
   verifyEmail: {
     title: "Verify your email",
     blurb: "Confirm the address you sign in with.",
-    href: "/account",
+    // origin + hash: the account page scrolls to and pulses the verify banner, with a back link.
+    href: "/account?origin=getting-started#verify-email",
     cta: "Verify",
   },
   confirmMobile: {
     title: "Confirm your mobile",
     blurb: "A verified mobile secures account recovery.",
-    href: "/account",
+    // Mobile verification lives inside the 2FA card on the account page.
+    href: "/account?origin=getting-started#two-factor",
     cta: "Confirm",
   },
   enableTwofa: {
@@ -39,38 +41,39 @@ export const STEP_META: Record<SetupStepKey, StepMeta> = {
   completeProfile: {
     title: "Complete your profile",
     blurb: "Name and photo shown to your team.",
-    href: "/account",
+    // The name + photo editor is the profile page, not /account.
+    href: "/profile?origin=getting-started",
     cta: "Complete",
   },
   // Organisation setup
   orgIdentity: {
     title: "Organisation profile",
     blurb: "Name, logo and brand colour.",
-    href: "/settings/organisation",
+    href: "/settings/organisation?origin=getting-started",
     cta: "Set up",
   },
   businessLegal: {
     title: "Business & legal details",
     blurb: "Legal trading name, ABN/ACN and entity type — needed for your own phone number.",
-    href: "/settings/business",
+    href: "/settings/business?origin=getting-started",
     cta: "Add details",
   },
   contacts: {
     title: "Organisation contacts",
     blurb: "A primary contact (and ideally an authorised signatory).",
-    href: "/settings/contacts",
+    href: "/settings/contacts?origin=getting-started",
     cta: "Add contact",
   },
   address: {
     title: "Registered address",
     blurb: "Street, suburb, state and postcode.",
-    href: "/settings/addresses",
+    href: "/settings/addresses?origin=getting-started",
     cta: "Add address",
   },
   branding: {
     title: "Branding extras",
     blurb: "Secondary colour and hero image for your public pages.",
-    href: "/settings/branding",
+    href: "/settings/branding?origin=getting-started",
     cta: "Add branding",
   },
   // Channels
