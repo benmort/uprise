@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Button } from '@uprise/ui';
-import { Modal } from '@/components/prog/ui/modal';
+import { Modal } from "@/components/ui/modal";
 import { Skeleton } from '@uprise/ui';
 import {
   FormCreditCard,

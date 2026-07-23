@@ -1,10 +1,11 @@
 "use client";
 
-// Retiring prog/ui → @uprise/ui. prog's isOpen/onClose portal Modal now renders via the shared
-// Radix Modal (focus trap, scroll-lock incl. the <main> scroller via RemoveScroll, portal,
-// Escape/outside-click close). bg-surface is forced last so a consumer's prog bg token
-// (e.g. bg-card) can't leave the panel transparent; padding stays consumer-controlled (p-0 base,
-// as prog had none). Consumers get restructured onto Modal/ModalContent later, then this is deleted.
+// Admin convenience wrapper over the shared @uprise/ui Modal: an imperative `isOpen`/`onClose`
+// API (as opposed to the compositional `Modal`/`ModalContent`) for the handful of admin dialogs
+// written that way. Renders via the shared Radix Modal (focus trap, scroll-lock incl. the <main>
+// scroller via RemoveScroll, portal, Escape/outside-click close). `bg-surface` is forced last so
+// a consumer's bg token can't leave the panel transparent; padding stays consumer-controlled
+// (p-0 base). Relocated here when the parallel prog/ui kit was retired.
 import * as React from "react";
 import { Modal as UiModal, ModalContent, cn } from "@uprise/ui";
 

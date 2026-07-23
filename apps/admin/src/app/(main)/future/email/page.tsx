@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Input } from '@uprise/ui';
-import Checkbox from '@/components/prog/ui/form-elements/Checkbox';
+import { Checkbox } from '@uprise/ui';
 import EmailSidebar from '@/components/prog/email/sidebar';
 import {
   Star,
@@ -224,7 +224,7 @@ export default function EmailPage() {
                       <label className="flex items-center space-x-3 group cursor-pointer">
                         <Checkbox
                           checked={selectedEmails.length === mockEmails.length}
-                          onChange={handleSelectAll}
+                          onCheckedChange={handleSelectAll}
                         />
                       </label>
                       <span className="text-gray-500 duration-300 dropdown-toggle ease-linear dark:text-gray-40">
@@ -279,7 +279,7 @@ export default function EmailPage() {
                           <label className="flex items-center space-x-3 group cursor-pointer" onClick={(e) => e.preventDefault()}>
                             <Checkbox
                               checked={selectedEmails.includes(email.id)}
-                              onChange={() => handleSelectEmail(email.id)}
+                              onCheckedChange={() => handleSelectEmail(email.id)}
                             />
                           </label>
                           <span className="ml-3 text-gray-400 cursor-pointer" onClick={(e) => e.preventDefault()}>

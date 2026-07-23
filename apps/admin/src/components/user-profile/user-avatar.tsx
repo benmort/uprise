@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/prog/ui/avatar";
+import { Avatar } from "@uprise/ui";
 
 /** Two-letter initials from a display name or email (prog parity). */
 export function avatarInitials(name?: string | null): string {
@@ -12,9 +12,9 @@ export function avatarInitials(name?: string | null): string {
 }
 
 /**
- * The single way uprise renders a person (prog's radix Avatar). Shows the supplied
- * image when present, else falls back to initials. Size via `className` (e.g. "h-11 w-11");
- * defaults to the prog size-8.
+ * The single way uprise renders a person, on the shared @uprise/ui `Avatar`. Shows the supplied
+ * image when present, else initials. Size via `className` (e.g. "h-11 w-11") which overrides the
+ * default (prog's size-8 == `size="sm"`).
  */
 export function UserAvatar({
   src,
@@ -25,10 +25,5 @@ export function UserAvatar({
   name?: string | null;
   className?: string;
 }) {
-  return (
-    <Avatar className={className}>
-      {src ? <AvatarImage src={src} alt={name ?? "User"} /> : null}
-      <AvatarFallback>{avatarInitials(name)}</AvatarFallback>
-    </Avatar>
-  );
+  return <Avatar src={src} name={name} size="sm" className={className} />;
 }

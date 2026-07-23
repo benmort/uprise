@@ -17,8 +17,8 @@ import { Badge } from "@uprise/ui";
 import { Button } from "@uprise/ui";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@uprise/ui";
 import { Input } from "@uprise/ui";
-import { Label } from "@/components/prog/ui/label";
-import { Modal } from "@/components/prog/ui/modal";
+import { Label } from "@uprise/ui";
+import { Modal } from "@/components/ui/modal";
 import {
   Table,
   TableBody,
@@ -476,7 +476,7 @@ export default function PlansPage() {
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="plan-key">Key (matches plan name)</Label>
+            <Label variant="form" htmlFor="plan-key">Key (matches plan name)</Label>
             <Input
               id="plan-key"
               value={newKey}
@@ -486,7 +486,7 @@ export default function PlansPage() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="plan-name">Display name</Label>
+            <Label variant="form" htmlFor="plan-name">Display name</Label>
             <Input
               id="plan-name"
               value={newName}
@@ -528,11 +528,11 @@ export default function PlansPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="e-name">Display name</Label>
+                <Label variant="form" htmlFor="e-name">Display name</Label>
                 <Input id="e-name" value={form.displayName} onChange={(e) => patchForm({ displayName: e.target.value })} />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="e-desc">Description</Label>
+                <Label variant="form" htmlFor="e-desc">Description</Label>
                 <Input
                   id="e-desc"
                   value={form.description}
@@ -541,7 +541,7 @@ export default function PlansPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="e-order">Display order</Label>
+                <Label variant="form" htmlFor="e-order">Display order</Label>
                 <Input id="e-order" type="number" value={form.order} onChange={(e) => patchForm({ order: e.target.value })} />
               </div>
               <div className="flex items-end gap-6">
@@ -564,19 +564,19 @@ export default function PlansPage() {
               <legend className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pricing</legend>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="e-pm">Monthly price ($)</Label>
+                  <Label variant="form" htmlFor="e-pm">Monthly price ($)</Label>
                   <Input id="e-pm" type="number" value={form.priceMonthly} onChange={(e) => patchForm({ priceMonthly: e.target.value })} placeholder="49" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="e-pmo">Monthly original ($)</Label>
+                  <Label variant="form" htmlFor="e-pmo">Monthly original ($)</Label>
                   <Input id="e-pmo" type="number" value={form.priceMonthlyOriginal} onChange={(e) => patchForm({ priceMonthlyOriginal: e.target.value })} placeholder="59" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="e-pa">Annual price ($)</Label>
+                  <Label variant="form" htmlFor="e-pa">Annual price ($)</Label>
                   <Input id="e-pa" type="number" value={form.priceAnnually} onChange={(e) => patchForm({ priceAnnually: e.target.value })} placeholder="499" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="e-pao">Annual original ($)</Label>
+                  <Label variant="form" htmlFor="e-pao">Annual original ($)</Label>
                   <Input id="e-pao" type="number" value={form.priceAnnuallyOriginal} onChange={(e) => patchForm({ priceAnnuallyOriginal: e.target.value })} placeholder="708" />
                 </div>
               </div>
@@ -588,15 +588,15 @@ export default function PlansPage() {
               </legend>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label htmlFor="e-contacts">Contacts</Label>
+                  <Label variant="form" htmlFor="e-contacts">Contacts</Label>
                   <Input id="e-contacts" type="number" value={form.contacts} onChange={(e) => patchForm({ contacts: e.target.value })} placeholder="5000" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="e-team">Team members</Label>
+                  <Label variant="form" htmlFor="e-team">Team members</Label>
                   <Input id="e-team" type="number" value={form.teamMembers} onChange={(e) => patchForm({ teamMembers: e.target.value })} placeholder="3" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="e-seg">Segments</Label>
+                  <Label variant="form" htmlFor="e-seg">Segments</Label>
                   <Input id="e-seg" type="number" value={form.segments} onChange={(e) => patchForm({ segments: e.target.value })} placeholder="5" />
                 </div>
               </div>

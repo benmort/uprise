@@ -16,7 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
 import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
-import { Label } from '@/components/prog/ui/label';
+import { Label } from "@uprise/ui";
 import { getSession } from '@/lib/session';
 import { getFeatureFlags } from '@/lib/api';
 import { TenantPageHeader } from '@/components/super/tenant-page-header';
@@ -400,21 +400,21 @@ export default function TenantEmailPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {form.kind === 'UPRISE_SUBDOMAIN' ? (
                     <div>
-                      <Label htmlFor="slug">Subdomain label</Label>
+                      <Label variant="form" htmlFor="slug">Subdomain label</Label>
                       <Input id="slug" placeholder={tenant?.slug ?? 'tenant-slug'} value={form.slug} onChange={set('slug')} />
                     </div>
                   ) : (
                     <div>
-                      <Label htmlFor="domain">Domain</Label>
+                      <Label variant="form" htmlFor="domain">Domain</Label>
                       <Input id="domain" placeholder="tenantparty.org.au" value={form.domain} onChange={set('domain')} />
                     </div>
                   )}
                   <div>
-                    <Label htmlFor="fromLocalPart">From (local part)</Label>
+                    <Label variant="form" htmlFor="fromLocalPart">From (local part)</Label>
                     <Input id="fromLocalPart" value={form.fromLocalPart} onChange={set('fromLocalPart')} />
                   </div>
                   <div className="sm:col-span-2">
-                    <Label htmlFor="fromName">From name</Label>
+                    <Label variant="form" htmlFor="fromName">From name</Label>
                     <Input id="fromName" placeholder={tenant?.name ?? 'Display name'} value={form.fromName} onChange={set('fromName')} />
                   </div>
                 </div>
@@ -430,7 +430,7 @@ export default function TenantEmailPage() {
                 </div>
                 {form.mode === 'BYO' ? (
                   <div>
-                    <Label htmlFor="byoKey">SendGrid API key</Label>
+                    <Label variant="form" htmlFor="byoKey">SendGrid API key</Label>
                     <Input id="byoKey" type="password" value={form.byoApiKey} onChange={set('byoApiKey')} />
                   </div>
                 ) : null}

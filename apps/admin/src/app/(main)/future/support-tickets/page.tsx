@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
-import Checkbox from '@/components/prog/ui/form-elements/Checkbox';
+import { Checkbox } from '@uprise/ui';
 import Breadcrumbs from '@/components/prog/shared/breadcrumbs';
 import {
   MessageSquare,
@@ -308,7 +308,7 @@ export default function SupportTicketsPage() {
                       <div className="flex items-center gap-3">
                         <Checkbox
                           checked={selectedTickets.length === mockTickets.length && mockTickets.length > 0}
-                          onChange={handleSelectAll}
+                          onCheckedChange={(v) => handleSelectAll(v === true)}
                           className="select-none"
                         />
                         <p className="text-theme-xs font-medium text-gray-700 dark:text-gray-400">Ticket ID</p>
@@ -358,7 +358,7 @@ export default function SupportTicketsPage() {
                         <div onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={selectedTickets.includes(ticket.id)}
-                            onChange={(checked) => handleSelectTicket(ticket.id, checked)}
+                            onCheckedChange={(checked) => handleSelectTicket(ticket.id, checked === true)}
                             className="select-none"
                           />
                         </div>

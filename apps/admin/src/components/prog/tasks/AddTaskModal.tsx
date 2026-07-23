@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Modal } from '@/components/prog/ui/modal';
+import { Modal } from "@/components/ui/modal";
 import { Plus, X } from 'lucide-react';
 
 interface AddTaskModalProps {

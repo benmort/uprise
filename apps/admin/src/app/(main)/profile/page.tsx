@@ -18,7 +18,7 @@ import { profile, type UserAvatarResponse, type UserProfileResponse } from "@upr
 import { useToast } from "@/components/ui/toast";
 import { getSession } from "@/lib/session";
 import { emitProfileUpdated } from "@/lib/profile-events";
-import { Modal } from "@/components/prog/ui/modal";
+import { Modal } from "@/components/ui/modal";
 import UserProfileCard from "@/components/user-profile/UserProfileCard";
 import AvatarEditCard from "@/components/user-profile/AvatarEditCard";
 

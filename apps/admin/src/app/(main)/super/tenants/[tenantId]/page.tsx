@@ -7,7 +7,7 @@ import { tenants as tenantsApi, type AuthPrincipal, type TenantRecord, type Tena
 import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
 import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
-import { Label } from '@/components/prog/ui/label';
+import { Label } from "@uprise/ui";
 import { getSession } from '@/lib/session';
 import { TenantPageHeader } from '@/components/super/tenant-page-header';
 
@@ -132,11 +132,11 @@ export default function TenantDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="t-name">Display Name</Label>
+              <Label variant="form" htmlFor="t-name">Display Name</Label>
               <Input id="t-name" value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="t-status">Status</Label>
+              <Label variant="form" htmlFor="t-status">Status</Label>
               {isSuperAdmin ? (
                 <select
                   id="t-status"
@@ -158,7 +158,7 @@ export default function TenantDetailPage() {
               ) : null}
             </div>
             <div>
-              <Label htmlFor="t-slug">Subdomain</Label>
+              <Label variant="form" htmlFor="t-slug">Subdomain</Label>
               <Input
                 id="t-slug"
                 value={slug}

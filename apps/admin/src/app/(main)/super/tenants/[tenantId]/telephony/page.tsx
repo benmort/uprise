@@ -14,7 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
 import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
-import { Label } from '@/components/prog/ui/label';
+import { Label } from "@uprise/ui";
 import { getSession } from '@/lib/session';
 import { TenantPageHeader } from '@/components/super/tenant-page-header';
 import { getFeatureFlags } from '@/lib/api';
@@ -233,46 +233,46 @@ export default function TenantTelephonyPage() {
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="legalName">Legal entity name</Label>
+                    <Label variant="form" htmlFor="legalName">Legal entity name</Label>
                     <Input id="legalName" value={form.legalName} onChange={set('legalName')} />
                   </div>
                   <div>
-                    <Label htmlFor="businessNumber">ABN / ACN</Label>
+                    <Label variant="form" htmlFor="businessNumber">ABN / ACN</Label>
                     <Input id="businessNumber" value={form.businessNumber} onChange={set('businessNumber')} />
                   </div>
                   <div>
-                    <Label htmlFor="contactFirstName">Contact first name</Label>
+                    <Label variant="form" htmlFor="contactFirstName">Contact first name</Label>
                     <Input id="contactFirstName" value={form.contactFirstName} onChange={set('contactFirstName')} />
                   </div>
                   <div>
-                    <Label htmlFor="contactLastName">Contact last name</Label>
+                    <Label variant="form" htmlFor="contactLastName">Contact last name</Label>
                     <Input id="contactLastName" value={form.contactLastName} onChange={set('contactLastName')} />
                   </div>
                   <div className="sm:col-span-2">
-                    <Label htmlFor="email">Compliance contact email</Label>
+                    <Label variant="form" htmlFor="email">Compliance contact email</Label>
                     <Input id="email" type="email" value={form.email} onChange={set('email')} />
                   </div>
                   <div className="sm:col-span-2">
-                    <Label htmlFor="street">Street address</Label>
+                    <Label variant="form" htmlFor="street">Street address</Label>
                     <Input id="street" value={form.street} onChange={set('street')} />
                   </div>
                   <div>
-                    <Label htmlFor="city">City / suburb</Label>
+                    <Label variant="form" htmlFor="city">City / suburb</Label>
                     <Input id="city" value={form.city} onChange={set('city')} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label htmlFor="region">State</Label>
+                      <Label variant="form" htmlFor="region">State</Label>
                       <Input id="region" placeholder="NSW" value={form.region} onChange={set('region')} />
                     </div>
                     <div>
-                      <Label htmlFor="postalCode">Postcode</Label>
+                      <Label variant="form" htmlFor="postalCode">Postcode</Label>
                       <Input id="postalCode" value={form.postalCode} onChange={set('postalCode')} />
                     </div>
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="doc" className="flex items-center gap-1.5">
+                  <Label variant="form" htmlFor="doc" className="flex items-center gap-1.5">
                     <Upload className="h-3.5 w-3.5" />
                     Business registration document (PDF)
                   </Label>
@@ -305,11 +305,11 @@ export default function TenantTelephonyPage() {
                 {form.mode === 'BYO' ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <Label htmlFor="byoSid">Account SID</Label>
+                      <Label variant="form" htmlFor="byoSid">Account SID</Label>
                       <Input id="byoSid" value={form.byoAccountSid} onChange={set('byoAccountSid')} />
                     </div>
                     <div>
-                      <Label htmlFor="byoToken">Auth token</Label>
+                      <Label variant="form" htmlFor="byoToken">Auth token</Label>
                       <Input id="byoToken" type="password" value={form.byoAuthToken} onChange={set('byoAuthToken')} />
                     </div>
                   </div>

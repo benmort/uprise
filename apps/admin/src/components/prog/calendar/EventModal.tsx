@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Modal } from '@/components/prog/ui/modal';
+import { Modal } from "@/components/ui/modal";
 
 export type EventColor = 'danger' | 'success' | 'primary' | 'warning';
 

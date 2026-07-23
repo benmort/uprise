@@ -1,14 +1,14 @@
 'use client';
 
 import { Button } from '@uprise/ui';
-import { Avatar, AvatarFallback } from '@/components/prog/ui/avatar';
+import { Avatar } from '@uprise/ui';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@uprise/ui';
-import { Modal } from '@/components/prog/ui/modal';
+import { Modal } from "@/components/ui/modal";
 import { useState, useCallback } from 'react';
 import { Suspense } from 'react';
 import { Loader2, PlusCircle, Pencil, Mail, RefreshCw } from 'lucide-react';
@@ -297,13 +297,6 @@ function TeamMembers({ refreshTrigger }: { refreshTrigger?: number }) {
                 member.userId === currentUser?.id;
               const canRemove = baseCanRemove && !isSoleOwner;
               const displayName = getMemberDisplayName(member.user);
-              const avatarInitials = displayName
-                .split(' ')
-                .map((n) => n[0])
-                .filter(Boolean)
-                .join('')
-                .toUpperCase()
-                .slice(0, 2) || '?';
               const isRemoving = removingMemberId === member.id;
               return (
                 <div
@@ -312,9 +305,7 @@ function TeamMembers({ refreshTrigger }: { refreshTrigger?: number }) {
                   className={`flex flex-col rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03] ${isRemoving ? 'opacity-60 pointer-events-none' : ''}`}
                 >
                   <div className="flex items-start gap-3">
-                    <Avatar>
-                      <AvatarFallback>{avatarInitials}</AvatarFallback>
-                    </Avatar>
+                    <Avatar name={displayName} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
                         {displayName}

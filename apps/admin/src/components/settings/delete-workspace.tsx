@@ -6,7 +6,7 @@ import { auth, tenants } from "@uprise/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@uprise/ui";
 import { Button } from "@uprise/ui";
 import { Input } from "@uprise/ui";
-import { Label } from "@/components/prog/ui/label";
+import { Label } from "@uprise/ui";
 import { Skeleton } from "@uprise/ui";
 import { Alert } from "@uprise/ui";
 import { logout } from "@/lib/session";
@@ -105,7 +105,7 @@ export function DeleteWorkspaceCard({
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label htmlFor="delete-workspace-password" className="mb-2">
+                  <Label variant="form" htmlFor="delete-workspace-password" className="mb-2">
                     Confirm your password
                   </Label>
                   <Input

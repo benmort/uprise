@@ -9,7 +9,7 @@ import { profile, sessions as sessionsApi, type SessionSummaryResponse } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@uprise/ui";
 import { Button } from "@uprise/ui";
 import { Input } from "@uprise/ui";
-import { Label } from "@/components/prog/ui/label";
+import { Label } from "@uprise/ui";
 import { Skeleton } from "@uprise/ui";
 import { Alert } from "@uprise/ui";
 import { getSession, logout } from "@/lib/session";
@@ -87,7 +87,7 @@ function ChangePasswordCard() {
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <Label htmlFor="current-password" className="mb-2">
+            <Label variant="form" htmlFor="current-password" className="mb-2">
               Current password
             </Label>
             <Input
@@ -103,7 +103,7 @@ function ChangePasswordCard() {
             />
           </div>
           <div>
-            <Label htmlFor="new-password" className="mb-2">
+            <Label variant="form" htmlFor="new-password" className="mb-2">
               New password
             </Label>
             <Input
@@ -120,7 +120,7 @@ function ChangePasswordCard() {
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">At least 8 characters.</p>
           </div>
           <div>
-            <Label htmlFor="confirm-password" className="mb-2">
+            <Label variant="form" htmlFor="confirm-password" className="mb-2">
               Confirm new password
             </Label>
             <Input
@@ -369,7 +369,7 @@ function DeleteAccountCard({
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label htmlFor="delete-password" className="mb-2">
+                  <Label variant="form" htmlFor="delete-password" className="mb-2">
                     Confirm your password
                   </Label>
                   <Input

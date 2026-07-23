@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
 import { Button } from '@uprise/ui';
 import { Input } from '@uprise/ui';
-import { Label } from '@/components/prog/ui/label';
+import { Label } from "@uprise/ui";
 import { TenantPageHeader } from '@/components/super/tenant-page-header';
 
 const ROLES: AppUserRole[] = ['OWNER', 'ORGANISER', 'VOLUNTEER'];
@@ -120,7 +120,7 @@ export default function TenantMembersPage() {
           <CardContent>
             <form onSubmit={addMember} className="flex flex-wrap items-end gap-3">
               <div className="flex-1 min-w-[200px]">
-                <Label htmlFor="m-email">Email</Label>
+                <Label variant="form" htmlFor="m-email">Email</Label>
                 <Input
                   id="m-email"
                   type="email"
@@ -131,7 +131,7 @@ export default function TenantMembersPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="m-role">Role</Label>
+                <Label variant="form" htmlFor="m-role">Role</Label>
                 <div className="mt-1">
                   <RoleSelect value={inviteRole} onChange={setInviteRole} />
                 </div>
