@@ -21,7 +21,6 @@ import {
   MessageSquareText,
   MessagesSquare,
   PersonStanding,
-  Rocket,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -38,10 +37,11 @@ import { tenants, type AuthPrincipal } from "@uprise/api-client";
 import { tenantSlugFromPlatformHost } from "@uprise/domains";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, getSessionOutcome, goToLogin, logout } from "@/lib/session";
-import { setupComplete } from "@/lib/setup/setup-state";
+import { setupComplete, overallProgress } from "@/lib/setup/setup-state";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search";
 import { NotificationsDropdown } from "@/components/topbar/notifications-dropdown";
+import { GettingStartedButton } from "@/components/topbar/getting-started-button";
 import { TenantSwitcher } from "@/components/topbar/tenant-switcher";
 import { UserDropdown } from "@/components/topbar/user-dropdown";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
@@ -86,7 +86,6 @@ type NavNode =
 // rail is open. Mirrors each surface's own page subtitle.
 const NAV_DESCRIPTIONS: Record<string, string> = {
   dashboard: "Everything across Uprise at a glance.",
-  "getting-started": "Set up your organisation, step by step.",
   "shared-inbox": "Every conversation across your channels, in one queue.",
   calendar: "Shifts, events and reminders in one place.",
   channels: "Reach people by text and voice.",
@@ -150,9 +149,7 @@ function buildNav(
   const sp = (s: string): NavMatch => (p) => p.startsWith(`/super/${s}`);
   return [
     { type: "leaf", key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, match: (p) => p === "/dashboard" },
-    // First-run organiser checklist — flag-gated (default on); the shell hides it
-    // once every onboarding step is complete (see onboardingDone).
-    { type: "leaf", key: "getting-started", label: "Getting Started", href: "/getting-started", icon: Rocket, match: (p) => p.startsWith("/getting-started"), flag: "FEATURE_NAV_GETTING_STARTED" },
+    // Getting Started lives in the topbar (rocket button beside notifications), not the sidebar.
     // Shared inbox (unified cross-channel queue). Open to organisers, flag-gated
     // (FEATURE_NAV_PROG_CHANNELS). The SMS-only inbox is parked in Future as "SMS inbox".
     { type: "leaf", key: "shared-inbox", label: "Inbox", href: "/inbox", icon: Inbox, match: (p) => p.startsWith("/inbox"), flag: "FEATURE_NAV_PROG_CHANNELS" },
@@ -440,6 +437,11 @@ export default function MainLayout({
   // getting-started page and the setup tracker use, via the use-api cache.
   const { state: setupState } = useSetupState();
   const onboardingDone = setupState ? setupComplete(setupState) : false;
+  // Remaining onboarding steps — drives the pulsing count badge on the topbar Getting Started
+  // button. Matches the headline "{done} of {total}" on the getting-started page (overallProgress).
+  const gettingStartedRemaining = setupState
+    ? Math.max(0, overallProgress(setupState).total - overallProgress(setupState).done)
+    : 0;
   const [creatingBlast, setCreatingBlast] = useState(false);
   const [inboxUnreadCount, setInboxUnreadCount] = useState(0);
   const [pendingJoinCount, setPendingJoinCount] = useState(0);
@@ -549,7 +551,7 @@ export default function MainLayout({
   }, [ready, principal]);
 
   // Onboarding completion now comes straight from useSetupState above — no separate
-  // derive pass; the nav memo reads `onboardingDone` as before.
+  // derive pass; it gates the topbar Getting Started button (hidden once complete).
 
   useEffect(() => {
     if (!ready) return;
@@ -805,7 +807,6 @@ export default function MainLayout({
     };
     const built = buildNav(isSuperAdmin, canvassCampaignId, superTenantId)
       .filter((n) => flagOn(n.flag))
-      .filter((n) => !(onboardingDone && n.key === "getting-started"))
       .map((n) => (n.type === "group" ? { ...n, children: filterEntries(n.children) } : n))
       .filter((n) => n.type !== "group" || n.children.length > 0);
     // Drop a zone header that has no surviving item before the next header / the end.
@@ -823,7 +824,7 @@ export default function MainLayout({
       if (!("href" in only)) return n; // sole child isn't a direct link → keep the group
       return { type: "leaf", key: n.key, label: n.label, icon: n.icon, href: only.href, match: n.match, flag: n.flag };
     });
-  }, [isSuperAdmin, flagOn, onboardingDone, canvassCampaignId, superTenantId]);
+  }, [isSuperAdmin, flagOn, canvassCampaignId, superTenantId]);
   // Flatten the nav into a search index for the topbar command palette.
   const searchItems = useMemo<SearchItem[]>(() => {
     const collect = (entries: NavEntry[]): { label: string; href: string }[] =>
@@ -1335,6 +1336,9 @@ export default function MainLayout({
             <div className="flex items-center gap-2.5">
               <ThemeToggle />
               <NotificationsDropdown unreadCount={inboxUnreadCount} />
+              {flagOn("FEATURE_NAV_GETTING_STARTED") && !onboardingDone ? (
+                <GettingStartedButton remaining={gettingStartedRemaining} />
+              ) : null}
               <UserDropdown email={principal?.email ?? null} />
             </div>
           </header>
