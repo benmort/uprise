@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Lock } from "lucide-react";
+import { TabNav, TabNavItem } from "@uprise/ui";
 import { cn } from "@/lib/utils";
 import {
   SETTINGS_PRIMARY_TABS,
@@ -33,7 +34,7 @@ export function SettingsTabs({
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-1 rounded-xl border border-border p-0.5">
+      <TabNav>
         {SETTINGS_PRIMARY_TABS.map((t) => {
           // Owner-only tabs are locked (greyed + padlock, not a link) for non-owners.
           if (t.ownerOnly && !isOwner) {
@@ -42,7 +43,7 @@ export function SettingsTabs({
                 key={t.key}
                 title={`${t.label} — workspace owners only`}
                 aria-disabled="true"
-                className="flex cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold text-muted-foreground/60"
+                className="flex cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground/60"
               >
                 <Lock className="h-3 w-3" />
                 {t.label}
@@ -50,20 +51,12 @@ export function SettingsTabs({
             );
           }
           return (
-            <Link
-              key={t.key}
-              href={`/settings/${TAB_SEGMENT[t.key]}`}
-              aria-current={active === t.key ? "page" : undefined}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-                active === t.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
-              )}
-            >
-              {t.label}
-            </Link>
+            <TabNavItem key={t.key} active={active === t.key} asChild>
+              <Link href={`/settings/${TAB_SEGMENT[t.key]}`}>{t.label}</Link>
+            </TabNavItem>
           );
         })}
-      </div>
+      </TabNav>
       {isSuperAdmin ? (
         <div className="flex flex-wrap items-center gap-1 rounded-xl border border-dashed border-border/70 bg-surface-variant/30 p-0.5">
           <span className="px-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">

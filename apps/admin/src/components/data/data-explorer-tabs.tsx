@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { TabNav, TabNavItem } from "@uprise/ui";
 
 /**
  * The segmented tab bar across the top of every /data explorer.
@@ -53,21 +53,14 @@ export function DataExplorerTabs({
   hrefFor?: (tab: DataTab, href: string) => string;
 }) {
   return (
-    <div className="flex flex-wrap rounded-xl border border-border p-0.5">
+    <TabNav>
       {TABS.map((t) => (
-        <Link
-          key={t.key}
-          href={hrefFor ? hrefFor(t.key, t.href) : t.href}
-          scroll={false}
-          aria-current={active === t.key ? "page" : undefined}
-          className={cn(
-            "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-            active === t.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
-          )}
-        >
-          {t.label}
-        </Link>
+        <TabNavItem key={t.key} active={active === t.key} asChild>
+          <Link href={hrefFor ? hrefFor(t.key, t.href) : t.href} scroll={false}>
+            {t.label}
+          </Link>
+        </TabNavItem>
       ))}
-    </div>
+    </TabNav>
   );
 }

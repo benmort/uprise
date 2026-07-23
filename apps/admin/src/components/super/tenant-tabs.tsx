@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { TabNav, TabNavItem } from "@uprise/ui";
 
 /**
  * The segmented tab bar across the super-admin tenant-scoped pages — the same control the
@@ -33,20 +33,12 @@ export function TenantTabs() {
     TABS.find((t) => t.suffix && subPath.startsWith(t.suffix))?.key ?? "overview";
 
   return (
-    <div className="flex flex-wrap rounded-xl border border-border p-0.5">
+    <TabNav>
       {TABS.map((t) => (
-        <Link
-          key={t.key}
-          href={`${base}${t.suffix}`}
-          aria-current={active === t.key ? "page" : undefined}
-          className={cn(
-            "rounded-lg px-3 py-1.5 text-sm font-semibold transition",
-            active === t.key ? "bg-primary text-white" : "text-foreground hover:bg-surface-variant",
-          )}
-        >
-          {t.label}
-        </Link>
+        <TabNavItem key={t.key} active={active === t.key} asChild>
+          <Link href={`${base}${t.suffix}`}>{t.label}</Link>
+        </TabNavItem>
       ))}
-    </div>
+    </TabNav>
   );
 }
