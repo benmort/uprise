@@ -15,6 +15,7 @@ const buttonVariants = cva(
         ghost: "text-foreground hover:bg-surface-variant",
         warning: "bg-warning-container text-warning-foreground hover:opacity-90",
         success: "bg-success text-white hover:opacity-90",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
         default: "h-11 px-4 py-2",

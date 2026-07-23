@@ -35,6 +35,22 @@ export function CardTitle({
   );
 }
 
+/** Sub-heading under the title. */
+export function CardDescription({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement>) {
+  return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;
+}
+
+/** Header-aligned action slot (e.g. a menu/button pinned top-right of the card). */
+export function CardAction({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn("ml-auto self-start", className)} {...props} />;
+}
+
 export function CardContent({
   className,
   ...props

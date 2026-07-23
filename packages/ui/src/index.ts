@@ -60,6 +60,7 @@ export * from "./components/modal";
 export * from "./components/form-dialog";
 export * from "./components/confirm-dialog";
 export * from "./components/dropdown";
+export * from "./components/dropdown-menu";
 export * from "./components/popover";
 export * from "./components/tooltip";
 export * from "./components/tooltip-hint";
