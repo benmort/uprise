@@ -1,8 +1,9 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AtSign, Copy, Loader2, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { AtSign, Copy, Plus, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import {
   emailProvisioning,
   tenants as tenantsApi,
@@ -204,7 +205,7 @@ export default function TenantEmailPage() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -438,7 +439,7 @@ export default function TenantEmailPage() {
                   onClick={startRun}
                   disabled={busy || !form.fromLocalPart || (form.kind !== 'UPRISE_SUBDOMAIN' && !form.domain)}
                 >
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {busy ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Start provisioning
                 </Button>
               </CardContent>

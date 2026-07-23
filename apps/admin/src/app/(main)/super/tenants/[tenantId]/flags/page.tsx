@@ -1,8 +1,9 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { Check, Loader2, Minus, ShieldAlert, X } from "lucide-react";
+import { Check, Minus, ShieldAlert, X } from "lucide-react";
 import { NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import { FlagSourceBadge } from "@/components/super/flag-source-badge";
@@ -135,7 +136,7 @@ export default function TenantFlagsPage() {
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-6 py-16 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading overrides…
+          <Spinner className="h-5 w-5 animate-spin" /> Loading overrides…
         </div>
       ) : error ? (
         <div className="rounded-xl border border-border bg-surface px-6 py-10 text-center">
@@ -169,7 +170,7 @@ export default function TenantFlagsPage() {
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{f.description}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {pending === f.key ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+                      {pending === f.key ? <Spinner className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
                       <TriState
                         value={f.tenantOverride}
                         disabled={pending === f.key}

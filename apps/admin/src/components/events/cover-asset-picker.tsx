@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useEffect, useState } from "react";
-import { Check, ImageIcon, Loader2 } from "lucide-react";
+import { Check, ImageIcon } from "lucide-react";
 import { EmptyState } from "@uprise/ui";
 import { listFiles, type StoredFile } from "@/lib/api/files";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,7 @@ export function CoverAssetPicker({
   if (rows === null && !error) {
     return (
       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading your cover library…
+        <Spinner className="mr-2 h-4 w-4 animate-spin" /> Loading your cover library…
       </div>
     );
   }

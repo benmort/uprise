@@ -3,8 +3,9 @@
 // Account security — password, active sessions, delete account. Extracted from the
 // standalone /future/security page so it renders both there and as a tab on the
 // General settings page. Self-contained: fetches the session for delete-account gating.
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Laptop, Loader2, Lock, RefreshCw, Trash2 } from "lucide-react";
+import { Laptop, Lock, RefreshCw, Trash2 } from "lucide-react";
 import { profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@uprise/ui";
 import { Button } from "@uprise/ui";
@@ -148,7 +149,7 @@ function ChangePasswordCard() {
           >
             {pending ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="mr-2 h-4 w-4 animate-spin" />
                 Updating…
               </>
             ) : (
@@ -406,7 +407,7 @@ function DeleteAccountCard({
                   >
                     {pending ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Spinner className="mr-2 h-4 w-4 animate-spin" />
                         Deleting…
                       </>
                     ) : (

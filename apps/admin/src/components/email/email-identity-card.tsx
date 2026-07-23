@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useEffect, useState } from "react";
-import { AtSign, Copy, Loader2 } from "lucide-react";
+import { AtSign, Copy } from "lucide-react";
 import {
   emailProvisioning,
   type EmailProvisioningRun,
@@ -89,7 +90,7 @@ export function EmailIdentityCard({ tenantId: tenantIdProp }: { tenantId?: strin
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : error ? (
           <p className="text-sm text-error">Couldn&rsquo;t load email identity status: {error}</p>
         ) : (

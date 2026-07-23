@@ -1,8 +1,9 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Building2, Loader2, Trash2 } from 'lucide-react';
+import { Building2, Trash2 } from "lucide-react";
 import { tenants as tenantsApi, type AuthPrincipal, type TenantRecord, type TenantStatus } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
 import { Button } from '@uprise/ui';
@@ -87,7 +88,7 @@ export default function TenantDetailPage() {
     return (
       <div className="page-stack">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+          <Spinner className="h-5 w-5 animate-spin" /> Loading…
         </div>
       </div>
     );
@@ -172,7 +173,7 @@ export default function TenantDetailPage() {
             </div>
             <div className="flex justify-end">
               <Button onClick={() => void save()} disabled={saving || !name.trim()}>
-                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                {saving ? <Spinner className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Save changes
               </Button>
             </div>

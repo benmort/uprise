@@ -1,9 +1,10 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ListOrdered, Loader2, Lock, Navigation, RefreshCw, UserMinus, UserPlus } from "lucide-react";
+import { ListOrdered, Lock, Navigation, RefreshCw, UserMinus, UserPlus } from "lucide-react";
 import { CampaignPageHeader } from "@/components/canvass/campaign-page-header";
 import {
   assignTurf,
@@ -528,7 +529,7 @@ export default function WalkListBuilderPage() {
                 disabled={rebuildingSingle || batchBusy || !turfId}
               >
                 {rebuildingSingle ? (
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  <Spinner className="mr-1.5 h-4 w-4 animate-spin" />
                 ) : (
                   <RefreshCw className="mr-1.5 h-4 w-4" />
                 )}
@@ -561,7 +562,7 @@ export default function WalkListBuilderPage() {
                     disabled={batchBusy || rebuildingSingle || batchSelected.length === 0}
                   >
                     {batchBusy ? (
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                      <Spinner className="mr-1.5 h-4 w-4 animate-spin" />
                     ) : (
                       <RefreshCw className="mr-1.5 h-4 w-4" />
                     )}

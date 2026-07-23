@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, Mic, MicOff, Phone, PhoneOff } from "lucide-react";
+import { Spinner } from "@uprise/ui";
+import { Mic, MicOff, Phone, PhoneOff } from "lucide-react";
 import { useSoftphone } from "./softphone-provider";
 
 function formatElapsed(sec: number): string {
@@ -35,7 +36,7 @@ export function CallBar() {
       className="fixed bottom-4 left-1/2 z-50 flex w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 items-center gap-3 rounded-2xl border border-border bg-surface p-3 shadow-lg"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-container text-primary">
-        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Phone className="h-5 w-5" />}
+        {busy ? <Spinner className="h-5 w-5 animate-spin" /> : <Phone className="h-5 w-5" />}
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">

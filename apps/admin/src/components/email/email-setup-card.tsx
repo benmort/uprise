@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from "react";
-import { AtSign, Loader2 } from "lucide-react";
+import { AtSign } from "lucide-react";
 import { emailProvisioning, type EmailProvisioningRequest } from "@uprise/api-client";
 import { StatusBadge, useToast } from "@uprise/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,7 +97,7 @@ export function EmailSetupCard({ tenantId: tenantIdProp }: { tenantId?: string }
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : openRequest ? (
           <>
             <p className="text-sm text-muted-foreground">
@@ -123,7 +124,7 @@ export function EmailSetupCard({ tenantId: tenantIdProp }: { tenantId?: string }
                 label="Request email setup"
               >
                 <Button size="sm" disabled={busy} onClick={() => void request()}>
-                  {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+                  {busy ? <Spinner className="mr-1.5 h-4 w-4 animate-spin" /> : null}
                   Request email setup
                 </Button>
               </LockedAction>

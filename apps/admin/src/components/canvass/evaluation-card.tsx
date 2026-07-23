@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from "react";
-import { FlaskConical, Loader2, Snowflake } from "lucide-react";
+import { FlaskConical, Snowflake } from "lucide-react";
 import {
   type CampaignEvaluation,
   type EvaluationPower,
@@ -91,7 +92,7 @@ export function EvaluationCard({
   return (
     <CollapsibleCard id={id} title="Evaluation" description="Randomised holdout + pre-election snapshot">
       {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <Spinner className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : evaluation ? (
         <div className="space-y-2 text-sm">
           <p className="flex items-center gap-1.5 font-semibold text-foreground">

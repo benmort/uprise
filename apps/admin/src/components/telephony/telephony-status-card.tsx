@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, Loader2, Phone, PhoneOff, Plus } from "lucide-react";
+import { ChevronDown, Phone, PhoneOff, Plus } from "lucide-react";
 import {
   telephony,
   type TelephonyPhoneNumber,
@@ -197,7 +198,7 @@ export function TelephonyStatusCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {loading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
         ) : error ? (
           <p className="text-sm text-error">Couldn&rsquo;t load telephony status: {error}</p>
         ) : (
@@ -253,7 +254,7 @@ export function TelephonyStatusCard({
                           onClick={() => void useForCalls(n)}
                         >
                           {savingNumberId === n.id ? (
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                           ) : null}
                           Use for calls
                         </Button>

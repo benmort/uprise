@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useState } from "react";
-import { AlertTriangle, Check, Loader2, Plus, Trash2, Wand2 } from "lucide-react";
+import { AlertTriangle, Check, Plus, Trash2, Wand2 } from "lucide-react";
 import type { SegmentCustomClause } from "@uprise/segmentation";
 import { compileSegmentCustomQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -137,7 +138,7 @@ export function CustomQueryLane({
                   onClick={() => compile(index)}
                 >
                   {candidate.status === "compiling" ? (
-                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    <Spinner className="mr-1 h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Wand2 className="mr-1 h-3.5 w-3.5" />
                   )}

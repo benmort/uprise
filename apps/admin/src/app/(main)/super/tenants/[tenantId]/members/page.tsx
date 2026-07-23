@@ -1,8 +1,9 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Users, Loader2, UserPlus, X } from 'lucide-react';
+import { Users, UserPlus, X } from "lucide-react";
 import {
   tenants as tenantsApi,
   type AppUserRole,
@@ -137,7 +138,7 @@ export default function TenantMembersPage() {
                 </div>
               </div>
               <Button type="submit" disabled={pending === 'add' || !inviteEmail.trim()}>
-                {pending === 'add' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                {pending === 'add' ? <Spinner className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Add
               </Button>
             </form>
@@ -156,7 +157,7 @@ export default function TenantMembersPage() {
           <CardContent>
             {members === null ? (
               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+                <Spinner className="h-5 w-5 animate-spin" /> Loading…
               </div>
             ) : error ? (
               <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
@@ -192,7 +193,7 @@ export default function TenantMembersPage() {
                         className="text-red-600 dark:text-red-400"
                       >
                         {pending === `remove:${m.userId}` ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Spinner className="h-4 w-4 animate-spin" />
                         ) : (
                           <X className="h-4 w-4" />
                         )}

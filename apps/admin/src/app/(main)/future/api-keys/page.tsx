@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Copy, KeyRound, Loader2, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import {
   issueApiKey,
   listApiKeys,
@@ -148,7 +149,7 @@ export default function ApiKeysPage() {
             disabled={!name.trim() || creating}
             className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {creating ? <Spinner className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             Create key
           </button>
         </form>
@@ -168,7 +169,7 @@ export default function ApiKeysPage() {
         </div>
       ) : loading ? (
         <div className={`${card} flex items-center justify-center gap-2 px-6 py-16 text-gray-500 dark:text-gray-400`}>
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading keys…
+          <Spinner className="h-5 w-5 animate-spin" /> Loading keys…
         </div>
       ) : error ? (
         <div className={`${card} px-6 py-10 text-center`}>
@@ -212,7 +213,7 @@ export default function ApiKeysPage() {
                         disabled={revoking === k.id}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-red-900/20"
                       >
-                        {revoking === k.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        {revoking === k.id ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         Revoke
                       </button>
                     </td>

@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "@uprise/ui";
 import { Button } from "@uprise/ui";
 import { Skeleton } from "@uprise/ui";
 import { getCroppedImg } from "@/lib/crop-image";
@@ -162,7 +162,7 @@ export default function AvatarEditCard({ onClose, onSave, inModal = false }: Ava
                     <img src={avatar.url} alt="" className="h-full w-full object-cover" />
                     {isLoading ? (
                       <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
-                        <Loader2 className="h-8 w-8 animate-spin text-white" />
+                        <Spinner className="h-8 w-8 animate-spin text-white" />
                       </div>
                     ) : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/50 p-1 opacity-0 transition-opacity hover:opacity-100">

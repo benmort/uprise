@@ -1,8 +1,9 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, ChevronLeft, EyeOff, Loader2, Pencil, Plus, ShieldAlert, ShieldCheck, Star, X } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronLeft, EyeOff, Pencil, Plus, ShieldAlert, ShieldCheck, Star, X } from "lucide-react";
 import { FEATURE_FLAG_KEYS, FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import {
@@ -324,7 +325,7 @@ export default function PlansPage() {
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-6 py-16 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading plans…
+          <Spinner className="h-5 w-5 animate-spin" /> Loading plans…
         </div>
       ) : error ? (
         <div className="rounded-xl border border-border bg-surface px-6 py-10 text-center">
@@ -397,7 +398,7 @@ export default function PlansPage() {
                                   onClick={() => void makeDefault(plan)}
                                 >
                                   {pending === `default:${plan.id}` ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <Spinner className="h-3.5 w-3.5 animate-spin" />
                                   ) : (
                                     <Star className="h-3.5 w-3.5" />
                                   )}
@@ -408,7 +409,7 @@ export default function PlansPage() {
                                 onClick={() => void setArchived(plan, !archived)}
                               >
                                 {pending === `archive:${plan.id}` ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <Spinner className="h-3.5 w-3.5 animate-spin" />
                                 ) : archived ? (
                                   <ArchiveRestore className="h-3.5 w-3.5" />
                                 ) : (
@@ -499,7 +500,7 @@ export default function PlansPage() {
               Cancel
             </Button>
             <Button type="submit" disabled={!newKey.trim() || !newName.trim() || pending === "create"}>
-              {pending === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {pending === "create" ? <Spinner className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Create plan
             </Button>
           </div>
@@ -687,7 +688,7 @@ export default function PlansPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={!form.displayName.trim() || pending === `save:${editing.id}`}>
-                {pending === `save:${editing.id}` ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {pending === `save:${editing.id}` ? <Spinner className="h-4 w-4 animate-spin" /> : null}
                 Save changes
               </Button>
             </div>

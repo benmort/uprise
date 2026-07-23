@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, CircleDashed, Loader2, SkipForward, X } from "lucide-react";
+import { Spinner } from "@uprise/ui";
+import { Check, CircleDashed, SkipForward, X } from "lucide-react";
 import { cn } from "@uprise/ui";
 
 export type TimelineStepDef = { key: string; label: string; hint?: string };
@@ -134,7 +135,7 @@ export function ProvisioningTimeline({
               {state === "done" ? <Check className="h-3.5 w-3.5" /> : null}
               {state === "skipped" ? <SkipForward className="h-3.5 w-3.5" /> : null}
               {state === "failed" ? <X className="h-3.5 w-3.5" /> : null}
-              {state === "current" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {state === "current" ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : null}
               {state === "pending" ? <CircleDashed className="h-3.5 w-3.5" /> : null}
             </span>
             <div className="min-w-0 flex-1 pt-0.5">

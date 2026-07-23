@@ -1,7 +1,8 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from "react";
-import { Building2, Check, Loader2, X } from "lucide-react";
+import { Building2, Check, X } from "lucide-react";
 import { Card, CardContent } from "@uprise/ui";
 import { Button } from "@uprise/ui";
 import { approveSignup, listPendingSignups, rejectSignup, type PendingSignup } from "@/lib/api";
@@ -78,7 +79,7 @@ export function SignupsPanel({ onCount }: { onCount?: (n: number) => void }) {
   if (rows === null) {
     return (
       <div className="flex h-64 items-center justify-center gap-2 text-gray-600 dark:text-gray-400">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading signups…
+        <Spinner className="h-5 w-5 animate-spin" /> Loading signups…
       </div>
     );
   }
@@ -123,7 +124,7 @@ export function SignupsPanel({ onCount }: { onCount?: (n: number) => void }) {
             <div className="flex flex-wrap gap-2 pt-1">
               <Button size="sm" disabled={!!pending} onClick={() => void approve(r)}>
                 {pending === `approve:${r.requestId}` ? (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  <Spinner className="mr-1 h-4 w-4 animate-spin" />
                 ) : (
                   <Check className="mr-1 h-4 w-4" />
                 )}
@@ -137,7 +138,7 @@ export function SignupsPanel({ onCount }: { onCount?: (n: number) => void }) {
                 className="text-red-600 dark:text-red-400"
               >
                 {pending === `reject:${r.requestId}` ? (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                  <Spinner className="mr-1 h-4 w-4 animate-spin" />
                 ) : (
                   <X className="mr-1 h-4 w-4" />
                 )}

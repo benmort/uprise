@@ -1,10 +1,11 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ArrowRight, DoorOpen, LayoutGrid, List, Loader2, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, DoorOpen, LayoutGrid, List, MapPin, MapPinned, Pencil, Plus, PlusCircle, Target, Trash2, TrendingUp, Users } from "lucide-react";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import {
   createCampaign,
@@ -469,7 +470,7 @@ export default function CanvassPage() {
           <h2 className="flex items-center gap-1.5 text-sm font-bold text-foreground">
             <MapPinned className="h-4 w-4 text-primary" />
             Turf
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+            <Spinner className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           </h2>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -578,7 +579,7 @@ export default function CanvassPage() {
         </div>
         {visibleCards < turfs.length ? (
           <div ref={loadMoreRef} className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Spinner className="h-4 w-4 animate-spin" />
             Loading more turf…
           </div>
         ) : null}
