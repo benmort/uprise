@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/prog/ui/button';
 import { Modal } from '@/components/prog/ui/modal';
-import { Skeleton } from '@/components/prog/ui/skeleton';
+import { Skeleton } from '@uprise/ui';
 import {
   FormCreditCard,
   FormBillingDetails,

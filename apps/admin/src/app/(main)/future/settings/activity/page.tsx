@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/prog/ui/card';
-import { Skeleton } from '@/components/prog/ui/skeleton';
+import { Skeleton } from '@uprise/ui';
 import Alert from '@/components/prog/ui/alert';
 import {
   Send,

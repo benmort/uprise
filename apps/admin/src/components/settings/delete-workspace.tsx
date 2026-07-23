@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/prog/ui/c
 import { Button } from "@/components/prog/ui/button";
 import { Input } from "@/components/prog/ui/input";
 import { Label } from "@/components/prog/ui/label";
-import { Skeleton } from "@/components/prog/ui/skeleton";
+import { Skeleton } from "@uprise/ui";
 import Alert from "@/components/prog/ui/alert";
 import { logout } from "@/lib/session";
 

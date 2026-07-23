@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Skeleton } from "@/components/prog/ui/skeleton";
+import { Skeleton } from "@uprise/ui";
 import type { PageTab } from "./sections";
 
 /**
