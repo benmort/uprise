@@ -99,6 +99,15 @@ const CORE_FLAGS = [
     envVar: "FEATURE_TENANT_EMAIL_ENABLED",
   },
   {
+    key: "FEATURE_OWN_CHANNELS_SETUP",
+    description:
+      "Own-channels setup UX: the getting-started Channels flow + the 'steps from your own channels' unlock tile. Plan default: growth/scale ON, grassroots/starter OFF; catalogue default ON so plan-less tenants keep today's behaviour. Provisioning itself stays gated by the TENANT_TELEPHONY/EMAIL flags.",
+    default: true,
+    kind: "release",
+    controllableBy: PLAN_DRIVEN,
+    envVar: "FEATURE_OWN_CHANNELS_SETUP",
+  },
+  {
     key: "FEATURE_FIELD_TEXTING",
     description:
       "Volunteer P2P texting in the field app: text banks, claimed batches, press-send sessions and the reply inbox. Kill-switch per tenant; the /texting API stays permission-gated regardless.",

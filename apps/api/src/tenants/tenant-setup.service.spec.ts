@@ -66,6 +66,7 @@ function setup(over: {
     resolveAll: jest.fn(async () => ({
       FEATURE_TENANT_TELEPHONY_ENABLED: true,
       FEATURE_TENANT_EMAIL_ENABLED: true,
+      FEATURE_OWN_CHANNELS_SETUP: true,
       ...over.flags,
     })),
   };
@@ -110,6 +111,13 @@ describe("TenantSetupService", () => {
       const state = await service.getSetupState("t1", ORGANISER);
       expect(state.flows.organisation.applicable).toBe(false);
       expect(state.flows.channels.applicable).toBe(false);
+    });
+
+    it("FEATURE_OWN_CHANNELS_SETUP off hides the channels flow entirely (grassroots/starter default)", async () => {
+      const { service } = setup({ flags: { FEATURE_OWN_CHANNELS_SETUP: false } });
+      const state = await service.getSetupState("t1", OWNER);
+      expect(state.flows.channels.applicable).toBe(false);
+      expect(state.flows.organisation.applicable).toBe(true); // org setup untouched
     });
 
     it("owner and super-admin see organisation + channels", async () => {

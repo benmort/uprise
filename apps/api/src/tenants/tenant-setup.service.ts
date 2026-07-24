@@ -148,6 +148,9 @@ export class TenantSetupService {
     // ── Channels (owner view; per-step plan locks) ────────────────────────────
     const telFlagOn = Boolean(flags.FEATURE_TENANT_TELEPHONY_ENABLED);
     const emailFlagOn = Boolean(flags.FEATURE_TENANT_EMAIL_ENABLED);
+    // The own-channels setup UX (Channels flow + the unlock tile) is its own plan-driven
+    // toggle: growth/scale ON by default, grassroots/starter OFF, tenant-overridable.
+    const ownChannelsOn = Boolean(flags.FEATURE_OWN_CHANNELS_SETUP);
 
     let phoneState: ChannelSetupState = "none";
     let phoneReason: string | null = null;
@@ -215,7 +218,7 @@ export class TenantSetupService {
         identity: { steps: identitySteps, complete: identityComplete },
         account: { steps: accountSteps, complete: accountComplete },
         organisation: { applicable: ownerView, steps: orgSteps, complete: orgComplete },
-        channels: { applicable: ownerView, steps: channelSteps, complete: channelsComplete },
+        channels: { applicable: ownerView && ownChannelsOn, steps: channelSteps, complete: channelsComplete },
       },
       gates: { canProvisionTelephony, canRequestEmail },
       dismissed: Boolean(onboarding?.dismissed),

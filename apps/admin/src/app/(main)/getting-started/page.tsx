@@ -95,7 +95,7 @@ export default function GettingStartedPage() {
 
                 {/* The two-state story, made explicit: sending works TODAY on the shared
                     platform channels; finishing setup provisions the org's OWN channels. */}
-                {ownerView ? (
+                {state.flows.channels.applicable ? (
                   <div className="grid gap-2.5 sm:grid-cols-2">
                     <div className="flex items-start gap-2.5 rounded-xl bg-success-container/40 p-3">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
