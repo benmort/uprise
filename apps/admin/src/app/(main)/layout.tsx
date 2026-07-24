@@ -20,10 +20,10 @@ import {
   Menu,
   MessageSquareText,
   MessagesSquare,
+  NotebookPen,
   PersonStanding,
   Settings,
   ShieldCheck,
-  Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -187,7 +187,7 @@ function buildNav(
     {
       // "Content" section (routes /content/*). Flag keys keep their FEATURE_NAV_ENGAGEMENT_*
       // names — they're internal identifiers wired to plans/overrides, not user-visible.
-      type: "group", key: "content", label: "Content", icon: Sparkles,
+      type: "group", key: "content", label: "Content", icon: NotebookPen,
       match: (p) => p.startsWith("/content"),
       flag: "FEATURE_NAV_ENGAGEMENT",
       children: [
