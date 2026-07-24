@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type RefObject } from "react";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type FullscreenEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> };
@@ -72,5 +72,33 @@ export function FullscreenButton({
       <Icon className="h-[18px] w-[18px]" strokeWidth={2.2} />
       <span className="sr-only">{isFullscreen ? "Exit full screen" : "Full screen"}</span>
     </button>
+  );
+}
+
+/**
+ * The in-fullscreen exit affordance — pinned to the top-right corner of a fullscreened
+ * container (the enter button lives in the page header and is hidden once fullscreen). An
+ * X button that exits plus an "Esc to exit" cue (Escape already exits via the browser). Render
+ * this inside the fullscreened element, gated on `isFullscreen`.
+ */
+export function FullscreenExitCue({ onExit }: { onExit: () => void }) {
+  return (
+    <div className="pointer-events-none absolute right-3 top-3 z-50 flex items-center gap-2">
+      <span className="hidden items-center gap-1 rounded-full border border-border bg-surface/90 px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-card backdrop-blur sm:inline-flex">
+        Press
+        <kbd className="rounded border border-border bg-surface px-1 font-sans text-[11px] leading-tight text-foreground">
+          Esc
+        </kbd>
+        to exit
+      </span>
+      <button
+        type="button"
+        onClick={onExit}
+        aria-label="Exit full screen"
+        className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-card transition-colors hover:border-primary hover:bg-surface-variant"
+      >
+        <X className="h-[18px] w-[18px]" strokeWidth={2.2} />
+      </button>
+    </div>
   );
 }

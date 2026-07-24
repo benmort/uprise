@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
@@ -45,6 +45,8 @@ import { createBlastAndOpen } from "@/lib/blasts";
 import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
 import { QuickActions } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
+import { FullscreenButton, FullscreenExitCue, useFullscreen } from "@/components/ui/fullscreen-button";
 import { OverviewModuleCard } from "@/components/overview/overview-module-card";
 import { MiniBar } from "@/components/overview/mini-bar";
 import { NewConversationMenu } from "@/components/inbox/new-conversation-menu";
@@ -76,6 +78,9 @@ export default function DashboardPage() {
   const { showToast } = useToast();
   const [creating, setCreating] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  // Full-screen the module grid — the same Fullscreen API the calendar + inbox use.
+  const dashRef = useRef<HTMLDivElement>(null);
+  const fs = useFullscreen(dashRef);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const [perf, setPerf] = useState<Slice<PerfData>>(null);
@@ -240,6 +245,7 @@ export default function DashboardPage() {
             {lastUpdatedAt ? ` Updated ${lastUpdatedAt.toLocaleTimeString()}.` : ""}
           </p>
         </div>
+        <div className="flex items-center gap-2">
         <QuickActions
           actions={[
             {
@@ -276,6 +282,8 @@ export default function DashboardPage() {
             },
           ]}
         />
+        <FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />
+        </div>
       </div>
 
       <NewConversationMenu
@@ -290,7 +298,17 @@ export default function DashboardPage() {
 
 
       {/* Domain module grid */}
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      <div
+        ref={dashRef}
+        className={cn(
+          "grid gap-4 lg:grid-cols-2 xl:grid-cols-3",
+          // Fullscreen: the grid fills the screen and its rows share the height equally so the
+          // module cards stretch to fill rather than sitting at the top. The exit cue is absolute
+          // (out of grid flow) against this relative container.
+          fs.isFullscreen && "relative h-screen w-screen auto-rows-fr overflow-auto bg-background p-4",
+        )}
+      >
+        {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
         <OverviewModuleCard
           title="Inbox"
           description="Two-way conversations"

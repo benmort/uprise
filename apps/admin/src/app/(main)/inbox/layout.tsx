@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { createBlastAndOpen } from '@/lib/blasts';
 import { NewConversationMenu } from '@/components/inbox/new-conversation-menu';
-import { FullscreenButton, useFullscreen } from '@/components/ui/fullscreen-button';
+import { FullscreenButton, FullscreenExitCue, useFullscreen } from '@/components/ui/fullscreen-button';
 import SharedInboxSidebar from '@/components/prog/shared-inbox/sidebar';
 import { folderLabel } from './conversations';
 
@@ -72,11 +72,19 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
         <div
           ref={inboxRef}
           className={cn(
-            "sm:h-[calc(100vh-174px)] h-screen xl:h-[calc(100vh-186px)]",
-            fs.isFullscreen && "!h-screen overflow-auto bg-background p-4",
+            "relative sm:h-[calc(100vh-174px)] h-screen xl:h-[calc(100vh-186px)]",
+            fs.isFullscreen && "!h-screen !w-screen flex flex-col overflow-hidden bg-background p-4",
           )}
         >
-          <div className="xl:grid xl:grid-cols-12 flex flex-col gap-5 sm:gap-5">
+          {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
+          <div
+            className={cn(
+              "xl:grid xl:grid-cols-12 flex flex-col gap-5 sm:gap-5",
+              // In fullscreen the panes stack + stretch to fill: the grid takes the remaining
+              // height and its single row becomes 1fr so both columns fill the screen.
+              fs.isFullscreen && "min-h-0 flex-1 xl:h-full xl:[grid-template-rows:minmax(0,1fr)] [&>*]:min-h-0",
+            )}
+          >
             <SharedInboxSidebar onCompose={() => setComposeOpen(true)} />
             <NewConversationMenu
               open={composeOpen}
