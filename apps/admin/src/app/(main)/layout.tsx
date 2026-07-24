@@ -318,6 +318,7 @@ function buildNav(
               px("support-tickets")(p) || px("checkout")(p) || px("api-keys")(p) ||
               px("chats")(p) || px("tasks")(p) ||
               px("ai-assistant")(p) ||
+              px("ai")(p) ||
               px("whatsapp")(p) || p.startsWith("/channels/email") || p.startsWith("/channels/social"),
             flag: "FEATURE_NAV_PROG",
             children: [
@@ -373,7 +374,14 @@ function buildNav(
                   { label: "Kanban", href: "/future/tasks/kanban", match: px("tasks/kanban") },
                 ],
               },
-              { label: "AI Assistant", href: "/future/ai-assistant", match: px("ai-assistant") },
+              {
+                label: "AI",
+                match: (p: string) => px("ai")(p) || px("ai-assistant")(p),
+                children: [
+                  { label: "Assistant", href: "/future/ai/assistant", match: px("ai/assistant") },
+                  { label: "Settings", href: "/future/ai/settings/general", match: px("ai/settings") },
+                ],
+              },
               // Form Elements now live in the Kitchen Sink (Super Admin → Kitchen Sink → Forms).
             ],
           },

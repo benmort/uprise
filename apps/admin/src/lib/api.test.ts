@@ -420,3 +420,34 @@ describe("segment (engine v2) wrappers", () => {
     });
   });
 });
+
+describe("AI assistant wrappers", () => {
+  it("aiChat POSTs the turn with optional fields only when set", async () => {
+    await api.aiChat({ message: "hello" });
+    expect(mockRequest).toHaveBeenCalledWith("/ai/chat", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ message: "hello" }),
+    });
+
+    await api.aiChat({ conversationId: "c1", message: "hi", model: "claude-haiku-4-5", system: "Be terse." });
+    expect(mockRequest).toHaveBeenLastCalledWith("/ai/chat", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ conversationId: "c1", message: "hi", model: "claude-haiku-4-5", system: "Be terse." }),
+    });
+  });
+
+  it("listAiConversations GETs the collection", async () => {
+    await api.listAiConversations();
+    expect(mockRequest).toHaveBeenCalledWith("/ai/conversations", undefined);
+  });
+
+  it("getAiConversation and deleteAiConversation encode the id", async () => {
+    await api.getAiConversation("c 1");
+    expect(mockRequest).toHaveBeenCalledWith("/ai/conversations/c%201", undefined);
+
+    await api.deleteAiConversation("c 1");
+    expect(mockRequest).toHaveBeenLastCalledWith("/ai/conversations/c%201", { method: "DELETE" });
+  });
+});

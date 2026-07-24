@@ -18,6 +18,7 @@ import { MessagingModule } from "./messaging/messaging.module";
 import { WhatsappModule } from "./whatsapp/whatsapp.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
+import { AiModule } from "./ai/ai.module";
 import { AudiencesModule } from "./audiences/audiences.module";
 import { BlastsModule } from "./blasts/blasts.module";
 import { TextingModule } from "./texting/texting.module";
@@ -92,6 +93,7 @@ import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
     WebhooksModule,
     IntegrationsModule,
     AudiencesModule,
+    AiModule,
     BlastsModule,
     TextingModule,
     AnalyticsModule,

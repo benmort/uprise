@@ -1601,3 +1601,58 @@ export async function compileSegmentCustomQuery(intent: string) {
     body: JSON.stringify({ intent }),
   });
 }
+
+// ── AI assistant (super-admin surface) ─────────────────────────────────────────
+
+export type AiChatModelId = "claude-opus-4-8" | "claude-sonnet-4-6" | "claude-haiku-4-5";
+export type AiConversationSummary = {
+  id: string;
+  title: string;
+  model: string | null;
+  updatedAt: string;
+  createdAt: string;
+};
+export type AiConversationMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  model: string | null;
+  createdAt: string;
+};
+export type AiChatResponse = {
+  conversationId: string;
+  reply: string;
+  model: string;
+  stopReason: string | null;
+  usage: { inputTokens: number; outputTokens: number };
+};
+
+/** Non-streaming assistant turn. 503 code AI_NOT_CONFIGURED when ANTHROPIC_API_KEY is unset. */
+export async function aiChat(input: {
+  conversationId?: string;
+  message: string;
+  model?: AiChatModelId;
+  system?: string;
+}) {
+  return request<AiChatResponse>("/ai/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function listAiConversations() {
+  return request<{ conversations: AiConversationSummary[] }>("/ai/conversations");
+}
+
+export async function getAiConversation(id: string) {
+  return request<{ id: string; title: string; messages: AiConversationMessage[] }>(
+    `/ai/conversations/${encodeURIComponent(id)}`,
+  );
+}
+
+export async function deleteAiConversation(id: string) {
+  return request<{ deleted: boolean }>(`/ai/conversations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}

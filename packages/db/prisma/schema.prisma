@@ -11,7 +11,7 @@ datasource db {
   // deploys with P1002. directUrl routes migrate/introspect over the direct connection.
   url       = env("DATABASE_URL")
   directUrl = env("DATABASE_URL_UNPOOLED")
-  schemas   = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "civic", "events", "email", "ops", "payment", "telephony"]
+  schemas   = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "civic", "events", "email", "ops", "payment", "telephony", "ai"]
 }
 
 enum AudienceStatus {
@@ -2825,4 +2825,40 @@ model CivicSyncRun {
   error       String?
 
   @@schema("civic")
+}
+
+// ── AI assistant (super-admin surface) ─────────────────────────────────────────
+// Server-side chat history for the admin AI assistant. userId is an id-only
+// reference into iam.User (no cross-schema FK, per house rule). No outbox events:
+// chat rows have no downstream consumers.
+
+model AiConversation {
+  id        String      @id @default(cuid())
+  userId    String
+  title     String
+  /// Model the conversation defaulted to at creation (allowlisted in the api).
+  model     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  messages  AiMessage[]
+
+  @@index([userId, updatedAt])
+  @@schema("ai")
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  /// "user" | "assistant" (contract-typed string).
+  role           String
+  content        String
+  /// Model that produced an assistant message; null for user messages.
+  model          String?
+  inputTokens    Int?
+  outputTokens   Int?
+  createdAt      DateTime       @default(now())
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@schema("ai")
 }
