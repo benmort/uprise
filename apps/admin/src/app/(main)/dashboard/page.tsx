@@ -232,7 +232,16 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="page-stack">
+    <div
+      ref={dashRef}
+      className={cn(
+        "page-stack",
+        // Fullscreen the whole page so the header + Quick Actions come with it; the module grid
+        // (below) is the only flex-1 child so it stretches to fill under the fixed header/footer.
+        fs.isFullscreen && "relative h-screen !max-w-none overflow-auto bg-background p-4",
+      )}
+    >
+      {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
       {/* Header + quick actions */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -282,7 +291,7 @@ export default function DashboardPage() {
             },
           ]}
         />
-        <FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />
+        {!fs.isFullscreen ? <FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} /> : null}
         </div>
       </div>
 
@@ -299,16 +308,13 @@ export default function DashboardPage() {
 
       {/* Domain module grid */}
       <div
-        ref={dashRef}
         className={cn(
           "grid gap-4 lg:grid-cols-2 xl:grid-cols-3",
-          // Fullscreen: the grid fills the screen and its rows share the height equally so the
-          // module cards stretch to fill rather than sitting at the top. The exit cue is absolute
-          // (out of grid flow) against this relative container.
-          fs.isFullscreen && "relative h-screen w-screen auto-rows-fr overflow-auto bg-background p-4",
+          // In fullscreen this is the one growing child: it takes the space under the header and
+          // its rows share the height equally (auto-rows-fr) so the module cards stretch to fill.
+          fs.isFullscreen && "min-h-0 flex-1 auto-rows-fr",
         )}
       >
-        {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
         <OverviewModuleCard
           title="Inbox"
           description="Two-way conversations"
