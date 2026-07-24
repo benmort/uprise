@@ -27,6 +27,7 @@ export default function GettingStartedPage() {
 
   const complete = state ? setupComplete(state) : false;
   const progress = state ? overallProgress(state) : { done: 0, total: 0 };
+  const remaining = Math.max(0, progress.total - progress.done);
   const next = state ? nextStep(state) : null;
   const ownerView = Boolean(state?.flows.organisation.applicable);
 
@@ -81,6 +82,15 @@ export default function GettingStartedPage() {
                         }`
                       : "Only recommended touches left."}
                   </p>
+                  {/* The carrot: what finishing the remaining counted steps unlocks. */}
+                  {next && remaining > 0 ? (
+                    <p className="mt-0.5 text-sm text-muted-foreground tabular-nums">
+                      {remaining} more {remaining === 1 ? "step" : "steps"} and{" "}
+                      {ownerView
+                        ? "you can text and call from your organisation's own number."
+                        : "your account is fully set up."}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <StepProgress current={progress.done} total={progress.total} className="w-36" />
