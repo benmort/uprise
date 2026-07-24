@@ -22,7 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { FullscreenButton, FullscreenExitCue, useFullscreen } from "@/components/ui/fullscreen-button";
+import { FullscreenButton, FullscreenExitCue, useCssFullscreen } from "@/components/ui/fullscreen-button";
 import "./calendar.css";
 
 /**
@@ -153,7 +153,7 @@ export default function CalendarPage() {
   }, []);
   // Full-screen the whole calendar card — the same Fullscreen API the maps use.
   const cardRef = useRef<HTMLDivElement>(null);
-  const fs = useFullscreen(cardRef);
+  const fs = useCssFullscreen(cardRef);
   // The mock's 165ms grid fade on navigation/view changes.
   const [gridFx, setGridFx] = useState<{ opacity: number; transform: string }>({ opacity: 1, transform: "none" });
   const fadeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -363,6 +363,7 @@ export default function CalendarPage() {
     <PageShell
       icon={CalendarDays}
       title="Calendar"
+      className={cn(fs.isFullscreen && "!transform-none")}
       actions={<FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />}
       description="Everything scheduled in one place — shifts, events and your own reminders. Select an item to open it."
     >
@@ -372,12 +373,18 @@ export default function CalendarPage() {
           "flex flex-col gap-6",
           // Fullscreen the whole calendar surface so the filter chips + search come with it; the
           // card below is the only flex-1 child, so its grid stretches under the fixed filter row.
-          fs.isFullscreen && "relative h-screen overflow-auto bg-background p-4 !gap-3",
+          fs.isFullscreen && "fixed inset-0 z-50 overflow-auto bg-background p-4 !gap-3",
         )}
       >
         {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
       {/* Kind filter chips + search — the mock's pill chips (primary-filled when on). */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <div
+        className={cn(
+          "flex shrink-0 flex-wrap items-center gap-2",
+          // Reserve room at the right so the fullscreen escape cue doesn't sit over the search.
+          fs.isFullscreen && "pr-14 sm:pr-52",
+        )}
+      >
         {FILTERS.map((f) => {
           const kind = f.key as CalendarItemKind;
           const on = shown.has(kind);
