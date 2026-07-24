@@ -5,14 +5,26 @@ import {
 } from "./integration.errors";
 
 describe("ActionNetworkConnector", () => {
-  // Pin the sync page size to 25 (the size these fixtures were written against);
-  // the production default is 95. Other config keys fall through to their defaults.
+  // All config keys fall through to their defaults (per_page defaults to 25 —
+  // Action Network's hard cap; it 403s anything higher).
   const connector = new ActionNetworkConnector({
-    get: (key: string) => (key === "ACTION_NETWORK_SYNC_PER_PAGE" ? "25" : undefined),
+    get: () => undefined,
   } as any);
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it("defaults to per_page=25 — Action Network 403s larger pages", async () => {
+    const fetchMock = jest.spyOn(global, "fetch" as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ _embedded: { "osdi:items": [] } }),
+    } as Response);
+
+    await connector.syncList("key", { listId: "list_1" });
+    const firstUrl = String(fetchMock.mock.calls[0][0]);
+    expect(firstUrl).toContain("/lists/list_1/items?per_page=25");
   });
 
   it("searches remote lists", async () => {

@@ -35,6 +35,10 @@ function boolish(env: Env, key: string, fallback = false): boolean {
 
 export type ValidatedEnv = {
   NODE_ENV: string;
+  // Tenant to attribute platform/auth messages to when the actor has no membership — e.g. the
+  // 2FA / phone-login OTP for a tenant-independent break-glass super-admin. Optional; blank ⇒
+  // fall back to the oldest tenant. The send uses the platform transactional number regardless.
+  PLATFORM_TENANT_ID: string;
   // Dev only: actually send OTP/2FA SMS via Twilio (vs the on-screen code). Ignored in prod.
   DEV_SEND_OTP_SMS: boolean;
   // Gate new-workspace self-service signups behind super-admin approval. When on, /auth/register
@@ -146,6 +150,7 @@ export function validateEnv(config: Env): ValidatedEnv {
   const resolvedBullmqRedisUrl = config.BULLMQ_REDIS_URL?.trim() || config.REDIS_URL?.trim() || "";
   const output: ValidatedEnv = {
     NODE_ENV: config.NODE_ENV?.trim() || "development",
+    PLATFORM_TENANT_ID: config.PLATFORM_TENANT_ID?.trim() || "",
     DEV_SEND_OTP_SMS: boolish(config, "DEV_SEND_OTP_SMS", false),
     // Default on in production so a public launch is gated; explicit env value always wins.
     SIGNUP_APPROVAL_REQUIRED: boolish(
@@ -318,7 +323,8 @@ export function validateEnv(config: Env): ValidatedEnv {
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
     ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),
-    ACTION_NETWORK_SYNC_PER_PAGE: numberInRange(config, "ACTION_NETWORK_SYNC_PER_PAGE", 1, 100, 95, errors),
+    // Action Network rejects per_page > 25 with a 403, so the range caps there.
+    ACTION_NETWORK_SYNC_PER_PAGE: numberInRange(config, "ACTION_NETWORK_SYNC_PER_PAGE", 1, 25, 25, errors),
     ACTION_NETWORK_SYNC_MAX_PAGES: numberInRange(
       config,
       "ACTION_NETWORK_SYNC_MAX_PAGES",
@@ -359,12 +365,13 @@ export function validateEnv(config: Env): ValidatedEnv {
       19,
       errors,
     ),
+    // Documented Action Network limit: 4 API calls per second per key.
     ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND: numberInRange(
       config,
       "ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND",
       1,
       200,
-      190,
+      4,
       errors,
     ),
     ACTION_NETWORK_SYNC_MAX_RETRIES: numberInRange(

@@ -280,12 +280,15 @@ export class ActionNetworkConnector implements IntegrationConnector {
     return Math.min(max, Math.max(min, Math.trunc(parsed)));
   }
 
+  // Action Network hard-caps per_page at 25 — anything higher is rejected with a
+  // 403 ("Please limit your requests to 25 results per page"), not a 400.
   private getPerPage(): number {
-    return this.getNumber("ACTION_NETWORK_SYNC_PER_PAGE", 95, 1, 100);
+    return this.getNumber("ACTION_NETWORK_SYNC_PER_PAGE", 25, 1, 25);
   }
 
+  // Documented Action Network limit: 4 API calls per second per key.
   private getRequestRatePerSecond(): number {
-    return this.getNumber("ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND", 190, 1, 200);
+    return this.getNumber("ACTION_NETWORK_SYNC_REQUESTS_PER_SECOND", 4, 1, 200);
   }
 
   private getRetryCount(): number {
