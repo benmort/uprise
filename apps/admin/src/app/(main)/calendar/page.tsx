@@ -22,7 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { FullscreenButton, useFullscreen } from "@/components/ui/fullscreen-button";
+import { FullscreenButton, FullscreenExitCue, useFullscreen } from "@/components/ui/fullscreen-button";
 import "./calendar.css";
 
 /**
@@ -363,6 +363,7 @@ export default function CalendarPage() {
     <PageShell
       icon={CalendarDays}
       title="Calendar"
+      actions={<FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />}
       description="Everything scheduled in one place — shifts, events and your own reminders. Select an item to open it."
     >
       {/* Kind filter chips + search — the mock's pill chips (primary-filled when on). */}
@@ -422,12 +423,15 @@ export default function CalendarPage() {
           ref={cardRef}
           className={cn(
             "relative rounded-[18px] border border-border bg-surface",
-            fs.isFullscreen ? "h-screen overflow-auto rounded-none" : "overflow-hidden",
+            // In fullscreen the card becomes a flex column so the toolbar stays put and the
+            // grid body (below) stretches to fill the screen rather than sitting content-height.
+            fs.isFullscreen ? "flex h-screen flex-col overflow-hidden rounded-none" : "overflow-hidden",
           )}
           style={{ boxShadow: "0 1px 2px rgba(16,24,40,.04), 0 12px 32px -18px rgba(16,24,40,.18)" }}
         >
+          {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
           {/* Toolbar: prev/next + Today + add actions | period label | view switcher */}
-          <div className="flex flex-wrap items-center justify-between gap-3.5 border-b border-border px-[18px] py-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3.5 border-b border-border px-[18px] py-4">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0.5 rounded-[11px] border border-border bg-surface-variant p-[3px]">
                 <button
@@ -457,7 +461,6 @@ export default function CalendarPage() {
               <Button className="h-10" onClick={() => openAddPanel()}>
                 <Plus className="mr-1.5 h-4 w-4" strokeWidth={2.4} /> New event
               </Button>
-              <FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />
             </div>
 
             <h2 className="min-w-[200px] flex-1 text-center text-[22px] font-bold tracking-[-0.01em]">
@@ -485,10 +488,13 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <div style={{ opacity: gridFx.opacity, transform: gridFx.transform, transition: "opacity .17s ease, transform .17s ease" }}>
+          <div
+            className={cn(fs.isFullscreen && "flex min-h-0 flex-1 flex-col overflow-auto")}
+            style={{ opacity: gridFx.opacity, transform: gridFx.transform, transition: "opacity .17s ease, transform .17s ease" }}
+          >
             {view === "month" && (
-              <div>
-                <div className="grid grid-cols-7 bg-surface">
+              <div className={cn(fs.isFullscreen && "flex min-h-0 flex-1 flex-col")}>
+                <div className="grid shrink-0 grid-cols-7 bg-surface">
                   {WD_SHORT.map((wd, i) => (
                     <div
                       key={wd}
@@ -501,7 +507,14 @@ export default function CalendarPage() {
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7 gap-px border-t border-border bg-border">
+                <div
+                  className={cn(
+                    "grid grid-cols-7 gap-px border-t border-border bg-border",
+                    // Fill the card: the 6 week-rows share the remaining height equally so cells
+                    // stretch past their min-height instead of leaving empty space below.
+                    fs.isFullscreen && "min-h-0 flex-1 auto-rows-fr",
+                  )}
+                >
                   {monthDays.map(({ day, inMonth, weekend, isToday, past, items: dayList }, i) => {
                     const shownItems = dayList.slice(0, MAX_PER_CELL);
                     const more = dayList.length - shownItems.length;
@@ -598,7 +611,7 @@ export default function CalendarPage() {
             )}
 
             {view === "week" && (
-              <div className="grid grid-cols-7 gap-px bg-border">
+              <div className={cn("grid grid-cols-7 gap-px bg-border", fs.isFullscreen && "h-full auto-rows-fr")}>
                 {weekColumns.map(({ day, weekday, isToday, past, items: colItems }) => (
                   <div
                     key={`${day.m}-${day.d}`}
