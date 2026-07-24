@@ -39,7 +39,9 @@ import "./calendar.css";
 type CatStyle = { accent: string; textL: string; textD: string; icon: string; label: string };
 const CAT: Record<CalendarItemKind, CatStyle> = {
   event: { accent: "#10b981", textL: "#047857", textD: "#6ee7b7", icon: "📣", label: "Event" },
-  shift: { accent: "#465fff", textL: "#2a31d8", textD: "#aeb8ff", icon: "🧭", label: "Shift" },
+  // Amber, not brand blue: shifts must read apart from selection/primary chrome, and the
+  // amber trio matches the DS warning hues (warning-foreground = amber-700).
+  shift: { accent: "#f59e0b", textL: "#b45309", textD: "#fcd34d", icon: "🧭", label: "Shift" },
   entry: { accent: "#f43f5e", textL: "#be123c", textD: "#fda4af", icon: "🔔", label: "Reminder" },
 };
 
