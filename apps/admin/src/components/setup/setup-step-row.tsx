@@ -33,7 +33,16 @@ function RowIcon({ status }: { status: string }) {
  * Chips never carry actions; the CTA does. Plan-locked rows grey out and lose the CTA
  * (the flow section's upgrade banner carries the escape hatch).
  */
-export function SetupStepRow({ step, compact = false }: { step: AnyStep; compact?: boolean }) {
+export function SetupStepRow({
+  step,
+  compact = false,
+  number,
+}: {
+  step: AnyStep;
+  compact?: boolean;
+  /** Position among the COUNTED steps — renders "Step N: …" on the full row. */
+  number?: number;
+}) {
   const status = chipStatus(step);
   const meta = STEP_META[step.key];
   const done = status === "DONE";
@@ -63,6 +72,9 @@ export function SetupStepRow({ step, compact = false }: { step: AnyStep; compact
       <span className="shrink-0"><RowIcon status={status} /></span>
       <div className="min-w-0 flex-1">
         <p className={cn("text-sm font-semibold text-foreground", done && "font-medium text-muted-foreground line-through")}>
+          {number != null ? (
+            <span className="mr-1 tabular-nums text-muted-foreground">Step {number}:</span>
+          ) : null}
           {stepTitle(step.key)}
         </p>
         {meta?.blurb ? <p className="mt-0.5 text-xs text-muted-foreground">{meta.blurb}</p> : null}

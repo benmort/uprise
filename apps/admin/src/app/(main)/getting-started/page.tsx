@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { PartyPopper, Rocket } from "lucide-react";
+import { CheckCircle2, PartyPopper, Rocket, Unlock } from "lucide-react";
 import { Button, EmptyState, StepProgress } from "@uprise/ui";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/ui/page-header";
@@ -38,7 +38,7 @@ export default function GettingStartedPage() {
         title="Getting started"
         description={
           ownerView
-            ? "Set up your account, your organisation, and your own channels. You can send on shared Uprise numbers and use Uprise email domains from day one."
+            ? "Set up your account, your organisation, and your own channels."
             : "Your account, ready to organise."
         }
       />
@@ -70,48 +70,72 @@ export default function GettingStartedPage() {
                 }
               />
             ) : (
-              <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-surface p-5 shadow-card animate-fade-up">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-foreground tabular-nums">
-                    {progress.done} of {progress.total} steps done
-                  </p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {next
-                      ? `Next: ${stepTitle(next.step.key)}${
-                          next.step.key === "businessLegal" ? " — it unlocks your own phone number." : ""
-                        }`
-                      : "Only recommended touches left."}
-                  </p>
-                  {/* The carrot: what finishing the remaining counted steps unlocks. */}
-                  {next && remaining > 0 ? (
-                    <p className="mt-0.5 text-sm text-muted-foreground tabular-nums">
-                      {remaining} more {remaining === 1 ? "step" : "steps"} and{" "}
-                      {ownerView
-                        ? "you can text and call from your organisation's own number."
-                        : "your account is fully set up."}
+              <div className="space-y-4 rounded-2xl border border-border bg-surface p-5 shadow-card animate-fade-up">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-foreground tabular-nums">
+                      {progress.done} of {progress.total} steps done
                     </p>
-                  ) : null}
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                      {next ? `Next: ${stepTitle(next.step.key)}` : "Only recommended touches left."}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-xs font-semibold text-muted-foreground tabular-nums">
+                      {progress.done}/{progress.total}
+                    </span>
+                    <StepProgress current={progress.done} total={progress.total} className="w-36" />
+                    {next && STEP_META[next.step.key] ? (
+                      <Button asChild size="sm">
+                        <Link href={STEP_META[next.step.key].href}>Continue</Link>
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs font-semibold text-muted-foreground tabular-nums">
-                    {progress.done}/{progress.total}
-                  </span>
-                  <StepProgress current={progress.done} total={progress.total} className="w-36" />
-                  {next && STEP_META[next.step.key] ? (
-                    <Button asChild size="sm">
-                      <Link href={STEP_META[next.step.key].href}>Continue</Link>
-                    </Button>
-                  ) : null}
-                </div>
+
+                {/* The two-state story, made explicit: sending works TODAY on the shared
+                    platform channels; finishing setup provisions the org's OWN channels. */}
+                {ownerView ? (
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <div className="flex items-start gap-2.5 rounded-xl bg-success-container/40 p-3">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">You can send today</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                          Texts, calls and email already go out on shared Uprise numbers and Uprise
+                          email addresses — nothing here blocks you.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5 rounded-xl bg-surface-variant/60 p-3">
+                      <Unlock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground tabular-nums">
+                          {remaining > 0
+                            ? `${remaining} ${remaining === 1 ? "step" : "steps"} from your own channels`
+                            : "Your own channels are unlocked"}
+                        </p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                          Finish these steps to provision your organisation&apos;s own phone number and
+                          email outbox — texts, calls and email from YOUR identity.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
 
             {/* Order: Identity (required) → Organisation → Account (recommended extras,
                 between the org and channel cards) → Channels. */}
-            <SetupFlowSection flow="identity" steps={state.flows.identity.steps} />
+            <SetupFlowSection flow="identity" steps={state.flows.identity.steps} numberFrom={1} />
 
             {state.flows.organisation.applicable ? (
-              <SetupFlowSection flow="organisation" steps={state.flows.organisation.steps} />
+              <SetupFlowSection
+                flow="organisation"
+                steps={state.flows.organisation.steps}
+                numberFrom={1 + state.flows.identity.steps.length}
+              />
             ) : null}
 
             <SetupFlowSection flow="account" steps={state.flows.account.steps} />

@@ -20,10 +20,13 @@ export function SetupFlowSection({
   flow,
   steps,
   children,
+  numberFrom,
 }: {
   flow: SetupFlowKey;
   steps: AnyStep[];
   children?: React.ReactNode;
+  /** 1-based position of this flow's first step among the COUNTED steps — numbers the rows. */
+  numberFrom?: number;
 }) {
   const meta = FLOW_META[flow];
   const progress = flowProgress(steps);
@@ -75,8 +78,8 @@ export function SetupFlowSection({
       ) : (
         <>
           <div className="px-2 pb-2">
-            {steps.map((s) => (
-              <SetupStepRow key={s.key} step={s} />
+            {steps.map((s, i) => (
+              <SetupStepRow key={s.key} step={s} number={numberFrom != null ? numberFrom + i : undefined} />
             ))}
           </div>
           {children ? <div className="space-y-4 px-5 pb-5">{children}</div> : null}
