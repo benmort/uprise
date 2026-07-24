@@ -366,8 +366,18 @@ export default function CalendarPage() {
       actions={<FullscreenButton isFullscreen={fs.isFullscreen} onToggle={fs.toggle} />}
       description="Everything scheduled in one place — shifts, events and your own reminders. Select an item to open it."
     >
+      <div
+        ref={cardRef}
+        className={cn(
+          "flex flex-col gap-6",
+          // Fullscreen the whole calendar surface so the filter chips + search come with it; the
+          // card below is the only flex-1 child, so its grid stretches under the fixed filter row.
+          fs.isFullscreen && "relative h-screen overflow-auto bg-background p-4 !gap-3",
+        )}
+      >
+        {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
       {/* Kind filter chips + search — the mock's pill chips (primary-filled when on). */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         {FILTERS.map((f) => {
           const kind = f.key as CalendarItemKind;
           const on = shown.has(kind);
@@ -420,16 +430,14 @@ export default function CalendarPage() {
       >
         {/* The calendar card — 18px radius, layered shadow, everything inside. */}
         <div
-          ref={cardRef}
           className={cn(
             "relative rounded-[18px] border border-border bg-surface",
-            // In fullscreen the card becomes a flex column so the toolbar stays put and the
-            // grid body (below) stretches to fill the screen rather than sitting content-height.
-            fs.isFullscreen ? "flex h-screen flex-col overflow-hidden rounded-none" : "overflow-hidden",
+            // In fullscreen the card fills the wrapper (below the filter row) and becomes a flex
+            // column so the grid body stretches rather than sitting content-height.
+            fs.isFullscreen ? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-none" : "overflow-hidden",
           )}
           style={{ boxShadow: "0 1px 2px rgba(16,24,40,.04), 0 12px 32px -18px rgba(16,24,40,.18)" }}
         >
-          {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
           {/* Toolbar: prev/next + Today + add actions | period label | view switcher */}
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3.5 border-b border-border px-[18px] py-4">
             <div className="flex items-center gap-2">
@@ -720,6 +728,7 @@ export default function CalendarPage() {
           </div>
         </div>
       </StateRegion>
+      </div>
 
       <EventModal
         isOpen={modalOpen}
