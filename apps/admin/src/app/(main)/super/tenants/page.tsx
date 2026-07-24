@@ -12,7 +12,7 @@ import {
   Loader2,
   Trash2,
   ArrowRightLeft,
-} from 'lucide-react';
+  X } from 'lucide-react';
 import { auth, tenants as tenantsApi, type AuthPrincipal, type TenantStatus } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
 import { Button } from '@uprise/ui';
@@ -52,12 +52,17 @@ export default function TenantsPage() {
   const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
   const [resolved, setResolved] = useState(false);
   const [rows, setRows] = useState<TenantRow[] | null>(null);
+  // ?plan=<key> filters the list (linked from the /super/plans counts row).
+  const [planFilter, setPlanFilter] = useState<string>(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("plan") ?? "",
+  );
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
 
   const isSuperAdmin = principal?.isSuperAdmin === true;
+  const visibleRows = (rows ?? []).filter((t) => !planFilter || t.planName === planFilter);
   // The caller's own tenants where they're OWNER — the customer (multi-brand) data source.
   const ownedMemberships = useMemo(
     () => (principal?.memberships ?? []).filter((m) => m.role === 'OWNER'),
@@ -219,12 +224,30 @@ export default function TenantsPage() {
         <SignupsPanel onCount={setSignupCount} />
       ) : (
         <>
-      <SearchInput
-        value={query}
-        onValueChange={setQuery}
-        placeholder='Search all tenants…'
-        wrapperClassName="max-w-sm"
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchInput
+          value={query}
+          onValueChange={setQuery}
+          placeholder='Search all tenants…'
+          wrapperClassName="max-w-sm"
+        />
+        {planFilter ? (
+          <button
+            type="button"
+            onClick={() => {
+              setPlanFilter("");
+              const url = new URL(window.location.href);
+              url.searchParams.delete("plan");
+              window.history.replaceState(null, "", url.toString());
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary bg-primary/10 px-3 py-1 text-xs font-bold text-primary dark:bg-primary/20"
+            title="Clear the plan filter"
+          >
+            Plan: {planFilter}
+            <X className="h-3 w-3" />
+          </button>
+        ) : null}
+      </div>
 
       {error ? (
         <div className="rounded-md border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/15 px-4 py-3 text-sm text-red-800 dark:text-red-400">
@@ -236,12 +259,12 @@ export default function TenantsPage() {
         <div className="flex items-center justify-center gap-2 h-64 text-gray-600 dark:text-gray-400">
           <Loader2 className="h-5 w-5 animate-spin" /> Loading tenants…
         </div>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <Card className="border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03]">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-              {query ? 'No tenants match' : 'No tenants yet'}
+              {query || planFilter ? 'No tenants match' : 'No tenants yet'}
             </h3>
             {canCreate && !query ? (
               <Button onClick={() => setCreateOpen(true)}>
@@ -252,7 +275,7 @@ export default function TenantsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {rows.map((t) => {
+          {visibleRows.map((t) => {
             const active = t.id === principal?.tenantId;
             return (
               <Card

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Archive, ArchiveRestore, ChevronLeft, EyeOff, Pencil, Plus, ShieldAlert, ShieldCheck, Star, X } from "lucide-react";
 import { FEATURE_FLAG_KEYS, FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
+import { tenants as tenantsApi } from "@uprise/api-client";
 import {
   listPlans,
   updatePlan,
@@ -178,6 +179,23 @@ export default function PlansPage() {
 
   // Create modal
   const [createOpen, setCreateOpen] = useState(false);
+  // Tenants per plan (by the owning network's planName) — the counts row links each cell
+  // through to the tenants list filtered to that plan.
+  const [planCounts, setPlanCounts] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void tenantsApi.search().then((res) => {
+      if (!alive || !res.ok) return;
+      const counts: Record<string, number> = {};
+      for (const t of res.data) {
+        if (t.planName) counts[t.planName] = (counts[t.planName] ?? 0) + 1;
+      }
+      setPlanCounts(counts);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [newKey, setNewKey] = useState("");
   const [newName, setNewName] = useState("");
 
@@ -424,6 +442,33 @@ export default function PlansPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {/* Who's actually ON each plan — counted from the tenants list, each cell
+                      linking through to /super/tenants filtered to that plan. */}
+                  <TableRow>
+                    <TableCell className="sticky left-0 z-10 bg-card font-medium text-foreground">
+                      Tenants on plan
+                    </TableCell>
+                    {plans.map((plan) => {
+                      const count = planCounts?.[plan.key] ?? 0;
+                      return (
+                        <TableCell key={plan.id} className="text-center">
+                          {planCounts === null ? (
+                            <span className="text-xs text-muted-foreground">…</span>
+                          ) : count > 0 ? (
+                            <Link
+                              href={`/super/tenants?plan=${encodeURIComponent(plan.key)}`}
+                              className="font-semibold text-primary tabular-nums hover:underline"
+                              title={`View the ${count} ${count === 1 ? "tenant" : "tenants"} on ${plan.displayName}`}
+                            >
+                              {count}
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground tabular-nums">0</span>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
                   {FLAG_GROUPS.map((group) => (
                     <Fragment key={group.section}>
                       <TableRow className="bg-muted/40 hover:bg-muted/40">
