@@ -1142,7 +1142,7 @@ export default function MainLayout({
       >
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col overflow-y-auto border-r border-border bg-surface p-4 transition-[width,transform] duration-300 ease-in-out lg:static lg:translate-x-0",
+            "app-shell-sidebar fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col overflow-y-auto border-r border-border bg-surface p-4 transition-[width,transform] duration-300 ease-in-out lg:static lg:translate-x-0",
             "w-full",
             collapsed ? "lg:w-[76px] lg:px-2" : "lg:w-[220px]",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
@@ -1318,7 +1318,7 @@ export default function MainLayout({
         </aside>
 
         <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4 lg:px-6">
+          <header className="app-shell-topbar flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-surface px-4 lg:px-6">
             <div
               className="flex min-w-0 flex-1 items-center gap-3 transition-[margin] duration-200 ease-in-out motion-reduce:transition-none"
               style={{ marginLeft: brandSlidePx }}

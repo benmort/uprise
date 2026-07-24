@@ -102,6 +102,17 @@ export function useCssFullscreen<T extends HTMLElement>(_ref?: RefObject<T | nul
     };
   }, [isFullscreen]);
 
+  // Flag the document so the app shell (topbar + sidebar) hides while ANY CSS-fullscreen
+  // overlay is up — the overlay's `fixed inset-0` alone can lose to the shell's z-50 /
+  // a transformed ancestor, so the shell is removed outright (see globals.css).
+  useEffect(() => {
+    if (!isFullscreen) return;
+    document.documentElement.classList.add("fs-overlay");
+    return () => {
+      document.documentElement.classList.remove("fs-overlay");
+    };
+  }, [isFullscreen]);
+
   return { isFullscreen, toggle };
 }
 

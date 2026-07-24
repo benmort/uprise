@@ -10,3 +10,11 @@
    silently no-ops — e.g. the walk-view preview map's `min-h-[60vh]` collapsed the map
    to 0 height. Mirrors apps/field's own globals. */
 @source "../../../../packages/field/src/**/*.{ts,tsx}";
+
+/* While a CSS-fullscreen overlay is up (useCssFullscreen flags <html> with .fs-overlay),
+   remove the app shell entirely — the topbar and sidebar are z-50 like the overlays and
+   would otherwise stay visible over them (only the dashboard happened to win). */
+html.fs-overlay .app-shell-sidebar,
+html.fs-overlay .app-shell-topbar {
+  display: none;
+}
