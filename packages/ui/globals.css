@@ -85,14 +85,14 @@
      the geo explorer, a poll's regional choropleth, a party-competence heatmap. Named for
      none of them, because it belongs to all of them.
 
-     Validated (dataviz validate_palette, ordinal mode, surface #ffffff): monotone lightness,
-     every adjacent ΔL ≥ 0.06, hue spread 3°, light end 2.11:1 against the surface.
-     It replaces a hand-picked ramp that failed that last check at 1.22:1. */
-  --seq-1: 212.6 76.6% 73.1%;
-  --seq-2: 212.5 75.3% 62%;
-  --seq-3: 212.8 67.7% 50.2%;
-  --seq-4: 213.1 71.9% 39%;
-  --seq-5: 213.5 77.9% 28.4%;
+     Runs gray → light blue → dark blue: the low end is a near-neutral grey (faint blue tint),
+     saturation and depth rising with magnitude. Monotone-decreasing lightness (ΔL ≥ 0.06),
+     hue held ~212–214°. The grey low step is why "no data" is now hatched, not flat grey. */
+  --seq-1: 212 14% 80%;
+  --seq-2: 212 40% 68%;
+  --seq-3: 213 60% 54%;
+  --seq-4: 213 72% 40%;
+  --seq-5: 214 80% 29%;
   /* "We do not know" — a suppressed poll cell, a region whose area was never measured.
      Must read as absent, never as a low value, so it is the neutral grey the diverging
      midpoint uses. A no-data region is not a sparse one. */
@@ -169,14 +169,14 @@
   --poll-oppose-strong: 10.6 85% 58.2%;
   --poll-accent: 10.6 85% 58.2%;
 
-  /* Sequential ramp (dark). Selected against #18181b, not inverted: the ramp still runs
-     low→high, but "high" is now the bright end so magnitude reads as luminance against a
-     dark surface. Validated in ordinal mode: monotone, ΔL 0.06+, hue spread 3°, 3.28:1. */
-  --seq-1: 213.1 67.5% 44.7%;
-  --seq-2: 212.8 76.8% 56.1%;
-  --seq-3: 212.6 77% 67.6%;
-  --seq-4: 212.8 79.6% 78.8%;
-  --seq-5: 212.6 85.2% 89.4%;
+  /* Sequential ramp (dark). Against #18181b, "high" is the bright end so magnitude reads as
+     luminance. Low end is a dim, desaturated grey-blue (the gray anchor); saturation +
+     lightness both rise with magnitude to a bright blue. Monotone, hue held ~213–214°. */
+  --seq-1: 214 14% 42%;
+  --seq-2: 213 45% 55%;
+  --seq-3: 213 68% 66%;
+  --seq-4: 213 80% 79%;
+  --seq-5: 213 85% 89%;
   --nodata: 240 5.3% 26.1%;
 
   /* ---- TailAdmin text/stroke constants (dark) ---- */

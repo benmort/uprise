@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Mail, Send, Smartphone } from "lucide-react";
-import { formatAuMobile, toE164 } from "@uprise/ui";
+import { PhoneInput, formatPhoneDisplay } from "@uprise/ui";
 import { tenants, messageTemplates, type MessageTemplate } from "@uprise/api-client";
 import { SectionCard } from "@uprise/field";
 import { getSession, goToLogin } from "@/lib/session";
@@ -126,14 +126,13 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
       return;
     }
     if (mode === "phone") {
-      const digits = phone.replace(/\D/g, "");
-      if (digits.length < 9) {
-        showToast({ tone: "warning", title: "Enter a mobile number", description: "An Australian mobile, e.g. 04xx xxx xxx." });
+      if (phone.replace(/\D/g, "").length < 8) {
+        showToast({ tone: "warning", title: "Enter a mobile number", description: "Pick the country, then type their mobile." });
         return;
       }
       setBusy(true);
       const res = await tenants.createInvitation(tenantId, {
-        phone: toE164(digits),
+        phone,
         role,
         invitedChannel: channel,
         message: body,
@@ -141,10 +140,11 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
       });
       setBusy(false);
       if (!res.ok) return showToast({ tone: "error", title: "Couldn't send invite", description: res.error });
+      const sentTo = formatPhoneDisplay(phone);
       setPhone("");
       setFirstName("");
       onInvited?.();
-      showToast({ tone: "success", title: "Invite texted", description: `On its way to ${formatAuMobile(digits)}.` });
+      showToast({ tone: "success", title: "Invite texted", description: `On its way to ${sentTo}.` });
     } else {
       if (!email.trim() || !subject.trim()) {
         showToast({ tone: "warning", title: "Add an email and subject" });
@@ -212,15 +212,7 @@ export function InviteVolunteerCard({ onInvited }: { onInvited?: () => void }) {
       <div className="grid gap-3 sm:grid-cols-2">
         {mode === "phone" ? (
           <Field label="Mobile number" htmlFor="iv-mobile" required hint="We'll text them a join link.">
-            <Input
-              id="iv-mobile"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel-national"
-              value={formatAuMobile(phone.replace(/\D/g, ""))}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              placeholder="04xx xxx xxx"
-            />
+            <PhoneInput id="iv-mobile" value={phone} onChange={setPhone} />
           </Field>
         ) : (
           <Field label="Email" htmlFor="iv-email" required>

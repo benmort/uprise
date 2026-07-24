@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import MapGL, { FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import bbox from "@turf/bbox";
 import { LocateFixed } from "lucide-react";
-import { installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
+import { installMoonlitDark, MapGestureToggle, useScrollToZoom, MapCorner, MapAttribution } from "@uprise/field";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useTheme } from "@/components/theme/theme-provider";
 
@@ -113,7 +113,9 @@ export function CampaignsMap({ campaigns, height = 340 }: { campaigns: CampaignS
         style={{ width: "100%", height: "100%" }}
         // ⌘/Ctrl + scroll to zoom by default, unless "Scroll to zoom" is ticked.
         cooperativeGestures={!scrollZoom}
+        // Mapbox chrome bottom-right only: wordmark + one compact ⓘ (<MapAttribution/>).
         attributionControl={false}
+        logoPosition="bottom-right"
         interactiveLayerIds={["campaigns-fill"]}
         onLoad={() => {
           loadedRef.current = true;
@@ -143,10 +145,25 @@ export function CampaignsMap({ campaigns, height = 340 }: { campaigns: CampaignS
           />
         </Source>
         <FullscreenControl position="top-left" />
-        <MapGestureToggle />
+        <MapAttribution />
       </MapGL>
 
-      {/* Per-campaign colour legend (click a turf to open that campaign). */}
+      {/* Top-right — context/actions: scroll-to-zoom, then recentre. */}
+      <MapCorner corner="top-right">
+        <MapGestureToggle />
+        <button
+          type="button"
+          onClick={() => recenter(500)}
+          title="Recentre on all campaigns"
+          aria-label="Recentre on all campaigns"
+          className="inline-flex items-center gap-1 rounded-lg bg-surface/95 px-2 py-1 text-xs font-medium text-foreground shadow-card hover:bg-surface"
+        >
+          <LocateFixed className="h-3.5 w-3.5" />
+          Recentre
+        </button>
+      </MapCorner>
+
+      {/* Bottom-left — informational: per-campaign colour legend (click a turf to open that campaign). */}
       <div className="pointer-events-none absolute bottom-2 left-2 flex max-h-[65%] flex-col gap-1 overflow-auto rounded-lg bg-surface/95 px-2.5 py-1.5 text-[11px] font-medium text-foreground shadow-card">
         {legend.map((c) => (
           <span key={c.id} className="flex items-center gap-1.5">
@@ -158,17 +175,6 @@ export function CampaignsMap({ campaigns, height = 340 }: { campaigns: CampaignS
           </span>
         ))}
       </div>
-
-      <button
-        type="button"
-        onClick={() => recenter(500)}
-        title="Recentre on all campaigns"
-        aria-label="Recentre on all campaigns"
-        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg bg-surface/95 px-2 py-1 text-xs font-medium text-foreground shadow-card hover:bg-surface"
-      >
-        <LocateFixed className="h-3.5 w-3.5" />
-        Recentre
-      </button>
     </div>
   );
 }

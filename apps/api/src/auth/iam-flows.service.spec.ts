@@ -229,6 +229,18 @@ describe("IamFlowsService", () => {
       await expect(svc.start2fa("u1")).rejects.toThrow();
     });
 
+    it("start still texts a tenant-independent super-admin (no membership) via a fallback tenant", async () => {
+      const { svc, prisma, dispatcher } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "sa1", mobile: "+61400000001" });
+      // Break-glass super-admin: no tenant membership — the OTP used to be silently dropped.
+      prisma.tenantMember.findFirst.mockResolvedValueOnce(null);
+      await svc.start2fa("sa1");
+      expect(prisma.tenant.findFirst).toHaveBeenCalled(); // fell back to a tenant
+      expect(dispatcher.sendSms).toHaveBeenCalledWith(
+        expect.objectContaining({ purpose: "2fa", toPhone: "+61400000001" }),
+      );
+    });
+
     it("verify grants a session on a correct code", async () => {
       const { svc, prisma, sessions } = setup();
       prisma.mobileVerification.findUnique.mockResolvedValueOnce({
@@ -408,6 +420,22 @@ describe("IamFlowsService", () => {
     it("setMobile rejects a non-E.164 number", async () => {
       const { svc } = setup();
       await expect(svc.setMobile("u1", "0400 000 000")).rejects.toThrow();
+    });
+
+    it("setMobile rejects a number already linked to another account (no raw 500)", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce({ id: "someone-else" });
+      await expect(svc.setMobile("u1", "+61481565866")).rejects.toThrow(/another account/i);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("setMobile saves the number (unverified) when it's free or already the caller's", async () => {
+      const { svc, prisma } = setup();
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+      await svc.setMobile("u1", "+61481565866");
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { mobile: "+61481565866", mobileVerified: false } }),
+      );
     });
 
     it("enable2fa requires a verified mobile", async () => {

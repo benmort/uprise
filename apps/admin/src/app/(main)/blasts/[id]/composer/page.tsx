@@ -35,7 +35,7 @@ import { FormDialog } from "@/components/ui/form-dialog";
 import { Field } from "@/components/ui/field";
 import { TooltipHint } from "@/components/ui/tooltip-hint";
 import { useToast } from "@/components/ui/toast";
-import { useLocalStorage } from "@uprise/ui";
+import { useLocalStorage, PhoneInput } from "@uprise/ui";
 import { profile } from "@uprise/api-client";
 import { FromNumberSelector } from "@/components/blasts/from-number-selector";
 import { listCampaigns } from "@/lib/api/campaigns";
@@ -691,7 +691,7 @@ export default function BlastComposerPage() {
               onClick={async () => {
                 if (!validateDraft({ forProof: true })) return;
                 if (!proofNumber.trim()) {
-                  setActionMessage("Enter a proof number in E.164 format (e.g. +614xxxxxxxx).");
+                  setActionMessage("Enter a mobile number to send the proof to.");
                   return;
                 }
                 const id = await ensureBlast();
@@ -997,11 +997,7 @@ export default function BlastComposerPage() {
                   <label className="mb-1 block text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                     Proof Number
                   </label>
-                  <Input
-                    value={proofNumber}
-                    onChange={(e) => setProofNumber(e.target.value)}
-                    placeholder="+614xxxxxxxx"
-                  />
+                  <PhoneInput value={proofNumber} onChange={setProofNumber} />
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="w-full max-w-xs">

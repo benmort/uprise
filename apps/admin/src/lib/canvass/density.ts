@@ -1,4 +1,4 @@
-import type { ExpressionSpecification } from "mapbox-gl";
+import type { ExpressionSpecification, FilterSpecification } from "mapbox-gl";
 
 /**
  * Painting address density onto the boundary tiles.
@@ -54,6 +54,12 @@ export function densityFill(
   stops.forEach((stop, i) => step.push(stop, seq[Math.min(i + 1, seq.length - 1)]));
 
   return ["case", ["==", ["get", "density"], null], nodata, step] as unknown as ExpressionSpecification;
+}
+
+/** Features with no measured density → the hatch overlay. `density` is baked on the tile, so
+ *  this is a property test (independent of the scale). */
+export function densityNoDataFilter(): FilterSpecification {
+  return ["==", ["get", "density"], null] as FilterSpecification;
 }
 
 export type DensityBand = { lo: number; hi: number | null; colour: string };

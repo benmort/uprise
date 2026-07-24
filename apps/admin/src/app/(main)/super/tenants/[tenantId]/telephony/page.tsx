@@ -1,8 +1,9 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2, Phone, Plus, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { Phone, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
 import {
   telephony,
   type AuthPrincipal,
@@ -149,7 +150,7 @@ export default function TenantTelephonyPage() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -315,7 +316,7 @@ export default function TenantTelephonyPage() {
                   </div>
                 ) : null}
                 <Button onClick={startRun} disabled={busy || !form.legalName || !form.email || !form.street}>
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {busy ? <Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Start provisioning
                 </Button>
               </CardContent>

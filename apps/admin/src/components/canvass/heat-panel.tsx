@@ -26,6 +26,7 @@ import {
   heatLegendBands,
 } from "@/lib/canvass/heat-fill";
 import { CollapsibleCard } from "@/components/canvass/geo-panels/collapsible-card";
+import { NODATA_HATCH_CSS } from "@/lib/canvass/nodata-hatch";
 import { cn } from "@/lib/utils";
 
 /**
@@ -269,6 +270,10 @@ export function HeatPanel({
           errorTitle="Couldn't load targeting"
           skeleton={
             <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-lg bg-surface-variant px-2.5 py-2 text-xs font-medium text-muted-foreground">
+                <Spinner className="h-3.5 w-3.5 shrink-0" />
+                Scoring the boundary&rsquo;s SA1s — this can take a moment on a large campaign. You can keep working; the map fills in when it&rsquo;s ready.
+              </div>
               <Skeleton className="h-9 w-full" />
               <Skeleton className="h-40 w-full" />
             </div>

@@ -91,6 +91,55 @@ export function bearingIfMoved(
   return metresBetween(a, b) >= minMetres ? bearingBetween(a, b) : null;
 }
 
+/**
+ * Chevron points flowing along a polyline: one every `spacingM`, all pushed forward by
+ * `offsetM`. Because the pattern repeats every `spacingM`, ramping the offset 0→spacingM and
+ * looping is a seamless forward march — a conveyor of arrows down the line. Each point carries
+ * `rotate` = the along-line bearing − 90°, so a right-pointing "›" glyph faces the way of travel.
+ * `coords` are `[lng, lat]`; a degenerate line yields an empty collection.
+ */
+export function sampleFlowChevrons(
+  coords: Array<[number, number]>,
+  spacingM: number,
+  offsetM: number,
+): GeoJSON.FeatureCollection {
+  const empty: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+  if (coords.length < 2 || !(spacingM > 0)) return empty;
+  const segLen: number[] = [];
+  let total = 0;
+  for (let i = 0; i < coords.length - 1; i += 1) {
+    const d = metresBetween(
+      { lng: coords[i][0], lat: coords[i][1] },
+      { lng: coords[i + 1][0], lat: coords[i + 1][1] },
+    );
+    segLen.push(d);
+    total += d;
+  }
+  if (total === 0) return empty;
+  const features: GeoJSON.Feature[] = [];
+  const start = ((offsetM % spacingM) + spacingM) % spacingM; // normalise into [0, spacingM)
+  let seg = 0;
+  let segStart = 0; // along-line distance at the start of segment `seg`
+  for (let d = start; d < total; d += spacingM) {
+    while (seg < segLen.length - 1 && segStart + segLen[seg] < d) {
+      segStart += segLen[seg];
+      seg += 1;
+    }
+    const a = coords[seg];
+    const b = coords[seg + 1];
+    const frac = segLen[seg] > 0 ? (d - segStart) / segLen[seg] : 0;
+    const lng = a[0] + (b[0] - a[0]) * frac;
+    const lat = a[1] + (b[1] - a[1]) * frac;
+    const bearing = bearingBetween({ lng: a[0], lat: a[1] }, { lng: b[0], lat: b[1] });
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lng, lat] },
+      properties: { rotate: bearing - 90 },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}
+
 export type BBox = { minLng: number; minLat: number; maxLng: number; maxLat: number };
 
 /** Bounding box of a set of points — used to enumerate offline tiles for a turf. */

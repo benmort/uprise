@@ -126,6 +126,20 @@ export function heatFilter(cells: HeatCell[]): FilterSpecification | undefined {
   return ["in", ["get", "code"], ["literal", codes]] as FilterSpecification;
 }
 
+/** The run's insufficient-data SA1s (null score/band) — the hatch-overlay filter. Undefined
+ *  when every scored cell has a band, so no hatch layer is added. */
+export function heatNoDataFilter(cells: HeatCell[]): FilterSpecification | undefined {
+  const codes = [
+    ...new Set(
+      cells
+        .filter((c) => c.sa1Code && (c.score === null || c.band === null || c.band < 1))
+        .map((c) => c.sa1Code),
+    ),
+  ];
+  if (codes.length === 0) return undefined;
+  return ["in", ["get", "code"], ["literal", codes]] as FilterSpecification;
+}
+
 export type HeatLegendBand = {
   /** Band number 1–5. */
   band: number;

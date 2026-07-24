@@ -122,7 +122,7 @@ export type PollPalette = {
  */
 const FALLBACK: PollPalette = {
   diverging: ["#2a31d8", "#6b7cff", "#e4e4e7", "#ea6248", "#c9351d"],
-  seq: ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"],
+  seq: ["#c5cbd3", "#8dabce", "#4383d0", "#1d5faf", "#0f4285"],
   accent: "#c9351d",
   nodata: "#e4e4e7",
   ink: "#09090b",

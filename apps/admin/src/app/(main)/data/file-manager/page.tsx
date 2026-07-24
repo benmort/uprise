@@ -1,20 +1,9 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Eye,
-  FileText,
-  Database,
-  Folder,
-  FolderPlus,
-  HardDrive,
-  Image as ImageIcon,
-  Loader2,
-  Music,
-  Plus,
-  Trash2,
-  Video,
-} from "lucide-react";
+  Eye, FileText, Database, Folder, FolderPlus, HardDrive, Image as ImageIcon, Music, Plus, Trash2, Video } from "lucide-react";
 import {
   deleteFile,
   getFilesSummary,
@@ -298,7 +287,7 @@ export default function FileManagerPage() {
                           : "Uploads without a folder"
                       }
                     >
-                      {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+                      {uploading ? <Spinner className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
                       Upload File
                     </Button>
                   </div>
@@ -547,7 +536,7 @@ export default function FileManagerPage() {
                                   className="text-muted-foreground hover:text-error disabled:opacity-50"
                                   aria-label={`Delete ${f.name}`}
                                 >
-                                  {removing === f.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                                  {removing === f.id ? <Spinner className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
                                 </button>
                                 <a
                                   href={f.url}

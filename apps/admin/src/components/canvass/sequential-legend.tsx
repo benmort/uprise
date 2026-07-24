@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDensity, type DensityBand } from "@/lib/canvass/density";
+import { NODATA_HATCH_CSS } from "@/lib/canvass/nodata-hatch";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,8 +45,8 @@ export function SequentialLegend({
         {nodata ? (
           <span
             className="ml-2 h-3 w-6 rounded-sm border border-border"
-            style={{ backgroundColor: nodata }}
-            title="Not measured"
+            style={{ backgroundColor: nodata, backgroundImage: NODATA_HATCH_CSS }}
+            title="Not enough data"
           />
         ) : null}
       </div>

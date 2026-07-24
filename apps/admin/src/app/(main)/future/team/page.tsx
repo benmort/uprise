@@ -1,17 +1,14 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { Button } from '@uprise/ui';
 import { Avatar } from '@uprise/ui';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@uprise/ui';
+  Card, CardContent, CardHeader, CardTitle, } from '@uprise/ui';
 import { Modal } from "@/components/ui/modal";
 import { useState, useCallback } from 'react';
 import { Suspense } from 'react';
-import { Loader2, PlusCircle, Pencil, Mail, RefreshCw } from 'lucide-react';
+import { Loader2, PlusCircle, Pencil, Mail, RefreshCw } from "lucide-react";
 import { CanManageUsers } from '@/components/prog/protected-route';
 import {
   FormSectionCard,
@@ -389,7 +386,7 @@ function TeamMembers({ refreshTrigger }: { refreshTrigger?: number }) {
             >
               {isEditPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Spinner className="mr-2 h-4 w-4 animate-spin" />
                   Saving...
                 </>
               ) : (
@@ -682,7 +679,7 @@ function InviteTeamMember({ onInvitationCreated }: { onInvitationCreated?: () =>
           >
             {isInvitePending ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="mr-2 h-4 w-4 animate-spin" />
                 Inviting...
               </>
             ) : (

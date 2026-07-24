@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { SearchInput } from "@/components/ui/search-input";
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@uprise/ui";
 import { cn } from "@/lib/utils";
 import { FullscreenButton, FullscreenExitCue, useCssFullscreen } from "@/components/ui/fullscreen-button";
 import "./calendar.css";
@@ -87,6 +88,57 @@ function tintVars(item: CalendarItem): React.CSSProperties {
       ? ENTRY_COLOR[item.color as EventColor]
       : CAT[item.kind];
   return { "--acc": base.accent, "--txl": base.textL, "--txd": base.textD } as React.CSSProperties;
+}
+
+/** Rich hover popover for a calendar pill — category icon + accent chip, the time, and the
+ *  per-kind entity detail (event location/status, shift type/capacity, reminder description). */
+function ItemDetails({ item }: { item: CalendarItem }) {
+  const cat = CAT[item.kind];
+  const meta = item.meta as Record<string, unknown>;
+  const str = (k: string) => (typeof meta[k] === "string" && meta[k] ? (meta[k] as string) : null);
+  const location = str("location");
+  const description = str("description");
+  const shiftType = str("type");
+  const status = str("derivedStatus") ?? str("status");
+  const capacity = typeof meta.capacity === "number" ? (meta.capacity as number) : null;
+  const when = new Date(item.startsAt).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
+  return (
+    <div className="w-60 space-y-1.5" style={tintVars(item)}>
+      <div className="flex items-center gap-1.5">
+        <span aria-hidden className="text-sm leading-none">
+          {cat.icon}
+        </span>
+        <span
+          className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+          style={{ backgroundColor: "var(--acc)" }}
+        >
+          {cat.label}
+        </span>
+        {status ? (
+          <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {status}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-sm font-semibold leading-snug text-foreground">{item.title}</p>
+      <p className="text-xs tabular-nums text-muted-foreground">
+        {when} · {timeLabel(item)}
+      </p>
+      {location ? <p className="text-xs text-muted-foreground">📍 {location}</p> : null}
+      {shiftType ? <p className="text-xs capitalize text-muted-foreground">Type: {shiftType.toLowerCase()}</p> : null}
+      {capacity != null ? <p className="text-xs text-muted-foreground">Capacity: {capacity}</p> : null}
+      {description ? <p className="line-clamp-3 text-xs text-muted-foreground">{description}</p> : null}
+    </div>
+  );
+}
+
+/** Wrap a calendar pill so hovering instantly shows the details popover above it. */
+function ItemTooltip({ item, children }: { item: CalendarItem; children: React.ReactNode }) {
+  return (
+    <Tooltip content={<ItemDetails item={item} />} side="top" align="center" delayDuration={0}>
+      {children}
+    </Tooltip>
+  );
 }
 
 type KindFilter = CalendarItemKind | "comms";
@@ -594,18 +646,18 @@ export default function CalendarPage() {
                         </div>
                         <div className="mt-[3px] flex flex-col gap-[3px]">
                           {shownItems.map((item) => (
-                            <button
-                              key={`${item.kind}:${item.id}`}
-                              type="button"
-                              title={item.title}
-                              className="cal-pill"
-                              style={tintVars(item)}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={() => openItem(item)}
-                            >
-                              <span className="text-xs leading-none">{CAT[item.kind].icon}</span>
-                              <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{item.title}</span>
-                            </button>
+                            <ItemTooltip key={`${item.kind}:${item.id}`} item={item}>
+                              <button
+                                type="button"
+                                className="cal-pill"
+                                style={tintVars(item)}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={() => openItem(item)}
+                              >
+                                <span className="text-xs leading-none">{CAT[item.kind].icon}</span>
+                                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{item.title}</span>
+                              </button>
+                            </ItemTooltip>
                           ))}
                           {more > 0 && (
                             <button
@@ -651,19 +703,15 @@ export default function CalendarPage() {
                     </div>
                     <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 py-2.5">
                       {colItems.map((item) => (
-                        <button
-                          key={`${item.kind}:${item.id}`}
-                          type="button"
-                          className="cal-card"
-                          style={tintVars(item)}
-                          onClick={() => openItem(item)}
-                        >
-                          <span className="flex items-center gap-1 text-[10.5px] font-semibold opacity-85">
-                            <span>{CAT[item.kind].icon}</span>
-                            {timeLabel(item)}
-                          </span>
-                          <span className="text-[12.5px] font-semibold leading-[1.25]">{item.title}</span>
-                        </button>
+                        <ItemTooltip key={`${item.kind}:${item.id}`} item={item}>
+                          <button type="button" className="cal-card" style={tintVars(item)} onClick={() => openItem(item)}>
+                            <span className="flex items-center gap-1 text-[10.5px] font-semibold opacity-85">
+                              <span>{CAT[item.kind].icon}</span>
+                              {timeLabel(item)}
+                            </span>
+                            <span className="text-[12.5px] font-semibold leading-[1.25]">{item.title}</span>
+                          </button>
+                        </ItemTooltip>
                       ))}
                       {colItems.length === 0 && !past && (
                         <button
@@ -694,27 +742,28 @@ export default function CalendarPage() {
                   </span>
                 </div>
                 {dayItems.map((item) => (
-                  <button
-                    key={`${item.kind}:${item.id}`}
-                    type="button"
-                    className="cal-row flex items-center gap-3.5 rounded-xl p-3.5 text-left"
-                    style={tintVars(item)}
-                    onClick={() => openItem(item)}
-                  >
-                    <span className="cal-badge" style={tintVars(item)}>
-                      <span>{CAT[item.kind].icon}</span>
-                      {CAT[item.kind].label}
-                    </span>
-                    <span className="w-28 shrink-0 text-[13px] font-semibold text-muted-foreground">
-                      {timeLabel(item)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[14.5px] font-semibold text-foreground">{item.title}</span>
-                      {typeof item.meta?.location === "string" && item.meta.location && (
-                        <span className="block truncate text-[12.5px] text-muted-foreground">{item.meta.location}</span>
-                      )}
-                    </span>
-                  </button>
+                  <ItemTooltip key={`${item.kind}:${item.id}`} item={item}>
+                    <button
+                      type="button"
+                      className="cal-row flex items-center gap-3.5 rounded-xl p-3.5 text-left"
+                      style={tintVars(item)}
+                      onClick={() => openItem(item)}
+                    >
+                      <span className="cal-badge" style={tintVars(item)}>
+                        <span>{CAT[item.kind].icon}</span>
+                        {CAT[item.kind].label}
+                      </span>
+                      <span className="w-28 shrink-0 text-[13px] font-semibold text-muted-foreground">
+                        {timeLabel(item)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14.5px] font-semibold text-foreground">{item.title}</span>
+                        {typeof item.meta?.location === "string" && item.meta.location && (
+                          <span className="block truncate text-[12.5px] text-muted-foreground">{item.meta.location}</span>
+                        )}
+                      </span>
+                    </button>
+                  </ItemTooltip>
                 ))}
                 {dayItems.length === 0 &&
                   (focusPast ? (

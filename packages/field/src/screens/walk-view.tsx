@@ -8,6 +8,7 @@ import { BrandLoadingScreen, Button, EmptyState, Skeleton, cn, useToast } from "
 import { getWalkRoute, type CanvassAssignment, type WalkRoute } from "../api";
 import { useAssignment } from "../hooks/use-canvass";
 import { getTenantBrand, getVolunteerId } from "../lib/volunteer";
+import { getSession } from "../lib/session";
 import { optimiseRoute, walkLineThrough, type Stop } from "../lib/route";
 import { estimateWalk, formatMinutes, trimToBudget } from "../lib/walk-estimate";
 import { coordKey, fetchWalkingRouteGeometry, formatDistance, type LatLng } from "../lib/directions";
@@ -74,6 +75,11 @@ export function WalkView({
   // Street = the map with a nav-style follow camera; both map-ish modes share the branch.
   const showMap = mode === "map" || mode === "street";
   const [showSteps, setShowSteps] = useState(false);
+  // "Replay shift" is a super-admin-only debug affordance. No session context exists in
+  // @uprise/field, so resolve the principal async (same pattern as FieldInstallNotice);
+  // super-admin is the env break-glass flag, not an AppRole. Resolves in both the field
+  // PWA and the admin organiser preview via the shared parent-domain auth cookie.
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   // Continuous GPS ONLY while street view is open (battery scoped to navigation); the
   // heading comes from the device or the last two fixes, and drives the follow camera.
   const streetWatch = useGeolocationWatch(mode === "street" && !readOnly);
@@ -89,6 +95,16 @@ export function WalkView({
   // `startFix` when set. Null until it loads / when offline — the client optimiser is the fallback.
   const [serverRoute, setServerRoute] = useState<WalkRoute | null>(null);
   const [routing, setRouting] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void getSession().then((p) => {
+      if (alive) setIsSuperAdmin(p?.isSuperAdmin === true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Organiser preview (apps/admin) supplies the assignment directly; the volunteer app
   // fetches the ONE turf being walked in full (boundary + walk-list items) — the boot-path
@@ -173,14 +189,25 @@ export function WalkView({
 
   const nextStop = stops.find((s) => s.status === "PENDING");
   const doneCount = stops.filter((s) => s.status !== "PENDING").length;
-  // Street mode: pin the turn-by-turn list open and pop the Knock button on arrival.
-  const stepsOpen = showSteps || mode === "street";
+  // Turn-by-turn list is collapsed by default and toggled by the user in every map mode
+  // (Street included) — a nav readout shouldn't hog the card or be un-dismissable.
+  const stepsOpen = showSteps;
   const arrived = Boolean(
     mode === "street" &&
       streetWatch.fix &&
       nextStop &&
       Number.isFinite(nextStop.lat) &&
       metresBetween(streetWatch.fix, nextStop) <= 15,
+  );
+
+  // Nav follow-camera target — Street mode + a live fix. Memoised on the primitive fix/heading
+  // so the map's follow effect keys off value changes, not a fresh object every render.
+  const followTarget = useMemo(
+    () =>
+      mode === "street" && streetWatch.fix
+        ? { position: { lat: streetWatch.fix.lat, lng: streetWatch.fix.lng }, bearing: streetWatch.heading }
+        : null,
+    [mode, streetWatch.fix, streetWatch.heading],
   );
 
   // Walk-time estimate for the turf + an optional "how long can you walk" budget that
@@ -376,27 +403,33 @@ export function WalkView({
         !readOnly && !isPreview && showMap ? { height: "calc(100dvh - 2rem)" } : undefined
       }
     >
-      <div className="flex items-center gap-3">
-        {!readOnly ? (
-          <button
-            type="button"
-            aria-label="Back"
-            onClick={() => router.push("/")}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <MarqueeText
-            text={assignment.turf.name}
-            className="text-lg font-extrabold text-foreground"
-          />
-          <p className="text-sm text-muted-foreground tabular-nums">
-            {doneCount} of {stops.length} stops done
-          </p>
+      {/* On mobile the turf name gets its own full-width line (the three-segment toggle no
+          longer competes for the row); it collapses back to a single row from md up. */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+        <div className="flex items-center gap-3 md:min-w-0 md:flex-1">
+          {!readOnly ? (
+            <button
+              type="button"
+              aria-label="Back"
+              onClick={() => router.push("/")}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface text-foreground"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <MarqueeText
+              text={assignment.turf.name}
+              className="text-lg font-extrabold text-foreground"
+            />
+            <p className="text-sm text-muted-foreground tabular-nums">
+              {doneCount} of {stops.length} stops done
+            </p>
+          </div>
         </div>
-        <WalkModeToggle value={mode} onChange={setMode} modes={readOnly ? ["list", "map"] : ["list", "map", "street"]} />
+        <div className="self-end md:self-auto">
+          <WalkModeToggle value={mode} onChange={setMode} modes={readOnly ? ["list", "map"] : ["list", "map", "street"]} />
+        </div>
       </div>
 
       <ProgressBar value={doneCount} max={stops.length || 1} tone="success" />
@@ -463,17 +496,13 @@ export function WalkView({
               routeGeometry={replay.active ? null : mapRoute}
               routeApproximate={mapRouteApproximate}
               nextLegGeometry={replay.active ? null : directions?.geometry ?? null}
-              follow={
-                mode === "street" && streetWatch.fix
-                  ? { position: { lat: streetWatch.fix.lat, lng: streetWatch.fix.lng }, bearing: streetWatch.heading }
-                  : null
-              }
+              follow={followTarget}
               userHeading={mode === "street" ? streetWatch.heading : null}
             >
               <ReplayMapContent replay={replay} />
             </TurfMap>
           </div>
-          <ReplayControls replay={replay} totalStops={locatedStops.length} />
+          {isSuperAdmin ? <ReplayControls replay={replay} totalStops={locatedStops.length} /> : null}
           {nextStop && !replay.active ? (
             <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-4 shadow-float">
               <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--success))]">
@@ -503,14 +532,13 @@ export function WalkView({
                   <button
                     type="button"
                     onClick={() => setShowSteps((v) => !v)}
-                    disabled={mode === "street"}
                     className="flex w-full items-center justify-between rounded-lg bg-surface-variant px-2.5 py-1.5 text-xs font-semibold text-foreground"
                   >
                     <span className="flex items-center gap-1.5">
                       <Navigation className="h-3.5 w-3.5 text-primary" />
                       Walking directions
                     </span>
-                    {mode === "street" ? null : showSteps ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                    {showSteps ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                   </button>
                   {stepsOpen ? (
                     <ol className="mt-1.5 max-h-32 space-y-1 overflow-auto pr-1 text-xs text-muted-foreground">

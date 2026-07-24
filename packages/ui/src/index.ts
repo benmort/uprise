@@ -41,6 +41,18 @@ export * from "./components/form-select";
 export * from "./components/form-textarea";
 export * from "./components/otp-input";
 export * from "./components/password-input";
+export * from "./components/phone-input";
+// Re-export the phone helpers except `toE164` — the AU-only `phone-number-field` already
+// exports that name; PhoneInput uses lib/phone's version internally.
+export {
+  PHONE_COUNTRIES,
+  DEFAULT_PHONE_COUNTRY,
+  findPhoneCountry,
+  parseE164,
+  nationalDisplay,
+  formatPhoneDisplay,
+  type PhoneCountry,
+} from "./lib/phone";
 export * from "./components/password-strength";
 export * from "./components/phone-number-field";
 export * from "./components/keypad";

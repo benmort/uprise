@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Map, { FullscreenControl, Layer, Marker, Popup, Source, type MapProps, type MapRef } from "react-map-gl/mapbox";
-import type { FilterSpecification } from "mapbox-gl";
+import Map, { FullscreenControl, Layer, Marker, Popup, Source, useMap, type MapProps, type MapRef } from "react-map-gl/mapbox";
+import type { ExpressionSpecification, FilterSpecification, SymbolLayerSpecification } from "mapbox-gl";
 import bbox from "@turf/bbox";
-import { Crosshair, Globe, Loader2, LocateFixed } from "lucide-react";
+import { Crosshair, Globe, Loader2, LocateFixed, Navigation } from "lucide-react";
 import { useTheme } from "../lib/use-theme";
+import { sampleFlowChevrons } from "../lib/geo";
 import { installMoonlitDark } from "../lib/moonlit-dark";
 import { AddressInfoCard } from "./address-info-card";
-import { useScrollToZoom } from "./map-gesture-toggle";
+import { useScrollToZoom, MapGestureToggle } from "./map-gesture-toggle";
+import { MapCorner, MapAttribution } from "./map-chrome";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 /** A walk stop. The optional address/contact/gnafPid fields feed the tap-to-open door
@@ -40,38 +42,87 @@ const AMBER = "#c9781a";
 // read the individual doors around the pin (vs the coarser stop/GPS focus at 14).
 const POINT_ZOOM = 16.5;
 
-/** Direction chevrons riding the route lines: "›" glyphs rotated along the line, spaced
- *  so they read as flow without cluttering. Shared by every route/trail layer (the replay
- *  trails import this), and pulsed every ~10s by the effect in TurfMap. */
-export const CHEVRON_SIZE = 48;
-export const CHEVRON_LAYER_IDS = [
-  "walk-route-chevrons",
-  "walk-next-leg-chevrons",
-  "replay-past-chevrons",
-  "replay-future-chevrons",
-] as const;
-export const CHEVRON_LAYOUT: {
-  "symbol-placement": "line";
-  "symbol-spacing": number;
-  "text-field": string;
-  "text-size": number;
-  "text-font": string[];
-  "text-keep-upright": boolean;
-  "text-rotation-alignment": "map";
-  "text-allow-overlap": boolean;
-  "text-ignore-placement": boolean;
-} = {
-  "symbol-placement": "line",
-  // Spacing scales with the big glyphs so arrows read as flow, not a picket fence.
-  "symbol-spacing": 130,
+/** Direction chevrons that FLOW along a route line — "›" glyphs that march forward, one moving
+ *  to where the next started and looping seamlessly, so the walking direction reads as motion.
+ *  Placed as points on an animated source (line-placed symbols can't scroll); {@link FlowChevrons}
+ *  drives it, shared by every route/trail layer (the replay trails import it). */
+const CHEVRON_SPACING_PX = 90; // on-screen gap between flowing chevrons (zoom-independent)
+const FLOW_PERIOD_MS = 6000; // time for one chevron to travel one gap, then loop
+const METRES_PER_PX_Z0 = 156543.03392; // web-mercator metres/px at the equator, zoom 0
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+/** Point-placed chevrons; each is rotated to the along-line bearing via its `rotate` property. */
+const CHEVRON_POINT_LAYOUT: SymbolLayerSpecification["layout"] = {
+  "symbol-placement": "point",
   "text-field": "›",
-  "text-size": CHEVRON_SIZE,
+  "text-size": 22,
   "text-font": ["DIN Pro Bold", "Arial Unicode MS Bold"],
-  "text-keep-upright": false,
+  "text-rotate": ["get", "rotate"] as ExpressionSpecification,
   "text-rotation-alignment": "map",
   "text-allow-overlap": true,
   "text-ignore-placement": true,
 };
+
+/**
+ * Renders + animates the flowing direction chevrons for one line. Its own point source is
+ * refreshed each frame from {@link sampleFlowChevrons}: spacing is derived from the current zoom
+ * (so on-screen density is constant) and the offset ramps 0→spacing over `FLOW_PERIOD_MS`, giving
+ * a seamless forward conveyor. Renders nothing extra when `line` is absent.
+ */
+export function FlowChevrons({
+  id,
+  line,
+  color,
+  opacity = 0.7,
+  haloColor = "#ffffff",
+  haloWidth = 1,
+}: {
+  id: string;
+  line?: GeoJSON.LineString | null;
+  color: string;
+  opacity?: number;
+  haloColor?: string;
+  haloWidth?: number;
+}) {
+  const { current: mapRef } = useMap();
+  const sourceId = `${id}-src`;
+  const lineRef = useRef(line);
+  lineRef.current = line;
+
+  useEffect(() => {
+    const map = mapRef?.getMap();
+    if (!map) return;
+    let raf = 0;
+    const tick = (t: number) => {
+      raf = requestAnimationFrame(tick);
+      const src = map.getSource(sourceId) as { setData?: (d: GeoJSON.FeatureCollection) => void } | undefined;
+      if (!src?.setData) return; // source not added yet (or removed mid style-swap)
+      const coords = (lineRef.current?.coordinates as Array<[number, number]> | undefined) ?? [];
+      if (coords.length < 2) {
+        src.setData(EMPTY_FC);
+        return;
+      }
+      const lat = coords[0][1];
+      const mPerPx = (METRES_PER_PX_Z0 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, map.getZoom());
+      const spacingM = CHEVRON_SPACING_PX * mPerPx;
+      const offsetM = ((t % FLOW_PERIOD_MS) / FLOW_PERIOD_MS) * spacingM;
+      src.setData(sampleFlowChevrons(coords, spacingM, offsetM));
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mapRef, sourceId]);
+
+  return (
+    <Source id={sourceId} type="geojson" data={EMPTY_FC}>
+      <Layer
+        id={id}
+        type="symbol"
+        layout={CHEVRON_POINT_LAYOUT}
+        paint={{ "text-color": color, "text-opacity": opacity, "text-halo-color": haloColor, "text-halo-width": haloWidth }}
+      />
+    </Source>
+  );
+}
 
 /**
  * Volunteer/organiser map. `mode="view"` renders walk stops (clustered) + the
@@ -306,59 +357,63 @@ export function TurfMap({
     }
   }, [defaultBounds]);
 
-  // Street walk view: follow camera. Ease to each new fix with the heading up and a low
-  // pitch over the street; when follow clears (leaving street mode), ease back to the
-  // flat, north-up map so the ordinary map mode isn't left tilted.
+  // Street walk view: nav-style follow camera. `following` = the camera should stick to the GPS
+  // position; it engages when Street opens and drops the instant the user pans/zooms/rotates so
+  // they can look around (the Recentre button re-engages it). It never recentres on its own and
+  // never overrides the zoom the user has set — the jarring per-fix snap came from re-centring +
+  // re-clamping zoom on every fix.
+  const [following, setFollowing] = useState(false);
   const wasFollowing = useRef(false);
+  // Whether the one-time nav framing (low 3D pitch + street-level zoom) has been applied for the
+  // current follow session. Reset on engage / re-engage so it lands once, then the user owns zoom.
+  const framedRef = useRef(false);
+  const hasFollow = !!follow;
+
+  // Explicit Recentre tap — re-engage follow and re-apply the nav framing on the next track run.
+  const engageFollow = useCallback(() => {
+    framedRef.current = false;
+    setFollowing(true);
+  }, []);
+
+  // Engage on entering Street, reset to the flat north-up map on leaving. Keyed on the boolean so
+  // it fires only on the transition, not on every new fix.
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
-    if (follow) {
+    if (hasFollow) {
       wasFollowing.current = true;
-      map.easeTo({
-        center: [follow.position.lng, follow.position.lat],
-        bearing: follow.bearing ?? map.getBearing(),
-        pitch: 62,
-        zoom: Math.max(map.getZoom(), 17),
-        duration: 900,
-        essential: true,
-      });
+      framedRef.current = false;
+      setFollowing(true);
     } else if (wasFollowing.current) {
       wasFollowing.current = false;
+      setFollowing(false);
       map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
     }
-  }, [follow]);
+  }, [hasFollow]);
 
-  // Chevron pulse: every ~10s the direction arrows swell and settle (a sine ease over
-  // ~900ms), nudging the eye along the route. Animated via setLayoutProperty — symbol
-  // layers can't be CSS-animated — against whichever chevron layers currently exist.
+  // Track each fix WHILE following: recentre + rotate to heading, applying the nav framing (low 3D
+  // pitch + street zoom) once per session, then leaving zoom/pitch to the user. Paused
+  // (following=false) the instant the user gestures, so it can't yank them back.
   useEffect(() => {
-    let raf = 0;
-    const swell = () => {
-      const map = mapRef.current?.getMap();
-      if (!map) return;
-      const t0 = performance.now();
-      const DURATION = 900;
-      const tick = (t: number) => {
-        const f = Math.min(1, (t - t0) / DURATION);
-        const scale = 1 + 0.5 * Math.sin(Math.PI * f);
-        for (const id of CHEVRON_LAYER_IDS) {
-          try {
-            if (map.getLayer(id)) map.setLayoutProperty(id, "text-size", CHEVRON_SIZE * scale);
-          } catch {
-            // Style mid-swap (theme change) — skip this frame.
-          }
-        }
-        if (f < 1) raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
+    if (!following || !follow) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const opts: Parameters<typeof map.easeTo>[0] = {
+      center: [follow.position.lng, follow.position.lat],
+      bearing: follow.bearing ?? map.getBearing(),
+      duration: 700,
+      essential: true,
     };
-    const interval = setInterval(swell, 10_000);
-    return () => {
-      clearInterval(interval);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
+    if (!framedRef.current) {
+      opts.pitch = 62;
+      opts.zoom = Math.max(map.getZoom(), 17);
+      framedRef.current = true;
+    }
+    map.easeTo(opts);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [following, follow?.position.lat, follow?.position.lng, follow?.bearing]);
+
+  // The direction arrows now flow (see FlowChevrons) instead of pulsing — no shared effect here.
 
   // "My location" — centre the map on the viewer's current GPS position + drop the marker.
   // Works standalone (doesn't need the parent's `userPosition` prop), so it also locates the
@@ -436,8 +491,9 @@ export function TurfMap({
       // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the "Use ⌘ + scroll" overlay), unless
       // the volunteer has ticked "Scroll to zoom" — then plain scroll zooms.
       cooperativeGestures={!scrollZoom}
-      // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
+      // Mapbox chrome bottom-right only: wordmark + one compact ⓘ (<MapAttribution/>).
       attributionControl={false}
+      logoPosition="bottom-right"
       transformRequest={transformRequest}
       onLoad={() => {
         const map = mapRef.current?.getMap();
@@ -450,6 +506,16 @@ export function TurfMap({
           ro.observe(map.getContainer());
           resizeObserverRef.current = ro;
         }
+        // Nav follow pauses the instant the user gestures (pan/zoom/rotate/pitch) so they can
+        // look around; the next GPS fix won't yank them back. User gestures carry an
+        // `originalEvent`; our programmatic easeTo moves don't, so follow never pauses itself.
+        const pauseFollow = (e: unknown) => {
+          if ((e as { originalEvent?: unknown }).originalEvent) setFollowing(false);
+        };
+        map.on("dragstart", pauseFollow);
+        map.on("rotatestart", pauseFollow);
+        map.on("pitchstart", pauseFollow);
+        map.on("zoomstart", pauseFollow);
         // The container often finishes laying out (next/dynamic + grid cell) AFTER
         // the map computes its initial view, so it fits to the wrong size and loads
         // tiles for the wrong viewport — boundaries look missing until you interact.
@@ -598,14 +664,9 @@ export function TurfMap({
               ...(routeApproximate ? { "line-dasharray": [1.5, 1.5] as [number, number] } : {}),
             }}
           />
-          <Layer
-            id="walk-route-chevrons"
-            type="symbol"
-            layout={CHEVRON_LAYOUT}
-            paint={{ "text-color": PRIMARY, "text-opacity": 0.55, "text-halo-color": "#ffffff", "text-halo-width": 1 }}
-          />
         </Source>
       )}
+      <FlowChevrons id="walk-route-chevrons" line={routeGeometry} color={PRIMARY} opacity={0.55} />
 
       {/* The user → next-stop walking leg, stronger and on top of the full route so the
           immediate path stands out from the rest of the walk. */}
@@ -621,14 +682,16 @@ export function TurfMap({
             layout={{ "line-cap": "round", "line-join": "round" }}
             paint={{ "line-color": PRIMARY, "line-width": 5, "line-opacity": 0.85 }}
           />
-          <Layer
-            id="walk-next-leg-chevrons"
-            type="symbol"
-            layout={CHEVRON_LAYOUT}
-            paint={{ "text-color": "#ffffff", "text-opacity": 0.95, "text-halo-color": PRIMARY, "text-halo-width": 1.2 }}
-          />
         </Source>
       )}
+      <FlowChevrons
+        id="walk-next-leg-chevrons"
+        line={nextLegGeometry}
+        color="#ffffff"
+        opacity={0.95}
+        haloColor={PRIMARY}
+        haloWidth={1.2}
+      />
 
       {/* Caller-supplied map content (e.g. the shift-replay trails + person marker). */}
       {children}
@@ -732,44 +795,69 @@ export function TurfMap({
         </Marker>
       )}
 
-      {/* Corner controls: recenter to what's focused (turf / searched address /
-          state), my-location, and a globe to zoom back out to the whole country. */}
-      <div className="absolute right-2 top-2 z-10 flex gap-1.5">
-        {(bounds || focusPoint || focusBounds) && (
+      {/* Top-right — context/actions: scroll-to-zoom atop the recenter / my-location /
+          Australia cluster (recenter to what's focused, my-location, globe to the country). */}
+      <MapCorner corner="top-right">
+        {/* Nav follow paused (user looked around) — one tap re-engages the follow camera.
+            Filled primary so it stands out as the key action once you've drifted. */}
+        {follow && !following ? (
           <button
             type="button"
-            onClick={recenter}
-            title="Recenter"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
+            onClick={engageFollow}
+            title="Recentre on your location"
+            className="flex items-center gap-1.5 rounded-lg border border-primary bg-primary px-2.5 py-1.5 text-xs font-semibold text-white shadow-card backdrop-blur hover:bg-primary/90"
           >
-            <Crosshair className="h-3.5 w-3.5" />
-            Recenter
+            <Navigation className="h-3.5 w-3.5" />
+            Recentre
           </button>
-        )}
-        {/* Centre on the viewer's current location + drop the GPS marker. */}
-        <button
-          type="button"
-          onClick={locateMe}
-          disabled={locating}
-          title="Centre on my location"
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant disabled:opacity-60"
-        >
-          {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LocateFixed className="h-3.5 w-3.5" />}
-          My location
-        </button>
-        {defaultBounds && (
+        ) : null}
+        <MapGestureToggle />
+        <div className="flex gap-1.5">
+          {(bounds || focusPoint || focusBounds) && (
+            <button
+              type="button"
+              // Reframing to the turf is a "look elsewhere" action — drop follow so the next GPS
+              // fix doesn't snap the nav camera straight back.
+              onClick={() => {
+                setFollowing(false);
+                recenter();
+              }}
+              title="Recenter"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
+            >
+              <Crosshair className="h-3.5 w-3.5" />
+              Recenter
+            </button>
+          )}
+          {/* Centre on the viewer's current location + drop the GPS marker. */}
           <button
             type="button"
-            onClick={recenterNational}
-            title="Zoom out to all of Australia"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
+            onClick={locateMe}
+            disabled={locating}
+            title="Centre on my location"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant disabled:opacity-60"
           >
-            <Globe className="h-3.5 w-3.5" />
-            Australia
+            {locating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LocateFixed className="h-3.5 w-3.5" />}
+            My location
           </button>
-        )}
-      </div>
+          {defaultBounds && (
+            <button
+              type="button"
+              onClick={() => {
+                setFollowing(false);
+                recenterNational();
+              }}
+              title="Zoom out to all of Australia"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
+            >
+              <Globe className="h-3.5 w-3.5" />
+              Australia
+            </button>
+          )}
+        </div>
+      </MapCorner>
       <FullscreenControl position="top-left" />
+      <MapAttribution />
     </Map>
   );
 }

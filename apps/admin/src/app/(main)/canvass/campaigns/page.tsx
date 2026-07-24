@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, DoorOpen, Layers, MapPinned } from "lucide-react";
+import { ArrowLeft, DoorOpen, Flag, Layers, MapPinned, Search } from "lucide-react";
 import {
   getCampaignSummary,
   listCampaigns,
@@ -12,6 +12,8 @@ import {
 } from "@/lib/api/campaigns";
 import { listTurfs, type TurfSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectItem } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,9 +33,19 @@ type Loaded = { campaign: CampaignSummary; kpis: CampaignKpis | null; turfs: Tur
 
 const THUMBS = 6;
 
+type SortKey = "priority" | "name" | "updated" | "turf" | "doors";
+
+// Unset priority (0) sorts to the bottom — it isn't "top priority", it's "no rank yet".
+const priorityRank = (p: number) => (p && p > 0 ? p : Number.MAX_SAFE_INTEGER);
+const doorsOf = (r: Loaded) => r.turfs.reduce((sum, t) => sum + t.contactCount, 0);
+
 export default function CampaignsIndexPage() {
   const [rows, setRows] = useState<Loaded[] | null>(null);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | CampaignSummary["status"]>("ALL");
+  const [channelFilter, setChannelFilter] = useState<"ALL" | CampaignSummary["channel"]>("ALL");
+  const [sort, setSort] = useState<SortKey>("priority");
 
   useEffect(() => {
     let alive = true;
@@ -58,6 +70,38 @@ export default function CampaignsIndexPage() {
     };
   }, []);
 
+  // Search + filter + sort over the loaded campaigns. Default order is organiser priority
+  // (1 = top; unset sinks to the bottom), tie-broken by name.
+  const visible = useMemo<Loaded[]>(() => {
+    if (!rows) return [];
+    const q = query.trim().toLowerCase();
+    const filtered = rows.filter(({ campaign }) => {
+      if (statusFilter !== "ALL" && campaign.status !== statusFilter) return false;
+      if (channelFilter !== "ALL" && campaign.channel !== channelFilter) return false;
+      if (q && !campaign.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+    return [...filtered].sort((a, b) => {
+      switch (sort) {
+        case "name":
+          return a.campaign.name.localeCompare(b.campaign.name);
+        case "updated":
+          return b.campaign.updatedAt.localeCompare(a.campaign.updatedAt);
+        case "turf":
+          return b.campaign.turfCount - a.campaign.turfCount;
+        case "doors":
+          return doorsOf(b) - doorsOf(a);
+        case "priority":
+        default: {
+          const d = priorityRank(a.campaign.priority) - priorityRank(b.campaign.priority);
+          return d !== 0 ? d : a.campaign.name.localeCompare(b.campaign.name);
+        }
+      }
+    });
+  }, [rows, query, statusFilter, channelFilter, sort]);
+
+  const hasCampaigns = (rows?.length ?? 0) > 0;
+
   return (
     <div className="page-stack">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -75,6 +119,58 @@ export default function CampaignsIndexPage() {
         </div>
       </div>
 
+      {hasCampaigns ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search campaigns…"
+              aria-label="Search campaigns"
+              className="pl-9"
+            />
+          </div>
+          <Select
+            label="Status"
+            aria-label="Filter by status"
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}
+            className="w-full sm:w-auto"
+          >
+            <SelectItem value="ALL">All statuses</SelectItem>
+            <SelectItem value="ACTIVE">Active</SelectItem>
+            <SelectItem value="DRAFT">Draft</SelectItem>
+            <SelectItem value="ARCHIVED">Archived</SelectItem>
+          </Select>
+          <Select
+            label="Channel"
+            aria-label="Filter by channel"
+            value={channelFilter}
+            onValueChange={(v) => setChannelFilter(v as typeof channelFilter)}
+            className="w-full sm:w-auto"
+          >
+            <SelectItem value="ALL">All channels</SelectItem>
+            <SelectItem value="DOOR">Door</SelectItem>
+            <SelectItem value="SMS">SMS</SelectItem>
+            <SelectItem value="BOTH">Door + SMS</SelectItem>
+          </Select>
+          <Select
+            label="Sort"
+            aria-label="Sort campaigns"
+            value={sort}
+            onValueChange={(v) => setSort(v as SortKey)}
+            className="w-full sm:w-auto"
+          >
+            <SelectItem value="priority">Priority</SelectItem>
+            <SelectItem value="name">Name A–Z</SelectItem>
+            <SelectItem value="updated">Recently updated</SelectItem>
+            <SelectItem value="turf">Most turf</SelectItem>
+            <SelectItem value="doors">Most doors</SelectItem>
+          </Select>
+        </div>
+      ) : null}
+
       {rows === null ? (
         <div className="space-y-3">
           {Array.from({ length: 2 }).map((_, i) => (
@@ -88,6 +184,23 @@ export default function CampaignsIndexPage() {
           title="No campaigns yet"
           description="Create a campaign on the canvass overview to start cutting turf."
         />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          title="No campaigns match"
+          description="Try a different search, or clear the filters to see them all."
+          action={
+            <Button
+              variant="outline"
+              onClick={() => {
+                setQuery("");
+                setStatusFilter("ALL");
+                setChannelFilter("ALL");
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-4">
           <section className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
@@ -99,7 +212,7 @@ export default function CampaignsIndexPage() {
               Every campaign&apos;s claimed turf on one map — click a shape to open that campaign.
             </p>
             <CampaignsMap
-              campaigns={rows.map(({ campaign, turfs }, idx) => ({
+              campaigns={visible.map(({ campaign, turfs }, idx) => ({
                 id: campaign.id,
                 name: campaign.name,
                 color: CAMPAIGN_COLORS[idx % CAMPAIGN_COLORS.length],
@@ -107,7 +220,7 @@ export default function CampaignsIndexPage() {
               }))}
             />
           </section>
-          {rows.map(({ campaign, kpis, turfs }, idx) => {
+          {visible.map(({ campaign, kpis, turfs }, idx) => {
             const color = CAMPAIGN_COLORS[idx % CAMPAIGN_COLORS.length];
             const doors = turfs.reduce((sum, t) => sum + t.contactCount, 0);
             const shown = turfs.slice(0, THUMBS);
@@ -119,6 +232,15 @@ export default function CampaignsIndexPage() {
                     <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
                     <h2 className="text-lg font-bold text-foreground">{campaign.name}</h2>
                     <StatusBadge status={campaign.status} />
+                    {campaign.priority > 0 ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-surface-variant px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
+                        title="Organiser-set priority (1 = top)"
+                      >
+                        <Flag className="h-3 w-3" />
+                        Priority {campaign.priority}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
                     <Layers className="h-3.5 w-3.5" />

@@ -7,6 +7,7 @@ import {
   matchFill,
   stepFill,
   choroplethBands,
+  demographicsNoDataFilter,
   formatIndicator,
 } from "./demographics-fill";
 
@@ -103,5 +104,27 @@ describe("formatIndicator", () => {
     expect(formatIndicator(38.4, "years")).toBe("38");
     expect(formatIndicator(7, "decile")).toBe("7");
     expect(formatIndicator(2600, "count")).toBe("2,600");
+  });
+});
+
+describe("demographicsNoDataFilter", () => {
+  it("tile-baked (step): matches features with a null baked value", () => {
+    expect(demographicsNoDataFilter([], false)).toEqual(["==", ["get", "value"], null]);
+  });
+
+  it("client-join (match): selects everything NOT in the valued rows", () => {
+    const rows = [
+      { code: "A", value: 42 },
+      { code: "B", value: null },
+      { code: "C", value: 7 },
+    ];
+    expect(demographicsNoDataFilter(rows, true)).toEqual([
+      "!",
+      ["in", ["get", "code"], ["literal", ["A", "C"]]],
+    ]);
+  });
+
+  it("client-join with no valued rows is undefined (nothing to distinguish)", () => {
+    expect(demographicsNoDataFilter([{ code: "B", value: null }], true)).toBeUndefined();
   });
 });

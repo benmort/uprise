@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Laptop, Lock, Mail, ShieldCheck, Trash2 } from "lucide-react";
+import { Laptop, Lock, Mail, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import {
   Alert,
+  Badge,
   Button,
   Card,
   CardContent,
@@ -15,8 +16,11 @@ import {
   Input,
   OtpInput,
   PasswordInput,
+  PhoneInput,
   Skeleton,
   Spinner,
+  Switch,
+  formatPhoneDisplay,
 } from "@uprise/ui";
 import { auth, profile, sessions as sessionsApi, type SessionSummaryResponse } from "@uprise/api-client";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,6 +30,7 @@ import { getSession, logout } from "@/lib/session";
 
 type Flags = {
   email: string | null;
+  mobile: string | null;
   role: string;
   emailVerified: boolean;
   mobileVerified: boolean;
@@ -43,13 +48,16 @@ export default function AccountPage() {
 
   const load = async () => {
     setLoadError(false);
-    const session = await getSession();
+    // Session carries the verification flags + email; the profile carries the mobile number
+    // (the session doesn't), so the Mobile card can show "Your mobile is …" like the email one.
+    const [session, prof] = await Promise.all([getSession(), profile.get()]);
     if (!session) {
       setLoadError(true);
       return;
     }
     setFlags({
       email: session.email ?? null,
+      mobile: prof.ok ? prof.data.phone : null,
       role: session.role ?? "",
       emailVerified: Boolean(session.emailVerified),
       mobileVerified: Boolean(session.mobileVerified),
@@ -97,18 +105,14 @@ export default function AccountPage() {
         <p className="text-sm text-muted-foreground">Sign-in, security and account controls.</p>
       </div>
 
-      {!flags.emailVerified && flags.email ? (
-        <div id="verify-email" className="scroll-mt-24">
-          <EmailVerificationBanner email={flags.email} onVerified={() => void load()} />
-        </div>
-      ) : null}
-
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChangePasswordCard />
-        <ChangeEmailCard currentEmail={flags.email} onChanged={() => void load()} />
+        <EmailCard email={flags.email} verified={flags.emailVerified} onRefresh={() => void load()} />
+        <MobileCard mobile={flags.mobile} verified={flags.mobileVerified} onRefresh={() => void load()} />
       </div>
 
       <TwoFactorCard flags={flags} onChange={() => void load()} />
+
+      <ChangePasswordCard />
 
       <SessionsCard />
 
@@ -123,13 +127,28 @@ export default function AccountPage() {
     showToast({ tone: "error", title, description });
   }
 
-  // ── Email verification banner ───────────────────────────────────────
-  function EmailVerificationBanner({ email, onVerified }: { email: string; onVerified: () => void }) {
+  // ── Email (verification + status) ───────────────────────────────────
+  // Always shown (above 2FA) with a status chip, so "is my email verified?" is answerable at
+  // a glance — not a banner that vanishes once verified. When unverified, the verify flow lives
+  // right here. Keeps id="verify-email" for the getting-started deep-link + pulse.
+  function EmailCard({
+    email,
+    verified,
+    onRefresh,
+  }: {
+    email: string | null;
+    verified: boolean;
+    onRefresh: () => void;
+  }) {
     const [sent, setSent] = useState(false);
     const [code, setCode] = useState("");
     const [busy, setBusy] = useState(false);
+    const [changing, setChanging] = useState(false);
+    const [newEmail, setNewEmail] = useState("");
+    const [password, setPassword] = useState("");
 
     const send = async () => {
+      if (!email) return;
       setBusy(true);
       const res = await auth.sendEmailVerification(email);
       setBusy(false);
@@ -139,35 +158,104 @@ export default function AccountPage() {
       } else notifyErr("Couldn't send code", res.error);
     };
     const confirm = async () => {
+      if (!email) return;
       setBusy(true);
       const res = await auth.confirmEmailVerification(email, code);
       setBusy(false);
       if (res.ok) {
         notifyOk("Email verified");
-        onVerified();
+        setCode("");
+        setSent(false);
+        onRefresh();
       } else notifyErr("Invalid code", res.error);
+    };
+    const changeEmail = async () => {
+      setBusy(true);
+      const res = await profile.changeEmail({ newEmail, password });
+      setBusy(false);
+      if (res.ok) {
+        notifyOk("Email updated — verify the new address below");
+        setNewEmail("");
+        setPassword("");
+        setChanging(false);
+        setSent(false);
+        onRefresh();
+      } else notifyErr("Couldn't change email", res.error);
     };
 
     return (
-      <Alert variant="warning" title="Verify your email" message={`We need to confirm ${email}.`}>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {!sent ? (
-            <Button size="sm" variant="outline" onClick={() => void send()} disabled={busy}>
+      <Card id="verify-email" className="scroll-mt-24">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-muted-foreground" /> Email
+            <Badge variant={verified ? "success" : "warning"} dot className="ml-auto">
+              {verified ? "Verified" : "Not verified"}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {email ? (
+              <>
+                Your sign-in email is <span className="font-medium text-foreground">{email}</span>.
+              </>
+            ) : (
+              "No email on file."
+            )}
+          </p>
+
+          {/* Verify the current (or a newly-changed) address. */}
+          {verified || !email ? null : !sent ? (
+            <Button onClick={() => void send()} disabled={busy}>
               Send verification code
             </Button>
           ) : (
-            <>
+            <div className="flex flex-wrap items-center gap-2">
               <OtpInput value={code} onChange={setCode} disabled={busy} />
-              <Button size="sm" onClick={() => void confirm()} disabled={busy || code.length < 4}>
+              <Button onClick={() => void confirm()} disabled={busy || code.length < 4}>
                 Verify
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => void send()} disabled={busy}>
+              <Button variant="ghost" onClick={() => void send()} disabled={busy}>
                 Resend
               </Button>
-            </>
+            </div>
           )}
-        </div>
-      </Alert>
+
+          {/* Change to a new address — resets verification, then verify it above. */}
+          <div className="border-t border-border pt-3">
+            {!changing ? (
+              <Button variant="outline" size="sm" onClick={() => setChanging(true)}>
+                Change email
+              </Button>
+            ) : (
+              <div className="space-y-3">
+                <Field label="New email" htmlFor="new-email">
+                  <Input id="new-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                </Field>
+                <Field label="Confirm password" htmlFor="email-pw">
+                  <PasswordInput id="email-pw" value={password} onChange={(e) => setPassword(e.target.value)} />
+                </Field>
+                <div className="flex gap-2">
+                  <Button onClick={() => void changeEmail()} disabled={busy || !newEmail || !password}>
+                    {busy ? (<><Spinner className="mr-2" />Saving…</>) : "Update email"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setChanging(false);
+                      setNewEmail("");
+                      setPassword("");
+                    }}
+                    disabled={busy}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -226,88 +314,135 @@ export default function AccountPage() {
     );
   }
 
-  // ── Change email ────────────────────────────────────────────────────
-  function ChangeEmailCard({ currentEmail, onChanged }: { currentEmail: string | null; onChanged: () => void }) {
-    const [newEmail, setNewEmail] = useState("");
-    const [password, setPassword] = useState("");
+  // ── Mobile (verification + status) ──────────────────────────────────
+  // Mirrors EmailCard: a status chip + "Your mobile is …" line, the verify flow when it isn't
+  // confirmed, and a change-number affordance. Verifying here is what unlocks the 2FA toggle.
+  function MobileCard({
+    mobile,
+    verified,
+    onRefresh,
+  }: {
+    mobile: string | null;
+    verified: boolean;
+    onRefresh: () => void;
+  }) {
+    const [sent, setSent] = useState(false);
+    const [code, setCode] = useState("");
     const [busy, setBusy] = useState(false);
+    const [changing, setChanging] = useState(false);
+    const [newMobile, setNewMobile] = useState("");
 
-    const submit = async () => {
+    // `number` set ⇒ save it first (a new/changed number); omitted ⇒ (re)send to the number on file.
+    const send = async (number?: string) => {
       setBusy(true);
-      const res = await profile.changeEmail({ newEmail, password });
+      if (number !== undefined) {
+        const set = await profile.setMobile(number);
+        if (!set.ok) {
+          setBusy(false);
+          return notifyErr("Couldn't save number", set.error);
+        }
+      }
+      const res = await profile.sendMobileCode();
       setBusy(false);
       if (res.ok) {
-        setNewEmail("");
-        setPassword("");
-        notifyOk("Email updated — check the new address to verify it");
-        onChanged();
-      } else notifyErr("Couldn't change email", res.error);
+        setSent(true);
+        setChanging(false);
+        notifyOk("Verification code sent");
+      } else notifyErr("Couldn't send code", res.error);
+    };
+    const confirm = async () => {
+      setBusy(true);
+      const res = await profile.verifyMobile(code);
+      setBusy(false);
+      if (res.ok) {
+        notifyOk("Mobile verified");
+        setCode("");
+        setSent(false);
+        onRefresh();
+      } else notifyErr("Invalid code", res.error);
     };
 
+    const showEntry = changing || (!mobile && !sent);
+
     return (
-      <Card>
+      <Card id="verify-mobile" className="scroll-mt-24">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Mail className="h-4 w-4 text-muted-foreground" /> Change email
+            <Smartphone className="h-4 w-4 text-muted-foreground" /> Mobile
+            <Badge variant={verified ? "success" : "warning"} dot className="ml-auto">
+              {verified ? "Verified" : "Not verified"}
+            </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {currentEmail ? (
-            <p className="text-sm text-muted-foreground">
-              Current: <span className="font-medium text-foreground">{currentEmail}</span>
-            </p>
-          ) : null}
-          <Field label="New email" htmlFor="new-email">
-            <Input id="new-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
-          </Field>
-          <Field label="Confirm password" htmlFor="email-pw">
-            <PasswordInput id="email-pw" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </Field>
-          <div className="flex justify-end">
-            <Button onClick={() => void submit()} disabled={busy || !newEmail || !password}>
-              {busy ? (<><Spinner className="mr-2" />Saving…</>) : "Update email"}
-            </Button>
-          </div>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {mobile ? (
+              <>
+                Your mobile is <span className="font-medium text-foreground">{formatPhoneDisplay(mobile)}</span>.
+              </>
+            ) : (
+              "No mobile on file."
+            )}
+          </p>
+
+          {sent ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <OtpInput value={code} onChange={setCode} disabled={busy} />
+              <Button onClick={() => void confirm()} disabled={busy || code.length < 4}>
+                Verify
+              </Button>
+              <Button variant="ghost" onClick={() => void send()} disabled={busy}>
+                Resend
+              </Button>
+            </div>
+          ) : showEntry ? (
+            <div className="space-y-3">
+              <Field label="Mobile number" htmlFor="mobile">
+                <PhoneInput id="mobile" value={newMobile} onChange={setNewMobile} />
+              </Field>
+              <div className="flex gap-2">
+                <Button onClick={() => void send(newMobile.trim())} disabled={busy || !newMobile.trim()}>
+                  Send code
+                </Button>
+                {mobile ? (
+                  <Button variant="ghost" onClick={() => { setChanging(false); setNewMobile(""); }} disabled={busy}>
+                    Cancel
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            // A number is on file — verify it, or change to a different one.
+            <div className="flex flex-wrap gap-2">
+              {!verified ? (
+                <Button onClick={() => void send()} disabled={busy}>
+                  Send verification code
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => setChanging(true)} disabled={busy}>
+                Change mobile
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     );
   }
 
   // ── Two-factor authentication ───────────────────────────────────────
+  // A plain on/off toggle now that mobile verification lives in its own card. The switch is
+  // disabled until the mobile is verified (SMS 2FA has nowhere to send a code otherwise).
   function TwoFactorCard({ flags, onChange }: { flags: Flags; onChange: () => void }) {
     const [busy, setBusy] = useState(false);
-    const [mobile, setMobile] = useState("");
-    const [code, setCode] = useState("");
-    const [codeSent, setCodeSent] = useState(false);
 
-    const disable = async () => {
+    const toggle = async (on: boolean) => {
       setBusy(true);
-      const res = await profile.disable2fa();
+      const res = on ? await profile.enable2fa() : await profile.disable2fa();
       setBusy(false);
-      res.ok ? (notifyOk("Two-factor disabled"), onChange()) : notifyErr("Couldn't disable 2FA", res.error);
-    };
-    const enable = async () => {
-      setBusy(true);
-      const res = await profile.enable2fa();
-      setBusy(false);
-      res.ok ? (notifyOk("Two-factor enabled"), onChange()) : notifyErr("Couldn't enable 2FA", res.error);
-    };
-    const sendCode = async () => {
-      setBusy(true);
-      const set = await profile.setMobile(mobile);
-      if (!set.ok) {
-        setBusy(false);
-        return notifyErr("Couldn't save number", set.error);
-      }
-      const res = await profile.sendMobileCode();
-      setBusy(false);
-      res.ok ? (setCodeSent(true), notifyOk("Code sent")) : notifyErr("Couldn't send code", res.error);
-    };
-    const verify = async () => {
-      setBusy(true);
-      const res = await profile.verifyMobile(code);
-      setBusy(false);
-      res.ok ? (notifyOk("Mobile verified"), onChange()) : notifyErr("Invalid code", res.error);
+      if (res.ok) {
+        notifyOk(on ? "Two-factor enabled" : "Two-factor disabled");
+        onChange();
+      } else notifyErr(on ? "Couldn't enable 2FA" : "Couldn't disable 2FA", res.error);
     };
 
     return (
@@ -315,43 +450,23 @@ export default function AccountPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Two-factor authentication
+            <Switch
+              className="ml-auto"
+              checked={flags.twofaEnabled}
+              disabled={busy || !flags.mobileVerified}
+              onCheckedChange={(v) => void toggle(v)}
+              aria-label="Toggle two-factor authentication"
+            />
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {flags.twofaEnabled ? (
-            <div className="flex items-center justify-between gap-3">
-              <Alert variant="success" title="Two-factor is on" message="You'll be asked for an SMS code at sign-in." />
-              <Button variant="outline" onClick={() => void disable()} disabled={busy}>
-                Disable
-              </Button>
-            </div>
-          ) : flags.mobileVerified ? (
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">Your mobile is verified. Turn on SMS two-factor.</p>
-              <Button onClick={() => void enable()} disabled={busy}>
-                Enable
-              </Button>
-            </div>
-          ) : !codeSent ? (
-            <div className="flex flex-wrap items-end gap-2">
-              <Field label="Mobile number" htmlFor="mobile" hint="E.164 format, e.g. +61400000000" className="flex-1 min-w-[16rem]">
-                <Input id="mobile" placeholder="+61400000000" value={mobile} onChange={(e) => setMobile(e.target.value)} />
-              </Field>
-              <Button onClick={() => void sendCode()} disabled={busy || !mobile.trim()}>
-                Send code
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <OtpInput value={code} onChange={setCode} disabled={busy} />
-              <Button onClick={() => void verify()} disabled={busy || code.length < 4}>
-                Verify
-              </Button>
-              <Button variant="ghost" onClick={() => void sendCode()} disabled={busy}>
-                Resend
-              </Button>
-            </div>
-          )}
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            {flags.twofaEnabled
+              ? "On — you'll be asked for an SMS code each time you sign in."
+              : flags.mobileVerified
+                ? "Off — turn on to require an SMS code at sign-in."
+                : "Verify your mobile above to turn on SMS two-factor."}
+          </p>
         </CardContent>
       </Card>
     );

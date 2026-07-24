@@ -1,10 +1,18 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MapGL, { FullscreenControl, Layer, Source, type MapRef } from "react-map-gl/mapbox";
 import bbox from "@turf/bbox";
 import { Loader2, LocateFixed } from "lucide-react";
-import { MapSizeControl, installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
+import {
+  MapSizeControl,
+  installMoonlitDark,
+  MapGestureToggle,
+  useScrollToZoom,
+  MapCorner,
+  MapAttribution,
+} from "@uprise/field";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useTheme } from "@/components/theme/theme-provider";
 
@@ -169,10 +177,10 @@ export function CampaignBoundaryMap({
         style={{ width: "100%", height: "100%" }}
         // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
         cooperativeGestures={!scrollZoom}
-        // The Mapbox wordmark is hidden globally (globals.css — permitted by our plan),
-        // freeing the bottom-left corner for the claimed/unclaimed legend. Attribution is
-        // replaced with a compact control bottom-right (kept for the OpenStreetMap licence).
+        // Mapbox chrome lives bottom-right only: the wordmark (logoPosition) + our single
+        // compact ⓘ (<MapAttribution/>). Suppress the default attribution so there's just one.
         attributionControl={false}
+        logoPosition="bottom-right"
         onLoad={() => {
           loadedRef.current = true;
           const map = mapRef.current?.getMap();
@@ -215,17 +223,32 @@ export function CampaignBoundaryMap({
 
         <FullscreenControl position="top-left" />
         <MapSizeControl large={large} onToggle={() => setLarge((v) => !v)} position="top-left" />
-        <MapGestureToggle />
+        <MapAttribution />
       </MapGL>
+
+      {/* Top-right — context/actions: scroll-to-zoom, then recentre. */}
+      <MapCorner corner="top-right">
+        <MapGestureToggle />
+        <button
+          type="button"
+          onClick={() => recenter(500)}
+          title="Recentre on boundary"
+          aria-label="Recentre on boundary"
+          className="inline-flex items-center gap-1 rounded-lg bg-surface/95 px-2 py-1 text-xs font-medium text-foreground shadow-card hover:bg-surface"
+        >
+          <LocateFixed className="h-3.5 w-3.5" />
+          Recentre
+        </button>
+      </MapCorner>
 
       {loadingBoundaries ? (
         <p className="pointer-events-none absolute left-1/2 top-2 flex -translate-x-1/2 items-center gap-1.5 rounded-lg bg-surface-variant px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-card">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Spinner className="h-3 w-3 animate-spin" />
           Loading boundaries…
         </p>
       ) : null}
 
-      {/* Claimed / unclaimed legend — only when the campaign has turf to show. */}
+      {/* Bottom-left — informational: claimed / unclaimed legend (only when the campaign has turf). */}
       {hasTurf ? (
         <div className="pointer-events-none absolute bottom-2 left-2 flex flex-col gap-1 rounded-lg bg-surface/95 px-2.5 py-1.5 text-[11px] font-medium text-foreground shadow-card">
           <span className="flex items-center gap-1.5">
@@ -244,17 +267,6 @@ export function CampaignBoundaryMap({
           </span>
         </div>
       ) : null}
-
-      <button
-        type="button"
-        onClick={() => recenter(500)}
-        title="Recentre on boundary"
-        aria-label="Recentre on boundary"
-        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg bg-surface/95 px-2 py-1 text-xs font-medium text-foreground shadow-card hover:bg-surface"
-      >
-        <LocateFixed className="h-3.5 w-3.5" />
-        Recentre
-      </button>
     </div>
   );
 }

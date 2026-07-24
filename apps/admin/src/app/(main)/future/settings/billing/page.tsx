@@ -1,27 +1,14 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { useState, useRef } from 'react';
 import { Button } from '@uprise/ui';
 import { Modal } from "@/components/ui/modal";
 import { Skeleton } from '@uprise/ui';
 import {
-  FormCreditCard,
-  FormBillingDetails,
-  type FormCreditCardRef,
-  type BillingDetailsFormValues,
-} from '@/components/prog/shared/forms';
+  FormCreditCard, FormBillingDetails, type FormCreditCardRef, type BillingDetailsFormValues, } from '@/components/prog/shared/forms';
 import {
-  Check,
-  Edit,
-  X,
-  Plus,
-  Download,
-  Eye,
-  CreditCard,
-  Loader2,
-  Trash2,
-  Star,
-} from 'lucide-react';
+  Check, Edit, X, Plus, Download, Eye, CreditCard, Trash2, Star } from "lucide-react";
 import { Suspense } from 'react';
 import { CanManageBilling } from '@/components/prog/protected-route';
 import { Alert } from "@uprise/ui";
@@ -458,7 +445,7 @@ function CurrentPlan() {
                             disabled={method.isDefault || isOnlyMethod || isActionLoading}
                           >
                             {isActionLoading ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <Spinner className="w-3 h-3 animate-spin" />
                             ) : (
                               <>
                                 <Star className="w-3 h-3 mr-1" />
@@ -474,7 +461,7 @@ function CurrentPlan() {
                             disabled={isOnlyMethod || isActionLoading}
                           >
                             {isActionLoading ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <Spinner className="w-3 h-3 animate-spin" />
                             ) : (
                               <>
                                 <Trash2 className="w-3 h-3 mr-1" />
@@ -576,7 +563,7 @@ function CurrentPlan() {
               >
                 {isAddCardPending ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Spinner className="mr-2 h-4 w-4 animate-spin" />
                     Adding Card...
                   </>
                 ) : (

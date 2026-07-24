@@ -10,6 +10,7 @@ import {
   heatConfidence,
   heatFill,
   heatFilter,
+  heatNoDataFilter,
   heatLegendBands,
   heatOpacity,
   withHoldoutOverride,
@@ -190,5 +191,21 @@ describe("withHoldoutOverride", () => {
 
   it("returns the base untouched with no holdout", () => {
     expect(withHoldoutOverride("#123456", [], "#999")).toBe("#123456");
+  });
+});
+
+describe("heatNoDataFilter", () => {
+  it("selects only the null-score / null-band SA1s", () => {
+    const f = heatNoDataFilter([
+      cell({ sa1Code: "A", score: 70, band: 4 }),
+      cell({ sa1Code: "B", score: null, band: null }),
+      cell({ sa1Code: "C", band: 0 }),
+    ]);
+    expect(f).toEqual(["in", ["get", "code"], ["literal", ["B", "C"]]]);
+  });
+
+  it("is undefined when every cell has a band (no hatch layer)", () => {
+    expect(heatNoDataFilter([cell({ sa1Code: "A", band: 2 })])).toBeUndefined();
+    expect(heatNoDataFilter([])).toBeUndefined();
   });
 });

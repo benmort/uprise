@@ -33,11 +33,29 @@ export class TemplateRendererService {
         nestedActionNetworkPerson?.first_name,
       ) ?? "friend";
 
+    // {{location}} = the recipient's suburb. Different imports name the column differently
+    // (suburb/locality/city/town) and Action Network nests it on the person's postal address,
+    // so accept any of them; fall back to a natural phrase when we don't know their suburb.
+    const actionNetworkAddress =
+      nestedActionNetworkPerson && Array.isArray(nestedActionNetworkPerson.postal_addresses)
+        ? (nestedActionNetworkPerson.postal_addresses[0] as Record<string, unknown> | undefined)
+        : undefined;
+    const location =
+      this.pickFirstNonEmptyString(
+        source.location,
+        source.suburb,
+        source.locality,
+        source.city,
+        source.town,
+        actionNetworkAddress?.locality,
+      ) ?? "your area";
+
     return {
       ...source,
       first_name: firstName,
       firstname: firstName,
       firstName,
+      location,
     };
   }
 

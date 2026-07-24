@@ -5,7 +5,7 @@
 // It's an orientation aid, not the turf-cut map — that's the Map view (TurfDrawMap).
 import { useEffect, useRef, useState } from "react";
 import Map, { type MapRef } from "react-map-gl/mapbox";
-import { installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
+import { installMoonlitDark, MapGestureToggle, useScrollToZoom, MapCorner, MapAttribution } from "@uprise/field";
 import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -68,7 +68,9 @@ export function AustraliaMap({ focusState }: { focusState?: string }) {
       initialViewState={AUSTRALIA_VIEW}
       mapStyle={theme === "dark" ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/streets-v12"}
       style={{ width: "100%", height: "100%" }}
+      // Mapbox chrome bottom-right only: wordmark + one compact ⓘ (<MapAttribution/>).
       attributionControl={false}
+      logoPosition="bottom-right"
       // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
       cooperativeGestures={!scrollZoom}
       onLoad={() => {
@@ -77,7 +79,11 @@ export function AustraliaMap({ focusState }: { focusState?: string }) {
         setLoaded(true);
       }}
     >
-      <MapGestureToggle />
+      <MapAttribution />
+      {/* Top-right — context/actions: scroll-to-zoom. */}
+      <MapCorner corner="top-right">
+        <MapGestureToggle />
+      </MapCorner>
     </Map>
   );
 }

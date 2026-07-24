@@ -1,7 +1,7 @@
 import { createBlast, listAudiences, type MessageChannel } from "@/lib/api";
 
 export const DEFAULT_BLAST_TEMPLATE =
-  "Hi {{first_name}}! We're building our volunteer team in {{city}} and would love your help at an upcoming community action. Can we count you in? Reply YES to volunteer or STOP to opt out.";
+  "Hi {{first_name}}! We're building our volunteer team in {{location}} and would love your help at an upcoming community action. Can we count you in? Reply YES to volunteer or STOP to opt out.";
 
 type Nav = { push: (href: string) => void };
 type Toast = (input: {

@@ -188,7 +188,7 @@ describe("buildPollPalette", () => {
     const p = buildPollPalette(() => "");
 
     expect(p.diverging).toEqual(["#2a31d8", "#6b7cff", "#e4e4e7", "#ea6248", "#c9351d"]);
-    expect(p.seq[0]).toBe("#86b6ef");
+    expect(p.seq[0]).toBe("#c5cbd3");
     expect(Object.values(p).flat().join()).not.toContain("NaN");
   });
 

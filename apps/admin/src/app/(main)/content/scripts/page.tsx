@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CornerDownRight, Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { CornerDownRight, Plus, Save, NotebookPen, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   createScript,
@@ -135,7 +135,7 @@ export default function ScriptsPage() {
     <div className="page-stack">
       <PageHeader
         title="Scripts"
-        icon={Sparkles}
+        icon={NotebookPen}
         description="Branching talk tracks for canvassers and callers."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },

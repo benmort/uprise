@@ -298,6 +298,27 @@ export class IamFlowsService {
     return membership?.tenantId ?? null;
   }
 
+  /**
+   * The tenant to attribute an auth OTP send to. Most users have a membership; a
+   * tenant-independent break-glass super-admin does NOT — and without this fallback the
+   * OTP was silently dropped (the transactional-SMS ledger row needs a tenant), so 2FA /
+   * phone-login never texted them. Fall back to the configured platform tenant, else the
+   * oldest tenant. The send uses the platform transactional number regardless of tenant;
+   * this only gives the ledger row a home so the code actually goes out. Null only when the
+   * instance has no tenants at all (fresh install) — then there's nothing to send under.
+   */
+  private async resolveOtpTenantId(userId: string): Promise<string | null> {
+    const own = await this.resolveTenantId(userId);
+    if (own) return own;
+    const platform = this.config.get<string>("PLATFORM_TENANT_ID", "").trim();
+    if (platform) return platform;
+    const oldest = await this.prisma.tenant.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    return oldest?.id ?? null;
+  }
+
   private async grantSession(userId: string): Promise<SessionGrant> {
     const memberships = await this.membershipsFor(userId);
     const tenantId = memberships[0]?.tenantId ?? null;
@@ -473,7 +494,8 @@ export class IamFlowsService {
     const record = await this.prisma.mobileVerification.create({
       data: { userId, code, expiresAt: new Date(Date.now() + TWOFA_CODE_TTL_MS) },
     });
-    const tenantId = await this.resolveTenantId(userId);
+    // OTP tenant falls back for a tenant-independent super-admin so the code still sends.
+    const tenantId = await this.resolveOtpTenantId(userId);
     if (tenantId && recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
       await this.sendOtpSms({
         tenantId,
@@ -562,7 +584,7 @@ export class IamFlowsService {
     const record = await this.prisma.mobileVerification.create({
       data: { userId: user?.id ?? null, mobile, code, expiresAt: new Date(Date.now() + PHONE_LOGIN_TTL_MS) },
     });
-    const tenantId = user ? await this.resolveTenantId(user.id) : null;
+    const tenantId = user ? await this.resolveOtpTenantId(user.id) : null;
     if (user && tenantId && !user.deletedAt && recentSends < PHONE_MAX_SENDS_PER_WINDOW) {
       await this.sendOtpSms({
         tenantId,
@@ -622,6 +644,12 @@ export class IamFlowsService {
   /** Set/replace the caller's mobile (resets verification). */
   async setMobile(userId: string, mobile: string): Promise<{ ok: true }> {
     const trimmed = assertE164(mobile);
+    // Mobile is unique across accounts (phone-login keys on it). If it already belongs to
+    // someone else, surface a clean error instead of a raw 500 from the unique constraint.
+    const taken = await this.prisma.user.findUnique({ where: { mobile: trimmed }, select: { id: true } });
+    if (taken && taken.id !== userId) {
+      throw new BadRequestException("That mobile number is already linked to another account");
+    }
     await this.prisma.user.update({ where: { id: userId }, data: { mobile: trimmed, mobileVerified: false } });
     return { ok: true };
   }

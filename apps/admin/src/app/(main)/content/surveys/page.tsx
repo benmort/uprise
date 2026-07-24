@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Save, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Save, NotebookPen, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { DualChannelPreview } from "@/components/content/dual-channel-preview";
 import {
@@ -189,7 +189,7 @@ export default function SurveysPage() {
     <div className="page-stack">
       <PageHeader
         title="Surveys"
-        icon={Sparkles}
+        icon={NotebookPen}
         description="Reusable question sets for doors and texts."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },

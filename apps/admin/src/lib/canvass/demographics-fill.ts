@@ -1,4 +1,4 @@
-import type { ExpressionSpecification } from "mapbox-gl";
+import type { ExpressionSpecification, FilterSpecification } from "mapbox-gl";
 import type { PollPalette } from "@/lib/insights/palette";
 import type { DensityBand } from "@/lib/canvass/density";
 import type { AbsChoroplethRow } from "@/lib/api/demographics";
@@ -60,6 +60,22 @@ export function stepFill(
   stops.forEach((stop, i) => step.push(stop, ramp[Math.min(i + 1, ramp.length - 1)]));
   // A feature with no baked value reads back null → no-data, not the bottom band.
   return ["case", ["==", ["get", "value"], null], nodata, step] as unknown as ExpressionSpecification;
+}
+
+/**
+ * No-data hatch overlay filter, matching whichever fill mechanism the level uses:
+ *  - client-join (SA2+, `matchFill`): everything NOT in the rows-with-values set;
+ *  - tile-baked (SA1/meshblock, `stepFill`): features whose baked `value` is null.
+ * Undefined for the client-join case when there are no valued rows (nothing to distinguish).
+ */
+export function demographicsNoDataFilter(
+  rows: AbsChoroplethRow[],
+  clientJoin: boolean,
+): FilterSpecification | undefined {
+  if (!clientJoin) return ["==", ["get", "value"], null] as FilterSpecification;
+  const codes = [...new Set(rows.filter((r) => r.value !== null && Number.isFinite(r.value)).map((r) => r.code))];
+  if (codes.length === 0) return undefined;
+  return ["!", ["in", ["get", "code"], ["literal", codes]]] as FilterSpecification;
 }
 
 /** SequentialLegend bands from the scale (first band starts at the layer min, top is open-ended). */

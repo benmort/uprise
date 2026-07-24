@@ -59,20 +59,24 @@ export function SetupFlowSection({
 
       {allPlanLocked ? (
         <div className="px-5 pb-5 pt-1">
-          <div className="flex flex-wrap items-start gap-3 rounded-xl border border-dashed border-border bg-surface-variant p-4">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">
-                Dedicated channels aren&apos;t part of your plan.
-              </span>{" "}
-              You&apos;re sending on shared Uprise numbers and addresses — that keeps working exactly as
-              it does today. Upgrade to text, call and email from numbers your organisation owns.
-            </p>
+          {/* Below tablet: stack with the CTA on top and the message beneath it. From md up:
+              message left, button right (row-reverse keeps the button — first in the DOM — on the right). */}
+          <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border bg-surface-variant p-4 md:flex-row-reverse md:items-start">
             <Button asChild size="sm" variant="outline" className="shrink-0">
               <a href="mailto:support@uprise.org.au?subject=Upgrading%20our%20plan">
                 Talk to us about upgrading
               </a>
             </Button>
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  Dedicated channels aren&apos;t part of your plan.
+                </span>{" "}
+                You&apos;re sending on shared Uprise numbers and addresses — that keeps working exactly as
+                it does today. Upgrade to text, call and email from numbers your organisation owns.
+              </p>
+            </div>
           </div>
         </div>
       ) : (

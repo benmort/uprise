@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Marker, Popup, Source } from "react-map-gl/mapbox";
-import { CHEVRON_LAYOUT } from "./turf-map";
+import { FlowChevrons } from "./turf-map";
 import { History, Loader2, Pause, Play, X } from "lucide-react";
 import { getTurfKnocks } from "../api";
 import { fetchWalkingRouteGeometry } from "../lib/directions";
@@ -277,13 +277,10 @@ export function ReplayMapContent({ replay }: { replay: RouteReplayState }) {
             layout={{ "line-cap": "round", "line-join": "round" }}
             paint={{ "line-color": PAST_TRAIL, "line-width": 4.5, "line-opacity": 0.55 }}
           />
-          <Layer
-            id="replay-past-chevrons"
-            type="symbol"
-            layout={CHEVRON_LAYOUT}
-            paint={{ "text-color": PAST_TRAIL, "text-opacity": 0.8, "text-halo-color": "#ffffff", "text-halo-width": 1 }}
-          />
         </Source>
+      )}
+      {replay.trails.past && (
+        <FlowChevrons id="replay-past-chevrons" line={replay.trails.past} color={PAST_TRAIL} opacity={0.8} />
       )}
       {replay.trails.future && (
         <Source id="replay-future" type="geojson" data={{ type: "Feature", geometry: replay.trails.future, properties: {} }}>
@@ -293,13 +290,10 @@ export function ReplayMapContent({ replay }: { replay: RouteReplayState }) {
             layout={{ "line-cap": "round", "line-join": "round" }}
             paint={{ "line-color": PRIMARY, "line-width": 4, "line-opacity": 0.35, "line-dasharray": [1.5, 1.5] }}
           />
-          <Layer
-            id="replay-future-chevrons"
-            type="symbol"
-            layout={CHEVRON_LAYOUT}
-            paint={{ "text-color": PRIMARY, "text-opacity": 0.5, "text-halo-color": "#ffffff", "text-halo-width": 1 }}
-          />
         </Source>
+      )}
+      {replay.trails.future && (
+        <FlowChevrons id="replay-future-chevrons" line={replay.trails.future} color={PRIMARY} opacity={0.5} />
       )}
       {replay.person && (
         <Marker latitude={replay.person.lat} longitude={replay.person.lng} anchor="center">

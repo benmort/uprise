@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Spinner } from "@uprise/ui";
 import { useEffect, useMemo, useState } from "react";
 import { Phone, PhoneOff, Search } from "lucide-react";
-import { FormDialog, Field, Input, FormSelect, StatusBadge, StepProgress, formatAuMobile, isAuMobile, toE164 } from "@uprise/ui";
+import { FormDialog, Field, Input, FormSelect, StatusBadge, StepProgress, PhoneInput, formatPhoneDisplay, isAuMobile } from "@uprise/ui";
 import {
   telephony,
   type TelephonyPhoneNumber,
@@ -92,8 +92,8 @@ export function NewCallDialog({ open, onClose }: { open: boolean; onClose: () =>
 
   const toNumber = useMemo(() => {
     if (mode === "contact") return picked?.phoneE164 ?? null;
-    const national = digits.replace(/\D/g, "");
-    return national.length >= 9 ? toE164(national) : null;
+    // `digits` is the E.164 emitted by PhoneInput; needs the "+" and enough digits to dial.
+    return /^\+[1-9]\d{6,14}$/.test(digits) ? digits : null;
   }, [mode, picked, digits]);
 
   const submit = () => {
@@ -101,7 +101,7 @@ export function NewCallDialog({ open, onClose }: { open: boolean; onClose: () =>
     const label =
       mode === "contact"
         ? picked?.fullName || picked?.phoneE164 || toNumber
-        : formatAuMobile(digits.replace(/\D/g, ""));
+        : formatPhoneDisplay(digits);
     void startCall({
       toNumber,
       contactId: mode === "contact" ? picked?.id : undefined,
@@ -218,17 +218,8 @@ export function NewCallDialog({ open, onClose }: { open: boolean; onClose: () =>
           ) : null}
         </Field>
       ) : (
-        <Field label="Phone number" htmlFor="call-number" hint="Australian mobile.">
-          <Input
-            id="call-number"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel-national"
-            value={formatAuMobile(digits.replace(/\D/g, ""))}
-            onChange={(e) => setDigits(e.target.value.replace(/\D/g, "").slice(0, 10))}
-            placeholder="04xx xxx xxx"
-            autoFocus
-          />
+        <Field label="Phone number" htmlFor="call-number">
+          <PhoneInput id="call-number" value={digits} onChange={setDigits} />
         </Field>
       )}
 

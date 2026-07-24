@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReferendumRow } from "@/lib/api/geo";
-import { referendumBands, referendumFill, yesColour } from "./referendum-fill";
+import { referendumBands, referendumFill, referendumNoDataFilter, yesColour } from "./referendum-fill";
 
 const D = ["strongYes", "leanYes", "even", "leanNo", "strongNo"];
 
@@ -74,5 +74,20 @@ describe("referendumBands", () => {
     expect(bands).toHaveLength(5);
     expect(bands[0]).toEqual({ color: "strongYes", label: "Yes ≥ 55%" });
     expect(bands[4]).toEqual({ color: "strongNo", label: "Yes < 45%" });
+  });
+});
+
+describe("referendumNoDataFilter", () => {
+  it("selects everything NOT in the results set", () => {
+    const rows = [
+      { geoCode: "101", yesPct: 61 },
+      { geoCode: "102", yesPct: null },
+      { geoCode: null, yesPct: 40 },
+    ] as unknown as ReferendumRow[];
+    expect(referendumNoDataFilter(rows)).toEqual(["!", ["in", ["get", "code"], ["literal", ["101"]]]]);
+  });
+
+  it("is undefined when there are no results", () => {
+    expect(referendumNoDataFilter([])).toBeUndefined();
   });
 });

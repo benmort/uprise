@@ -26,9 +26,10 @@ export function NotificationsDropdown({ unreadCount }: { unreadCount: number }) 
           className="relative flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground transition-colors hover:bg-surface-variant hover:text-foreground"
         >
           {unreadCount > 0 ? (
-            <span className="absolute right-2.5 top-2.5 flex h-2 w-2">
+            // Avatar-indicator style: a ringed dot at the top-right corner with an expanding ping.
+            <span className="absolute right-2 top-2 flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-surface" />
             </span>
           ) : null}
           <Bell className="h-[18px] w-[18px]" />

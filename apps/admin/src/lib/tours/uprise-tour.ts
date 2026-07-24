@@ -282,7 +282,7 @@ export const upriseTourSteps: TourStep[] = [
     icon: Tag,
     title: "Personalization tags",
     content: "Click a chip to drop a merge tag into the message.",
-    detail: "Tags come from your audience's metadata columns, so {{first_name}}, {{city}} and friends just work.",
+    detail: "Standard tags like {{first_name}} and {{location}} (their suburb) always work, plus any of your audience's own metadata columns.",
     selector: "#tour-composer-tags",
     route: composerRoute,
   },

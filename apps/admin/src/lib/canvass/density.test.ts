@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { densityBands, densityFill, densityStops, formatDensity, type DensityScale } from "./density";
+import { densityBands, densityFill, densityNoDataFilter, densityStops, formatDensity, type DensityScale } from "./density";
 
 const SEQ = ["#s1", "#s2", "#s3", "#s4", "#s5"] as const;
 const NODATA = "#nd";
@@ -97,5 +97,11 @@ describe("formatDensity", () => {
     [9611.2, "9,611"],
   ])("formats %s as %s", (v, expected) => {
     expect(formatDensity(v)).toBe(expected);
+  });
+});
+
+describe("densityNoDataFilter", () => {
+  it("matches features whose baked density is null", () => {
+    expect(densityNoDataFilter()).toEqual(["==", ["get", "density"], null]);
   });
 });

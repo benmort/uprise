@@ -10,10 +10,3 @@
    silently no-ops — e.g. the walk-view preview map's `min-h-[60vh]` collapsed the map
    to 0 height. Mirrors apps/field's own globals. */
 @source "../../../../packages/field/src/**/*.{ts,tsx}";
-
-/* Hide the Mapbox wordmark on every map (rendered by mapbox-gl outside React). The
-   attribution is set to `compact` per-map, so it collapses to a small ⓘ toggle
-   (text hidden until clicked) rather than the always-on "© Mapbox …" bar. */
-.mapboxgl-ctrl-logo {
-  display: none !important;
-}

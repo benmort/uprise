@@ -1,19 +1,10 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Building2,
-  Check,
-  Loader2,
-  Minus,
-  Network as NetworkIcon,
-  Search,
-  ShieldAlert,
-  ShieldCheck,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+  Building2, Check, Minus, Network as NetworkIcon, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import { FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import { FlagSourceBadge } from "@/components/super/flag-source-badge";
@@ -246,7 +237,7 @@ export default function FeatureFlagsPage() {
             <div className="max-h-[420px] space-y-1 overflow-y-auto">
               {searching ? (
                 <div className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+                  <Spinner className="h-4 w-4 animate-spin" /> Searching…
                 </div>
               ) : results.length === 0 ? (
                 <p className="px-1 py-4 text-sm text-muted-foreground">No {tab}s found.</p>
@@ -283,7 +274,7 @@ export default function FeatureFlagsPage() {
               </div>
             ) : loading ? (
               <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-6 py-16 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" /> Loading overrides…
+                <Spinner className="h-5 w-5 animate-spin" /> Loading overrides…
               </div>
             ) : error ? (
               <div className="rounded-xl border border-border bg-surface px-6 py-10 text-center">
@@ -327,7 +318,7 @@ export default function FeatureFlagsPage() {
                             <p className="mt-0.5 truncate text-xs text-muted-foreground">{f.description}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            {pending === f.key ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
+                            {pending === f.key ? <Spinner className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
                             <TriState
                               value={overrideOf(f)}
                               disabled={pending === f.key}

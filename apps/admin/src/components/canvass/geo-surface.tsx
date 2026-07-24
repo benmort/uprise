@@ -24,11 +24,19 @@ import { DemographicsPanel } from "@/components/canvass/geo-panels/demographics-
 import { firstNationsSlug, resolveFirstNationsLevel } from "@/lib/canvass/first-nations";
 import { getArea, getDensityScale, getFirstNations, getReferendum } from "@/lib/api/geo";
 import { getChoropleth } from "@/lib/api/demographics";
-import { densityBands, densityFill } from "@/lib/canvass/density";
-import { referendumBands, referendumFill } from "@/lib/canvass/referendum-fill";
-import { matchFill, stepFill, choroplethBands, rampFor, formatIndicator } from "@/lib/canvass/demographics-fill";
+import { densityBands, densityFill, densityNoDataFilter } from "@/lib/canvass/density";
+import { referendumBands, referendumFill, referendumNoDataFilter } from "@/lib/canvass/referendum-fill";
+import {
+  matchFill,
+  stepFill,
+  choroplethBands,
+  rampFor,
+  formatIndicator,
+  demographicsNoDataFilter,
+} from "@/lib/canvass/demographics-fill";
 import { useChartPalette } from "@/components/insights/use-poll-palette";
 import { SequentialLegend } from "@/components/canvass/sequential-legend";
+import { NODATA_HATCH_CSS } from "@/lib/canvass/nodata-hatch";
 import { useApi } from "@/lib/use-api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -140,6 +148,7 @@ export function GeoSurface() {
     densityOn && palette && densityScale.data
       ? densityFill(densityScale.data, palette.seq, palette.nodata)
       : undefined;
+  const boundaryNoData = boundaryFill ? densityNoDataFilter() : undefined;
   const densityLegend = palette ? densityBands(densityScale.data ?? null, palette.seq) : [];
 
   // ── 2023 referendum choropleth (the referendum kind) ────────────────────────
@@ -151,6 +160,7 @@ export function GeoSurface() {
   const refRows = refLevel === "state" ? (referendum.data?.states ?? []) : (referendum.data?.divisions ?? []);
   const referendumFillExpr =
     referendumOn && palette && refRows.length ? referendumFill(refRows, palette.diverging, palette.nodata) : undefined;
+  const referendumNoData = referendumFillExpr ? referendumNoDataFilter(refRows) : undefined;
   const referendumLegend = referendumOn && palette ? referendumBands(palette.diverging) : [];
 
   // ── ABS demographics choropleth (the demographics kind) ─────────────────────
@@ -194,6 +204,9 @@ export function GeoSurface() {
         ? matchFill(demoData.rows ?? [], demoData.breaks, demoRamp, palette.nodata)
         : stepFill(demoData.breaks, demoRamp, palette.nodata)
       : undefined;
+  const demographicsNoData = demographicsFillExpr
+    ? demographicsNoDataFilter(demoData?.rows ?? [], demoClientJoin)
+    : undefined;
   const demographicsLegend =
     demographicsOn && palette && demoData ? choroplethBands(demoData.breaks, demoData.min, demoRamp) : [];
 
@@ -232,6 +245,7 @@ export function GeoSurface() {
         })),
         boundaryFilter,
         boundaryFill,
+        boundaryNoDataFilter: boundaryNoData,
         selectedBoundaryCode: selectedCode,
         // "My turf" divisions of the active type — drawn green-dashed on the map.
         basketCodes: basket.divisions.filter((d) => d.type === type).map((d) => d.code),
@@ -252,6 +266,7 @@ export function GeoSurface() {
         boundaryTilesUrl: `${getApiUrl()}/geo/tiles/state/{z}/{x}/{y}?v=4`,
         boundaryFilter: stateDigit ? (["==", ["get", "code"], stateDigit] as FilterSpecification) : undefined,
         boundaryFill,
+        boundaryNoDataFilter: boundaryNoData,
         selectedBoundaryCode: code || undefined,
         // Whole states banked in "My turf" (stored as division type "ste") — green-dashed.
         basketCodes: basket.divisions.filter((d) => d.type === "ste").map((d) => d.code),
@@ -285,6 +300,7 @@ export function GeoSurface() {
           ? (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
           : undefined,
         boundaryFill,
+        boundaryNoDataFilter: boundaryNoData,
         selectedBoundaryCode: fnCode || undefined,
         showDraw: false,
         // The tile carries no slug, so derive it from the boundary's name — exactly the way
@@ -312,6 +328,7 @@ export function GeoSurface() {
             : (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
           : undefined,
         boundaryFill: referendumFillExpr,
+        boundaryNoDataFilter: referendumNoData,
         selectedBoundaryCode: code || undefined,
         showDraw: false,
         // Reference-only — never turf, so no basketCodes.
@@ -343,6 +360,7 @@ export function GeoSurface() {
           ? (["==", ["slice", ["get", "code"], 0, 1], stateDigit] as FilterSpecification)
           : undefined,
         boundaryFill: demographicsFillExpr,
+        boundaryNoDataFilter: demographicsNoData,
         selectedBoundaryCode: code || undefined,
         onBoundaryClick: (clicked: string) => writeGeoParam("code", code === clicked ? null : clicked),
       };
@@ -404,8 +422,8 @@ export function GeoSurface() {
     divisionSelected, setDivisionSelected, selectedAreas, toggleSelectedArea, setViewportAreas,
     setDrawnPolygons, doors, activePid, setActivePid, picked, basket.divisions, basket.areas,
     pollingPlaces, pollingSelectedId, setPollingSelectedId,
-    fnCode, boundaryFill, refLevel, referendumFillExpr,
-    demoLevel, demoClientJoin, indicatorKey, demographicsFillExpr,
+    fnCode, boundaryFill, boundaryNoData, refLevel, referendumFillExpr, referendumNoData,
+    demoLevel, demoClientJoin, indicatorKey, demographicsFillExpr, demographicsNoData,
     demoRegionBounds, demoFrame, demoRecenterNonce,
   ]);
 
@@ -446,7 +464,9 @@ export function GeoSurface() {
       >
         <GeoMap {...mapProps} />
         {demographicsOn ? (
-          <div className="absolute left-3 top-3 z-10 flex flex-col gap-1.5">
+          // Top-left, below the map's own fullscreen control (demographics never shows Draw,
+          // so this corner is otherwise clear) — the selection/country framing toggle.
+          <div className="absolute left-2 top-14 z-10 flex flex-col gap-1.5">
             <button
               type="button"
               disabled={!code}
@@ -476,12 +496,12 @@ export function GeoSurface() {
           </div>
         ) : null}
         {densityOn && densityLegend.length > 0 && palette ? (
-          <div className="pointer-events-none absolute bottom-3 right-3 z-10">
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10">
             <SequentialLegend bands={densityLegend} nodata={palette.nodata} unit="addresses / km²" />
           </div>
         ) : null}
         {referendumOn && referendumLegend.length > 0 ? (
-          <div className="pointer-events-none absolute bottom-3 right-3 z-10 rounded-lg border border-border bg-surface/95 p-2 text-xs shadow-card backdrop-blur">
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg border border-border bg-surface/95 p-2 text-xs shadow-card backdrop-blur">
             <div className="mb-1 font-semibold text-foreground">Yes share</div>
             <div className="space-y-0.5">
               {referendumLegend.map((b) => (
@@ -490,11 +510,20 @@ export function GeoSurface() {
                   <span className="text-muted-foreground">{b.label}</span>
                 </div>
               ))}
+              {palette ? (
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-sm border border-border"
+                    style={{ backgroundColor: palette.nodata, backgroundImage: NODATA_HATCH_CSS }}
+                  />
+                  <span className="text-muted-foreground">Not enough data</span>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
         {demographicsOn && demographicsLegend.length > 0 && palette && demoData ? (
-          <div className="pointer-events-none absolute bottom-3 right-3 z-10">
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10">
             <SequentialLegend
               bands={demographicsLegend}
               nodata={palette.nodata}

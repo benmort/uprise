@@ -5,9 +5,3 @@
    (this app's own files are auto-detected by Tailwind v4). */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 @source "../../../../packages/field/src/**/*.{ts,tsx}";
-
-/* Hide the Mapbox wordmark on the field maps (mirrors the admin app). Attribution is
-   already collapsed to the ⓘ toggle via attributionControl={false} on the map. */
-.mapboxgl-ctrl-logo {
-  display: none !important;
-}

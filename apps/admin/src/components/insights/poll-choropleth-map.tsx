@@ -2,11 +2,12 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import MapGL, { Layer, Source, type MapRef } from "react-map-gl/mapbox";
-import type { ExpressionSpecification } from "mapbox-gl";
+import type { ExpressionSpecification, FilterSpecification } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { LocateFixed } from "lucide-react";
-import { installMoonlitDark, MapGestureToggle, useScrollToZoom } from "@uprise/field";
+import { installMoonlitDark, MapGestureToggle, useScrollToZoom, MapCorner, MapAttribution } from "@uprise/field";
 import { getApiUrl } from "@/lib/api";
+import { ensureNoDataHatch, NODATA_HATCH_CSS, NODATA_HATCH_ID, NODATA_OUTLINE_PAINT } from "@/lib/canvass/nodata-hatch";
 import { useTheme } from "@/components/theme/theme-provider";
 import { usePollPalette } from "@/components/insights/use-poll-palette";
 import type { ChoroplethCell } from "@/lib/api/insights";
@@ -103,6 +104,20 @@ export function PollChoroplethMap({
     return ["match", ["get", "code"], ...pairs, noData] as unknown as ExpressionSpecification;
   }, [cells, scale, palette]);
 
+  // Everything that isn't a reportable cell is "not enough data" (suppressed small base, no
+  // percent, or a region the poll never covered) — hatched + dash-outlined rather than left a
+  // flat near-surface grey that reads like a low value.
+  const noDataFilter = useMemo<FilterSpecification>(() => {
+    const codes = [
+      ...new Set(
+        cells
+          .filter((c) => c.geoCode && c.reportable && typeof c.percent === "number")
+          .map((c) => c.geoCode as string),
+      ),
+    ];
+    return ["!", ["in", ["get", "code"], ["literal", codes]]] as FilterSpecification;
+  }, [cells]);
+
   const tileUrl = isPublic
     ? `${getApiUrl()}/insights/public/tiles/${geoKind}/{z}/{x}/{y}?v=3`
     : `${getApiUrl()}/geo/tiles/${geoKind}/{z}/{x}/{y}?v=3`;
@@ -159,7 +174,9 @@ export function PollChoroplethMap({
         initialViewState={{ bounds, fitBoundsOptions: { padding: 24 } }}
         mapStyle={mapStyleFor(theme)}
         style={{ width: "100%", height: "100%" }}
+        // Mapbox chrome bottom-right only: wordmark + one compact ⓘ (<MapAttribution/>).
         attributionControl={false}
+        logoPosition="bottom-right"
         // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
         cooperativeGestures={!scrollZoom}
         interactiveLayerIds={["poll-fill"]}
@@ -168,12 +185,17 @@ export function PollChoroplethMap({
         onMouseLeave={() => setHover(null)}
         onLoad={() => {
           const map = mapRef.current?.getMap();
-          if (map) installMoonlitDark(map, () => themeRef.current);
+          if (map) {
+            installMoonlitDark(map, () => themeRef.current);
+            ensureNoDataHatch(map);
+          }
           recenter(0);
         }}
       >
         <Source id="poll-regions" type="vector" tiles={[tileUrl]} minzoom={0} maxzoom={16}>
           <Layer id="poll-fill" source-layer="areas" type="fill" paint={{ "fill-color": fillColour, "fill-opacity": 0.75 }} />
+          <Layer id="poll-nodata-fill" source-layer="areas" type="fill" filter={noDataFilter} paint={{ "fill-pattern": NODATA_HATCH_ID, "fill-opacity": 0.9 }} />
+          <Layer id="poll-nodata-line" source-layer="areas" type="line" filter={noDataFilter} paint={NODATA_OUTLINE_PAINT} />
           <Layer
             id="poll-line"
             source-layer="areas"
@@ -181,50 +203,62 @@ export function PollChoroplethMap({
             paint={{ "line-color": palette?.ink ?? "transparent", "line-width": 0.8, "line-opacity": 0.35 }}
           />
         </Source>
-        <MapGestureToggle />
+        <MapAttribution />
       </MapGL>
 
-      {/* Recentre — re-fit the region extent after panning/zooming */}
-      <button
-        type="button"
-        onClick={() => recenter(500)}
-        title="Recentre the map"
-        aria-label="Recentre the map"
-        className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-lg bg-surface/95 px-2 py-1 text-xs font-medium text-foreground shadow-card hover:bg-surface"
-      >
-        <LocateFixed className="h-3.5 w-3.5" />
-        Recentre
-      </button>
+      {/* Top-right — context/actions: scroll-to-zoom, then recentre. */}
+      <MapCorner corner="top-right">
+        <MapGestureToggle />
+        <button
+          type="button"
+          onClick={() => recenter(500)}
+          title="Recentre the map"
+          aria-label="Recentre the map"
+          className="inline-flex items-center gap-1 rounded-lg bg-surface/95 px-2 py-1 text-xs font-medium text-foreground shadow-card hover:bg-surface"
+        >
+          <LocateFixed className="h-3.5 w-3.5" />
+          Recentre
+        </button>
+      </MapCorner>
 
-      {/* Hover readout */}
-      {hover ? (
-        <div className="pointer-events-none absolute left-2 top-2 rounded-lg bg-surface/95 px-2.5 py-1.5 text-xs shadow-card">
-          <span className="font-semibold text-foreground">{hover.name}</span>
-          <span className="ml-2 tabular-nums text-muted-foreground">
-            {hover.reportable && typeof hover.percent === "number" ? `${Math.round(hover.percent)}%` : "small base"}
-          </span>
-        </div>
-      ) : null}
+      {/* Bottom-left — informational: hover readout (transient, sits above) then the legend
+          (pinned to the bottom edge; the column grows upward). */}
+      <MapCorner corner="bottom-left">
+        {hover ? (
+          <div className="rounded-lg bg-surface/95 px-2.5 py-1.5 text-xs shadow-card">
+            <span className="font-semibold text-foreground">{hover.name}</span>
+            <span className="ml-2 tabular-nums text-muted-foreground">
+              {hover.reportable && typeof hover.percent === "number" ? `${Math.round(hover.percent)}%` : "small base"}
+            </span>
+          </div>
+        ) : null}
 
-      {/* Sequential legend */}
-      {scale && palette ? (
-        <div className="absolute bottom-2 right-2 rounded-lg bg-surface/95 px-2 py-1.5 shadow-card">
-          <div className="flex items-center gap-0.5">
-            {scale.bands.map((b, i) => (
+        {scale && palette ? (
+          <div className="rounded-lg bg-surface/95 px-2 py-1.5 shadow-card">
+            <div className="flex items-center gap-0.5">
+              {scale.bands.map((b, i) => (
+                <span
+                  key={b.lo}
+                  className="h-3 w-6"
+                  style={{ backgroundColor: palette.seq[i] }}
+                  title={`${b.lo}–${b.hi}%`}
+                />
+              ))}
+            </div>
+            <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-muted-foreground">
+              <span>{scale.min}%</span>
+              <span>{scale.max}%</span>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <span
-                key={b.lo}
-                className="h-3 w-6"
-                style={{ backgroundColor: palette.seq[i] }}
-                title={`${b.lo}–${b.hi}%`}
+                className="h-2.5 w-4 shrink-0 rounded-sm border border-border"
+                style={{ backgroundColor: palette.nodata, backgroundImage: NODATA_HATCH_CSS }}
               />
-            ))}
+              Not enough data
+            </div>
           </div>
-          <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-muted-foreground">
-            <span>{scale.min}%</span>
-            <span>{scale.max}%</span>
-          </div>
-        </div>
-      ) : null}
+        ) : null}
+      </MapCorner>
     </div>
   );
 }

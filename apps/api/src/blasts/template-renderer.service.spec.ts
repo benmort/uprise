@@ -24,4 +24,28 @@ describe("TemplateRendererService", () => {
     });
     expect(rendered).toBe("Hi Taylor");
   });
+
+  it("defaults location to 'your area' when no suburb is known", () => {
+    const service = new TemplateRendererService();
+    expect(service.render("team in {{location}}", {})).toBe("team in your area");
+  });
+
+  it("resolves {{location}} from suburb/locality/city/town aliases", () => {
+    const service = new TemplateRendererService();
+    expect(service.render("in {{location}}", { suburb: "Glebe" })).toBe("in Glebe");
+    expect(service.render("in {{location}}", { locality: "Fitzroy" })).toBe("in Fitzroy");
+    expect(service.render("in {{location}}", { city: "Northcote" })).toBe("in Northcote");
+    expect(service.render("in {{location}}", { town: "Katoomba" })).toBe("in Katoomba");
+  });
+
+  it("prefers an explicit location, then reads the action network postal address locality", () => {
+    const service = new TemplateRendererService();
+    expect(service.render("in {{location}}", { location: "Brunswick", city: "Melbourne" })).toBe(
+      "in Brunswick",
+    );
+    const rendered = service.render("in {{location}}", {
+      actionNetwork: { person: { postal_addresses: [{ locality: "Marrickville" }] } },
+    });
+    expect(rendered).toBe("in Marrickville");
+  });
 });

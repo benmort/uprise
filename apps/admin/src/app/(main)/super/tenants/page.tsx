@@ -1,18 +1,10 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Building2,
-  Plus,
-  ShieldCheck,
-  Users,
-  Settings,
-  ShieldAlert,
-  Loader2,
-  Trash2,
-  ArrowRightLeft,
-  X } from 'lucide-react';
+  Building2, Plus, ShieldCheck, Users, Settings, ShieldAlert, Trash2, ArrowRightLeft, X } from "lucide-react";
 import { auth, tenants as tenantsApi, type AuthPrincipal, type TenantStatus } from '@uprise/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@uprise/ui';
 import { Button } from '@uprise/ui';
@@ -257,7 +249,7 @@ export default function TenantsPage() {
 
       {rows === null ? (
         <div className="flex items-center justify-center gap-2 h-64 text-gray-600 dark:text-gray-400">
-          <Loader2 className="h-5 w-5 animate-spin" /> Loading tenants…
+          <Spinner className="h-5 w-5 animate-spin" /> Loading tenants…
         </div>
       ) : visibleRows.length === 0 ? (
         <Card className="border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03]">
@@ -331,7 +323,7 @@ export default function TenantsPage() {
                           onClick={() => void switchInto(t.id)}
                         >
                           {pending === `switch:${t.id}` ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            <Spinner className="h-4 w-4 mr-1 animate-spin" />
                           ) : (
                             <ArrowRightLeft className="h-4 w-4 mr-1" />
                           )}
@@ -361,7 +353,7 @@ export default function TenantsPage() {
                           className="text-red-600 dark:text-red-400"
                         >
                           {pending === `delete:${t.id}` ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            <Spinner className="h-4 w-4 mr-1 animate-spin" />
                           ) : (
                             <Trash2 className="h-4 w-4 mr-1" />
                           )}

@@ -1,15 +1,25 @@
 "use client";
 
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Map, { FullscreenControl, Layer, Marker, Popup, Source, useControl, type MapProps, type MapRef } from "react-map-gl/mapbox";
 import type { FilterSpecification, ExpressionSpecification } from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import bbox from "@turf/bbox";
-import { Crosshair, Loader2, MapPin, Search, X } from "lucide-react";
-import { AU_BOUNDS, AddressInfoCard, installMoonlitDark, useScrollToZoom } from "@uprise/field";
+import { Crosshair, MapPin, Search, X } from "lucide-react";
+import {
+  AU_BOUNDS,
+  AddressInfoCard,
+  installMoonlitDark,
+  useScrollToZoom,
+  MapGestureToggle,
+  MapCorner,
+  MapAttribution,
+} from "@uprise/field";
 import { getArea, searchAreas, type AreaHit, type AreaLevel } from "@/lib/api/geo";
 import { getApiUrl } from "@/lib/api";
+import { ensureNoDataHatch, NODATA_HATCH_ID, NODATA_OUTLINE_PAINT } from "@/lib/canvass/nodata-hatch";
 import { useTheme } from "@/components/theme/theme-provider";
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
@@ -126,6 +136,7 @@ export function TurfDrawMap({
   onAreaHover,
   selectedAreas = [],
   onToggleArea,
+  suggestedName,
   onPolygonsChange,
   clearToken,
   controlsContainer,
@@ -144,10 +155,12 @@ export function TurfDrawMap({
   boundaryMinZoom = 0,
   boundaryFilter,
   boundaryFill,
+  boundaryNoDataFilter,
   selectedBoundaryCode,
   basketCodes,
   onBoundaryClick,
   heatOverlay,
+  heatNoDataFilter,
   stops = [],
   activeStopId,
   onStopTap,
@@ -180,6 +193,9 @@ export function TurfDrawMap({
   stateDigit?: string;
   selectedAreas?: SelectedArea[];
   onToggleArea?: (area: SelectedArea) => void;
+  /** The pregenerated turf name for the current selection (from the parent's autoTurfName).
+   *  Shown in the on-map areas panel as the forming turf's name. Omit → a plain label. */
+  suggestedName?: string;
   onPolygonsChange: (polygons: GeoJSON.Polygon[]) => void;
   clearToken?: number;
   /**
@@ -238,6 +254,10 @@ export function TurfDrawMap({
    * 6% wash is a boundary hint, not a choropleth.
    */
   boundaryFill?: ExpressionSpecification | string;
+  /** Which boundary features have no data for the active choropleth — painted with the diagonal
+   *  hatch + dashed outline instead of a flat colour, so "not enough data" never reads as a low
+   *  value. From the fill builders' `*NoDataFilter` helpers. Omit → no hatch overlay. */
+  boundaryNoDataFilter?: FilterSpecification;
   selectedBoundaryCode?: string;
   /**
    * Targeting-heat choropleth: an SA1 vector-tile overlay painted per feature by
@@ -255,6 +275,9 @@ export function TurfDrawMap({
     /** Restrict painting to the scored cells. */
     filter?: FilterSpecification;
   } | null;
+  /** The heat run's insufficient-data SA1s (from `heatNoDataFilter`) — hatched + dash-outlined
+   *  over the low-alpha fill so they read as unknown, not merely faint. Omit → no hatch. */
+  heatNoDataFilter?: FilterSpecification;
   /** Codes already in the "My turf" basket for the active kind/level — drawn as a
    *  distinct green dashed overlay (vs the solid `selectedBoundaryCode` highlight)
    *  so it's clear what's banked vs what's currently picked. */
@@ -325,6 +348,9 @@ export function TurfDrawMap({
   const [hits, setHits] = useState<Array<{ label: string; code?: string; lat: number; lng: number; bbox?: [number, number, number, number] }>>([]);
   const [searching, setSearching] = useState(false);
   const [areaOpen, setAreaOpen] = useState(false);
+  // On-map areas panel (level pills + search) collapse toggle — closable so it stops covering
+  // the map once you've picked; reopens from a compact chip that shows the forming turf name.
+  const [areasPanelOpen, setAreasPanelOpen] = useState(true);
 
   // A campaign boundary's bounding box → the frame to fit when no explicit
   // focusBounds is passed, so cutting a campaign's turf opens on its boundary.
@@ -730,7 +756,7 @@ export function TurfDrawMap({
             placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
             className="w-52 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
-          {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+          {searching ? <Spinner className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
           {query ? (
             <button type="button" aria-label="Clear" onClick={() => { setQuery(""); setHits([]); }}>
               <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
@@ -779,8 +805,9 @@ export function TurfDrawMap({
         style={{ width: "100%", height: "100%" }}
         // ⌘/Ctrl + scroll to zoom by default (Mapbox shows the notice), unless "Scroll to zoom" is ticked.
         cooperativeGestures={!scrollZoom}
-        // Compact attribution: collapse the "© Mapbox © OpenStreetMap" bar to a small ⓘ toggle.
+        // Mapbox chrome bottom-right only: wordmark + one compact ⓘ (<MapAttribution/>).
         attributionControl={false}
+        logoPosition="bottom-right"
         interactiveLayerIds={
           mode === "boundaries"
             ? [
@@ -799,6 +826,7 @@ export function TurfDrawMap({
           const map = mapRef.current?.getMap();
           if (map) {
             installMoonlitDark(map, () => themeRef.current);
+            ensureNoDataHatch(map); // register the "not enough data" hatch pattern
             // The container finishes laying out (next/dynamic + grid) after the map
             // computes its initial view, so re-fit once sized or the wrong tiles load
             // and boundaries look missing until you interact. A `center`/`focusPoint`
@@ -962,6 +990,26 @@ export function TurfDrawMap({
           <Source key={boundaryTilesUrl} id="boundaries" type="vector" tiles={[boundaryTilesUrl]} minzoom={boundaryMinZoom} maxzoom={16}>
             <Layer id="boundaries-fill" source-layer="areas" type="fill" filter={boundaryFilter ?? MATCH_ALL} paint={{ "fill-color": boundaryFill ?? PRIMARY, "fill-opacity": boundaryFill ? 0.75 : 0.06 }} />
             <Layer id="boundaries-line" source-layer="areas" type="line" filter={boundaryFilter ?? MATCH_ALL} paint={{ "line-color": PRIMARY, "line-width": 1.2, "line-opacity": 0.7 }} />
+            {/* "Not enough data" for the active choropleth: diagonal hatch + dashed outline over
+                the flat no-data fill, so it never reads as a low value on the grey-anchored ramp. */}
+            {boundaryNoDataFilter ? (
+              <>
+                <Layer
+                  id="boundaries-nodata-fill"
+                  source-layer="areas"
+                  type="fill"
+                  filter={["all", boundaryFilter ?? MATCH_ALL, boundaryNoDataFilter] as FilterSpecification}
+                  paint={{ "fill-pattern": NODATA_HATCH_ID, "fill-opacity": 0.9 }}
+                />
+                <Layer
+                  id="boundaries-nodata-line"
+                  source-layer="areas"
+                  type="line"
+                  filter={["all", boundaryFilter ?? MATCH_ALL, boundaryNoDataFilter] as FilterSpecification}
+                  paint={NODATA_OUTLINE_PAINT}
+                />
+              </>
+            ) : null}
             {basketFilter ? (
               <>
                 <Layer id="boundaries-basket-fill" source-layer="areas" type="fill" filter={basketFilter} paint={{ "fill-color": BASKET_COLOR, "fill-opacity": 0.22 }} />
@@ -1076,25 +1124,53 @@ export function TurfDrawMap({
               filter={heatOverlay.filter ?? MATCH_ALL}
               paint={{ "fill-color": heatOverlay.fill, "fill-opacity": heatOverlay.opacity }}
             />
+            {/* Insufficient-data SA1s: hatch + dashed outline over the low-alpha fill, so they
+                read as unknown rather than merely faint. */}
+            {heatNoDataFilter ? (
+              <>
+                <Layer
+                  id="heat-nodata-fill"
+                  source-layer="areas"
+                  type="fill"
+                  beforeId={mode === "areas" ? (useBoundaryAreas ? "boundary-areas-fill" : "areas-fill") : undefined}
+                  filter={heatNoDataFilter}
+                  paint={{ "fill-pattern": NODATA_HATCH_ID, "fill-opacity": 0.9 }}
+                />
+                <Layer
+                  id="heat-nodata-line"
+                  source-layer="areas"
+                  type="line"
+                  beforeId={mode === "areas" ? (useBoundaryAreas ? "boundary-areas-fill" : "areas-fill") : undefined}
+                  filter={heatNoDataFilter}
+                  paint={NODATA_OUTLINE_PAINT}
+                />
+              </>
+            ) : null}
           </Source>
         ) : null}
-        <FullscreenControl position="top-right" />
+        <FullscreenControl position="top-left" />
+        <MapAttribution />
       </Map>
 
-      {/* On-map recentre — snaps back to the campaign boundary (or picked state / country). */}
-      <button
-        type="button"
-        onClick={recenter}
-        title="Recentre the map"
-        className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur transition hover:bg-surface-variant"
-      >
-        <Crosshair className="h-3.5 w-3.5" />
-        Recentre
-      </button>
+      {/* Top-right — context/actions: scroll-to-zoom → recentre → areas panel (on-map).
+          The areas ternary sits inside: its portaled branch renders elsewhere (createPortal),
+          so only the on-map branch draws a panel here, stacked under recentre. */}
+      <MapCorner corner="top-right">
+        <MapGestureToggle />
+        {/* Recentre — snaps back to the campaign boundary (or picked state / country). */}
+        <button
+          type="button"
+          onClick={recenter}
+          title="Recentre the map"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur transition hover:bg-surface-variant"
+        >
+          <Crosshair className="h-3.5 w-3.5" />
+          Recentre
+        </button>
 
-      {/* Level toggle + search panel (areas mode only): portaled toolbar or on-map
-          overlay. Boundaries/points modes render no in-map controls. */}
-      {mode !== "areas" ? null : controlsContainer !== undefined ? (
+        {/* Level toggle + search panel (areas mode only): portaled toolbar or on-map
+            overlay. Boundaries/points modes render no in-map controls. */}
+        {mode !== "areas" ? null : controlsContainer !== undefined ? (
         <>
           {controlsContainer &&
             createPortal(
@@ -1121,7 +1197,7 @@ export function TurfDrawMap({
 
                 {loadingTiles ? (
                   <p className="flex items-center gap-1.5 rounded-lg bg-surface-variant px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Spinner className="h-3 w-3 animate-spin" />
                     Loading boundaries…
                   </p>
                 ) : tooZoomedOut ? (
@@ -1134,8 +1210,34 @@ export function TurfDrawMap({
             )}
           {controlsContainer && searchContainer ? createPortal(searchCombobox, searchContainer) : null}
         </>
+      ) : !areasPanelOpen ? (
+        // Collapsed → a compact reopen chip that carries the forming turf's name.
+        <button
+          type="button"
+          onClick={() => setAreasPanelOpen(true)}
+          title="Show area selection"
+          className="flex max-w-[16rem] items-center gap-1.5 rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-card backdrop-blur hover:bg-surface-variant"
+        >
+          <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="truncate">{suggestedName || "Select areas"}</span>
+        </button>
       ) : (
-        <div className="absolute right-2 top-2 z-10 w-64 space-y-2">
+        <div className="w-64 space-y-2">
+          {/* Header: the forming turf's pregenerated name + a close (collapse) control. */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1.5 shadow-card">
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
+              {suggestedName || "Select SA / meshblock"}
+            </span>
+            <button
+              type="button"
+              aria-label="Close area selection"
+              onClick={() => setAreasPanelOpen(false)}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
           <div className="flex overflow-hidden rounded-lg border border-border bg-surface shadow-card">
             {LEVELS.map((l) => (
               <button
@@ -1180,7 +1282,7 @@ export function TurfDrawMap({
                 placeholder={searchMode === "area" ? `Search or browse ${level.toUpperCase()}…` : "Suburb, address…"}
                 className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
               />
-              {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+              {searching ? <Spinner className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
               {query ? (
                 <button type="button" aria-label="Clear" onClick={() => { setQuery(""); setHits([]); }}>
                   <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
@@ -1219,7 +1321,7 @@ export function TurfDrawMap({
 
           {loadingTiles ? (
             <p className="flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground shadow-card">
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Spinner className="h-3 w-3 animate-spin" />
               Loading boundaries…
             </p>
           ) : tooZoomedOut ? (
@@ -1228,7 +1330,8 @@ export function TurfDrawMap({
             </p>
           ) : null}
         </div>
-      )}
+        )}
+      </MapCorner>
     </div>
   );
 }

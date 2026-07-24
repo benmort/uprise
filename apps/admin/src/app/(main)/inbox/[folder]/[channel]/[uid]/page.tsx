@@ -4,28 +4,15 @@
 // layout). Real Text(SMS)/WhatsApp rows load the live thread via /inbox/conversations and
 // get a working composer + resolve/claim, kept live by polling + SSE. Addressed by
 // /inbox/<folder>/<prefix>/<uid> (e.g. /inbox/inbox/t/61438221004).
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import {
-  claimConversation,
-  getConversation,
-  listConversations,
-  markConversation,
-  releaseConversation,
-  sendInboxReply,
-} from '@/lib/api';
+  claimConversation, getConversation, listConversations, markConversation, releaseConversation, sendInboxReply, } from '@/lib/api';
 import { getSession } from '@/lib/session';
 import {
-  ArrowLeft,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Send,
-  Loader2,
-  UserPlus,
-  UserCheck,
-} from 'lucide-react';
+  ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Send, UserPlus, UserCheck } from "lucide-react";
 import {
   CHANNELS,
   conversationHref,
@@ -380,7 +367,7 @@ function RealThread({
       <div className="flex-1 space-y-3 overflow-y-auto p-5 max-h-[420px] 2xl:max-h-[620px]">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500 dark:text-gray-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading conversation…
+            <Spinner className="h-4 w-4 animate-spin" /> Loading conversation…
           </div>
         ) : thread.length === 0 ? (
           <p className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">No messages yet.</p>
@@ -433,7 +420,7 @@ function RealThread({
             disabled={waClosed || sending || !draft.trim()}
             className="flex h-11 shrink-0 items-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-medium text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {sending ? <Spinner className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Send
           </button>
         </div>

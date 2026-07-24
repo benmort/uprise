@@ -19,8 +19,11 @@ import {
   type HeatWeights,
 } from "./heat-score";
 
-/** Above this many SA1s a campaign run moves to the worker (extraction is the cost). */
-export const INLINE_SA1_CAP = 1_500;
+/** Above this many SA1s a campaign run moves to the worker instead of blocking the request
+ *  (scoring is the cost). Kept low so turning targeting on returns fast: only tiny boundaries
+ *  compute inline; everything else scores in the background while the client polls + shows a
+ *  "computing" state, rather than hanging on one long synchronous request. */
+export const INLINE_SA1_CAP = 300;
 /** Preview hard cap — beyond this the selection is too broad to score interactively. */
 export const PREVIEW_SA1_CAP = 5_000;
 /** Default fit lens: SEIFA disadvantage decile, near-middle target. */

@@ -23,7 +23,7 @@ import {
   type HeatResponse,
 } from "@/lib/api/campaigns";
 import { getApiUrl } from "@/lib/api";
-import { heatFill, heatFilter, heatOpacity } from "@/lib/canvass/heat-fill";
+import { heatFill, heatFilter, heatNoDataFilter, heatOpacity } from "@/lib/canvass/heat-fill";
 import { useChartPalette } from "@/components/insights/use-poll-palette";
 import { HeatLegend } from "@/components/canvass/heat-panel";
 import type { SelectedArea } from "@/components/canvass/turf-draw-map";
@@ -293,6 +293,7 @@ export default function CampaignBoundaryPage() {
             onPolygonsChange={setPolygons}
             clearToken={clearToken}
             heatOverlay={heatOverlay}
+            heatNoDataFilter={showTargeting && heatCells?.length ? heatNoDataFilter(heatCells) : undefined}
           />
           {showTargeting && palette && heatPreview ? (
             <div className="pointer-events-none absolute bottom-3 left-3 z-10">

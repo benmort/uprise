@@ -1,18 +1,16 @@
 'use client';
 
+import { Spinner } from "@uprise/ui";
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@uprise/ui';
 import { Alert } from "@uprise/ui";
 import {
-  FormBillingDetails,
-  FormCheckoutPaymentMethod,
-  type CheckoutPaymentMethodValues,
-} from '@/components/prog/shared/forms';
+  FormBillingDetails, FormCheckoutPaymentMethod, type CheckoutPaymentMethodValues, } from '@/components/prog/shared/forms';
 import Breadcrumbs from '@/components/prog/shared/breadcrumbs';
 import PaymentSecuritySection from '@/components/prog/shared/PaymentSecuritySection';
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from "lucide-react";
 
 const PLAN_DISPLAY: Record<
   string,
@@ -204,7 +202,7 @@ function CheckoutContent() {
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  <Spinner className="mr-2 h-5 w-5 animate-spin" />
                   Redirecting...
                 </>
               ) : (
@@ -229,7 +227,7 @@ export default function CheckoutPage() {
     <Suspense
       fallback={
         <div className="flex min-h-[400px] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          <Spinner className="h-8 w-8 animate-spin text-gray-400" />
         </div>
       }
     >

@@ -1,4 +1,4 @@
-import type { ExpressionSpecification } from "mapbox-gl";
+import type { ExpressionSpecification, FilterSpecification } from "mapbox-gl";
 import type { ReferendumRow } from "@/lib/api/geo";
 
 /**
@@ -41,6 +41,15 @@ export function referendumFill(
   }
   if (pairs.length === 0) return nodata;
   return ["match", ["get", "code"], ...pairs, nodata] as unknown as ExpressionSpecification;
+}
+
+/** Regions with a result → the "with data" set; the hatch overlay covers everything else (an
+ *  unmatched or abolished division). Undefined when there are no results, so no hatch is drawn.
+ *  Combine with the layer's own boundaryFilter so only in-region no-data areas hatch. */
+export function referendumNoDataFilter(rows: ReferendumRow[]): FilterSpecification | undefined {
+  const codes = [...new Set(rows.filter((r) => r.geoCode && typeof r.yesPct === "number").map((r) => r.geoCode))];
+  if (codes.length === 0) return undefined;
+  return ["!", ["in", ["get", "code"], ["literal", codes]]] as FilterSpecification;
 }
 
 /** Legend swatches for the diverging Yes scale. */

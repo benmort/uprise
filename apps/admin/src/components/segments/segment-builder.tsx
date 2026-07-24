@@ -1,26 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { Spinner } from "@uprise/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Activity,
-  CheckCircle2,
-  Copy,
-  GitBranch,
-  Info,
-  List,
-  Loader2,
-  MapPin,
-  Pencil,
-  Plus,
-  Save,
-  Shield,
-  Tag,
-  Trash2,
-  Users,
-  Zap,
-} from "lucide-react";
+  Activity, CheckCircle2, Copy, GitBranch, Info, List, MapPin, Pencil, Plus, Save, Shield, Tag, Trash2, Users, Zap } from "lucide-react";
 
 import type {
   CatalogueEntry,
@@ -352,7 +337,7 @@ export function SegmentBuilder({ segment }: { segment?: SegmentDetail }) {
             </button>
           </div>
           <Button onClick={save} disabled={saving || !name.trim()}>
-            {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
+            {saving ? <Spinner className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
             Save search
           </Button>
         </div>
@@ -992,7 +977,7 @@ function PreviewPanel({ preview, busy }: { preview: SegmentPreview | null; busy:
       <CardContent className="space-y-4 p-4">
         <div>
           <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Live count {busy && <Loader2 className="h-3 w-3 animate-spin" />}
+            Live count {busy && <Spinner className="h-3 w-3 animate-spin" />}
           </p>
           <p className="mt-1 font-mono text-4xl font-bold text-primary">
             {preview ? preview.sendable.toLocaleString() : "—"}

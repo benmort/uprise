@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { Pencil, Plus, Sparkles, Trash2, Zap } from "lucide-react";
+import { Pencil, Plus, NotebookPen, Trash2, Zap } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import {
   createCannedResponse,
@@ -128,7 +128,7 @@ export default function CannedResponsesPage() {
     <div className="page-stack">
       <PageHeader
         title="Canned responses"
-        icon={Sparkles}
+        icon={NotebookPen}
         description="Saved replies your team can send in a tap."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },

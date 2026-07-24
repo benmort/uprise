@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bboxRing, bearingBetween, bearingIfMoved, boundingBox, metresBetween, pointInGeometry, pointInPolygon, type Polygon } from "./geo";
+import { bboxRing, bearingBetween, bearingIfMoved, boundingBox, metresBetween, pointInGeometry, pointInPolygon, sampleFlowChevrons, type Polygon } from "./geo";
 
 const square: Polygon = [
   [
@@ -103,5 +103,46 @@ describe("bearing helpers", () => {
     expect(bearingIfMoved(HOME, { lat: HOME.lat + 0.00001, lng: HOME.lng })).toBeNull();
     // ~110m north: a real move.
     expect(bearingIfMoved(HOME, { lat: HOME.lat + 0.001, lng: HOME.lng })).toBeCloseTo(0, 0);
+  });
+});
+
+describe("sampleFlowChevrons", () => {
+  // A due-east line ~200m long near the equator (0.0018° ≈ 200m).
+  const east: Array<[number, number]> = [
+    [0, 0],
+    [0.0018, 0],
+  ];
+
+  it("returns an empty collection for a degenerate line or bad spacing", () => {
+    expect(sampleFlowChevrons([[0, 0]], 50, 0).features).toHaveLength(0);
+    expect(sampleFlowChevrons(east, 0, 0).features).toHaveLength(0);
+  });
+
+  it("places one chevron per spacing, rotated to the travel direction", () => {
+    const fc = sampleFlowChevrons(east, 50, 0);
+    expect(fc.features.length).toBeGreaterThanOrEqual(3); // ~200m / 50m
+    // "›" points east on a due-east line → rotate ≈ bearing(90) − 90 = 0.
+    for (const f of fc.features) {
+      expect(Math.abs((f.properties as { rotate: number }).rotate)).toBeLessThan(1);
+    }
+    // First chevron sits at the line start when offset is 0.
+    expect((fc.features[0].geometry as GeoJSON.Point).coordinates[0]).toBeCloseTo(0, 6);
+  });
+
+  it("advances every chevron forward by the offset (the flow)", () => {
+    const at0 = sampleFlowChevrons(east, 50, 0);
+    const at20 = sampleFlowChevrons(east, 50, 20);
+    const x0 = (at0.features[0].geometry as GeoJSON.Point).coordinates[0];
+    const x20 = (at20.features[0].geometry as GeoJSON.Point).coordinates[0];
+    expect(x20).toBeGreaterThan(x0); // shifted east (forward)
+  });
+
+  it("wraps seamlessly: offset === spacing matches offset 0", () => {
+    const a = sampleFlowChevrons(east, 50, 0);
+    const b = sampleFlowChevrons(east, 50, 50);
+    expect((b.features[0].geometry as GeoJSON.Point).coordinates[0]).toBeCloseTo(
+      (a.features[0].geometry as GeoJSON.Point).coordinates[0],
+      6,
+    );
   });
 });

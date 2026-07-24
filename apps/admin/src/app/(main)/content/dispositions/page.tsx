@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Lock, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Lock, Pencil, Plus, NotebookPen, Trash2 } from "lucide-react";
 import {
   createDispositionDef,
   deleteDispositionDef,
@@ -111,7 +111,7 @@ export default function DispositionsPage() {
     <div className="page-stack">
       <PageHeader
         title="Dispositions"
-        icon={Sparkles}
+        icon={NotebookPen}
         description="The outcome codes your team tags each contact with."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },

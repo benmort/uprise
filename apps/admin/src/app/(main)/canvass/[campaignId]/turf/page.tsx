@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { AlertTriangle, Crosshair, MapPin, RefreshCw, Save } from "lucide-react";
@@ -27,7 +27,7 @@ import {
   type DescribedSource,
 } from "@/lib/api/campaigns";
 import { getApiUrl } from "@/lib/api";
-import { heatFill, heatFilter, heatOpacity, withHoldoutOverride } from "@/lib/canvass/heat-fill";
+import { heatFill, heatFilter, heatNoDataFilter, heatOpacity, withHoldoutOverride } from "@/lib/canvass/heat-fill";
 import { EvaluationCard } from "@/components/canvass/evaluation-card";
 import { useChartPalette } from "@/components/insights/use-poll-palette";
 import { HeatLegend, HeatPanel } from "@/components/canvass/heat-panel";
@@ -176,12 +176,23 @@ export default function TurfCuttingPage() {
   const [targeting, setTargeting] = useState(false);
   const [heatCellCode, setHeatCellCode] = useState("");
   const palette = useChartPalette();
+  // While a run is scoring on the worker, poll so it appears without re-toggling targeting.
+  const [heatPollMs, setHeatPollMs] = useState<number | false>(false);
   const heat = useApi(
     targeting && campaignBoundary ? `/canvass/campaigns/${campaignId}/heat` : null,
     () => getCampaignHeat(campaignId),
+    { refetchInterval: heatPollMs },
   );
   const heatData = heat.data ?? null;
   const heatCells = heatData?.cells;
+  // The run isn't ready when it's still loading, the server returned a queued/stale run, or a
+  // large boundary 202'd (HEAT_QUEUED) — surface a "computing" state (not an error) and poll.
+  const heatQueued = heatData?.meta.queued === true || /being computed in the background/i.test(heat.error ?? "");
+  const heatReady = Boolean(heatData && heatData.cells.length > 0 && !heatData.meta.queued);
+  const heatComputing = Boolean(targeting && campaignBoundary) && !heatReady && (heat.loading || heatQueued);
+  useEffect(() => {
+    setHeatPollMs(heatComputing ? 4000 : false);
+  }, [heatComputing]);
   const heatCodes = useMemo(() => new Set((heatCells ?? []).map((c) => c.sa1Code)), [heatCells]);
   const heatCell = heatCellCode ? (heatCells?.find((c) => c.sa1Code === heatCellCode) ?? null) : null;
   // Evaluation holdout SA1s paint over the score (fixed nodata colour) — organisers must
@@ -490,10 +501,12 @@ export default function TurfCuttingPage() {
             onLevelChange={setLevel}
             selectedAreas={selectedAreas}
             onToggleArea={handleToggleArea}
+            suggestedName={hasSelection ? suggestedName : undefined}
             onPolygonsChange={setPolygons}
             clearToken={clearToken}
             recenterToken={recenterToken}
             heatOverlay={heatOverlay}
+            heatNoDataFilter={targeting && heatCells?.length ? heatNoDataFilter(heatCells) : undefined}
           />
           {targeting && palette && heatData ? (
             <div className="pointer-events-none absolute bottom-3 left-3 z-10">
@@ -695,8 +708,8 @@ export default function TurfCuttingPage() {
               enabled={targeting}
               onEnabledChange={setTargetingOn}
               data={heatData}
-              loading={heat.loading}
-              error={heat.error}
+              loading={heatComputing}
+              error={heatComputing ? undefined : heat.error}
               noPermission={heat.noPermission}
               onRetry={() => void heat.refetch()}
               onData={(next) => heat.mutate(next)}
