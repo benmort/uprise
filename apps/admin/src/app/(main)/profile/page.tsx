@@ -14,6 +14,7 @@ import {
   Spinner,
   Textarea,
 } from "@uprise/ui";
+import { UserRound } from "lucide-react";
 import { profile, type UserAvatarResponse, type UserProfileResponse } from "@uprise/api-client";
 import { useToast } from "@/components/ui/toast";
 import { getSession } from "@/lib/session";
@@ -192,7 +193,9 @@ export default function ProfilePage() {
       {/* Personal information */}
       <Card>
         <CardHeader>
-          <CardTitle>Personal information</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <UserRound className="h-4 w-4 text-muted-foreground" /> Personal information
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
