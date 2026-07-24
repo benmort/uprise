@@ -46,6 +46,36 @@ export function useFullscreen<T extends HTMLElement>(ref: RefObject<T | null>) {
   return { isFullscreen, toggle };
 }
 
+/**
+ * CSS "fill the screen" toggle — a `fixed inset-0` overlay in the normal DOM (not the browser
+ * Fullscreen API). Unlike the native API this keeps the page in flow, so body-portaled overlays
+ * (popovers, dropdowns, tooltips, modals) still render ON TOP of the fullscreen surface. Handles
+ * Esc-to-exit and locks body scroll while open. The container that carries the `fixed inset-0`
+ * classes must sit in a `transform`-free ancestor chain (add `!transform-none` to any animated
+ * `page-stack` ancestor) so `fixed` resolves against the viewport, not a transformed box. The
+ * `ref` arg is accepted for call-site parity with `useFullscreen` and otherwise unused.
+ */
+export function useCssFullscreen<T extends HTMLElement>(_ref?: RefObject<T | null>) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const toggle = useCallback(() => setIsFullscreen((v) => !v), []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullscreen(false);
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isFullscreen]);
+
+  return { isFullscreen, toggle };
+}
+
 /** The toggle button — Maximize when windowed, Minimize when full-screen. Styled to match
  *  the calendar toolbar's square icon buttons. */
 export function FullscreenButton({

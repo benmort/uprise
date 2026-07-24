@@ -46,7 +46,7 @@ import { normaliseChannel } from "@/components/channels/channel-campaigns-view";
 import { QuickActions } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { FullscreenButton, FullscreenExitCue, useFullscreen } from "@/components/ui/fullscreen-button";
+import { FullscreenButton, FullscreenExitCue, useCssFullscreen } from "@/components/ui/fullscreen-button";
 import { OverviewModuleCard } from "@/components/overview/overview-module-card";
 import { MiniBar } from "@/components/overview/mini-bar";
 import { NewConversationMenu } from "@/components/inbox/new-conversation-menu";
@@ -78,9 +78,9 @@ export default function DashboardPage() {
   const { showToast } = useToast();
   const [creating, setCreating] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
-  // Full-screen the module grid — the same Fullscreen API the calendar + inbox use.
+  // Full-screen the dashboard — CSS overlay (not the native API) so popovers/menus stay on top.
   const dashRef = useRef<HTMLDivElement>(null);
-  const fs = useFullscreen(dashRef);
+  const fs = useCssFullscreen(dashRef);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
   const [perf, setPerf] = useState<Slice<PerfData>>(null);
@@ -236,14 +236,20 @@ export default function DashboardPage() {
       ref={dashRef}
       className={cn(
         "page-stack",
-        // Fullscreen the whole page so the header + Quick Actions come with it; the module grid
-        // (below) is the only flex-1 child so it stretches to fill under the fixed header/footer.
-        fs.isFullscreen && "relative h-screen !max-w-none overflow-auto bg-background p-4",
+        // CSS fullscreen (not the native API) so popovers/menus still portal on top; !transform-none
+        // frees this fixed overlay from page-stack's fadeUp transform so it fills the viewport.
+        fs.isFullscreen && "fixed inset-0 z-50 !max-w-none !transform-none overflow-auto bg-background p-6",
       )}
     >
       {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
       {/* Header + quick actions */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-3",
+          // Reserve room at the right so the fullscreen escape cue doesn't sit over Quick Actions.
+          fs.isFullscreen && "pr-14 sm:pr-52",
+        )}
+      >
         <div>
           <div className="flex items-center gap-2">
             <LayoutDashboard className="h-6 w-6 shrink-0 text-primary" />
@@ -306,15 +312,8 @@ export default function DashboardPage() {
       />
 
 
-      {/* Domain module grid */}
-      <div
-        className={cn(
-          "grid gap-4 lg:grid-cols-2 xl:grid-cols-3",
-          // In fullscreen this is the one growing child: it takes the space under the header and
-          // its rows share the height equally (auto-rows-fr) so the module cards stretch to fill.
-          fs.isFullscreen && "min-h-0 flex-1 auto-rows-fr",
-        )}
-      >
+      {/* Domain module grid — natural card heights so they stack cleanly (also in fullscreen). */}
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <OverviewModuleCard
           title="Inbox"
           description="Two-way conversations"

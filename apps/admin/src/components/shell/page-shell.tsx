@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * The shared page chrome every admin page previously reinvented: back-link,
@@ -17,6 +18,7 @@ export function PageShell({
   backLabel,
   actions,
   children,
+  className,
 }: {
   /** Leading title icon — pass the page's sidebar-menu icon for a consistent header. */
   icon?: LucideIcon;
@@ -26,9 +28,11 @@ export function PageShell({
   backLabel?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  /** Extra classes for the root page-stack (e.g. `!transform-none` so a fixed child escapes). */
+  className?: string;
 }) {
   return (
-    <div className="page-stack">
+    <div className={cn("page-stack", className)}>
       <div className="flex flex-wrap items-center gap-2">
         {backHref ? (
           <Button asChild variant="ghost" size="sm">

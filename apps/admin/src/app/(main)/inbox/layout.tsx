@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { createBlastAndOpen } from '@/lib/blasts';
 import { NewConversationMenu } from '@/components/inbox/new-conversation-menu';
-import { FullscreenButton, FullscreenExitCue, useFullscreen } from '@/components/ui/fullscreen-button';
+import { FullscreenButton, FullscreenExitCue, useCssFullscreen } from '@/components/ui/fullscreen-button';
 import SharedInboxSidebar from '@/components/prog/shared-inbox/sidebar';
 import { folderLabel } from './conversations';
 
@@ -21,12 +21,13 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
   const { showToast } = useToast();
   const folder = String(params.folder ?? 'inbox');
   const [composeOpen, setComposeOpen] = useState(false);
-  // Full-screen the inbox pane (sidebar + conversation) — the same Fullscreen API the maps use.
+  // Full-screen the inbox pane (sidebar + conversation) — CSS overlay (not the native API) so
+  // popovers/menus stay on top; !transform-none below frees the fixed overlay from page-stack.
   const inboxRef = useRef<HTMLDivElement>(null);
-  const fs = useFullscreen(inboxRef);
+  const fs = useCssFullscreen(inboxRef);
 
   return (
-    <div className="page-stack">
+    <div className={cn("page-stack", fs.isFullscreen && "!transform-none")}>
       <div>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
           <div className="flex items-center gap-2">
@@ -73,7 +74,7 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
           ref={inboxRef}
           className={cn(
             "relative sm:h-[calc(100vh-174px)] h-screen xl:h-[calc(100vh-186px)]",
-            fs.isFullscreen && "!h-screen !w-screen flex flex-col overflow-hidden bg-background p-4",
+            fs.isFullscreen && "fixed inset-0 z-50 flex flex-col overflow-hidden bg-background p-4",
           )}
         >
           {fs.isFullscreen ? <FullscreenExitCue onExit={fs.toggle} /> : null}
