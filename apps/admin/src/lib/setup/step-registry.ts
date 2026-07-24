@@ -100,7 +100,7 @@ export const FLOW_META: Record<SetupFlowKey, { label: string; blurb: string; ico
     icon: UserRound,
   },
   account: {
-    label: "Account setup",
+    label: "Account setup – optional",
     blurb: "Recommended extras — two-factor, your profile and branding.",
     icon: ShieldCheck,
   },

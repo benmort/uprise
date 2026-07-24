@@ -93,6 +93,9 @@ export default function GettingStartedPage() {
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs font-semibold text-muted-foreground tabular-nums">
+                    {progress.done}/{progress.total}
+                  </span>
                   <StepProgress current={progress.done} total={progress.total} className="w-36" />
                   {next && STEP_META[next.step.key] ? (
                     <Button asChild size="sm">

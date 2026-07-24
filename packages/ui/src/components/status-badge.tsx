@@ -66,7 +66,9 @@ const STATUS_STYLES: Record<string, string> = {
   // Setup / getting-started chips (chipStatus() in the admin maps setup states here)
   DONE: "bg-success-container text-success",
   TODO: "bg-secondary-container text-secondary-foreground",
-  RECOMMENDED: "bg-primary-container text-primary",
+  // NOT primary-container + text-primary: that container token is a saturated mid-blue,
+  // so brand-blue text on it clashes. The soft primary tint keeps the text readable.
+  RECOMMENDED: "bg-primary/10 text-primary dark:bg-primary/20",
   ACTION_REQUIRED: "bg-warning-container text-warning-foreground",
   PLAN_LOCKED: "bg-surface-variant text-muted-foreground",
 };
