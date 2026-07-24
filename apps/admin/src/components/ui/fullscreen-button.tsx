@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Maximize2, Minimize2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,29 +47,58 @@ export function useFullscreen<T extends HTMLElement>(ref: RefObject<T | null>) {
 }
 
 /**
- * CSS "fill the screen" toggle — a `fixed inset-0` overlay in the normal DOM (not the browser
- * Fullscreen API). Unlike the native API this keeps the page in flow, so body-portaled overlays
- * (popovers, dropdowns, tooltips, modals) still render ON TOP of the fullscreen surface. Handles
- * Esc-to-exit and locks body scroll while open. The container that carries the `fixed inset-0`
- * classes must sit in a `transform`-free ancestor chain (add `!transform-none` to any animated
- * `page-stack` ancestor) so `fixed` resolves against the viewport, not a transformed box. The
- * `ref` arg is accepted for call-site parity with `useFullscreen` and otherwise unused.
+ * "Fill the screen" toggle that is BOTH true fullscreen and overlay-friendly. It requests the
+ * native Fullscreen API on `document.documentElement` (so the browser address bar + chrome hide),
+ * and — because the WHOLE document is the fullscreen element — body-portaled overlays (popovers,
+ * dropdowns, tooltips, modals) are inside that element and still render on top. A `fixed inset-0`
+ * CSS overlay (applied by the caller via `isFullscreen`) does the "maximise this panel" layout
+ * over the app shell. Esc / the browser exiting native fullscreen drops the overlay too (synced
+ * via `fullscreenchange`). The container carrying `fixed inset-0` must sit in a `transform`-free
+ * ancestor chain (add `!transform-none` to any animated `page-stack` ancestor) so `fixed` resolves
+ * against the viewport. The `ref` arg is accepted for call-site parity and otherwise unused.
  */
 export function useCssFullscreen<T extends HTMLElement>(_ref?: RefObject<T | null>) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const toggle = useCallback(() => setIsFullscreen((v) => !v), []);
+  const stateRef = useRef(false);
+  stateRef.current = isFullscreen;
 
+  const toggle = useCallback(() => {
+    const next = !stateRef.current;
+    const doc = document as FullscreenDoc;
+    if (next) {
+      const el = document.documentElement as FullscreenEl;
+      const p = el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } else if (doc.fullscreenElement ?? doc.webkitFullscreenElement) {
+      const p = document.exitFullscreen?.() ?? doc.webkitExitFullscreen?.();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    }
+    setIsFullscreen(next);
+  }, []);
+
+  // Keep the overlay in lock-step with the browser: Esc / the native fullscreen UI exiting must
+  // also drop the CSS overlay.
+  useEffect(() => {
+    const doc = document as FullscreenDoc;
+    const onChange = () => {
+      const active = doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      if (!active) setIsFullscreen(false);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    document.addEventListener("webkitfullscreenchange", onChange as EventListener);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      document.removeEventListener("webkitfullscreenchange", onChange as EventListener);
+    };
+  }, []);
+
+  // Lock body scroll while the overlay is up.
   useEffect(() => {
     if (!isFullscreen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setIsFullscreen(false);
-    };
-    const prevOverflow = document.body.style.overflow;
+    const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prevOverflow;
-      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
     };
   }, [isFullscreen]);
 
