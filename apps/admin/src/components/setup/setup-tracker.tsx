@@ -33,12 +33,20 @@ function readDismiss(tenantId: string): DismissSnapshot | null {
 }
 
 /**
- * The floating setup tracker — a bottom-left pill (progress ring + count) expanding to a
+ * The floating setup tracker – a bottom-RIGHT pill (progress ring + count) expanding to a
  * per-flow checklist popover. Personal chrome: dismissal is per-user localStorage and
  * resurfaces only when a step newly needs attention (e.g. a compliance rejection); a
  * one-time celebration fires when setup completes, then the tracker retires itself.
  * z-40 keeps it under the call bar, nav flyout and the product tour.
+ *
+ * Bottom-right, not bottom-left: the sidebar owns the bottom-left corner. This used to sit
+ * left with a `lg:left-[calc(var(--sidebar-w)+1rem)]` dodge, but the tracker mounts OUTSIDE
+ * the layout div that defines `--sidebar-w`, so the var never resolved, the fallback 0px won,
+ * and the pill hid under the sidebar. The right corner has no such neighbour (the call bar
+ * and PWA prompt are both bottom-CENTRE), so no offset maths is needed.
  */
+const ANCHOR = "fixed bottom-4 right-4";
+
 export function SetupTracker() {
   const pathname = usePathname();
   const { state, session, tenantId, loading, error, noPermission } = useSetupState();
@@ -109,7 +117,10 @@ export function SetupTracker() {
       <div
         role="dialog"
         aria-label="Setup complete"
-        className="fixed bottom-4 left-4 z-40 w-80 rounded-2xl border border-border bg-surface p-6 text-center shadow-theme-lg animate-fade-up lg:left-[calc(var(--sidebar-w,0px)+1rem)]"
+        className={cn(
+          ANCHOR,
+          "z-40 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-surface p-6 text-center shadow-theme-lg animate-fade-up",
+        )}
       >
         <CheckCircle2 className="mx-auto h-10 w-10 text-success" />
         <p className="mt-3 text-sm font-bold text-foreground">You&apos;re all set — nice work.</p>
@@ -130,7 +141,10 @@ export function SetupTracker() {
         id="setup-tracker-panel"
         role="dialog"
         aria-label="Workspace setup"
-        className="fixed bottom-4 left-4 z-40 max-h-[70vh] w-80 overflow-y-auto rounded-2xl border border-border bg-surface shadow-theme-lg animate-fade-up lg:left-[calc(var(--sidebar-w,0px)+1rem)]"
+        className={cn(
+          ANCHOR,
+          "z-40 max-h-[70vh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-border bg-surface shadow-theme-lg animate-fade-up",
+        )}
       >
         <div className="border-b border-border/60 px-4 pb-3 pt-4">
           <div className="flex items-center justify-between gap-2">
@@ -200,9 +214,10 @@ export function SetupTracker() {
       aria-controls="setup-tracker-panel"
       onClick={() => setOpen(true)}
       className={cn(
-        "fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pl-2 pr-3.5",
+        ANCHOR,
+        "z-40 flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pl-2 pr-3.5",
         "text-sm font-semibold text-foreground shadow-theme-lg transition-colors hover:bg-surface-variant",
-        "animate-fade-up lg:left-[calc(var(--sidebar-w,0px)+1rem)]",
+        "animate-fade-up",
       )}
     >
       <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden>

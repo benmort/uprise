@@ -609,7 +609,10 @@ export default function CalendarPage() {
                           }
                         }}
                         className={cn(
-                          "cal-cell min-h-[118px] select-none",
+                          "cal-cell select-none",
+                          // Windowed the cell has a floor; fullscreen `auto-rows-fr` divides the
+                          // height evenly, and the floor would force a scroll on a short window.
+                          fs.isFullscreen ? "min-h-0" : "min-h-[118px]",
                           past ? "is-past cursor-default" : "cursor-pointer",
                           isToday && "is-today",
                           !inMonth && "is-out",
@@ -682,7 +685,11 @@ export default function CalendarPage() {
                 {weekColumns.map(({ day, weekday, isToday, past, items: colItems }) => (
                   <div
                     key={`${day.m}-${day.d}`}
-                    className={cn("flex min-h-[520px] flex-col", past ? "bg-surface-variant/30" : "bg-surface")}
+                    className={cn(
+                      "flex flex-col",
+                      fs.isFullscreen ? "min-h-0" : "min-h-[520px]",
+                      past ? "bg-surface-variant/30" : "bg-surface",
+                    )}
                   >
                     <div
                       className={cn(
@@ -729,7 +736,14 @@ export default function CalendarPage() {
             )}
 
             {view === "day" && (
-              <div className="mx-auto flex max-w-[720px] flex-col gap-3.5 px-5 pb-8 pt-6">
+              <div
+                className={cn(
+                  "mx-auto flex flex-col gap-3.5 px-5 pb-8 pt-6",
+                  // Windowed, the day list is a readable 720px column. Fullscreen, that column
+                  // would float in the middle of the screen, so it widens and fills the height.
+                  fs.isFullscreen ? "w-full min-h-0 flex-1 max-w-none" : "max-w-[720px]",
+                )}
+              >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-[13px] font-semibold text-muted-foreground">

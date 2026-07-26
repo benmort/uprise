@@ -49,8 +49,10 @@ export default function SharedInboxSidebar({ onCompose }: SharedInboxSidebarProp
     }`;
 
   return (
-    <div className="xl:col-span-3 col-span-full">
-      <div className="flex flex-col rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03]">
+    // min-h-0 on this column + the card lets the folder scroller's fs-stretch resolve against
+    // the fullscreen overlay instead of the cards sitting at content height.
+    <div className="xl:col-span-3 col-span-full min-h-0">
+      <div className="flex min-h-0 flex-col rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-white/[0.03] xl:h-full">
         <div className="pb-5">
           <Button
             type="button"
@@ -62,7 +64,7 @@ export default function SharedInboxSidebar({ onCompose }: SharedInboxSidebarProp
           </Button>
         </div>
 
-        <div className="max-h-[550px] 2xl:max-h-[670px] overflow-y-auto">
+        <div className="fs-stretch max-h-[550px] 2xl:max-h-[670px] overflow-y-auto">
           <nav className="space-y-5">
             {/* Mailbox Section */}
             <div>

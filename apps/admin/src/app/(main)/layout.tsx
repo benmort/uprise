@@ -1142,12 +1142,7 @@ export default function MainLayout({
         onClick={() => setMobileOpen(false)}
         aria-hidden
       />
-      {/* --sidebar-w feeds the setup tracker's bottom-left offset (0 on mobile via the
-          lg-only calc; 76/220px matching the rail) so the pill clears the sidebar. */}
-      <div
-        className="flex h-full w-full"
-        style={{ "--sidebar-w": collapsed ? "76px" : "220px" } as React.CSSProperties}
-      >
+      <div className="flex h-full w-full">
         <aside
           className={cn(
             "app-shell-sidebar fixed inset-y-0 left-0 z-50 flex h-full shrink-0 flex-col overflow-y-auto border-r border-border bg-surface p-4 transition-[width,transform] duration-300 ease-in-out lg:static lg:translate-x-0",
@@ -1372,7 +1367,7 @@ export default function MainLayout({
           </main>
         </div>
       </div>
-      {/* Floating setup tracker — bottom-left pill/popover tracking the role-layered
+      {/* Floating setup tracker – bottom-right pill/popover tracking the role-layered
           setup flows (hidden on getting-started, which owns the full surface). */}
       <SetupTracker />
       {/* Global in-call widget for the browser softphone (shown only during a call). */}

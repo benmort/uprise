@@ -18,3 +18,18 @@ html.fs-overlay .app-shell-sidebar,
 html.fs-overlay .app-shell-topbar {
   display: none;
 }
+
+/* Panes whose windowed height is a fixed cap (a `max-h-[…]` scroller sized to look right
+   inside the page) must release that cap in fullscreen, or the overlay fills the viewport
+   while the list stops short and leaves dead space beneath it. Mark such a scroller
+   `fs-stretch` and it grows to its flex parent instead.
+
+   This is a class rather than an `isFullscreen` prop because these panes sit either side of
+   an App Router boundary: the inbox list is `children` of the fullscreening layout, so no
+   prop can reach it. Every ancestor between the overlay and the pane needs `min-h-0` for the
+   flex chain to actually resolve. */
+html.fs-overlay .fs-stretch {
+  max-height: none;
+  min-height: 0;
+  flex: 1 1 0%;
+}

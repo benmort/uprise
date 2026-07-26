@@ -314,7 +314,9 @@ export default function InboxFolderView() {
       : '');
 
   return (
-    <div className="rounded-2xl xl:col-span-9 w-full border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+    // flex column + min-h-0 so the conversation list's fs-stretch can claim the leftover
+    // height in fullscreen; windowed, the list keeps its max-h cap and the card is content-height.
+    <div className="flex min-h-0 w-full flex-col rounded-2xl border border-gray-200 bg-white xl:col-span-9 xl:h-full dark:border-gray-800 dark:bg-white/[0.03]">
       {/* Toolbar */}
       <div className="flex flex-col justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-800 sm:flex-row">
         <div className="flex items-center w-full gap-2">
@@ -444,7 +446,7 @@ export default function InboxFolderView() {
       )}
 
       {/* Conversation List */}
-      <div className="max-h-[510px] 2xl:max-h-[630px] overflow-y-auto">
+      <div className="fs-stretch max-h-[510px] overflow-y-auto 2xl:max-h-[630px]">
         <StateRegion
           loading={loading}
           error={error}
@@ -541,8 +543,8 @@ export default function InboxFolderView() {
         </StateRegion>
       </div>
 
-      {/* Footer */}
-      <div className="sticky bottom-0 flex items-center rounded-b-2xl justify-between border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#171f2f]">
+      {/* Footer – shrink-0 keeps the pager on screen once the list above it stretches. */}
+      <div className="sticky bottom-0 flex shrink-0 items-center justify-between rounded-b-2xl border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-[#171f2f]">
         <p className="text-sm text-gray-500 dark:text-gray-400">
           Showing {rangeStart}–{rangeEnd} of {filtered.length}
         </p>
