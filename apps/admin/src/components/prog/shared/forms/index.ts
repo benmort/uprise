@@ -21,6 +21,11 @@ export { FormDropzone } from './form-dropzone';
 export { FormInputWithStatus } from './form-input-with-status';
 export { FormAddress, type AddressFormValues } from './form-address';
 export {
+  FormAddressAutocomplete,
+  type FormAddressAutocompleteProps,
+  type AddressSuggestion,
+} from './form-address-autocomplete';
+export {
   FormOrganisationAddress,
   type OrganisationAddressFormValues,
   type OrganisationAddressType,

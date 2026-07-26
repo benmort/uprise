@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { FormInput } from './form-input';
 import { FormSelect, type FormSelectOption } from './form-select';
+import { FormAddressAutocomplete, type AddressSuggestion } from './form-address-autocomplete';
 
 export interface AddressFormValues {
   street: string;
@@ -70,15 +71,26 @@ export function FormAddress({
 
   const prefix = (field: string) => (namePrefix ? `${namePrefix}.${field}` : field);
 
+  // Picking a Mapbox suggestion fills the street line plus everything it knows about the rest of
+  // the address; blank parts are left alone so a pick never wipes what someone already typed.
+  const applySuggestion = (s: AddressSuggestion) => {
+    if (s.city || s.suburb) setCity(s.city || s.suburb);
+    if (s.state) setState(s.state);
+    if (s.postcode) setPostalCode(s.postcode);
+    if (s.country && countryOptions.some((o) => o.value === s.country)) setCountry(s.country);
+  };
+
   return (
     <div className={`space-y-5 ${className}`}>
-      <FormInput
+      <FormAddressAutocomplete
         id={prefix('street')}
         name={prefix('street')}
         label="Street Address"
-        placeholder="House number and street name"
+        placeholder="Start typing an address…"
         value={street}
-        onChange={(e) => setStreet(e.target.value)}
+        onChange={setStreet}
+        onSelect={applySuggestion}
+        country={country}
         required={required}
       />
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
