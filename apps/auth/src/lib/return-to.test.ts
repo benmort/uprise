@@ -87,18 +87,36 @@ describe("return-to", () => {
       expect(validateReturnTo("http://localhost:9999/x")).toBe("http://localhost:3000");
     });
 
-    it("accepts a tenant subdomain under a platform root (not in the env allowlist)", () => {
+    it("accepts a tenant subdomain under the deployment's own platform root (not in the env allowlist)", () => {
+      // A prod deployment: its allowlisted origins live under uprise.org.au.
+      process.env[ENV_KEY] = "https://admin.uprise.org.au";
       expect(validateReturnTo("https://common-threads.uprise.org.au/dashboard")).toBe(
         "https://common-threads.uprise.org.au/dashboard",
       );
+      // A dev deployment: its origins live under dev.uprise.org.au.
+      process.env[ENV_KEY] = "https://admin.dev.uprise.org.au";
       expect(validateReturnTo("https://acme.dev.uprise.org.au/x")).toBe(
         "https://acme.dev.uprise.org.au/x",
       );
     });
 
+    it("rejects a cross-environment host even though it shares the registrable domain (prod↔dev leak guard)", () => {
+      // Prod auth must NOT honour a *.dev.uprise.org.au return_to — the reported bug.
+      process.env[ENV_KEY] = "https://admin.uprise.org.au";
+      expect(validateReturnTo("https://admin.dev.uprise.org.au/dashboard")).toBe(
+        "https://admin.uprise.org.au",
+      );
+      // And the mirror: a dev deployment must not bounce to a prod host.
+      process.env[ENV_KEY] = "https://admin.dev.uprise.org.au";
+      expect(validateReturnTo("https://admin.uprise.org.au/dashboard")).toBe(
+        "https://admin.dev.uprise.org.au",
+      );
+    });
+
     it("still rejects a look-alike host outside the platform roots", () => {
+      process.env[ENV_KEY] = "https://admin.uprise.org.au";
       expect(validateReturnTo("https://common-threads.uprise.evil.com/x")).toBe(
-        "http://localhost:3000",
+        "https://admin.uprise.org.au",
       );
     });
 

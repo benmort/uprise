@@ -17,6 +17,25 @@ export function defaultReturnTo(): string {
 }
 
 /**
+ * The platform root(s) THIS deployment's allowlisted origins live under — the env-scoped subset
+ * of {@link DEFAULT_PLATFORM_ROOTS}. Prod origins sit under `uprise.org.au`, dev under
+ * `dev.uprise.org.au`; gating the tenant-subdomain fallback to these stops prod auth accepting a
+ * `*.dev.uprise.org.au` return_to (and vice versa) even though both are platform roots.
+ */
+function envPlatformRoots(): string[] {
+  const parents = new Set<string>();
+  for (const origin of allowedOrigins()) {
+    try {
+      const parent = parentDomain(new URL(origin).hostname);
+      if (parent) parents.add(parent);
+    } catch {
+      // skip a malformed allowlist entry
+    }
+  }
+  return DEFAULT_PLATFORM_ROOTS.filter((root) => parents.has(root));
+}
+
+/**
  * Carry an inbound `return_to` across an internal hop, so a volunteer bounced here from
  * the field app still lands back there once they finish. The value is passed through
  * untouched – it is `validateReturnTo` at the actual redirect that gates the origin, so
@@ -38,11 +57,14 @@ export function validateReturnTo(raw: string | null | undefined): string {
       return url.toString();
     }
     // Tenant subdomains (e.g. common-threads.uprise.org.au) aren't in the static env
-    // allowlist, so also accept any host whose registrable parent is a platform root.
+    // allowlist, so also accept any host whose registrable parent is a platform root —
+    // but only THIS deployment's root. Prod origins live under uprise.org.au, dev under
+    // dev.uprise.org.au; scoping to the env's own root keeps a tenant subdomain working
+    // while stopping prod auth honouring a *.dev.uprise.org.au return_to (and vice versa).
     // Still an open-redirect guard: only the platform's own domains pass, never an
     // arbitrary external host.
     const parent = parentDomain(url.hostname);
-    if (parent && DEFAULT_PLATFORM_ROOTS.includes(parent)) {
+    if (parent && envPlatformRoots().includes(parent)) {
       return url.toString();
     }
   } catch {
