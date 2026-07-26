@@ -438,8 +438,8 @@ export type ChannelSetupState =
 
 /** Identity-setup step keys (every admin role) — both REQUIRED: who you sign in as. */
 export const IDENTITY_SETUP_KEYS = ["verifyEmail", "confirmMobile"] as const;
-/** Account-setup step keys — recommended polish, never blocking. branding is owner-only. */
-export const ACCOUNT_SETUP_KEYS = ["enableTwofa", "completeProfile", "branding"] as const;
+/** Account-setup step keys – recommended polish, never blocking. brandAssets + branding are owner-only. */
+export const ACCOUNT_SETUP_KEYS = ["enableTwofa", "completeProfile", "brandAssets", "branding"] as const;
 /** Organisation step keys (owner) — all required. */
 export const ORG_SETUP_KEYS = ["orgIdentity", "businessLegal", "contacts", "address"] as const;
 /** Channel step keys (owner). */
@@ -499,6 +499,7 @@ export interface TenantSetupState {
 export interface OrgSetupSnapshot {
   profile: {
     name: string | null;
+    bio: string | null;
     logoBlockUrl: string | null;
     logoLandscapeUrl: string | null;
     primaryColour: string | null;
@@ -533,10 +534,11 @@ export interface OrgSetupResult {
     businessLegal: boolean;
     contacts: boolean;
     address: boolean;
+    brandAssets: boolean;
     branding: boolean;
   };
   /** True when the AU regulatory bundle can be filled: businessLegal + contacts + address.
-   *  orgIdentity/branding are brand polish, not identification. */
+   *  orgIdentity/brandAssets/branding are brand polish, not identification. */
   provisionReady: boolean;
   missing: SetupMissing[];
 }
@@ -546,20 +548,22 @@ const filled = (v: string | null | undefined): boolean => Boolean(v && v.trim())
 /**
  * Evaluate org-identification completeness from a plain snapshot. Rules mirror what the
  * Twilio AU regulatory bundle (and its compliance prefill) actually consume:
- * - orgIdentity: name + a logo + primary colour (today's "org profile" heuristic)
+ * - orgIdentity: name + bio – the two fields the /settings/organisation tab actually holds
  * - businessLegal: legal trading name + (ABN or ACN) + entity type
  * - contacts: a primary contact with first + last + email
  * - address: line1 + (suburb or city) + state + postcode
- * - branding (recommended, never blocks): secondary colour + hero image
+ *
+ * The two brand steps are recommended-only and never block. They split along the Branding
+ * tab's cards so each card can carry its own status chip:
+ * - brandAssets: a logo (block or landscape) + hero image → the "Logos & images" card
+ * - branding: primary + secondary colour → the "Brand colours" card
  */
 export function evaluateOrgSetup(snapshot: OrgSetupSnapshot): OrgSetupResult {
   const missing: SetupMissing[] = [];
   const p = snapshot.profile;
   const c = snapshot.credential;
 
-  const orgIdentity = Boolean(
-    p && filled(p.name) && (filled(p.logoBlockUrl) || filled(p.logoLandscapeUrl)) && filled(p.primaryColour),
-  );
+  const orgIdentity = Boolean(p && filled(p.name) && filled(p.bio));
 
   const businessLegal = Boolean(
     c &&
@@ -583,10 +587,13 @@ export function evaluateOrgSetup(snapshot: OrgSetupSnapshot): OrgSetupResult {
   );
   if (!address) missing.push({ step: "address", field: "address" });
 
-  const branding = Boolean(p && filled(p.secondaryColour) && filled(p.heroImageUrl));
+  const brandAssets = Boolean(
+    p && (filled(p.logoBlockUrl) || filled(p.logoLandscapeUrl)) && filled(p.heroImageUrl),
+  );
+  const branding = Boolean(p && filled(p.primaryColour) && filled(p.secondaryColour));
 
   return {
-    steps: { orgIdentity, businessLegal, contacts, address, branding },
+    steps: { orgIdentity, businessLegal, contacts, address, brandAssets, branding },
     provisionReady: businessLegal && contacts && address,
     missing,
   };

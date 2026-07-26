@@ -48,7 +48,7 @@ export const STEP_META: Record<SetupStepKey, StepMeta> = {
   // Organisation setup
   orgIdentity: {
     title: "Organisation profile",
-    blurb: "Name, logo and brand colour.",
+    blurb: "Your public name and a short bio.",
     href: "/settings/organisation?origin=getting-started",
     cta: "Set up",
   },
@@ -70,11 +70,18 @@ export const STEP_META: Record<SetupStepKey, StepMeta> = {
     href: "/settings/addresses?origin=getting-started",
     cta: "Add address",
   },
-  branding: {
-    title: "Branding extras",
-    blurb: "Secondary colour and hero image for your public pages.",
+  // The two brand steps mirror the Branding tab's two cards, so each card carries its own chip.
+  brandAssets: {
+    title: "Logos & images",
+    blurb: "Block and landscape logo, plus a hero image.",
     href: "/settings/branding?origin=getting-started",
-    cta: "Add branding",
+    cta: "Upload",
+  },
+  branding: {
+    title: "Brand colours",
+    blurb: "Primary and secondary colour for your public pages.",
+    href: "/settings/branding?origin=getting-started",
+    cta: "Pick colours",
   },
   // Channels
   phoneNumber: {

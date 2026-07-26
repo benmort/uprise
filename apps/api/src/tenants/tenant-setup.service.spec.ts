@@ -9,6 +9,7 @@ const SUPER: AuthUser = { id: "u1", role: AppUserRole.ORGANISER, tenantId: "t1",
 function completeOrgProfile() {
   return {
     name: "Acme",
+    bio: "We knock on doors in the inner west.",
     logoBlockUrl: "https://cdn/logo.png",
     logoLandscapeUrl: null,
     primaryColour: "#465fff",
@@ -95,12 +96,21 @@ describe("TenantSetupService", () => {
       expect(state.flows.account.complete).toBe(true);
     });
 
-    it("branding is an owner-only account step, recommended until done", async () => {
+    it("the brand steps are owner-only account steps, recommended until done", async () => {
+      // brandAssets = a logo + hero image; branding = the two colours. They track the Branding
+      // tab's two cards separately, so dropping the hero must not unset the colours' step.
       const owner = await setup({ orgProfile: { ...completeOrgProfile(), heroImageUrl: null } })
         .service.getSetupState("t1", OWNER);
-      expect(stepOf(owner.flows.account.steps, "branding").status).toBe("recommended");
+      expect(stepOf(owner.flows.account.steps, "brandAssets").status).toBe("recommended");
+      expect(stepOf(owner.flows.account.steps, "branding").status).toBe("done");
+
+      const noColours = await setup({ orgProfile: { ...completeOrgProfile(), secondaryColour: null } })
+        .service.getSetupState("t1", OWNER);
+      expect(stepOf(noColours.flows.account.steps, "branding").status).toBe("recommended");
+      expect(stepOf(noColours.flows.account.steps, "brandAssets").status).toBe("done");
 
       const organiser = await setup().service.getSetupState("t1", ORGANISER);
+      expect(stepOf(organiser.flows.account.steps, "brandAssets")).toBeUndefined();
       expect(stepOf(organiser.flows.account.steps, "branding")).toBeUndefined();
     });
   });
@@ -145,13 +155,45 @@ describe("TenantSetupService", () => {
       expect(state.gates.canProvisionTelephony.missing!.length).toBeGreaterThan(0);
     });
 
-    it("a complete org profile completes the flow and opens the gate; branding lives under account", async () => {
+    it("a complete org profile completes the flow and opens the gate; brand steps live under account", async () => {
       const { service } = setup();
       const state = await service.getSetupState("t1", OWNER);
       expect(state.flows.organisation.complete).toBe(true);
+      expect(stepOf(state.flows.organisation.steps, "brandAssets")).toBeUndefined();
       expect(stepOf(state.flows.organisation.steps, "branding")).toBeUndefined();
+      expect(stepOf(state.flows.account.steps, "brandAssets").status).toBe("done");
       expect(stepOf(state.flows.account.steps, "branding").status).toBe("done");
       expect(state.gates.canProvisionTelephony).toEqual({ allowed: true });
+    });
+
+    it("orgIdentity is name + bio – a bio-less profile is todo, however good the branding", async () => {
+      const { service } = setup({ orgProfile: { ...completeOrgProfile(), bio: "   " } });
+      const state = await service.getSetupState("t1", OWNER);
+      expect(stepOf(state.flows.organisation.steps, "orgIdentity").status).toBe("todo");
+      expect(state.flows.organisation.complete).toBe(false);
+      // Brand polish can't stand in for identity, and it doesn't gate provisioning either.
+      expect(stepOf(state.flows.account.steps, "brandAssets").status).toBe("done");
+      expect(state.gates.canProvisionTelephony).toEqual({ allowed: true });
+    });
+
+    it("orgIdentity completes on name + bio alone – no logo, no colours needed", async () => {
+      const { service } = setup({
+        orgProfile: {
+          ...completeOrgProfile(),
+          logoBlockUrl: null,
+          logoLandscapeUrl: null,
+          heroImageUrl: null,
+          primaryColour: null,
+          secondaryColour: null,
+        },
+      });
+      const state = await service.getSetupState("t1", OWNER);
+      expect(stepOf(state.flows.organisation.steps, "orgIdentity").status).toBe("done");
+      expect(state.flows.organisation.complete).toBe(true);
+      // The brand work is still tracked – just as recommended extras that never block.
+      expect(stepOf(state.flows.account.steps, "brandAssets").status).toBe("recommended");
+      expect(stepOf(state.flows.account.steps, "branding").status).toBe("recommended");
+      expect(state.flows.account.complete).toBe(false);
     });
   });
 

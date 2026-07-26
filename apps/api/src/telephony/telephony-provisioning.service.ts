@@ -108,6 +108,7 @@ export class TelephonyProvisioningService {
       where: { tenantId },
       select: {
         name: true,
+        bio: true,
         logoBlockUrl: true,
         logoLandscapeUrl: true,
         primaryColour: true,
@@ -139,6 +140,7 @@ export class TelephonyProvisioningService {
       profile: profile
         ? {
             name: profile.name,
+            bio: profile.bio,
             logoBlockUrl: profile.logoBlockUrl,
             logoLandscapeUrl: profile.logoLandscapeUrl,
             primaryColour: profile.primaryColour,

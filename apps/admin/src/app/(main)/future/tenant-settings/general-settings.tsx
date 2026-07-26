@@ -9,6 +9,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Lock, Save, Settings } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
 import { OriginBackLink } from "@/components/setup/origin-deep-link";
+import { invalidateSetupState, useSetupState } from "@/components/setup/use-setup-state";
+import { stepCardStatus } from "@/lib/setup/card-status";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import {
   orgProfile,
@@ -188,6 +190,10 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
   const [role, setRole] = useState<string | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
 
+  // Server truth for the cards' status chips – the SAME cached read the getting-started page,
+  // the tracker and the layout's nav self-hide use, so a card and its checklist row can't disagree.
+  const { state: setupState } = useSetupState();
+
   // Brand + org identity (Organisation + Branding tabs → orgProfile.update).
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
@@ -277,6 +283,9 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
 
   const done = (message: string, reload = true) => {
     showToast({ tone: "success", title: message });
+    // Any save here can move a setup step, so drop the cached setup state: the card chips,
+    // the getting-started count and the topbar badge all re-derive instead of waiting out the TTL.
+    if (tenantId) invalidateSetupState(tenantId);
     if (reload) void load();
   };
   const fail = (error: string) => showToast({ tone: "error", title: "Couldn't save", description: error });
@@ -494,12 +503,20 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
 
             {tab === "organisation" ? (
               <>
-                <FormSectionCard title="Organisation" description="Your public name and description.">
+                <FormSectionCard
+                  title="Organisation"
+                  description="Your public name and description."
+                  status={stepCardStatus(setupState, "orgIdentity")}
+                >
                   <FormInput label="Organisation name" value={name} onChange={(e) => setName(e.target.value)} />
                   <FormTextarea label="Bio" rows={3} value={bio} onChange={(e) => setBio(e.target.value)} />
                 </FormSectionCard>
 
-                <FormSectionCard title="Profile & social">
+                <FormSectionCard
+                  title="Profile & social"
+                  description="Website and social links – nice to have, never required."
+                  status="OPTIONAL"
+                >
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FormInput label="Website" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} placeholder="https://…" />
                     <FormInput label="Facebook" value={facebookUrl} onChange={(e) => setFacebookUrl(e.target.value)} />
@@ -515,7 +532,11 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
 
             {tab === "branding" ? (
               <>
-                <FormSectionCard title="Logos & images" description="Upload and crop — saved automatically. Logos keep transparency (PNG).">
+                <FormSectionCard
+                  title="Logos & images"
+                  description="Upload and crop — saved automatically. Logos keep transparency (PNG)."
+                  status={stepCardStatus(setupState, "brandAssets")}
+                >
                   <div className="grid gap-6 sm:grid-cols-2">
                     <ImageCropUpload label="Block logo" helpText="Square, for tight spaces." value={logoBlockUrl} onChange={autoSaveImage("logoBlockUrl", setLogoBlockUrl)} aspect={1} boxClassName="h-40" />
                     <ImageCropUpload label="Landscape logo" helpText="Wide, for headers and email." value={logoLandscapeUrl} onChange={autoSaveImage("logoLandscapeUrl", setLogoLandscapeUrl)} aspect={3} boxClassName="h-24" />
@@ -523,7 +544,11 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
                   </div>
                 </FormSectionCard>
 
-                <FormSectionCard title="Brand colours" description="Used across your public surfaces.">
+                <FormSectionCard
+                  title="Brand colours"
+                  description="Used across your public surfaces."
+                  status={stepCardStatus(setupState, "branding")}
+                >
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="flex items-center gap-3">
                       <input type="color" value={primaryColour} onChange={(e) => setPrimaryColour(e.target.value)} className="h-10 w-14 cursor-pointer rounded border border-border bg-surface" aria-label="Primary colour" />
@@ -536,7 +561,11 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
                   </div>
                 </FormSectionCard>
 
-                <FormSectionCard title="Custom styling" description="Advanced: white-label CSS applied to your public pages.">
+                <FormSectionCard
+                  title="Custom styling"
+                  description="Advanced: white-label CSS applied to your public pages."
+                  status="OPTIONAL"
+                >
                   <FormTextarea label="Custom CSS" rows={8} value={customCss} onChange={(e) => setCustomCss(e.target.value)} className="font-mono text-xs" placeholder=":root { --brand: #… }" />
                 </FormSectionCard>
 
@@ -546,21 +575,33 @@ export function GeneralSettings({ activeTab }: { activeTab: PageTab }) {
 
             {tab === "business" ? (
               <>
-                <OrganisationCredentialsForm values={credentials} onChange={setCredentials} />
+                <OrganisationCredentialsForm
+                  values={credentials}
+                  onChange={setCredentials}
+                  status={stepCardStatus(setupState, "businessLegal")}
+                />
                 <SaveButton onClick={() => void saveBusiness()} tabKey="business" />
               </>
             ) : null}
 
             {tab === "contacts" ? (
               <>
-                <OrganisationContactsForm contacts={contacts} onChange={setContacts} />
+                <OrganisationContactsForm
+                  contacts={contacts}
+                  onChange={setContacts}
+                  status={stepCardStatus(setupState, "contacts")}
+                />
                 <SaveButton onClick={() => void saveContacts()} tabKey="contacts" />
               </>
             ) : null}
 
             {tab === "addresses" ? (
               <>
-                <OrganisationAddressesForm values={addresses} onChange={setAddresses} />
+                <OrganisationAddressesForm
+                  values={addresses}
+                  onChange={setAddresses}
+                  status={stepCardStatus(setupState, "address")}
+                />
                 <SaveButton onClick={() => void saveAddresses()} tabKey="addresses" />
               </>
             ) : null}

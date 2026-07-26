@@ -48,6 +48,7 @@ export class TenantSetupService {
           where: { tenantId },
           select: {
             name: true,
+            bio: true,
             logoBlockUrl: true,
             logoLandscapeUrl: true,
             primaryColour: true,
@@ -111,6 +112,7 @@ export class TenantSetupService {
       profile: orgProfile
         ? {
             name: orgProfile.name,
+            bio: orgProfile.bio,
             logoBlockUrl: orgProfile.logoBlockUrl,
             logoLandscapeUrl: orgProfile.logoLandscapeUrl,
             primaryColour: orgProfile.primaryColour,
@@ -133,15 +135,21 @@ export class TenantSetupService {
       org.steps.orgIdentity && org.steps.businessLegal && org.steps.contacts && org.steps.address;
 
     // ── Account setup (recommended polish — never blocks completion) ──────────
-    // branding lives here rather than under Organisation: it's an extra, and the
-    // settings route is owner-only, so organisers don't get the step at all.
+    // The brand steps live here rather than under Organisation: they're extras, and the
+    // settings route is owner-only, so organisers don't get them at all. They split per
+    // Branding-tab card – brandAssets = logos + hero, branding = the two colours.
     const displayName = profile?.displayName?.trim() || user?.displayName?.trim() || "";
     const profileDone = Boolean(displayName && profile?.avatarUrl?.trim());
     const recommended = (done: boolean): SetupStepStatus => (done ? "done" : "recommended");
     const accountSteps: SetupStep[] = [
       { key: "enableTwofa", status: recommended(Boolean(user?.twofaEnabled)) },
       { key: "completeProfile", status: recommended(profileDone) },
-      ...(ownerView ? [{ key: "branding", status: recommended(org.steps.branding) } as SetupStep] : []),
+      ...(ownerView
+        ? ([
+            { key: "brandAssets", status: recommended(org.steps.brandAssets) },
+            { key: "branding", status: recommended(org.steps.branding) },
+          ] as SetupStep[])
+        : []),
     ];
     const accountComplete = accountSteps.every((s) => s.status === "done");
 

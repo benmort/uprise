@@ -7,6 +7,7 @@ import {
   FormPhoneInput,
   FormSelect,
   FormToggle,
+  type FormSectionCardStatus,
 } from '@/components/prog/shared/forms';
 import { OrganisationContactFormValues } from '../types';
 import { Users, Plus, Trash2 } from 'lucide-react';
@@ -43,8 +44,8 @@ export interface OrganisationContactsFormProps {
   onChange: (contacts: OrganisationContactFormValues[]) => void;
   errors?: ContactsFormErrors;
   disabled?: boolean;
-  /** When true, show green check in card header (step complete). */
-  completed?: boolean;
+  /** Setup status chip for the card header (see FormSectionCard). */
+  status?: FormSectionCardStatus;
 }
 
 const EMPTY_CONTACT: OrganisationContactFormValues = {
@@ -60,7 +61,7 @@ const EMPTY_CONTACT: OrganisationContactFormValues = {
   isAuthorizedSignatory: false,
 };
 
-export function OrganisationContactsForm({ contacts, onChange, errors = {}, disabled, completed }: OrganisationContactsFormProps) {
+export function OrganisationContactsForm({ contacts, onChange, errors = {}, disabled, status }: OrganisationContactsFormProps) {
   const [lastAddedIndex, setLastAddedIndex] = React.useState<number | null>(null);
   const prevContactsLength = React.useRef(contacts.length);
   React.useEffect(() => {
@@ -104,7 +105,7 @@ export function OrganisationContactsForm({ contacts, onChange, errors = {}, disa
       title="Organisation Contacts"
       description="Contact persons for the organisation"
       icon={<Users className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
-      completed={completed}
+      status={status}
     >
       <div className="space-y-6">
         {contacts.map((contact, index) => (

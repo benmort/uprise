@@ -6,6 +6,7 @@ import {
   FormInput,
   FormSelect,
   FormToggle,
+  type FormSectionCardStatus,
 } from '@/components/prog/shared/forms';
 import { OrganisationCredentialsFormValues, OrganisationIdentifierType } from '../types';
 import { FileText } from 'lucide-react';
@@ -52,11 +53,11 @@ export interface OrganisationCredentialsFormProps {
   onChange: (values: OrganisationCredentialsFormValues) => void;
   errors?: Partial<Record<keyof OrganisationCredentialsFormValues, string>>;
   disabled?: boolean;
-  /** When true, show green check in card header (step complete). */
-  completed?: boolean;
+  /** Setup status chip for the card header (see FormSectionCard). */
+  status?: FormSectionCardStatus;
 }
 
-export function OrganisationCredentialsForm({ values, onChange, errors = {}, disabled, completed }: OrganisationCredentialsFormProps) {
+export function OrganisationCredentialsForm({ values, onChange, errors = {}, disabled, status }: OrganisationCredentialsFormProps) {
   const handleChange = <K extends keyof OrganisationCredentialsFormValues>(field: K) => (
     value: OrganisationCredentialsFormValues[K]
   ) => {
@@ -88,7 +89,7 @@ export function OrganisationCredentialsForm({ values, onChange, errors = {}, dis
       title="Organisation Credentials"
       description="Legal and business registration details"
       icon={<FileText className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
-      completed={completed}
+      status={status}
     >
       <FormInput
         label="Legal Trading Name"

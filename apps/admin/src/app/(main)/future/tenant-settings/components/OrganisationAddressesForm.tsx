@@ -4,6 +4,7 @@ import * as React from 'react';
 import {
   FormSectionCard,
   FormOrganisationAddress,
+  type FormSectionCardStatus,
   type OrganisationAddressFormValues as SingleAddressValues,
 } from '@/components/prog/shared/forms';
 import { OrganisationAddressFormValues } from '../types';
@@ -26,11 +27,14 @@ export interface OrganisationAddressesFormProps {
   onChange: (values: OrganisationAddressFormValues) => void;
   errors?: { registered?: AddressErrors; billing?: AddressErrors };
   disabled?: boolean;
-  /** When true, show green check in card header (step complete). */
-  completed?: boolean;
+  /**
+   * Setup status chip for the REGISTERED address card. Only a registered address satisfies the
+   * `address` setup step, so the billing card is always "Optional" regardless of this.
+   */
+  status?: FormSectionCardStatus;
 }
 
-export function OrganisationAddressesForm({ values, onChange, errors = {}, disabled, completed }: OrganisationAddressesFormProps) {
+export function OrganisationAddressesForm({ values, onChange, errors = {}, disabled, status }: OrganisationAddressesFormProps) {
   const billingSameAsRegistered = values.billingSameAsRegistered ?? true;
 
   const handleRegisteredChange = (v: SingleAddressValues) => {
@@ -82,7 +86,7 @@ export function OrganisationAddressesForm({ values, onChange, errors = {}, disab
         title="Registered Address"
         description="Official registered business address"
         icon={<MapPin className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
-        completed={completed}
+        status={status}
       >
         <FormOrganisationAddress
           addressType="registered"
@@ -98,7 +102,7 @@ export function OrganisationAddressesForm({ values, onChange, errors = {}, disab
         title="Billing Address"
         description="Address used for invoicing"
         icon={<MapPin className="h-5 w-5 text-gray-500 dark:text-gray-400" />}
-        completed={completed}
+        status="OPTIONAL"
       >
         <div className="space-y-5">
           <div className="flex items-center justify-between gap-4" role="group" aria-label="Billing address options">

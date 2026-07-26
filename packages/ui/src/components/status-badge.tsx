@@ -69,6 +69,9 @@ const STATUS_STYLES: Record<string, string> = {
   // NOT primary-container + text-primary: that container token is a saturated mid-blue,
   // so brand-blue text on it clashes. The soft primary tint keeps the text readable.
   RECOMMENDED: "bg-primary/10 text-primary dark:bg-primary/20",
+  // Nice-to-have, and we're not nagging about it – the muted tone reads as "no action pending"
+  // (same as PLAN_LOCKED; the icon + label tell them apart).
+  OPTIONAL: "bg-surface-variant text-muted-foreground",
   ACTION_REQUIRED: "bg-warning-container text-warning-foreground",
   PLAN_LOCKED: "bg-surface-variant text-muted-foreground",
 };
@@ -117,6 +120,7 @@ const STATUS_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
   DONE: CheckCircle2,
   TODO: CircleDashed,
   RECOMMENDED: Sparkles,
+  OPTIONAL: CircleDashed,
   ACTION_REQUIRED: AlertCircle,
   PLAN_LOCKED: Lock,
 };

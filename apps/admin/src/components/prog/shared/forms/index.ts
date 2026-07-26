@@ -1,5 +1,5 @@
 export { FormField, inputBaseClasses } from './form-field';
-export { FormSectionCard } from './form-section-card';
+export { FormSectionCard, type FormSectionCardStatus } from './form-section-card';
 export { FormInput } from './form-input';
 export { FormSelect, type FormSelectOption } from './form-select';
 export { FormPasswordInput } from './form-password-input';

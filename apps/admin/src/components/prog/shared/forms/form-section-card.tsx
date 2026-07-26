@@ -1,8 +1,17 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronDown, Check } from 'lucide-react';
-import { cn } from "@uprise/ui";
+import { ChevronDown } from 'lucide-react';
+import { cn, StatusBadge } from "@uprise/ui";
+
+/** A settings card's setup state. Mirrors the getting-started chip vocabulary. */
+export type FormSectionCardStatus = 'DONE' | 'TODO' | 'OPTIONAL';
+
+const STATUS_LABELS: Record<FormSectionCardStatus, string> = {
+  DONE: 'Done',
+  TODO: 'To do',
+  OPTIONAL: 'Optional',
+};
 
 export interface FormSectionCardProps {
   title: string;
@@ -14,8 +23,12 @@ export interface FormSectionCardProps {
   collapsible?: boolean;
   /** When collapsible, start collapsed. */
   defaultCollapsed?: boolean;
-  /** When true, show green check in header (e.g. step complete). */
-  completed?: boolean;
+  /**
+   * Setup status chip in the header – the SAME `StatusBadge` the getting-started rows render
+   * (see components/setup/setup-chip.tsx), so the vocabulary can't drift between surfaces.
+   * Omit for a card that isn't part of setup: no chip, unchanged layout.
+   */
+  status?: FormSectionCardStatus;
 }
 
 export function FormSectionCard({
@@ -26,21 +39,17 @@ export function FormSectionCard({
   className = '',
   collapsible = false,
   defaultCollapsed = false,
-  completed = false,
+  status,
 }: FormSectionCardProps) {
   const [collapsed, setCollapsed] = React.useState(defaultCollapsed);
 
   const header = (
     <div className="border-b border-gray-200 px-4 py-5 dark:border-gray-800 sm:px-6">
       <h3 className="text-lg font-medium text-gray-800 dark:text-white/90 flex items-center gap-2">
-        {!completed && icon}
+        {icon}
         {title}
         <span className="ml-auto flex items-center gap-2">
-          {completed && (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-500/20">
-              <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
-            </div>
-          )}
+          {status && <StatusBadge status={status} label={STATUS_LABELS[status]} className="shrink-0" />}
           {collapsible && (
           <button
             type="button"
