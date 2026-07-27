@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import {
   AppUserRole,
   AudienceSource,
+  MessageChannel,
   Prisma,
   WalkListItemListType,
 } from "@uprise/db";
@@ -18,7 +19,9 @@ import {
   DEMO_KNOCKS,
   DEMO_LOGINS,
   DEMO_SCRIPT,
+  DEMO_SENDER_PHONE,
   DEMO_SURVEY,
+  DEMO_THREADS,
   DEMO_TURF,
   DEMO_WALK_LIST,
   EXAMPLE_AUDIENCE_NAME,
@@ -108,11 +111,94 @@ export class SeedService {
     return userId;
   }
 
+  /**
+   * Seed the shared inbox from DEMO_THREADS: an inbound/outbound message pair per exchange plus the
+   * ConversationState row that carries unread/resolved/owner. Before this, seedDemo() created no
+   * messages at all, so the inbox rendered empty on every fresh environment.
+   *
+   * Idempotent via a deterministic `twilioMessageSid` (`demo:thread:<thread>:<msg>`) — the column is
+   * @unique, so a re-seed skips messages it already wrote rather than duplicating the thread.
+   */
+  private async seedThreads(
+    tenantId: string,
+    contactIds: string[],
+    contacts: ReturnType<typeof buildDemoContacts>,
+    organiserId: string,
+  ): Promise<void> {
+    const now = Date.now();
+    for (const [t, thread] of DEMO_THREADS.entries()) {
+      const contactId = contactIds[thread.contactIndex];
+      const contact = contacts[thread.contactIndex];
+      if (!contactId || !contact) continue;
+      const contactPhone = contact.phoneE164;
+
+      let lastMessageAt: Date | null = null;
+      for (const [m, msg] of thread.messages.entries()) {
+        const sid = `demo:thread:${t}:${m}`;
+        const at = new Date(now - msg.minutesAgo * 60_000);
+        if (!lastMessageAt || at > lastMessageAt) lastMessageAt = at;
+
+        if (msg.direction === "in") {
+          const existing = await this.prisma.inboundMessage.findUnique({ where: { twilioMessageSid: sid } });
+          if (existing) continue;
+          await this.prisma.inboundMessage.create({
+            data: {
+              tenantId,
+              contactId,
+              fromPhone: contactPhone,
+              toPhone: DEMO_SENDER_PHONE,
+              body: msg.body,
+              threadKey: contactPhone,
+              twilioMessageSid: sid,
+              receivedAt: at,
+            },
+          });
+        } else {
+          const existing = await this.prisma.outboundMessage.findUnique({ where: { twilioMessageSid: sid } });
+          if (existing) continue;
+          await this.prisma.outboundMessage.create({
+            data: {
+              tenantId,
+              contactId,
+              toPhone: contactPhone,
+              fromPhone: DEMO_SENDER_PHONE,
+              body: msg.body,
+              twilioMessageSid: sid,
+              sentAt: at,
+            },
+          });
+        }
+      }
+
+      await this.prisma.conversationState.upsert({
+        where: { tenantId_contactPhone_channel: { tenantId, contactPhone, channel: MessageChannel.SMS } },
+        create: {
+          tenantId,
+          contactId,
+          contactPhone,
+          unreadCount: thread.unread,
+          resolved: thread.resolved,
+          ownerId: thread.claimed ? organiserId : null,
+          claimedAt: thread.claimed ? lastMessageAt : null,
+          lastMessageAt,
+        },
+        update: {
+          unreadCount: thread.unread,
+          resolved: thread.resolved,
+          ownerId: thread.claimed ? organiserId : null,
+          claimedAt: thread.claimed ? lastMessageAt : null,
+          lastMessageAt,
+        },
+      });
+    }
+  }
+
   async seedDemo(): Promise<SeedResult> {
     const tenantId = await this.org();
     await this.engagement.ensureDefaultDispositions();
 
-    await this.upsertUser(tenantId, DEMO_LOGINS.organiser, AppUserRole.ORGANISER);
+    // Bound (not discarded) — the claimed demo inbox threads need an owner.
+    const organiserId = await this.upsertUser(tenantId, DEMO_LOGINS.organiser, AppUserRole.ORGANISER);
     const volunteerId = await this.upsertUser(tenantId, DEMO_LOGINS.volunteer, AppUserRole.VOLUNTEER);
 
     // Campaign
@@ -213,6 +299,11 @@ export class SeedService {
           audienceId: audience.id,
         },
       }));
+
+    // Inbox threads — real two-way exchanges so the shared inbox, its folder counts and the
+    // conversation detail pane have something to render. Idempotent on the deterministic
+    // twilioMessageSid (a @unique column), so re-seeding never duplicates a message.
+    await this.seedThreads(tenantId, contactIds, contacts, organiserId);
 
     // Survey (dual-channel options)
     const survey =
@@ -460,8 +551,20 @@ export class SeedService {
   /** Best-effort removal of demo-labelled rows (FK-safe order). */
   async clearDemo(): Promise<void> {
     const tenantId = await this.org();
-    const addresses = buildDemoContacts().map((c) => c.address);
+    const demoContacts = buildDemoContacts();
+    const addresses = demoContacts.map((c) => c.address);
+    const demoPhones = [...demoContacts.map((c) => c.phoneE164), DEMO_SENDER_PHONE];
     await this.prisma.doorKnock.deleteMany({ where: { tenantId, localId: { startsWith: "demo:knock:" } } });
+    // Inbox threads: messages by their deterministic demo SID, then the conversation rows. Both
+    // before the Contact delete — the FKs are SetNull, so orphans would otherwise survive as
+    // phone-only threads cluttering the inbox.
+    await this.prisma.inboundMessage.deleteMany({
+      where: { tenantId, twilioMessageSid: { startsWith: "demo:thread:" } },
+    });
+    await this.prisma.outboundMessage.deleteMany({
+      where: { tenantId, twilioMessageSid: { startsWith: "demo:thread:" } },
+    });
+    await this.prisma.conversationState.deleteMany({ where: { tenantId, contactPhone: { in: demoPhones } } });
     await this.prisma.canvassCampaign.deleteMany({ where: { tenantId, name: DEMO_CAMPAIGN.name } });
     await this.prisma.turf.deleteMany({ where: { tenantId, name: DEMO_TURF.name } });
     await this.prisma.contact.deleteMany({ where: { tenantId, address: { in: addresses } } });
