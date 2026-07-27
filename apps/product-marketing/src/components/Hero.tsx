@@ -3,9 +3,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@uprise/ui";
 import { authAppUrl } from "@/lib/links";
+import { screen } from "@/lib/screens";
 import MarketingLaunchpad from "./MarketingLaunchpad";
 
 export default function Hero() {
+  // The canvasser-app phone inset, when a real capture exists (see the slot below).
+  const fieldShot = screen("field-walk");
   return (
     <section className="px-4 pt-20 sm:px-8 xl:px-12.5">
       <div className="relative z-10 overflow-hidden rounded-3xl border border-stroke-secondary bg-gradient-to-br from-gray-50 via-primary-25 to-pink-50 pt-14 md:pt-16 lg:pt-24">
@@ -60,16 +63,25 @@ export default function Hero() {
                   />
                 </div>
 
-                {/* Floating phone — scaled down and repositioned on small screens */}
-                <div className="absolute -bottom-6 right-2 aspect-[204/277] w-[110px] overflow-hidden rounded-t-[14px] border-[6px] border-b-0 border-white bg-white shadow-[-24px_24px_70px_0px_rgba(16,24,40,0.18)] sm:right-4 sm:w-[140px] lg:-right-10 lg:w-[180px]">
-                  <Image
-                    alt="Uprise canvasser app"
-                    src="/images/marketing/mobile-screenshot.png"
-                    width={410}
-                    height={554}
-                    className="h-auto w-full"
-                  />
-                </div>
+                {/* Floating phone — the canvasser PWA, captured at phone size by
+                    `pnpm marketing:shots`. Rendered ONLY when a real capture exists: the previous
+                    asset here was labelled "Uprise canvasser app" while actually showing the admin
+                    dashboard full of leftover template data, and it declared 410×554 for a 770×1490
+                    file so the frame cropped it. No screenshot beats the wrong screenshot. */}
+                {fieldShot ? (
+                  <div
+                    className="absolute -bottom-6 right-2 w-[110px] overflow-hidden rounded-t-[14px] border-[6px] border-b-0 border-white bg-white shadow-[-24px_24px_70px_0px_rgba(16,24,40,0.18)] sm:right-4 sm:w-[140px] lg:-right-10 lg:w-[180px]"
+                    style={{ aspectRatio: `${fieldShot.width} / ${fieldShot.height}` }}
+                  >
+                    <Image
+                      alt={fieldShot.alt}
+                      src={fieldShot.file}
+                      width={fieldShot.width}
+                      height={fieldShot.height}
+                      className="h-auto w-full"
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

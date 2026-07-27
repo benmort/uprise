@@ -1,0 +1,3 @@
+{
+  "_comment": "Written by `pnpm marketing:shots` (apps/admin/scripts/marketing-shots.mjs). Each entry carries the capture's TRUE pixel dimensions so components never hardcode a wrong aspect ratio, plus alt text recorded at capture time so it can't drift from the picture. Empty until the pipeline has been run against a seeded local environment; CapabilityShowcase renders a 'pending capture' placeholder for any missing key."
+}

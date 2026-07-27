@@ -90,6 +90,7 @@ export * from "./components/card";
 export * from "./components/list";
 export * from "./components/table";
 export * from "./components/carousel";
+export * from "./components/reveal";
 
 // ── Domain & status ─────────────────────────────────────────────────────────
 export * from "./components/status-badge";

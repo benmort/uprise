@@ -3,9 +3,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@uprise/ui";
 import { authAppUrl } from "@/lib/links";
+import { screen } from "@/lib/screens";
 import MarketingLaunchpad from "./MarketingLaunchpad";
 
 export default function CTA() {
+  const dashboardShot = screen("dashboard");
   return (
     <section className="overflow-hidden bg-white pt-16 md:pt-14 lg:pt-30">
       <div className="container">
@@ -35,18 +37,10 @@ export default function CTA() {
               </MarketingLaunchpad>
             </div>
 
+            {/* The three gradient A/B/C circles that used to sit here read as customer avatars but
+                were invented — fabricated social proof. The real supporter logos are in
+                <LogoCarousel /> further up the page; this is copy only. */}
             <div className="flex gap-4 max-sm:flex-col sm:items-center">
-              <div className="flex items-center -space-x-4">
-                <div className="h-10 w-10 rounded-full border-[3px] border-gray-800 bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold">
-                  A
-                </div>
-                <div className="h-10 w-10 rounded-full border-[3px] border-gray-800 bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-semibold">
-                  B
-                </div>
-                <div className="h-10 w-10 rounded-full border-[3px] border-gray-800 bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white font-semibold">
-                  C
-                </div>
-              </div>
               <div>
                 <h3 className="text-base font-medium text-gray-200">
                   Built by campaigners, for campaigners
@@ -58,16 +52,22 @@ export default function CTA() {
             </div>
           </div>
 
-          <div className="relative aspect-[540/370] max-w-[540px] self-end rounded-t-xl border-[8px] border-b-0 border-white shadow-[0px_0px_0px_1px_#E4E7EC,0px_18.824px_100px_0px_rgba(16,24,40,0.12)] overflow-hidden">
-            <Image
-              src="/images/marketing/dashboard-screenshot.png"
-              alt="Campaign Dashboard Screenshot"
-              width={540}
-              height={370}
-              className="h-full w-full object-cover object-top-left"
-              priority
-            />
-          </div>
+          {/* The committed dashboard-screenshot.png was Uprise chrome wrapping raw TailAdmin demo
+              content ("Monthly Target 75.55%", "You earn $3287 today", "Upgrade To Pro") and
+              declared 540×370 for a 3022×1646 file. Now driven by the capture manifest, and the
+              slot is simply absent until a real dashboard shot exists. */}
+          {dashboardShot ? (
+            <div className="relative aspect-[540/370] max-w-[540px] self-end overflow-hidden rounded-t-xl border-[8px] border-b-0 border-white shadow-[0px_0px_0px_1px_#E4E7EC,0px_18.824px_100px_0px_rgba(16,24,40,0.12)]">
+              <Image
+                src={dashboardShot.file}
+                alt={dashboardShot.alt}
+                width={dashboardShot.width}
+                height={dashboardShot.height}
+                className="h-full w-full object-cover object-top-left"
+                priority
+              />
+            </div>
+          ) : null}
 
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
             <svg width="279" height="54" viewBox="0 0 279 54" fill="none" xmlns="http://www.w3.org/2000/svg">
