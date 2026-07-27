@@ -1,7 +1,7 @@
 {
   "name": "twilio-messenger",
   "private": true,
-  "packageManager": "pnpm@10.15.0",
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "marketing:shots": "pnpm --filter admin run marketing:shots",
     "clean:next": "rm -rf apps/*/.next apps/*/.next-validate",
@@ -14,7 +14,7 @@
     "dev:organisation-marketing": "pnpm --filter organisation-marketing run dev",
     "dev:action": "pnpm --filter action run dev",
     "dev:worker": "pnpm --filter worker run dev",
-    "dev:tunnel": "ngrok start --config ngrok.local.yml --config ngrok.yml --all",
+    "dev:tunnel": "node scripts/dev-tunnel.mjs",
     "dev:fresh": "bash scripts/dev.sh",
     "kill:ports": "bash scripts/kill-ports.sh",
     "reset:tenants": "pnpm --filter api run reset:tenants",

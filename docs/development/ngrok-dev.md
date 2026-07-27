@@ -31,9 +31,18 @@ subdomain routing is a deferred item in `docs/TODO.md`.)
   ```yaml
   version: "2"
   authtoken: <token-from-the-prog-ngrok-account>
+  # account: <email-of-that-ngrok-account>
   ```
   (`--config ngrok.yml` alone does NOT pick up the agent's global authtoken, hence the
   explicit local file. The token lives in prog's `core-orchestration/ngrok.yml`.)
+
+  The `# account:` line is a **comment**, not a config key (ngrok rejects unknown fields
+  with `ERR_NGROK_106`) — `dev:tunnel` reads it to name the account in its startup banner.
+  `NGROK_ACCOUNT_EMAIL` overrides it. Recording it is worth the one line: domain
+  reservations are per-account, so a token from the wrong one fails with `ERR_NGROK_319`
+  (unreserved) or `ERR_NGROK_314` (the account is on the free plan, which cannot serve
+  custom hostnames at all), and the agent otherwise never says which account it
+  authenticated as.
 
 ## Run it
 
@@ -53,6 +62,20 @@ pnpm dev:tunnel    # the ngrok tunnels on their own (optional, second terminal)
 
 `dev:all` won't kill the apps if the tunnel fails (e.g. missing token) — you'll just
 see ngrok errors under the `tunnel` label while the apps keep running.
+
+Once the tunnels are up, `dev:tunnel` prints which account is live and where each domain
+points (the domains come from the agent's own API, so this is what is actually serving):
+
+```
+▶ ngrok tunnels online – account you@example.com
+    https://dev.uprise.org.au        →  http://localhost:3003
+    https://auth.dev.uprise.org.au   →  http://localhost:3002
+    …
+```
+
+The wrapper (`scripts/dev-tunnel.mjs`) runs ngrok with `--log stdout`, so you get logfmt
+lines rather than ngrok's full-screen TUI — the TUI would paint over the banner, and
+under `concurrently` it was never usable anyway.
 
 Then copy the **"ngrok / prog-subdomain dev"** block from each app's `.env.example` into its
 `.env` (api, admin, auth, product-marketing) and restart `dev:all`. The key overrides:
