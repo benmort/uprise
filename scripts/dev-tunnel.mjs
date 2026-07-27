@@ -6,9 +6,11 @@
 // The domains come from the agent's own web API (ground truth, not a re-read of the
 // config). The account email cannot: the agent never reveals it locally – not in the
 // log (even at --log-level debug), not on http://127.0.0.1:4040/api/*, not via
-// `ngrok diagnose` – and the ngrok REST API has no account resource. So it is read from
-// NGROK_ACCOUNT_EMAIL, or from an `# account:` comment in the gitignored ngrok.local.yml
-// that already holds this machine's authtoken.
+// `ngrok diagnose` – and the ngrok REST API has no account resource either (the address
+// surfaces only incidentally, in a credential's description). So it is read from
+// NGROK_ACCOUNT_EMAIL – set in the gitignored repo-root .env, or exported in the shell –
+// or from an `# account:` comment in the gitignored ngrok.local.yml that already holds
+// this machine's authtoken.
 //
 // Knowing which account is live matters because domain reservations are per-account:
 // a token from the wrong one fails with ERR_NGROK_319 on dev.uprise.org.au.
@@ -18,6 +20,16 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+// This machine's NGROK_* settings live in a gitignored repo-root .env. Load it before
+// reading any of them. An already-exported shell variable still wins – loadEnvFile does
+// not overwrite an entry that is already in process.env.
+try {
+  process.loadEnvFile(join(ROOT, '.env'))
+} catch {
+  // No repo-root .env – the fallbacks below cover it.
+}
+
 const WEB_API = process.env.NGROK_WEB_API ?? 'http://127.0.0.1:4040'
 const ONLINE_TIMEOUT_MS = 60_000
 const POLL_MS = 500

@@ -64,3 +64,12 @@ tunnels:
     proto: http
     compression: true
     domain: labs.dev.uprise.org.au
+
+  # Worker health + Bull Board → worker.dev.uprise.org.au (WORKER_HEALTH_PORT, default
+  # 3210). /admin/queues is basic-auth gated and closed by default when
+  # BASIC_AUTH_USERNAME/PASSWORD are unset, so the tunnel exposes nothing without them.
+  worker:
+    addr: 3210
+    proto: http
+    compression: true
+    domain: worker.dev.uprise.org.au

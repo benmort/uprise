@@ -13,9 +13,12 @@ instead of bare `localhost:PORT`.
 | `admin.dev.uprise.org.au` | `localhost:3000` | admin (organiser) |
 | `api.dev.uprise.org.au` | `localhost:3001` | api (frontend calls + webhooks) |
 | `field.dev.uprise.org.au` | `localhost:3005` | field (canvasser PWA) |
+| `action.dev.uprise.org.au` | `localhost:3004` | action (public volunteer app) |
 | `labs.dev.uprise.org.au` | `localhost:3006` | organisation-marketing (Uprise Labs) |
+| `worker.dev.uprise.org.au` | `localhost:3210` | worker (health + Bull Board, basic-auth gated) |
 
-`admin.*`, `api.*`, `field.*` and `labs.*` sit under the reserved `*.dev.uprise.org.au` wildcard. Tenancy is
+Every name except the apex `dev.uprise.org.au` sits under the reserved `*.dev.uprise.org.au`
+wildcard, so adding an app needs a `ngrok.yml` entry only – no new reservation. Tenancy is
 still chosen in-session (`/select-tenant`) — subdomains map apps, not tenants. (Per-tenant
 subdomain routing is a deferred item in `docs/TODO.md`.)
 
@@ -34,7 +37,8 @@ subdomain routing is a deferred item in `docs/TODO.md`.)
   # account: <email-of-that-ngrok-account>
   ```
   (`--config ngrok.yml` alone does NOT pick up the agent's global authtoken, hence the
-  explicit local file. The token lives in prog's `core-orchestration/ngrok.yml`.)
+  explicit local file. Mint the token on the uprise ngrok account —
+  https://dashboard.ngrok.com/get-started/your-authtoken.)
 
   The `# account:` line is a **comment**, not a config key (ngrok rejects unknown fields
   with `ERR_NGROK_106`) — `dev:tunnel` reads it to name the account in its startup banner.
