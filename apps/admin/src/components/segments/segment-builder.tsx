@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Spinner } from "@uprise/ui";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SegmentedControl, Spinner } from "@uprise/ui";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity, CheckCircle2, Copy, GitBranch, Info, List, MapPin, Pencil, Plus, Save, Shield, Tag, Trash2, Users, Zap } from "lucide-react";
@@ -313,29 +313,17 @@ export function SegmentBuilder({ segment }: { segment?: SegmentDetail }) {
             compliance floor apply at send time.
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <div className="inline-flex overflow-hidden rounded-md border border-border">
-            <button
-              type="button"
-              onClick={() => setView("tree")}
-              className={cn(
-                "flex h-9 items-center gap-1.5 px-3 text-xs font-medium",
-                view === "tree" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-surface-variant",
-              )}
-            >
-              <List className="h-3.5 w-3.5" /> Tree
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("canvas")}
-              className={cn(
-                "flex h-9 items-center gap-1.5 px-3 text-xs font-medium",
-                view === "canvas" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-surface-variant",
-              )}
-            >
-              <GitBranch className="h-3.5 w-3.5" /> Canvas
-            </button>
-          </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Same segmented switch as the list/map toggles on the data explorers. */}
+          <SegmentedControl
+            value={view}
+            onChange={setView}
+            aria-label="Builder view"
+            options={[
+              { value: "tree", label: "Tree", icon: <List className="h-4 w-4" /> },
+              { value: "canvas", label: "Canvas", icon: <GitBranch className="h-4 w-4" /> },
+            ]}
+          />
           <Button onClick={save} disabled={saving || !name.trim()}>
             {saving ? <Spinner className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
             Save search
@@ -890,9 +878,124 @@ function PolicyBand({
           hint={`Skip anyone sent ${policy.fatigue.maxSends}+ blasts in the last ${policy.fatigue.windowHours}h.`}
           checked={policy.fatigue.enabled}
           onChange={(v) => onChange({ ...policy, fatigue: { ...policy.fatigue, enabled: v } })}
-        />
+        >
+          {policy.fatigue.enabled ? (
+            <div className="mt-4 space-y-4 border-t border-border pt-4">
+              <NumberSlider
+                id="fatigue-max-sends"
+                label="Blast cap"
+                unit={policy.fatigue.maxSends === 1 ? "blast" : "blasts"}
+                value={policy.fatigue.maxSends}
+                min={FATIGUE_MAX_SENDS.min}
+                max={FATIGUE_MAX_SENDS.max}
+                onChange={(maxSends) => onChange({ ...policy, fatigue: { ...policy.fatigue, maxSends } })}
+              />
+              <NumberSlider
+                id="fatigue-window-hours"
+                label="Rolling window"
+                unit="hours"
+                caption={describeWindow(policy.fatigue.windowHours)}
+                value={policy.fatigue.windowHours}
+                min={FATIGUE_WINDOW_HOURS.min}
+                max={FATIGUE_WINDOW_HOURS.max}
+                onChange={(windowHours) => onChange({ ...policy, fatigue: { ...policy.fatigue, windowHours } })}
+              />
+            </div>
+          ) : null}
+        </PolicyToggle>
       </CardContent>
     </Card>
+  );
+}
+
+// The practical band organisers actually tune, well inside `FatigueSchema`'s outer bounds
+// (1–100 sends, 1–2160h): one blast a week at the strict end, three per 72h at the loose end.
+const FATIGUE_MAX_SENDS = { min: 1, max: 5 } as const;
+const FATIGUE_WINDOW_HOURS = { min: 24, max: 168 } as const;
+
+/** Hours read as hours up to a day, then as days – 72 → "3 days". */
+function describeWindow(hours: number): string {
+  if (hours < 24) return hours === 1 ? "1 hour" : `${hours} hours`;
+  const days = hours / 24;
+  const label = Number.isInteger(days) ? String(days) : days.toFixed(1);
+  return `${label} ${label === "1" ? "day" : "days"}`;
+}
+
+/**
+ * A bounded integer control: slider for coarse dragging, text field for the exact
+ * number. The field keeps a draft so a half-typed value isn't fought by state; it
+ * commits when it parses in range and clamps on blur.
+ */
+function NumberSlider({
+  id,
+  label,
+  unit,
+  caption,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  unit: string;
+  caption?: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const commitDraft = (raw: string) => {
+    const n = Math.round(Number(raw));
+    if (raw.trim() === "" || !Number.isFinite(n)) {
+      setDraft(String(value));
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, n));
+    setDraft(String(clamped));
+    if (clamped !== value) onChange(clamped);
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <label htmlFor={id} className="text-xs font-medium text-foreground">
+          {label}
+        </label>
+        <div className="flex items-center gap-1.5">
+          <Input
+            value={draft}
+            inputMode="numeric"
+            aria-label={`${label} value`}
+            className="h-7 w-16 text-xs tabular-nums"
+            onChange={(e) => {
+              const raw = e.target.value;
+              setDraft(raw);
+              const n = Number(raw);
+              if (/^\d+$/.test(raw) && n >= min && n <= max) onChange(n);
+            }}
+            onBlur={(e) => commitDraft(e.target.value)}
+          />
+          <span className="text-xs text-muted-foreground">{unit}</span>
+        </div>
+      </div>
+      <input
+        id={id}
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="mt-2 w-full accent-primary"
+      />
+      <p className="text-[10px] tabular-nums text-muted-foreground">
+        {caption ?? `${min}–${max}`}
+      </p>
+    </div>
   );
 }
 
@@ -901,36 +1004,41 @@ function PolicyToggle({
   hint,
   checked,
   onChange,
+  children,
 }: {
   label: string;
   hint: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  children?: ReactNode;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 p-4">
-      <span>
-        <span className="block text-sm font-medium text-foreground">{label}</span>
-        <span className="block text-xs text-muted-foreground">{hint}</span>
-      </span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={cn(
-          "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-          checked ? "bg-primary" : "bg-surface-variant",
-        )}
-      >
-        <span
+    <div className="p-4">
+      <label className="flex cursor-pointer items-center justify-between gap-3">
+        <span>
+          <span className="block text-sm font-medium text-foreground">{label}</span>
+          <span className="block text-xs text-muted-foreground">{hint}</span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          onClick={() => onChange(!checked)}
           className={cn(
-            "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform",
-            checked ? "translate-x-[22px]" : "translate-x-0.5",
+            "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+            checked ? "bg-primary" : "bg-surface-variant",
           )}
-        />
-      </button>
-    </label>
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 h-5 w-5 rounded-full bg-background shadow transition-transform",
+              checked ? "translate-x-[22px]" : "translate-x-0.5",
+            )}
+          />
+        </button>
+      </label>
+      {children}
+    </div>
   );
 }
 
