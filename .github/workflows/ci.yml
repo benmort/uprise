@@ -30,16 +30,17 @@ jobs:
           # Full history so scripts/coverage-check.mjs can diff against origin/main for the patch floor.
           fetch-depth: 0
 
+      # No version pin: action-setup reads package.json#packageManager, so CI can never drift
+      # from what Vercel builds with. A hardcoded 10.15.0 here is why CI stayed green through
+      # the pnpm 11 bump while all seven production builds failed.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          # Match the repo's packageManager (pnpm@10.15.0) so --frozen-lockfile is honoured.
-          version: 10.15.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Matches the Node major the Vercel projects build on (24.x).
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -128,16 +129,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Unpinned on purpose — see the quality job.
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          # Match the repo's packageManager so --frozen-lockfile is honoured.
-          version: 10.15.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies

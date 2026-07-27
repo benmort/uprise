@@ -64,12 +64,16 @@ const FAQ_ITEMS: FaqItem[] = [
   },
 ];
 
+// The comparison grid says "included" with nothing but a colour and a shape, so both marks carry
+// role="img" + a label — without one a screen reader reads a row of empty cells.
 function CheckIcon() {
   return (
     <svg
       className="h-6 w-6 text-success-500 max-md:h-5 max-md:w-5"
       viewBox="0 0 24 24"
       fill="none"
+      role="img"
+      aria-label="Included"
       xmlns="http://www.w3.org/2000/svg"
     >
       <path
@@ -88,6 +92,8 @@ function DashIcon() {
       className="h-6 w-6 text-gray-300 max-md:h-5 max-md:w-5"
       viewBox="0 0 24 4"
       fill="none"
+      role="img"
+      aria-label="Not included"
       xmlns="http://www.w3.org/2000/svg"
     >
       <path
@@ -101,10 +107,26 @@ function DashIcon() {
   );
 }
 
-function formatLimit(value: number | null | undefined): string {
+/**
+ * A plan's usage limit. The top plan's numbers read as a floor ("100,000+", "25+") because it is
+ * quoted per organisation and sized past the listed figure; every plan below it is a ceiling.
+ */
+function formatLimit(value: number | null | undefined, openEnded = false): string {
   if (value === null || value === undefined) return "Unlimited";
+  if (openEnded) return `${value.toLocaleString()}+`;
   return value >= 1000 ? `Up to ${value.toLocaleString()}` : String(value);
 }
+
+/**
+ * The usage-limit rows. `get` returns a string to print, or `true` for a tick — segments are a tick
+ * everywhere because every plan segments its contacts; the numeric cap is an enforcement detail
+ * rather than something a plan is chosen on.
+ */
+const LIMIT_ROWS: Array<{ label: string; get: (p: PublicPlan, topPlan: boolean) => string | true }> = [
+  { label: "Contacts", get: (p, top) => formatLimit(p.limits?.contacts, top) },
+  { label: "Team members", get: (p, top) => formatLimit(p.limits?.teamMembers, top) },
+  { label: "Segments", get: () => true },
+];
 
 /** Savings % between an original and a current price (0 if no discount). */
 function savingsPercent(price: number | null, original: number | null): number {
@@ -220,6 +242,8 @@ export default function PlansPage() {
                   {plans.map((plan) => {
                     const { price, original } = priceFor(plan);
                     const saving = savingsPercent(price, original);
+                    // No price on the plan means it is quoted, not listed.
+                    const quoted = price === null || price === undefined;
                     return (
                       <div
                         key={plan.id}
@@ -245,29 +269,33 @@ export default function PlansPage() {
                               ) : null}
                             </div>
                             <div className="mb-2.5">
-                              <p className="flex items-center gap-2">
-                                {original && original > (price ?? 0) ? (
-                                  <span className="text-[26px] font-medium text-dark-4 line-through">
-                                    ${original}
+                              {quoted ? (
+                                <p className="text-4xl font-bold text-text-color">Custom</p>
+                              ) : (
+                                <p className="flex items-center gap-2">
+                                  {original && original > (price ?? 0) ? (
+                                    <span className="text-[26px] font-medium text-dark-4 line-through">
+                                      ${original}
+                                    </span>
+                                  ) : null}
+                                  <span className="text-4xl font-bold text-text-color">
+                                    ${price ?? 0}
                                   </span>
-                                ) : null}
-                                <span className="text-4xl font-bold text-text-color">
-                                  ${price ?? 0}
-                                </span>
-                              </p>
+                                </p>
+                              )}
                             </div>
                             <p className="mb-1 text-base font-medium text-text-color">
-                              per {monthly ? "month" : "year"}
+                              {quoted ? "Talk to us" : `per ${monthly ? "month" : "year"}`}
                             </p>
                             <p className="mb-5 text-base text-text-color-tertiary">
                               {plan.description}
                             </p>
                           </div>
                           <Link
-                            href="/sign-up"
+                            href={quoted ? "/request-demo" : "/sign-up"}
                             className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-5 py-3.5 text-sm font-medium text-white duration-200 hover:bg-brand-600 sm:text-base lg:gap-1 lg:px-2 lg:text-sm xl:gap-2 xl:px-5 xl:text-base"
                           >
-                            <span>Choose {plan.displayName}</span>
+                            <span>{quoted ? "Talk to us" : `Choose ${plan.displayName}`}</span>
                           </Link>
                         </div>
                       </div>
@@ -275,38 +303,32 @@ export default function PlansPage() {
                   })}
                 </div>
 
-                <div
-                  className="grid rounded-lg text-center text-sm font-medium *:px-7 *:py-3.5 *:text-text-color-secondary max-lg:hidden"
-                  style={gridStyle}
-                >
-                  <p className="text-left">Key Features</p>
-                  {plans.map((plan) => (
-                    <p key={plan.id} className="border-l border-stroke">
-                      {plan.displayName}
-                    </p>
-                  ))}
-                </div>
-
                 {/* Usage limits */}
-                {[
-                  { label: "Contacts", get: (p: PublicPlan) => formatLimit(p.limits?.contacts) },
-                  { label: "Team members", get: (p: PublicPlan) => formatLimit(p.limits?.teamMembers) },
-                  { label: "Segments", get: (p: PublicPlan) => formatLimit(p.limits?.segments) },
-                ].map((row) => (
+                {LIMIT_ROWS.map((row) => (
                   <div
                     key={row.label}
                     className="flex grid-cols-4 border-t border-stroke text-center text-xs font-medium *:px-2 *:py-2.5 *:text-text-color sm:text-sm md:text-base md:*:px-7 md:*:py-6 lg:grid"
                     style={gridStyle}
                   >
                     <p className="flex gap-3 text-left max-xl:w-full">{row.label}</p>
-                    {plans.map((plan) => (
-                      <p
-                        key={plan.id}
-                        className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20"
-                      >
-                        {row.get(plan)}
-                      </p>
-                    ))}
+                    {plans.map((plan, i) => {
+                      const v = row.get(plan, i === plans.length - 1);
+                      return v === true ? (
+                        <div
+                          key={plan.id}
+                          className="flex items-center justify-center border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20"
+                        >
+                          <CheckIcon />
+                        </div>
+                      ) : (
+                        <p
+                          key={plan.id}
+                          className="border-l border-stroke max-xl:min-w-40 max-md:min-w-32 max-sm:min-w-20"
+                        >
+                          {v}
+                        </p>
+                      );
+                    })}
                   </div>
                 ))}
 
