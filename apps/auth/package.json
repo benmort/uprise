@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node ../../scripts/dev-supervisor.mjs --label auth --heal-next -- next dev -p 3002",
-    "build": "next build",
+    "build": "pnpm -w run build:packages && next build",
     "start": "next start -p 3002",
     "lint": "tsc --noEmit --pretty false",
     "typecheck": "tsc --noEmit --pretty false",

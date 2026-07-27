@@ -5,6 +5,7 @@
   "scripts": {
     "marketing:shots": "pnpm --filter admin run marketing:shots",
     "clean:next": "rm -rf apps/*/.next apps/*/.next-validate",
+    "build:packages": "pnpm --filter \"./packages/**\" run build",
     "dev:all": "concurrently -n apps,worker,tunnel -c blue,cyan,magenta \"pnpm dev:apps\" \"pnpm dev:worker\" \"pnpm dev:tunnel\"",
     "dev:apps": "pnpm -r --parallel --filter=!worker run dev",
     "dev:api": "pnpm --filter api run dev",

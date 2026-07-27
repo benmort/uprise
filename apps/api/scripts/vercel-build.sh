@@ -13,8 +13,13 @@ if [ "${VERCEL_ENV:-}" = "production" ]; then
   pnpm --filter @uprise/db exec prisma migrate deploy
 fi
 
-# Always (re)generate the client so the function build picks up the current schema.
-pnpm --filter @uprise/db run prisma:generate
+# Build every workspace package the api imports: the tsc `dist/`s (@uprise/events,
+# @uprise/permissions, @uprise/contracts …) and @uprise/db's generated client. Those are
+# normally produced by each package's `prepare`/`postinstall` during install — but a
+# cache-warm Vercel install skips straight past them ("Done in 794ms", no prepare lines),
+# leaving the build to compile against dist directories that do not exist. Building here
+# makes the deploy independent of whether install ran them.
+pnpm -w run build:packages
 
 # Deploys apply migrations only. The plan seeders remain for manual runs:
 #   pnpm --filter api exec ts-node src/scripts/seed-plans-standalone.ts   (non-clobbering)

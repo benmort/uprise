@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node ../../scripts/dev-supervisor.mjs --label admin --heal-next -- next dev",
-    "build": "next build",
+    "build": "pnpm -w run build:packages && next build",
     "start": "next start",
     "lint": "node scripts/check-colours.mjs && tsc --noEmit --pretty false",
     "lint:colours": "node scripts/check-colours.mjs",
