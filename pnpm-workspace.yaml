@@ -1,3 +1,27 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# Which dependencies may run install scripts. pnpm 11 stopped reading the `pnpm` field in
+# package.json (it warns "the following keys were ignored: pnpm.onlyBuiltDependencies"), so the
+# old allowlist lives here now. Anything false is ignored at install time and pnpm prints
+# ERR_PNPM_IGNORED_BUILDS listing it — that's expected, not a failure.
+#
+# This deliberately reproduces the previous `onlyBuiltDependencies` exactly: only the Prisma
+# three. The other entries surfaced when pnpm started asking about them; they were never allowed
+# to run scripts under pnpm 10 either, and everything worked, so they stay off. Widening the set
+# means letting more packages execute code at install time — do it on evidence, not to silence a
+# warning.
+allowBuilds:
+  # Prisma downloads/positions its query engines in a postinstall — without these, the generated
+  # client has no engine to talk to.
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  # Postinstall only prints a funding/telemetry notice.
+  '@nestjs/core': false
+  # Platform binaries arrive via optionalDependencies on modern esbuild; its postinstall is a
+  # version check, not the install itself.
+  esbuild: false
+  # Optional native accelerator for msgpackr (BullMQ payloads). Falls back to the JS path.
+  msgpackr-extract: false
