@@ -1,0 +1,95 @@
+import "reflect-metadata";
+import { NestFactory } from "@nestjs/core";
+import { AppModule } from "../app.module";
+import { PrismaService } from "../prisma/prisma.service";
+import { PRIMARY_TENANT } from "../shared-seed/tenants.seed";
+import { looksLikeProduction } from "./seed-demo.guard";
+
+/**
+ * Delete the rows the browser e2e suite leaves behind in the demo tenant.
+ *
+ * `apps/admin/e2e/forms.spec.ts` creates a real campaign and a real shift on every run and does
+ * not clean up, so the tenant accumulates "New campaign" and "E2E Campaign <stamp>" rows. They
+ * are not cosmetic: the dashboard aggregates across all campaigns, so a pile of empty ones drags
+ * "doors today", "turf complete" and "contact rate" to zero — which is exactly how the marketing
+ * captures ended up photographing a dead-looking install.
+ *
+ * This only removes rows matching the e2e naming patterns, never the seeded demo fixtures.
+ *
+ *   npm --prefix apps/api run clear:test-residue
+ *
+ * Guarded like seed:clear — it deletes by name pattern, so it refuses to run against a
+ * production-looking database without --force.
+ */
+const CAMPAIGN_PATTERNS = ["New campaign", "E2E Campaign "];
+const SHIFT_PATTERN = "E2E Shift ";
+const CONTENT_PATTERNS = ["E2E Disp ", "E2E Canned ", "E2E Survey ", "E2E Script ", "E2E Validation "];
+
+async function main(): Promise<void> {
+  if (looksLikeProduction(process.env) && !process.argv.includes("--force")) {
+    // eslint-disable-next-line no-console
+    console.error("Refusing to run against a non-local database. Re-run with --force if intended.");
+    process.exit(1);
+  }
+
+  const app = await NestFactory.createApplicationContext(AppModule, { logger: ["error", "warn"] });
+  try {
+    const prisma = app.get(PrismaService);
+    const tenant = await prisma.tenant.findUnique({ where: { slug: PRIMARY_TENANT.slug } });
+    if (!tenant) {
+      // eslint-disable-next-line no-console
+      console.log("Primary tenant not found — nothing to clean.");
+      return;
+    }
+    const tenantId = tenant.id;
+
+    const campaigns = await prisma.canvassCampaign.findMany({
+      where: { tenantId, OR: CAMPAIGN_PATTERNS.map((p) => ({ name: { startsWith: p } })) },
+      select: { id: true, name: true },
+    });
+    // Shift seats first — ShiftAssignment FKs the shift.
+    const shifts = await prisma.shift.findMany({
+      where: { tenantId, name: { startsWith: SHIFT_PATTERN } },
+      select: { id: true },
+    });
+    await prisma.shiftAssignment.deleteMany({ where: { tenantId, shiftId: { in: shifts.map((s) => s.id) } } });
+    const removedShifts = await prisma.shift.deleteMany({ where: { tenantId, id: { in: shifts.map((s) => s.id) } } });
+    const removedCampaigns = await prisma.canvassCampaign.deleteMany({
+      where: { tenantId, id: { in: campaigns.map((c) => c.id) } },
+    });
+    const removedDisp = await prisma.dispositionDef.deleteMany({
+      where: { tenantId, label: { startsWith: "E2E Disp " } },
+    });
+    const removedCanned = await prisma.cannedResponse.deleteMany({
+      where: { tenantId, OR: CONTENT_PATTERNS.map((p) => ({ title: { startsWith: p } })) },
+    });
+    const removedSurveys = await prisma.survey.deleteMany({
+      where: { tenantId, OR: CONTENT_PATTERNS.map((p) => ({ name: { startsWith: p } })) },
+    });
+    const removedScripts = await prisma.script.deleteMany({
+      where: { tenantId, OR: CONTENT_PATTERNS.map((p) => ({ name: { startsWith: p } })) },
+    });
+
+    // eslint-disable-next-line no-console
+    console.log(
+      [
+        `campaigns: ${removedCampaigns.count}`,
+        `shifts: ${removedShifts.count}`,
+        `dispositions: ${removedDisp.count}`,
+        `canned: ${removedCanned.count}`,
+        `surveys: ${removedSurveys.count}`,
+        `scripts: ${removedScripts.count}`,
+      ].join("  "),
+    );
+  } finally {
+    await app.close();
+  }
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    // eslint-disable-next-line no-console
+    console.error("Residue sweep failed:", error);
+    process.exit(1);
+  });

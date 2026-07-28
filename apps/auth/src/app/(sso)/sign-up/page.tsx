@@ -173,6 +173,16 @@ export default function SignUpPage() {
           <p className="text-sm text-muted-foreground">
             {step === 1 ? "Tell us about your organisation." : "Set up your admin account."}
           </p>
+          {/* Workspaces are approved by a super-admin before they go live (the register response
+              comes back pending — see isRegisterPending below), so say so BEFORE the form rather
+              than only on the confirmation step. Someone who fills in two steps expecting instant
+              access has been misled by the omission. */}
+          <Alert
+            variant="info"
+            title="We're taking signup requests"
+            message="Complete your details and we'll review your workspace. We'll get back to you as soon as possible after you finish signing up."
+            className="mt-4"
+          />
         </div>
       ) : null}
 

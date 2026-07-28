@@ -42,4 +42,23 @@ test.describe("inbox + blasts + audience", () => {
     test.skip(!ids.audienceId, "no seeded audience");
     await gotoOk(page, `/audience/${ids.audienceId}`, /audience|member|contact|growth|import/i);
   });
+
+  /**
+   * Saved searches (segments) — reusable audience definitions evaluated live and targetable
+   * from any blast. The list and its new-search entry point had no cover.
+   */
+  test("saved searches (segments) render with a create entry point", async ({ page }) => {
+    await gotoOk(page, "/audience/segments", /search|segment|audience definition|reusable/i);
+    await expect(page.getByRole("link", { name: /new search/i }).or(page.getByRole("button", { name: /new search/i })).first()).toBeVisible({
+      timeout: 20_000,
+    });
+  });
+
+  /** The email channel surface — deliverability + compliance, untested until now. */
+  test("the email channel renders its deliverability surface", async ({ page }) => {
+    await gotoOk(page, "/channels/email", /email/i);
+    await expect(page.locator("body")).toContainText(/compliance|deliverab|blast|open rate|unsubscrib/i, {
+      timeout: 20_000,
+    });
+  });
 });

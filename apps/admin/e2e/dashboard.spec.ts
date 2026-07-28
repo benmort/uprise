@@ -18,4 +18,10 @@ test.describe("dashboard", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/dashboard/);
   });
+
+  /** The onboarding checklist a new workspace lands on — step progress, not just chrome. */
+  test("getting-started renders the onboarding checklist with step progress", async ({ page }) => {
+    await gotoOk(page, "/getting-started", /getting started|steps done|verify your email/i);
+    await expect(page.locator("body")).toContainText(/\d+ of \d+ steps done|\d+\/\d+/i, { timeout: 20_000 });
+  });
 });

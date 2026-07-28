@@ -2,22 +2,28 @@ import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "../app.module";
 import { SeedService } from "../shared-seed/seed.service";
+import { resolveSeedAction } from "./seed-demo.guard";
 
 /**
  * Demo-data seeder — the shared seed used by demo/screenshots (and sharing its
  * canonical definitions with the product tour + tests). Idempotent: safe to
  * re-run. Run after `prisma migrate deploy`:
  *   npm --prefix apps/api run seed:demo      # populate
- *   npm --prefix apps/api run seed:clear     # remove demo rows
+ *   npm --prefix apps/api run seed:clear     # remove demo rows (local only unless --force)
  */
 async function main(): Promise<void> {
-  const clear = process.argv.includes("--clear");
+  const decision = resolveSeedAction(process.argv, process.env);
+  if (decision.action === "refuse") {
+    // eslint-disable-next-line no-console
+    console.error(decision.reason);
+    process.exit(1);
+  }
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ["error", "warn", "log"],
   });
   try {
     const seed = app.get(SeedService);
-    if (clear) {
+    if (decision.action === "clear") {
       await seed.clearDemo();
       // eslint-disable-next-line no-console
       console.log("Demo data cleared.");

@@ -30,4 +30,14 @@ test.describe("geo explorer", () => {
       await gotoOk(page, route, expected);
     });
   }
+
+  /**
+   * The datasets page is the operator's view of WHICH geo data is loaded — the one geo surface
+   * that is meaningful on an env with no ABS files staged, because "nothing loaded" is itself
+   * the answer it reports.
+   */
+  test("the datasets page reports loader state", async ({ page }) => {
+    await gotoOk(page, "/data/datasets", /dataset/i);
+    await expect(page.getByRole("heading", { name: /datasets/i }).first()).toBeVisible({ timeout: 20_000 });
+  });
 });

@@ -873,8 +873,8 @@ describe("IamFlowsService", () => {
         { id: "c2", name: "Autumn Blitz", tenantId: "t2" },
       ]);
       (prisma.tenant as any).findMany = jest.fn(async () => [
-        { id: "t1", name: "Org One" },
-        { id: "t2", name: "Org Two" },
+        { id: "t1", name: "Org One", slug: "org-one" },
+        { id: "t2", name: "Org Two" }, // unslugged → tenantSlug null
       ]);
       (prisma as any).orgProfile = {
         findMany: jest.fn(async () => [
@@ -885,7 +885,9 @@ describe("IamFlowsService", () => {
       expect(res).toEqual([
         {
           campaignId: "c1",
+          open: true,
           tenantId: "t1",
+          tenantSlug: "org-one",
           campaignName: "Spring Doorknock",
           tenantName: "Org One",
           logoUrl: "logo1.png",
@@ -897,7 +899,9 @@ describe("IamFlowsService", () => {
         },
         {
           campaignId: "c2",
+          open: true,
           tenantId: "t2",
+          tenantSlug: null,
           campaignName: "Autumn Blitz",
           tenantName: "Org Two",
           logoUrl: null,
@@ -951,7 +955,7 @@ describe("IamFlowsService", () => {
     it("openJoinPreview returns the campaign + org name + logo for an open campaign", async () => {
       const { svc, prisma } = setup();
       prisma.canvassCampaign.findUnique.mockResolvedValue(openCampaign);
-      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One" });
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One", slug: "org-one" });
       (prisma as any).orgProfile = {
         findFirst: jest.fn(async () => ({
           logoBlockUrl: "logo1.png",
@@ -963,7 +967,9 @@ describe("IamFlowsService", () => {
       const res = await svc.openJoinPreview("c1");
       expect(res).toEqual({
         campaignId: "c1",
+        open: true,
         tenantId: "t1",
+        tenantSlug: "org-one",
         campaignName: "Spring Doorknock",
         tenantName: "Org One",
         logoUrl: "logo1.png",
@@ -973,6 +979,62 @@ describe("IamFlowsService", () => {
         volunteerCount: 0,
         doorsThisWeek: 0,
       });
+    });
+
+    // A closed campaign is previewable so the landing can render a BRANDED "sign-ups closed" page
+    // (org name, logo, colours, the campaign's own name) instead of a bare error – while every
+    // join action still refuses it. Both halves are asserted here.
+    it.each([
+      ["the master switch is off", { ...openCampaign, openJoinEnabled: false }],
+      ["the campaign is no longer ACTIVE", { ...openCampaign, status: "COMPLETED" }],
+    ])("openJoinPreview returns a branded preview with open:false when %s", async (_label, campaign) => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(campaign);
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One", slug: "org-one" });
+      (prisma as any).orgProfile = {
+        findFirst: jest.fn(async () => ({
+          logoBlockUrl: "logo1.png",
+          primaryColour: "#a23",
+          secondaryColour: "#0f0",
+          customCss: null,
+        })),
+      };
+      const res = await svc.openJoinPreview("c1");
+      expect(res).toMatchObject({
+        open: false,
+        campaignId: "c1",
+        campaignName: "Spring Doorknock",
+        tenantName: "Org One",
+        tenantSlug: "org-one",
+        logoUrl: "logo1.png",
+        primaryColour: "#a23",
+        secondaryColour: "#0f0",
+      });
+    });
+
+    it("openJoinPreview keeps the historical stats on a closed campaign", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue({ ...openCampaign, status: "COMPLETED" });
+      prisma.tenant.findUnique.mockResolvedValue({ name: "Org One", slug: "org-one" });
+      (prisma as any).turfAssignment = { findMany: jest.fn(async () => [{ volunteerId: "v1" }, { volunteerId: "v2" }]) };
+      (prisma as any).doorKnock = { count: jest.fn(async () => 412) };
+      const res = await svc.openJoinPreview("c1");
+      expect(res).toMatchObject({ open: false, volunteerCount: 2, doorsThisWeek: 412 });
+    });
+
+    it("openJoinPreview still refuses an id that matches no campaign", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue(null);
+      await expect(svc.openJoinPreview("nope")).rejects.toThrow("This campaign isn't open for sign-ups.");
+    });
+
+    it("a closed campaign is still unjoinable – preview open:false does not unlock accept", async () => {
+      const { svc, prisma } = setup();
+      prisma.canvassCampaign.findUnique.mockResolvedValue({ ...openCampaign, openJoinEnabled: false });
+      await expect(
+        svc.openJoinAccept("c1", { challengeId: "mv1", code: "123456", displayName: "Jo Vol" }),
+      ).rejects.toThrow("This campaign isn't open for sign-ups.");
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
 
     it("openJoinPreview surfaces recruitment stats (distinct volunteers + doors this week)", async () => {

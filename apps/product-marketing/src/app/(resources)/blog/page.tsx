@@ -43,7 +43,8 @@ export default function BlogIndexPage() {
               className="group mt-14 grid grid-cols-1 overflow-hidden rounded-2xl border border-stroke-secondary bg-white duration-200 hover:border-primary-200 hover:shadow-feature md:grid-cols-2"
             >
               <div className="min-h-[260px] overflow-hidden rounded-2xl md:h-full">
-                <BlogCover tone={posts[0].coverTone} category={posts[0].category} />
+                {/* The featured cover is this page's LCP image – load it eagerly. */}
+                <BlogCover tone={posts[0].coverTone} category={posts[0].category} priority />
               </div>
               <div className="flex flex-col justify-center p-8 md:p-10">
                 <div className="mb-4 flex items-center gap-2">

@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { Alert, Spinner, brandVarsCss, writeBrandCookie } from "@uprise/ui";
+import { brandVarsCss, writeBrandCookie } from "@uprise/ui";
 import { auth, tenantLogoUrl, type TenantBrand } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { withReturnTo } from "@/lib/return-to";
 import { VolunteerJoinHero } from "@/components/volunteer-join-hero";
+import { VolunteerOpportunityList } from "@/components/volunteer-opportunity-list";
 
 /**
  * Volunteer landing (client half of `/volunteer`) — the two-column join hero, "Get started"
@@ -15,17 +16,6 @@ import { VolunteerJoinHero } from "@/components/volunteer-join-hero";
  * sibling page.tsx) and handed in as `initialBrand`, so the very first paint is already in the
  * org's colours + name — no flash of Uprise's default brand snapping to the org's on load.
  */
-function hashHue(seed: string): number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-function tenantGradient(id: string): string {
-  const h1 = hashHue(id);
-  const h2 = (h1 + 48) % 360;
-  return `linear-gradient(135deg, hsl(${h1} 72% 56%), hsl(${h2} 76% 46%))`;
-}
-
 export function VolunteerBoardClient({
   initialBrand,
   orgSlug,
@@ -97,55 +87,15 @@ export function VolunteerBoardClient({
       <p className="mt-1 text-base text-ink/60">Pick a campaign near you to get started.</p>
 
       <div className="mt-6">
-        {loading ? (
-          <div className="flex justify-center py-10">
-            <Spinner />
-          </div>
-        ) : error ? (
-          <Alert variant="error" title={error} />
-        ) : opportunities && opportunities.length > 0 ? (
-          <ul className="space-y-2.5">
-            {opportunities.map((o) => (
-              <li key={o.campaignId}>
-                <Link
-                  // Deep-link straight into the wizard's phone step — the volunteer already chose
-                  // this campaign from the board, so skip its "Get started" hero.
-                  href={withOrg(`/volunteer/${o.campaignId}?step=phone`)}
-                  className="flex items-center gap-3 rounded-[0.9rem] border border-ink/10 bg-white p-3 transition hover:border-primary/40 hover:bg-primary/[0.03] dark:bg-white/[0.05] dark:hover:bg-primary/[0.12]"
-                >
-                  {/* Off-white plate behind the logo in dark mode — tenant logos are drawn
-                      for light backgrounds and vanish on the dark card without it. */}
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl dark:bg-[#f4f3f0] dark:p-1">
-                    {o.logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={o.logoUrl} alt={o.tenantName} className="h-full w-full rounded-lg object-cover" />
-                    ) : (
-                      <span
-                        className="flex h-full w-full items-center justify-center text-base font-extrabold text-white"
-                        style={{ background: tenantGradient(o.tenantId) }}
-                      >
-                        {(o.tenantName || o.campaignName).charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-bold text-ink">{o.campaignName}</span>
-                    {o.tenantName ? (
-                      <span className="block truncate text-sm text-ink/55">{o.tenantName}</span>
-                    ) : null}
-                  </span>
-                  <span aria-hidden className="shrink-0 text-lg text-ink/30">
-                    →
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-[0.9rem] border border-dashed border-ink/15 px-4 py-8 text-center text-sm text-ink/55">
-            No open opportunities right now. Check back soon.
-          </p>
-        )}
+        <VolunteerOpportunityList
+          opportunities={opportunities}
+          loading={loading}
+          error={error}
+          // Deep-link straight into the wizard's phone step – the volunteer already chose
+          // this campaign from the board, so skip its "Get started" hero.
+          hrefFor={(o) => withOrg(`/volunteer/${o.campaignId}?step=phone`)}
+          emptyBody="No open opportunities right now. Check back soon."
+        />
       </div>
 
       <p className="mt-6 text-center text-base sm:text-left">

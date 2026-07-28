@@ -87,6 +87,13 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
               >
                 <div className="mt-2 rounded-lg border border-gray-200 p-3">
                   <Link
+                    href="/docs"
+                    className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
+                    onClick={onClose}
+                  >
+                    Handbook
+                  </Link>
+                  <Link
                     href="/about-us"
                     className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
                     onClick={onClose}

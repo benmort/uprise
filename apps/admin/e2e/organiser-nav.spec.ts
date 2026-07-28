@@ -19,6 +19,7 @@ const STATIC_ROUTES: Array<[string, RegExp]> = [
   ["/audience", /audience|contacts|members|no audiences/i],
   ["/channels/text", /text|sms|message|blast|send/i],
   ["/channels/calls", /call|dial|phone|number|softphone/i],
+  ["/content", /content|shared building blocks|disposition|survey/i],
   ["/content/surveys", /survey/i],
   ["/content/scripts", /script/i],
   ["/content/dispositions", /disposition/i],
@@ -26,6 +27,14 @@ const STATIC_ROUTES: Array<[string, RegExp]> = [
   ["/compliance", /complian|opt.?out|consent/i],
   ["/settings", /setting/i],
   ["/settings/team", /team|member|invite|join request/i],
+  // Previously uncovered top-level surfaces.
+  ["/calendar", /calendar|scheduled|shift|event/i],
+  ["/insights", /polling|poll|crosstab|electorate/i],
+  ["/account", /account|sign-in|security|email|mobile/i],
+  ["/channels/email", /email|deliverab|compliance|blast/i],
+  ["/channels/social", /social|integration|connect/i],
+  ["/canvass/planner", /turf planner|door goal|densit/i],
+  ["/profile", /profile|name|photo|details|account/i],
 ];
 
 for (const [route, expected] of STATIC_ROUTES) {

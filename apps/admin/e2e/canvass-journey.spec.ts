@@ -53,10 +53,33 @@ test.describe("canvass — campaign lifecycle", () => {
       ["/canvass/walklists", /walk list|turf|route/i],
       ["/canvass/shifts", /shift|schedule/i],
       ["/canvass/live", /live|out|doors|volunteers/i],
-      ["/canvass/qa", /quality|flag|review|qa/i],
       ["/canvass/volunteers", /volunteer|invite/i],
     ] as const) {
       await gotoOk(page, route, expected);
     }
+  });
+
+  /**
+   * The campaign-less /canvass/qa was folded into the insights surface — it now redirects
+   * rather than 404ing. (The campaign-SCOPED /canvass/:id/qa is still its own page and is
+   * covered above.) Asserting the redirect keeps the old entry point honest.
+   */
+  test("the campaign-less /canvass/qa redirects to the insights surface", async ({ page }) => {
+    await page.goto("/canvass/qa", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/canvass\/insights/, { timeout: 20_000 });
+    await expect(page.locator("body")).toContainText(/insight|disposition|support/i, { timeout: 20_000 });
+  });
+
+  /** Campaign-scoped surfaces that the ops loop above doesn't reach. */
+  test("campaign boundary + insights render for the seeded campaign", async ({ page }) => {
+    test.skip(!ids.campaignId, "no seeded campaign");
+    const id = ids.campaignId!;
+    await gotoOk(page, `/canvass/${id}/boundary`, /boundary|campaign|area|map|draw/i);
+    await gotoOk(page, `/canvass/${id}/insights`, /insight|disposition|support|breakdown/i);
+  });
+
+  /** The turf planner sizes turf by density — a standalone canvass tool with no cover. */
+  test("the turf planner renders its sizing model", async ({ page }) => {
+    await gotoOk(page, "/canvass/planner", /turf planner|door goal|densit|shift/i);
   });
 });

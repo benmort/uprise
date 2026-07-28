@@ -17,18 +17,35 @@ instead of bare `localhost:PORT`.
 | `labs.dev.uprise.org.au` | `localhost:3006` | organisation-marketing (Uprise Labs) |
 | `worker.dev.uprise.org.au` | `localhost:3210` | worker (health + Bull Board, basic-auth gated) |
 
-Every name except the apex `dev.uprise.org.au` sits under the reserved `*.dev.uprise.org.au`
-wildcard, so adding an app needs a `ngrok.yml` entry only – no new reservation. Tenancy is
-still chosen in-session (`/select-tenant`) — subdomains map apps, not tenants. (Per-tenant
-subdomain routing is a deferred item in `docs/TODO.md`.)
+Each name is reserved individually, so adding an app takes three steps: a `ngrok.yml`
+entry, a reservation, and a CNAME. Tenancy is still chosen in-session (`/select-tenant`)
+— subdomains map apps, not tenants. (Per-tenant subdomain routing is a deferred item in
+`docs/TODO.md`.)
 
 ## Prerequisites
 
-- The **uprise ngrok account** must **reserve** `dev.uprise.org.au` and the
-  `*.dev.uprise.org.au` wildcard on https://dashboard.ngrok.com/domains, each with a DNS
-  CNAME in the `uprise.org.au` zone pointing at the target ngrok shows. Until they are
-  reserved, `dev:tunnel` fails with `ERR_NGROK_319`. The free tier cannot use reserved
-  domains.
+- The **uprise ngrok account** must **reserve each hostname** above on
+  https://dashboard.ngrok.com/domains, each with its own DNS CNAME in the `uprise.org.au`
+  zone pointing at that domain's own target. Until a name is reserved, `dev:tunnel` fails
+  with `ERR_NGROK_319`; on the free tier, which cannot serve custom hostnames at all, it
+  fails with `ERR_NGROK_314`.
+- **Don't reach for a `*.dev` wildcard reservation.** It looks like it saves work, and it
+  does cost one reserved domain instead of eight, but Let's Encrypt will not issue a
+  wildcard certificate over HTTP validation. ngrok then exposes an
+  `acme_challenge_cname_target` that you must publish as `_acme-challenge.dev`, and until
+  you do, provisioning sits at "in progress" forever while every subdomain serves a
+  mismatched cert — a browser `ERR_CERT_COMMON_NAME_INVALID` that looks nothing like a
+  certificate problem. Individually reserved names are HTTP-validated automatically.
+- **Every tunnel declares `schemes: [https]`.** This pins behaviour ngrok already gives you
+  here — plain http is answered at the edge with a 307 to https and never reaches the app — so
+  the guarantee doesn't depend on a default. It matters because the `auth_token` cookie is
+  Secure and scoped to `.dev.uprise.org.au`: no app that sets it should ever see cleartext.
+  Note the redirect still means a bare `auth.dev.uprise.org.au` typed into Chrome touches http
+  for one hop and flashes "Not secure" before bouncing; use the `https://` form in bookmarks.
+- **Deleting a CNAME doesn't free the name immediately.** Reserving a hostname that still
+  resolves fails with `ERR_NGROK_511`/`512` ("dangling CNAME"), and ngrok's resolver holds
+  the old record for its full TTL — an hour at the zone default. The dev records are set
+  to TTL 300 so a future move propagates in five minutes.
 - A **`ngrok.local.yml`** in the repo root holding just your authtoken (gitignored — the
   secret never enters git). `dev:tunnel` merges it with the committed `ngrok.yml`:
   ```yaml

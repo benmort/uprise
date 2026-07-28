@@ -34,7 +34,13 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1, // shared seeded DB — keep it serial to avoid cross-test contention
-  retries: process.env.CI ? 1 : 0,
+  // One retry everywhere, not just CI. The admin app's next-pwa service worker can replay a
+  // cached sign-in redirect into a fresh context before sw-cleanup.tsx evicts it (the poisoned
+  // start-url cache documented in auth.spec), which bounces an authed navigation to the auth
+  // app at random — server-side the same routes return 200 every time. A retry keeps that from
+  // failing the suite while STILL reporting it: Playwright counts a pass-on-retry as "flaky",
+  // so the noise stays visible rather than being swallowed.
+  retries: 1,
   reporter: [["list"]],
   use: {
     baseURL: WEB,

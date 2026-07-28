@@ -1,14 +1,14 @@
 'use client';
 
 import Image from 'next/image';
-import { LOGOS } from './logos';
+import { VISIBLE_LOGOS } from './logos';
 
 /**
  * LogoRow Component
  *
  * Static "trusted by" layout for a SMALL supporter set (~4-5) where a scrolling
  * carousel looks sparse. No animation: logos are laid out centered and evenly
- * spaced, wrapping on narrow screens. Shares the LOGOS list with LogoCarousel.
+ * spaced, wrapping on narrow screens. Shares the visible-logo list with LogoCarousel (see logos.ts for what is hidden).
  *
  * Differences from LogoCarousel:
  * - No scroll animation / no duplicated set
@@ -29,7 +29,7 @@ export default function LogoRow() {
           </h2>
 
           <div className="mb-13 flex flex-wrap items-center justify-center gap-x-12 gap-y-8 md:gap-x-16 lg:gap-x-20">
-            {LOGOS.map((logo, index) => (
+            {VISIBLE_LOGOS.map((logo, index) => (
               <div key={index} className="inline-flex items-center justify-center flex-shrink-0">
                 <Image
                   alt={logo.alt}

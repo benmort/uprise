@@ -23,6 +23,13 @@ export const DEMO_TAG = "demo:uprise";
 export const DEMO_LOGINS = {
   organiser: { email: "demo.organiser@uprise.test", password: "demo-organiser-pw", displayName: "Demo Organiser", mobile: "+61400000001" },
   volunteer: { email: "demo.volunteer@uprise.test", password: "demo-volunteer-pw", displayName: "Demo Volunteer", mobile: "+61400000002" },
+  /**
+   * OWNER, not ORGANISER. `read analytics.all` is owner/admin-only (packages/permissions roles),
+   * so the dashboard's messaging card renders "Couldn't load — Missing permission: read
+   * analytics.all" for an organiser. Marketing captures sign in as this account so every card on
+   * the dashboard is populated.
+   */
+  owner: { email: "demo.owner@uprise.test", password: "demo-owner-pw", displayName: "Demo Owner", mobile: "+61400000003" },
 } as const;
 
 export const DEMO_CAMPAIGN = { name: "Demo — Spring Doorknock" } as const;
@@ -55,9 +62,17 @@ export type DemoContactSeed = {
   firstName: string;
   lastName: string;
   address: string;
-  phoneE164: string;
+  /**
+   * Undefined for the email-only tier. The drama range holds exactly 151 numbers, so once the
+   * canvassable households have consumed it the remaining contacts are reachable by email only —
+   * which is also what a real imported list looks like.
+   */
+  phoneE164?: string;
+  email?: string;
   lat: number;
   lng: number;
+  /** True for the households inside DEMO_TURF that the walk list and knocks are drawn from. */
+  canvassable: boolean;
 };
 
 /**
@@ -130,21 +145,123 @@ const DEMO_HOUSEHOLDS: Array<[string, string, string, number, number]> = [
   ["Yasmin", "Karimi", "45 Hereford St", -33.8829, 151.1880],
 ];
 
+// ── Generated tiers ───────────────────────────────────────────────────────────
+// The 50 households above are hand-written because they carry the fixture's recognisable names
+// and real Glebe street addresses. Volume past that is generated: index-driven and free of any
+// RNG, because the seeder matches contacts BY ADDRESS — a value that shifted between runs would
+// duplicate every contact instead of updating it.
+
+const GIVEN_NAMES = [
+  "Aroha", "Bilal", "Cormac", "Delphine", "Eamon", "Farida", "Gideon", "Halina", "Ibrahim",
+  "Jacinta", "Kwame", "Lena", "Manaia", "Nadia", "Oskar", "Pia", "Rafael", "Saoirse", "Tomas",
+  "Ulises", "Valentina", "Wiremu", "Ximena", "Yohan", "Zara", "Anouk", "Bodhi", "Celia", "Dario",
+  "Elif", "Fabien", "Greta", "Hana", "Idris", "Juno", "Kiri", "Lorcan", "Mira", "Nikolai", "Ottilie",
+];
+
+const FAMILY_NAMES = [
+  "Abbott", "Baptiste", "Chen", "Donnelly", "Eriksen", "Ferreira", "Gallagher", "Hakim", "Ivanov",
+  "Jelic", "Kaur", "Laurent", "Mbeki", "Nascimento", "Ortega", "Pereira", "Quereshi", "Rahman",
+  "Solomon", "Tupou", "Ueda", "Vasquez", "Wong", "Yildiz", "Zielinski",
+];
+
+/** Glebe/Forest Lodge streets that are not already used above, so addresses cannot collide. */
+const TURF_STREETS = [
+  "Arcadia Rd", "Bay St", "Catherine St", "Derwent St", "Eglinton Rd", "Forsyth St",
+  "Hordern St", "Junction Rd", "Leichhardt St", "Mansfield St", "Oxley St", "Pendrill St",
+];
+
+/** Nearby suburbs for the email-only tier — deliberately OUTSIDE the turf polygon. */
+const WIDER_STREETS = [
+  ["Enmore Rd", "Enmore"], ["King St", "Newtown"], ["Norton St", "Leichhardt"],
+  ["Darling St", "Balmain"], ["Marrickville Rd", "Marrickville"], ["Erskineville Rd", "Erskineville"],
+] as const;
+
+/**
+ * A deterministic point inside DEMO_TURF. The polygon spans lat −33.879…−33.889 and
+ * lng 151.184…151.196; this walks an inset grid so no generated door lands on the boundary
+ * (`insideTurf` in the spec is a strict test).
+ */
+function turfPoint(i: number): { lat: number; lng: number } {
+  const cols = 12;
+  const row = Math.floor(i / cols);
+  const col = i % cols;
+  return {
+    lat: Number((-33.8795 - (row % 10) * 0.00095).toFixed(6)),
+    lng: Number((151.1845 + col * 0.00092).toFixed(6)),
+  };
+}
+
+/** How many households sit inside the turf and carry a drama-range mobile. */
+const TURF_HOUSEHOLD_TARGET = 150;
+/** Contacts reachable by email only — list volume past the phone range. */
+const EMAIL_ONLY_TARGET = 90;
+
+function generatedTurfHouseholds(): DemoContactSeed[] {
+  const out: DemoContactSeed[] = [];
+  for (let n = DEMO_HOUSEHOLDS.length; n < TURF_HOUSEHOLD_TARGET; n++) {
+    const i = n - DEMO_HOUSEHOLDS.length;
+    const street = TURF_STREETS[i % TURF_STREETS.length];
+    // Stride the house number by the lap through the street list so each street's numbers climb.
+    const number = 2 + Math.floor(i / TURF_STREETS.length) * 3 + (i % 2);
+    const { lat, lng } = turfPoint(i);
+    out.push({
+      firstName: GIVEN_NAMES[i % GIVEN_NAMES.length],
+      lastName: FAMILY_NAMES[(i * 7) % FAMILY_NAMES.length],
+      address: `${number} ${street}`,
+      phoneE164: demoPhone(n),
+      lat,
+      lng,
+      canvassable: true,
+    });
+  }
+  return out;
+}
+
+function emailOnlyContacts(): DemoContactSeed[] {
+  const out: DemoContactSeed[] = [];
+  for (let i = 0; i < EMAIL_ONLY_TARGET; i++) {
+    const [street, suburb] = WIDER_STREETS[i % WIDER_STREETS.length];
+    const firstName = GIVEN_NAMES[(i * 3) % GIVEN_NAMES.length];
+    const lastName = FAMILY_NAMES[(i * 11) % FAMILY_NAMES.length];
+    out.push({
+      firstName,
+      lastName,
+      address: `${4 + i * 2} ${street}, ${suburb}`,
+      // example.org is IANA-reserved (RFC 2606) — it can never route to a real inbox.
+      email: `${firstName}.${lastName}${i}`.toLowerCase() + "@example.org",
+      // Sits outside DEMO_TURF on purpose: these are list contacts, not doors on the walk.
+      lat: Number((-33.895 - (i % 12) * 0.0011).toFixed(6)),
+      lng: Number((151.17 + (i % 15) * 0.0013).toFixed(6)),
+      canvassable: false,
+    });
+  }
+  return out;
+}
+
 /** The demo households as contact seeds. Deterministic — same order, same phones, every run. */
 export function buildDemoContacts(): DemoContactSeed[] {
-  return DEMO_HOUSEHOLDS.map(([firstName, lastName, address, lat, lng], i) => ({
+  const core: DemoContactSeed[] = DEMO_HOUSEHOLDS.map(([firstName, lastName, address, lat, lng], i) => ({
     firstName,
     lastName,
     address,
     phoneE164: demoPhone(i),
     lat,
     lng,
+    canvassable: true,
   }));
+  return [...core, ...generatedTurfHouseholds(), ...emailOnlyContacts()];
 }
 
-/** How many drama-range numbers the fixture consumes — guards against silently overflowing it. */
-export const DEMO_CONTACT_COUNT = DEMO_HOUSEHOLDS.length;
+/** Total fixture size, and the phone-bearing slice that must fit the drama range. */
+export const DEMO_CONTACT_COUNT = TURF_HOUSEHOLD_TARGET + EMAIL_ONLY_TARGET;
+export const DEMO_PHONE_CONTACT_COUNT = TURF_HOUSEHOLD_TARGET;
 export const DEMO_PHONE_CAPACITY = DRAMA_RANGE_END - DRAMA_RANGE_START + 1;
+
+/**
+ * How many of the turf households the demo walk list covers. Deliberately a slice, not all 150 —
+ * a walk list is one volunteer's shift, and a 150-stop route reads as fake in the field capture.
+ */
+export const DEMO_WALK_LIST_SIZE = 42;
 
 export const DEMO_WALK_LIST = { name: "Demo — Glebe walk list" } as const;
 
@@ -157,40 +274,78 @@ export const DEMO_WALK_LIST = { name: "Demo — Glebe walk list" } as const;
  * and the first four entries are the original fixture (indices 0-3), kept so anything addressing
  * them by position still resolves.
  */
-export const DEMO_KNOCKS: Array<{ contactIndex: number; dispositionCode: string }> = [
-  { contactIndex: 0, dispositionCode: "spoke_to_target" },
-  { contactIndex: 1, dispositionCode: "not_home" },
-  { contactIndex: 2, dispositionCode: "spoke_to_other" },
-  { contactIndex: 3, dispositionCode: "refused" },
-  { contactIndex: 4, dispositionCode: "not_home" },
-  { contactIndex: 5, dispositionCode: "spoke_to_target" },
-  { contactIndex: 6, dispositionCode: "not_home" },
-  { contactIndex: 7, dispositionCode: "spoke_to_target" },
-  { contactIndex: 8, dispositionCode: "not_home" },
-  { contactIndex: 9, dispositionCode: "spoke_to_target" },
-  { contactIndex: 10, dispositionCode: "not_home" },
-  { contactIndex: 11, dispositionCode: "spoke_to_other" },
-  { contactIndex: 12, dispositionCode: "not_home" },
-  { contactIndex: 13, dispositionCode: "spoke_to_target" },
-  { contactIndex: 14, dispositionCode: "refused" },
-  { contactIndex: 15, dispositionCode: "not_home" },
-  { contactIndex: 16, dispositionCode: "spoke_to_target" },
-  { contactIndex: 17, dispositionCode: "not_home" },
-  { contactIndex: 18, dispositionCode: "spoke_to_target" },
-  { contactIndex: 19, dispositionCode: "not_home" },
-  { contactIndex: 20, dispositionCode: "spoke_to_other" },
-  { contactIndex: 21, dispositionCode: "spoke_to_target" },
-  { contactIndex: 22, dispositionCode: "not_home" },
-  { contactIndex: 23, dispositionCode: "not_home" },
-  { contactIndex: 24, dispositionCode: "spoke_to_target" },
-  { contactIndex: 25, dispositionCode: "refused" },
-  { contactIndex: 26, dispositionCode: "not_home" },
-  { contactIndex: 27, dispositionCode: "spoke_to_target" },
-  { contactIndex: 28, dispositionCode: "not_home" },
-  { contactIndex: 29, dispositionCode: "spoke_to_target" },
-  { contactIndex: 30, dispositionCode: "not_home" },
-  { contactIndex: 31, dispositionCode: "spoke_to_other" },
+export type DemoKnockSeed = {
+  contactIndex: number;
+  dispositionCode: string;
+  /**
+   * Age of the knock at seed time. Knocks used to land at whatever instant the seeder ran, so
+   * the dashboard's "doors today" tile read 0 from the day after seeding onwards — it counts
+   * `DoorKnock.createdAt >= startOfToday()`. Dating relative to run time keeps every
+   * time-scoped tile alive no matter when the seed last ran.
+   */
+  hoursAgo: number;
+};
+
+/**
+ * Knocks under this age are the "today" cohort. The seeder does not date them by subtracting
+ * hours — it spreads them across the part of today that has actually elapsed, so the dashboard's
+ * doors-today tile is non-zero no matter what time the seed runs. Subtracting a fixed 1-9 hours
+ * would put every one of them in YESTERDAY if you seeded at 00:30.
+ */
+export const DEMO_KNOCK_TODAY_WINDOW_HOURS = 12;
+
+/** Campaign-shaped rather than uniform — a flat split makes the contact-rate tiles read as fake. */
+const DISPOSITION_CYCLE = [
+  "not_home",
+  "spoke_to_target",
+  "not_home",
+  "spoke_to_other",
+  "not_home",
+  "spoke_to_target",
+  "refused",
+  "not_home",
+  "spoke_to_target",
+  "not_home",
 ];
+
+/**
+ * Which of the walk list's stops have been knocked. Deliberately short of DEMO_WALK_LIST_SIZE so
+ * the turf reads as a walk IN PROGRESS: the field capture's whole point is the next doors, and a
+ * fully-knocked list renders "All stops done. Nice work." with every stop greyed out.
+ */
+const WALK_STOPS_KNOCKED = 28;
+/** Doors knocked elsewhere in the turf, off this walk list. */
+const OFF_LIST_KNOCKS = 62;
+
+function buildDemoKnocks(): DemoKnockSeed[] {
+  const out: DemoKnockSeed[] = [];
+  // Today's doors first (0-11h) so "doors today" is never zero, then back through ~10 days.
+  const hoursFor = (n: number): number => (n < 9 ? 1 + n : Math.round((n - 8) * 2.6));
+  for (let n = 0; n < WALK_STOPS_KNOCKED; n++) {
+    out.push({
+      contactIndex: n,
+      dispositionCode: DISPOSITION_CYCLE[n % DISPOSITION_CYCLE.length],
+      hoursAgo: hoursFor(n),
+    });
+  }
+  for (let i = 0; i < OFF_LIST_KNOCKS; i++) {
+    const contactIndex = DEMO_WALK_LIST_SIZE + i;
+    if (contactIndex >= TURF_HOUSEHOLD_TARGET) break;
+    out.push({
+      contactIndex,
+      dispositionCode: DISPOSITION_CYCLE[(i + 3) % DISPOSITION_CYCLE.length],
+      hoursAgo: 6 + Math.round(i * 3.7),
+    });
+  }
+  return out;
+}
+
+/**
+ * Door knocks so results / QA / timeline / the dashboard tiles have data. dispositionCode values
+ * match the seeded default taxonomy (engagement-defaults). Indices 0-3 are the original fixture,
+ * kept so anything addressing them by position still resolves.
+ */
+export const DEMO_KNOCKS: DemoKnockSeed[] = buildDemoKnocks();
 
 export const DEMO_SURVEY = {
   name: "Demo — Support survey",
@@ -377,4 +532,163 @@ export const DEMO_THREADS: DemoThreadSeed[] = [
       { direction: "in", body: "Was a good day! Count me in for the next one.", minutesAgo: 4260 },
     ],
   },
+];
+
+// ── Surfaces that previously photographed empty ───────────────────────────────
+// Everything below exists because a dashboard card or a nav destination rendered its
+// zero-state in the marketing captures: "No searches yet.", "0 opted out", "1 audiences",
+// an empty calendar. Each is dated relative to run time for the same reason the knocks are.
+
+/** Saved searches (AudienceSegment). Definitions use the @uprise/segmentation v2 envelope. */
+export type DemoSearchSeed = {
+  name: string;
+  /** Leaves from the closed Condition union — see packages/segmentation condition.types.ts. */
+  conditions: Array<Record<string, unknown>>;
+};
+
+export const DEMO_SEARCHES: DemoSearchSeed[] = [
+  {
+    name: "Glebe — spoke to target",
+    conditions: [
+      { type: "contact.locality", op: "in", values: ["Glebe"] },
+      { type: "canvass.dispositionCode", op: "in", values: ["spoke_to_target"] },
+    ],
+  },
+  {
+    name: "Undecided — follow up",
+    conditions: [{ type: "canvass.dispositionCode", op: "in", values: ["spoke_to_other", "not_home"] }],
+  },
+  {
+    name: "Active in the last 30 days",
+    conditions: [{ type: "activity.lastActiveWithin", op: "within", days: 30 }],
+  },
+];
+
+/**
+ * Opt-outs, so the compliance card is not a flat zero.
+ *
+ * These point at real seeded households rather than spare numbers, because that is what an
+ * opt-out actually is — someone on your list who replied STOP. It also means the compliance
+ * surface shows names and numbers consistent with the rest of the fixture instead of orphans.
+ */
+export const DEMO_SUPPRESSIONS: Array<{ contactIndex: number; reason: string; source: string }> = [
+  { contactIndex: 137, reason: "Replied STOP", source: DEMO_TAG },
+  { contactIndex: 121, reason: "Replied STOP", source: DEMO_TAG },
+  { contactIndex: 108, reason: "Asked at the door", source: DEMO_TAG },
+  { contactIndex: 96, reason: "Replied UNSUBSCRIBE", source: DEMO_TAG },
+  { contactIndex: 83, reason: "Requested removal by email", source: DEMO_TAG },
+  { contactIndex: 71, reason: "Replied STOP", source: DEMO_TAG },
+];
+
+/** Calendar entries. Negative daysFromNow is in the past, so the calendar has history and future. */
+export const DEMO_EVENTS: Array<{
+  title: string;
+  description: string;
+  category: string;
+  location: string;
+  daysFromNow: number;
+  startHour: number;
+  durationHours: number;
+  capacity: number | null;
+  published: boolean;
+  goingCount: number;
+}> = [
+  { title: "Glebe doorknock — Saturday morning", description: "Meet at the Glebe Point Rd shops. Turf, scripts and clipboards provided.", category: "Canvass", location: "Glebe Point Rd shops", daysFromNow: 3, startHour: 9, durationHours: 3, capacity: 24, published: true, goingCount: 11 },
+  { title: "Volunteer induction", description: "An hour on the doorstep conversation, the app, and staying safe on a shift.", category: "Training", location: "Uprise Labs office", daysFromNow: 6, startHour: 18, durationHours: 1, capacity: 30, published: true, goingCount: 17 },
+  { title: "Phone bank — undecided voters", description: "Calling everyone we marked undecided at the door.", category: "Phone bank", location: "Online", daysFromNow: 9, startHour: 17, durationHours: 2, capacity: 15, published: true, goingCount: 6 },
+  { title: "Community BBQ — Bicentennial Park", description: "Low-key listening event. Bring the banner and the sign-up clipboard.", category: "Community", location: "Bicentennial Park, Glebe", daysFromNow: 14, startHour: 11, durationHours: 4, capacity: null, published: true, goingCount: 38 },
+  { title: "Campaign planning", description: "Where we are against the door target, and what the next fortnight looks like.", category: "Meeting", location: "Uprise Labs office", daysFromNow: 21, startHour: 18, durationHours: 2, capacity: 12, published: false, goingCount: 0 },
+  { title: "Forest Lodge doorknock", description: "Second pass on the streets we missed.", category: "Canvass", location: "Ross St corner", daysFromNow: -4, startHour: 10, durationHours: 3, capacity: 20, published: true, goingCount: 14 },
+  { title: "Street stall — Glebe Markets", description: "Petition and volunteer sign-ups.", category: "Community", location: "Glebe Public School", daysFromNow: -11, startHour: 10, durationHours: 5, capacity: null, published: true, goingCount: 22 },
+];
+
+/** Canvass shifts, so the shifts board and the calendar's shift layer are populated. */
+export const DEMO_SHIFTS: Array<{
+  name: string;
+  type: "CANVASS" | "POLLING_BOOTH" | "EVENT" | "GENERAL";
+  location: string;
+  daysFromNow: number;
+  startHour: number;
+  durationHours: number;
+  capacity: number;
+}> = [
+  { name: "Saturday AM — Glebe blocks", type: "CANVASS", location: "Glebe Point Rd shops", daysFromNow: 3, startHour: 9, durationHours: 3, capacity: 8 },
+  { name: "Saturday PM — Glebe blocks", type: "CANVASS", location: "Glebe Point Rd shops", daysFromNow: 3, startHour: 13, durationHours: 3, capacity: 8 },
+  { name: "Sunday AM — Forest Lodge", type: "CANVASS", location: "Ross St corner", daysFromNow: 4, startHour: 10, durationHours: 3, capacity: 6 },
+  { name: "Weeknight phone bank", type: "GENERAL", location: "Online", daysFromNow: 9, startHour: 17, durationHours: 2, capacity: 15 },
+  { name: "Induction session", type: "EVENT", location: "Uprise Labs office", daysFromNow: 6, startHour: 18, durationHours: 1, capacity: 30 },
+  { name: "Last Saturday — Glebe blocks", type: "CANVASS", location: "Glebe Point Rd shops", daysFromNow: -4, startHour: 9, durationHours: 3, capacity: 8 },
+];
+
+/** Contact tags, so the audience filters and contact chips are not empty. */
+export const DEMO_TAGS: Array<{ key: string; label: string; color: string; everyNth: number }> = [
+  { key: "volunteer", label: "Volunteer", color: "#2563eb", everyNth: 11 },
+  { key: "supporter", label: "Supporter", color: "#16a34a", everyNth: 4 },
+  { key: "needs-follow-up", label: "Needs follow-up", color: "#f59e0b", everyNth: 7 },
+  { key: "donor", label: "Donor", color: "#9333ea", everyNth: 17 },
+];
+
+/**
+ * Extra audiences beyond the tour example. `contactStride` picks members deterministically —
+ * every nth contact — so membership counts are stable across runs.
+ */
+export const DEMO_AUDIENCES: Array<{ name: string; contactStride: number }> = [
+  { name: "Glebe households", contactStride: 2 },
+  { name: "Spoke to at the door", contactStride: 5 },
+  { name: "Email list — inner west", contactStride: 3 },
+];
+
+/** Sent blasts, so the texting surfaces and the messaging card have history. */
+export const DEMO_BLASTS: Array<{
+  title: string;
+  body: string;
+  audienceName: string;
+  daysAgo: number;
+  recipientStride: number;
+}> = [
+  {
+    title: "Saturday doorknock — can you make it?",
+    body: "Hi {{first_name}}, we're knocking Glebe on Saturday 9am. Can you join us? Reply YES and we'll send the meeting spot. Reply STOP to opt out.",
+    audienceName: "Glebe households",
+    daysAgo: 6,
+    recipientStride: 2,
+  },
+  {
+    title: "Thanks for Saturday",
+    body: "Thanks for coming out {{first_name}} — 412 doors between us. Next one is in a fortnight. Reply STOP to opt out.",
+    audienceName: "Spoke to at the door",
+    daysAgo: 2,
+    recipientStride: 5,
+  },
+];
+
+/** Additional content, so Surveys/Scripts/Canned responses list more than one row each. */
+export const DEMO_EXTRA_SURVEYS: Array<{ name: string; prompt: string; options: string[] }> = [
+  { name: "Cost of living — top issue", prompt: "Which of these worries you most right now?", options: ["Rent or mortgage", "Groceries", "Energy bills", "Health costs"] },
+  { name: "Volunteer availability", prompt: "When could you help out?", options: ["Weekday evenings", "Saturday", "Sunday", "Not right now"] },
+];
+
+export const DEMO_EXTRA_SCRIPTS: Array<{ name: string; steps: string[] }> = [
+  {
+    name: "Demo — Phone bank script",
+    steps: [
+      "Hi, is that {{first_name}}? I'm a volunteer with the campaign — have you got two minutes?",
+      "We're asking people what matters most to them this year. What's top of your list?",
+      "Thanks, that's really useful. Can we let you know when we're doorknocking nearby?",
+    ],
+  },
+  {
+    name: "Demo — Volunteer recruitment",
+    steps: [
+      "Hi {{first_name}}, you signed our petition a while back — thanks again.",
+      "We're building a team for the Glebe doorknock. Could you spare three hours on a Saturday?",
+      "Brilliant. I'll text you the details and a link to the induction.",
+    ],
+  },
+];
+
+export const DEMO_EXTRA_CANNED: Array<{ title: string; body: string; dispositionCode: string }> = [
+  { title: "Send the shift link", body: "Here's the sign-up for Saturday: {{shift_link}}. Meeting at the Glebe Point Rd shops at 9.", dispositionCode: "spoke_to_target" },
+  { title: "Not right now", body: "No worries at all {{first_name}} — thanks for hearing me out. Reply STOP if you'd rather we didn't get in touch.", dispositionCode: "refused" },
+  { title: "Follow up later", body: "Thanks {{first_name}} — I'll check back after the holidays.", dispositionCode: "spoke_to_other" },
 ];

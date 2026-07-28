@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { CircleIcon } from "lucide-react";
 import OnThisPage from "@/components/OnThisPage";
 
-interface NavigationItem {
+export interface NavigationItem {
   title: string;
   href: string;
   children?: NavigationItem[];
@@ -16,9 +16,15 @@ interface DocumentationLayoutProps {
   children: React.ReactNode;
   title: string;
   description?: string;
+  /** Sidebar sections. Defaults to the developer/architecture tree; the user handbook
+   *  under /docs passes its own so both doc sets share this chrome. */
+  navigation?: NavigationItem[];
+  /** Hrefs that should only light up on an exact path match (section index pages).
+   *  Everything else matches by prefix so a nested page keeps its parent highlighted. */
+  exactMatchHrefs?: string[];
 }
 
-const navigationData: NavigationItem[] = [
+const architectureNavigation: NavigationItem[] = [
   {
     title: "Getting Started",
     href: "#getting-started",
@@ -47,12 +53,17 @@ export default function DocumentationLayout({
   children,
   title,
   description,
+  navigation,
+  exactMatchHrefs,
 }: DocumentationLayoutProps) {
+  const navigationData = navigation ?? architectureNavigation;
+  const exactHrefs = exactMatchHrefs ?? ["/developers"];
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set([
-    "Getting Started",
-    "Architecture Documentation",
-  ]));
+  // Every section starts open – both doc sets are short enough that hiding half of the
+  // tree behind a click costs more than it saves.
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    () => new Set(navigationData.map((section) => section.title)),
+  );
   const pathname = usePathname();
 
   const toggleSection = (sectionTitle: string) => {
@@ -66,7 +77,7 @@ export default function DocumentationLayout({
   };
 
   const isActiveLink = (href: string) => {
-    if (href === "/developers") {
+    if (exactHrefs.includes(href)) {
       return pathname === href;
     }
     return pathname.startsWith(href);

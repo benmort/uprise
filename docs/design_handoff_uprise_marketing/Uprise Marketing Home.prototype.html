@@ -1,0 +1,1435 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uprise — home, cinema direction (design prototype)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================================
+   UPRISE — product marketing home. "Cinema" direction.
+   Design prototype. Not production code. See README.md beside this file.
+
+   One continuous scroll film in six acts. Depth comes from parallax planes,
+   glass elevation and a pinned stage, not from a new palette – the brand
+   indigo (#465fff) and Outfit are kept from @uprise/ui.
+   ========================================================================= */
+
+/* --- tokens -------------------------------------------------------------- */
+:root{
+  /* brand ramp, verbatim from packages/ui/globals.css */
+  --brand-50:#ecf3ff; --brand-100:#dde9ff; --brand-200:#c2d6ff;
+  --brand-300:#9cb9ff; --brand-400:#7592ff; --brand:#465fff;
+  --brand-600:#3641f5; --brand-700:#2a31d8; --brand-950:#161950;
+
+  /* ink deepened from the current --title-color #1e293b: the film needs the
+     extra contrast against white, and it lets the dark act read as the same
+     family rather than a different site. */
+  --ink:#0B0F1C;
+  --ink-2:#070A14;
+  --body:#4A5468;
+  --muted:#7A869C;
+  --faint:#A7B0C0;
+
+  --paper:#ffffff;
+  --plate:#F6F7FB;
+  --line:rgba(11,15,28,.09);
+  --line-2:rgba(11,15,28,.055);
+  --glass:rgba(255,255,255,.72);
+
+  /* sequential ramp for the atlas — from --seq-1..5 in @uprise/ui */
+  --seq-1:#c3cad3; --seq-2:#87a6c9; --seq-3:#3776b8; --seq-4:#1c5cb0; --seq-5:#0f3f85;
+
+  --shell:1320px;
+  --gutter:clamp(20px,4vw,48px);
+
+  --ease:cubic-bezier(.22,1,.36,1);
+  --ease-io:cubic-bezier(.65,0,.35,1);
+}
+
+/* --- reset --------------------------------------------------------------- */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+img{display:block;max-width:100%}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4,p,figure,blockquote{margin:0}
+ul{margin:0;padding:0;list-style:none}
+
+html{scroll-behavior:smooth}
+body{
+  font-family:"Outfit",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  color:var(--body);
+  background:var(--paper);
+  font-size:17px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* --- type scale ---------------------------------------------------------- */
+.mono{
+  font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11.5px; font-weight:500;
+  letter-spacing:.16em; text-transform:uppercase;
+}
+.eyebrow{ color:var(--brand); display:inline-flex; align-items:center; gap:10px }
+.eyebrow::before{
+  content:""; width:22px; height:1px; background:currentColor; opacity:.5;
+}
+.display{
+  font-size:clamp(48px,7.6vw,118px); font-weight:700; line-height:.96;
+  letter-spacing:-.045em; color:var(--ink);
+}
+.h2{
+  font-size:clamp(34px,5vw,68px); font-weight:700; line-height:1.02;
+  letter-spacing:-.035em; color:var(--ink);
+}
+.h3{
+  font-size:clamp(21px,2vw,27px); font-weight:600; line-height:1.22;
+  letter-spacing:-.02em; color:var(--ink);
+}
+.lede{
+  font-size:clamp(18px,1.55vw,23px); font-weight:400; line-height:1.55;
+  color:var(--body); letter-spacing:-.008em;
+}
+.shell{ width:100%; max-width:var(--shell); margin-inline:auto; padding-inline:var(--gutter) }
+
+/* ============================================================================
+   REVEALS — one shared mechanism. IntersectionObserver adds .in.
+   Every reveal is opacity + a small transform, so prefers-reduced-motion can
+   drop the transform and keep the fade without any layout surprise.
+   ========================================================================= */
+[data-rise]{
+  opacity:0; transform:translate3d(0,26px,0);
+  transition:opacity .85s var(--ease) var(--d,0ms), transform .85s var(--ease) var(--d,0ms);
+}
+[data-rise].in{ opacity:1; transform:none }
+
+/* word-level mask reveal, used on the two big headlines.
+   The padding/negative-margin pair gives descenders room inside the clip box
+   without adding to the line box – at 118px a bare overflow:hidden shears the
+   'g' in "Progress". */
+.mask{
+  display:inline-block; overflow:hidden; vertical-align:bottom;
+  padding-bottom:.18em; margin-bottom:-.18em;
+}
+.mask > span{
+  display:inline-block; transform:translate3d(0,110%,0);
+  transition:transform 1.05s var(--ease) var(--d,0ms);
+}
+.in .mask > span, .mask.in > span{ transform:none }
+
+/* ============================================================================
+   CHROME — scroll-progress hairline, act rail, header
+   ========================================================================= */
+.progress{
+  position:fixed; inset:0 0 auto 0; height:2px; z-index:90; pointer-events:none;
+}
+.progress i{
+  display:block; height:100%; width:100%; transform-origin:0 50%;
+  transform:scaleX(var(--p,0));
+  background:linear-gradient(90deg,var(--brand-400),var(--brand),var(--brand-700));
+}
+
+/* left-edge act rail */
+.rail{
+  position:fixed; left:calc(var(--gutter) - 10px); top:50%; translate:0 -50%;
+  z-index:80; display:grid; gap:14px; mix-blend-mode:difference;
+}
+.rail a{ display:flex; align-items:center; gap:10px; }
+.rail .dot{
+  width:6px; height:6px; border-radius:99px; background:#8b93a4;
+  transition:height .45s var(--ease), background .45s var(--ease);
+}
+.rail a.on .dot{ height:26px; background:#fff }
+.rail .lbl{
+  font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:#fff; opacity:0;
+  transform:translateX(-6px); transition:opacity .35s var(--ease), transform .35s var(--ease);
+  white-space:nowrap;
+}
+.rail:hover .lbl, .rail a.on .lbl{ opacity:.85; transform:none }
+@media (max-width:1180px){ .rail{ display:none } }
+
+/* header: full-width over the hero, condenses into a floating glass pill */
+.hdr{
+  position:fixed; inset:0 0 auto 0; z-index:85;
+  display:flex; justify-content:center;
+  padding:22px var(--gutter);
+  transition:padding .6s var(--ease);
+}
+.hdr__in{
+  width:100%; max-width:var(--shell);
+  display:flex; align-items:center; gap:28px;
+  padding:10px 12px 10px 4px;
+  border:1px solid transparent; border-radius:100px;
+  background:transparent;
+  transition:max-width .7s var(--ease), background .5s var(--ease),
+             border-color .5s var(--ease), box-shadow .5s var(--ease),
+             padding .6s var(--ease), backdrop-filter .5s var(--ease);
+}
+.hdr.stuck{ padding-top:12px }
+.hdr.stuck .hdr__in{
+  max-width:940px;
+  background:var(--glass);
+  -webkit-backdrop-filter:blur(18px) saturate(1.6);
+  backdrop-filter:blur(18px) saturate(1.6);
+  border-color:var(--line);
+  box-shadow:0 1px 2px rgba(11,15,28,.04), 0 12px 34px -14px rgba(11,15,28,.22);
+  padding:8px 10px 8px 16px;
+}
+.brand{ display:flex; align-items:center; gap:11px; font-weight:700; color:var(--ink); letter-spacing:-.02em; font-size:19px }
+.brand .glyph{
+  width:32px; height:32px; border-radius:9px; display:grid; place-items:center;
+  background:linear-gradient(150deg,var(--brand-400),var(--brand) 55%,var(--brand-700));
+  color:#fff; font-size:16px; font-weight:700; letter-spacing:-.02em;
+  box-shadow:0 6px 16px -6px rgba(70,95,255,.7);
+}
+.nav{ display:flex; gap:4px; margin-left:auto }
+.nav a{
+  padding:8px 14px; border-radius:100px; font-size:15px; font-weight:500; color:var(--ink);
+  transition:background .25s var(--ease), color .25s var(--ease);
+}
+.nav a:hover{ background:rgba(11,15,28,.05) }
+.hdr__cta{ display:flex; gap:8px; align-items:center }
+@media (max-width:900px){ .nav{ display:none } }
+
+/* --- buttons ------------------------------------------------------------- */
+.btn{
+  display:inline-flex; align-items:center; gap:9px;
+  padding:13px 22px; border-radius:100px;
+  font-size:15.5px; font-weight:600; letter-spacing:-.01em;
+  transition:transform .3s var(--ease), box-shadow .3s var(--ease),
+             background .3s var(--ease), color .3s var(--ease), border-color .3s var(--ease);
+  will-change:transform;
+}
+.btn--sm{ padding:9px 17px; font-size:14.5px }
+.btn--primary{
+  color:#fff; background:var(--brand);
+  box-shadow:0 1px 1px rgba(11,15,28,.1), 0 10px 26px -10px rgba(70,95,255,.85);
+}
+.btn--primary:hover{ background:var(--brand-600); transform:translateY(-2px);
+  box-shadow:0 1px 1px rgba(11,15,28,.1), 0 18px 34px -12px rgba(70,95,255,.95) }
+.btn--ghost{ color:var(--ink); border:1px solid var(--line); background:rgba(255,255,255,.6) }
+.btn--ghost:hover{ border-color:rgba(11,15,28,.2); transform:translateY(-2px) }
+.btn--onDark{ color:var(--ink); background:#fff }
+.btn--onDark:hover{ transform:translateY(-2px); box-shadow:0 18px 34px -14px rgba(0,0,0,.6) }
+.btn--wireDark{ color:#fff; border:1px solid rgba(255,255,255,.24) }
+.btn--wireDark:hover{ border-color:rgba(255,255,255,.5); transform:translateY(-2px) }
+.btn .arw{ transition:transform .3s var(--ease) }
+.btn:hover .arw{ transform:translateX(3px) }
+
+/* ============================================================================
+   ACT 0 — HERO. Four parallax planes: aurora (.06), grid (.16),
+   cursor spotlight (live), content (0, but fades out as it leaves).
+   ========================================================================= */
+.hero{
+  position:relative; min-height:100svh; display:grid; align-items:center;
+  padding:124px 0 84px; overflow:hidden; isolation:isolate;
+}
+.plane{ position:absolute; inset:-10% -5%; z-index:-1; pointer-events:none; will-change:transform }
+
+.aurora b{
+  position:absolute; display:block; border-radius:50%;
+  filter:blur(90px); opacity:.55;
+}
+.aurora b:nth-child(1){ width:56vw; height:56vw; left:-12vw; top:-18vw;
+  background:radial-gradient(circle at 40% 40%, #cfdcff, rgba(207,220,255,0) 68%);
+  animation:drift1 34s ease-in-out infinite }
+.aurora b:nth-child(2){ width:48vw; height:48vw; right:-10vw; top:-6vw;
+  background:radial-gradient(circle at 50% 50%, #e6dcff, rgba(230,220,255,0) 68%);
+  animation:drift2 44s ease-in-out infinite }
+.aurora b:nth-child(3){ width:60vw; height:44vw; left:22vw; bottom:-24vw;
+  background:radial-gradient(circle at 50% 50%, #d6e6ff, rgba(214,230,255,0) 70%);
+  animation:drift3 52s ease-in-out infinite }
+@keyframes drift1{ 50%{ transform:translate3d(5vw,4vw,0) scale(1.12) } }
+@keyframes drift2{ 50%{ transform:translate3d(-6vw,5vw,0) scale(1.08) } }
+@keyframes drift3{ 50%{ transform:translate3d(4vw,-4vw,0) scale(1.14) } }
+
+.gridplane{
+  background-image:
+    linear-gradient(to right, var(--line-2) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line-2) 1px, transparent 1px);
+  background-size:86px 86px;
+  -webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 42%, #000 20%, transparent 78%);
+  mask-image:radial-gradient(ellipse 70% 60% at 50% 42%, #000 20%, transparent 78%);
+}
+
+/* cursor spotlight — pointer:fine only, set from JS via --mx/--my */
+.spot{
+  background:radial-gradient(420px circle at var(--mx,50%) var(--my,40%),
+    rgba(70,95,255,.10), rgba(70,95,255,0) 65%);
+  transition:opacity .5s var(--ease); opacity:0;
+}
+@media (pointer:fine){ .hero:hover .spot{ opacity:1 } }
+
+.hero__in{ position:relative; text-align:center; display:grid; justify-items:center; gap:0 }
+.hero .display{ margin:20px 0 0; max-width:16ch }
+/* Solid brand, not a gradient. A per-word gradient restarts inside every mask
+   and reads as three mismatched washes; one flat indigo with a soft bloom
+   behind it holds the line together at display size. */
+.hero .display .accent{ color:var(--brand); text-shadow:0 8px 46px rgba(70,95,255,.28) }
+.hero .lede{ margin-top:24px; max-width:56ch }
+.hero__cta{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:30px }
+
+/* live counter strip — the film's opening numbers */
+.ticker{
+  margin-top:46px; display:flex; gap:0; flex-wrap:wrap; justify-content:center;
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  background:rgba(255,255,255,.5);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  border-radius:2px;
+}
+.ticker div{
+  padding:16px clamp(20px,3.2vw,42px); display:grid; gap:3px; justify-items:center;
+  border-right:1px solid var(--line-2);
+}
+.ticker div:last-child{ border-right:0 }
+.ticker .n{
+  font-size:clamp(24px,2.3vw,32px); font-weight:700; letter-spacing:-.035em;
+  color:var(--ink); font-variant-numeric:tabular-nums; line-height:1;
+}
+.ticker .k{ color:var(--muted) }
+
+.cue{
+  position:absolute; left:50%; bottom:26px; translate:-50% 0;
+  display:grid; justify-items:center; gap:8px; color:var(--faint);
+  animation:bob 2.6s ease-in-out infinite;
+}
+.cue i{ display:block; width:1px; height:34px; background:linear-gradient(var(--faint),transparent) }
+@keyframes bob{ 50%{ transform:translateY(8px) } }
+
+/* ============================================================================
+   ACT 1 — THE PINNED STAGE.
+   .stage is 560vh tall; .stage__pin sticks for its whole length. Scroll
+   progress 0..1 maps to raw = p * 5, and each scene's opacity is a smoothstep
+   of its distance from raw, so neighbours cross-fade and always sum to 1.
+   ========================================================================= */
+/* 5 scenes = 4 transitions. ~120vh of scroll each. */
+.stage{ position:relative; height:480vh; background:var(--paper) }
+.stage__pin{
+  position:sticky; top:0; height:100svh; overflow:hidden;
+  display:grid; align-content:center;
+}
+.stage__grid{
+  width:100%; max-width:var(--shell); margin-inline:auto; padding-inline:var(--gutter);
+  display:grid; grid-template-columns:minmax(0,4.6fr) minmax(0,7.4fr);
+  gap:clamp(28px,4vw,70px); align-items:center;
+}
+@media (max-width:1000px){
+  .stage{ height:auto }
+  .stage__pin{ position:static; height:auto; padding:90px 0 }
+  .stage__grid{ grid-template-columns:1fr }
+}
+
+/* scene copy column — scenes stack, only the live one is opaque */
+.scenes{ position:relative; min-height:340px }
+.scene{
+  position:absolute; inset:0; display:grid; align-content:center; gap:16px;
+  opacity:0; will-change:opacity,transform;
+}
+.scene h2{ font-size:clamp(30px,3.5vw,50px); font-weight:700; line-height:1.04;
+  letter-spacing:-.035em; color:var(--ink) }
+.scene p{ max-width:44ch }
+.scene .facts{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px }
+.pill{
+  display:inline-flex; align-items:center; gap:7px;
+  padding:7px 13px; border-radius:100px; border:1px solid var(--line);
+  background:#fff; color:var(--ink);
+  font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+}
+.pill .tick{ width:5px; height:5px; border-radius:99px; background:var(--brand) }
+@media (max-width:1000px){
+  .scenes{ min-height:0; display:grid; gap:80px }
+  .scene{ position:static; opacity:1 !important; transform:none !important }
+}
+
+/* the counter + the act label */
+.stage__meta{ display:flex; align-items:baseline; gap:14px; color:var(--muted); margin-bottom:6px }
+.stage__meta .num{ color:var(--brand) }
+
+/* --- the device -------------------------------------------------------- */
+.deck{ position:relative; display:grid; place-items:center; perspective:1600px }
+.frame{
+  position:relative; width:100%; max-width:var(--fw,940px); aspect-ratio:2584/1672;
+  border-radius:var(--fr,15px); overflow:hidden;
+  background:#fff; border:1px solid var(--line);
+  box-shadow:
+    0 1px 2px rgba(11,15,28,.05),
+    0 26px 50px -22px rgba(11,15,28,.28),
+    0 70px 120px -60px rgba(70,95,255,.4);
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) scale(var(--fs,1)) translateZ(0);
+  will-change:transform,opacity;   /* --fw/--fs are driven per frame, so no transition */
+}
+.frame__bar{
+  height:34px; display:flex; align-items:center; gap:7px; padding:0 14px;
+  background:linear-gradient(#fbfbfd,#f4f5f9); border-bottom:1px solid var(--line-2);
+  position:relative; z-index:3;
+}
+.frame__bar s{ width:9px; height:9px; border-radius:99px; background:#dfe3ec; display:block }
+.frame__bar em{
+  margin-left:12px; font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.08em;
+  color:var(--faint); font-style:normal;
+}
+.frame__screens{ position:absolute; inset:34px 0 0; background:var(--plate) }
+.frame__screens img{
+  position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:top center;
+  opacity:0; will-change:opacity,transform;
+}
+/* placeholder if a capture is missing — keeps the prototype legible offline */
+.frame__screens .ph{
+  position:absolute; inset:0; display:none; place-items:center; text-align:center;
+  background:
+    repeating-linear-gradient(135deg, #eef0f6 0 10px, #e7eaf3 10px 20px);
+  color:var(--muted);
+}
+.frame.is-missing .frame__screens .ph{ display:grid }
+
+/* satellite objects that orbit the frame per scene */
+.sat{
+  position:absolute; z-index:4; opacity:0; will-change:opacity,transform;
+  background:rgba(255,255,255,.82);
+  -webkit-backdrop-filter:blur(16px) saturate(1.7); backdrop-filter:blur(16px) saturate(1.7);
+  border:1px solid var(--line); border-radius:14px;
+  box-shadow:0 1px 2px rgba(11,15,28,.05), 0 20px 40px -18px rgba(11,15,28,.34);
+  padding:13px 15px;
+}
+.sat .cap{ color:var(--muted); display:block; margin-bottom:7px }
+.sat .big{ font-size:25px; font-weight:700; letter-spacing:-.03em; color:var(--ink);
+  font-variant-numeric:tabular-nums; line-height:1 }
+
+.sat--tl{ left:-4%; top:8% }
+.sat--bl{ left:-6%; bottom:12% }
+.sat--tr{ right:-4%; top:12% }
+.sat--br{ right:-5%; bottom:10% }
+@media (max-width:1240px){ .sat--tl,.sat--bl{ left:2% } .sat--tr,.sat--br{ right:2% } }
+@media (max-width:1000px){ .sat{ display:none } }
+
+/* progress bar inside a satellite */
+.bar{ width:150px; height:5px; border-radius:99px; background:#e8ebf3; overflow:hidden; margin-top:9px }
+.bar i{ display:block; height:100%; border-radius:99px; background:var(--brand);
+  width:var(--w,0%); transition:width 1.1s var(--ease) }
+
+/* the 5-point support meter satellite */
+.meter{ display:flex; gap:4px; margin-top:9px }
+.meter s{ display:block; width:22px; height:26px; border-radius:4px; background:#e8ebf3 }
+.meter s:nth-child(1){ background:#2f9e5f } .meter s:nth-child(2){ background:#4bbf9a }
+.meter s:nth-child(3){ background:#cbd2de } .meter s:nth-child(4){ background:#d99a3f }
+.meter s:nth-child(5){ background:#dc5a4e }
+
+/* the hand-built phone that flies in on scene 02 (no phone capture exists) */
+/* Scene 02's subject. Centre-anchored so it can scale up and take the stage
+   while the desktop frame recedes behind it. */
+.phone{
+  position:absolute; left:50%; top:50%; z-index:5; width:250px;
+  border-radius:34px; padding:10px; background:#0B0F1C;
+  box-shadow:0 40px 80px -26px rgba(11,15,28,.62), 0 0 0 1px rgba(255,255,255,.07) inset;
+  opacity:0; will-change:opacity,transform; transform-origin:50% 50%;
+}
+.phone__scr{ border-radius:25px; overflow:hidden; background:#fff; padding:15px 14px 16px; display:grid; gap:10px }
+.phone__top{ display:flex; align-items:center; justify-content:space-between; color:var(--faint) }
+.phone__q{
+  display:flex; align-items:center; gap:7px; padding:7px 9px; border-radius:9px;
+  background:#fff6ed; border:1px solid #fadfc2; color:#8a5a1c;
+  font-family:"JetBrains Mono",monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase;
+}
+.phone__q s{ width:5px; height:5px; border-radius:99px; background:#e08b2b; display:block;
+  animation:pulse 1.6s ease-in-out infinite }
+@keyframes pulse{ 50%{ opacity:.25 } }
+.phone__addr{ font-weight:600; color:var(--ink); font-size:14px; line-height:1.25; letter-spacing:-.01em }
+.phone__opts{ display:grid; gap:5px; margin-top:2px }
+.phone__opts b{
+  display:flex; align-items:center; gap:8px; font-weight:500; font-size:12px; color:var(--body);
+  border:1px solid var(--line); border-radius:8px; padding:7px 9px;
+}
+.phone__opts b.on{ border-color:var(--brand); background:var(--brand-50); color:var(--brand-700); font-weight:600 }
+.phone__opts b s{ width:12px; height:12px; border-radius:99px; border:1.5px solid #cfd6e2; display:block }
+.phone__opts b.on s{ border-color:var(--brand); background:var(--brand);
+  box-shadow:inset 0 0 0 2.5px #fff }
+.phone__btn{ margin-top:2px; text-align:center; padding:9px; border-radius:9px;
+  background:var(--brand); color:#fff; font-size:12.5px; font-weight:600 }
+@media (max-width:1000px){ .phone{ display:none } }
+
+/* ============================================================================
+   ACT 2 — CAPABILITY CONSTELLATION (bento, not another 3×4 grid)
+   ========================================================================= */
+.const{ position:relative; padding:clamp(90px,11vw,150px) 0; background:var(--plate); overflow:hidden }
+.const::before{
+  content:""; position:absolute; left:50%; top:-14%; translate:-50% 0;
+  width:100vw; height:60vh; pointer-events:none;
+  background:radial-gradient(ellipse 46% 100% at 50% 0%, rgba(70,95,255,.15), rgba(70,95,255,0) 70%);
+}
+.sechead{ position:relative; display:grid; gap:18px; max-width:64ch; margin-bottom:clamp(40px,5vw,64px) }
+.sechead--mid{ justify-items:center; text-align:center; margin-inline:auto }
+
+.bento{ position:relative; display:grid; grid-template-columns:repeat(12,1fr); gap:14px }
+.tile{
+  position:relative; background:#fff; border:1px solid var(--line); border-radius:18px;
+  padding:24px; overflow:hidden;
+  transition:transform .45s var(--ease), box-shadow .45s var(--ease), border-color .45s var(--ease);
+  box-shadow:0 1px 2px rgba(11,15,28,.03);
+}
+.tile:hover{ transform:translateY(-4px); border-color:rgba(70,95,255,.32);
+  box-shadow:0 1px 2px rgba(11,15,28,.04), 0 22px 44px -22px rgba(11,15,28,.24) }
+.tile .h3{ margin-bottom:8px }
+.tile p{ font-size:15.5px; line-height:1.55 }
+.tile .eyebrow{ margin-bottom:14px }
+
+.t-7{ grid-column:span 7 } .t-5{ grid-column:span 5 }
+.t-4{ grid-column:span 4 } .t-3{ grid-column:span 3 }
+.t-tall{ grid-row:span 2; display:grid; grid-template-rows:auto 1fr; gap:18px }
+@media (max-width:1000px){
+  .t-7,.t-5{ grid-column:span 12 } .t-4{ grid-column:span 6 } .t-3{ grid-column:span 6 }
+  .t-tall{ grid-row:auto }
+}
+@media (max-width:620px){ .t-4,.t-3{ grid-column:span 12 } }
+
+/* mini turf map that draws itself on reveal */
+.minimap{ position:relative; border-radius:12px; overflow:hidden; background:#eef1f7; min-height:210px;
+  border:1px solid var(--line-2) }
+.minimap svg{ position:absolute; inset:0; width:100%; height:100% }
+.minimap .roads path{ stroke:#dee3ed; stroke-width:1.4; fill:none }
+.minimap .turf{
+  fill:rgba(70,95,255,.13); stroke:var(--brand); stroke-width:2; stroke-linejoin:round;
+  stroke-dasharray:900; stroke-dashoffset:900;
+  transition:stroke-dashoffset 2s var(--ease-io) .15s, fill-opacity .8s var(--ease) 1.4s;
+  fill-opacity:0;
+}
+.in .minimap .turf{ stroke-dashoffset:0; fill-opacity:1 }
+.minimap .door{ fill:var(--brand); opacity:0; transform-box:fill-box; transform-origin:center;
+  transition:opacity .4s var(--ease) var(--d,0ms) }
+.in .minimap .door{ opacity:1 }
+.minimap .badge{
+  position:absolute; right:10px; bottom:10px; z-index:2;
+  background:rgba(255,255,255,.9); border:1px solid var(--line); border-radius:100px;
+  padding:6px 12px; color:var(--ink);
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+}
+
+/* mini inbox where messages land in sequence */
+.thread{ display:grid; gap:9px; align-content:end; min-height:196px }
+.msg{
+  max-width:80%; padding:10px 13px; border-radius:14px; font-size:14px; line-height:1.45;
+  opacity:0; transform:translateY(10px);
+  transition:opacity .5s var(--ease) var(--d,0ms), transform .5s var(--ease) var(--d,0ms);
+}
+.in .msg{ opacity:1; transform:none }
+.msg--in{ background:#f1f3f8; color:var(--ink); border-bottom-left-radius:5px }
+.msg--out{ background:var(--brand); color:#fff; justify-self:end; border-bottom-right-radius:5px }
+.msg .who{ display:block; color:var(--faint); margin-bottom:3px }
+.msg--out .who{ color:rgba(255,255,255,.72) }
+
+/* the small chip tiles */
+.chip{ display:flex; align-items:center; gap:12px; padding:18px 20px }
+.chip .ic{
+  width:34px; height:34px; flex:none; border-radius:10px; display:grid; place-items:center;
+  background:var(--brand-50); color:var(--brand-700); border:1px solid var(--brand-100);
+}
+.chip b{ font-weight:600; color:var(--ink); font-size:15.5px; letter-spacing:-.01em }
+.chip span{ display:block; font-size:13.5px; color:var(--muted); line-height:1.4 }
+
+/* ============================================================================
+   ACT 3 — THE ATLAS. The one dark act: it gives the light film a spine.
+   Australia as a dot matrix, cells shaded from the @uprise/ui --seq ramp.
+   ========================================================================= */
+.atlas{
+  position:relative; background:var(--ink-2); color:#fff; overflow:hidden;
+  padding:clamp(96px,12vw,170px) 0;
+}
+.atlas::before{
+  content:""; position:absolute; inset:0;
+  background:radial-gradient(ellipse 60% 70% at 22% 45%, rgba(70,95,255,.28), rgba(70,95,255,0) 62%);
+}
+.atlas::after{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size:86px 86px;
+  -webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 50%, #000, transparent 80%);
+  mask-image:radial-gradient(ellipse 80% 70% at 50% 50%, #000, transparent 80%);
+}
+.atlas__grid{
+  position:relative; display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
+  gap:clamp(34px,5vw,80px); align-items:center;
+}
+@media (max-width:1000px){ .atlas__grid{ grid-template-columns:1fr } }
+.atlas .h2{ color:#fff }
+.atlas .lede{ color:rgba(255,255,255,.62) }
+.atlas .eyebrow{ color:var(--brand-300) }
+
+.matrix{
+  display:grid; grid-template-columns:repeat(32,1fr); gap:clamp(2px,.42vw,5px);
+  width:100%; aspect-ratio:32/22;
+}
+.matrix s{
+  display:block; width:100%; aspect-ratio:1; border-radius:2px;
+  background:var(--c,#1a2036); opacity:0; transform:scale(.4);
+  transition:opacity .5s var(--ease) var(--d,0ms), transform .6s var(--ease) var(--d,0ms);
+}
+.matrix.in s{ opacity:1; transform:none }
+.matrix s.sea{ background:rgba(255,255,255,.035); border-radius:1px }
+
+.legend{ display:flex; align-items:center; gap:9px; margin-top:22px; color:rgba(255,255,255,.5) }
+.legend .ramp{ display:flex; gap:2px }
+.legend .ramp s{ width:22px; height:8px; border-radius:2px; display:block }
+
+.stats{ display:grid; grid-template-columns:1fr 1fr; gap:1px; background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.1); border-radius:14px; overflow:hidden; margin-top:34px }
+.stats div{ background:var(--ink-2); padding:22px 20px; display:grid; gap:4px }
+.stats .n{ font-size:clamp(28px,3vw,40px); font-weight:700; letter-spacing:-.035em; color:#fff;
+  font-variant-numeric:tabular-nums; line-height:1 }
+.stats .k{ color:rgba(255,255,255,.5) }
+
+/* ============================================================================
+   ACT 4 — CAMPAIGN TYPES, horizontal snap rail
+   ========================================================================= */
+.types{ padding:clamp(90px,11vw,150px) 0 clamp(70px,8vw,110px); background:var(--paper) }
+.trail{
+  display:flex; gap:16px; overflow-x:auto; scroll-snap-type:x mandatory;
+  padding:6px var(--gutter) 26px; margin-inline:calc(var(--gutter) * -1);
+  scrollbar-width:none; cursor:grab;
+}
+.trail::-webkit-scrollbar{ display:none }
+.trail.dragging{ cursor:grabbing; scroll-snap-type:none }
+.tcard{
+  scroll-snap-align:center; flex:0 0 clamp(268px,26vw,340px);
+  border-radius:20px; padding:26px; min-height:296px;
+  display:grid; align-content:space-between; gap:20px;
+  border:1px solid var(--line); background:var(--plate);
+  transition:transform .45s var(--ease), box-shadow .45s var(--ease);
+  user-select:none;
+}
+.tcard:hover{ transform:translateY(-5px);
+  box-shadow:0 24px 48px -24px rgba(11,15,28,.3) }
+.tcard .no{
+  font-family:"JetBrains Mono",monospace; font-size:12px; letter-spacing:.14em;
+  color:var(--brand); opacity:.85;
+}
+.tcard .h3{ letter-spacing:-.025em }
+.tcard p{ font-size:15px; line-height:1.55 }
+.tcard:nth-child(1){ background:linear-gradient(160deg,#eef2ff,#f7f8fc) }
+.tcard:nth-child(2){ background:linear-gradient(160deg,#f2f0ff,#f8f7fc) }
+.tcard:nth-child(3){ background:linear-gradient(160deg,#ecf4ff,#f6f9fc) }
+.tcard:nth-child(4){ background:linear-gradient(160deg,#eff3f8,#f7f9fb) }
+.tcard:nth-child(5){ background:linear-gradient(160deg,#eef2ff,#f6f7fc) }
+.tcard:nth-child(6){ background:linear-gradient(160deg,#f1f1fa,#f8f8fc) }
+.trail__bar{ height:2px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:6px }
+.trail__bar i{ display:block; height:100%; width:26%; background:var(--brand); border-radius:99px;
+  transform:translateX(var(--x,0%)); transition:transform .15s linear }
+
+/* ============================================================================
+   ACT 5 — PROOF (logos + blog) and the FINALE
+   ========================================================================= */
+.proof{ padding:0 0 clamp(80px,10vw,130px); background:var(--paper) }
+.logos{ display:flex; align-items:center; justify-content:center; gap:clamp(30px,6vw,80px);
+  flex-wrap:wrap; padding:38px 0; border-block:1px solid var(--line) }
+.logos b{ font-size:clamp(17px,1.7vw,22px); font-weight:700; letter-spacing:-.02em; color:#aab2c2;
+  transition:color .35s var(--ease) }
+.logos b:hover{ color:var(--ink) }
+
+.posts{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:clamp(40px,5vw,60px) }
+@media (max-width:900px){ .posts{ grid-template-columns:1fr } }
+.post{ display:grid; gap:14px; border-radius:18px; padding:22px; border:1px solid var(--line);
+  background:#fff; transition:transform .45s var(--ease), box-shadow .45s var(--ease) }
+.post:hover{ transform:translateY(-4px); box-shadow:0 22px 44px -24px rgba(11,15,28,.26) }
+.post .thumb{
+  aspect-ratio:16/9; border-radius:12px; overflow:hidden; position:relative;
+  background:linear-gradient(140deg,var(--brand-100),#f2f4fa);
+}
+.post .thumb::after{
+  content:""; position:absolute; inset:0;
+  background:radial-gradient(circle at 70% 25%, rgba(70,95,255,.35), transparent 55%);
+}
+.post h3{ font-size:19px; font-weight:600; letter-spacing:-.02em; color:var(--ink); line-height:1.3 }
+.post .meta{ color:var(--muted); display:flex; gap:10px; align-items:center }
+
+.finale{
+  position:relative; overflow:hidden; isolation:isolate;
+  min-height:82svh; display:grid; place-items:center; text-align:center;
+  padding:clamp(90px,12vw,150px) 0; background:var(--plate);
+}
+.finale .shell{ position:relative; display:grid; justify-items:center; gap:26px }
+.finale .lede{ max-width:52ch }
+.finale__cta{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center }
+
+.ftr{ background:var(--ink-2); color:rgba(255,255,255,.62); padding:64px 0 34px }
+.ftr__grid{ display:grid; grid-template-columns:1.4fr repeat(3,1fr); gap:34px }
+@media (max-width:820px){ .ftr__grid{ grid-template-columns:1fr 1fr } }
+.ftr .brand{ color:#fff }
+.ftr h4{ color:#fff; font-size:13px; font-weight:600; letter-spacing:.02em; margin-bottom:12px }
+.ftr li{ margin-bottom:8px; font-size:14.5px }
+.ftr a:hover{ color:#fff }
+.ftr__legal{ margin-top:48px; padding-top:22px; border-top:1px solid rgba(255,255,255,.1);
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; color:rgba(255,255,255,.42) }
+
+/* ----------------------------------------------------------------------------
+   STACKED FALLBACK — narrow viewports and reduced motion both drop the pinned
+   stage, and paintStage() stops driving the frame. The captures default to
+   opacity:0, so without this block the whole scene set renders blank. Lay them
+   out in normal flow instead, and let the drawn phone through as a real figure.
+   -------------------------------------------------------------------------- */
+@media (max-width:1000px), (prefers-reduced-motion:reduce){
+  .deck{ perspective:none; gap:16px }
+  .frame{
+    max-width:100% !important; aspect-ratio:auto !important; opacity:1 !important;
+    transform:none !important; border:0; background:none; box-shadow:none; border-radius:0;
+  }
+  .frame__bar{ display:none }
+  .frame__screens{ position:static !important; inset:auto; background:none; display:grid; gap:16px }
+  .frame__screens img{
+    position:static !important; opacity:1 !important; transform:none !important;
+    width:100%; height:auto !important; object-fit:contain;
+    border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 18px 36px -22px rgba(11,15,28,.28);
+  }
+  .phone{
+    display:block !important; position:static !important; opacity:1 !important;
+    transform:none !important; width:250px; margin:0 auto;
+  }
+  .sat{ display:none }
+}
+
+/* ============================================================================
+   REDUCED MOTION — everything degrades to a static, fully-legible page.
+   The pinned stage un-pins and the scenes stack, so no content is reachable
+   only by animating.
+   ========================================================================= */
+@media (prefers-reduced-motion:reduce){
+  html{ scroll-behavior:auto }
+  *,*::before,*::after{ animation:none !important; transition-duration:.01ms !important }
+  [data-rise]{ opacity:1 !important; transform:none !important }
+  .mask > span{ transform:none !important }
+  .matrix s{ opacity:1 !important; transform:none !important }
+  .minimap .turf{ stroke-dashoffset:0 !important; fill-opacity:1 !important }
+  .minimap .door,.msg{ opacity:1 !important; transform:none !important }
+  .stage{ height:auto !important }
+  .stage__pin{ position:static !important; height:auto !important; padding:80px 0 }
+  .stage__grid{ grid-template-columns:1fr !important }
+  .scenes{ min-height:0 !important; display:grid !important; gap:70px }
+  .scene{ position:static !important; opacity:1 !important; transform:none !important }
+  .sat{ display:none !important }   /* the phone stays – see the stacked fallback above */
+}
+</style>
+</head>
+<body>
+
+<div class="progress"><i id="pbar"></i></div>
+
+<nav class="rail" id="rail" aria-label="Section progress">
+  <a href="#act0" data-act="act0"><span class="dot"></span><span class="lbl">Open</span></a>
+  <a href="#act1" data-act="act1"><span class="dot"></span><span class="lbl">One shift</span></a>
+  <a href="#act2" data-act="act2"><span class="dot"></span><span class="lbl">Toolkit</span></a>
+  <a href="#act3" data-act="act3"><span class="dot"></span><span class="lbl">Atlas</span></a>
+  <a href="#act4" data-act="act4"><span class="dot"></span><span class="lbl">Campaigns</span></a>
+  <a href="#act5" data-act="act5"><span class="dot"></span><span class="lbl">Close</span></a>
+</nav>
+
+<header class="hdr" id="hdr">
+  <div class="hdr__in">
+    <a class="brand" href="#act0"><span class="glyph">U</span>Uprise</a>
+    <nav class="nav">
+      <a href="#act2">Features</a>
+      <a href="#act3">Data</a>
+      <a href="#act4">Campaigns</a>
+      <a href="#act5">Blog</a>
+      <a href="#act5">Plans</a>
+    </nav>
+    <div class="hdr__cta">
+      <a class="btn btn--sm btn--ghost" href="#act5">Login</a>
+      <a class="btn btn--sm btn--primary" href="#act5">Start a campaign<span class="arw">→</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ================= ACT 0 — OPEN ================= -->
+  <section class="hero" id="act0">
+    <div class="plane aurora" data-rate="0.06"><b></b><b></b><b></b></div>
+    <div class="plane gridplane" data-rate="0.16"></div>
+    <div class="plane spot"></div>
+
+    <div class="shell hero__in" id="heroIn">
+      <span class="mono eyebrow">Australia · multichannel organising</span>
+
+      <h1 class="display" id="heroH">
+        <span class="mask"><span style="--d:60ms">Built</span></span>
+        <span class="mask"><span style="--d:120ms">for</span></span>
+        <span class="mask"><span style="--d:180ms">Progress.</span></span><br>
+        <span class="mask"><span class="accent" style="--d:280ms">Ready</span></span>
+        <span class="mask"><span class="accent" style="--d:340ms">for</span></span>
+        <span class="mask"><span class="accent" style="--d:400ms">Power.</span></span>
+      </h1>
+
+      <p class="lede" data-rise style="--d:620ms">
+        The all-in-one campaigning platform for progressive organisations – texting, calls,
+        doorknocking, surveys, audiences and Australian data in one place.
+      </p>
+
+      <div class="hero__cta" data-rise style="--d:720ms">
+        <a class="btn btn--primary" href="#act5">Start a campaign<span class="arw">→</span></a>
+        <a class="btn btn--ghost" href="#act1">Watch a shift<span class="arw">↓</span></a>
+      </div>
+
+      <!-- Coverage numbers, not usage numbers. Every figure here is read off the
+           Datasets screen in the product (16,905,838 addresses; 150 federal
+           divisions; 415 + 23 state seats; 547 LGAs), so nothing on the page is
+           an invented growth stat. See README → "Numbers on this page". -->
+      <div class="ticker" data-rise style="--d:840ms">
+        <div><span class="n" data-count="16.9" data-dp="1" data-suffix="M">0</span><span class="mono k">Australian addresses</span></div>
+        <div><span class="n" data-count="150" data-suffix="">0</span><span class="mono k">Federal divisions</span></div>
+        <div><span class="n" data-count="438" data-suffix="">0</span><span class="mono k">State electorates</span></div>
+        <div><span class="n" data-count="547" data-suffix="">0</span><span class="mono k">Local councils</span></div>
+      </div>
+    </div>
+
+    <div class="cue"><span class="mono">Scroll</span><i></i></div>
+  </section>
+
+  <!-- ================= ACT 1 — THE PINNED STAGE ================= -->
+  <section class="stage" id="act1">
+    <div class="stage__pin">
+      <div class="stage__grid">
+
+        <div class="scenes" id="scenes">
+          <article class="scene" data-scene="0">
+            <div class="stage__meta"><span class="mono num" id="sceneNo">01</span><span class="mono">One shift, start to finish</span></div>
+            <h2>Cut the turf before anyone leaves the office.</h2>
+            <p class="lede">Draw a boundary on the map, split it into walkable blocks by door count,
+              and watch the address estimate update as you go.</p>
+            <div class="facts">
+              <span class="pill"><i class="tick"></i>Mapbox turf cutter</span>
+              <span class="pill"><i class="tick"></i>Live address counts</span>
+            </div>
+          </article>
+
+          <article class="scene" data-scene="1">
+            <div class="stage__meta"><span class="mono num">02</span><span class="mono">One shift, start to finish</span></div>
+            <h2>Hand every volunteer a route, not a spreadsheet.</h2>
+            <p class="lede">Walk lists come route-optimised and land on the phone. The app queues
+              knocks to an on-device outbox and flushes the moment signal comes back.</p>
+            <div class="facts">
+              <span class="pill"><i class="tick"></i>Installable PWA</span>
+              <span class="pill"><i class="tick"></i>Offline outbox</span>
+            </div>
+          </article>
+
+          <article class="scene" data-scene="2">
+            <div class="stage__meta"><span class="mono num">03</span><span class="mono">One shift, start to finish</span></div>
+            <h2>Every reply lands in one claimable queue.</h2>
+            <p class="lede">SMS and WhatsApp arrive in a shared inbox the whole team works, live over
+              SSE, with claims so nobody doubles up on the same conversation.</p>
+            <div class="facts">
+              <span class="pill"><i class="tick"></i>Shared + claimable</span>
+              <span class="pill"><i class="tick"></i>Live over SSE</span>
+              <span class="pill"><i class="tick"></i>Shown in dark theme</span>
+            </div>
+          </article>
+
+          <article class="scene" data-scene="3">
+            <div class="stage__meta"><span class="mono num">04</span><span class="mono">One shift, start to finish</span></div>
+            <h2>Turn the conversation into a number you can target on.</h2>
+            <p class="lede">Custom dispositions map to a five-point support scale, so a night of
+              doorknocking becomes a targeting decision by the morning.</p>
+            <div class="facts">
+              <span class="pill"><i class="tick"></i>Custom dispositions</span>
+              <span class="pill"><i class="tick"></i>5-point scoring</span>
+            </div>
+          </article>
+
+          <article class="scene" data-scene="4">
+            <div class="stage__meta"><span class="mono num">05</span><span class="mono">One shift, start to finish</span></div>
+            <h2>Then reshape the turf around what you learned.</h2>
+            <p class="lede">Every boundary set is already ingested – federal, state and local
+              divisions, ASGS statistical areas, 16.9 million addresses – so the next round of
+              turf is a better one.</p>
+            <div class="facts">
+              <span class="pill"><i class="tick"></i>ABS + G-NAF built in</span>
+              <span class="pill"><i class="tick"></i>No data project first</span>
+            </div>
+          </article>
+        </div>
+
+        <div class="deck" id="deck">
+          <div class="frame" id="frame">
+            <div class="frame__bar"><s></s><s></s><s></s><em id="frameUrl">app.uprise.org.au/canvass/turf</em></div>
+            <!-- Only verified-good captures are wired up. dashboard@2x,
+                 demographics@2x and inbox@2x are byte-identical ngrok error
+                 pages, and field-walk@2x is the field sign-in screen, not a walk
+                 list – see README → "Capture set". Scene 02 therefore has no
+                 screenshot at all: the desktop frame recedes and a drawn phone
+                 takes the stage, which is the better beat anyway. -->
+            <div class="frame__screens">
+              <div class="ph"><div><span class="mono">Capture pending</span></div></div>
+              <img data-shot="0" alt="Cutting turf on a Mapbox map in Uprise" src="../../apps/product-marketing/public/images/marketing/screens/turf@2x.png">
+              <img data-shot="1" alt="The unified team inbox in Uprise, dark theme" src="../../apps/product-marketing/public/images/marketing/screens/inbox-dark@2x.png">
+              <img data-shot="2" alt="Canvassing results and five-point support scoring in Uprise" src="../../apps/product-marketing/public/images/marketing/screens/results@2x.png">
+              <img data-shot="3" alt="The Australian datasets library in Uprise, with row counts per boundary set" src="../../apps/product-marketing/public/images/marketing/screens/datasets@2x.png">
+            </div>
+          </div>
+
+          <!-- Satellites: each belongs to one scene, and every figure is read off
+               the capture sitting behind it. A satellite that quotes a number the
+               screenshot does not show reads as invented – keep them in step if
+               the capture set is ever re-shot. -->
+          <aside class="sat sat--tl" data-sat="0">
+            <span class="mono cap">Doors in this turf</span>
+            <span class="big" data-count="150">0</span>
+          </aside>
+          <aside class="sat sat--br" data-sat="0">
+            <span class="mono cap">Doors knocked</span>
+            <span class="big" data-count="67" data-suffix="%">0</span>
+            <div class="bar"><i style="--w:0%" data-w="67%"></i></div>
+          </aside>
+
+          <aside class="sat sat--tr" data-sat="2">
+            <span class="mono cap">Unified inbox</span>
+            <span class="big" data-count="24">0</span>
+          </aside>
+
+          <aside class="sat sat--bl" data-sat="3">
+            <span class="mono cap">Support · 5-point</span>
+            <div class="meter"><s></s><s></s><s></s><s></s><s></s></div>
+          </aside>
+          <aside class="sat sat--tr" data-sat="3">
+            <span class="mono cap">Doors attempted</span>
+            <span class="big" data-count="90">0</span>
+          </aside>
+
+          <aside class="sat sat--tr" data-sat="4">
+            <span class="mono cap">Local government areas</span>
+            <span class="big" data-count="547">0</span>
+          </aside>
+
+          <!-- hand-built phone: no phone capture exists, so this is drawn -->
+          <div class="phone" id="phone">
+            <div class="phone__scr">
+              <div class="phone__top"><span class="mono">Walk list · 14/62</span><span class="mono">◐</span></div>
+              <div class="phone__q"><s></s>Offline · queued 12</div>
+              <div class="phone__addr">14 Bell Street<br>Coburg VIC 3058</div>
+              <div class="phone__opts">
+                <b class="on"><s></s>Strong support</b>
+                <b><s></s>Leaning support</b>
+                <b><s></s>Undecided</b>
+              </div>
+              <div class="phone__btn">Save &amp; next door</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ACT 2 — CONSTELLATION ================= -->
+  <section class="const" id="act2">
+    <div class="shell">
+      <header class="sechead sechead--mid" data-rise>
+        <span class="mono eyebrow">The whole toolkit</span>
+        <h2 class="h2">Everything your campaign runs on</h2>
+        <p class="lede">From the first text to the last door knocked – five connected systems,
+          one platform.</p>
+      </header>
+
+      <div class="bento">
+        <article class="tile t-7 t-tall" data-rise>
+          <div>
+            <span class="mono eyebrow">Field canvassing</span>
+            <h3 class="h3">Cut turf, then walk it</h3>
+            <p>Draw a boundary, split it into walkable blocks, and send route-ordered lists to
+              volunteers' phones with real walking metrics.</p>
+          </div>
+          <div class="minimap">
+            <svg viewBox="0 0 420 230" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <g class="roads">
+                <path d="M0 46 H420 M0 104 H420 M0 162 H420"/>
+                <path d="M74 0 V230 M158 0 V230 M242 0 V230 M326 0 V230"/>
+              </g>
+              <polygon class="turf" points="96,34 258,26 300,96 254,182 122,190 74,118"/>
+              <g>
+                <circle class="door" cx="120" cy="62"  r="3.4" style="--d:1500ms"/>
+                <circle class="door" cx="158" cy="52"  r="3.4" style="--d:1580ms"/>
+                <circle class="door" cx="196" cy="60"  r="3.4" style="--d:1660ms"/>
+                <circle class="door" cx="232" cy="76"  r="3.4" style="--d:1740ms"/>
+                <circle class="door" cx="252" cy="112" r="3.4" style="--d:1820ms"/>
+                <circle class="door" cx="228" cy="146" r="3.4" style="--d:1900ms"/>
+                <circle class="door" cx="188" cy="162" r="3.4" style="--d:1980ms"/>
+                <circle class="door" cx="146" cy="156" r="3.4" style="--d:2060ms"/>
+                <circle class="door" cx="112" cy="124" r="3.4" style="--d:2140ms"/>
+                <circle class="door" cx="104" cy="90"  r="3.4" style="--d:2220ms"/>
+              </g>
+            </svg>
+            <span class="mono badge">18 blocks · route-ordered</span>
+          </div>
+        </article>
+
+        <article class="tile t-5" data-rise style="--d:80ms">
+          <span class="mono eyebrow">Multichannel outreach</span>
+          <h3 class="h3">One inbox for every conversation</h3>
+          <p>SMS and WhatsApp land in a shared queue your whole team works, with claims so nobody
+            doubles up.</p>
+          <div class="thread" style="margin-top:16px">
+            <div class="msg msg--in" style="--d:400ms"><span class="mono who">+61 4·· ··· 118</span>What time does the Coburg door knock start?</div>
+            <div class="msg msg--out" style="--d:900ms"><span class="mono who">Claimed by Sam</span>10am at the Bell St shops – I'll send the walk list through now.</div>
+            <div class="msg msg--in" style="--d:1500ms"><span class="mono who">+61 4·· ··· 118</span>Perfect, count me in 👍</div>
+          </div>
+        </article>
+
+        <article class="tile t-5" data-rise style="--d:140ms">
+          <span class="mono eyebrow">Engagement content</span>
+          <h3 class="h3">Dispositions on a five-point scale</h3>
+          <p>Map custom outcome codes to strong support through strong oppose, and fire canned
+            replies on the first inbound.</p>
+          <div class="meter" style="margin-top:16px">
+            <s style="width:64px"></s><s style="width:48px"></s><s style="width:34px"></s>
+            <s style="width:26px"></s><s style="width:20px"></s>
+          </div>
+        </article>
+
+        <article class="tile t-4" data-rise>
+          <span class="mono eyebrow">Reach</span>
+          <h3 class="h3">P2P texting &amp; browser calls</h3>
+          <p>A peer-to-peer SMS console with a live dual-channel preview, plus a WebRTC softphone
+            that dials from the campaign's own number.</p>
+        </article>
+        <article class="tile t-4" data-rise style="--d:70ms">
+          <span class="mono eyebrow">Volunteers</span>
+          <h3 class="h3">Shifts and a live action room</h3>
+          <p>Roles, invitations and approvals, a calendar volunteers can read, and a one-tap
+            broadcast to every phone in the field.</p>
+        </article>
+        <article class="tile t-4" data-rise style="--d:140ms">
+          <span class="mono eyebrow">White-label</span>
+          <h3 class="h3">Many brands, one account</h3>
+          <p>Each campaign gets an isolated portal at its own slug, with its own logo, colours
+            and custom styling.</p>
+        </article>
+
+        <article class="tile t-3 chip" data-rise><span class="ic">◆</span><span><b>Audiences &amp; CSV</b><span>Live import progress</span></span></article>
+        <article class="tile t-3 chip" data-rise style="--d:60ms"><span class="ic">↻</span><span><b>Action Network</b><span>Two-way list sync</span></span></article>
+        <article class="tile t-3 chip" data-rise style="--d:120ms"><span class="ic">✓</span><span><b>Opt-out compliance</b><span>Checked automatically</span></span></article>
+        <article class="tile t-3 chip" data-rise style="--d:180ms"><span class="ic">◈</span><span><b>Quality assurance</b><span>Review every shift</span></span></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ACT 3 — THE ATLAS ================= -->
+  <section class="atlas" id="act3">
+    <div class="shell atlas__grid">
+      <div>
+        <div class="matrix" id="matrix" aria-label="Australia, shaded by census indicator" role="img"></div>
+        <div class="legend">
+          <span class="mono">Low</span>
+          <span class="ramp">
+            <s style="background:var(--seq-1)"></s><s style="background:var(--seq-2)"></s>
+            <s style="background:var(--seq-3)"></s><s style="background:var(--seq-4)"></s>
+            <s style="background:var(--seq-5)"></s>
+          </span>
+          <span class="mono">High</span>
+          <span class="mono" style="margin-left:auto">ABS Census 2021 · median age</span>
+        </div>
+      </div>
+
+      <div>
+        <span class="mono eyebrow" data-rise>Audience, data &amp; insights</span>
+        <h2 class="h2" data-rise style="--d:80ms; margin-top:18px">
+          <span class="mask"><span>The whole country,</span></span><br>
+          <span class="mask"><span style="--d:140ms">already loaded.</span></span>
+        </h2>
+        <p class="lede" data-rise style="--d:200ms; margin-top:20px">
+          G-NAF addresses, ASGS geography, every federal, state and local division, politicians,
+          policies and census demographics – in the workspace on day one, not a data project you
+          have to run first.
+        </p>
+        <div class="stats" data-rise style="--d:280ms">
+          <div><span class="n" data-count="16905838">0</span><span class="mono k">G-NAF addresses</span></div>
+          <div><span class="n" data-count="150">0</span><span class="mono k">Federal divisions</span></div>
+          <div><span class="n" data-count="547">0</span><span class="mono k">Local government areas</span></div>
+          <div><span class="n" data-count="438">0</span><span class="mono k">State electorates</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ACT 4 — CAMPAIGN TYPES ================= -->
+  <section class="types" id="act4">
+    <div class="shell">
+      <header class="sechead" data-rise>
+        <span class="mono eyebrow">Built for the work</span>
+        <h2 class="h2">Built for every kind of campaign</h2>
+        <p class="lede">Electoral, advocacy, community organising, union, GOTV, referendum – and more.</p>
+      </header>
+    </div>
+
+    <div class="shell">
+      <div class="trail" id="trail">
+        <article class="tcard"><span class="no">01</span><div><h3 class="h3">Electoral &amp; candidate</h3><p>Cut turf, knock doors and text voters from the candidate's own number – with electorate data and polling built in.</p></div></article>
+        <article class="tcard"><span class="no">02</span><div><h3 class="h3">Advocacy &amp; issue</h3><p>Run P2P SMS and calls, capture support on a five-point scale, and sync every contact to Action Network.</p></div></article>
+        <article class="tcard"><span class="no">03</span><div><h3 class="h3">Community organising</h3><p>Coordinate volunteers with shifts, a shared claimable inbox and a live action room that updates in real time.</p></div></article>
+        <article class="tcard"><span class="no">04</span><div><h3 class="h3">Union &amp; member</h3><p>Reach members by SMS and phone, survey them at the door or over text, and segment by workplace or region.</p></div></article>
+        <article class="tcard"><span class="no">05</span><div><h3 class="h3">GOTV &amp; field</h3><p>Optimised walk lists, an offline-first canvasser app and pace-vs-target goals to get the vote out on the day.</p></div></article>
+        <article class="tcard"><span class="no">06</span><div><h3 class="h3">Referendum &amp; ballot</h3><p>Map the electorate, canvass yes/no support with branching surveys, and track the contact funnel to polling day.</p></div></article>
+      </div>
+      <div class="trail__bar"><i id="trailBar"></i></div>
+    </div>
+  </section>
+
+  <!-- ================= ACT 5 — PROOF + FINALE ================= -->
+  <section class="proof" id="act5">
+    <div class="shell">
+      <div class="logos" data-rise>
+        <span class="mono" style="color:var(--muted)">Trusted by</span>
+        <b>Australian Progress</b><b>Common Threads</b><b>Tomorrow Movement</b><b>Sweltering Cities</b>
+      </div>
+
+      <header class="sechead" data-rise style="margin-top:clamp(56px,7vw,88px)">
+        <span class="mono eyebrow">From the blog</span>
+        <h2 class="h2">Playbooks from the field</h2>
+      </header>
+
+      <div class="posts">
+        <a class="post" href="#act5" data-rise>
+          <div class="thumb"></div>
+          <div class="meta"><span class="mono" style="color:var(--brand)">Organising</span><span class="mono">8 min</span></div>
+          <h3>Build a volunteer team that actually shows up</h3>
+          <p style="font-size:15px">Invitations and roles, a calendar volunteers can read, shifts that stick, and a live action room with one-tap broadcast.</p>
+        </a>
+        <a class="post" href="#act5" data-rise style="--d:80ms">
+          <div class="thumb"></div>
+          <div class="meta"><span class="mono" style="color:var(--brand)">Data</span><span class="mono">7 min</span></div>
+          <h3>Your electorate, mapped before you knock a single door</h3>
+          <p style="font-size:15px">G-NAF addresses, ASGS geography, every electoral division and electorate polling on a choropleth – ready to turn into turf.</p>
+        </a>
+        <a class="post" href="#act5" data-rise style="--d:160ms">
+          <div class="thumb"></div>
+          <div class="meta"><span class="mono" style="color:var(--brand)">Playbook</span><span class="mono">8 min</span></div>
+          <h3>Turn every door knock into a targeting decision</h3>
+          <p style="font-size:15px">Custom dispositions on a five-point support scale, an honest results read, and turf that reshapes around what you learn.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="finale">
+    <div class="plane aurora" data-rate="0.06"><b></b><b></b><b></b></div>
+    <div class="shell">
+      <span class="mono eyebrow" data-rise>Ready when you are</span>
+      <h2 class="display" data-rise style="--d:80ms; max-width:14ch">Ready to organise?</h2>
+      <p class="lede" data-rise style="--d:160ms">Every channel, every door, every volunteer – run your
+        whole campaign from one place.</p>
+      <div class="finale__cta" data-rise style="--d:240ms">
+        <a class="btn btn--primary" href="#act0">Start a campaign<span class="arw">→</span></a>
+        <a class="btn btn--ghost" href="#act0">Request a demo</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="ftr">
+  <div class="shell">
+    <div class="ftr__grid">
+      <div>
+        <a class="brand" href="#act0"><span class="glyph">U</span>Uprise</a>
+        <p style="margin-top:14px; max-width:34ch; font-size:14.5px">
+          SMS, calls, canvassing and Australian data in one platform. Built by campaigners,
+          for campaigners.
+        </p>
+      </div>
+      <div><h4>Product</h4><ul><li><a href="#act2">Features</a></li><li><a href="#act3">Data</a></li><li><a href="#act4">Campaigns</a></li><li><a href="#act5">Plans</a></li></ul></div>
+      <div><h4>Resources</h4><ul><li><a href="#act5">Blog</a></li><li><a href="#act5">Docs</a></li><li><a href="#act5">Integrations</a></li><li><a href="#act5">About</a></li></ul></div>
+      <div><h4>Community</h4><ul><li><a href="#act5">Contact us</a></li><li><a href="#act5">Support centre</a></li><li><a href="#act5">Developers</a></li><li><a href="#act5">Request a demo</a></li></ul></div>
+    </div>
+    <div class="ftr__legal">
+      <span class="mono">© 2026 Uprise Labs · Naarm / Melbourne</span>
+      <span class="mono">Privacy · Terms · Security · Compliance</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var fine   = matchMedia("(pointer: fine)").matches;
+  var clamp  = function(v,a,b){ return v<a?a:v>b?b:v };
+  var lerp   = function(a,b,t){ return a+(b-a)*t };
+  var smooth = function(t){ t=clamp(t,0,1); return t*t*(3-2*t) };
+
+  /* ---------------------------------------------------------------- reveals */
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target) } });
+  }, { rootMargin:"0px 0px -12% 0px", threshold:.12 });
+  document.querySelectorAll("[data-rise], .minimap, .thread, .matrix, .mask").forEach(function(n){
+    // .mask inside a [data-rise] is driven by the parent's .in
+    if(n.classList.contains("mask") && n.closest("[data-rise]")) return;
+    io.observe(n);
+  });
+  // hero headline plays on load rather than on scroll
+  requestAnimationFrame(function(){
+    document.querySelectorAll("#heroH .mask").forEach(function(m){ m.classList.add("in") });
+  });
+
+  /* ------------------------------------------------------------ count-up */
+  function countUp(el){
+    if(el.dataset.done) return; el.dataset.done = "1";
+    var to = parseFloat(el.dataset.count), dp = parseInt(el.dataset.dp||"0",10),
+        sfx = el.dataset.suffix||"", dur = reduce?0:1400, t0 = performance.now();
+    function fmt(v){
+      return (dp ? v.toFixed(dp) : Math.round(v).toLocaleString("en-AU")) + sfx;
+    }
+    if(reduce){ el.textContent = fmt(to); return }
+    (function step(now){
+      var p = clamp((now-t0)/dur,0,1), e = 1-Math.pow(1-p,3);
+      el.textContent = fmt(to*e);
+      if(p<1) requestAnimationFrame(step);
+    })(t0);
+  }
+  var cio = new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ countUp(e.target); cio.unobserve(e.target) } });
+  }, { threshold:.6 });
+  document.querySelectorAll("[data-count]").forEach(function(n){
+    if(n.closest("[data-sat]")) return;      // stage satellites: driven by paintStage
+    cio.observe(n);
+  });
+
+  /* ------------------------------------------------------------ the atlas */
+  // 32 × 22 dot matrix. '#' is land; each land cell picks a band off the
+  // @uprise/ui --seq ramp from a deterministic hash, so the shading reads as a
+  // real choropleth rather than noise, and is identical on every load.
+  var AU = [
+    "......................##........",
+    ".............####....####.......",
+    "............#######...###.......",
+    ".........##########...####......",
+    "........############..#####.....",
+    ".......####################.....",
+    "......######################....",
+    "....#########################...",
+    "..############################..",
+    ".##############################.",
+    ".###############################",
+    ".###############################",
+    "..##############################",
+    "..#############################.",
+    "..##########......#############.",
+    "..########........#############.",
+    "...####..........#############..",
+    "....................##########..",
+    ".....................#######....",
+    ".........................###....",
+    "........................####....",
+    ".........................##....."
+  ];
+  var ramp = ["--seq-1","--seq-2","--seq-3","--seq-4","--seq-5"];
+  var mx = document.getElementById("matrix"), frag = document.createDocumentFragment();
+  AU.forEach(function(row,y){
+    row.split("").forEach(function(ch,x){
+      var s = document.createElement("s");
+      if(ch === "#"){
+        var h = (x*73856093 ^ y*19349663) >>> 0;          // stable pseudo-random
+        var band = Math.floor(((h % 1000)/1000) * 5);
+        s.style.setProperty("--c", "var(" + ramp[clamp(band,0,4)] + ")");
+        // stagger from the south-east, so the fill sweeps up the continent
+        s.style.setProperty("--d", Math.round((Math.abs(x-27) + Math.abs(y-19)) * 16) + "ms");
+      } else { s.className = "sea"; s.style.setProperty("--d", "0ms") }
+      frag.appendChild(s);
+    });
+  });
+  mx.appendChild(frag);
+
+  /* -------------------------------------------------- header / rail / bar */
+  var hdr = document.getElementById("hdr"), pbar = document.getElementById("pbar");
+  var railLinks = [].slice.call(document.querySelectorAll("#rail a"));
+  var acts = railLinks.map(function(a){ return document.getElementById(a.dataset.act) });
+
+  /* ------------------------------------------------------- the pinned stage */
+  var stage   = document.getElementById("act1");
+  var scenes  = [].slice.call(document.querySelectorAll(".scene"));
+  var shots   = [].slice.call(document.querySelectorAll("[data-shot]"));
+  var sats    = [].slice.call(document.querySelectorAll("[data-sat]"));
+  var frame   = document.getElementById("frame");
+  var phone   = document.getElementById("phone");
+  var frameUrl= document.getElementById("frameUrl");
+  var N = scenes.length;
+
+  // Scene → capture. `shot: null` means the scene has no screenshot: on 02 the
+  // desktop frame recedes and the drawn phone takes the stage. `w` is the frame
+  // width the scene settles at, so the frame visibly narrows and widens between
+  // beats – the morph, without needing a second capture set.
+  var SCENE = [
+    { shot:0,    w:1000, url:"app.uprise.org.au/canvass/turf" },
+    { shot:null, w:600,  url:"field.uprise.org.au/walk/coburg-14" },
+    { shot:1,    w:900,  url:"app.uprise.org.au/inbox" },
+    { shot:2,    w:920,  url:"app.uprise.org.au/canvass/insights" },
+    { shot:3,    w:1000, url:"app.uprise.org.au/data/datasets" }
+  ];
+  var lastUrl = -1;
+
+  // missing-capture fallback
+  shots.forEach(function(img){
+    img.addEventListener("error", function(){ frame.classList.add("is-missing") });
+  });
+
+  // 1 across the middle of scene i's band, crossing to 0 over `w` either side of
+  // the boundary. `gap` brings the cross-out forward of the cross-in, so two
+  // headlines are never legible on top of each other.
+  function band(raw, i, w, gap){
+    return smooth(((0.5 - (gap||0)) + w - Math.abs(raw - (i + 0.5))) / (2*w));
+  }
+
+  function paintStage(){
+    var r = stage.getBoundingClientRect();
+    var span = stage.offsetHeight - innerHeight;
+    var p = clamp(-r.top / (span||1), 0, 1);
+    // Map so scene 0 is centred the instant the stage pins and scene N-1 is still
+    // centred when it releases. Mapping p straight onto 0..N instead leaves the
+    // first and last scenes half-faded at the pin edges – a void either side.
+    var raw = p * (N - 1) + .5;                          // .5 .. N-.5
+    var live = clamp(Math.round(raw - .5), 0, N-1);
+
+    // copy: hard swap with a beat of blank between scenes
+    for(var i=0;i<N;i++){
+      var o = band(raw, i, .08, .08);
+      scenes[i].style.opacity = o;
+      scenes[i].style.transform = "translate3d(0," + lerp(16, 0, o) + "px,0)";
+    }
+    // captures: a short cross-dissolve, so two dense UI screens overlap only briefly
+    SCENE.forEach(function(sc, i){
+      if(sc.shot === null) return;
+      var o = band(raw, i, .09, 0);
+      shots[sc.shot].style.opacity = o;
+      shots[sc.shot].style.transform = "scale(" + lerp(1.025, 1, o) + ")";
+    });
+    sats.forEach(function(s){
+      var o = band(raw, +s.dataset.sat, .12, .06);
+      s.style.opacity = o;
+      s.style.transform = "translate3d(0," + lerp(14,0,o) + "px,0) scale(" + lerp(.95,1,o) + ")";
+    });
+
+    // scene 02: the phone takes over and the desktop frame recedes behind it
+    var po = band(raw, 1, .13, 0);
+    phone.style.opacity = po;
+    phone.style.transform =
+      "translate(calc(-50% + " + lerp(90,0,po).toFixed(1) + "px), -50%)" +
+      " scale(" + lerp(.72,1.3,po).toFixed(3) + ")" +
+      " rotate(" + lerp(7,0,po).toFixed(2) + "deg)";
+    frame.style.opacity = (1 - .93*po).toFixed(3);
+    frame.style.setProperty("--fs", (1 - .12*po).toFixed(3));
+
+    // frame width lerps between the two nearest scenes
+    var f = clamp(raw - .5, 0, N-1), a = Math.floor(f), b = Math.min(a+1, N-1), t = f-a;
+    frame.style.setProperty("--fw", Math.round(lerp(SCENE[a].w, SCENE[b].w, t)) + "px");
+
+    if(live !== lastUrl){
+      frameUrl.textContent = SCENE[live].url;
+      lastUrl = live;
+      // Count the live scene's satellites here rather than on intersection: the
+      // satellites are absolutely positioned inside the pinned deck, so they are
+      // "in view" for the whole stage and an IntersectionObserver fires them all
+      // at once, long before their scene arrives.
+      document.querySelectorAll('[data-sat="' + live + '"] [data-count]').forEach(countUp);
+      document.querySelectorAll('[data-sat="' + live + '"] .bar i').forEach(function(i){
+        i.style.setProperty("--w", i.dataset.w);
+      });
+    }
+  }
+
+  /* ------------------------------------------------------------- parallax */
+  var planes = [].slice.call(document.querySelectorAll(".plane[data-rate]"));
+
+  function frameLoop(){
+    var y = scrollY || pageYOffset;
+
+    // scroll progress hairline
+    var max = document.documentElement.scrollHeight - innerHeight;
+    pbar.style.setProperty("--p", (max>0 ? y/max : 0).toFixed(4));
+
+    // header
+    hdr.classList.toggle("stuck", y > 60);
+
+    // parallax planes, each relative to its own section
+    planes.forEach(function(pl){
+      var host = pl.parentElement.getBoundingClientRect();
+      pl.style.transform = "translate3d(0," + (-host.top * +pl.dataset.rate).toFixed(2) + "px,0)";
+    });
+
+    // hero content drifts and dissolves as it leaves
+    var hi = document.getElementById("heroIn");
+    var hp = clamp(y / (innerHeight * .85), 0, 1);
+    hi.style.opacity = 1 - hp;
+    hi.style.transform = "translate3d(0," + (hp*-40).toFixed(1) + "px,0) scale(" + (1 - hp*.04).toFixed(4) + ")";
+
+    if(!reduce) paintStage();
+
+    // act rail
+    var best = 0;
+    acts.forEach(function(sec,i){
+      if(sec && sec.getBoundingClientRect().top <= innerHeight * .45) best = i;
+    });
+    railLinks.forEach(function(a,i){ a.classList.toggle("on", i === best) });
+
+    ticking = false;
+  }
+  var ticking = false;
+  function onScroll(){ if(!ticking){ ticking = true; requestAnimationFrame(frameLoop) } }
+  addEventListener("scroll", onScroll, { passive:true });
+  addEventListener("resize", onScroll);
+  frameLoop();
+
+  /* -------------------------------------------- cursor spotlight + tilt */
+  if(fine && !reduce){
+    var hero = document.querySelector(".hero");
+    hero.addEventListener("pointermove", function(e){
+      var r = hero.getBoundingClientRect();
+      hero.querySelector(".spot").style.setProperty("--mx", ((e.clientX-r.left)/r.width*100)+"%");
+      hero.querySelector(".spot").style.setProperty("--my", ((e.clientY-r.top)/r.height*100)+"%");
+    });
+
+    // the device leans toward the cursor, easing back to flat
+    var tx=0, ty=0, cx=0, cy=0, deck = document.getElementById("deck");
+    addEventListener("pointermove", function(e){
+      var r = deck.getBoundingClientRect();
+      if(r.bottom < 0 || r.top > innerHeight) return;
+      tx = clamp((e.clientX - (r.left + r.width/2)) / r.width, -.5, .5);
+      ty = clamp((e.clientY - (r.top + r.height/2)) / r.height, -.5, .5);
+    }, { passive:true });
+    (function tilt(){
+      cx = lerp(cx, tx, .06); cy = lerp(cy, ty, .06);
+      frame.style.setProperty("--ry", (cx * 5).toFixed(2) + "deg");
+      frame.style.setProperty("--rx", (-cy * 3.4).toFixed(2) + "deg");
+      requestAnimationFrame(tilt);
+    })();
+  }
+
+  /* ------------------------------------------------- horizontal type rail */
+  var trail = document.getElementById("trail"), tbar = document.getElementById("trailBar");
+  function paintTrail(){
+    var max = trail.scrollWidth - trail.clientWidth;
+    var p = max>0 ? trail.scrollLeft/max : 0;
+    tbar.style.setProperty("--x", (p * (100/0.26 - 100)).toFixed(2) + "%");
+  }
+  trail.addEventListener("scroll", paintTrail, { passive:true });
+  paintTrail();
+
+  // drag to scroll
+  var down=false, sx=0, sl=0;
+  trail.addEventListener("pointerdown", function(e){
+    down=true; sx=e.clientX; sl=trail.scrollLeft; trail.classList.add("dragging");
+    trail.setPointerCapture(e.pointerId);
+  });
+  trail.addEventListener("pointermove", function(e){
+    if(!down) return; trail.scrollLeft = sl - (e.clientX - sx);
+  });
+  ["pointerup","pointercancel"].forEach(function(ev){
+    trail.addEventListener(ev, function(){ down=false; trail.classList.remove("dragging") });
+  });
+})();
+</script>
+</body>
+</html>

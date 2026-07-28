@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Pause, Play } from "lucide-react";
-import { Reveal } from "@uprise/ui";
 import SCREENS from "../../../public/images/marketing/screens/screens.json";
 import { CAPABILITIES, type Capability } from "./capabilities";
 import Callout from "./Callout";
@@ -26,15 +25,16 @@ function isCaptured(c: Capability): boolean {
 }
 
 /**
- * The homepage capability walkthrough: a sticky screenshot stage that advances through the product's
- * real surfaces, drawing annotation callouts onto each one in sequence.
+ * The capability walkthrough: a sticky screenshot stage that advances through the product's real
+ * surfaces, drawing annotation callouts onto each one in sequence. Lives in the hero, which supplies
+ * the surrounding heading, width and background — this renders the reel and nothing else.
  *
  * Auto-advances, but yields to the visitor — it pauses on hover, on keyboard focus within, when
  * scrolled out of view, and permanently once they touch a control. Reduced-motion users get no
  * auto-advance, no slide and all callouts at once. Below `lg` the sticky stage is dropped entirely
  * for a plain stacked list, because a pinned stage on a short phone viewport is a trap.
  */
-export default function CapabilityShowcase() {
+export default function CapabilityShowreel() {
   // Only capabilities with a real capture. The whole section is about showing the actual product,
   // so a capability with no screenshot has nothing to say here — and a visitor must never be shown
   // a "pending capture" box. Renders nothing at all until `pnpm marketing:shots` has been run.
@@ -103,98 +103,134 @@ export default function CapabilityShowcase() {
   if (!current) return null;
 
   return (
-    <section className="bg-[linear-gradient(180deg,#FFF_0%,#F9FAFB_100%)] py-16 md:py-24 lg:py-30">
-      <div className="container">
-        <Reveal>
-          <div className="mx-auto mb-12 max-w-2xl text-center">
-            <span className="mb-3 inline-block text-sm font-semibold uppercase tracking-wide text-primary">
-              See it working
-            </span>
-            <h2 className="text-3xl font-bold !leading-[1.2] text-title-color md:text-[40px]">
-              The whole campaign, on one screen at a time
-            </h2>
-            <p className="mt-4 text-base !leading-normal text-text-color-secondary">
-              Real screens from the product — not mockups. Every capture comes from a live Uprise
-              workspace running on demo data.
+    <div
+      ref={sectionRef}
+      className="text-left"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocusCapture={() => setFocused(true)}
+      onBlurCapture={() => setFocused(false)}
+      onKeyDown={onKeyDown}
+    >
+      {/* One capability at a time — stage above the words on a phone, beside them from lg. */}
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-14">
+        <Stage capability={current} runId={runId} reduced={reduced} />
+
+        {/* Keyed on the capability so the whole panel remounts and re-fades on every step. */}
+        <div key={current.key} className="animate-fade-up lg:pt-2">
+          <span className="mb-2 inline-block text-sm font-semibold uppercase tracking-wide text-primary">
+            {current.eyebrow}
+          </span>
+          <h3 className="text-2xl font-bold !leading-[1.15] text-title-color md:text-3xl">
+            {current.title}
+          </h3>
+          <p className="mt-3 text-base !leading-normal text-text-color-secondary">{current.blurb}</p>
+
+          {/* The callouts are pinned to the screenshot from lg (see Stage); below that there is no
+              room to point at anything, so they read as prose instead of vanishing. */}
+          <ul className="mt-5 space-y-3 lg:hidden">
+            {current.callouts.map((a) => (
+              <li key={a.title}>
+                <p className="text-base font-semibold text-title-color">{a.title}</p>
+                <p className="text-sm !leading-normal text-text-color-secondary">{a.body}</p>
+              </li>
+            ))}
+          </ul>
+
+          <StepProgress
+            capabilities={shown}
+            active={active}
+            running={running}
+            dwellMs={DWELL_MS}
+            onSelect={(i) => {
+              setUserPaused(true);
+              goTo(i);
+            }}
+          />
+
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setUserPaused((p) => !p)}
+              aria-pressed={userPaused}
+              className="inline-flex items-center gap-1.5 rounded-full border border-stroke px-3 py-1.5 text-xs font-medium text-text-color-secondary transition-colors hover:border-primary hover:text-primary"
+            >
+              {userPaused || reduced ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+              {userPaused || reduced ? "Play" : "Pause"}
+            </button>
+            <p className="text-xs text-text-color-tertiary">
+              {reduced ? "Pick a capability to view it." : "Or use ← → to step through."}
             </p>
           </div>
-        </Reveal>
-
-        {/* ── Desktop: sticky stage + step rail ───────────────────────────────── */}
-        <div
-          ref={sectionRef}
-          className="hidden lg:block"
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-          onFocusCapture={() => setFocused(true)}
-          onBlurCapture={() => setFocused(false)}
-          onKeyDown={onKeyDown}
-        >
-          <div className="grid grid-cols-[minmax(0,7fr)_minmax(0,5fr)] items-start gap-14">
-            <Stage capability={current} runId={runId} reduced={reduced} />
-
-            <div className="pt-2">
-              <ol className="space-y-1" aria-label="Capabilities">
-                {shown.map((c, i) => (
-                  <StepRow
-                    key={c.key}
-                    capability={c}
-                    index={i}
-                    active={i === active}
-                    running={running && i === active}
-                    dwellMs={DWELL_MS}
-                    onSelect={() => {
-                      setUserPaused(true);
-                      goTo(i);
-                    }}
-                  />
-                ))}
-              </ol>
-
-              <div className="mt-6 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setUserPaused((p) => !p)}
-                  aria-pressed={userPaused}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-stroke px-3 py-1.5 text-xs font-medium text-text-color-secondary transition-colors hover:border-primary hover:text-primary"
-                >
-                  {userPaused || reduced ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                  {userPaused || reduced ? "Play" : "Pause"}
-                </button>
-                <p className="text-xs text-text-color-tertiary">
-                  {reduced ? "Pick a capability to view it." : "Or use ← → to step through."}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Mobile: stacked, static, callouts as prose ──────────────────────── */}
-        <div className="space-y-12 lg:hidden">
-          {shown.map((c) => (
-            <Reveal key={c.key}>
-              <div>
-                <span className="mb-2 inline-block text-sm font-semibold uppercase tracking-wide text-primary">
-                  {c.eyebrow}
-                </span>
-                <h3 className="mb-4 text-2xl font-bold !leading-[1.2] text-title-color">{c.title}</h3>
-                <Frame>
-                  <Shot capability={c} />
-                </Frame>
-                <ul className="mt-5 space-y-3">
-                  {c.callouts.map((a) => (
-                    <li key={a.title}>
-                      <p className="text-base font-semibold text-title-color">{a.title}</p>
-                      <p className="text-sm !leading-normal text-text-color-secondary">{a.body}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-          ))}
         </div>
       </div>
-    </section>
+    </div>
+  );
+}
+
+/**
+ * The step indicator: one slim segment per capability, the active one filling over its dwell. It
+ * replaces a rail that listed every step at once — with the panel above showing only the active
+ * capability, this is what tells you how many there are and where you are among them.
+ */
+function StepProgress({
+  capabilities,
+  active,
+  running,
+  dwellMs,
+  onSelect,
+}: {
+  capabilities: Capability[];
+  active: number;
+  running: boolean;
+  dwellMs: number;
+  onSelect: (i: number) => void;
+}) {
+  return (
+    <ol className="mt-7 flex items-center gap-2" aria-label="Capabilities">
+      {capabilities.map((c, i) => (
+        <li key={c.key} className="relative flex-1">
+          <button
+            type="button"
+            onClick={() => onSelect(i)}
+            aria-current={i === active ? "step" : undefined}
+            aria-label={c.title}
+            className="group block w-full py-2"
+          >
+            {/* The label rides above the segment on hover/focus, so a visitor can tell what they're
+                about to jump to instead of picking a numbered bar blind. Pointer-events-none keeps
+                it from stealing the hover it was opened by. */}
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-lg bg-title-color px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-feature transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
+            >
+              {c.title}
+              <span
+                aria-hidden
+                className="absolute left-1/2 top-full -ml-1 border-4 border-transparent border-t-title-color"
+              />
+            </span>
+
+            {/* Every segment keeps a visible track: a hairline for the steps still to come reads as
+                empty space, and then the row can't say how many capabilities there are. */}
+            <span
+              className={`block w-full overflow-hidden rounded-full transition-all duration-200 ${
+                i === active
+                  ? "h-[3px] bg-gray-200"
+                  : "h-[2px] bg-gray-200 group-hover:h-[5px] group-hover:bg-gray-300 group-focus-visible:h-[5px]"
+              }`}
+            >
+              {/* Steps already shown stay filled, so the row reads as progress, not as a menu. */}
+              {i < active ? (
+                <span className="block h-full w-full rounded-full bg-primary opacity-40 transition-opacity duration-200 group-hover:opacity-70" />
+              ) : (
+                <ProgressFill active={i === active} running={running} dwellMs={dwellMs} />
+              )}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -228,7 +264,7 @@ function Shot({ capability, priority = false }: { capability: Capability; priori
   );
 }
 
-/** The sticky stage: the active screenshot with its callouts drawing on in sequence. */
+/** The stage: the active screenshot with its callouts drawing on in sequence. */
 function Stage({
   capability,
   runId,
@@ -239,12 +275,14 @@ function Stage({
   reduced: boolean;
 }) {
   return (
-    <div className="sticky top-28">
-      {/* keyed on the capability so the swap remounts (and re-fades) the image */}
-      <div key={capability.key} className="relative animate-fade-up">
-        <Frame>
-          <Shot capability={capability} priority />
-        </Frame>
+    // keyed on the capability so the swap remounts (and re-fades) the image
+    <div key={capability.key} className="relative animate-fade-up">
+      <Frame>
+        <Shot capability={capability} priority />
+      </Frame>
+      {/* Pinned annotations need room to sit beside the shot; below lg the panel prints them as
+          prose instead. The wrapper is static, so each Callout still anchors to the frame above. */}
+      <div className="hidden lg:block">
         {capability.callouts.map((c, i) => (
           <Callout
             key={`${runId}:${c.title}`}
@@ -298,69 +336,3 @@ function ProgressFill({ active, running, dwellMs }: { active: boolean; running: 
   );
 }
 
-/**
- * A step in the rail. The progress track is the "small grey text that grows and thickens on hover"
- * — a hairline rule that thickens and gains contrast on hover/active, filling left-to-right over the
- * dwell while this step is the running one.
- */
-function StepRow({
-  capability,
-  index,
-  active,
-  running,
-  dwellMs,
-  onSelect,
-}: {
-  capability: Capability;
-  index: number;
-  active: boolean;
-  running: boolean;
-  dwellMs: number;
-  onSelect: () => void;
-}) {
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onSelect}
-        aria-current={active ? "step" : undefined}
-        className="group block w-full py-3 text-left"
-      >
-        <span className="flex items-baseline gap-2.5">
-          <span
-            className={`text-xs tabular-nums transition-colors ${
-              active ? "text-primary" : "text-text-color-tertiary group-hover:text-text-color-secondary"
-            }`}
-          >
-            {String(index + 1).padStart(2, "0")}
-          </span>
-          <span
-            className={`text-lg font-semibold transition-colors ${
-              active ? "text-title-color" : "text-text-color-secondary group-hover:text-title-color"
-            }`}
-          >
-            {capability.title}
-          </span>
-        </span>
-
-        {/* Track: 1px and faint at rest, 3px and darker on hover or when active. */}
-        <span
-          aria-hidden
-          className={`mt-2.5 block w-full overflow-hidden rounded-full bg-stroke transition-all duration-200 ${
-            active ? "h-[3px] bg-gray-200" : "h-px group-hover:h-[3px] group-hover:bg-gray-200"
-          }`}
-        >
-          <ProgressFill active={active} running={running} dwellMs={dwellMs} />
-        </span>
-
-        <span
-          className={`mt-2 block text-sm !leading-normal transition-opacity ${
-            active ? "text-text-color-secondary opacity-100" : "text-text-color-tertiary opacity-70"
-          }`}
-        >
-          {capability.blurb}
-        </span>
-      </button>
-    </li>
-  );
-}

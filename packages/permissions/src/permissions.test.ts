@@ -278,3 +278,37 @@ describe("resource + action taxonomies", () => {
     }
   });
 });
+
+/**
+ * Regression: `.all` grants must satisfy guards written against `.all`.
+ *
+ * expandRule used to REPLACE a `<domain>.all` rule with its concrete resources, dropping the
+ * wildcard itself. Every endpoint gated on a wildcard resource — the whole analytics, payment and
+ * integrations controllers, plus /auth/stream-token — was therefore unreachable for every role
+ * except super-admin, including the owner who is granted `manage <domain>.all` outright.
+ */
+describe("defineAbilityFor — wildcard grants satisfy wildcard guards", () => {
+  const roleAbility = (role: string) =>
+    defineAbilityFor({ id: "u", type: "user", email: "e", tenantId: "t", roles: [role], isSuperAdmin: false });
+
+  it("lets an owner read the resources its role grants domain-wide", () => {
+    const owner = roleAbility("owner");
+    expect(owner.can("read", "analytics.all")).toBe(true);
+    expect(owner.can("read", "payment.all")).toBe(true);
+    expect(owner.can("manage", "payment.all")).toBe(true);
+    expect(owner.can("read", "integration.all")).toBe(true);
+  });
+
+  it("still expands the wildcard down to concrete resources", () => {
+    const owner = roleAbility("owner");
+    expect(owner.can("create", "analytics.vital")).toBe(true);
+  });
+
+  it("grants nothing to a role that holds no such wildcard", () => {
+    // The widening must be exactly "the grant you already had", nothing more.
+    const volunteer = roleAbility("volunteer");
+    expect(volunteer.can("read", "analytics.all")).toBe(false);
+    expect(volunteer.can("read", "payment.all")).toBe(false);
+    expect(volunteer.can("manage", "tenant.all")).toBe(false);
+  });
+});

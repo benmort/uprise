@@ -45,7 +45,10 @@ function readDismiss(tenantId: string): DismissSnapshot | null {
  * and the pill hid under the sidebar. The right corner has no such neighbour (the call bar
  * and PWA prompt are both bottom-CENTRE), so no offset maths is needed.
  */
-const ANCHOR = "fixed bottom-4 right-4";
+// `setup-tracker` is a plain hook class, not a style: the tracker is position:fixed, so it paints
+// over every marketing capture regardless of the region being cropped. apps/admin/scripts/
+// marketing-shots.mjs hides it by this class. Keep it on every branch's root.
+const ANCHOR = "setup-tracker fixed bottom-4 right-4";
 
 export function SetupTracker() {
   const pathname = usePathname();

@@ -72,6 +72,43 @@ Fills the real photos/logos the app renders (politician headshots on the data pa
 
 ---
 
+## 2c. Demo data on prod (optional)
+
+Populates the **Uprise Labs** tenant so the live product demos well: ~150 canvassable households
+plus ~90 email-only contacts, 90 door knocks, saved searches, audiences with members, sent blasts,
+opt-outs, events, shifts, tags and content. Additive and idempotent — re-running changes nothing.
+
+> This writes fake data into a REAL tenant. It is only appropriate because Uprise Labs is our own
+> company tenant, not a customer's. Never point this at a tenant holding real supporter data.
+
+Run on the **direct (unpooled)** Neon url — the seeder does many sequential writes and pgbouncer
+breaks them. Resolve the secret in a subshell so it never lands in the transcript:
+
+```
+( set -a; source <(grep -E '^PRODUCTION_DATABASE_URL=' apps/api/.env.prod); set +a
+  DIRECT="${PRODUCTION_DATABASE_URL/-pooler./.}"
+  echo "target: ${DIRECT##*@}"                       # host+db only, no creds
+  cd apps/api && NODE_ENV=production DATABASE_URL="$DIRECT" pnpm --filter api seed:demo )
+```
+
+**Verify:** sign in as `demo.owner@uprise.test` and check the dashboard tiles are populated —
+doors today > 0, saved searches listed, opt-outs > 0, calendar showing events both sides of today.
+Re-run once and confirm no duplicate contacts or campaigns.
+
+Knocks are dated **relative to the run**, with the recent cohort spread across the part of today
+that has already elapsed — so "doors today" stays non-zero however long ago the seed last ran, and
+whatever hour it ran at.
+
+**Teardown** is guarded. `seed:clear` deletes contacts by ADDRESS and campaigns/turfs/surveys by
+exact NAME, so a colliding real row would be destroyed; it refuses to run against a
+non-local database unless you also pass `--force`:
+
+```
+cd apps/api && DATABASE_URL="$DIRECT" pnpm --filter api seed:clear -- --force
+```
+
+---
+
 ## 3. API environment variables (Vercel → API project)
 
 **Required**

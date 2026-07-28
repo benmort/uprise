@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Alert, BrandStyle, Spinner, brandVarsCss, writeBrandCookie } from "@uprise/ui";
+import { BrandStyle, Spinner, brandVarsCss, writeBrandCookie } from "@uprise/ui";
 import { auth, getActionAppUrl } from "@uprise/api-client";
 import type { OpenJoinPreview } from "@uprise/contracts";
 import { completeAuth } from "@/lib/session";
@@ -11,6 +11,7 @@ import { useWizardStep } from "@/lib/wizard-step";
 import { VolunteerOnboardWizard } from "@/components/volunteer-onboard-wizard";
 import { VolunteerFlowShell } from "@/components/volunteer-flow-shell";
 import { VolunteerJoinHero } from "@/components/volunteer-join-hero";
+import { VolunteerCampaignClosed } from "@/components/volunteer-campaign-closed";
 
 /**
  * Client half of the tokenless open-join entry. The campaign preview (incl. brand colours) is
@@ -105,13 +106,20 @@ export function OpenJoinClient({
       </div>
     );
   }
-  if (error && campaignName === null) {
+  // Closed campaign (`open: false`), or one that couldn't be resolved at all. Either way the
+  // reader is a would-be volunteer who followed a real link, so they get the branded recovery
+  // page – the org's other open campaigns – rather than an error card in an empty shell.
+  if (!preview || !preview.open) {
     return (
-      <VolunteerFlowShell>
-        <div className="px-5 py-8">
-          <Alert variant="error" title={error} />
-        </div>
-      </VolunteerFlowShell>
+      <VolunteerCampaignClosed
+        brand={preview}
+        reason={error}
+        requestJoinHref={withReturnTo("/volunteer/join", returnTo)}
+        signInHref={withReturnTo("/volunteer/sign-in", returnTo)}
+        browseHref={withReturnTo("/volunteer", returnTo)}
+        // Straight into the wizard's phone step: they already chose this campaign from the list.
+        hrefFor={(o) => withReturnTo(`/volunteer/${o.campaignId}?step=phone`, returnTo)}
+      />
     );
   }
 

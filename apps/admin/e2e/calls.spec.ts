@@ -25,10 +25,12 @@ test("new call dialog opens and switches between number + contact modes", async 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
 
-  // Number mode formats an AU mobile as you type.
+  // Number mode: @uprise/ui's PhoneInput is a country-code select beside a national-number
+  // field. It strips non-digits (`raw.replace(/\D/g, "")`) and keeps the typed leading 0
+  // visible, emitting E.164 via onChange — so the field shows the digits, unspaced.
   await dialog.getByRole("button", { name: /^Number$/ }).click();
-  await page.locator("#call-number").fill("0400000123");
-  await expect(page.locator("#call-number")).toHaveValue("0400 000 123");
+  await page.locator("#call-number").fill("0400 000 123");
+  await expect(page.locator("#call-number")).toHaveValue("0400000123");
 
   // Contact mode searches the seeded contacts (tolerate zero results).
   await dialog.getByRole("button", { name: /^Contact$/ }).click();
@@ -45,4 +47,11 @@ test("volunteers roster shows the mobile column + a call button per volunteer", 
   // One Call button per volunteer row (none when the roster is empty — tolerate that).
   const callButtons = page.getByRole("button", { name: /^Call$/ });
   if (await callButtons.count()) await expect(callButtons.first()).toBeVisible();
+});
+
+/** The calls channel itself — its surface renders and offers the dialog entry point. */
+test("the calls channel renders with a New call entry point", async ({ page }) => {
+  await page.goto("/channels/calls", { waitUntil: "domcontentloaded" });
+  await expect(page, "no sign-in bounce from /channels/calls").not.toHaveURL(/\/sign-in|\/login/);
+  await expect(page.getByRole("button", { name: /new call/i })).toBeVisible({ timeout: 20_000 });
 });

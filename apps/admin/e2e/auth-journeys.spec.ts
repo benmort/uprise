@@ -32,6 +32,20 @@ test.describe("auth app — screens render", () => {
   }
 });
 
+test.describe("auth app — sign-up wizard", () => {
+  /**
+   * Step 1 collects the organisation and its workspace URL — the subdomain the tenant is
+   * reached on. Asserting the field (not just the heading) guards the step-1 form itself.
+   */
+  test("sign-up step 1 collects the organisation + workspace URL", async ({ page }) => {
+    await page.goto(`${AUTH_APP_URL}/sign-up`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: /organisation setup/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("body")).toContainText(/step 1 of 2/i);
+    await expect(page.locator("body")).toContainText(/organisation name/i);
+    await expect(page.locator("body")).toContainText(/workspace url/i);
+  });
+});
+
 test.describe("auth app — organiser sign-in journey", () => {
   test("email/password sign-in mints a session and reaches the admin dashboard", async ({ page }) => {
     await page.goto(`${AUTH_APP_URL}/sign-in`, { waitUntil: "domcontentloaded" });

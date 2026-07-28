@@ -1,7 +1,26 @@
 'use client';
 
 import Image from 'next/image';
-import { LOGOS } from './logos';
+import { VISIBLE_LOGOS } from './logos';
+import LogoRow from './LogoRow';
+
+/**
+ * Below this, scrolling is worse than not scrolling: the loop can only be filled by repeating the
+ * same marks, so a visitor watches two supporters cycle past pretending to be many. A centred
+ * static row states the same thing honestly — that's <LogoRow />.
+ */
+const MIN_LOGOS_TO_SCROLL = 4;
+
+/**
+ * The loop works by translating the track -50%, which only reads as continuous if a single half
+ * already overflows the container — so the half is repeated until it is wide enough. Only reached
+ * with four or more supporters; below that the static row runs instead.
+ */
+const MIN_ITEMS_PER_HALF = 8;
+const track = Array.from(
+  { length: Math.max(1, Math.ceil(MIN_ITEMS_PER_HALF / Math.max(VISIBLE_LOGOS.length, 1))) },
+  () => VISIBLE_LOGOS,
+).flat();
 
 /**
  * LogoCarousel Component
@@ -19,6 +38,10 @@ import { LOGOS } from './logos';
  */
 
 export default function LogoCarousel() {
+  // No visible supporters → render nothing rather than an empty animated strip under a heading.
+  if (VISIBLE_LOGOS.length === 0) return null;
+  // Too few to loop without repeating them → centred row, no animation, no duplicates.
+  if (VISIBLE_LOGOS.length < MIN_LOGOS_TO_SCROLL) return <LogoRow />;
   return (
     <section className="pt-16">
       <div className="container">
@@ -35,8 +58,8 @@ export default function LogoCarousel() {
             }}
           >
             <div className="flex animate-scroll whitespace-nowrap">
-              {/* First set of logos */}
-              {LOGOS.map((logo, index) => (
+              {/* First half */}
+              {track.map((logo, index) => (
                 <div key={`first-${index}`} className="inline-flex items-center justify-center px-8 flex-shrink-0">
                   <Image
                     alt={logo.alt}
@@ -50,8 +73,8 @@ export default function LogoCarousel() {
                 </div>
               ))}
               
-              {/* Duplicate set for seamless loop */}
-              {LOGOS.map((logo, index) => (
+              {/* Duplicate half for the seamless loop */}
+              {track.map((logo, index) => (
                 <div key={`second-${index}`} className="inline-flex items-center justify-center px-8 flex-shrink-0">
                   <Image
                     alt={logo.alt}

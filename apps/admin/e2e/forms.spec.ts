@@ -56,13 +56,45 @@ test("create a script via the dialog", async ({ page }) => {
   await expect(page.locator("body")).toContainText(name, { timeout: 15_000 });
 });
 
-test("create a campaign via the dialog", async ({ page }) => {
+/**
+ * "New campaign" no longer opens a dialog — it mirrors "New blast": create with a default
+ * name and drop straight into cut-turf (see the onNewCampaign comment in canvass/page.tsx,
+ * "no modal to mount"). Renaming happens afterwards via the edit (pencil) dialog, which is
+ * where #camp-name now lives — so this drives create-then-rename.
+ */
+test("new campaign creates immediately and lands on cut turf", async ({ page }) => {
+  await page.goto("/canvass", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /new campaign/i }).first().click();
+  await page.waitForURL(/\/canvass\/[^/]+\/turf/, { timeout: 30_000 });
+  await expect(page.locator("body")).toContainText(/turf|cut|draw|area/i, { timeout: 20_000 });
+});
+
+test("the edit dialog renames a campaign", async ({ page }) => {
+  test.skip(!ids.campaignId, "no seeded campaign");
   await page.goto("/canvass", { waitUntil: "domcontentloaded" });
   const name = `E2E Campaign ${stamp()}`;
-  await page.getByRole("button", { name: /new campaign/i }).first().click();
+  await page.getByRole("button", { name: /edit campaign/i }).first().click();
   await page.locator("#camp-name").fill(name);
-  await page.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page.locator("body")).toContainText(/campaign created|E2E Campaign/i, { timeout: 15_000 });
+  await page.getByRole("button", { name: /^(Save|Update|Create)$/ }).first().click();
+  await expect(page.locator("body")).toContainText(name, { timeout: 20_000 });
+});
+
+/**
+ * Negative path for the shared form-kit: a required field must block the submit rather than
+ * create an empty record. The dialog staying open is the observable signal.
+ */
+test("the survey dialog blocks submit with an empty required name", async ({ page }) => {
+  await page.goto("/engagement/surveys", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /new survey/i }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await page.locator("#survey-name").fill("");
+  // The form-kit keeps Create disabled until the required name is present, so the empty form
+  // cannot be submitted at all; filling a name enables it again.
+  await expect(page.getByRole("button", { name: /^Create$/ })).toBeDisabled();
+  await page.locator("#survey-name").fill(`E2E Validation ${stamp()}`);
+  await expect(page.getByRole("button", { name: /^Create$/ })).toBeEnabled();
+  await expect(dialog).toBeVisible();
 });
 
 test("schedule a shift via the form", async ({ page }) => {

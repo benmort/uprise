@@ -155,9 +155,17 @@ export type OpenJoinPreview = JoinBrand & {
   /** The campaign's outreach medium — drives the wizard's door/texting branching. */
   channel?: "DOOR" | "SMS" | "BOTH";
   campaignId: string;
+  /** Whether the campaign is actually taking sign-ups (openJoinEnabled + ACTIVE). False → the
+   *  landing renders the branded "sign-ups closed" state instead of the wizard. Advisory only:
+   *  the join endpoints re-check it, so a false here can never be talked past. Board items are
+   *  always true (the board lists open campaigns by definition). */
+  open: boolean;
   /** The campaign's tenant id — keys the deterministic fallback avatar gradient when
    *  the org has no logo (same as the tenant selector). */
   tenantId: string;
+  /** The org's URL slug – lets a closed campaign's landing offer that org's OTHER open
+   *  campaigns (`openJoinList(tenantSlug)`) rather than a dead end. Null if unslugged. */
+  tenantSlug: string | null;
   campaignName: string;
   tenantName: string;
   /** The tenant's block/avatar logo (OrgProfile.logoBlockUrl) — the one the tenant

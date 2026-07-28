@@ -1,3 +1,179 @@
 {
-  "_comment": "Written by `pnpm marketing:shots` (apps/admin/scripts/marketing-shots.mjs). Each entry carries the capture's TRUE pixel dimensions so components never hardcode a wrong aspect ratio, plus alt text recorded at capture time so it can't drift from the picture. Empty until the pipeline has been run against a seeded local environment; CapabilityShowcase renders a 'pending capture' placeholder for any missing key."
+  "_comment": "Written by `pnpm marketing:shots` (apps/admin/scripts/marketing-shots.mjs). Each entry carries the capture's TRUE pixel dimensions so components never hardcode a wrong aspect ratio, plus alt text recorded at capture time so it can't drift from the picture. Empty until the pipeline has been run against a seeded local environment; CapabilityShowcase renders a 'pending capture' placeholder for any missing key.",
+  "branding": {
+    "file": "/images/marketing/screens/branding@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "White-label branding settings in Uprise: an organisation's logos, brand colours and custom styling",
+    "route": "/settings/branding",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 167891
+  },
+  "branding-dark": {
+    "file": "/images/marketing/screens/branding-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "White-label branding settings in Uprise: an organisation's logos, brand colours and custom styling",
+    "route": "/settings/branding",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 170260
+  },
+  "dashboard": {
+    "file": "/images/marketing/screens/dashboard@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise campaign dashboard: doors knocked, contact rate and volunteer activity for a live doorknock campaign",
+    "route": "/dashboard",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:31:59.420Z",
+    "bytes": 241246
+  },
+  "dashboard-dark": {
+    "file": "/images/marketing/screens/dashboard-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise campaign dashboard: doors knocked, contact rate and volunteer activity for a live doorknock campaign",
+    "route": "/dashboard",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:31:59.420Z",
+    "bytes": 241319
+  },
+  "datasets": {
+    "file": "/images/marketing/screens/datasets@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise Australian datasets library, listing federal, state and local government boundary sets with row counts",
+    "route": "/data/datasets",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 364563
+  },
+  "datasets-dark": {
+    "file": "/images/marketing/screens/datasets-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise Australian datasets library, listing federal, state and local government boundary sets with row counts",
+    "route": "/data/datasets",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 367891
+  },
+  "demographics": {
+    "file": "/images/marketing/screens/demographics@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "ABS census demographics mapped across Australia in Uprise, shaded by median age",
+    "route": "/data/demographics?ind=median_age&view=map",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:31:59.420Z",
+    "bytes": 1092498
+  },
+  "demographics-dark": {
+    "file": "/images/marketing/screens/demographics-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "ABS census demographics mapped across Australia in Uprise, shaded by median age",
+    "route": "/data/demographics?ind=median_age&view=map",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:31:59.420Z",
+    "bytes": 846062
+  },
+  "field-walk": {
+    "file": "/images/marketing/screens/field-walk@2x.png",
+    "width": 804,
+    "height": 1748,
+    "alt": "The Uprise canvasser app on a phone, showing the next doors on a walk list",
+    "route": "/cms3ygozx00081fxfjdbvkved",
+    "clip": "page",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 121388
+  },
+  "field-walk-dark": {
+    "file": "/images/marketing/screens/field-walk-dark@2x.png",
+    "width": 804,
+    "height": 1748,
+    "alt": "The Uprise canvasser app on a phone, showing the next doors on a walk list",
+    "route": "/cms3ygozx00081fxfjdbvkved",
+    "clip": "page",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 121388
+  },
+  "inbox": {
+    "file": "/images/marketing/screens/inbox@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise shared team inbox, with SMS conversations from supporters claimed across the team",
+    "route": "/inbox",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:31:59.420Z",
+    "bytes": 204421
+  },
+  "inbox-dark": {
+    "file": "/images/marketing/screens/inbox-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise shared team inbox, with SMS conversations from supporters claimed across the team",
+    "route": "/inbox",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:31:59.420Z",
+    "bytes": 205242
+  },
+  "results": {
+    "file": "/images/marketing/screens/results@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "Canvassing results in Uprise, breaking door knocks down by outcome",
+    "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/results",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 177035
+  },
+  "results-dark": {
+    "file": "/images/marketing/screens/results-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "Canvassing results in Uprise, breaking door knocks down by outcome",
+    "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/results",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 177164
+  },
+  "turf": {
+    "file": "/images/marketing/screens/turf@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "Cutting canvassing turf on a map in Uprise, dividing a suburb into walkable blocks",
+    "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/turf",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 817778
+  },
+  "turf-dark": {
+    "file": "/images/marketing/screens/turf-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "Cutting canvassing turf on a map in Uprise, dividing a suburb into walkable blocks",
+    "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/turf",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "bytes": 514843
+  }
 }

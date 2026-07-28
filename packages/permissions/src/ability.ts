@@ -26,12 +26,23 @@ function expandRule(rule: PermissionRule): PermissionRule[] {
   const domain = rule.resource.slice(0, -".all".length);
   const concretes = DOMAIN_RESOURCES[domain];
   if (!concretes || concretes.length === 0) return [rule];
-  return concretes.map((resource) => ({
-    action: rule.action,
-    resource,
-    inverted: rule.inverted,
-    conditions: rule.conditions,
-  }));
+  // KEEP the wildcard alongside its expansion. Returning only the concretes dropped the
+  // `<domain>.all` grant itself, so a guard written as
+  // `@RequirePermission({ action: "read", resource: "analytics.all" })` could never be satisfied
+  // — not even by an owner holding `manage analytics.all`. That silently made four controllers
+  // (analytics, payment, integrations, and the SSE stream token) unreachable for every role
+  // except super-admin, whose `manage all` bypasses this path entirely.
+  //
+  // This widens nothing: a role only gains `<domain>.all` if the role table already granted it.
+  return [
+    rule,
+    ...concretes.map((resource) => ({
+      action: rule.action,
+      resource,
+      inverted: rule.inverted,
+      conditions: rule.conditions,
+    })),
+  ];
 }
 
 /**

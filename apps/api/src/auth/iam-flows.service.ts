@@ -42,6 +42,13 @@ function phonePlaceholderEmail(mobile: string): string {
   return `${mobile.replace(/\D/g, "")}@phone.uprise.invalid`;
 }
 
+/** The tokenless open-join gate: the campaign's own master switch plus an ACTIVE status. The single
+ *  definition of "open", shared by the join actions (which refuse a closed campaign) and the public
+ *  preview (which brands a closed page instead). */
+function isOpenForJoin(campaign: { openJoinEnabled: boolean; status: CanvassCampaignStatus }): boolean {
+  return campaign.openJoinEnabled && campaign.status === CanvassCampaignStatus.ACTIVE;
+}
+
 /** Start of the current week (Monday 00:00 UTC) — the window for the join hero's "doors this week". */
 function startOfWeekUtc(): Date {
   const d = new Date();
@@ -1098,21 +1105,39 @@ export class IamFlowsService {
    * is what replaces the invite token as the authorisation to onboard + the SMS send.
    */
   private async loadOpenCampaign(campaignId: string) {
-    const campaign = await this.prisma.canvassCampaign.findUnique({
-      where: { id: campaignId },
-      select: { id: true, name: true, tenantId: true, openJoinEnabled: true, status: true, channel: true },
-    });
-    if (!campaign || !campaign.openJoinEnabled || campaign.status !== CanvassCampaignStatus.ACTIVE) {
+    const campaign = await this.loadCampaignForJoin(campaignId);
+    if (!campaign || !isOpenForJoin(campaign)) {
       throw new BadRequestException("This campaign isn't open for sign-ups.");
     }
     return campaign;
   }
 
-  /** Public preview for the `/volunteer/[campaignId]` landing – campaign + org name, gated. */
+  /** The raw campaign row behind a join link, open or not. Callers decide what a closed one means:
+   *  the join actions refuse it via {@link loadOpenCampaign}; the preview brands a closed page. */
+  private loadCampaignForJoin(campaignId: string) {
+    return this.prisma.canvassCampaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true, name: true, tenantId: true, openJoinEnabled: true, status: true, channel: true },
+    });
+  }
+
+  /**
+   * Public preview for the `/volunteer/[campaignId]` landing – campaign + org name + brand.
+   *
+   * Deliberately NOT gated on `openJoinEnabled`/ACTIVE: a campaign that has closed still returns
+   * its preview with `open: false`, so the landing can render a branded "sign-ups closed" page
+   * (org logo, colours, the campaign's name, that org's other open campaigns) instead of a bare
+   * error. Only an id that matches no campaign at all is refused. The trade this accepts: anyone
+   * holding a campaign id learns the campaign exists and which org runs it, for closed campaigns
+   * as well as open ones. Nothing here authorises joining – `loadOpenCampaign` still gates every
+   * write path, so `open: false` cannot be talked past by a crafted client.
+   */
   async openJoinPreview(campaignId: string): Promise<{
     channel: string;
     campaignId: string;
+    open: boolean;
     tenantId: string;
+    tenantSlug: string | null;
     campaignName: string;
     tenantName: string;
     logoUrl: string | null;
@@ -1122,20 +1147,25 @@ export class IamFlowsService {
     volunteerCount: number;
     doorsThisWeek: number;
   }> {
-    const campaign = await this.loadOpenCampaign(campaignId);
+    const campaign = await this.loadCampaignForJoin(campaignId);
+    if (!campaign) throw new BadRequestException("This campaign isn't open for sign-ups.");
     const [tenant, profile, stats] = await Promise.all([
-      this.prisma.tenant.findUnique({ where: { id: campaign.tenantId }, select: { name: true } }),
+      this.prisma.tenant.findUnique({ where: { id: campaign.tenantId }, select: { name: true, slug: true } }),
       // The org's block/avatar logo + brand colours — so the join hero wears the tenant's brand.
       this.prisma.orgProfile.findFirst({
         where: { tenantId: campaign.tenantId },
         select: { logoBlockUrl: true, primaryColour: true, secondaryColour: true, customCss: true },
       }),
+      // Kept for a closed campaign too – its historical doors/volunteers are what make the
+      // closed page read as a campaign that happened, not a broken link.
       this.campaignJoinStats(campaign.tenantId, campaign.id),
     ]);
     return {
       channel: campaign.channel,
       campaignId: campaign.id,
+      open: isOpenForJoin(campaign),
       tenantId: campaign.tenantId,
+      tenantSlug: tenant?.slug ?? null,
       campaignName: campaign.name,
       tenantName: tenant?.name ?? "",
       logoUrl: profile?.logoBlockUrl ?? null,
@@ -1183,7 +1213,9 @@ export class IamFlowsService {
   async openJoinList(tenantSlug?: string): Promise<
     Array<{
       campaignId: string;
+      open: boolean;
       tenantId: string;
+      tenantSlug: string | null;
       campaignName: string;
       tenantName: string;
       logoUrl: string | null;
@@ -1214,23 +1246,27 @@ export class IamFlowsService {
     // One round-trip per related table across the distinct tenants (not per campaign).
     const tenantIds = [...new Set(campaigns.map((c) => c.tenantId))];
     const [tenants, profiles] = await Promise.all([
-      this.prisma.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true } }),
+      this.prisma.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true, name: true, slug: true } }),
       this.prisma.orgProfile.findMany({
         where: { tenantId: { in: tenantIds } },
         select: { tenantId: true, logoBlockUrl: true, primaryColour: true, secondaryColour: true },
       }),
     ]);
-    const nameById = new Map(tenants.map((t) => [t.id, t.name]));
+    const tenantById = new Map(tenants.map((t) => [t.id, t]));
     const profileById = new Map(profiles.map((p) => [p.tenantId, p]));
     // The board is a card list, not the branded hero — so it carries logo + colour for each card but
     // NOT the per-campaign stats (kept cheap; the hero fetches those on select) or customCss.
     return campaigns.map((c) => {
       const p = profileById.get(c.tenantId);
+      const t = tenantById.get(c.tenantId);
       return {
         campaignId: c.id,
+        // The board's `where` already filters to openJoinEnabled + ACTIVE, so every item is open.
+        open: true,
         tenantId: c.tenantId,
+        tenantSlug: t?.slug ?? null,
         campaignName: c.name,
-        tenantName: nameById.get(c.tenantId) ?? "",
+        tenantName: t?.name ?? "",
         logoUrl: p?.logoBlockUrl ?? null,
         primaryColour: p?.primaryColour ?? null,
         secondaryColour: p?.secondaryColour ?? null,

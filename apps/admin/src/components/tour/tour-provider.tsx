@@ -1,6 +1,6 @@
 "use client";
 
-import { HelpCircle } from "lucide-react";
+import { BookOpen, ExternalLink, HelpCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -13,6 +13,10 @@ import { UpriseTourContext, useUpriseTour, useUpriseTourState } from "@/lib/tour
 import { FloatingTourCard } from "./floating-tour-card";
 
 const FIRST_RUN_KEY = "uprise.tour.firstRunDone";
+
+/** Where the user handbook lives. It is published with the marketing site, not this app, so the
+ *  origin is env-driven – set NEXT_PUBLIC_MARKETING_URL per environment; prod is the default. */
+const HANDBOOK_URL = (process.env.NEXT_PUBLIC_MARKETING_URL || "https://uprise.org.au").replace(/\/+$/, "");
 
 /**
  * Holds tour state in context, bridges navigation to the Next router, and auto-starts
@@ -98,11 +102,11 @@ export function TourMenuButton() {
         type="button"
         variant="ghost"
         className="w-full justify-start"
-        title="Take a tour of Uprise"
+        title="Guided tours of Uprise, and the handbook"
         onClick={toggle}
       >
         <HelpCircle className="mr-2 h-4 w-4" />
-        Tour
+        Tours
       </Button>
       {open && coords
         ? createPortal(
@@ -150,6 +154,24 @@ export function TourMenuButton() {
               </div>
             );
           })}
+          {/* A tour shows you where things are; the handbook explains how to run the work.
+              Lives on the marketing site, so it opens in a new tab rather than leaving the app. */}
+          <a
+            href={`${HANDBOOK_URL}/docs`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 border-t border-border px-3 py-2.5 text-sm font-medium hover:bg-surface-variant"
+            onClick={() => setOpen(false)}
+          >
+            <BookOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0">
+              Read the handbook
+              <span className="block text-xs font-normal text-muted-foreground">
+                Scenario walkthroughs and how to manage a campaign
+              </span>
+            </span>
+            <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          </a>
             </div>,
             document.body,
           )

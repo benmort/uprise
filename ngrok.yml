@@ -4,12 +4,21 @@
 #   pnpm dev:tunnel   (terminal B — exposes them on the dev.uprise.org.au subdomains)
 #
 # Prerequisites (see docs/development/ngrok-dev.md):
-#   - The uprise ngrok account must RESERVE these hostnames before they can be used
-#     (else ERR_NGROK_319): dev.uprise.org.au plus the *.dev.uprise.org.au wildcard
-#     (covers auth/app/api), each with a DNS CNAME in the uprise.org.au zone pointing
-#     at the target ngrok shows on https://dashboard.ngrok.com/domains.
+#   - Every hostname below is RESERVED individually on the uprise ngrok account (else
+#     ERR_NGROK_319), each with its own DNS CNAME in the uprise.org.au zone pointing at
+#     that domain's own target from https://dashboard.ngrok.com/domains. Deliberately
+#     NOT a *.dev wildcard: a wildcard cert can only be issued over a DNS-01 challenge,
+#     so it also needs an _acme-challenge.dev CNAME, and until that exists every
+#     subdomain serves a mismatched cert (ERR_CERT_COMMON_NAME_INVALID). Individually
+#     reserved names are HTTP-validated by ngrok with no extra record.
 #   - Authtoken set once on this machine: `ngrok config add-authtoken <token>`
 #     (NOT committed here — keep the secret in your local ngrok config).
+#
+# `schemes: [https]` on every tunnel PINS what ngrok already does by default here — a plain
+# http request is answered at the edge with a 307 to https and never reaches the app (verified:
+# no `x-powered-by: Next.js` on that response, and no app-level redirect exists). Stated
+# explicitly so the guarantee survives a change in ngrok's defaults: the session cookie is
+# Secure and scoped to .dev.uprise.org.au, so cleartext must never reach an app that sets it.
 version: "2"
 
 tunnels:
@@ -17,6 +26,7 @@ tunnels:
   product-marketing:
     addr: 3003
     proto: http
+    schemes: [https]
     compression: true
     domain: dev.uprise.org.au
 
@@ -24,13 +34,15 @@ tunnels:
   auth:
     addr: 3002
     proto: http
+    schemes: [https]
     compression: true
     domain: auth.dev.uprise.org.au
 
-  # Organiser admin app → admin.dev.uprise.org.au (under the *.dev.uprise.org.au reservation)
+  # Organiser admin app → admin.dev.uprise.org.au
   admin:
     addr: 3000
     proto: http
+    schemes: [https]
     compression: true
     domain: admin.dev.uprise.org.au
 
@@ -38,30 +50,34 @@ tunnels:
   api:
     addr: 3001
     proto: http
+    schemes: [https]
     compression: true
     domain: api.dev.uprise.org.au
 
-  # Canvasser field PWA → field.dev.uprise.org.au (under the *.dev.uprise.org.au reservation)
+  # Canvasser field PWA → field.dev.uprise.org.au
   field:
     addr: 3005
     proto: http
+    schemes: [https]
     compression: true
     domain: field.dev.uprise.org.au
 
-  # Public action app → action.dev.uprise.org.au (under the *.dev.uprise.org.au reservation).
+  # Public action app → action.dev.uprise.org.au.
   # Where /volunteer/[campaignId] lands a freshly-joined volunteer, so the auth app's
   # NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS must include this origin.
   action:
     addr: 3004
     proto: http
+    schemes: [https]
     compression: true
     domain: action.dev.uprise.org.au
 
-  # Uprise Labs organisation site → labs.dev.uprise.org.au (under the *.dev.uprise.org.au
-  # reservation; the real site ships to upriselabs.org at deploy)
+  # Uprise Labs organisation site → labs.dev.uprise.org.au (the real site ships to
+  # upriselabs.org at deploy)
   organisation-marketing:
     addr: 3006
     proto: http
+    schemes: [https]
     compression: true
     domain: labs.dev.uprise.org.au
 
@@ -71,5 +87,6 @@ tunnels:
   worker:
     addr: 3210
     proto: http
+    schemes: [https]
     compression: true
     domain: worker.dev.uprise.org.au

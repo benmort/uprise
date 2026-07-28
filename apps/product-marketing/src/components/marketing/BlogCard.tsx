@@ -4,7 +4,7 @@ import { ArrowUpRight } from "lucide-react";
 import { formatPostDate, type BlogPost } from "@/lib/blog";
 import BlogCover from "./BlogCover";
 
-/** Blog grid card — gradient cover, category badge, title, excerpt, author + date. */
+/** Blog grid card – photo cover, category badge, title, excerpt, author + date. */
 export default function BlogCard({ post }: { post: BlogPost }) {
   return (
     <Link

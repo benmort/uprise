@@ -54,6 +54,35 @@ test.describe("unauthenticated", () => {
   }
 });
 
+/**
+ * KNOWN GAP — marked test.fail() so it still runs and is reported, and so the suite turns red
+ * the moment it starts passing (i.e. when the gap is closed).
+ *
+ * The middleware gates on the PRESENCE of an auth_token cookie, not its validity: no cookie
+ * 307s to the auth app, but `auth_token=<anything>` returns 200 and renders the admin shell.
+ * Verified directly against the tunnel:
+ *   curl -o /dev/null -w '%{http_code}' -b 'auth_token=not-a-real-session-token' \
+ *     https://admin.dev.uprise.org.au/dashboard      # => 200   (no cookie => 307)
+ *
+ * Data is not exposed — the API rejects the token, so every fetch 401s and the surfaces render
+ * empty (UI gating is advisory, the API enforces — apps/admin/CLAUDE.md). But the shell, nav and
+ * tenant name render for an unauthenticated caller, and the documented gate does not do what it
+ * says. Closing it means validating the token in middleware before serving the page.
+ */
+test.describe("invalid session", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("a garbage auth_token is rejected and still bounces to the auth app", async ({ request }) => {
+    test.fail(); // delete this line once middleware validates the token, not just its presence
+    const res = await request.get("/dashboard", {
+      maxRedirects: 0,
+      headers: { cookie: "auth_token=not-a-real-session-token" },
+    });
+    expect([301, 302, 307, 308]).toContain(res.status());
+    expect(res.headers()["location"] ?? "").toContain(`${AUTH_APP}/sign-in`);
+  });
+});
+
 // The host-only-cookie bug only manifests across real subdomains; assert the live
 // tunnel API mints a parent-domain, Secure cookie so admin and api both see it.
 test("the API issues a parent-domain, Secure session cookie (no host-only loop)", async ({ request }) => {

@@ -94,6 +94,9 @@ export default function Header() {
                   </span>
                 </button>
                 <div className="invisible absolute left-[120%] top-full w-[270px] -translate-x-1/2 rounded-2xl border bg-white p-3 opacity-0 shadow-lg group-hover:visible group-hover:opacity-100">
+                  <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/docs">
+                    Handbook
+                  </Link>
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/about-us">
                     About Us
                   </Link>

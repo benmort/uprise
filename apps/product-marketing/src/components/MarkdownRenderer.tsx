@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import MermaidDiagram from "@/components/MermaidDiagram";
 
@@ -21,9 +22,6 @@ export default function MarkdownRenderer({ content, className = "" }: MarkdownRe
           h3: ({ children }) => (
             <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3">{children}</h3>
           ),
-          p: ({ children }) => (
-            <p className="mb-4 text-gray-700 leading-relaxed">{children}</p>
-          ),
           ul: ({ children }) => (
             <ul className="list-disc mb-4 ml-4">{children}</ul>
           ),
@@ -36,6 +34,34 @@ export default function MarkdownRenderer({ content, className = "" }: MarkdownRe
           a: ({ href, children }) => (
             <a href={href} className="text-primary hover:opacity-80 underline">{children}</a>
           ),
+          // Body images. Markdown carries no dimensions, so the figure fixes a 16/9 box and
+          // `fill` crops into it – every in-article image then sits on the same rhythm as the
+          // cover above it. A markdown title (the "quoted" part of ![alt](src "title")) becomes
+          // the visible caption; alt stays the accessible description.
+          img: ({ src, alt, title }) => {
+            if (typeof src !== "string" || src.length === 0) return null;
+            return (
+              <figure className="my-8">
+                <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-gray-100">
+                  <Image src={src} alt={alt ?? ""} fill sizes="(min-width: 768px) 800px, 100vw" className="object-cover" />
+                </div>
+                {title ? (
+                  <figcaption className="mt-3 text-center text-sm text-gray-500">{title}</figcaption>
+                ) : null}
+              </figure>
+            );
+          },
+          // react-markdown wraps a lone image in a <p>; that would nest a <figure> (and a div)
+          // inside a <p>, which the HTML parser unnests and React warns about. Detect that case
+          // and render the children bare.
+          p: ({ children, node }) => {
+            // Inspect the source node, not the rendered children: by the time children exist the
+            // image is already our own component, so its element type is no longer "img".
+            const kids = (node as any)?.children ?? [];
+            const isLoneImage = kids.length === 1 && kids[0]?.tagName === "img";
+            if (isLoneImage) return <>{children}</>;
+            return <p className="mb-4 text-gray-700 leading-relaxed">{children}</p>;
+          },
           strong: ({ children }) => (
             <strong className="font-semibold">{children}</strong>
           ),
