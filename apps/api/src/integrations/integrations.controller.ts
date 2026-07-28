@@ -29,8 +29,8 @@ export class IntegrationsController {
 
   @Post("connections/test")
   @RequirePermission(MANAGE)
-  testConnection(@Body() dto: TestIntegrationConnectionDto) {
-    return this.integrations.testConnection(dto);
+  testConnection(@TenantId() tenantId: string, @Body() dto: TestIntegrationConnectionDto) {
+    return this.integrations.testConnection(tenantId, dto);
   }
 
   // Disconnect / reconnect = status flip; DELETE removes the connection outright.

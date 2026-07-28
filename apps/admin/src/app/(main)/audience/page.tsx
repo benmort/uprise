@@ -10,12 +10,22 @@ import {
   getSyncJobs,
   importAudienceCsv,
   listAudiences,
+  listIntegrationConnections,
   searchIntegrationLists,
   syncIntegrationList,
   type AudienceChannel,
   type AudienceImportProgress,
   type AudienceSegmentRow,
 } from "@/lib/api";
+import {
+  audienceNameForList,
+  audienceSourceFor,
+  autoSelectedSourceId,
+  findSource,
+  syncCardTitle,
+  toImportSources,
+  type ImportSource,
+} from "@/lib/integration-sources";
 import {
   mergeSyncBadges,
   pollSyncJob,
@@ -143,7 +153,12 @@ export default function AudiencePage() {
   const [audienceName, setAudienceName] = useState("");
   const [newChannel, setNewChannel] = useState<AudienceChannel>("ALL");
   const [creatingSmart, setCreatingSmart] = useState(false);
-  const integrationType: "ACTION_NETWORK" = "ACTION_NETWORK";
+  // Import sources are whatever this tenant has actually connected. There is no default
+  // provider and no platform-wide fallback — an organiser who has connected nothing gets
+  // an empty state, not somebody else's Action Network lists.
+  const [sources, setSources] = useState<ImportSource[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [selectedSourceId, setSelectedSourceId] = useState("");
   const [lists, setLists] = useState<Array<Record<string, unknown>>>([]);
   const [selectedListId, setSelectedListId] = useState("");
   const [listSearchMessage, setListSearchMessage] = useState("");
@@ -194,9 +209,29 @@ export default function AudiencePage() {
     setLoading(false);
   };
 
-  const loadIntegrationLists = async () => {
+  /** Connections this tenant owns. Drives the source picker; nothing is fetched without one. */
+  const loadSources = async () => {
+    setSourcesLoading(true);
+    const res = await listIntegrationConnections();
+    const next = res.ok ? toImportSources(res.data) : [];
+    setSources(next);
+    setSourcesLoading(false);
+    const preselected = autoSelectedSourceId(next);
+    setSelectedSourceId(preselected);
+    return preselected ? next.find((s) => s.id === preselected) : undefined;
+  };
+
+  const loadIntegrationLists = async (source?: ImportSource) => {
+    const target = source ?? findSource(sources, selectedSourceId);
+    if (!target) {
+      setLists([]);
+      setListPage(0);
+      setSelectedListId("");
+      setListSearchMessage("");
+      return;
+    }
     setListsLoading(true);
-    const result = await searchIntegrationLists(integrationType, "");
+    const result = await searchIntegrationLists(target.type, "", target.id);
     if (result.ok) {
       setLists(result.data.lists);
       setListPage(0);
@@ -219,15 +254,17 @@ export default function AudiencePage() {
   };
 
   const handleSyncSelectedList = async () => {
-    if (!selectedListId || syncing) return;
+    const source = findSource(sources, selectedSourceId);
+    if (!selectedListId || syncing || !source) return;
     const selectedList = lists.find((list) => String(list.id) === selectedListId);
     const selectedListName = String(selectedList?.name || "").trim();
-    const audienceNameForSync = `Action Network: ${selectedListName || "Unnamed list"}`;
+    const audienceNameForSync = audienceNameForList(source, selectedListName);
     setSyncing(true);
     setSyncMessage("");
     try {
       const synced = await syncIntegrationList({
-        type: integrationType,
+        type: source.type,
+        connectionId: source.id,
         listId: selectedListId,
         listName: selectedListName || undefined,
         audienceName: audienceNameForSync,
@@ -260,7 +297,7 @@ export default function AudiencePage() {
                 {
                   id: audienceId,
                   name: audienceNameForSync,
-                  source: "ACTION_NETWORK",
+                  source: audienceSourceFor(source.type),
                   status: "QUEUED",
                   channel: "ALL",
                   _count: { contacts: 0 },
@@ -310,8 +347,12 @@ export default function AudiencePage() {
       setFilter(window.localStorage.getItem(AUDIENCE_SEARCH_KEY) || "");
     }
     refresh();
-    loadIntegrationLists();
     loadSegments();
+    // Only reach the provider once we know the tenant has a connection to reach it
+    // through, and only for that exact connection.
+    void loadSources().then((auto) => {
+      if (auto) void loadIntegrationLists(auto);
+    });
   }, []);
 
   useEffect(() => {
@@ -354,6 +395,11 @@ export default function AudiencePage() {
     }
     return base;
   }, [rows, filter, uploadState]);
+
+  const selectedSource = useMemo(
+    () => findSource(sources, selectedSourceId),
+    [sources, selectedSourceId],
+  );
 
   const pageSize = 8;
   const paged = filtered.slice(tablePage * pageSize, tablePage * pageSize + pageSize);
@@ -605,15 +651,20 @@ export default function AudiencePage() {
 
         <Card id="tour-audience-sync" className="lg:order-1">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <CardTitle>Action Network List Sync</CardTitle>
+            <CardTitle>{syncCardTitle(selectedSource)}</CardTitle>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={loadIntegrationLists} disabled={listsLoading}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void loadIntegrationLists()}
+                disabled={listsLoading || !selectedSource}
+              >
                 Refresh
               </Button>
               <Button
                 size="sm"
                 onClick={() => void handleSyncSelectedList()}
-                disabled={!selectedListId || syncing}
+                disabled={!selectedListId || syncing || !selectedSource}
               >
                 {syncing ? (
                   <span className="inline-flex items-center gap-2">
@@ -630,6 +681,47 @@ export default function AudiencePage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {sourcesLoading ? (
+              <Skeleton className="h-10 w-full" />
+            ) : sources.length === 0 ? (
+              <EmptyState
+                title="No import source connected"
+                description="Connect Action Network or an internal source in Settings → Integrations, then come back to import a list."
+                action={
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/settings/integrations">Go to Integrations</Link>
+                  </Button>
+                }
+              />
+            ) : (
+              <>
+                <Select
+                  value={selectedSourceId}
+                  onValueChange={(v) => {
+                    setSelectedSourceId(v);
+                    setLists([]);
+                    setSelectedListId("");
+                    setListSearchMessage("");
+                    void loadIntegrationLists(findSource(sources, v));
+                  }}
+                  title="Which connected account to import from"
+                  placeholder="Choose a source…"
+                >
+                  {sources.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.optionLabel}
+                    </SelectItem>
+                  ))}
+                </Select>
+                {!selectedSourceId && (
+                  <p className="text-xs text-muted-foreground">
+                    Choose which connected account to import from.
+                  </p>
+                )}
+              </>
+            )}
+            {sources.length > 0 && (
+              <>
             <div className="min-h-[220px] max-h-[260px] overflow-y-auto rounded border border-border">
               {pagedLists.map((list) => {
                 const listId = String(list.id);
@@ -663,7 +755,8 @@ export default function AudiencePage() {
                   </div>
                 ) : (
                   <p className="px-3 py-2 text-xs text-muted-foreground">
-                    {listSearchMessage || "No remote lists loaded."}
+                    {listSearchMessage ||
+                      (selectedSourceId ? "No remote lists loaded." : "Choose a source to load its lists.")}
                   </p>
                 ))}
             </div>
@@ -676,6 +769,8 @@ export default function AudiencePage() {
                 onNext={() => setListPage((prev) => prev + 1)}
               />
             </div>
+              </>
+            )}
             {syncMessage && <p className="text-xs text-muted-foreground">{syncMessage}</p>}
           </CardContent>
         </Card>

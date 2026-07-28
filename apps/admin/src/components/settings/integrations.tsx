@@ -57,7 +57,16 @@ export function IntegrationsSettings() {
 
   const rows = data ?? [];
   const needsBaseUrl = type === "INTERNAL";
-  const canSubmit = name.trim().length > 0 && (!needsBaseUrl || baseUrl.trim().length > 0);
+  // Connecting a provider the tenant has no row for is a CREATE, and a create needs a key.
+  // A blank key used to be accepted and silently substituted with the platform env key,
+  // which connected the tenant to whichever organisation owned that key — and reported
+  // success. Blank still means "keep the stored key", but only when there IS one.
+  const isUpdate = rows.some((c) => c.type === type);
+  const needsApiKey = !isUpdate;
+  const canSubmit =
+    name.trim().length > 0 &&
+    (!needsBaseUrl || baseUrl.trim().length > 0) &&
+    (!needsApiKey || apiKey.trim().length > 0);
 
   function openConnect() {
     setType("ACTION_NETWORK");
@@ -148,8 +157,9 @@ export function IntegrationsSettings() {
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Integrations</h3>
           {!noPermission ? (
             <p className="mt-1 text-sm text-muted-foreground">
-              Connect Action Network or an internal source here, or from the Audience importer while building an
-              audience. Connections are keyed one per type – reconnecting the same type updates it.
+              Connect Action Network or an internal source with your own API key. Connections are keyed one per
+              type – reconnecting the same type updates it. Only accounts you connect here are available to
+              import from.
             </p>
           ) : null}
         </div>
@@ -221,7 +231,7 @@ export function IntegrationsSettings() {
       <FormDialog
         open={connectOpen}
         title="Connect an integration"
-        description="Reconnecting an existing type updates its stored settings. Leave the API key blank to keep the saved one."
+        description="Reconnecting an existing type updates its stored settings. Leave the API key blank to keep the saved one – a new connection needs its own key."
         onClose={() => setConnectOpen(false)}
         onSubmit={() => void doConnect()}
         submitLabel="Connect"
@@ -250,7 +260,15 @@ export function IntegrationsSettings() {
             disabled={saving}
           />
         </Field>
-        <Field label="API key" htmlFor="connection-api-key" hint="Blank keeps the stored key when updating.">
+        <Field
+          label={needsApiKey ? "API key" : "API key (optional)"}
+          htmlFor="connection-api-key"
+          hint={
+            needsApiKey
+              ? "Required – this is your organisation's own key."
+              : "Blank keeps the stored key."
+          }
+        >
           <Input
             id="connection-api-key"
             type="password"

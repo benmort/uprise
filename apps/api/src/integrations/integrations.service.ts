@@ -23,7 +23,7 @@ import {
   TestIntegrationConnectionDto,
   UpsertIntegrationConnectionDto,
 } from "./dto/integration.dto";
-import { IntegrationValidationError } from "./integration.errors";
+import { IntegrationNotConnectedError, IntegrationValidationError } from "./integration.errors";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { DispatchQueue } from "../common/queue/dispatch-queue";
 import { getIntegrationSyncJobId, QUEUE_JOB_TYPES, QUEUE_NAMES } from "../common/queue/queue.constants";
@@ -32,6 +32,23 @@ import { IntegrationSyncJobPayload } from "../common/queue/queue.payloads";
 
 type IntegrationConnectionType = "ACTION_NETWORK" | "INTERNAL";
 type SyncReasonCounts = Record<string, number>;
+
+/**
+ * A connection resolved for use, with its provenance. `shared` / `ownerTenantId` /
+ * `networkId` are always own-tenant today; they exist so the network-sharing resolver
+ * can populate them without changing every call site, and so the UI can always say
+ * whose external account a sync is actually reading from.
+ */
+type ResolvedConnection = {
+  id: string;
+  type: IntegrationConnectionType;
+  name: string;
+  apiKey: string;
+  baseUrl?: string;
+  shared: boolean;
+  ownerTenantId: string;
+  networkId: string | null;
+};
 type MappedExternalContact = {
   source: AudienceSource;
   phoneE164: string;
@@ -95,109 +112,105 @@ export class IntegrationsService {
     return trimmed || undefined;
   }
 
-  private envCredentials(type: IntegrationConnectionType): { apiKey: string; baseUrl?: string } {
-    if (type === "ACTION_NETWORK") {
-      const apiKey = (this.config.get<string>("ACTION_NETWORK_API_KEY") || "").trim();
-      const baseUrl = (this.config.get<string>("ACTION_NETWORK_API_BASE_URL") || "").trim();
-      return { apiKey, baseUrl: baseUrl || undefined };
-    }
-    const apiKey = (this.config.get<string>("INTERNAL_SOURCE_API_KEY") || "").trim();
-    const baseUrl = (this.config.get<string>("INTERNAL_SOURCE_API_BASE_URL") || "").trim();
-    return { apiKey, baseUrl: baseUrl || undefined };
+  /**
+   * The platform-wide base URL default for a provider. Deliberately the ONLY thing still
+   * read from env on the credential path: a base URL is public, a key is not.
+   *
+   * There used to be an `ACTION_NETWORK_API_KEY` / `INTERNAL_SOURCE_API_KEY` fallback here.
+   * It meant one platform key stood in for every tenant that hadn't connected an account,
+   * so every tenant reached the same external org's data. Do not reintroduce it — a tenant
+   * uses a credential it supplied, or (once network sharing lands) one another tenant has
+   * explicitly granted it through a network. Nothing else.
+   */
+  private envBaseUrl(type: IntegrationConnectionType): string | undefined {
+    const key = type === "ACTION_NETWORK" ? "ACTION_NETWORK_API_BASE_URL" : "INTERNAL_SOURCE_API_BASE_URL";
+    return (this.config.get<string>(key) || "").trim() || undefined;
   }
 
+  /** Validate a caller-supplied credential pair. No env fallback for the key. */
   private resolveCredentials(
     type: IntegrationConnectionType,
     input: { apiKey?: string; baseUrl?: string },
   ): { apiKey: string; baseUrl?: string } {
-    const env = this.envCredentials(type);
-    const apiKey = input.apiKey?.trim() || env.apiKey;
-    const baseUrl = input.baseUrl?.trim() || env.baseUrl;
+    const apiKey = input.apiKey?.trim() || "";
+    const baseUrl = input.baseUrl?.trim() || this.envBaseUrl(type);
 
     if (!apiKey) {
-      const envKeyName = type === "ACTION_NETWORK" ? "ACTION_NETWORK_API_KEY" : "INTERNAL_SOURCE_API_KEY";
-      throw new IntegrationValidationError(`${envKeyName} is not configured`);
+      throw new IntegrationValidationError("An API key is required to connect this integration");
     }
     if (type === "INTERNAL" && !baseUrl) {
-      throw new IntegrationValidationError("INTERNAL_SOURCE_API_BASE_URL is not configured");
+      throw new IntegrationValidationError("A base URL is required for an internal source");
     }
 
     return { apiKey, baseUrl };
   }
 
-  private async resolveConnection(tenantId: string, type: IntegrationConnectionType) {
-    const existing = await this.prisma.integrationConnection.findFirst({
-      where: {
-        tenantId,
-        type: type as IntegrationType,
-        status: IntegrationConnectionStatus.ACTIVE,
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-    if (!existing) return null;
-    return {
-      ...existing,
-      apiKey: this.crypto.decrypt(existing.encryptedCredential),
-    };
-  }
+  /**
+   * Resolve the connection a read/sync should run through. Purely a read — it never
+   * creates and never mutates, which is what makes Disconnect durable. Callers may pin
+   * an explicit `connectionId`; otherwise the tenant's own ACTIVE row for the type wins.
+   */
+  private async requireConnection(
+    tenantId: string,
+    input: { type?: IntegrationConnectionType; connectionId?: string },
+  ): Promise<ResolvedConnection> {
+    const row = input.connectionId
+      ? await this.prisma.integrationConnection.findFirst({
+          where: {
+            id: input.connectionId,
+            tenantId,
+            status: IntegrationConnectionStatus.ACTIVE,
+          },
+        })
+      : await this.prisma.integrationConnection.findFirst({
+          where: {
+            tenantId,
+            type: input.type as IntegrationType,
+            status: IntegrationConnectionStatus.ACTIVE,
+          },
+          orderBy: { updatedAt: "desc" },
+        });
 
-  private async ensureConnection(tenantId: string, type: IntegrationConnectionType) {
-    const existing = await this.resolveConnection(tenantId, type);
-    if (!existing) {
-      const defaults = this.resolveCredentials(type, {});
-      const created = await this.upsertConnection(tenantId, {
-        type,
-        name: this.defaultConnectionName(type),
-        apiKey: defaults.apiKey,
-        baseUrl: defaults.baseUrl,
-      });
-      return {
-        id: created.id,
-        apiKey: defaults.apiKey,
-        baseUrl: defaults.baseUrl,
-      };
-    }
-
-    const existingBaseUrl = this.baseUrlFromSettings(existing.settings);
-    const credentials = this.resolveCredentials(type, {
-      apiKey: existing.apiKey,
-      baseUrl: existingBaseUrl,
-    });
-
-    if (existing.apiKey !== credentials.apiKey || existingBaseUrl !== credentials.baseUrl) {
-      await this.upsertConnection(tenantId, {
-        type,
-        name: existing.name,
-        apiKey: credentials.apiKey,
-        baseUrl: credentials.baseUrl,
-      });
+    if (!row) {
+      throw new IntegrationNotConnectedError(
+        input.connectionId
+          ? "That integration connection is not available to this organisation"
+          : `No active ${this.defaultConnectionName(input.type ?? "ACTION_NETWORK")} connection. Connect one in Settings → Integrations.`,
+      );
     }
 
     return {
-      id: existing.id,
-      apiKey: credentials.apiKey,
-      baseUrl: credentials.baseUrl,
+      id: row.id,
+      type: row.type as IntegrationConnectionType,
+      name: row.name,
+      apiKey: this.crypto.decrypt(row.encryptedCredential),
+      baseUrl: this.baseUrlFromSettings(row.settings) ?? this.envBaseUrl(row.type as IntegrationConnectionType),
+      // Set by the network-sharing resolver once that lands; own connections are never shared.
+      shared: false,
+      ownerTenantId: row.tenantId,
+      networkId: null,
     };
   }
 
   async upsertConnection(tenantId: string, dto: UpsertIntegrationConnectionDto) {
-    const credentials = this.resolveCredentials(dto.type, {
-      apiKey: dto.apiKey,
-      baseUrl: dto.baseUrl,
+    const existing = await this.prisma.integrationConnection.findUnique({
+      where: { tenantId_type: { tenantId, type: dto.type as IntegrationType } },
+      select: { id: true, encryptedCredential: true, settings: true },
     });
-    const encrypted = this.crypto.encrypt(credentials.apiKey);
+
+    // Blank key on update keeps the stored one; blank key on create is rejected. It used
+    // to silently mean "use the platform env key", which is how tenants ended up connected
+    // to someone else's account while the UI reported success.
+    const suppliedKey = dto.apiKey?.trim() || "";
+    const apiKey = suppliedKey || (existing ? this.crypto.decrypt(existing.encryptedCredential) : "");
+    const credentials = this.resolveCredentials(dto.type, {
+      apiKey,
+      baseUrl: dto.baseUrl?.trim() || this.baseUrlFromSettings(existing?.settings),
+    });
+    const encrypted = suppliedKey ? this.crypto.encrypt(credentials.apiKey) : existing!.encryptedCredential;
+
     const row = await this.prisma.integrationConnection.upsert({
-      where: {
-        id: (
-          await this.prisma.integrationConnection.findFirst({
-            where: {
-              tenantId,
-              type: dto.type as IntegrationType,
-            },
-            select: { id: true },
-          })
-        )?.id || "missing",
-      },
+      where: { tenantId_type: { tenantId, type: dto.type as IntegrationType } },
       create: {
         tenantId,
         type: dto.type as IntegrationType,
@@ -206,6 +219,8 @@ export class IntegrationsService {
         status: IntegrationConnectionStatus.ACTIVE,
         settings: credentials.baseUrl ? { baseUrl: credentials.baseUrl } : undefined,
       },
+      // Reconnecting is an explicit user action, so it may reactivate. No READ path is
+      // allowed to do this — that is what kept undoing Disconnect.
       update: {
         name: dto.name,
         encryptedCredential: encrypted,
@@ -222,19 +237,22 @@ export class IntegrationsService {
     };
   }
 
-  async testConnection(dto: TestIntegrationConnectionDto) {
+  /** Test a candidate key, or (with connectionId) the tenant's stored one. Never env. */
+  async testConnection(tenantId: string, dto: TestIntegrationConnectionDto) {
     const connector = this.connector(dto.type);
-    const credentials = this.resolveCredentials(dto.type, {
-      apiKey: dto.apiKey,
-      baseUrl: dto.baseUrl,
-    });
+    const credentials = dto.apiKey?.trim()
+      ? this.resolveCredentials(dto.type, { apiKey: dto.apiKey, baseUrl: dto.baseUrl })
+      : await this.requireConnection(tenantId, { type: dto.type, connectionId: dto.connectionId });
     const result = await connector.testConnection(credentials.apiKey, credentials.baseUrl);
     return { ...result, type: dto.type };
   }
 
   async searchLists(tenantId: string, dto: SearchIntegrationListsDto) {
-    const connection = await this.ensureConnection(tenantId, dto.type);
-    const lists = await this.connector(dto.type).searchLists(
+    const connection = await this.requireConnection(tenantId, {
+      type: dto.type,
+      connectionId: dto.connectionId,
+    });
+    const lists = await this.connector(connection.type).searchLists(
       connection.apiKey,
       { query: dto.query, limit: 25 },
       connection.baseUrl,
@@ -243,8 +261,11 @@ export class IntegrationsService {
   }
 
   async sampleList(tenantId: string, dto: SampleIntegrationListDto) {
-    const connection = await this.ensureConnection(tenantId, dto.type);
-    const sample = await this.connector(dto.type).sampleListContacts(
+    const connection = await this.requireConnection(tenantId, {
+      type: dto.type,
+      connectionId: dto.connectionId,
+    });
+    const sample = await this.connector(connection.type).sampleListContacts(
       connection.apiKey,
       dto.listId,
       connection.baseUrl,
@@ -457,19 +478,22 @@ export class IntegrationsService {
   }
 
   async requestSyncList(tenantId: string, dto: SyncIntegrationListDto) {
-    const connection = await this.ensureConnection(tenantId, dto.type);
-    const audienceName = this.buildAudienceName({
+    const connection = await this.requireConnection(tenantId, {
       type: dto.type,
+      connectionId: dto.connectionId,
+    });
+    const audienceName = this.buildAudienceName({
+      type: connection.type,
       listId: dto.listId,
       listName: dto.listName,
       audienceName: dto.audienceName,
     });
     const source =
-      dto.type === "ACTION_NETWORK" ? AudienceSource.ACTION_NETWORK : AudienceSource.INTERNAL;
+      connection.type === "ACTION_NETWORK" ? AudienceSource.ACTION_NETWORK : AudienceSource.INTERNAL;
 
     const initialPayload: IntegrationSyncJobPayload = {
       syncJobId: "",
-      type: dto.type,
+      type: connection.type,
       listId: dto.listId,
       audienceName,
       listName: dto.listName,
@@ -496,6 +520,15 @@ export class IntegrationsService {
         orderBy: { createdAt: "asc" },
         select: { id: true },
       });
+      if (existing) {
+        // Re-sync may run through a different connection than last time (a tenant
+        // reconnected, or switched from its own account to a network-shared one).
+        // Keep the provenance stamp current.
+        await tx.audience.update({
+          where: { id: existing.id },
+          data: { integrationConnectionId: connection.id },
+        });
+      }
       const audience =
         existing ??
         (await tx.audience.create({
@@ -504,6 +537,7 @@ export class IntegrationsService {
             name: audienceName,
             source,
             externalListId: dto.listId,
+            integrationConnectionId: connection.id,
             status: "ACTIVE",
           },
           select: { id: true },
@@ -552,7 +586,7 @@ export class IntegrationsService {
       status: IntegrationJobStatus.QUEUED,
       audienceName,
       listId: dto.listId,
-      type: dto.type,
+      type: connection.type,
     };
   }
 
@@ -583,7 +617,7 @@ export class IntegrationsService {
     }
 
     const connectionType = syncJob.connection.type as IntegrationConnectionType;
-    const baseUrl = this.baseUrlFromSettings(syncJob.connection.settings) || this.envCredentials(connectionType).baseUrl;
+    const baseUrl = this.baseUrlFromSettings(syncJob.connection.settings) || this.envBaseUrl(connectionType);
     const apiKey = this.crypto.decrypt(syncJob.connection.encryptedCredential);
     const checkpoint = this.parseCheckpointState(syncJob.errorSummary, payload);
     const cursorUrl = payload.cursorUrl || checkpoint.nextCursorUrl || undefined;

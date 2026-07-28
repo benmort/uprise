@@ -1,5 +1,6 @@
 import { NotFoundException } from "@nestjs/common";
 import { IntegrationsService } from "./integrations.service";
+import { IntegrationNotConnectedError } from "./integration.errors";
 
 /**
  * Covers the sync QUEUE machinery of IntegrationsService: the eager-audience
@@ -68,6 +69,20 @@ describe("IntegrationsService — sync queue", () => {
       },
       audienceContact: { upsert: jest.fn().mockResolvedValue({}) },
       integrationConnection: {
+        // The tenant's own active connection. requestSyncList resolves through this —
+        // there is no env fallback and nothing is auto-created, so a test that wants a
+        // sync to proceed has to supply a connection, exactly like a real tenant does.
+        findFirst: jest.fn().mockResolvedValue({
+          id: "conn1",
+          tenantId: "org1",
+          type: "ACTION_NETWORK",
+          name: "Action Network",
+          status: "ACTIVE",
+          encryptedCredential: "enc",
+          settings: null,
+        }),
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockResolvedValue({ id: "conn1" }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn().mockResolvedValue([]),
@@ -239,7 +254,6 @@ describe("IntegrationsService — sync queue", () => {
   // ── requestSyncList (eager audience + enqueue) ─────────────────────────────
   it("requestSyncList eagerly creates the audience, stamps it on the job, returns audienceId", async () => {
     const { service, tx, queue } = build();
-    jest.spyOn(service as any, "ensureConnection").mockResolvedValue({ id: "conn1" });
     const res = await service.syncList("org1", { type: "ACTION_NETWORK", listId: "list1", listName: "Vols" } as any);
     expect(tx.audience.create).toHaveBeenCalled();
     expect(tx.integrationSyncJob.create).toHaveBeenCalledWith(
@@ -249,24 +263,47 @@ describe("IntegrationsService — sync queue", () => {
     expect(res).toMatchObject({ syncJobId: "job1", audienceId: "aud1", status: "QUEUED", queued: true });
   });
 
+  it("requestSyncList stamps the resolving connection on the new audience", async () => {
+    const { service, tx } = build();
+    await service.syncList("org1", { type: "ACTION_NETWORK", listId: "list1" } as any);
+    expect(tx.audience.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ integrationConnectionId: "conn1" }) }),
+    );
+  });
+
   it("requestSyncList reuses an existing audience for the same list (no duplicate)", async () => {
     const { service, tx } = build();
     tx.audience.findFirst.mockResolvedValueOnce({ id: "audExisting" });
-    jest.spyOn(service as any, "ensureConnection").mockResolvedValue({ id: "conn1" });
     const res = await service.syncList("org1", { type: "ACTION_NETWORK", listId: "list1" } as any);
     expect(tx.audience.create).not.toHaveBeenCalled();
     expect(res.audienceId).toBe("audExisting");
+    // A re-sync may run through a different connection than last time; keep it current.
+    expect(tx.audience.update).toHaveBeenCalledWith({
+      where: { id: "audExisting" },
+      data: { integrationConnectionId: "conn1" },
+    });
   });
 
   it("requestSyncList marks the job FAILED and rethrows when enqueue fails", async () => {
     const enqueue = jest.fn().mockRejectedValue(new Error("redis down"));
     const { service, prisma } = build({ queueEnqueue: enqueue });
-    jest.spyOn(service as any, "ensureConnection").mockResolvedValue({ id: "conn1" });
     await expect(
       service.syncList("org1", { type: "ACTION_NETWORK", listId: "list1" } as any),
     ).rejects.toThrow("redis down");
     const failUpdate = prisma.integrationSyncJob.update.mock.calls.at(-1)[0];
     expect(failUpdate.data.status).toBe("FAILED");
+  });
+
+  it("requestSyncList refuses to sync when the tenant has no connection", async () => {
+    const { service, prisma, tx } = build();
+    prisma.integrationConnection.findFirst.mockResolvedValue(null);
+    await expect(
+      service.syncList("org1", { type: "ACTION_NETWORK", listId: "list1" } as any),
+    ).rejects.toBeInstanceOf(IntegrationNotConnectedError);
+    // Nothing auto-created, nothing written — this is the leak that let every tenant
+    // import through the platform env key.
+    expect(prisma.integrationConnection.upsert).not.toHaveBeenCalled();
+    expect(tx.audience.create).not.toHaveBeenCalled();
   });
 
   // ── connection management ──────────────────────────────────────────────────

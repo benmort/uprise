@@ -78,7 +78,10 @@ describe("ContactsService — identity resolution (meld doc 10)", () => {
     expect(result).toBeNull();
   });
 
-  it("recordSourceRecord upserts provenance idempotently on (sourceSystem, externalId)", async () => {
+  // Tenant-scoped, not (sourceSystem, externalId): two tenants may both sync the same
+  // Action Network person, and the old cross-tenant unique made the second collide with
+  // the first — silently repointing one tenant's provenance row at another's contact.
+  it("recordSourceRecord upserts provenance idempotently on (tenantId, sourceSystem, externalId)", async () => {
     const { svc, prisma } = setup();
 
     await svc.recordSourceRecord({
@@ -90,7 +93,13 @@ describe("ContactsService — identity resolution (meld doc 10)", () => {
     });
 
     expect(prisma.contactSourceRecord.upsert).toHaveBeenCalledWith({
-      where: { sourceSystem_externalId: { sourceSystem: "action_network", externalId: "an_123" } },
+      where: {
+        tenantId_sourceSystem_externalId: {
+          tenantId: "t1",
+          sourceSystem: "action_network",
+          externalId: "an_123",
+        },
+      },
       create: {
         tenantId: "t1",
         contactId: "c1",
@@ -98,7 +107,8 @@ describe("ContactsService — identity resolution (meld doc 10)", () => {
         externalId: "an_123",
         data: { tags: ["volunteer"] },
       },
-      update: { tenantId: "t1", contactId: "c1", data: { tags: ["volunteer"] } },
+      // tenantId is part of the key now, so the update never rewrites it.
+      update: { contactId: "c1", data: { tags: ["volunteer"] } },
     });
   });
 });

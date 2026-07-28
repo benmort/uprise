@@ -222,8 +222,11 @@ export class ContactsService {
 
   /**
    * Record multi-source provenance for a contact (meld doc 10). Idempotent on
-   * (sourceSystem, externalId) so re-importing from Action Network/CSV updates the
-   * payload rather than duplicating. Drives the segment `hasSource` clause.
+   * (tenantId, sourceSystem, externalId) so re-importing from Action Network/CSV updates
+   * the payload rather than duplicating. Drives the segment `hasSource` clause.
+   *
+   * Tenant-scoped: two tenants may legitimately sync the same Action Network person, and
+   * the old cross-tenant unique made the second one collide with the first.
    */
   async recordSourceRecord(input: {
     tenantId: string;
@@ -234,7 +237,8 @@ export class ContactsService {
   }): Promise<void> {
     await this.prisma.contactSourceRecord.upsert({
       where: {
-        sourceSystem_externalId: {
+        tenantId_sourceSystem_externalId: {
+          tenantId: input.tenantId,
           sourceSystem: input.sourceSystem,
           externalId: input.externalId,
         },
@@ -247,7 +251,6 @@ export class ContactsService {
         ...(input.data !== undefined ? { data: input.data } : {}),
       },
       update: {
-        tenantId: input.tenantId,
         contactId: input.contactId,
         ...(input.data !== undefined ? { data: input.data } : {}),
       },

@@ -26,11 +26,11 @@ export class HealthService {
             this.config.get<string>("TWILIO_AUTH_TOKEN") &&
             this.config.get<string>("TWILIO_PHONE_NUMBER"),
         ),
-        actionNetwork: Boolean(this.config.get<string>("ACTION_NETWORK_API_KEY")),
-        internalSource: Boolean(
-          this.config.get<string>("INTERNAL_SOURCE_API_KEY") &&
-            this.config.get<string>("INTERNAL_SOURCE_API_BASE_URL"),
-        ),
+        // Integration credentials are per-tenant (IntegrationConnection), so a platform
+        // key says nothing about whether integrations work — it only ever meant "some
+        // org's key is sitting in env". Report the reachable endpoint config instead.
+        actionNetwork: Boolean(this.config.get<string>("ACTION_NETWORK_API_BASE_URL")),
+        internalSource: Boolean(this.config.get<string>("INTERNAL_SOURCE_API_BASE_URL")),
       },
       at: new Date().toISOString(),
     };

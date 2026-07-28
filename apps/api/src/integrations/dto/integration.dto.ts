@@ -24,6 +24,7 @@ export class UpdateConnectionStatusDto {
   status!: "ACTIVE" | "INACTIVE";
 }
 
+/** Blank apiKey + a connectionId tests the stored credential; a supplied apiKey tests that. */
 export class TestIntegrationConnectionDto {
   @IsIn(["ACTION_NETWORK", "INTERNAL"])
   type!: "ACTION_NETWORK" | "INTERNAL";
@@ -35,6 +36,10 @@ export class TestIntegrationConnectionDto {
   @IsOptional()
   @IsString()
   baseUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  connectionId?: string;
 }
 
 export class SearchIntegrationListsDto {
@@ -44,6 +49,12 @@ export class SearchIntegrationListsDto {
   @IsOptional()
   @IsString()
   query?: string;
+
+  // Pin the exact connection to read through. Omitted ⇒ the tenant's own active
+  // connection for `type`. There is no platform-wide fallback.
+  @IsOptional()
+  @IsString()
+  connectionId?: string;
 }
 
 export class SampleIntegrationListDto {
@@ -52,6 +63,10 @@ export class SampleIntegrationListDto {
 
   @IsString()
   listId!: string;
+
+  @IsOptional()
+  @IsString()
+  connectionId?: string;
 }
 
 export class SyncIntegrationListDto {
@@ -71,4 +86,8 @@ export class SyncIntegrationListDto {
   @IsOptional()
   @IsString()
   query?: string;
+
+  @IsOptional()
+  @IsString()
+  connectionId?: string;
 }

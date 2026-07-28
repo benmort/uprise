@@ -322,7 +322,12 @@ export function validateEnv(config: Env): ValidatedEnv {
     MAPBOX_DIRECTIONS_RPM: numberInRange(config, "MAPBOX_DIRECTIONS_RPM", 1, 1200, 240, errors),
     ACTION_NETWORK_API_BASE_URL:
       config.ACTION_NETWORK_API_BASE_URL?.trim() || "https://actionnetwork.org/api/v2",
-    ACTION_NETWORK_API_KEY: required(config, "ACTION_NETWORK_API_KEY", errors),
+    // Optional and unread at runtime. Integration credentials are per-tenant
+    // (integration.IntegrationConnection); a platform-wide key used to stand in for any
+    // tenant that hadn't connected an account, which pointed every tenant at the same
+    // external org. Kept in the schema only so an existing deployment doesn't fail
+    // validation on a leftover value — nothing reads it.
+    ACTION_NETWORK_API_KEY: config.ACTION_NETWORK_API_KEY?.trim() || "",
     // Action Network rejects per_page > 25 with a 403, so the range caps there.
     ACTION_NETWORK_SYNC_PER_PAGE: numberInRange(config, "ACTION_NETWORK_SYNC_PER_PAGE", 1, 25, 25, errors),
     ACTION_NETWORK_SYNC_MAX_PAGES: numberInRange(
@@ -382,8 +387,10 @@ export function validateEnv(config: Env): ValidatedEnv {
       9,
       errors,
     ),
-    INTERNAL_SOURCE_API_BASE_URL: required(config, "INTERNAL_SOURCE_API_BASE_URL", errors),
-    INTERNAL_SOURCE_API_KEY: required(config, "INTERNAL_SOURCE_API_KEY", errors),
+    // Base URL stays useful as a platform default for internal-source connections; the
+    // key is per-tenant and unread at runtime (see ACTION_NETWORK_API_KEY above).
+    INTERNAL_SOURCE_API_BASE_URL: config.INTERNAL_SOURCE_API_BASE_URL?.trim() || "",
+    INTERNAL_SOURCE_API_KEY: config.INTERNAL_SOURCE_API_KEY?.trim() || "",
     INTEGRATION_CREDENTIAL_SECRET: required(config, "INTEGRATION_CREDENTIAL_SECRET", errors),
     QUIET_HOURS_START: numberInRange(config, "QUIET_HOURS_START", 0, 23, 21, errors),
     QUIET_HOURS_END: numberInRange(config, "QUIET_HOURS_END", 0, 23, 8, errors),

@@ -293,8 +293,18 @@ export async function getAudienceImportStatus(audienceId: string, importId: stri
   );
 }
 
-export async function searchIntegrationLists(type: "ACTION_NETWORK" | "INTERNAL", query: string) {
+/**
+ * Remote lists for one connection. `connectionId` pins which connected account is read —
+ * without it the API falls back to the tenant's own active connection for `type`, and if
+ * there is none it returns INTEGRATION_NOT_CONNECTED rather than inventing one.
+ */
+export async function searchIntegrationLists(
+  type: "ACTION_NETWORK" | "INTERNAL",
+  query: string,
+  connectionId?: string,
+) {
   const q = new URLSearchParams({ type, query });
+  if (connectionId) q.set("connectionId", connectionId);
   return request<{ lists: Array<Record<string, unknown>> }>(`/integrations/lists/search?${q}`);
 }
 
@@ -319,6 +329,7 @@ export async function syncIntegrationList(input: {
   audienceName: string;
   listName?: string;
   query?: string;
+  connectionId?: string;
 }) {
   return request<SyncIntegrationListResult>("/integrations/lists/sync", {
     method: "POST",
@@ -364,10 +375,12 @@ export async function upsertIntegrationConnection(input: {
   });
 }
 
+/** With an apiKey, tests that candidate. Without one, tests the tenant's stored credential. */
 export async function testIntegrationConnection(input: {
   type: "ACTION_NETWORK" | "INTERNAL";
   apiKey?: string;
   baseUrl?: string;
+  connectionId?: string;
 }) {
   return request<{ ok: boolean; detail?: string }>("/integrations/connections/test", {
     method: "POST",

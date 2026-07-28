@@ -524,6 +524,11 @@ model Audience {
   kind           AudienceKind    @default(STATIC)
   status         AudienceStatus @default(ACTIVE)
   externalListId String?
+  // Which IntegrationConnection produced this audience. id-only ref to
+  // integration.IntegrationConnection (no cross-schema FK). Lets a re-sync resolve the
+  // same credential, and keeps provenance honest when the connection is shared into a
+  // network by another tenant.
+  integrationConnectionId String?
   syncedAt       DateTime?
   archivedAt     DateTime?
   createdAt      DateTime       @default(now())
@@ -536,6 +541,7 @@ model Audience {
   blasts         Blast[]
 
   @@index([tenantId, status])
+  @@index([integrationConnectionId])
   @@schema("audience")
 }
 
@@ -818,6 +824,9 @@ model IntegrationConnection {
   tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   syncJobs       IntegrationSyncJob[]
 
+  // One connection per (tenant, type) — makes upsertConnection a real upsert instead
+  // of the racy findFirst-inside-where it used to be.
+  @@unique([tenantId, type])
   @@index([tenantId, type, status])
   @@schema("integration")
 }
@@ -2257,7 +2266,9 @@ model ContactSourceRecord {
   data         Json?
   createdAt    DateTime @default(now())
 
-  @@unique([sourceSystem, externalId])
+  // Tenant-scoped: the same Action Network person id legitimately appears in two
+  // tenants that both sync it. A cross-tenant unique made the second one collide.
+  @@unique([tenantId, sourceSystem, externalId])
   @@index([contactId])
   @@index([tenantId, sourceSystem])
   @@schema("audience")

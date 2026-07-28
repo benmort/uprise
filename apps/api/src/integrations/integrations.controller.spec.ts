@@ -30,12 +30,14 @@ describe("IntegrationsController", () => {
     expect(svc.upsertConnection).toHaveBeenCalledWith("t1", dto);
   });
 
-  it("testConnection delegates with the dto", async () => {
+  // tenantId is required now: with a blank apiKey, testConnection tests the tenant's own
+  // stored credential rather than falling back to a platform env key.
+  it("testConnection delegates with tenantId + dto", async () => {
     const svc = makeSvc();
     const c = new IntegrationsController(svc);
     const dto = { type: "ACTION_NETWORK", apiKey: "k" } as TestIntegrationConnectionDto;
-    await c.testConnection(dto);
-    expect(svc.testConnection).toHaveBeenCalledWith(dto);
+    await c.testConnection("t1", dto);
+    expect(svc.testConnection).toHaveBeenCalledWith("t1", dto);
   });
 
   it("updateConnectionStatus delegates with tenantId, id + status", async () => {
