@@ -355,13 +355,24 @@ export const ATLAS = {
   /**
    * Same combined boundary count as the hero ticker (150 federal + 438 state + 547 LGA = 1,135),
    * so the two do not contradict each other on the one page. The freed slots go to data this
-   * section is actually about rather than repeating the ticker: SA2s are the level the choropleth
-   * shades at, and the ABS Indigenous structure is 40 Regions + 412 Areas = 452.
+   * section is actually about rather than repeating the ticker: the ASGS hierarchy the turf cutter
+   * and the choropleth work in, and the ABS Indigenous structure (40 Regions + 412 Areas = 452).
+   *
+   * 432,972 is the whole ASGS hierarchy the product carries — Mesh Block → SA1 → SA2 → SA3 → SA4
+   * (see AreaLevel in apps/api/src/geo/geo.service.ts:79-90, one table per level) — counted off the
+   * loaded database rather than off the ABS's published totals:
+   *
+   *   368,271 meshblocks + 61,815 SA1 + 2,456 SA2 + 341 SA3 + 89 SA4 = 432,972
+   *
+   * Each is a little under the ABS's own figure because the loader carries the spatial set only;
+   * the special-purpose codes (no usual address, migratory and offshore) have no boundary to hold.
+   * This replaces a lone "2,472 SA2 statistical areas", which was the published SA2 count rather
+   * than the 2,456 actually loaded, and named one level of five besides.
    */
   stats: [
     { to: 16905838, label: "G-NAF addresses" },
     { to: 1135, label: "Electorates & councils" },
-    { to: 2472, label: "SA2 statistical areas" },
+    { to: 432972, label: "Statistical areas & meshblocks" },
     { to: 452, label: "Indigenous areas & regions" },
   ] as Stat[],
 } as const;

@@ -75,8 +75,9 @@ export type Stat = { to: number; dp?: number; suffix?: string; label: string };
  *          (apps/field) and supporter action pages (apps/action). api, auth, worker and the two
  *          marketing sites aren't member-facing, so they aren't counted.
  *
- * The SA2 count (2,472) and the "0 bars of signal" line this replaced are both still made
- * elsewhere: SA2s in ATLAS.stats, and the offline story in SCENES[1] and GALLERY.facts.
+ * The statistical-area count and the "0 bars of signal" line these replaced are both still made
+ * elsewhere: the ASGS hierarchy in ATLAS.stats, and the offline story in SCENES[1] and
+ * GALLERY.facts.
  */
 export const TICKER: Stat[] = [
   { to: 16.9, dp: 1, suffix: "M", label: "Australian addresses" },
