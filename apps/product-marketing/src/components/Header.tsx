@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { CircleIcon, ChevronDown, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import MobileMenu from "./MobileMenu";
 import { authAppUrl, adminAppUrl } from "@/lib/links";
@@ -23,7 +24,26 @@ const useIsomorphicLayoutEffect = typeof window !== "undefined" ? React.useLayou
  * and re-skins depending on which page you are on reads as two different sites, so the homepage's
  * treatment is now simply the header.
  */
+/**
+ * THE TOGGLE. Hold the pill at one width and one height off the homepage, so the nav stays put
+ * whatever the scroll position.
+ *
+ * The condense (max-w 1320px → 1100px, pt-5 → pt-3) belongs to the homepage's opening: it answers
+ * a full-bleed hero wash that scrolls away beneath it. On an ordinary page there is nothing for it
+ * to answer, so all it does is slide the logo and nav 110px sideways and 8px up while someone is
+ * reading — movement with no meaning behind it.
+ *
+ * Only the GEOMETRY is held. The glass skin still arrives on scroll everywhere, because that one
+ * does have a job: it keeps the nav legible once content is passing under it.
+ *
+ * Set to false to condense on every route, as it did before.
+ */
+const NORMALISE_INNER_HEADER = true;
+
 export default function Header() {
+  const pathname = usePathname();
+  // EXACT match: "/" as a prefix matches every route, which would opt the whole site out.
+  const condenses = pathname === "/" || !NORMALISE_INNER_HEADER;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   /**
@@ -111,16 +131,18 @@ export default function Header() {
   // text a visitor needs to copy. Inherited, so it also covers the mobile drawer; <MobileMenu />
   // renders inside this header element.
   const headerClasses = `fixed left-0 top-0 z-9999 flex w-full select-none justify-center px-4 pb-2 sm:px-8 xl:px-12.5 ${shellTransition} ${
-    isScrolled ? "pt-3" : "pt-5"
+    condenses && isScrolled ? "pt-3" : "pt-5"
   }`;
 
-  // The pill narrows and picks up its glass as you scroll; at rest it is invisible so the hero
+  // Skin and geometry are separate so NORMALISE_INNER_HEADER can hold one and keep the other: the
+  // glass arrives on scroll everywhere, the narrowing only where the pill condenses.
+  const skin = isScrolled
+    ? "border-stroke-secondary bg-white/75 shadow-xl backdrop-blur-[18px] backdrop-saturate-150"
+    : "border-transparent bg-transparent";
+  // The pill narrows as you scroll on the homepage; at rest it is invisible so the hero
   // wash runs edge to edge behind it.
-  const innerClasses = `relative mx-auto w-full items-center justify-between rounded-full border px-4 py-3 xl:flex xl:gap-7 xl:py-1 xl:pl-7 xl:pr-4 ${shellTransition} ${
-    isScrolled
-      ? "max-w-[1100px] border-stroke-secondary bg-white/75 shadow-xl backdrop-blur-[18px] backdrop-saturate-150"
-      : "max-w-[1320px] border-transparent bg-transparent"
-  }`;
+  const width = condenses && isScrolled ? "max-w-[1100px]" : "max-w-[1320px]";
+  const innerClasses = `relative mx-auto w-full items-center justify-between rounded-full border px-4 py-3 xl:flex xl:gap-7 xl:py-1 xl:pl-7 xl:pr-4 ${shellTransition} ${width} ${skin}`;
 
   return (
     <header className={headerClasses}>
