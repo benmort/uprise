@@ -179,6 +179,7 @@ export default function SignUpPage() {
               access has been misled by the omission. */}
           <Alert
             variant="info"
+            showIcon={false}
             title="We're taking signup requests"
             message="Complete your details and we'll review your workspace. We'll get back to you as soon as possible after you finish signing up."
             className="mt-4"

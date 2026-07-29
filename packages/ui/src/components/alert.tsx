@@ -12,6 +12,9 @@ export interface AlertProps {
   title?: string;
   message?: string;
   children?: React.ReactNode;
+  /** Render the variant's status icon. Off for a callout that reads as prose rather than an alarm –
+   *  the coloured panel already carries the variant. */
+  showIcon?: boolean;
   showLink?: boolean;
   linkHref?: string;
   linkText?: string;
@@ -88,6 +91,7 @@ export function Alert({
   title,
   message,
   children,
+  showIcon = true,
   showLink = false,
   linkHref = "#",
   linkText = "Learn more",
@@ -102,7 +106,7 @@ export function Alert({
   return (
     <div role="alert" className={cn("rounded-xl border p-4", container, className)}>
       <div className="flex items-start gap-3">
-        <div className={cn("-mt-0.5 shrink-0", icon)}>{icons[variant]}</div>
+        {showIcon ? <div className={cn("-mt-0.5 shrink-0", icon)}>{icons[variant]}</div> : null}
         <div className="min-w-0 flex-1">
           {title ? (
             <h4 className="mb-1 text-sm font-semibold text-gray-800 dark:text-white/90">{title}</h4>
