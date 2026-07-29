@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { countUp } from "./count-up";
-import "./homepage4.css";
+import "./home.css";
 
 /**
  * The client boundary every section below the opening shares: one IntersectionObserver that adds
@@ -18,14 +18,14 @@ import "./homepage4.css";
  */
 /**
  * Every entry is a container with its OWN internal timeline, observed separately from the
- * `.hp4-rise` article around it — so a tile's visual starts when the tile arrives rather than when
+ * `.home-rise` article around it — so a tile's visual starts when the tile arrives rather than when
  * the section does. Adding a container here is required, not cosmetic: `is-in` is added per observed
  * element and the rules fire off the payload's own class, so a payload that is missing from this
  * list never receives it and every child stays at its `opacity: 0` initial state — the tile renders
  * permanently blank.
  */
 const TARGETS =
-  ".hp4-rise, .hp4-minimap, .hp4-thread, .hp4-matrix, .hp4-outreach, .hp4-blast";
+  ".home-rise, .home-minimap, .home-thread, .home-matrix, .home-outreach, .home-blast";
 
 export default function RevealScope({
   children,
@@ -85,7 +85,7 @@ export default function RevealScope({
   }, []);
 
   return (
-    <div ref={ref} id={id} className={`hp4-band ${className}`}>
+    <div ref={ref} id={id} className={`home-band ${className}`}>
       {children}
     </div>
   );

@@ -8,7 +8,7 @@ import { screen } from "@/lib/screens";
 import MarketingLaunchpad from "../MarketingLaunchpad";
 import { countUp } from "./count-up";
 import { HERO, SCENES, SECTION, TICKER } from "./content";
-import "./homepage4.css";
+import "./home.css";
 
 /** Inline CSS custom properties need a cast — React's CSSProperties has no index signature. */
 const cssVars = (vars: Record<string, string | number>) => vars as React.CSSProperties;
@@ -27,7 +27,7 @@ const cssVars = (vars: Record<string, string | number>) => vars as React.CSSProp
  * here will fight it; extend `paint()` instead. The glass header condenses on its own (see
  * components/Header.tsx `glass`), so nothing here touches it.
  */
-export default function Homepage4Opening() {
+export default function Opening() {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,15 +68,15 @@ export default function Homepage4Opening() {
       },
       { rootMargin: "0px 0px -12% 0px", threshold: 0.12 },
     );
-    all(".hp4-rise").forEach((n) => io.observe(n));
+    all(".home-rise").forEach((n) => io.observe(n));
     cleanups.push(() => io.disconnect());
 
     // the hero headline plays on mount rather than on scroll
-    const heroH = one(".hp4-heroh");
+    const heroH = one(".home-heroh");
     const raf0 = requestAnimationFrame(() => {
-      all(".hp4-heroh .hp4-mask").forEach((m) => m.classList.add("is-in"));
+      all(".home-heroh .home-mask").forEach((m) => m.classList.add("is-in"));
     });
-    // Then unclip the masks — see .hp4-heroh.is-clear: while overflow is hidden the accent
+    // Then unclip the masks — see .home-heroh.is-clear: while overflow is hidden the accent
     // line's glow is cut square at each word's box.
     const clearT = window.setTimeout(() => heroH?.classList.add("is-clear"), reduce ? 0 : 1800);
     cleanups.push(() => {
@@ -103,19 +103,19 @@ export default function Homepage4Opening() {
     // "in view" for the whole 480vh and an observer fires them all at once, long before their
     // scene arrives. paint() counts them on live-scene change.
     all("[data-to]")
-      .filter((n) => !n.closest(".hp4-sat"))
+      .filter((n) => !n.closest(".home-sat"))
       .forEach((n) => cio.observe(n));
     cleanups.push(() => cio.disconnect());
 
     /* ---------------------------------------------------------- stage refs */
-    const stage = one(".hp4-stage");
-    const scenes = all(".hp4-scene");
-    const sats = all(".hp4-sat");
-    const frame = one(".hp4-frame");
-    const phone = one(".hp4-phone");
-    const frameUrl = one(".hp4-furl");
-    const stageCue = one(".hp4-cue--stage");
-    const shots = all<HTMLImageElement>("[data-hp4-shot]");
+    const stage = one(".home-stage");
+    const scenes = all(".home-scene");
+    const sats = all(".home-sat");
+    const frame = one(".home-frame");
+    const phone = one(".home-phone");
+    const frameUrl = one(".home-furl");
+    const stageCue = one(".home-cue--stage");
+    const shots = all<HTMLImageElement>("[data-home-shot]");
     const N = SCENES.length;
     let lastLive = -1;
 
@@ -146,13 +146,13 @@ export default function Homepage4Opening() {
       // captures: a short cross-dissolve — two dense UI screens overlapping for long reads as
       // a rendering glitch
       shots.forEach((img) => {
-        const i = Number(img.dataset.hp4Shot);
+        const i = Number(img.dataset.homeShot);
         const o = band(raw, i, 0.09);
         img.style.opacity = String(o);
         img.style.transform = `scale(${lerp(1.025, 1, o)})`;
       });
       sats.forEach((node) => {
-        const o = band(raw, Number(node.dataset.hp4Sat), 0.12, 0.06);
+        const o = band(raw, Number(node.dataset.homeSat), 0.12, 0.06);
         node.style.opacity = String(o);
         node.style.transform = `translate3d(0,${lerp(14, 0, o)}px,0) scale(${lerp(0.95, 1, o)})`;
       });
@@ -181,17 +181,17 @@ export default function Homepage4Opening() {
         lastLive = live;
         if (frameUrl) frameUrl.textContent = SCENES[live].url;
         root
-          .querySelectorAll<HTMLElement>(`[data-hp4-sat="${live}"] [data-to]`)
+          .querySelectorAll<HTMLElement>(`[data-home-sat="${live}"] [data-to]`)
           .forEach((n) => count(n));
-        root.querySelectorAll<HTMLElement>(`[data-hp4-sat="${live}"] .hp4-bar i`).forEach((i) => {
+        root.querySelectorAll<HTMLElement>(`[data-home-sat="${live}"] .home-bar i`).forEach((i) => {
           if (i.dataset.w) i.style.setProperty("--w", i.dataset.w);
         });
       }
     };
 
     /* --------------------------------------------------------- scroll paint */
-    const planes = all(".hp4-plane[data-rate]");
-    const heroIn = one(".hp4-heroin");
+    const planes = all(".home-plane[data-rate]");
+    const heroIn = one(".home-heroin");
 
     let ticking = false;
     const paint = () => {
@@ -229,8 +229,8 @@ export default function Homepage4Opening() {
 
     /* ------------------------------------------- cursor spotlight + tilt */
     if (fine && !reduce) {
-      const hero = one(".hp4-hero");
-      const spot = one(".hp4-spot");
+      const hero = one(".home-hero");
+      const spot = one(".home-spot");
       if (hero && spot) {
         const onHeroMove = (e: PointerEvent) => {
           const r = hero.getBoundingClientRect();
@@ -241,7 +241,7 @@ export default function Homepage4Opening() {
         cleanups.push(() => hero.removeEventListener("pointermove", onHeroMove));
       }
 
-      const deck = one(".hp4-deck");
+      const deck = one(".home-deck");
       if (deck && frame) {
         let tx = 0;
         let ty = 0;
@@ -274,26 +274,26 @@ export default function Homepage4Opening() {
   }, []);
 
   return (
-    <div className="hp4-root" ref={rootRef}>
+    <div className="home-root" ref={rootRef}>
       {/* ============ HERO ============ */}
-      <section className="hp4-hero" id={SECTION.overview}>
-        <div className="hp4-plane hp4-aurora" data-rate="0.06">
+      <section className="home-hero" id={SECTION.overview}>
+        <div className="home-plane home-aurora" data-rate="0.06">
           <b />
           <b />
           <b />
         </div>
-        <div className="hp4-plane hp4-gridplane" data-rate="0.16" />
-        <div className="hp4-plane hp4-spot" />
+        <div className="home-plane home-gridplane" data-rate="0.16" />
+        <div className="home-plane home-spot" />
 
-        <div className="hp4-shell hp4-heroin">
+        <div className="home-shell home-heroin">
           {/* Beat zero of the hero cascade. Without a reveal the eyebrow sat fully painted while
               everything under it rose, which read as a static label above an animating page; at 0ms
               it overlaps the headline's first word (60ms) closely enough to land as one movement. */}
-          <span className="hp4-mono hp4-eyebrow hp4-rise" style={cssVars({ "--d": "0ms" })}>
+          <span className="home-mono home-eyebrow home-rise" style={cssVars({ "--d": "0ms" })}>
             {HERO.eyebrow}
           </span>
 
-          <h1 className="hp4-display hp4-heroh">
+          <h1 className="home-display home-heroh">
             {HERO.titleLines.map((line, i) => {
               const accent = i === HERO.titleLines.length - 1;
               return (
@@ -301,9 +301,9 @@ export default function Homepage4Opening() {
                   {/* Word-masked so each word rises out of its own clip box. */}
                   {line.split(" ").map((word, w) => (
                     <React.Fragment key={`${line}-${word}`}>
-                      <span className="hp4-mask">
+                      <span className="home-mask">
                         <span
-                          className={accent ? "hp4-accent" : undefined}
+                          className={accent ? "home-accent" : undefined}
                           style={cssVars({ "--d": `${i * 160 + w * 60 + 60}ms` })}
                         >
                           {word}
@@ -317,15 +317,15 @@ export default function Homepage4Opening() {
             })}
           </h1>
 
-          <p className="hp4-lede hp4-rise" style={cssVars({ "--d": "620ms" })}>
+          <p className="home-lede home-rise" style={cssVars({ "--d": "620ms" })}>
             {HERO.lede}
           </p>
 
           {/* Session-aware, exactly as on the live homepage: signed-in visitors get the
               launchpad instead of the sign-up pair. */}
-          <div className="hp4-rise" style={cssVars({ "--d": "720ms" })}>
+          <div className="home-rise" style={cssVars({ "--d": "720ms" })}>
             <MarketingLaunchpad tone="light">
-              <div className="hp4-cta">
+              <div className="home-cta">
                 <Button asChild variant="cta" size="pill">
                   <a href={`${authAppUrl()}/sign-up`}>Start a Campaign</a>
                 </Button>
@@ -336,7 +336,7 @@ export default function Homepage4Opening() {
             </MarketingLaunchpad>
           </div>
 
-          <div className="hp4-ticker hp4-rise" style={cssVars({ "--d": "840ms" })}>
+          <div className="home-ticker home-rise" style={cssVars({ "--d": "840ms" })}>
             {TICKER.map((s) => (
               <div key={s.label}>
                 <span
@@ -347,41 +347,41 @@ export default function Homepage4Opening() {
                 >
                   0
                 </span>
-                <span className="hp4-mono k">{s.label}</span>
+                <span className="home-mono k">{s.label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="hp4-cue">
-          <span className="hp4-mono">Scroll</span>
+        <div className="home-cue">
+          <span className="home-mono">Scroll</span>
           <i />
         </div>
       </section>
 
       {/* ============ THE PINNED STAGE ============ */}
-      <section className="hp4-stage" id={SECTION.oneShift}>
-        <div className="hp4-pin">
-          {/* The second cue — see .hp4-cue--stage. Driven by paintStage(), not CSS, because it
+      <section className="home-stage" id={SECTION.oneShift}>
+        <div className="home-pin">
+          {/* The second cue — see .home-cue--stage. Driven by paintStage(), not CSS, because it
               has to answer the pin's progress rather than the page's. */}
-          <div className="hp4-cue hp4-cue--stage">
-            <span className="hp4-mono">Keep scrolling</span>
+          <div className="home-cue home-cue--stage">
+            <span className="home-mono">Keep scrolling</span>
             <i />
           </div>
 
-          <div className="hp4-sgrid">
-            <div className="hp4-scenes">
+          <div className="home-sgrid">
+            <div className="home-scenes">
               {SCENES.map((s) => (
-                <article className="hp4-scene" key={s.no}>
-                  <div className="hp4-smeta">
-                    <span className="hp4-mono num">{s.no}</span>
-                    <span className="hp4-mono">One shift, start to finish</span>
+                <article className="home-scene" key={s.no}>
+                  <div className="home-smeta">
+                    <span className="home-mono num">{s.no}</span>
+                    <span className="home-mono">One shift, start to finish</span>
                   </div>
                   <h2>{s.heading}</h2>
-                  <p className="hp4-lede">{s.body}</p>
-                  <div className="hp4-facts">
+                  <p className="home-lede">{s.body}</p>
+                  <div className="home-facts">
                     {s.facts.map((f) => (
-                      <span className="hp4-pill" key={f}>
+                      <span className="home-pill" key={f}>
                         <i className="tick" />
                         {f}
                       </span>
@@ -391,15 +391,15 @@ export default function Homepage4Opening() {
               ))}
             </div>
 
-            <div className="hp4-deck">
-              <div className="hp4-frame">
-                <div className="hp4-fbar">
+            <div className="home-deck">
+              <div className="home-frame">
+                <div className="home-fbar">
                   <s />
                   <s />
                   <s />
-                  <em className="hp4-furl">{SCENES[0].url}</em>
+                  <em className="home-furl">{SCENES[0].url}</em>
                 </div>
-                <div className="hp4-screens">
+                <div className="home-screens">
                   {SCENES.map((s, i) => {
                     const shot = s.shotKey ? screen(s.shotKey) : null;
                     if (!shot) return null;
@@ -407,7 +407,7 @@ export default function Homepage4Opening() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         key={s.no}
-                        data-hp4-shot={i}
+                        data-home-shot={i}
                         src={shot.file}
                         alt={shot.alt}
                         width={shot.width}
@@ -421,18 +421,18 @@ export default function Homepage4Opening() {
               {SCENES.flatMap((s, i) =>
                 s.satellites.map((sat) => (
                   <aside
-                    className={`hp4-sat hp4-sat--${sat.pos}`}
-                    data-hp4-sat={i}
+                    className={`home-sat home-sat--${sat.pos}`}
+                    data-home-sat={i}
                     key={`${s.no}-${sat.cap}`}
                   >
-                    <span className="hp4-mono cap">{sat.cap}</span>
+                    <span className="home-mono cap">{sat.cap}</span>
                     {typeof sat.to === "number" && (
                       <span className="big" data-to={sat.to} data-suffix={sat.suffix ?? ""}>
                         0
                       </span>
                     )}
                     {sat.meter && (
-                      <div className="hp4-meter">
+                      <div className="home-meter">
                         <s />
                         <s />
                         <s />
@@ -441,7 +441,7 @@ export default function Homepage4Opening() {
                       </div>
                     )}
                     {sat.bar && (
-                      <div className="hp4-bar">
+                      <div className="home-bar">
                         <i data-w={sat.bar} />
                       </div>
                     )}
@@ -456,43 +456,43 @@ export default function Homepage4Opening() {
 
                   The status bar carries the scene's whole point: no signal, and a queue
                   that has kept counting anyway. */}
-              <div className="hp4-phone">
-                <div className="hp4-pscr">
-                  <div className="hp4-pnotch" aria-hidden>
+              <div className="home-phone">
+                <div className="home-pscr">
+                  <div className="home-pnotch" aria-hidden>
                     <s />
                   </div>
 
-                  <div className="hp4-pstatus">
-                    <span className="hp4-mono">9:41</span>
+                  <div className="home-pstatus">
+                    <span className="home-mono">9:41</span>
                     {/* Dimmed signal bars rather than the words "No service": any label long
                         enough to read collides with the notch. The offline state is stated
                         outright in the queue pill below, where it carries more weight. */}
-                    <span className="hp4-pstatus-r">
-                      <s className="hp4-psig" aria-hidden>
+                    <span className="home-pstatus-r">
+                      <s className="home-psig" aria-hidden>
                         <i />
                         <i />
                         <i />
                         <i />
                       </s>
-                      <s className="hp4-pbatt" aria-hidden />
+                      <s className="home-pbatt" aria-hidden />
                     </span>
                   </div>
 
-                  <div className="hp4-pbody">
-                    <div className="hp4-ptop">
-                      <span className="hp4-mono">Walk list · 14/62</span>
-                      <span className="hp4-mono">◐</span>
+                  <div className="home-pbody">
+                    <div className="home-ptop">
+                      <span className="home-mono">Walk list · 14/62</span>
+                      <span className="home-mono">◐</span>
                     </div>
-                    <div className="hp4-pq">
+                    <div className="home-pq">
                       <s />
                       Offline · queued 12
                     </div>
-                    <div className="hp4-paddr">
+                    <div className="home-paddr">
                       14 Bell Street
                       <br />
                       Coburg VIC 3058
                     </div>
-                    <div className="hp4-popts">
+                    <div className="home-popts">
                       <b className="is-on">
                         <s />
                         Strong support
@@ -509,12 +509,12 @@ export default function Homepage4Opening() {
                     {/* Fills the screen the way the real app does rather than leaving a void
                         under the options. Both are genuine field-app affordances — the
                         installed PWA queues notes and photos to the same on-device outbox. */}
-                    <div className="hp4-pnote">Add a note…</div>
+                    <div className="home-pnote">Add a note…</div>
                   </div>
 
-                  <div className="hp4-pfoot">
-                    <div className="hp4-pbtn">Save &amp; next door</div>
-                    <span className="hp4-phome" aria-hidden />
+                  <div className="home-pfoot">
+                    <div className="home-pbtn">Save &amp; next door</div>
+                    <span className="home-phome" aria-hidden />
                   </div>
                 </div>
               </div>

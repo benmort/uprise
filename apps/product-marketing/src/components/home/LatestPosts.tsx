@@ -22,32 +22,32 @@ export default function LatestPosts() {
   if (posts.length === 0) return null;
 
   return (
-    <RevealScope className="hp4-blog">
-      <div className="hp4-shell">
-        <div className="hp4-bloghead hp4-rise">
-          <div className="hp4-sechead">
-            <span className="hp4-mono hp4-eyebrow">{BLOG.eyebrow}</span>
-            <h2 className="hp4-h2">{BLOG.title}</h2>
+    <RevealScope className="home-blog">
+      <div className="home-shell">
+        <div className="home-bloghead home-rise">
+          <div className="home-sechead">
+            <span className="home-mono home-eyebrow">{BLOG.eyebrow}</span>
+            <h2 className="home-h2">{BLOG.title}</h2>
           </div>
-          <Link href="/blog" className="hp4-viewall">
+          <Link href="/blog" className="home-viewall">
             View all posts →
           </Link>
         </div>
 
-        <div className="hp4-posts">
+        <div className="home-posts">
           {posts.map((post, i) => (
             <Link
               key={post.slug}
               href={`/blog/${post.slug}`}
-              className="hp4-post hp4-rise"
+              className="home-post home-rise"
               style={cssVars({ "--d": `${i * 80}ms` })}
             >
               <span className="thumb">
                 <BlogCover tone={post.coverTone} category={post.category} />
               </span>
               <span className="meta">
-                <span className="hp4-mono cat">{post.category}</span>
-                <span className="hp4-mono">{post.readingTime}</span>
+                <span className="home-mono cat">{post.category}</span>
+                <span className="home-mono">{post.readingTime}</span>
               </span>
               <h3>{post.title}</h3>
               <p>{post.excerpt}</p>

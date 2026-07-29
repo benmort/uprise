@@ -19,15 +19,15 @@ export default function Gallery({ demo }: { demo?: React.ReactNode }) {
   const phoneShot = screen(GALLERY.phoneScreen);
 
   return (
-    <RevealScope className="hp4-gallery">
-      <div className="hp4-shell">
-        <header className="hp4-sechead hp4-sechead--mid hp4-rise">
-          <span className="hp4-mono hp4-eyebrow">{GALLERY.eyebrow}</span>
-          <h2 className="hp4-h2">{GALLERY.title}</h2>
-          <p className="hp4-lede">{GALLERY.lede}</p>
-          <div className="hp4-facts">
+    <RevealScope className="home-gallery">
+      <div className="home-shell">
+        <header className="home-sechead home-sechead--mid home-rise">
+          <span className="home-mono home-eyebrow">{GALLERY.eyebrow}</span>
+          <h2 className="home-h2">{GALLERY.title}</h2>
+          <p className="home-lede">{GALLERY.lede}</p>
+          <div className="home-facts">
             {GALLERY.facts.map((f) => (
-              <span className="hp4-pill" key={f}>
+              <span className="home-pill" key={f}>
                 <i className="tick" />
                 {f}
               </span>
@@ -35,9 +35,9 @@ export default function Gallery({ demo }: { demo?: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="hp4-gstage hp4-rise" style={cssVars({ "--d": "80ms" })}>
+        <div className="home-gstage home-rise" style={cssVars({ "--d": "80ms" })}>
           {wideShot ? (
-            <div className="hp4-gmap">
+            <div className="home-gmap">
               <Image
                 alt={wideShot.alt}
                 src={wideShot.file}
@@ -48,7 +48,7 @@ export default function Gallery({ demo }: { demo?: React.ReactNode }) {
             </div>
           ) : null}
 
-          <div className="hp4-gphone">
+          <div className="home-gphone">
             {demo ??
               (phoneShot ? (
                 <Image

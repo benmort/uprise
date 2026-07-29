@@ -25,18 +25,18 @@ export function SectionHead({
 }) {
   return (
     <header
-      className={`hp4-sechead hp4-rise${align === "centre" ? " hp4-sechead--mid" : ""}`}
+      className={`home-sechead home-rise${align === "centre" ? " home-sechead--mid" : ""}`}
       style={cssVars({ "--d": `${delayMs}ms` })}
     >
-      <span className="hp4-mono hp4-eyebrow">{eyebrow}</span>
-      <h2 className="hp4-h2">{title}</h2>
-      {lede ? <p className="hp4-lede">{lede}</p> : null}
+      <span className="home-mono home-eyebrow">{eyebrow}</span>
+      <h2 className="home-h2">{title}</h2>
+      {lede ? <p className="home-lede">{lede}</p> : null}
     </header>
   );
 }
 
 export function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="hp4-chip">{children}</span>;
+  return <span className="home-chip">{children}</span>;
 }
 
 /** A white card with the mono label/meta strip across the top — the frame every product mock uses. */
@@ -50,12 +50,12 @@ export function MockCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="hp4-mock">
-      <div className="hp4-mockbar">
-        <span className="hp4-mono">{label}</span>
-        <span className="hp4-mono">{meta}</span>
+    <div className="home-mock">
+      <div className="home-mockbar">
+        <span className="home-mono">{label}</span>
+        <span className="home-mono">{meta}</span>
       </div>
-      <div className="hp4-mockbody">{children}</div>
+      <div className="home-mockbody">{children}</div>
     </div>
   );
 }

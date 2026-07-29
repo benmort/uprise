@@ -14,23 +14,23 @@ import { CLOSING } from "./sections";
  */
 export default function Closing() {
   return (
-    <RevealScope id={SECTION.getStarted} className="hp4-finale">
-      <div className="hp4-plane hp4-aurora" aria-hidden>
+    <RevealScope id={SECTION.getStarted} className="home-finale">
+      <div className="home-plane home-aurora" aria-hidden>
         <b />
         <b />
         <b />
       </div>
-      <div className="hp4-shell">
-        <span className="hp4-mono hp4-eyebrow hp4-rise">{CLOSING.eyebrow}</span>
-        <h2 className="hp4-display hp4-rise" style={cssVars({ "--d": "80ms" })}>
+      <div className="home-shell">
+        <span className="home-mono home-eyebrow home-rise">{CLOSING.eyebrow}</span>
+        <h2 className="home-display home-rise" style={cssVars({ "--d": "80ms" })}>
           {CLOSING.title}
         </h2>
-        <p className="hp4-lede hp4-rise" style={cssVars({ "--d": "160ms" })}>
+        <p className="home-lede home-rise" style={cssVars({ "--d": "160ms" })}>
           {CLOSING.lede}
         </p>
-        <div className="hp4-rise" style={cssVars({ "--d": "240ms" })}>
+        <div className="home-rise" style={cssVars({ "--d": "240ms" })}>
           <MarketingLaunchpad tone="light">
-            <div className="hp4-cta">
+            <div className="home-cta">
               <Button asChild variant="cta" size="pill">
                 <a href={`${authAppUrl()}/sign-up`}>Start a Campaign</a>
               </Button>

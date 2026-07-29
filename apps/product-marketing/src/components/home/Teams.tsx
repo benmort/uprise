@@ -10,45 +10,45 @@ import { TEAMS } from "./sections";
  */
 export default function Teams() {
   return (
-    <RevealScope id={SECTION.teams} className="hp4-split">
-      <div className="hp4-shell hp4-sgrid2">
-        <div className="hp4-rise">
-          <span className="hp4-mono hp4-eyebrow">{TEAMS.eyebrow}</span>
-          <h2 className="hp4-h2" style={{ marginTop: 18 }}>
+    <RevealScope id={SECTION.teams} className="home-split">
+      <div className="home-shell home-sgrid2">
+        <div className="home-rise">
+          <span className="home-mono home-eyebrow">{TEAMS.eyebrow}</span>
+          <h2 className="home-h2" style={{ marginTop: 18 }}>
             {TEAMS.title}
           </h2>
           {TEAMS.body.map((para) => (
-            <p className="hp4-lede" key={para} style={{ marginTop: 18 }}>
+            <p className="home-lede" key={para} style={{ marginTop: 18 }}>
               {para}
             </p>
           ))}
         </div>
 
-        <div className="hp4-rise" style={cssVars({ "--d": "120ms" })}>
+        <div className="home-rise" style={cssVars({ "--d": "120ms" })}>
           <MockCard label={TEAMS.mock.label} meta={TEAMS.mock.meta}>
-            <div className="hp4-rows">
+            <div className="home-rows">
               {TEAMS.mock.members.map((m) => (
-                <div className="hp4-row" key={m.name}>
+                <div className="home-row" key={m.name}>
                   <div>
                     <b>{m.name}</b>
                     <span>{m.role}</span>
                   </div>
-                  <span className={`hp4-badge${m.tone === "accent" ? " is-accent" : ""}`}>
+                  <span className={`home-badge${m.tone === "accent" ? " is-accent" : ""}`}>
                     {m.badge}
                   </span>
                 </div>
               ))}
-              <div className="hp4-row hp4-row--pending">
+              <div className="home-row home-row--pending">
                 <div>
                   <b>{TEAMS.mock.pending.email}</b>
                   <span>{TEAMS.mock.pending.note}</span>
                 </div>
-                <span className="hp4-badge is-solid">{TEAMS.mock.pending.action}</span>
+                <span className="home-badge is-solid">{TEAMS.mock.pending.action}</span>
               </div>
             </div>
-            <div className="hp4-chiprow">
+            <div className="home-chiprow">
               {TEAMS.mock.chips.map((c) => (
-                <span className="hp4-chip" key={c}>
+                <span className="home-chip" key={c}>
                   {c}
                 </span>
               ))}

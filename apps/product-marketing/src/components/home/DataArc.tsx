@@ -4,7 +4,7 @@ import { cssVars } from "./parts";
 import { SECTION } from "./content";
 import { ATLAS, AU_GRID } from "./sections";
 
-const SEQ = ["--hp4-seq-1", "--hp4-seq-2", "--hp4-seq-3", "--hp4-seq-4", "--hp4-seq-5"];
+const SEQ = ["--home-seq-1", "--home-seq-2", "--home-seq-3", "--home-seq-4", "--home-seq-5"];
 
 /**
  * The data arc — the one part of the platform nothing else on the page can show: the whole country
@@ -18,10 +18,10 @@ const SEQ = ["--hp4-seq-1", "--hp4-seq-2", "--hp4-seq-3", "--hp4-seq-4", "--hp4-
 export default function DataArc() {
   return (
     <>
-      <RevealScope id={SECTION.data} className="hp4-atlas">
-        <div className="hp4-shell hp4-agrid">
+      <RevealScope id={SECTION.data} className="home-atlas">
+        <div className="home-shell home-agrid">
           <div>
-            <div className="hp4-matrix" role="img" aria-label="Australia, shaded by census indicator">
+            <div className="home-matrix" role="img" aria-label="Australia, shaded by census indicator">
               {AU_GRID.flatMap((row, y) =>
                 row.split("").map((ch, x) => {
                   if (ch !== "#") {
@@ -41,42 +41,42 @@ export default function DataArc() {
                 }),
               )}
             </div>
-            <div className="hp4-legend">
-              <span className="hp4-mono">Low</span>
+            <div className="home-legend">
+              <span className="home-mono">Low</span>
               <span className="ramp">
                 {SEQ.map((v) => (
                   <s key={v} style={{ background: `var(${v})` }} />
                 ))}
               </span>
-              <span className="hp4-mono">High</span>
-              <span className="hp4-mono" style={{ marginLeft: "auto" }}>
+              <span className="home-mono">High</span>
+              <span className="home-mono" style={{ marginLeft: "auto" }}>
                 {ATLAS.legend}
               </span>
             </div>
           </div>
 
           <div>
-            <span className="hp4-mono hp4-eyebrow hp4-rise">{ATLAS.eyebrow}</span>
-            <h2 className="hp4-h2 hp4-rise" style={cssVars({ "--d": "80ms", marginTop: "18px" })}>
+            <span className="home-mono home-eyebrow home-rise">{ATLAS.eyebrow}</span>
+            <h2 className="home-h2 home-rise" style={cssVars({ "--d": "80ms", marginTop: "18px" })}>
               {ATLAS.titleLines.map((line, i) => (
                 <React.Fragment key={line}>
-                  <span className="hp4-mask">
+                  <span className="home-mask">
                     <span style={cssVars({ "--d": `${i * 60}ms` })}>{line}</span>
                   </span>
                   {i < ATLAS.titleLines.length - 1 ? <br /> : null}
                 </React.Fragment>
               ))}
             </h2>
-            <p className="hp4-lede hp4-rise" style={cssVars({ "--d": "200ms", marginTop: "20px" })}>
+            <p className="home-lede home-rise" style={cssVars({ "--d": "200ms", marginTop: "20px" })}>
               {ATLAS.lede}
             </p>
-            <div className="hp4-stats hp4-rise" style={cssVars({ "--d": "280ms" })}>
+            <div className="home-stats home-rise" style={cssVars({ "--d": "280ms" })}>
               {ATLAS.stats.map((s) => (
                 <div key={s.label}>
                   <span className="n" data-to={s.to} data-dp={s.dp ?? 0}>
                     0
                   </span>
-                  <span className="hp4-mono k">{s.label}</span>
+                  <span className="home-mono k">{s.label}</span>
                 </div>
               ))}
             </div>
@@ -89,7 +89,7 @@ export default function DataArc() {
           running into each other made the data story outstay its welcome.
 
           Everything it needs is still here: the copy is `DEMOGRAPHICS` in ./sections.ts and the
-          styles are `.hp4-demoband` / `.hp4-dgrid` / `.hp4-dshot` in homepage4.css. To restore it,
+          styles are `.home-demoband` / `.home-dgrid` / `.home-dshot` in home.css. To restore it,
           re-add the block with `screen(DEMOGRAPHICS.screen)` guarding on the capture existing — a
           claim about a map with no map is worse than no section. */}
     </>

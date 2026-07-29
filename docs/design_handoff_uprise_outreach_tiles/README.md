@@ -1,7 +1,7 @@
 # Outreach + blast tiles — motion lab
 
 Design reference for **two tiles inside the existing `#toolkit` band of the homepage** (`/`, which
-renders `apps/product-marketing/src/components/homepage4/*`). Nothing else on the page changes: no
+renders `apps/product-marketing/src/components/home/*`). Nothing else on the page changes: no
 new section, so no new rail stop.
 
 - The existing **"P2P texting & browser calls"** tile keeps its copy verbatim and gains a visual.
@@ -51,17 +51,17 @@ judgement this lab exists to make early.
 
 The prototype animates by adding **`.is-in` to the payload container and nothing else** – byte
 identical to what `RevealScope.tsx:41` and `:51` do in production. Children carry their own initial
-state and a `var(--d)` delay. **Transitions only, no keyframes** (the one exception is `hp4pulse`,
-which already exists in `homepage4.css`).
+state and a `var(--d)` delay. **Transitions only, no keyframes** (the one exception is `home-pulse`,
+which already exists in `home.css`).
 
-Class names are already `hp4-` prefixed. So the port is a move, not a reinterpretation.
+Class names are already `home-` prefixed. So the port is a move, not a reinterpretation.
 
 Two consequences for Stage 3, both load-bearing:
 
-1. `RevealScope.tsx`'s `TARGETS` string must gain `.hp4-outreach, .hp4-blast`. `.is-in` is added
+1. `RevealScope.tsx`'s `TARGETS` string must gain `.home-outreach, .home-blast`. `.is-in` is added
    per observed element and the rules fire off the *payload's* class — a payload not listed never
    receives it and every child stays at `opacity: 0`, so the tile renders permanently blank.
-2. `.hp4-states > *` needs `position: relative`. Not tidiness: a layer carrying a transform (the
+2. `.home-states > *` needs `position: relative`. Not tidiness: a layer carrying a transform (the
    connecting spinner does) creates a stacking context and paints **above** its non-transformed
    siblings whatever the source order. Without it the spinner sits on top of the handset meant to
    replace it. Verified in-browser via `elementFromPoint`.
@@ -70,21 +70,21 @@ Two consequences for Stage 3, both load-bearing:
 
 | Token | Value | Source |
 |---|---|---|
-| `--hp4-brand` / `-50` / `-100` / `-300` / `-700` | `#465fff` `#ecf3ff` `#dde9ff` `#9cb9ff` `#2a31d8` | Already declared on `.hp4-root, .hp4-band` (`homepage4.css:26-89`) — brand ramp verbatim from `packages/ui/globals.css` |
-| `--hp4-ink` / `-body` / `-muted` / `-faint` | `#0b0f1c` `#4a5468` `#7a869c` `#a7b0c0` | Already declared |
-| `--hp4-line` / `-line-2` | `rgba(11,15,28,.09)` / `.055` | Already declared |
-| `--hp4-sup-1` / `-sup-5` | `#2f9e5f` / `#dc5a4e` | Already declared — the five-point support scale, reused for RESPONDED / FAILED |
-| `--hp4-seq-1` | `#c3cad3` | Already declared — reused for SKIPPED |
-| `--hp4-ease` / `-ease-io` | `cubic-bezier(.22,1,.36,1)` / `(.65,0,.35,1)` | Already declared. **No third curve is introduced** |
-| `#e8ebf3` | pending cell / rail track | **Departure** — but not new: it is already the `.hp4-bar` track colour in this file |
-| `#fff6ed` `#fadfc2` `#8a5a1c` | the amber character-count pill | **Departure** — already in the file on `.hp4-pq`, and they are the product's own amber tones |
-| `#1f9254` | compliance pass green | **Departure** — the `.hp4-synced` green already in the file |
+| `--home-brand` / `-50` / `-100` / `-300` / `-700` | `#465fff` `#ecf3ff` `#dde9ff` `#9cb9ff` `#2a31d8` | Already declared on `.home-root, .home-band` (`home.css:26-89`) — brand ramp verbatim from `packages/ui/globals.css` |
+| `--home-ink` / `-body` / `-muted` / `-faint` | `#0b0f1c` `#4a5468` `#7a869c` `#a7b0c0` | Already declared |
+| `--home-line` / `-line-2` | `rgba(11,15,28,.09)` / `.055` | Already declared |
+| `--home-sup-1` / `-sup-5` | `#2f9e5f` / `#dc5a4e` | Already declared — the five-point support scale, reused for RESPONDED / FAILED |
+| `--home-seq-1` | `#c3cad3` | Already declared — reused for SKIPPED |
+| `--home-ease` / `-ease-io` | `cubic-bezier(.22,1,.36,1)` / `(.65,0,.35,1)` | Already declared. **No third curve is introduced** |
+| `#e8ebf3` | pending cell / rail track | **Departure** — but not new: it is already the `.home-bar` track colour in this file |
+| `#fff6ed` `#fadfc2` `#8a5a1c` | the amber character-count pill | **Departure** — already in the file on `.home-pq`, and they are the product's own amber tones |
+| `#1f9254` | compliance pass green | **Departure** — the `.home-synced` green already in the file |
 | JetBrains Mono | every eyebrow, label and status | **Departure from `.design-sync/conventions.md`**, which mandates Outfit only. Deliberate and pre-existing on this page; marketing is light-only and single-brand |
 
 ## Motion timelines
 
 Budgeted against what already runs in this band — turf outline `2s` then fill at `1.4s`, doors to
-`2.3s`, thread messages at 400/900/1500ms, the shared `.hp4-rise` at `.85s`.
+`2.3s`, thread messages at 400/900/1500ms, the shared `.home-rise` at `.85s`.
 
 ### Tile A — outreach (~2.45s)
 
@@ -122,7 +122,7 @@ the only beat in this band that shows a product *behaviour* rather than a produc
 | — | `475` counts up |
 
 Two waves off one element, by giving `background-color` its own later delay variable (`--d2`) —
-`.hp4-matrix s`, one property further on.
+`.home-matrix s`, one property further on.
 
 ## Fidelity — literal vs stylised
 
@@ -147,7 +147,7 @@ entries), so all of this is drawn.
 | `DRAFTED PROOFED SENDING SENT` | `BlastStatus`, `schema.prisma:59-67` |
 | `QUEUED SENT DELIVERED RESPONDED SKIPPED FAILED` | `BlastRecipientStatus`, `schema.prisma:69-80` |
 | `475 per send batch · 500 cap` | `BLAST_SEND_BATCH_SIZE`, `apps/api/src/blasts/blasts.service.ts:500-503` |
-| the phone shell | `aspect-ratio: 486/1024`, notch pill + camera dot — the admin composer's own Live Preview mock, and the same numbers `.hp4-phone` uses |
+| the phone shell | `aspect-ratio: 486/1024`, notch pill + camera dot — the admin composer's own Live Preview mock, and the same numbers `.home-phone` uses |
 
 **Stylised — representative, not a claim:**
 
@@ -190,7 +190,7 @@ visual is grounded in the **blast composer's real surface**, which genuinely is 
 surface with a live dual-channel preview — i.e. exactly what the sentence's first clause describes.
 Every string is copied from the product. Nothing new asserts a console exists.
 
-If it ever matters, the fix is a third tile using `.hp4-thread` plus a `data-to` on `N sent · M to
+If it ever matters, the fix is a third tile using `.home-thread` plus a `data-to` on `N sent · M to
 go` — the primitives are already there.
 
 ### One deliberate reduction
@@ -208,20 +208,20 @@ templates while pretending to compare channels.
 board **keeps its 18 columns** — the cell delays are computed from `(x, y)` against an 18-wide grid,
 so re-columning would garble the frontier. Rows come off instead.
 
-**Reduced motion.** The production block at `homepage4.css:2091` is scoped to `.hp4-root *`, which
-wraps only the opening — verified: **zero** `hp4-band` mentions. So the turf minimap still runs its
+**Reduced motion.** The production block at `home.css:2091` is scoped to `.home-root *`, which
+wraps only the opening — verified: **zero** `home-band` mentions. So the turf minimap still runs its
 full 2s draw and the inbox thread still staggers under `prefers-reduced-motion: reduce`, and they
 fire at *load*, because `RevealScope` stamps `is-in` immediately in that mode. It isn't a missing
 trigger; it's a live animation with no brake.
 
 The fix, previewable here on the **Reduced motion** button, is to extend that selector list with
-`.hp4-band *`, `*::before`, `*::after` **and add `transition-delay: 0ms !important`**. The delay line
+`.home-band *`, `*::before`, `*::after` **and add `transition-delay: 0ms !important`**. The delay line
 is not optional: zeroing duration alone leaves a 1.3s-delayed layer waiting 1.3s before snapping in,
 so a visitor would sit looking at a red compliance warning and a "Connecting…" call. With both in
-place every `.is-in` rule lands at t=0 and each `.hp4-states` group resolves to its **last** layer —
+place every `.is-in` rule lands at t=0 and each `.home-states` group resolves to its **last** layer —
 rendered message, green compliance, `0:02` with the handset, fully-coloured board, filled rail.
 
-Blast radius to flag in review: it also flattens `.hp4-tile:hover`, which under reduced motion is
+Blast radius to flag in review: it also flattens `.home-tile:hover`, which under reduced motion is
 correct behaviour but is wider than the current block reaches.
 
 ## Grid
@@ -241,7 +241,7 @@ The tiles land in a restructured bento. Every row totals 12; nothing existing mo
 └────────────┴─────────────────────────────┘
 ```
 
-`.hp4-t4` becomes unused (verified nothing else in the repo uses it) and `.hp4-t6` replaces it. This
+`.home-t4` becomes unused (verified nothing else in the repo uses it) and `.home-t6` replaces it. This
 also fixes a live bug: at ≤1000px the three current `t4` tiles make 12 + **6 orphan columns**.
 
 The outreach tile is a **single-row `t7`**, not row-spanning. That is deliberate — a `ttall` tile is

@@ -9,13 +9,13 @@ import { ROADMAP } from "./sections";
  */
 export default function RoadmapBand() {
   return (
-    <RevealScope className="hp4-roadmap">
-      <div className="hp4-shell">
+    <RevealScope className="home-roadmap">
+      <div className="home-shell">
         <SectionHead eyebrow={ROADMAP.eyebrow} title={ROADMAP.title} lede={ROADMAP.lede} />
-        <div className="hp4-rcards">
+        <div className="home-rcards">
           {ROADMAP.items.map((r, i) => (
-            <article className="hp4-rcard hp4-rise" key={r.title} style={cssVars({ "--d": `${i * 60}ms` })}>
-              <span className="hp4-mono tag">Coming soon</span>
+            <article className="home-rcard home-rise" key={r.title} style={cssVars({ "--d": `${i * 60}ms` })}>
+              <span className="home-mono tag">Coming soon</span>
               <h3>{r.title}</h3>
               <p>{r.body}</p>
             </article>

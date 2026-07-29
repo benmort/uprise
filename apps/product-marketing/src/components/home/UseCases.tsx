@@ -15,18 +15,18 @@ import { USE_CASES } from "./sections";
  */
 export default function UseCases() {
   return (
-    <RevealScope id={SECTION.campaigns} className="hp4-types">
-      <div className="hp4-shell">
+    <RevealScope id={SECTION.campaigns} className="home-types">
+      <div className="home-shell">
         <SectionHead eyebrow={USE_CASES.eyebrow} title={USE_CASES.title} />
 
-        <div className="hp4-reel hp4-rise">
+        <div className="home-reel home-rise">
           <Showreel />
         </div>
 
-        <div className="hp4-ucards">
+        <div className="home-ucards">
           {USE_CASES.cards.map((c, i) => (
-            <article className="hp4-ucard hp4-rise" key={c.title} style={cssVars({ "--d": `${(i % 3) * 70}ms` })}>
-              <h3 className="hp4-h3">{c.title}</h3>
+            <article className="home-ucard home-rise" key={c.title} style={cssVars({ "--d": `${(i % 3) * 70}ms` })}>
+              <h3 className="home-h3">{c.title}</h3>
               <p>{c.body}</p>
             </article>
           ))}

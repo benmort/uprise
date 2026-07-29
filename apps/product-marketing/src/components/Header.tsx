@@ -15,19 +15,22 @@ import { useSession } from "@/lib/session";
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
 
 /**
- * The global marketing header. `glass` swaps the solid white bar for the /homepage2 treatment —
- * transparent over the hero, condensing into a centred glass pill once scrolled. Only the shell
- * changes: the nav links, the dropdowns and the session-aware CTAs are the same in both modes, so
- * a candidate homepage can restyle the chrome without forking the navigation.
+ * The global marketing header: a floating pill, transparent at rest and condensing into a centred
+ * glass bar once scrolled.
+ *
+ * One treatment on every route. This used to take a `glass` flag so the homepage could wear the
+ * condensing pill while every other route got a plain full-width white bar — but a nav that moves
+ * and re-skins depending on which page you are on reads as two different sites, so the homepage's
+ * treatment is now simply the header.
  */
-export default function Header({ glass = false }: { glass?: boolean } = {}) {
+export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   /**
    * Gates the shell's width/padding transition. Off until the initial scroll position has been
    * read, so that first correction is instant rather than a 500ms slide.
    *
-   * Why this matters: in glass mode the pill goes max-w-[1320px] → max-w-[1100px] when scrolled,
+   * Why this matters: the pill goes max-w-[1320px] → max-w-[1100px] when scrolled,
    * and because it is mx-auto that 220px narrowing moves the logo and nav 110px to the right.
    * `isScrolled` has to start false to match the server HTML, so a page loaded ALREADY scrolled
    * (a reload part-way down, or a restored scroll position) painted the wide bar and then slid the
@@ -78,7 +81,7 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
   /**
    * The homepage's top-left cluster – wordmark and nav list – rises with the act rail's label
    * instead of being painted flat before the splash has animated. Deliberately the SAME motion as
-   * homepage4.css `.hp4-rail .lbl`: a 0.35s opacity + 6px inward slide on --hp4-ease. Both start on
+   * home.css `.home-rail .lbl`: a 0.35s opacity + 6px inward slide on --home-ease. Both start on
    * the frame after mount, which is the frame <Chrome /> marks its first rail stop `is-on`, so the
    * two land together.
    *
@@ -88,10 +91,9 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
    */
   const [chromeRevealed, setChromeRevealed] = useState(false);
   React.useEffect(() => {
-    if (!glass) return;
     const id = requestAnimationFrame(() => setChromeRevealed(true));
     return () => cancelAnimationFrame(id);
-  }, [glass]);
+  }, []);
 
   // Transitions `translate`, NOT `transform`: Tailwind v4's translate-x-* utilities set the
   // standalone `translate` property (via --tw-translate-x), so a transition naming `transform`
@@ -99,34 +101,26 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
   //
   // motion-reduce keeps the cluster present and still: this is chrome a visitor navigates with, so
   // it must never depend on a transition they've asked not to run.
-  const railReveal = glass
-    ? `transition-[opacity,translate] duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:translate-x-0 motion-reduce:opacity-100 motion-reduce:transition-none ${
-        chromeRevealed ? "translate-x-0 opacity-100" : "-translate-x-1.5 opacity-0"
-      }`
-    : "";
+  const railReveal = `transition-[opacity,translate] duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:translate-x-0 motion-reduce:opacity-100 motion-reduce:transition-none ${
+    chromeRevealed ? "translate-x-0 opacity-100" : "-translate-x-1.5 opacity-0"
+  }`;
 
-  // select-none in glass mode only, i.e. on the homepage: the bar sits over the splash, which is
-  // deliberately unselectable (see homepage4.css `.hp4-hero`), and a drag that started on the
-  // headline shouldn't pick up the nav on its way past. Inherited, so it also covers the mobile
-  // drawer — <MobileMenu /> renders inside this header element. Every other route keeps its nav
-  // selectable.
-  const headerClasses = glass
-    ? `fixed left-0 top-0 z-9999 flex w-full select-none justify-center px-4 pb-2 sm:px-8 xl:px-12.5 ${shellTransition} ${
-        isScrolled ? "pt-3" : "pt-5"
-      }`
-    : isScrolled
-      ? "fixed left-0 top-0 z-9999 w-full bg-white dark:bg-black-dark shadow transition duration-400"
-      : "fixed left-0 top-0 z-9999 w-full bg-white transition duration-400";
+  // select-none matters most on the homepage, where the bar sits over a splash that is itself
+  // unselectable (see home.css `.home-hero`) and a drag started on the headline shouldn't pick up
+  // the nav on its way past. Applied everywhere now that there is one treatment — chrome is not
+  // text a visitor needs to copy. Inherited, so it also covers the mobile drawer; <MobileMenu />
+  // renders inside this header element.
+  const headerClasses = `fixed left-0 top-0 z-9999 flex w-full select-none justify-center px-4 pb-2 sm:px-8 xl:px-12.5 ${shellTransition} ${
+    isScrolled ? "pt-3" : "pt-5"
+  }`;
 
   // The pill narrows and picks up its glass as you scroll; at rest it is invisible so the hero
   // wash runs edge to edge behind it.
-  const innerClasses = glass
-    ? `relative mx-auto w-full items-center justify-between rounded-full border px-4 py-3 xl:flex xl:gap-7 xl:py-1 xl:pl-7 xl:pr-4 ${shellTransition} ${
-        isScrolled
-          ? "max-w-[1100px] border-stroke-secondary bg-white/75 shadow-xl backdrop-blur-[18px] backdrop-saturate-150"
-          : "max-w-[1320px] border-transparent bg-transparent"
-      }`
-    : "relative items-center justify-between px-4 py-4 sm:px-8 xl:flex xl:gap-7 xl:px-12.5 xl:py-0";
+  const innerClasses = `relative mx-auto w-full items-center justify-between rounded-full border px-4 py-3 xl:flex xl:gap-7 xl:py-1 xl:pl-7 xl:pr-4 ${shellTransition} ${
+    isScrolled
+      ? "max-w-[1100px] border-stroke-secondary bg-white/75 shadow-xl backdrop-blur-[18px] backdrop-saturate-150"
+      : "max-w-[1320px] border-transparent bg-transparent"
+  }`;
 
   return (
     <header className={headerClasses}>
@@ -144,17 +138,12 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
                     lit against the hero wash rather than pasted onto it. Same geometry and letter
                     as uprise-icon.svg — drawn in CSS because an <img> can't carry a gradient.
                     Every other route keeps the flat asset. */}
-                {glass ? (
-                  <span
-                    aria-hidden
-                    className="grid h-8 w-8 place-items-center rounded-[9px] bg-[linear-gradient(150deg,var(--color-brand-400),var(--color-brand-500)_55%,var(--color-brand-700))] text-base font-bold tracking-[-0.02em] text-white shadow-[0_6px_16px_-6px] shadow-brand-500/70"
-                  >
-                    U
-                  </span>
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src="/uprise-icon.svg" alt="" className="h-8 w-8" />
-                )}
+                <span
+                  aria-hidden
+                  className="grid h-8 w-8 place-items-center rounded-[9px] bg-[linear-gradient(150deg,var(--color-brand-400),var(--color-brand-500)_55%,var(--color-brand-700))] text-base font-bold tracking-[-0.02em] text-white shadow-[0_6px_16px_-6px] shadow-brand-500/70"
+                >
+                  U
+                </span>
                 <span className="text-xl font-bold text-gray-900">Uprise</span>
               </div>
             </Link>

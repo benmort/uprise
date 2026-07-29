@@ -25,8 +25,8 @@
  * repeating the string in each section is what stops that drifting.
  *
  * These are public URL fragments (uprise.org.au/#toolkit), so they say what the section is. The
- * old `hp4-` prefix named the candidate this page was built as, and the labels had drifted from
- * the ids besides ("Open" pointing at `#hp4-hero`); the CSS keeps `hp4-` on its classes, which are
+ * old `home-` prefix named the candidate this page was built as, and the labels had drifted from
+ * the ids besides ("Open" pointing at `#home-hero`); the CSS keeps `home-` on its classes, which are
  * internal.
  */
 export const SECTION = {

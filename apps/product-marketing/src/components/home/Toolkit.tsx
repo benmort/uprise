@@ -36,13 +36,13 @@ const DOORS: Array<[number, number]> = [
  * 475 — do not try to make them equal.
  */
 const CELL: Record<string, string> = {
-  q: "var(--hp4-brand-100)", // QUEUED
-  s: "var(--hp4-brand-300)", // SENT — receipt not back yet
-  d: "var(--hp4-brand)", // DELIVERED
-  r: "var(--hp4-sup-1)", // RESPONDED
-  x: "var(--hp4-seq-1)", // SKIPPED — opted out, checked before every send
-  f: "var(--hp4-sup-5)", // FAILED
-  ".": "#e8ebf3", // PENDING — the .hp4-bar track colour, reused
+  q: "var(--home-brand-100)", // QUEUED
+  s: "var(--home-brand-300)", // SENT — receipt not back yet
+  d: "var(--home-brand)", // DELIVERED
+  r: "var(--home-sup-1)", // RESPONDED
+  x: "var(--home-seq-1)", // SKIPPED — opted out, checked before every send
+  f: "var(--home-sup-5)", // FAILED
+  ".": "#e8ebf3", // PENDING — the .home-bar track colour, reused
 };
 
 function cellCode(x: number, y: number, cols: number, rows: number): string {
@@ -72,19 +72,19 @@ function cellCode(x: number, y: number, cols: number, rows: number): string {
  */
 export default function Toolkit() {
   return (
-    <RevealScope id={SECTION.toolkit} className="hp4-const">
-      <div className="hp4-shell">
+    <RevealScope id={SECTION.toolkit} className="home-const">
+      <div className="home-shell">
         <SectionHead eyebrow={TOOLKIT.eyebrow} title={TOOLKIT.title} lede={TOOLKIT.lede} />
 
-        <div className="hp4-bento">
+        <div className="home-bento">
           {/* Canvassing — the turf outline draws, then the doors land in route order. */}
-          <article className="hp4-tile hp4-t7 hp4-ttall hp4-rise">
+          <article className="home-tile home-t7 home-ttall home-rise">
             <div>
-              <span className="hp4-mono hp4-eyebrow">{CANVASS_TILE.eyebrow}</span>
-              <h3 className="hp4-h3">{CANVASS_TILE.title}</h3>
+              <span className="home-mono home-eyebrow">{CANVASS_TILE.eyebrow}</span>
+              <h3 className="home-h3">{CANVASS_TILE.title}</h3>
               <p>{CANVASS_TILE.body}</p>
             </div>
-            <div className="hp4-minimap">
+            <div className="home-minimap">
               <svg viewBox="0 0 420 230" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
                 <g className="roads">
                   <path d="M0 46 H420 M0 104 H420 M0 162 H420" />
@@ -104,34 +104,34 @@ export default function Toolkit() {
                   ))}
                 </g>
               </svg>
-              <span className="hp4-mono hp4-mapbadge">{CANVASS_TILE.badge}</span>
+              <span className="home-mono home-mapbadge">{CANVASS_TILE.badge}</span>
             </div>
           </article>
 
           {/* The inbox — a real exchange, claimed, so "shared queue" is shown not asserted. */}
-          <article className="hp4-tile hp4-t5 hp4-rise" style={cssVars({ "--d": "80ms" })}>
-            <span className="hp4-mono hp4-eyebrow">{INBOX_TILE.eyebrow}</span>
-            <h3 className="hp4-h3">{INBOX_TILE.title}</h3>
+          <article className="home-tile home-t5 home-rise" style={cssVars({ "--d": "80ms" })}>
+            <span className="home-mono home-eyebrow">{INBOX_TILE.eyebrow}</span>
+            <h3 className="home-h3">{INBOX_TILE.title}</h3>
             <p>{INBOX_TILE.body}</p>
-            <div className="hp4-thread">
+            <div className="home-thread">
               {INBOX_TILE.thread.map((m) => (
                 <div
                   key={m.text}
-                  className={`hp4-msg hp4-msg--${m.dir}`}
+                  className={`home-msg home-msg--${m.dir}`}
                   style={cssVars({ "--d": `${m.d}ms` })}
                 >
-                  <span className="hp4-mono who">{m.who}</span>
+                  <span className="home-mono who">{m.who}</span>
                   {m.text}
                 </div>
               ))}
             </div>
           </article>
 
-          <article className="hp4-tile hp4-t5 hp4-rise" style={cssVars({ "--d": "140ms" })}>
-            <span className="hp4-mono hp4-eyebrow">{DISPOSITION_TILE.eyebrow}</span>
-            <h3 className="hp4-h3">{DISPOSITION_TILE.title}</h3>
+          <article className="home-tile home-t5 home-rise" style={cssVars({ "--d": "140ms" })}>
+            <span className="home-mono home-eyebrow">{DISPOSITION_TILE.eyebrow}</span>
+            <h3 className="home-h3">{DISPOSITION_TILE.title}</h3>
             <p>{DISPOSITION_TILE.body}</p>
-            <div className="hp4-meter" style={{ marginTop: 16 }}>
+            <div className="home-meter" style={{ marginTop: 16 }}>
               <s style={{ width: 64 }} />
               <s style={{ width: 48 }} />
               <s style={{ width: 34 }} />
@@ -143,22 +143,22 @@ export default function Toolkit() {
           {/* Outreach — the composer writes itself and its compliance check clears, then the
               softphone bar arrives and walks its real states. Both surfaces are drawn: no capture
               of either exists. Every string is copied from the product — see OUTREACH_TILE. */}
-          <article className="hp4-tile hp4-t7 hp4-rise">
-            <span className="hp4-mono hp4-eyebrow">{OUTREACH_TILE.eyebrow}</span>
-            <h3 className="hp4-h3">{OUTREACH_TILE.title}</h3>
+          <article className="home-tile home-t7 home-rise">
+            <span className="home-mono home-eyebrow">{OUTREACH_TILE.eyebrow}</span>
+            <h3 className="home-h3">{OUTREACH_TILE.title}</h3>
             <p>{OUTREACH_TILE.body}</p>
 
-            <div className="hp4-outreach">
-              <div className="hp4-cmpgrid">
-                <div className="hp4-cmp" style={cssVars({ "--d": "100ms" })}>
-                  <div className="hp4-cmphead">
-                    <span className="hp4-mono">{OUTREACH_TILE.composer.panel}</span>
-                    <span className="hp4-mono hp4-cmpcount">
+            <div className="home-outreach">
+              <div className="home-cmpgrid">
+                <div className="home-cmp" style={cssVars({ "--d": "100ms" })}>
+                  <div className="home-cmphead">
+                    <span className="home-mono">{OUTREACH_TILE.composer.panel}</span>
+                    <span className="home-mono home-cmpcount">
                       <b data-to={OUTREACH_TILE.composer.chars.to}>0</b> /{" "}
                       {OUTREACH_TILE.composer.chars.max} chars
                     </span>
                   </div>
-                  <p className="hp4-cmpbody">
+                  <p className="home-cmpbody">
                     {OUTREACH_TILE.composer.runs.map((r) => (
                       <span className="seg" key={r.d} style={cssVars({ "--d": `${r.d}ms` })}>
                         {r.pre}
@@ -167,16 +167,16 @@ export default function Toolkit() {
                       </span>
                     ))}
                   </p>
-                  <div className="hp4-cmptags">
+                  <div className="home-cmptags">
                     {OUTREACH_TILE.composer.tags.map((t) => (
-                      <span className="hp4-cmptag" key={t.text} style={cssVars({ "--d": `${t.d}ms` })}>
+                      <span className="home-cmptag" key={t.text} style={cssVars({ "--d": `${t.d}ms` })}>
                         {t.text}
                       </span>
                     ))}
                   </div>
                   {/* aria-hidden on the warning: without it a reader announces both states as one
                       contradictory sentence. */}
-                  <div className="hp4-cmpsub hp4-states">
+                  <div className="home-cmpsub home-states">
                     <span className="warn" aria-hidden="true">
                       {OUTREACH_TILE.composer.compliance.warn}
                     </span>
@@ -187,10 +187,10 @@ export default function Toolkit() {
                       {OUTREACH_TILE.composer.compliance.ok}
                     </span>
                   </div>
-                  <div className="hp4-cmpact">
+                  <div className="home-cmpact">
                     {OUTREACH_TILE.composer.actions.map((a) => (
                       <span
-                        className={`hp4-cmpbtn hp4-cmpbtn--${a.tone}`}
+                        className={`home-cmpbtn home-cmpbtn--${a.tone}`}
                         key={a.label}
                         style={cssVars({ "--d": `${a.d}ms` })}
                       >
@@ -201,8 +201,8 @@ export default function Toolkit() {
                 </div>
 
                 {/* A rendering of text already present above, so it is decorative to a reader. */}
-                <div className="hp4-cmppre" aria-hidden="true">
-                  <span className="hp4-cmpchan">
+                <div className="home-cmppre" aria-hidden="true">
+                  <span className="home-cmpchan">
                     {OUTREACH_TILE.composer.preview.channels.map((c, i) => (
                       <s className={i === 0 ? "is-on" : undefined} key={c}>
                         {c}
@@ -210,12 +210,12 @@ export default function Toolkit() {
                     ))}
                   </span>
                   <div
-                    className="hp4-cmpdev"
+                    className="home-cmpdev"
                     style={cssVars({ "--d": `${OUTREACH_TILE.composer.preview.deviceD}ms` })}
                   >
-                    <div className="hp4-cmpscr">
+                    <div className="home-cmpscr">
                       <div
-                        className="hp4-cmpbub"
+                        className="home-cmpbub"
                         style={cssVars({ "--d": `${OUTREACH_TILE.composer.preview.bubbleD}ms` })}
                       >
                         {OUTREACH_TILE.composer.preview.rendered}
@@ -226,10 +226,10 @@ export default function Toolkit() {
               </div>
 
               <div>
-                <div className="hp4-cbar" style={cssVars({ "--d": `${OUTREACH_TILE.call.d}ms` })}>
-                  <span className="hp4-cbav">
-                    <span className="hp4-states" aria-hidden="true">
-                      <svg className="hp4-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <div className="home-cbar" style={cssVars({ "--d": `${OUTREACH_TILE.call.d}ms` })}>
+                  <span className="home-cbav">
+                    <span className="home-states" aria-hidden="true">
+                      <svg className="home-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
                         <path d="M21 12a9 9 0 1 1-6.2-8.6" />
                       </svg>
                       <svg
@@ -240,10 +240,10 @@ export default function Toolkit() {
                       </svg>
                     </span>
                   </span>
-                  <span className="hp4-cbmeta">
+                  <span className="home-cbmeta">
                     <b>{OUTREACH_TILE.call.who}</b>
-                    <span className="hp4-cbsub">
-                      <span className="hp4-cbstat hp4-states">
+                    <span className="home-cbsub">
+                      <span className="home-cbstat home-states">
                         {OUTREACH_TILE.call.states.map((st, i) => (
                           <s
                             key={st.text}
@@ -260,7 +260,7 @@ export default function Toolkit() {
                     </span>
                   </span>
                   <span
-                    className="hp4-cbbtn"
+                    className="home-cbbtn"
                     style={cssVars({ "--d": `${OUTREACH_TILE.call.muteD}ms` })}
                     aria-hidden="true"
                   >
@@ -270,7 +270,7 @@ export default function Toolkit() {
                       <path d="M12 19v3" />
                     </svg>
                   </span>
-                  <span className="hp4-cbbtn hp4-cbbtn--end" aria-hidden="true">
+                  <span className="home-cbbtn home-cbbtn--end" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M10.7 13.3a16 16 0 0 0 6 6" />
                       <path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1" />
@@ -278,9 +278,9 @@ export default function Toolkit() {
                     </svg>
                   </span>
                 </div>
-                <div className="hp4-clog">
+                <div className="home-clog">
                   {OUTREACH_TILE.call.log.map((row) => (
-                    <div className="hp4-clogrow" key={row.num} style={cssVars({ "--d": `${row.d}ms` })}>
+                    <div className="home-clogrow" key={row.num} style={cssVars({ "--d": `${row.d}ms` })}>
                       <span className="num">{row.num}</span>
                       <span className={`st${row.ok ? " is-ok" : ""}`}>{row.status}</span>
                       <span className="dur">{row.dur}</span>
@@ -293,17 +293,17 @@ export default function Toolkit() {
 
           {/* Blasts — the lifecycle rail advances, then the recipient board arrives pending and a
               second wave of colour crosses it as each recipient's state resolves. */}
-          <article className="hp4-tile hp4-t5 hp4-rise" style={cssVars({ "--d": "70ms" })}>
-            <span className="hp4-mono hp4-eyebrow">{BLAST_TILE.eyebrow}</span>
-            <h3 className="hp4-h3">{BLAST_TILE.title}</h3>
+          <article className="home-tile home-t5 home-rise" style={cssVars({ "--d": "70ms" })}>
+            <span className="home-mono home-eyebrow">{BLAST_TILE.eyebrow}</span>
+            <h3 className="home-h3">{BLAST_TILE.title}</h3>
             <p>{BLAST_TILE.body}</p>
 
-            <div className="hp4-blast">
-              <div className="hp4-brail">
-                <div className="hp4-bsteps">
+            <div className="home-blast">
+              <div className="home-brail">
+                <div className="home-bsteps">
                   {BLAST_TILE.rail.map((s) => (
                     <span
-                      className={`hp4-bstep${s.on ? " is-on" : ""}`}
+                      className={`home-bstep${s.on ? " is-on" : ""}`}
                       key={s.label}
                       style={cssVars({ "--d": `${s.d}ms` })}
                     >
@@ -311,13 +311,13 @@ export default function Toolkit() {
                     </span>
                   ))}
                 </div>
-                <div className="hp4-bar">
+                <div className="home-bar">
                   <i style={cssVars({ "--w": BLAST_TILE.railFill.w, "--d": `${BLAST_TILE.railFill.d}ms` })} />
                 </div>
               </div>
 
               <div
-                className="hp4-bboard"
+                className="home-bboard"
                 role="img"
                 aria-label="One send batch, each cell a recipient — most delivered, with a few replied, skipped and failed"
               >
@@ -326,7 +326,7 @@ export default function Toolkit() {
                   const y = Math.floor(n / BLAST_TILE.board.cols);
                   return (
                     <s
-                      className="hp4-bcell"
+                      className="home-bcell"
                       key={n}
                       style={cssVars({
                         "--c": CELL[cellCode(x, y, BLAST_TILE.board.cols, BLAST_TILE.board.rows)],
@@ -338,10 +338,10 @@ export default function Toolkit() {
                 })}
               </div>
 
-              <div className="hp4-bnote">
+              <div className="home-bnote">
                 <b data-to={BLAST_TILE.batch.to}>0</b> {BLAST_TILE.batch.note}
               </div>
-              <div className="hp4-blegend" style={cssVars({ "--d": `${BLAST_TILE.legendD}ms` })}>
+              <div className="home-blegend" style={cssVars({ "--d": `${BLAST_TILE.legendD}ms` })}>
                 {BLAST_TILE.legend.map((l) => (
                   <span key={l.label}>
                     <i style={cssVars({ "--c": `var(${l.c})` })} />
@@ -354,30 +354,30 @@ export default function Toolkit() {
 
           {SMALL_TILES.map((t, i) => (
             <article
-              className="hp4-tile hp4-t6 hp4-rise"
+              className="home-tile home-t6 home-rise"
               key={t.title}
               style={cssVars({ "--d": `${i * 70}ms` })}
             >
-              <span className="hp4-mono hp4-eyebrow">{t.eyebrow}</span>
-              <h3 className="hp4-h3">{t.title}</h3>
+              <span className="home-mono home-eyebrow">{t.eyebrow}</span>
+              <h3 className="home-h3">{t.title}</h3>
               <p>{t.body}</p>
             </article>
           ))}
         </div>
 
-        <div className="hp4-subhead hp4-rise">
-          <span className="hp4-mono">{TOOLKIT.alsoLabel}</span>
+        <div className="home-subhead home-rise">
+          <span className="home-mono">{TOOLKIT.alsoLabel}</span>
           <i />
         </div>
 
-        <div className="hp4-cards">
+        <div className="home-cards">
           {FEATURE_CARDS.map((c, i) => (
             <article
-              className="hp4-card hp4-rise"
+              className="home-card home-rise"
               key={c.title}
               style={cssVars({ "--d": `${(i % 4) * 60}ms` })}
             >
-              <span className="hp4-mono no">{String(i + 1).padStart(2, "0")}</span>
+              <span className="home-mono no">{String(i + 1).padStart(2, "0")}</span>
               <h4>{c.title}</h4>
               <p>{c.body}</p>
             </article>

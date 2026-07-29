@@ -13,13 +13,13 @@
    Design reference. See README.md beside this file.
 
    Everything below the `LAB CHROME` block is production-shaped: the class names
-   are already `hp4-` prefixed and the gate is already `.is-in`, so porting to
-   apps/product-marketing/src/components/homepage4/ is a move, not a rewrite.
+   are already `home-` prefixed and the gate is already `.is-in`, so porting to
+   apps/product-marketing/src/components/home/ is a move, not a rewrite.
 
    THE CONTRACT, identical to RevealScope.tsx:
      the payload container gets `.is-in`, once, and nothing else happens.
      Children carry their own initial state and a `var(--d)` delay.
-     Transitions only. No keyframes (except the one reused `hp4pulse`).
+     Transitions only. No keyframes (except the one reused `home-pulse`).
    ========================================================================= */
 
 /* ---------------------------------------------------------- LAB CHROME ---- */
@@ -122,83 +122,83 @@ body.lab-insitu .lab-stub { display: block }
    ========================================================================= */
 
 /* The token subset these two tiles need, values verbatim from the
-   `.hp4-root, .hp4-band` block in homepage4.css:26-89. */
-.hp4-band {
-  --hp4-brand-50: #ecf3ff;
-  --hp4-brand-100: #dde9ff;
-  --hp4-brand-300: #9cb9ff;
-  --hp4-brand: #465fff;
-  --hp4-brand-700: #2a31d8;
-  --hp4-ink: #0b0f1c;
-  --hp4-body: #4a5468;
-  --hp4-muted: #7a869c;
-  --hp4-faint: #a7b0c0;
-  --hp4-plate: #f6f7fb;
-  --hp4-line: rgba(11, 15, 28, 0.09);
-  --hp4-line-2: rgba(11, 15, 28, 0.055);
-  --hp4-seq-1: #c3cad3;
-  --hp4-sup-1: #2f9e5f;
-  --hp4-sup-5: #dc5a4e;
-  --hp4-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --hp4-ease-io: cubic-bezier(0.65, 0, 0.35, 1);
-  --hp4-mono-f: "JetBrains Mono", ui-monospace, monospace;
+   `.home-root, .home-band` block in home.css:26-89. */
+.home-band {
+  --home-brand-50: #ecf3ff;
+  --home-brand-100: #dde9ff;
+  --home-brand-300: #9cb9ff;
+  --home-brand: #465fff;
+  --home-brand-700: #2a31d8;
+  --home-ink: #0b0f1c;
+  --home-body: #4a5468;
+  --home-muted: #7a869c;
+  --home-faint: #a7b0c0;
+  --home-plate: #f6f7fb;
+  --home-line: rgba(11, 15, 28, 0.09);
+  --home-line-2: rgba(11, 15, 28, 0.055);
+  --home-seq-1: #c3cad3;
+  --home-sup-1: #2f9e5f;
+  --home-sup-5: #dc5a4e;
+  --home-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --home-ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+  --home-mono-f: "JetBrains Mono", ui-monospace, monospace;
 
   font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
 }
-.hp4-band *, .hp4-band *::before, .hp4-band *::after { box-sizing: border-box }
-.hp4-band h3, .hp4-band h4, .hp4-band p { margin: 0 }
+.home-band *, .home-band *::before, .home-band *::after { box-sizing: border-box }
+.home-band h3, .home-band h4, .home-band p { margin: 0 }
 
-.hp4-mono {
-  font-family: var(--hp4-mono-f);
+.home-mono {
+  font-family: var(--home-mono-f);
   font-size: 11.5px;
   font-weight: 500;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
-.hp4-eyebrow { color: var(--hp4-brand); display: inline-flex; align-items: center; gap: 10px }
-.hp4-eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; opacity: 0.5 }
-.hp4-h3 {
+.home-eyebrow { color: var(--home-brand); display: inline-flex; align-items: center; gap: 10px }
+.home-eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; opacity: 0.5 }
+.home-h3 {
   font-size: clamp(20px, 1.9vw, 26px);
   font-weight: 600;
   line-height: 1.22;
   letter-spacing: -0.02em;
-  color: var(--hp4-ink);
+  color: var(--home-ink);
 }
 
 /* the bento, at production spans */
-.hp4-bento {
+.home-bento {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 14px;
 }
-.hp4-tile {
+.home-tile {
   position: relative;
   padding: 24px;
   overflow: hidden;
   background: #fff;
-  border: 1px solid var(--hp4-line);
+  border: 1px solid var(--home-line);
   border-radius: 18px;
   box-shadow: 0 1px 2px rgba(11, 15, 28, 0.03);
 }
-.hp4-tile p { font-size: 15.5px; line-height: 1.55; color: var(--hp4-body) }
-.hp4-tile .hp4-h3 { margin-bottom: 8px }
-.hp4-tile .hp4-eyebrow { margin-bottom: 14px }
-.hp4-t7 { grid-column: span 7 }
-.hp4-t5 { grid-column: span 5 }
-.hp4-t6 { grid-column: span 6 }          /* NEW — replaces the retired .hp4-t4 */
-.hp4-ttall { grid-row: span 2 }
+.home-tile p { font-size: 15.5px; line-height: 1.55; color: var(--home-body) }
+.home-tile .home-h3 { margin-bottom: 8px }
+.home-tile .home-eyebrow { margin-bottom: 14px }
+.home-t7 { grid-column: span 7 }
+.home-t5 { grid-column: span 5 }
+.home-t6 { grid-column: span 6 }          /* NEW — replaces the retired .home-t4 */
+.home-ttall { grid-row: span 2 }
 
 /* ---------------------------------------------------------------------------
-   .hp4-states — N states in one box.
+   .home-states — N states in one box.
    Each layer is opaque and paints over the one before it, so a value that
    CHANGES only has to fade IN: one transition per layer, no keyframes, and the
    LAST layer in source order is what a reduced-motion visitor is left looking
-   at. Named `-states` rather than `-seq` to stay clear of --hp4-seq-*.
+   at. Named `-states` rather than `-seq` to stay clear of --home-seq-*.
    Every layer but the last carries aria-hidden, or a screen reader announces
    all of them as one contradictory sentence.
    --------------------------------------------------------------------------- */
-.hp4-states { display: grid }
-.hp4-states > * {
+.home-states { display: grid }
+.home-states > * {
   grid-area: 1 / 1;
   /* `position: relative` is load-bearing, not tidiness. A layer that carries a
      transform (the connecting spinner does) creates a stacking context and so
@@ -209,38 +209,38 @@ body.lab-insitu .lab-stub { display: block }
   position: relative;
   background: var(--layer, #fff);
   opacity: 0;
-  transition: opacity calc(340ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+  transition: opacity calc(340ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-states > :first-child { opacity: 1 }
-.is-in .hp4-states > * { opacity: 1 }
+.home-states > :first-child { opacity: 1 }
+.is-in .home-states > * { opacity: 1 }
 
 /* ===========================================================================
    TILE A — outreach. Two stacked panels, in the order the tile's own copy
    reads: the SMS console with its live preview, then the softphone.
    ======================================================================== */
-.hp4-outreach { display: grid; gap: 16px; margin-top: 18px }
+.home-outreach { display: grid; gap: 16px; margin-top: 18px }
 
 /* --- panel one: the composer ------------------------------------------- */
-.hp4-cmpgrid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start }
-.hp4-cmp {
-  border: 1px solid var(--hp4-line);
+.home-cmpgrid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start }
+.home-cmp {
+  border: 1px solid var(--home-line);
   border-radius: 12px;
   background: #fcfdff;
   padding: 12px 13px 13px;
   opacity: 0;
   transform: translateY(8px);
   transition:
-    opacity calc(480ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(480ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+    opacity calc(480ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(480ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cmp { opacity: 1; transform: none }
-.hp4-cmphead {
+.home-outreach.is-in .home-cmp { opacity: 1; transform: none }
+.home-cmphead {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  margin-bottom: 9px; color: var(--hp4-muted);
+  margin-bottom: 9px; color: var(--home-muted);
 }
 /* Amber under the limit, red over — the product's own two tones. 141 raw
    characters against 160, so amber. */
-.hp4-cmpcount {
+.home-cmpcount {
   flex: none; padding: 4px 8px; border-radius: 5px;
   background: #fff6ed; border: 1px solid #fadfc2; color: #8a5a1c;
   font-variant-numeric: tabular-nums;
@@ -248,165 +248,165 @@ body.lab-insitu .lab-stub { display: block }
 /* `display: inline` and opacity only: a run of body copy has to keep flowing
    inside the paragraph. `transform` does nothing on an inline box, and
    inline-block would stop the run wrapping mid-sentence. */
-.hp4-cmpbody { font-size: 13.5px; line-height: 1.55; color: var(--hp4-ink) }
-.hp4-cmpbody .seg {
+.home-cmpbody { font-size: 13.5px; line-height: 1.55; color: var(--home-ink) }
+.home-cmpbody .seg {
   opacity: 0;
-  transition: opacity calc(420ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+  transition: opacity calc(420ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cmpbody .seg { opacity: 1 }
+.home-outreach.is-in .home-cmpbody .seg { opacity: 1 }
 /* Tags stay tags in the editor and become values in the preview — which is what
    the product does, and cheaper than animating a token flip whose box cannot
    animate to `auto` width. */
-.hp4-cmpbody .tag {
-  font-family: var(--hp4-mono-f); font-size: 11.5px; font-weight: 500;
+.home-cmpbody .tag {
+  font-family: var(--home-mono-f); font-size: 11.5px; font-weight: 500;
   padding: 1px 5px; border-radius: 4px;
-  background: var(--hp4-brand-50); color: var(--hp4-brand-700); white-space: nowrap;
+  background: var(--home-brand-50); color: var(--home-brand-700); white-space: nowrap;
 }
 /* Dashed — these are the composer's draggable chip palette, not text. */
-.hp4-cmptags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px }
-.hp4-cmptag {
-  font-family: var(--hp4-mono-f); font-size: 10.5px; letter-spacing: 0.06em;
+.home-cmptags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px }
+.home-cmptag {
+  font-family: var(--home-mono-f); font-size: 10.5px; letter-spacing: 0.06em;
   padding: 4px 8px; border-radius: 6px;
-  border: 1px dashed var(--hp4-line); background: #fff; color: var(--hp4-muted);
+  border: 1px dashed var(--home-line); background: #fff; color: var(--home-muted);
   opacity: 0; transform: translateY(4px);
   transition:
-    opacity calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+    opacity calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cmptag { opacity: 1; transform: none }
-.hp4-cmpsub {
+.home-outreach.is-in .home-cmptag { opacity: 1; transform: none }
+.home-cmpsub {
   margin-top: 12px; padding-top: 10px;
-  border-top: 1px solid var(--hp4-line-2);
+  border-top: 1px solid var(--home-line-2);
   font-size: 12.5px; line-height: 1.45;
 }
-.hp4-cmpsub .warn { color: var(--hp4-sup-5) }
-.hp4-cmpsub .ok { color: #1f9254 }
-.hp4-cmpsub .warn::before, .hp4-cmpsub .ok::before {
+.home-cmpsub .warn { color: var(--home-sup-5) }
+.home-cmpsub .ok { color: #1f9254 }
+.home-cmpsub .warn::before, .home-cmpsub .ok::before {
   content: ""; display: inline-block; vertical-align: middle;
   width: 7px; height: 7px; margin-right: 7px; border-radius: 99px; background: currentColor;
 }
-.hp4-cmpact { display: flex; gap: 7px; margin-top: 12px }
-.hp4-cmpbtn {
+.home-cmpact { display: flex; gap: 7px; margin-top: 12px }
+.home-cmpbtn {
   padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
   opacity: 0; transform: translateY(4px);
   transition:
-    opacity calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+    opacity calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cmpbtn { opacity: 1; transform: none }
-.hp4-cmpbtn--ghost { border: 1px solid var(--hp4-line); background: #fff; color: var(--hp4-ink) }
-.hp4-cmpbtn--solid { background: var(--hp4-brand); color: #fff }
+.home-outreach.is-in .home-cmpbtn { opacity: 1; transform: none }
+.home-cmpbtn--ghost { border: 1px solid var(--home-line); background: #fff; color: var(--home-ink) }
+.home-cmpbtn--solid { background: var(--home-brand); color: #fff }
 
-/* the live preview. Same construction as .hp4-phone and the admin mock: black
+/* the live preview. Same construction as .home-phone and the admin mock: black
    bezel, a 486/1024 screen, a notch pill with a camera dot. */
-.hp4-cmppre { display: grid; gap: 8px; justify-items: center }
+.home-cmppre { display: grid; gap: 8px; justify-items: center }
 /* The composer's real channel toggle. Static: the WhatsApp path renders an
    approved template, not the SMS body, so animating a swap between them would
    compare templates while pretending to compare channels. */
-.hp4-cmpchan { display: inline-flex; border: 1px solid var(--hp4-line); border-radius: 100px; overflow: hidden }
-.hp4-cmpchan s {
-  font-family: var(--hp4-mono-f); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
-  text-decoration: none; padding: 4px 9px; color: var(--hp4-muted); background: #fff;
+.home-cmpchan { display: inline-flex; border: 1px solid var(--home-line); border-radius: 100px; overflow: hidden }
+.home-cmpchan s {
+  font-family: var(--home-mono-f); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  text-decoration: none; padding: 4px 9px; color: var(--home-muted); background: #fff;
 }
-.hp4-cmpchan s.is-on { background: var(--hp4-brand); color: #fff }
-.hp4-cmpdev {
+.home-cmpchan s.is-on { background: var(--home-brand); color: #fff }
+.home-cmpdev {
   /* 128px, not 150: at a 486/1024 aspect every extra 10px of width costs 21px of
      height, and the preview must not out-tall the editor panel beside it. */
   width: 128px; padding: 5px; border-radius: 1.35rem; background: #06070d;
   box-shadow: 0 18px 34px -18px rgba(11, 15, 28, 0.5);
   opacity: 0; transform: translateY(10px);
   transition:
-    opacity calc(520ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(520ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+    opacity calc(520ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(520ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cmpdev { opacity: 1; transform: none }
-.hp4-cmpscr {
+.home-outreach.is-in .home-cmpdev { opacity: 1; transform: none }
+.home-cmpscr {
   position: relative; aspect-ratio: 486 / 1024;
   border-radius: 1.15rem; overflow: hidden; background: #fff;
   display: flex; align-items: flex-start; justify-content: flex-end;
   padding: 24px 7px 7px;
 }
-.hp4-cmpscr::before, .hp4-cmpscr::after {
+.home-cmpscr::before, .home-cmpscr::after {
   content: ""; position: absolute; left: 50%; z-index: 3; translate: -50% 0;
   border-radius: 99px; pointer-events: none;
 }
-.hp4-cmpscr::before { top: 4px; width: 44%; height: 11px; background: #06070d }
-.hp4-cmpscr::after { top: 7.5px; width: 4px; height: 4px; background: #1b2233 }
-.hp4-cmpbub {
+.home-cmpscr::before { top: 4px; width: 44%; height: 11px; background: #06070d }
+.home-cmpscr::after { top: 7.5px; width: 4px; height: 4px; background: #1b2233 }
+.home-cmpbub {
   max-width: 88%; padding: 7px 9px; font-size: 9.5px; line-height: 1.42;
   border-radius: 12px 12px 4px 12px;                  /* rounded-2xl + rounded-br-md */
-  background: var(--hp4-brand); color: #fff;
+  background: var(--home-brand); color: #fff;
   opacity: 0;
-  transition: opacity calc(440ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+  transition: opacity calc(440ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cmpbub { opacity: 1 }
+.home-outreach.is-in .home-cmpbub { opacity: 1 }
 
 /* --- panel two: the softphone ------------------------------------------ */
 /* The bar only exists while a call is up (`if (state === "idle") return null`),
    so it ARRIVES, then walks CallState: connecting → ringing → open, with mute
    dimmed until the leg is open. No post-call disposition — the product has none. */
-.hp4-cbar {
+.home-cbar {
   display: flex; align-items: center; gap: 10px;
   width: 100%; max-width: 384px; margin-inline: auto;   /* w-[min(24rem,…)] */
   padding: 11px;
-  border: 1px solid var(--hp4-line); border-radius: 14px; background: #fff;
+  border: 1px solid var(--home-line); border-radius: 14px; background: #fff;
   box-shadow: 0 1px 2px rgba(11, 15, 28, 0.05), 0 10px 22px -10px rgba(11, 15, 28, 0.28);
   opacity: 0; transform: translateY(14px);
   transition:
-    opacity calc(480ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(480ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+    opacity calc(480ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(480ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cbar { opacity: 1; transform: none }
-.hp4-cbav {
+.home-outreach.is-in .home-cbar { opacity: 1; transform: none }
+.home-cbav {
   flex: none; width: 34px; height: 34px; border-radius: 99px;
-  background: var(--hp4-brand-50); color: var(--hp4-brand);
+  background: var(--home-brand-50); color: var(--home-brand);
   display: grid; place-items: center;
 }
-.hp4-cbav .hp4-states { --layer: var(--hp4-brand-50); place-items: center }
-.hp4-cbav svg { width: 15px; height: 15px; display: block }
-.hp4-spin { animation: hp4spin 0.9s linear infinite }
-@keyframes hp4spin { to { transform: rotate(360deg) } }
-.hp4-cbmeta { flex: 1 1 auto; min-width: 0 }
-.hp4-cbmeta b {
-  display: block; font-size: 13.5px; font-weight: 600; color: var(--hp4-ink);
+.home-cbav .home-states { --layer: var(--home-brand-50); place-items: center }
+.home-cbav svg { width: 15px; height: 15px; display: block }
+.home-spin { animation: home-spin 0.9s linear infinite }
+@keyframes home-spin { to { transform: rotate(360deg) } }
+.home-cbmeta { flex: 1 1 auto; min-width: 0 }
+.home-cbmeta b {
+  display: block; font-size: 13.5px; font-weight: 600; color: var(--home-ink);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.hp4-cbsub { display: flex; gap: 4px; font-size: 11.5px; color: var(--hp4-muted) }
-.hp4-cbstat { font-variant-numeric: tabular-nums }
-.hp4-cbstat .live::after {
+.home-cbsub { display: flex; gap: 4px; font-size: 11.5px; color: var(--home-muted) }
+.home-cbstat { font-variant-numeric: tabular-nums }
+.home-cbstat .live::after {
   content: ""; display: inline-block; vertical-align: middle;
   width: 5px; height: 5px; margin-left: 6px; border-radius: 99px;
-  background: var(--hp4-sup-1);
-  animation: hp4pulse 1.6s ease-in-out infinite;
+  background: var(--home-sup-1);
+  animation: home-pulse 1.6s ease-in-out infinite;
 }
-@keyframes hp4pulse { 50% { opacity: 0.25 } }
-.hp4-cbbtn {
+@keyframes home-pulse { 50% { opacity: 0.25 } }
+.home-cbbtn {
   flex: none; width: 31px; height: 31px; border-radius: 99px;
   display: grid; place-items: center;
-  border: 1px solid var(--hp4-line); color: var(--hp4-ink);
+  border: 1px solid var(--home-line); color: var(--home-ink);
   opacity: 0.4;                                        /* disabled until open */
-  transition: opacity calc(340ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+  transition: opacity calc(340ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-cbbtn { opacity: 1 }
-.hp4-cbbtn svg { width: 14px; height: 14px; display: block }
+.home-outreach.is-in .home-cbbtn { opacity: 1 }
+.home-cbbtn svg { width: 14px; height: 14px; display: block }
 /* Hang-up is never disabled, so it opens at full strength. Later in source than
    the base rule, so it wins before .is-in lands. */
-.hp4-cbbtn--end { border: 0; background: var(--hp4-sup-5); color: #fff; opacity: 1 }
-.hp4-clog { display: grid; gap: 6px; width: 100%; max-width: 384px; margin: 10px auto 0 }
-.hp4-clogrow {
+.home-cbbtn--end { border: 0; background: var(--home-sup-5); color: #fff; opacity: 1 }
+.home-clog { display: grid; gap: 6px; width: 100%; max-width: 384px; margin: 10px auto 0 }
+.home-clogrow {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 11px; border: 1px solid var(--hp4-line-2); border-radius: 10px;
+  padding: 8px 11px; border: 1px solid var(--home-line-2); border-radius: 10px;
   font-size: 12px;
   opacity: 0; transform: translateY(6px);
   transition:
-    opacity calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+    opacity calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-outreach.is-in .hp4-clogrow { opacity: 1; transform: none }
-.hp4-clogrow .num { flex: 1 1 auto; color: var(--hp4-body); font-variant-numeric: tabular-nums }
-.hp4-clogrow .st { flex: none; font-family: var(--hp4-mono-f); font-size: 9.5px; letter-spacing: 0.1em; color: var(--hp4-faint) }
-.hp4-clogrow .st.is-ok { color: #1f9254 }
-.hp4-clogrow .dur { flex: none; width: 34px; text-align: right; color: var(--hp4-muted); font-variant-numeric: tabular-nums }
+.home-outreach.is-in .home-clogrow { opacity: 1; transform: none }
+.home-clogrow .num { flex: 1 1 auto; color: var(--home-body); font-variant-numeric: tabular-nums }
+.home-clogrow .st { flex: none; font-family: var(--home-mono-f); font-size: 9.5px; letter-spacing: 0.1em; color: var(--home-faint) }
+.home-clogrow .st.is-ok { color: #1f9254 }
+.home-clogrow .dur { flex: none; width: 34px; text-align: right; color: var(--home-muted); font-variant-numeric: tabular-nums }
 
 /* ===========================================================================
    TILE B — blasts. The send, and what came back.
@@ -415,37 +415,37 @@ body.lab-insitu .lab-stub { display: block }
    vocabulary. Coarse on purpose, like AU_GRID: the cell count is a SHAPE, not
    a count — do not try to make it total 475.
    ======================================================================== */
-.hp4-blast { margin-top: 18px }
-.hp4-brail { display: grid; gap: 9px }
-.hp4-bsteps { display: flex; justify-content: space-between; gap: 6px }
-.hp4-bstep {
-  font-family: var(--hp4-mono-f); font-size: 9.5px; letter-spacing: 0.1em;
-  color: var(--hp4-faint);
+.home-blast { margin-top: 18px }
+.home-brail { display: grid; gap: 9px }
+.home-bsteps { display: flex; justify-content: space-between; gap: 6px }
+.home-bstep {
+  font-family: var(--home-mono-f); font-size: 9.5px; letter-spacing: 0.1em;
+  color: var(--home-faint);
   opacity: 0; transform: translateY(4px);
   transition:
-    opacity calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(400ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+    opacity calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(400ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-blast.is-in .hp4-bstep { opacity: 1; transform: none }
-.hp4-bstep.is-on { color: var(--hp4-brand); font-weight: 500 }
-.hp4-bstep.is-on::before {
+.home-blast.is-in .home-bstep { opacity: 1; transform: none }
+.home-bstep.is-on { color: var(--home-brand); font-weight: 500 }
+.home-bstep.is-on::before {
   content: ""; display: inline-block; vertical-align: middle;
   width: 5px; height: 5px; margin-right: 6px; border-radius: 99px;
-  background: var(--hp4-brand);
-  animation: hp4pulse 1.6s ease-in-out infinite;
+  background: var(--home-brand);
+  animation: home-pulse 1.6s ease-in-out infinite;
 }
-/* .hp4-bar is the opening's width-fill primitive, where a scroll handler sets
+/* .home-bar is the opening's width-fill primitive, where a scroll handler sets
    --w. Here it is gated on .is-in instead, and given the delay the primitive
    does not carry. */
-.hp4-bar { width: 100%; height: 5px; border-radius: 99px; background: #e8ebf3; overflow: hidden }
-.hp4-bar i {
-  display: block; height: 100%; border-radius: 99px; background: var(--hp4-brand);
+.home-bar { width: 100%; height: 5px; border-radius: 99px; background: #e8ebf3; overflow: hidden }
+.home-bar i {
+  display: block; height: 100%; border-radius: 99px; background: var(--home-brand);
   width: 0;
-  transition: width calc(1100ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+  transition: width calc(1100ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-blast.is-in .hp4-bar i { width: var(--w, 0%) }
+.home-blast.is-in .home-bar i { width: var(--w, 0%) }
 
-.hp4-bboard {
+.home-bboard {
   display: grid;
   grid-template-columns: repeat(18, minmax(0, 1fr));
   gap: clamp(1.5px, 0.4vw, 3px);
@@ -453,61 +453,61 @@ body.lab-insitu .lab-stub { display: block }
 }
 /* Two waves off one element: the cells ARRIVE pending (opacity + scale, --d),
    then a second, slower wave of colour crosses the board as each recipient's
-   state RESOLVES (background-color, --d2). `.hp4-matrix s`, one property on. */
-.hp4-bcell {
+   state RESOLVES (background-color, --d2). `.home-matrix s`, one property on. */
+.home-bcell {
   display: block; width: 100%; aspect-ratio: 1; border-radius: 2px;
   background: #e8ebf3;                                 /* PENDING */
   opacity: 0; transform: scale(0.4);
   transition:
-    opacity calc(440ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    transform calc(540ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t)),
-    background-color calc(500ms * var(--lab-t)) var(--hp4-ease) calc(var(--d2, 0ms) * var(--lab-t));
+    opacity calc(440ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    transform calc(540ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t)),
+    background-color calc(500ms * var(--lab-t)) var(--home-ease) calc(var(--d2, 0ms) * var(--lab-t));
 }
-.hp4-blast.is-in .hp4-bcell { opacity: 1; transform: none; background-color: var(--c, #e8ebf3) }
-.hp4-bnote { display: flex; align-items: baseline; gap: 8px; margin-top: 13px; color: var(--hp4-muted); font-size: 12px }
-.hp4-bnote b { color: var(--hp4-ink); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums }
-.hp4-blegend {
+.home-blast.is-in .home-bcell { opacity: 1; transform: none; background-color: var(--c, #e8ebf3) }
+.home-bnote { display: flex; align-items: baseline; gap: 8px; margin-top: 13px; color: var(--home-muted); font-size: 12px }
+.home-bnote b { color: var(--home-ink); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums }
+.home-blegend {
   display: flex; flex-wrap: wrap; gap: 4px 11px; margin-top: 10px;
-  font-family: var(--hp4-mono-f); font-size: 9px; letter-spacing: 0.09em; color: var(--hp4-faint);
+  font-family: var(--home-mono-f); font-size: 9px; letter-spacing: 0.09em; color: var(--home-faint);
   opacity: 0;
-  transition: opacity calc(500ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
+  transition: opacity calc(500ms * var(--lab-t)) var(--home-ease) calc(var(--d, 0ms) * var(--lab-t));
 }
-.hp4-blast.is-in .hp4-blegend { opacity: 1 }
-.hp4-blegend span { display: inline-flex; align-items: center; gap: 5px }
-.hp4-blegend i { width: 7px; height: 7px; border-radius: 2px; background: var(--c) }
+.home-blast.is-in .home-blegend { opacity: 1 }
+.home-blegend span { display: inline-flex; align-items: center; gap: 5px }
+.home-blegend i { width: 7px; height: 7px; border-radius: 2px; background: var(--c) }
 
 /* --- responsive, mirroring the production breakpoints ------------------- */
 @media (max-width: 1000px) {
-  .hp4-t7, .hp4-t5 { grid-column: span 12 }
-  .hp4-ttall { grid-row: auto }
+  .home-t7, .home-t5 { grid-column: span 12 }
+  .home-ttall { grid-row: auto }
 }
 @media (max-width: 640px) {
-  .hp4-t6 { grid-column: span 12 }
-  .hp4-cmpgrid { grid-template-columns: 1fr; gap: 14px }
-  .hp4-cmppre { justify-items: start }
+  .home-t6 { grid-column: span 12 }
+  .home-cmpgrid { grid-template-columns: 1fr; gap: 14px }
+  .home-cmppre { justify-items: start }
   /* The board keeps its 18 columns at every width — the delays are computed
      from (x, y) against an 18-wide grid, so re-columning garbles the frontier.
      Rows come off instead. */
-  .hp4-bboard > .hp4-bcell:nth-child(n + 109) { display: none }
+  .home-bboard > .home-bcell:nth-child(n + 109) { display: none }
 }
 
 /* The lab's width presets drive the same rules off a class, so all three can be
    compared without resizing the browser. */
-.lab-w1000 .hp4-t7, .lab-w1000 .hp4-t5,
-.lab-w640 .hp4-t7, .lab-w640 .hp4-t5 { grid-column: span 12 }
-.lab-w1000 .hp4-ttall, .lab-w640 .hp4-ttall { grid-row: auto }
-.lab-w640 .hp4-t6 { grid-column: span 12 }
-.lab-w640 .hp4-cmpgrid { grid-template-columns: 1fr; gap: 14px }
-.lab-w640 .hp4-cmppre { justify-items: start }
-.lab-w640 .hp4-bboard > .hp4-bcell:nth-child(n + 109) { display: none }
+.lab-w1000 .home-t7, .lab-w1000 .home-t5,
+.lab-w640 .home-t7, .lab-w640 .home-t5 { grid-column: span 12 }
+.lab-w1000 .home-ttall, .lab-w640 .home-ttall { grid-row: auto }
+.lab-w640 .home-t6 { grid-column: span 12 }
+.lab-w640 .home-cmpgrid { grid-template-columns: 1fr; gap: 14px }
+.lab-w640 .home-cmppre { justify-items: start }
+.lab-w640 .home-bboard > .home-bcell:nth-child(n + 109) { display: none }
 
 /* ============================================================================
    REDUCED MOTION — the production fix, previewable here as a class.
 
-   In production the block at homepage4.css:2091 is scoped to `.hp4-root *`,
+   In production the block at home.css:2091 is scoped to `.home-root *`,
    which wraps only the opening — so the turf minimap and the inbox thread
    currently animate under prefers-reduced-motion, and fire at LOAD because
-   RevealScope stamps is-in immediately in that mode. `.hp4-band *` is the fix.
+   RevealScope stamps is-in immediately in that mode. `.home-band *` is the fix.
 
    `transition-delay: 0ms` is not optional: zeroing duration alone leaves a
    1.3s-delayed layer waiting 1.3s before snapping in, so a visitor would sit
@@ -515,9 +515,9 @@ body.lab-insitu .lab-stub { display: block }
    ========================================================================= */
 /* This is the exact selector list to add in production. */
 @media (prefers-reduced-motion: reduce) {
-  .hp4-band *,
-  .hp4-band *::before,
-  .hp4-band *::after {
+  .home-band *,
+  .home-band *::before,
+  .home-band *::after {
     animation: none !important;
     transition-duration: 0.01ms !important;
     transition-delay: 0ms !important;
@@ -525,29 +525,29 @@ body.lab-insitu .lab-stub { display: block }
 }
 /* And the same, driven off a class, so the fallback is reviewable without
    leaving the page or changing an OS setting. */
-body.lab-reduce .hp4-band *,
-body.lab-reduce .hp4-band *::before,
-body.lab-reduce .hp4-band *::after {
+body.lab-reduce .home-band *,
+body.lab-reduce .home-band *::before,
+body.lab-reduce .home-band *::after {
   animation: none !important;
   transition-duration: 0.01ms !important;
   transition-delay: 0ms !important;
 }
 /* Belt and braces, for the case where JS never runs and nothing gets is-in. */
-body.lab-reduce .hp4-cmp,
-body.lab-reduce .hp4-cmpbody .seg,
-body.lab-reduce .hp4-cmptag,
-body.lab-reduce .hp4-cmpbtn,
-body.lab-reduce .hp4-cmpdev,
-body.lab-reduce .hp4-cmpbub,
-body.lab-reduce .hp4-cbar,
-body.lab-reduce .hp4-cbbtn,
-body.lab-reduce .hp4-clogrow,
-body.lab-reduce .hp4-bstep,
-body.lab-reduce .hp4-bcell,
-body.lab-reduce .hp4-blegend,
-body.lab-reduce .hp4-states > * { opacity: 1 !important; transform: none !important }
-body.lab-reduce .hp4-bcell { background-color: var(--c, #e8ebf3) !important }
-body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
+body.lab-reduce .home-cmp,
+body.lab-reduce .home-cmpbody .seg,
+body.lab-reduce .home-cmptag,
+body.lab-reduce .home-cmpbtn,
+body.lab-reduce .home-cmpdev,
+body.lab-reduce .home-cmpbub,
+body.lab-reduce .home-cbar,
+body.lab-reduce .home-cbbtn,
+body.lab-reduce .home-clogrow,
+body.lab-reduce .home-bstep,
+body.lab-reduce .home-bcell,
+body.lab-reduce .home-blegend,
+body.lab-reduce .home-states > * { opacity: 1 !important; transform: none !important }
+body.lab-reduce .home-bcell { background-color: var(--c, #e8ebf3) !important }
+body.lab-reduce .home-bar i { width: var(--w, 0%) !important }
 </style>
 </head>
 <body>
@@ -584,59 +584,59 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
     scrolls — can be judged here rather than discovered on the live page.
   </p>
 
-  <div class="lab-wrap hp4-band" id="labWrap" style="max-width: 1320px">
-    <div class="hp4-bento">
+  <div class="lab-wrap home-band" id="labWrap" style="max-width: 1320px">
+    <div class="home-bento">
 
       <!-- stubs for the five tiles that already exist, shown by the In situ toggle -->
-      <div class="lab-stub hp4-t7 hp4-ttall">canvass · t7 tall · minimap draws 2.3s</div>
-      <div class="lab-stub hp4-t5">inbox · t5 · thread 2.0s</div>
-      <div class="lab-stub hp4-t5">five-point · t5 · static</div>
+      <div class="lab-stub home-t7 home-ttall">canvass · t7 tall · minimap draws 2.3s</div>
+      <div class="lab-stub home-t5">inbox · t5 · thread 2.0s</div>
+      <div class="lab-stub home-t5">five-point · t5 · static</div>
 
       <!-- ========== TILE A — outreach ========== -->
-      <article class="hp4-tile hp4-t7">
-        <span class="hp4-mono hp4-eyebrow">Reach</span>
-        <h3 class="hp4-h3">P2P texting &amp; browser calls</h3>
+      <article class="home-tile home-t7">
+        <span class="home-mono home-eyebrow">Reach</span>
+        <h3 class="home-h3">P2P texting &amp; browser calls</h3>
         <p>A peer-to-peer SMS console with a live dual-channel preview, plus a WebRTC softphone
           that dials from the campaign's own number.</p>
 
-        <div class="hp4-outreach" data-anim>
+        <div class="home-outreach" data-anim>
           <!-- panel one: the composer -->
-          <div class="hp4-cmpgrid">
-            <div class="hp4-cmp" style="--d:100ms">
-              <div class="hp4-cmphead">
-                <span class="hp4-mono">Message content</span>
+          <div class="home-cmpgrid">
+            <div class="home-cmp" style="--d:100ms">
+              <div class="home-cmphead">
+                <span class="home-mono">Message content</span>
                 <!-- 141 is template.length with the tags UNRENDERED, which is what the
                      composer counts. The preview beside it is 126 characters — shorter on
                      purpose, and that gap is the counter's whole point. Do not "fix" it. -->
-                <span class="hp4-mono hp4-cmpcount"><b data-to="141">0</b> / 160 chars</span>
+                <span class="home-mono home-cmpcount"><b data-to="141">0</b> / 160 chars</span>
               </div>
-              <p class="hp4-cmpbody">
+              <p class="home-cmpbody">
                 <span class="seg" style="--d:220ms">Hi <b class="tag">{{first_name}}</b>, it's Sam from the campaign — </span>
                 <span class="seg" style="--d:520ms">we're knocking doors in <b class="tag">{{location}}</b> on Saturday 10am. Can you make it? </span>
                 <span class="seg" style="--d:820ms">Reply STOP to opt out</span>
               </p>
-              <div class="hp4-cmptags">
-                <span class="hp4-cmptag" style="--d:340ms">{{first_name}}</span>
-                <span class="hp4-cmptag" style="--d:400ms">{{location}}</span>
+              <div class="home-cmptags">
+                <span class="home-cmptag" style="--d:340ms">{{first_name}}</span>
+                <span class="home-cmptag" style="--d:400ms">{{location}}</span>
               </div>
               <!-- The flip is the tile. It is literally true: the composer re-runs its
                    opt-out check on every keystroke, so the warning is genuinely what the
                    card shows until the third run lands. -->
-              <div class="hp4-cmpsub hp4-states">
+              <div class="home-cmpsub home-states">
                 <span class="warn" aria-hidden="true">Missing opt-out language. Include 'Reply STOP to opt out'.</span>
                 <span class="ok" style="--d:1100ms">No compliance warnings detected.</span>
               </div>
-              <div class="hp4-cmpact">
-                <span class="hp4-cmpbtn hp4-cmpbtn--ghost" style="--d:1200ms">Send Proof</span>
-                <span class="hp4-cmpbtn hp4-cmpbtn--solid" style="--d:1260ms">Send Now</span>
+              <div class="home-cmpact">
+                <span class="home-cmpbtn home-cmpbtn--ghost" style="--d:1200ms">Send Proof</span>
+                <span class="home-cmpbtn home-cmpbtn--solid" style="--d:1260ms">Send Now</span>
               </div>
             </div>
 
-            <div class="hp4-cmppre" aria-hidden="true">
-              <span class="hp4-cmpchan"><s class="is-on">SMS</s><s>WhatsApp</s></span>
-              <div class="hp4-cmpdev" style="--d:900ms">
-                <div class="hp4-cmpscr">
-                  <div class="hp4-cmpbub" style="--d:1020ms">
+            <div class="home-cmppre" aria-hidden="true">
+              <span class="home-cmpchan"><s class="is-on">SMS</s><s>WhatsApp</s></span>
+              <div class="home-cmpdev" style="--d:900ms">
+                <div class="home-cmpscr">
+                  <div class="home-cmpbub" style="--d:1020ms">
                     Hi Priya, it's Sam from the campaign — we're knocking doors in Coburg on
                     Saturday 10am. Can you make it? Reply STOP to opt out
                   </div>
@@ -647,20 +647,20 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
 
           <!-- panel two: the softphone -->
           <div>
-            <div class="hp4-cbar" style="--d:1300ms">
-              <span class="hp4-cbav">
-                <span class="hp4-states" aria-hidden="true">
-                  <svg class="hp4-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
+            <div class="home-cbar" style="--d:1300ms">
+              <span class="home-cbav">
+                <span class="home-states" aria-hidden="true">
+                  <svg class="home-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
                   <svg style="--d:1900ms" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8.1 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z"/></svg>
                 </span>
               </span>
-              <span class="hp4-cbmeta">
+              <span class="home-cbmeta">
                 <b>Priya Raman</b>
-                <span class="hp4-cbsub">
+                <span class="home-cbsub">
                   <!-- The bar appends the from-number to EVERY state, so it sits outside
                        the swap. This clause is the tile's copy made literal: "dials from
                        the campaign's own number". -->
-                  <span class="hp4-cbstat hp4-states">
+                  <span class="home-cbstat home-states">
                     <s aria-hidden="true" style="text-decoration:none">Connecting…</s>
                     <s aria-hidden="true" style="text-decoration:none;--d:1600ms">Ringing…</s>
                     <s style="text-decoration:none;--d:1900ms"><span class="live">0:02</span></s>
@@ -668,18 +668,18 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
                   <span>· from +61 3 7003 ····</span>
                 </span>
               </span>
-              <span class="hp4-cbbtn" style="--d:2050ms" aria-hidden="true">
+              <span class="home-cbbtn" style="--d:2050ms" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
               </span>
-              <span class="hp4-cbbtn hp4-cbbtn--end" aria-hidden="true">
+              <span class="home-cbbtn home-cbbtn--end" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.7 13.3a16 16 0 0 0 6 6"/><path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1"/><path d="m2 2 20 20"/></svg>
               </span>
             </div>
-            <div class="hp4-clog">
-              <div class="hp4-clogrow" style="--d:2150ms">
+            <div class="home-clog">
+              <div class="home-clogrow" style="--d:2150ms">
                 <span class="num">+61 4·· ··· 118</span><span class="st is-ok">COMPLETED</span><span class="dur">1:42</span>
               </div>
-              <div class="hp4-clogrow" style="--d:2230ms">
+              <div class="home-clogrow" style="--d:2230ms">
                 <span class="num">+61 4·· ··· 402</span><span class="st">NO_ANSWER</span><span class="dur">—</span>
               </div>
             </div>
@@ -689,26 +689,26 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
       </article>
 
       <!-- ========== TILE B — blasts ========== -->
-      <article class="hp4-tile hp4-t5">
-        <span class="hp4-mono hp4-eyebrow">Broadcast</span>
-        <h3 class="hp4-h3">Send to a whole audience</h3>
+      <article class="home-tile home-t5">
+        <span class="home-mono home-eyebrow">Broadcast</span>
+        <h3 class="home-h3">Send to a whole audience</h3>
         <p>Compose once, proof it to your own phone, then send in batches — with every recipient's
           state tracked from queued through delivered and replied.</p>
 
-        <div class="hp4-blast" data-anim>
-          <div class="hp4-brail">
-            <div class="hp4-bsteps">
-              <span class="hp4-bstep" style="--d:140ms">DRAFTED</span>
-              <span class="hp4-bstep" style="--d:210ms">PROOFED</span>
-              <span class="hp4-bstep is-on" style="--d:280ms">SENDING</span>
-              <span class="hp4-bstep" style="--d:350ms">SENT</span>
+        <div class="home-blast" data-anim>
+          <div class="home-brail">
+            <div class="home-bsteps">
+              <span class="home-bstep" style="--d:140ms">DRAFTED</span>
+              <span class="home-bstep" style="--d:210ms">PROOFED</span>
+              <span class="home-bstep is-on" style="--d:280ms">SENDING</span>
+              <span class="home-bstep" style="--d:350ms">SENT</span>
             </div>
-            <div class="hp4-bar"><i style="--w:67%;--d:260ms"></i></div>
+            <div class="home-bar"><i style="--w:67%;--d:260ms"></i></div>
           </div>
-          <div class="hp4-bboard" id="labBoard" role="img"
+          <div class="home-bboard" id="labBoard" role="img"
                aria-label="One send batch, each cell a recipient, most delivered with a few replied, skipped and failed"></div>
-          <div class="hp4-bnote"><b data-to="475">0</b> per send batch · 500 cap</div>
-          <div class="hp4-blegend" style="--d:1300ms">
+          <div class="home-bnote"><b data-to="475">0</b> per send batch · 500 cap</div>
+          <div class="home-blegend" style="--d:1300ms">
             <span><i style="--c:#dde9ff"></i>QUEUED</span>
             <span><i style="--c:#9cb9ff"></i>SENT</span>
             <span><i style="--c:#465fff"></i>DELIVERED</span>
@@ -721,8 +721,8 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
       </article>
 
       <!-- stubs for the two closing text tiles -->
-      <div class="lab-stub hp4-t6">shifts · t6 · text only</div>
-      <div class="lab-stub hp4-t6">white-label · t6 · text only</div>
+      <div class="lab-stub home-t6">shifts · t6 · text only</div>
+      <div class="lab-stub home-t6">white-label · t6 · text only</div>
 
     </div>
   </div>
@@ -738,13 +738,13 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
      in Toolkit.tsx beside DOORS, not in sections.ts. */
   var COLS = 18, ROWS = 8;
   var CELL = {
-    q: "#dde9ff",  /* QUEUED    --hp4-brand-100 */
-    s: "#9cb9ff",  /* SENT      --hp4-brand-300 */
-    d: "#465fff",  /* DELIVERED --hp4-brand     */
-    r: "#2f9e5f",  /* RESPONDED --hp4-sup-1     */
-    x: "#c3cad3",  /* SKIPPED   --hp4-seq-1     */
-    f: "#dc5a4e",  /* FAILED    --hp4-sup-5     */
-    ".": "#e8ebf3" /* PENDING — the .hp4-bar track colour, reused */
+    q: "#dde9ff",  /* QUEUED    --home-brand-100 */
+    s: "#9cb9ff",  /* SENT      --home-brand-300 */
+    d: "#465fff",  /* DELIVERED --home-brand     */
+    r: "#2f9e5f",  /* RESPONDED --home-sup-1     */
+    x: "#c3cad3",  /* SKIPPED   --home-seq-1     */
+    f: "#dc5a4e",  /* FAILED    --home-sup-5     */
+    ".": "#e8ebf3" /* PENDING — the .home-bar track colour, reused */
   };
   function code(x, y) {
     var n = COLS * ROWS;
@@ -766,7 +766,7 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
   for (var y = 0; y < ROWS; y++) {
     for (var x = 0; x < COLS; x++) {
       var s = document.createElement("s");
-      s.className = "hp4-bcell";
+      s.className = "home-bcell";
       s.style.setProperty("--c", CELL[code(x, y)]);
       s.style.setProperty("--d", 220 + (x * 9 + y * 22) + "ms");   // arrive
       s.style.setProperty("--d2", 800 + (x * 11 + y * 26) + "ms"); // resolve
@@ -817,7 +817,7 @@ body.lab-reduce .hp4-bar i { width: var(--w, 0%) !important }
   });
   document.querySelectorAll("[data-replay]").forEach(function (btn) {
     btn.addEventListener("click", function () {
-      replay(btn.closest(".hp4-tile").querySelector("[data-anim]"));
+      replay(btn.closest(".home-tile").querySelector("[data-anim]"));
     });
   });
 

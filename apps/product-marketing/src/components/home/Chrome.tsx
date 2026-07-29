@@ -2,19 +2,19 @@
 
 import { useEffect, useRef } from "react";
 import { RAIL } from "./content";
-import "./homepage4.css";
+import "./home.css";
 
 /**
  * The homepage's fixed chrome, ported from /homepage2: a scroll-progress hairline across the top
  * and the left rail whose dot grows into a bar for the section you're in.
  *
- * Deliberately separate from <Homepage4Opening />: the rail tracks sections that live further down
+ * Deliberately separate from <Opening />: the rail tracks sections that live further down
  * the page (toolkit, atlas, teams…), so it resolves them from the document by id rather than from
  * a component subtree. A stop whose section isn't on the page never activates, which is what lets
  * the same rail ride any composition.
  *
  * Both elements are `position: fixed`, so the wrapper adds no layout — it exists to scope the
- * `--hp4-*` custom properties, which are otherwise only declared on `.hp4-root`.
+ * `--home-*` custom properties, which are otherwise only declared on `.home-root`.
  */
 export default function Chrome() {
   const barRef = useRef<HTMLElement | null>(null);
@@ -57,12 +57,12 @@ export default function Chrome() {
   }, []);
 
   return (
-    <div className="hp4-chrome">
-      <div className="hp4-progress" aria-hidden>
+    <div className="home-chrome">
+      <div className="home-progress" aria-hidden>
         <i ref={barRef} />
       </div>
 
-      <nav className="hp4-rail" aria-label="Page sections">
+      <nav className="home-rail" aria-label="Page sections">
         {RAIL.map((r, i) => (
           <a
             key={r.id}

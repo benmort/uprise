@@ -9,11 +9,11 @@ import { ELECTORATE } from "./sections";
  * <Research />.
  *
  * It wears their treatment rather than the shared <NotableFeatureRow /> it used to: the same
- * .hp4-split band, the same two-column .hp4-sgrid2, and the same eyebrow → h2 → points → MockCard
+ * .home-split band, the same two-column .home-sgrid2, and the same eyebrow → h2 → points → MockCard
  * furniture, so the three sections read as one run. Mirrored, though — the capture takes the left
  * column and the copy the right, which is the inverse of the two either side.
  *
- * The mirror is CSS-only and scoped above the collapse breakpoint (.hp4-sgrid--flip). Below it the
+ * The mirror is CSS-only and scoped above the collapse breakpoint (.home-sgrid--flip). Below it the
  * grid is a single column and DOM order wins, so the stacked layout still leads with the heading
  * instead of opening on a screenshot.
  *
@@ -21,17 +21,17 @@ import { ELECTORATE } from "./sections";
  */
 export default function Electorate() {
   return (
-    <RevealScope className="hp4-split">
-      <div className="hp4-shell hp4-sgrid2 hp4-sgrid--flip">
-        <div className="hp4-rise">
-          <span className="hp4-mono hp4-eyebrow">{ELECTORATE.eyebrow}</span>
-          <h2 className="hp4-h2" style={{ marginTop: 18 }}>
+    <RevealScope className="home-split">
+      <div className="home-shell home-sgrid2 home-sgrid--flip">
+        <div className="home-rise">
+          <span className="home-mono home-eyebrow">{ELECTORATE.eyebrow}</span>
+          <h2 className="home-h2" style={{ marginTop: 18 }}>
             {ELECTORATE.title}
           </h2>
 
           {/* The two sub-features as <Research />'s point list: each is a lead plus a body, which is
               exactly the shape that pattern is for. */}
-          <div className="hp4-points">
+          <div className="home-points">
             {ELECTORATE.subFeatures.map((f) => (
               <div key={f.title}>
                 <i aria-hidden />
@@ -43,7 +43,7 @@ export default function Electorate() {
           </div>
         </div>
 
-        <div className="hp4-rise hp4-dsshot" style={cssVars({ "--d": "120ms" })}>
+        <div className="home-rise home-dsshot" style={cssVars({ "--d": "120ms" })}>
           <MockCard label="Australian datasets" meta="app.uprise.org.au/data/datasets">
             <Image
               alt="The uprise Australian datasets library"

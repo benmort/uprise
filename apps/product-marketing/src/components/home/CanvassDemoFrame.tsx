@@ -52,7 +52,7 @@ export default function CanvassDemoFrame() {
   const src = `${fieldAppUrl().replace(/\/$/, "")}/demo`;
 
   return (
-    <div ref={ref} className="hp4-demoframe">
+    <div ref={ref} className="home-demoframe">
       {show ? (
         <iframe
           src={src}
@@ -71,7 +71,7 @@ export default function CanvassDemoFrame() {
           sizes="(min-width: 1024px) 320px, 60vw"
         />
       ) : null}
-      <a className="hp4-demoopen" href={src} target="_blank" rel="noreferrer">
+      <a className="home-demoopen" href={src} target="_blank" rel="noreferrer">
         Open the app
       </a>
     </div>
