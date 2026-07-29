@@ -2,55 +2,81 @@ import { ForbiddenException } from "@nestjs/common";
 import { PlanLimitsService } from "./plan-limits.service";
 import type { PrismaService } from "../../prisma/prisma.service";
 
-/** Minimal Prisma stub: a tenant on a network on a plan with the given limits. */
+/**
+ * Minimal Prisma stub: a tenant on a network on a plan with the given limits.
+ * `defaultPlan` is the row `findFirst({ isDefault: true })` returns — the baseline a tenant
+ * falls back to when it has no network, no plan, or a missing/archived one.
+ */
 function makePrisma(opts: {
   networkId?: string | null;
   planName?: string | null;
   plan?: { limits: unknown; archivedAt: Date | null } | null;
+  defaultPlan?: { limits: unknown; archivedAt: Date | null } | null;
   memberCount?: number;
   contactCount?: number;
 }) {
   return {
     tenant: { findUnique: jest.fn().mockResolvedValue({ networkId: opts.networkId ?? null }) },
     network: { findUnique: jest.fn().mockResolvedValue({ planName: opts.planName ?? null }) },
-    plan: { findUnique: jest.fn().mockResolvedValue(opts.plan ?? null) },
+    plan: {
+      findUnique: jest.fn().mockResolvedValue(opts.plan ?? null),
+      findFirst: jest.fn().mockResolvedValue(opts.defaultPlan ?? null),
+    },
     tenantMember: { count: jest.fn().mockResolvedValue(opts.memberCount ?? 0) },
     contact: { count: jest.fn().mockResolvedValue(opts.contactCount ?? 0) },
   } as unknown as PrismaService;
 }
 
 const planWith = (limits: unknown) => ({ limits, archivedAt: null });
+const UNLIMITED = { contacts: null, teamMembers: null, segments: null };
+/** Stands in for Growth, which carries isDefault in the seed. */
+const GROWTH = planWith({ contacts: 25000, teamMembers: 10, segments: 20 });
 
 describe("PlanLimitsService", () => {
   describe("resolveForTenant", () => {
     it("is unlimited with no tenant", async () => {
-      const svc = new PlanLimitsService(makePrisma({}));
-      expect(await svc.resolveForTenant(null)).toEqual({ contacts: null, teamMembers: null, segments: null });
+      const svc = new PlanLimitsService(makePrisma({ defaultPlan: GROWTH }));
+      expect(await svc.resolveForTenant(null)).toEqual(UNLIMITED);
     });
 
-    it("is unlimited when the tenant has no network", async () => {
-      const svc = new PlanLimitsService(makePrisma({ networkId: null }));
-      expect(await svc.resolveForTenant("t1")).toEqual({ contacts: null, teamMembers: null, segments: null });
+    // The three no-plan routes below all used to return unlimited. They now resolve the
+    // default plan, so entitlements and limits agree on what a plan-less tenant gets.
+    it("falls back to the default plan when the tenant has no network", async () => {
+      const svc = new PlanLimitsService(makePrisma({ networkId: null, defaultPlan: GROWTH }));
+      expect(await svc.resolveForTenant("t1")).toEqual({ contacts: 25000, teamMembers: 10, segments: 20 });
     });
 
-    it("is unlimited when the network has no plan name", async () => {
-      const svc = new PlanLimitsService(makePrisma({ networkId: "n1", planName: null }));
-      expect(await svc.resolveForTenant("t1")).toEqual({ contacts: null, teamMembers: null, segments: null });
+    it("falls back to the default plan when the network has no plan name", async () => {
+      const svc = new PlanLimitsService(makePrisma({ networkId: "n1", planName: null, defaultPlan: GROWTH }));
+      expect(await svc.resolveForTenant("t1")).toEqual({ contacts: 25000, teamMembers: 10, segments: 20 });
     });
 
-    it("is unlimited when the plan is archived", async () => {
+    it("falls back to the default plan when the named plan is archived", async () => {
       const svc = new PlanLimitsService(
-        makePrisma({ networkId: "n1", planName: "starter", plan: { limits: { contacts: 10 }, archivedAt: new Date() } }),
+        makePrisma({
+          networkId: "n1",
+          planName: "starter",
+          plan: { limits: { contacts: 10 }, archivedAt: new Date() },
+          defaultPlan: GROWTH,
+        }),
       );
-      expect(await svc.resolveForTenant("t1")).toEqual({ contacts: null, teamMembers: null, segments: null });
+      expect(await svc.resolveForTenant("t1")).toEqual({ contacts: 25000, teamMembers: 10, segments: 20 });
     });
 
-    it("returns the plan limits, treating a null member as unlimited", async () => {
+    // The escape hatch: with nothing marked default the old behaviour stands, so a database
+    // that hasn't run the plan migration can't accidentally cap everyone.
+    it("stays unlimited when no plan is marked default", async () => {
+      const svc = new PlanLimitsService(makePrisma({ networkId: "n1", planName: null, defaultPlan: null }));
+      expect(await svc.resolveForTenant("t1")).toEqual(UNLIMITED);
+    });
+
+    it("prefers the tenant's own plan over the default", async () => {
       const svc = new PlanLimitsService(
         makePrisma({
           networkId: "n1",
           planName: "scale",
           plan: planWith({ contacts: 100000, teamMembers: 25, segments: null }),
+          defaultPlan: GROWTH,
         }),
       );
       expect(await svc.resolveForTenant("t1")).toEqual({ contacts: 100000, teamMembers: 25, segments: null });

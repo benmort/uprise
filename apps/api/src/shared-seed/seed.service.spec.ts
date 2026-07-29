@@ -186,18 +186,33 @@ describe("SeedService — knock backdating", () => {
   });
 
   it("puts the whole recent cohort inside today and spreads the rest backwards", async () => {
-    const { client, calls } = mockPrisma();
-    const before = Date.now();
-    await backdate(service(client));
-    const times = calls["doorKnock.updateMany"].mock.calls.map((c: any[]) => c[0].data.createdAt.getTime());
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+    // Pinned to mid-morning, like the after-midnight case below, because this assertion is
+    // only true for part of the day. Knocks outside the today cohort are dated `now - hoursAgo`,
+    // so once more than DEMO_KNOCK_TODAY_WINDOW_HOURS of the day have elapsed the ones just
+    // beyond the window also land inside today and the count overshoots. That is correct
+    // behaviour — a knock 13 hours ago really did happen early today — but it made the test
+    // pass every morning and fail every afternoon.
+    jest.useFakeTimers();
+    try {
+      const midMorning = new Date();
+      midMorning.setHours(9, 0, 0, 0);
+      jest.setSystemTime(midMorning);
 
-    const todayCount = DEMO_KNOCKS.filter((k) => k.hoursAgo < DEMO_KNOCK_TODAY_WINDOW_HOURS).length;
-    expect(times.filter((t: number) => t >= startOfToday.getTime()).length).toBe(todayCount);
-    expect(Math.max(...times)).toBeLessThanOrEqual(before + 1000);
-    // Several days of history behind it.
-    expect(before - Math.min(...times)).toBeGreaterThan(5 * 86_400_000);
+      const { client, calls } = mockPrisma();
+      const before = Date.now();
+      await backdate(service(client));
+      const times = calls["doorKnock.updateMany"].mock.calls.map((c: any[]) => c[0].data.createdAt.getTime());
+      const startOfToday = new Date(midMorning);
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const todayCount = DEMO_KNOCKS.filter((k) => k.hoursAgo < DEMO_KNOCK_TODAY_WINDOW_HOURS).length;
+      expect(times.filter((t: number) => t >= startOfToday.getTime()).length).toBe(todayCount);
+      expect(Math.max(...times)).toBeLessThanOrEqual(before + 1000);
+      // Several days of history behind it.
+      expect(before - Math.min(...times)).toBeGreaterThan(5 * 86_400_000);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("keeps the today cohort inside today even when run just after midnight", async () => {

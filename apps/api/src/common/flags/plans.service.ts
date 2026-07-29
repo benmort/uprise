@@ -102,6 +102,31 @@ export class PlansService {
   async update(id: string, input: PlanWritable) {
     const existing = await this.prisma.plan.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException("Plan not found");
+    // Promoting a plan to default demotes the others, in one transaction. The default plan is
+    // the entitlement + limit baseline for every plan-less tenant, so two rows with
+    // isDefault: true would make that baseline depend on row order.
+    if (input.isDefault === true) {
+      const [, updated] = await this.prisma.$transaction([
+        this.prisma.plan.updateMany({
+          where: { isDefault: true, NOT: { id } },
+          data: { isDefault: false },
+        }),
+        this.prisma.plan.update({ where: { id }, data: toUpdateData(input) }),
+      ]);
+      return updated;
+    }
     return this.prisma.plan.update({ where: { id }, data: toUpdateData(input) });
+  }
+
+  /**
+   * The plan that stands in when a tenant's network has no plan (or names one that is missing
+   * or archived). Null when no plan is marked default, in which case callers keep their
+   * previous no-plan behaviour.
+   */
+  defaultPlan() {
+    return this.prisma.plan.findFirst({
+      where: { isDefault: true, archivedAt: null },
+      orderBy: { order: "asc" },
+    });
   }
 }

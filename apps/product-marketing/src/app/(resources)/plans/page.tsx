@@ -5,6 +5,7 @@ import Link from "next/link";
 import { plans as plansApi, type PublicPlan } from "@uprise/api-client";
 import FaqSection, { type FaqItem } from "@/components/FaqSection";
 import PaymentSecuritySection from "@/components/PaymentSecuritySection";
+import { callToAction, isQuoted } from "@/lib/plan-cta";
 
 const FAQ_ITEMS: FaqItem[] = [
   {
@@ -25,17 +26,27 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Is it a monthly or annual payment?",
     answer:
-      "You can choose either. Pay monthly for flexibility, or save with annual billing. All plans include the same features regardless of billing cycle.",
+      "Both plans are quoted rather than listed, so billing is agreed with you. Where a subscription applies you can pay monthly for flexibility or save with annual billing, and the features are the same either way.",
   },
   {
     question: "Which plan is suitable for me?",
     answer:
-      "Starter is ideal for small teams and local campaigns. Growth suits growing organisations and regional campaigns. Scale is for larger teams and multi-region operations. Compare the pricing table above to find the best fit.",
+      "Grassroots is for community organisations doing work that deserves better tools than their budget allows – it is a philanthropically funded licence, so you apply and we assess. Scale is for larger teams and multi-region operations, sized per organisation. If you are unsure, apply for Grassroots and we will tell you honestly which fits.",
   },
   {
-    question: "Can I upgrade to a higher plan?",
+    question: "What is a philanthropic licence?",
     answer:
-      "Yes, you can upgrade to a higher plan at any time. Contact us via support and we'll help you transition smoothly.",
+      "Uprise is partly funded by philanthropy so that campaigning tools are not rationed by budget. That funding pays for Grassroots licences, which we grant to organisations whose work we think should not be held back by software costs. There is no catch and no reduced product – you get the platform, we cover the cost.",
+  },
+  {
+    question: "Who qualifies for a Grassroots licence?",
+    answer:
+      "We look at the work, not the letterhead. Small and volunteer-run organisations, First Nations-led campaigns, and groups working on justice, climate and democracy are all a good fit. You do not need to be an incorporated charity. If you are not sure whether you qualify, apply anyway – it costs you a few minutes.",
+  },
+  {
+    question: "Can I move between plans?",
+    answer:
+      "Yes. Organisations grow, and funding changes. Talk to us and we'll move you across without disruption – a Grassroots licence is not a trap, and it does not lapse because you had a good year.",
   },
   {
     question: 'What does "contacts" mean?',
@@ -133,6 +144,7 @@ function savingsPercent(price: number | null, original: number | null): number {
   if (!price || !original || original <= price) return 0;
   return Math.round((1 - price / original) * 100);
 }
+
 
 export default function PlansPage() {
   const [monthly, setMonthly] = useState(true);
@@ -243,7 +255,8 @@ export default function PlansPage() {
                     const { price, original } = priceFor(plan);
                     const saving = savingsPercent(price, original);
                     // No price on the plan means it is quoted, not listed.
-                    const quoted = price === null || price === undefined;
+                    const quoted = isQuoted(price);
+                    const cta = callToAction(plan, quoted);
                     return (
                       <div
                         key={plan.id}
@@ -285,17 +298,17 @@ export default function PlansPage() {
                               )}
                             </div>
                             <p className="mb-1 text-base font-medium text-text-color">
-                              {quoted ? "Talk to us" : `per ${monthly ? "month" : "year"}`}
+                              {quoted ? cta.heading : `per ${monthly ? "month" : "year"}`}
                             </p>
                             <p className="mb-5 text-base text-text-color-tertiary">
                               {plan.description}
                             </p>
                           </div>
                           <Link
-                            href={quoted ? "/request-demo" : "/sign-up"}
+                            href={cta.href}
                             className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-5 py-3.5 text-sm font-medium text-white duration-200 hover:bg-brand-600 sm:text-base lg:gap-1 lg:px-2 lg:text-sm xl:gap-2 xl:px-5 xl:text-base"
                           >
-                            <span>{quoted ? "Talk to us" : `Choose ${plan.displayName}`}</span>
+                            <span>{cta.label}</span>
                           </Link>
                         </div>
                       </div>

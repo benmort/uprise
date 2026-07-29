@@ -17,9 +17,15 @@ function numOrNull(v: unknown): number | null {
 
 /**
  * Resolves and enforces a tenant's plan limits. Limits live on the Plan keyed by
- * the tenant's `Network.planName` (tenant → network → plan → Plan.limits). A tenant
- * with no network, no plan, or an archived plan is unlimited — so existing tenants
- * stay unlimited until a plan is assigned (see meld plan: no-plan = unlimited).
+ * the tenant's `Network.planName` (tenant → network → plan → Plan.limits).
+ *
+ * A tenant with no network, no plan, or a missing/archived plan falls back to the plan marked
+ * `isDefault` (Growth) — the same baseline the feature-flag resolver uses, so entitlements and
+ * limits can't disagree about what a plan-less tenant gets. This replaces the previous
+ * no-plan = unlimited rule: such a tenant is now capped at Growth's allowance.
+ *
+ * Unlimited survives in two cases only: there is no tenant at all (a platform-level caller),
+ * or no plan is marked default.
  */
 @Injectable()
 export class PlanLimitsService {
@@ -32,17 +38,27 @@ export class PlanLimitsService {
       where: { id: tenantId },
       select: { networkId: true },
     });
-    if (!tenant?.networkId) return { ...UNLIMITED };
-    const network = await this.prisma.network.findUnique({
-      where: { id: tenant.networkId },
-      select: { planName: true },
-    });
-    if (!network?.planName) return { ...UNLIMITED };
-    const plan = await this.prisma.plan.findUnique({
-      where: { key: network.planName },
-      select: { limits: true, archivedAt: true },
-    });
-    if (!plan || plan.archivedAt) return { ...UNLIMITED };
+    const network = tenant?.networkId
+      ? await this.prisma.network.findUnique({
+          where: { id: tenant.networkId },
+          select: { planName: true },
+        })
+      : null;
+    const named = network?.planName
+      ? await this.prisma.plan.findUnique({
+          where: { key: network.planName },
+          select: { limits: true, archivedAt: true },
+        })
+      : null;
+    const plan =
+      named && !named.archivedAt
+        ? named
+        : await this.prisma.plan.findFirst({
+            where: { isDefault: true, archivedAt: null },
+            orderBy: { order: "asc" },
+            select: { limits: true, archivedAt: true },
+          });
+    if (!plan) return { ...UNLIMITED };
     const l = plan.limits as Record<string, unknown> | null;
     if (!l || typeof l !== "object") return { ...UNLIMITED };
     return {

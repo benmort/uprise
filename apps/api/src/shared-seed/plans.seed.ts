@@ -2,7 +2,15 @@ import type { PrismaService } from "../prisma/prisma.service";
 
 /**
  * Canonical subscription plans. `key` matches Network.planName + the Stripe price nickname.
- * Grassroots is the hidden free tier (super-admin assignable, off the public pricing page).
+ *
+ * Public pricing shows the two quoted tiers only — Grassroots (philanthropic licence, apply
+ * with us) and Scale (sized per organisation, talk to us). Starter and Growth are
+ * `publiclyVisible: false`: hidden from the pricing page but fully intact, so networks already
+ * on them keep their entitlements and limits.
+ *
+ * Growth carries `isDefault: true` and is therefore the baseline for any tenant whose network
+ * has no plan — both its `featureFlags` and its `limits`. Exactly one plan may be default.
+ *
  * `featureFlags` carries each plan's entitlements: nav flags default ON so we RESTRICT (e.g.
  * WhatsApp off for Grassroots), while default-OFF entitlements are GRANTED (e.g. multi-brand on
  * Scale only). `limits` (null member = unlimited) drives enforcement; `features` is the public
@@ -52,14 +60,18 @@ export const PLAN_SEED: PlanSeed[] = [
   {
     key: "grassroots",
     displayName: "Grassroots",
-    publiclyVisible: false,
+    publiclyVisible: true,
     isDefault: false,
     order: 0,
     popular: false,
-    description: "Free tier for grassroots organisers",
-    priceMonthly: 0,
+    description:
+      "Philanthropically funded licences for grassroots organisations doing work that deserves better tools than they can afford. Tell us about your campaign and we'll take it from there.",
+    // Quoted, not listed. A philanthropic licence is assessed, not bought, so all four price
+    // fields stay null and the pricing page renders the apply-with-us treatment rather than $0
+    // — which would otherwise read as self-serve and route to sign-up.
+    priceMonthly: null,
     priceMonthlyOriginal: null,
-    priceAnnually: 0,
+    priceAnnually: null,
     priceAnnuallyOriginal: null,
     featureFlags: {
       FEATURE_WHATSAPP_ENABLED: false,
@@ -75,7 +87,9 @@ export const PLAN_SEED: PlanSeed[] = [
   {
     key: "starter",
     displayName: "Starter",
-    publiclyVisible: true,
+    // Hidden, not removed: existing networks stay on this plan and keep their entitlements;
+    // it is simply off the public pricing page.
+    publiclyVisible: false,
     isDefault: false,
     order: 1,
     popular: false,
@@ -97,10 +111,13 @@ export const PLAN_SEED: PlanSeed[] = [
   {
     key: "growth",
     displayName: "Growth",
-    publiclyVisible: true,
-    isDefault: false,
+    // Hidden from pricing but load-bearing: isDefault makes it the entitlement + limit baseline
+    // for any tenant whose network has no plan (see FeatureFlagsService.loadPlanEntitlements and
+    // PlanLimitsService.resolveForTenant). Exactly one plan may be the default.
+    publiclyVisible: false,
+    isDefault: true,
     order: 2,
-    popular: true,
+    popular: false,
     description: "For growing organisations and regional campaigns",
     priceMonthly: 298,
     priceMonthlyOriginal: 358,

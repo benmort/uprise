@@ -145,3 +145,57 @@ describe("PlansService", () => {
     });
   });
 });
+
+/**
+ * The default plan is the entitlement + limit baseline for every plan-less tenant, so exactly
+ * one row may carry isDefault. The admin UI has always claimed "setting one default clears the
+ * others server-side"; until now nothing did, and two defaults would have made the baseline
+ * depend on row order.
+ */
+describe("PlansService — default plan", () => {
+  function prismaWithTx() {
+    const prisma: any = makePrisma({
+      plan: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findUnique: jest.fn().mockResolvedValue({ id: "p1" }),
+        findFirst: jest.fn().mockResolvedValue({ id: "growth", key: "growth" }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn(async ({ data }: any) => ({ id: "p1", ...data })),
+      },
+    });
+    prisma.$transaction = jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops));
+    return prisma;
+  }
+
+  it("demotes the other defaults in the same transaction when promoting one", async () => {
+    const prisma = prismaWithTx();
+    await new PlansService(prisma).update("p1", { isDefault: true });
+    expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.plan.updateMany).toHaveBeenCalledWith({
+      where: { isDefault: true, NOT: { id: "p1" } },
+      data: { isDefault: false },
+    });
+  });
+
+  it("does not touch the other plans on an unrelated edit", async () => {
+    const prisma = prismaWithTx();
+    await new PlansService(prisma).update("p1", { displayName: "Renamed" });
+    expect(prisma.plan.updateMany).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not demote others when explicitly clearing a default", async () => {
+    const prisma = prismaWithTx();
+    await new PlansService(prisma).update("p1", { isDefault: false });
+    expect(prisma.plan.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("defaultPlan reads the non-archived default", async () => {
+    const prisma = prismaWithTx();
+    await new PlansService(prisma).defaultPlan();
+    expect(prisma.plan.findFirst).toHaveBeenCalledWith({
+      where: { isDefault: true, archivedAt: null },
+      orderBy: { order: "asc" },
+    });
+  });
+});

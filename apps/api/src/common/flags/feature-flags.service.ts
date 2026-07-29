@@ -149,15 +149,33 @@ export class FeatureFlagsService {
     return { tenant, network, plan, global };
   }
 
-  /** A plan's feature-flag entitlements, by plan key (Network.planName → Plan). */
+  /**
+   * A plan's feature-flag entitlements, by plan key (Network.planName → Plan).
+   *
+   * A tenant with no network, no plan, or a plan that is missing/archived falls back to the
+   * plan marked `isDefault` (Growth). Without that fallback such a tenant got the catalogue
+   * defaults, which quietly withheld WhatsApp, tenant telephony and tenant email from every
+   * network that had not been assigned a plan — and networks are created plan-less.
+   *
+   * If no plan is marked default the map stays empty, i.e. the previous behaviour.
+   */
   private async loadPlanEntitlements(planName: string | null): Promise<Map<string, boolean>> {
     const map = new Map<string, boolean>();
-    if (!planName) return map;
-    const plan = await this.prisma.plan.findUnique({
-      where: { key: planName },
-      select: { featureFlags: true, archivedAt: true },
-    });
-    if (!plan || plan.archivedAt) return map;
+    const named = planName
+      ? await this.prisma.plan.findUnique({
+          where: { key: planName },
+          select: { featureFlags: true, archivedAt: true },
+        })
+      : null;
+    const plan =
+      named && !named.archivedAt
+        ? named
+        : await this.prisma.plan.findFirst({
+            where: { isDefault: true, archivedAt: null },
+            orderBy: { order: "asc" },
+            select: { featureFlags: true, archivedAt: true },
+          });
+    if (!plan) return map;
     const ff = plan.featureFlags as Record<string, unknown> | null;
     if (ff && typeof ff === "object") {
       for (const [k, v] of Object.entries(ff)) if (typeof v === "boolean") map.set(k, v);
