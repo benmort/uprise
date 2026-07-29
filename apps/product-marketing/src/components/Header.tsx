@@ -150,16 +150,6 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
         <div className="invisible hidden h-0 w-full items-center justify-between xl:visible xl:flex xl:h-auto xl:flex-1">
           <nav>
             <ul className="flex flex-col gap-5 xl:flex-row xl:items-center 2xl:gap-8">
-              <li className="nav__menu group xl:py-4">
-                <Link className="font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white" href="/#features">
-                  Features
-                </Link>
-              </li>
-              <li className="nav__menu group xl:py-4">
-                <Link className="font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white" href="/blog">
-                  Blog
-                </Link>
-              </li>
               <li className="nav__menu group relative xl:py-4">
                 <button className="inline-flex items-center gap-1.5 font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white">
                   Resources
@@ -231,6 +221,11 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
                     Donations Policy
                   </Link>
                 </div>
+              </li>
+              <li className="nav__menu group xl:py-4">
+                <Link className="font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white" href="/blog">
+                  Blog
+                </Link>
               </li>
             </ul>
           </nav>

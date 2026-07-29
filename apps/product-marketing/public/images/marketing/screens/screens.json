@@ -8,7 +8,7 @@
     "route": "/settings/branding",
     "clip": "main",
     "theme": "light",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
     "bytes": 167891
   },
   "branding-dark": {
@@ -19,20 +19,19 @@
     "route": "/settings/branding",
     "clip": "main",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
     "bytes": 170260
   },
   "dashboard": {
-    "file": null,
-    "width": null,
-    "height": null,
-    "alt": null,
+    "file": "/images/marketing/screens/dashboard@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise campaign dashboard: doors knocked, contact rate and volunteer activity for a live doorknock campaign",
     "route": "/dashboard",
     "clip": "main",
     "theme": "light",
-    "capturedAt": null,
-    "bytes": null,
-    "invalidReason": "light capture is an ngrok ERR_NGROK_8012 error page, not the dashboard"
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 240103
   },
   "dashboard-dark": {
     "file": "/images/marketing/screens/dashboard-dark@2x.png",
@@ -42,8 +41,8 @@
     "route": "/dashboard",
     "clip": "main",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:31:59.420Z",
-    "bytes": 241319
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 240168
   },
   "datasets": {
     "file": "/images/marketing/screens/datasets@2x.png",
@@ -64,20 +63,19 @@
     "route": "/data/datasets",
     "clip": "main",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
     "bytes": 367891
   },
   "demographics": {
-    "file": null,
-    "width": null,
-    "height": null,
-    "alt": null,
+    "file": "/images/marketing/screens/demographics@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "ABS census demographics mapped across Australia in Uprise, shaded by median age",
     "route": "/data/demographics?ind=median_age&view=map",
     "clip": "main",
     "theme": "light",
-    "capturedAt": null,
-    "bytes": null,
-    "invalidReason": "light capture is an ngrok ERR_NGROK_8012 error page, not the map"
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 1092498
   },
   "demographics-dark": {
     "file": "/images/marketing/screens/demographics-dark@2x.png",
@@ -87,20 +85,19 @@
     "route": "/data/demographics?ind=median_age&view=map",
     "clip": "main",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:31:59.420Z",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
     "bytes": 846062
   },
   "field-walk": {
-    "file": null,
-    "width": null,
-    "height": null,
-    "alt": null,
+    "file": "/images/marketing/screens/field-walk@2x.png",
+    "width": 804,
+    "height": 1748,
+    "alt": "The Uprise canvasser app on a phone, showing the next doors on a walk list",
     "route": "/cms3ygozx00081fxfjdbvkved",
     "clip": "page",
     "theme": "light",
-    "capturedAt": null,
-    "bytes": null,
-    "invalidReason": "capture is the field sign-in screen, not a walk list"
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 217435
   },
   "field-walk-dark": {
     "file": "/images/marketing/screens/field-walk-dark@2x.png",
@@ -110,20 +107,19 @@
     "route": "/cms3ygozx00081fxfjdbvkved",
     "clip": "page",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
-    "bytes": 121388
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 212481
   },
   "inbox": {
-    "file": null,
-    "width": null,
-    "height": null,
-    "alt": null,
+    "file": "/images/marketing/screens/inbox@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "The Uprise shared team inbox, with SMS conversations from supporters claimed across the team",
     "route": "/inbox",
     "clip": "main",
     "theme": "light",
-    "capturedAt": null,
-    "bytes": null,
-    "invalidReason": "light capture is an ngrok ERR_NGROK_8012 error page, not the inbox"
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 210880
   },
   "inbox-dark": {
     "file": "/images/marketing/screens/inbox-dark@2x.png",
@@ -133,8 +129,8 @@
     "route": "/inbox",
     "clip": "main",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:31:59.420Z",
-    "bytes": 205242
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 212015
   },
   "results": {
     "file": "/images/marketing/screens/results@2x.png",
@@ -144,8 +140,8 @@
     "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/results",
     "clip": "main",
     "theme": "light",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
-    "bytes": 177035
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 176677
   },
   "results-dark": {
     "file": "/images/marketing/screens/results-dark@2x.png",
@@ -155,8 +151,30 @@
     "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/results",
     "clip": "main",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
-    "bytes": 177164
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 176875
+  },
+  "segments": {
+    "file": "/images/marketing/screens/segments@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "Audience segments in Uprise, each with its rules and live member count, ready to send to",
+    "route": "/audience/segments",
+    "clip": "main",
+    "theme": "light",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 67379
+  },
+  "segments-dark": {
+    "file": "/images/marketing/screens/segments-dark@2x.png",
+    "width": 2584,
+    "height": 1672,
+    "alt": "Audience segments in Uprise, each with its rules and live member count, ready to send to",
+    "route": "/audience/segments",
+    "clip": "main",
+    "theme": "dark",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
+    "bytes": 69292
   },
   "turf": {
     "file": "/images/marketing/screens/turf@2x.png",
@@ -166,7 +184,7 @@
     "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/turf",
     "clip": "main",
     "theme": "light",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
     "bytes": 817778
   },
   "turf-dark": {
@@ -177,7 +195,7 @@
     "route": "/canvass/cms3vkek0000b1flhwp1sjsiu/turf",
     "clip": "main",
     "theme": "dark",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
+    "capturedAt": "2026-07-29T02:22:13.748Z",
     "bytes": 514843
   }
 }

@@ -53,24 +53,6 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
         <div className="flex-1 overflow-y-auto p-5 pt-20 pb-24 min-h-0">
           <ul>
             <li className="group relative">
-              <Link
-                href="/#features"
-                className="flex items-center justify-between gap-2 border-b border-gray-200 p-3 text-base text-gray-700 duration-200 hover:text-blue-600"
-                onClick={onClose}
-              >
-                Features
-              </Link>
-            </li>
-            <li className="group relative">
-              <Link
-                href="/blog"
-                className="flex items-center justify-between gap-2 border-b border-gray-200 p-3 text-base text-gray-700 duration-200 hover:text-blue-600"
-                onClick={onClose}
-              >
-                Blog
-              </Link>
-            </li>
-            <li className="group relative">
               <button
                 className="flex w-full items-center justify-between gap-2 border-b border-gray-200 p-3 text-base text-gray-700 duration-200 hover:text-blue-600"
                 onClick={() => toggleSection('resources')}
@@ -224,6 +206,15 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                   </Link>
                 </div>
               </div>
+            </li>
+            <li className="group relative">
+              <Link
+                href="/blog"
+                className="flex items-center justify-between gap-2 border-b border-gray-200 p-3 text-base text-gray-700 duration-200 hover:text-blue-600"
+                onClick={onClose}
+              >
+                Blog
+              </Link>
             </li>
           </ul>
         </div>
