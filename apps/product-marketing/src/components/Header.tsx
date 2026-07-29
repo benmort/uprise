@@ -7,9 +7,33 @@ import MobileMenu from "./MobileMenu";
 import { authAppUrl, adminAppUrl } from "@/lib/links";
 import { useSession } from "@/lib/session";
 
-export default function Header() {
+/**
+ * useLayoutEffect on the client, useEffect on the server — the server variant is a no-op, which
+ * keeps React from warning about useLayoutEffect during SSR. Used for the initial scroll sync,
+ * which has to land BEFORE the browser paints to avoid a visible jump.
+ */
+const useIsomorphicLayoutEffect = typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
+
+/**
+ * The global marketing header. `glass` swaps the solid white bar for the /homepage2 treatment —
+ * transparent over the hero, condensing into a centred glass pill once scrolled. Only the shell
+ * changes: the nav links, the dropdowns and the session-aware CTAs are the same in both modes, so
+ * a candidate homepage can restyle the chrome without forking the navigation.
+ */
+export default function Header({ glass = false }: { glass?: boolean } = {}) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  /**
+   * Gates the shell's width/padding transition. Off until the initial scroll position has been
+   * read, so that first correction is instant rather than a 500ms slide.
+   *
+   * Why this matters: in glass mode the pill goes max-w-[1320px] → max-w-[1100px] when scrolled,
+   * and because it is mx-auto that 220px narrowing moves the logo and nav 110px to the right.
+   * `isScrolled` has to start false to match the server HTML, so a page loaded ALREADY scrolled
+   * (a reload part-way down, or a restored scroll position) painted the wide bar and then slid the
+   * whole left side 110px across — the jank this pair of flags removes.
+   */
+  const [scrollSynced, setScrollSynced] = useState(false);
   const { user, loading: sessionLoading } = useSession();
   const sessionHint = user?.email ? { email: user.email } : null;
 
@@ -23,29 +47,79 @@ export default function Header() {
     return () => cancelAnimationFrame(id);
   }, [sessionLoading]);
 
+  // Read the real scroll position before the first paint, so a page that loads already scrolled
+  // paints the condensed bar straight away instead of correcting into it.
+  useIsomorphicLayoutEffect(() => {
+    setIsScrolled(window.scrollY > 50);
+  }, []);
+
+  // Enable the transition in a LATER task, not alongside the sync above. React batches state set
+  // in the same effect into one render, so setting both together would put the transition class on
+  // the very commit that corrects the width — animating the correction, which is the jank. A
+  // separate task guarantees the corrected shell has committed and painted first.
+  React.useEffect(() => {
+    const id = window.setTimeout(() => setScrollSynced(true), 0);
+    return () => window.clearTimeout(id);
+  }, []);
+
   React.useEffect(() => {
     const handleScroll = () => {
       const scrollTop = window.scrollY;
       setIsScrolled(scrollTop > 50);
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const headerClasses = isScrolled
-    ? "fixed left-0 top-0 z-9999 w-full bg-white dark:bg-black-dark shadow transition duration-400"
-    : "fixed left-0 top-0 z-9999 w-full bg-white transition duration-400";
+  // Animate scroll-driven changes, but never the initial sync above.
+  const shellTransition = scrollSynced ? "transition-all duration-500" : "";
+
+  const headerClasses = glass
+    ? `fixed left-0 top-0 z-9999 flex w-full justify-center px-4 pb-2 sm:px-8 xl:px-12.5 ${shellTransition} ${
+        isScrolled ? "pt-3" : "pt-5"
+      }`
+    : isScrolled
+      ? "fixed left-0 top-0 z-9999 w-full bg-white dark:bg-black-dark shadow transition duration-400"
+      : "fixed left-0 top-0 z-9999 w-full bg-white transition duration-400";
+
+  // The pill narrows and picks up its glass as you scroll; at rest it is invisible so the hero
+  // wash runs edge to edge behind it.
+  const innerClasses = glass
+    ? `relative mx-auto w-full items-center justify-between rounded-full border px-4 py-3 xl:flex xl:gap-7 xl:py-1 xl:pl-7 xl:pr-4 ${shellTransition} ${
+        isScrolled
+          ? "max-w-[1100px] border-stroke-secondary bg-white/75 shadow-xl backdrop-blur-[18px] backdrop-saturate-150"
+          : "max-w-[1320px] border-transparent bg-transparent"
+      }`
+    : "relative items-center justify-between px-4 py-4 sm:px-8 xl:flex xl:gap-7 xl:px-12.5 xl:py-0";
 
   return (
     <header className={headerClasses}>
-      <div className="relative items-center justify-between px-4 py-4 sm:px-8 xl:flex xl:gap-7 xl:px-12.5 xl:py-0 2xl:gap-0">
-        <div className="flex w-full items-center justify-between xl:w-3/12">
+      {/* The logo column is content-width rather than a 3/12 fraction so the nav starts
+          immediately after the wordmark (left-aligned) instead of being pushed toward the
+          centre by a reserved column. The nav block then takes the remaining space and its
+          justify-between keeps the CTAs hard right. */}
+      <div className={innerClasses}>
+        <div className="flex w-full items-center justify-between xl:w-auto xl:shrink-0">
           <div className="inline-flex items-center gap-1 z-[9999]">
             <Link aria-label="Uprise logo" href="/">
               <div className="flex items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/uprise-icon.svg" alt="" className="h-8 w-8" />
+                {/* On the homepage the mark wears the /homepage2 treatment: the flat brand-500
+                    square becomes the brand ramp on a diagonal with a soft glow, so it reads as
+                    lit against the hero wash rather than pasted onto it. Same geometry and letter
+                    as uprise-icon.svg — drawn in CSS because an <img> can't carry a gradient.
+                    Every other route keeps the flat asset. */}
+                {glass ? (
+                  <span
+                    aria-hidden
+                    className="grid h-8 w-8 place-items-center rounded-[9px] bg-[linear-gradient(150deg,var(--color-brand-400),var(--color-brand-500)_55%,var(--color-brand-700))] text-base font-bold tracking-[-0.02em] text-white shadow-[0_6px_16px_-6px] shadow-brand-500/70"
+                  >
+                    U
+                  </span>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/uprise-icon.svg" alt="" className="h-8 w-8" />
+                )}
                 <span className="text-xl font-bold text-gray-900">Uprise</span>
               </div>
             </Link>
@@ -73,7 +147,7 @@ export default function Header() {
           </div>
         </div>
 
-        <div className="invisible hidden h-0 w-full items-center justify-between lg:w-9/12 xl:visible xl:flex xl:h-auto 2xl:w-10/12">
+        <div className="invisible hidden h-0 w-full items-center justify-between xl:visible xl:flex xl:h-auto xl:flex-1">
           <nav>
             <ul className="flex flex-col gap-5 xl:flex-row xl:items-center 2xl:gap-8">
               <li className="nav__menu group xl:py-4">
@@ -161,9 +235,29 @@ export default function Header() {
             </ul>
           </nav>
 
-          <div className="mt-7 flex min-h-[3.25rem] items-center gap-3 xl:mt-0">
+          {/* The CTA slot reserves BOTH axes before the session is known, so nothing in the bar
+              moves when /auth/check resolves. Two separate reservations, both needed:
+
+              WIDTH (xl:min-w-[23rem]) — the placeholder used to be w-44 (176px) against a resolved
+              logged-out set of ~368px, so the slot grew 191px and the buttons popped in from
+              nowhere.
+
+              HEIGHT (min-h-[4.375rem] = 70px) — this is the one that moved the LEFT side. The old
+              floor was 3.25rem (52px), but the resolved content is 68px logged out and 70px logged
+              in: the `py-3` wrapper on Get Started below makes that one button 24px taller than its
+              View Plans / Login siblings. So the row grew 16px on resolve, the pill 12px, and
+              because the row is items-center that halved into the logo and the whole nav dropping
+              6px. 70px is the taller of the two resolved states, so neither grows the row.
+
+              Reserving rather than trimming the stray py-3 keeps the settled header exactly the
+              height it is today — trimming it would be the cleaner fix but shrinks the bar 12px. */}
+          <div className="mt-7 flex min-h-[4.375rem] items-center justify-end gap-3 xl:mt-0 xl:min-w-[23rem]">
             {sessionLoading ? (
-              <div className="h-11 w-44 animate-pulse rounded-lg bg-gray-100 max-xl:w-full" aria-hidden />
+              // Fills the reserved slot rather than sitting at 176px inside it, so the skeleton is
+              // the shape of what arrives. A neutral black tint rather than bg-gray-100 so it reads
+              // the same faint grey on a white page and on the homepage's pale hero wash — the grey
+              // token disappeared entirely against the wash, leaving what looked like a broken gap.
+              <div className="h-11 w-full animate-pulse rounded-lg bg-black/[0.045]" aria-hidden />
             ) : (
             <div
               className={`flex flex-col gap-3.5 transition-opacity duration-300 xl:flex-row xl:items-center ${

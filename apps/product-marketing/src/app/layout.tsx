@@ -26,13 +26,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  // Optional: the homepage's embedded canvasser demo derives field.<host> when this is unset.
+  const fieldAppUrl = process.env.NEXT_PUBLIC_FIELD_APP_URL || "";
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
   return (
     <html lang="en">
       <body className={`${outfit.variable} bg-gray-50`}>
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};window.__APP_URL__=${JSON.stringify(appUrl)};window.__TURNSTILE_SITE_KEY__=${JSON.stringify(turnstileSiteKey)};`,
+            __html:
+              `window.__API_URL__=${JSON.stringify(apiUrl)};window.__AUTH_APP_URL__=${JSON.stringify(authAppUrl)};window.__APP_URL__=${JSON.stringify(appUrl)};window.__TURNSTILE_SITE_KEY__=${JSON.stringify(turnstileSiteKey)};` +
+              (fieldAppUrl ? `window.__FIELD_APP_URL__=${JSON.stringify(fieldAppUrl)};` : ""),
           }}
         />
         <SessionProvider>

@@ -1,0 +1,174 @@
+import React from "react";
+import {
+  MessageSquare,
+  Phone,
+  Map,
+  Smartphone,
+  GitBranch,
+  Gauge,
+  Users,
+  MapPinned,
+  UserPlus,
+  Palette,
+  ClipboardList,
+} from "lucide-react";
+import SectionHeading from "@/components/marketing/SectionHeading";
+import NotableFeatureRow from "@/components/marketing/NotableFeatureRow";
+
+/**
+ * The alternating feature rows — the whole toolkit across five connected systems, each row a pair of
+ * sub-features beside a real screenshot (or an honest abstract panel where no capture fits).
+ *
+ * Shared: the homepage's predecessor renders it via <NotableFeatures />, and /campaigners renders it
+ * directly. Pass `heading={false}` when the host page already has a section head, so the rows slot
+ * under it instead of restating the pitch.
+ */
+export default function FeatureRows({ heading = true }: { heading?: boolean }) {
+  return (
+    <section className="py-16 md:py-24 lg:py-30">
+      <div className="container">
+        {heading ? (
+          <SectionHeading
+            eyebrow="The whole toolkit"
+            title="Everything your campaign runs on"
+            subtitle="From the first text to the last door knocked – five connected systems, one platform."
+          />
+        ) : null}
+
+        <div className={`space-y-20 lg:space-y-28 ${heading ? "mt-14 md:mt-16" : ""}`}>
+          <NotableFeatureRow
+            eyebrow="MULTICHANNEL OUTREACH"
+            title="Reach every voter, on every channel you run"
+            subFeatures={[
+              {
+                icon: MessageSquare,
+                title: "P2P text messaging",
+                description:
+                  "A peer-to-peer SMS console with personalisation tags, a dual-channel live preview, proof sends and schedule-or-send – opt-outs checked automatically.",
+              },
+              {
+                icon: Phone,
+                title: "Browser calls + unified inbox",
+                description:
+                  "A WebRTC softphone that dials from your campaign's own number, plus a shared SMS and WhatsApp inbox the whole team claims from, live over SSE.",
+              },
+            ]}
+            image={{
+              src: "/images/marketing/inbox-screenshot.jpg",
+              alt: "The uprise unified team inbox",
+              width: 1600,
+              height: 943,
+            }}
+          />
+
+          <NotableFeatureRow
+            eyebrow="FIELD CANVASSING"
+            title="Run your whole field program from one place"
+            reverse
+            subFeatures={[
+              {
+                icon: Map,
+                title: "Turf & optimised walk lists",
+                description:
+                  "Cut turf on a Mapbox map or from geographic areas with live address counts, then build optimised walk lists with real walking metrics – grouped, assigned, re-optimised on demand.",
+              },
+              {
+                icon: Smartphone,
+                title: "Offline canvasser app + live action room",
+                description:
+                  "An installable PWA that queues door knocks offline and flushes on reconnect, with on-device route optimisation and a live action room that broadcasts to every volunteer's phone.",
+              },
+            ]}
+            image={{
+              src: "/images/marketing/canvassing-screenshot.jpg",
+              alt: "The uprise canvassing campaign surface",
+              width: 1600,
+              height: 868,
+            }}
+          />
+
+          <NotableFeatureRow
+            eyebrow="ENGAGEMENT CONTENT"
+            title="Turn conversations into data you can act on"
+            subFeatures={[
+              {
+                icon: GitBranch,
+                title: "Branching surveys & scripts",
+                description:
+                  "Build surveys with per-option skip logic and terminal branches that work on the doors and over SMS, backed by step-based scripts for every channel.",
+              },
+              {
+                icon: Gauge,
+                title: "Dispositions, 5-point scoring & canned replies",
+                description:
+                  "Map custom outcome codes to a 5-point support scale, and fire canned replies automatically on the first inbound reply from an org-wide or personal library.",
+              },
+            ]}
+            preview={{
+              tone: "violet",
+              icon: ClipboardList,
+              label: "Branching survey builder",
+              chips: ["Skip logic", "Door + SMS", "Auto canned-reply", "Disposition mapping"],
+            }}
+          />
+
+          <NotableFeatureRow
+            eyebrow="AUDIENCE, DATA & INSIGHTS"
+            title="Know your electorate"
+            reverse
+            subFeatures={[
+              {
+                icon: Users,
+                title: "Audiences, imports & Action Network sync",
+                description:
+                  "Build audiences and segments, upload CSVs with live import progress, target by channel, and connect Action Network for two-way list sync.",
+              },
+              {
+                icon: MapPinned,
+                title: "Australian data & electorate polling",
+                description:
+                  "G-NAF addresses, ASGS geography, federal, state and local divisions, politicians and policies built in – plus electorate polling with crosstabs and choropleth maps.",
+              },
+            ]}
+            image={{
+              src: "/images/marketing/datasets-screenshot.jpg",
+              alt: "The uprise Australian datasets library",
+              width: 1600,
+              height: 868,
+            }}
+          />
+
+          <NotableFeatureRow
+            eyebrow="TEAMS & WHITE-LABEL"
+            title="Built for teams – and for many brands"
+            subFeatures={[
+              {
+                icon: UserPlus,
+                title: "Roles, invitations & approvals",
+                description:
+                  "Role-based team access with invitations and join-request approvals, per-plan feature flags and a getting-started checklist for every new organiser.",
+              },
+              {
+                icon: Palette,
+                title: "White-label multi-brand portals",
+                description:
+                  "Run many campaigns and brands from one account, each an isolated white-label portal at your own slug with its own logo, colours and CSS.",
+              },
+            ]}
+            preview={{
+              tone: "amber",
+              icon: Palette,
+              label: "White-label workspace",
+              chips: [
+                "yourname.uprise.org.au",
+                "Your logo & colours",
+                "Isolated data",
+                "Per-plan features",
+              ],
+            }}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}

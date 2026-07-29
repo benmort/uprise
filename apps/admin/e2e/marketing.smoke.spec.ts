@@ -11,16 +11,27 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 test("landing renders the hero + primary CTAs", async ({ page }) => {
   await page.goto(`${MKT}/`);
-  await expect(page.getByRole("heading", { name: /built for progress/i })).toBeVisible();
-  await expect(page.getByRole("link", { name: /get started/i }).first()).toBeVisible();
+  // The cinema opening's headline. Word-masked, so assert on the h1's text rather than an
+  // accessible name built from one span.
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(/every channel/i);
+  await expect(page.getByRole("link", { name: /start a campaign/i }).first()).toBeVisible();
 });
 
-test("plans page shows the three tiers", async ({ page }) => {
+test("plans page shows the two quoted tiers", async ({ page }) => {
   await page.goto(`${MKT}/plans`);
-  // Tier names appear in both the pricing cards and the comparison table.
-  await expect(page.getByText("Starter").first()).toBeVisible();
-  await expect(page.getByText("Growth").first()).toBeVisible();
+  // Public pricing is Grassroots + Scale. Starter and Growth are publiclyVisible: false —
+  // hidden, not removed, so networks already on them keep their entitlements.
+  await expect(page.getByText("Grassroots").first()).toBeVisible();
   await expect(page.getByText("Scale").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /apply with us/i }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /talk to us/i }).first()).toBeVisible();
+});
+
+test("apply page renders the grassroots application form", async ({ page }) => {
+  await page.goto(`${MKT}/apply`);
+  await expect(page.getByRole("heading", { name: /rationed by budget/i })).toBeVisible();
+  await expect(page.getByLabel(/organisation/i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /send application/i })).toBeVisible();
 });
 
 test("request-demo + contact forms render", async ({ page }) => {

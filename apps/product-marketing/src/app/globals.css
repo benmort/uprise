@@ -4,3 +4,37 @@
 /* Scan the shared design system for class strings (this app's own files are
    auto-detected by Tailwind v4). */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
+
+/* Reserve the vertical scrollbar's width at all times.
+   Without this, a page that is short at first paint and grows past the viewport as its images and
+   sections load gains a scrollbar mid-load. That narrows the viewport by ~15px, and every
+   horizontally-centred element — including the header's mx-auto pill — jumps half that to the
+   left. Reserving the gutter costs a sliver of width and removes the class of shift entirely. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* The hero showreel's "LIVE" dot. Tailwind's animate-pulse only moves opacity; this is the
+   breathing dot from the homepage design – opacity AND scale – so it reads as a heartbeat
+   rather than a fade. Reduced-motion users get a static dot. */
+@keyframes uprise-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.72);
+  }
+}
+
+.animate-live-pulse {
+  animation: uprise-live-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-live-pulse {
+    animation: none;
+  }
+}

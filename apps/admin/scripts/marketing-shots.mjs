@@ -153,6 +153,13 @@ function shotList(ids) {
       settle: 5000,
       alt: "The Uprise Australian datasets library, listing federal, state and local government boundary sets with row counts",
     },
+    {
+      name: "segments",
+      app: "admin",
+      path: "/audience/segments",
+      settle: 5000,
+      alt: "Audience segments in Uprise, each with its rules and live member count, ready to send to",
+    },
     ids.campaignId && {
       name: "turf",
       app: "admin",

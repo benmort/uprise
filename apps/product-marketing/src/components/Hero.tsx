@@ -2,13 +2,16 @@ import React from "react";
 import Link from "next/link";
 import { Button } from "@uprise/ui";
 import { authAppUrl } from "@/lib/links";
-import CapabilityShowreel from "./marketing/CapabilityShowreel";
 import MarketingLaunchpad from "./MarketingLaunchpad";
 
 export default function Hero() {
   return (
     <section className="px-4 pt-20 sm:px-8 xl:px-12.5">
-      <div className="relative z-10 overflow-hidden rounded-3xl border border-stroke-secondary bg-gradient-to-br from-gray-50 via-primary-25 to-pink-50 pt-14 md:pt-16 lg:pt-24">
+      {/* Symmetric padding now the card ends at the CTAs. The showreel that used to close it
+          supplied its own pb-14/pb-16, so without this the buttons sit flush to the bottom edge.
+          <Showreel /> lives in components/marketing/Showreel.tsx and is still rendered by
+          /homepage3 — drop it back in here if the hero should lead with the product again. */}
+      <div className="relative z-10 overflow-hidden rounded-3xl border border-stroke-secondary bg-gradient-to-br from-gray-50 via-primary-25 to-pink-50 py-14 md:py-16 lg:pt-24 lg:pb-24">
         {/* Soft blurred gradient blobs — brand blue + pink, kept minimal */}
         <div
           aria-hidden
@@ -22,13 +25,12 @@ export default function Hero() {
         <div className="relative z-10 mx-auto px-4 sm:px-8 xl:px-0">
           <div className="text-center">
             <h1 className="mx-auto mb-5 w-full max-w-[820px] text-4xl font-bold !leading-[1.1] text-title-color sm:text-5xl lg:text-6xl">
-              Built for Progress.
-              <span className="block text-primary">Ready for Power.</span>
+              <span className="block">Every person.</span>
+              <span className="block">Every channel.</span>
+              <span className="block text-primary">One campaign.</span>
             </h1>
             <p className="mx-auto mb-9 w-full max-w-[680px] text-base text-text-color-secondary sm:text-lg">
-              The all-in-one campaigning platform for progressive organisations –
-              texting, calls, doorknocking, surveys, audiences and Australian
-              data in one place.
+              The all-in-one campaigning platform for progressive organisations.
             </p>
 
             <MarketingLaunchpad tone="light">
@@ -45,14 +47,6 @@ export default function Hero() {
                 </Link>
               </div>
             </MarketingLaunchpad>
-
-            {/* The showreel leads: a visitor sees the product working before they scroll. It
-                brings its own step rail and play/pause; the gradient card above is its backdrop,
-                so it renders bare here rather than in its own section. The demographics map that
-                used to sit in this slot is now <HighlightMapping /> in the lower third. */}
-            <div className="mx-auto mt-14 w-full max-w-[1100px] pb-14 md:mt-16 md:pb-16">
-              <CapabilityShowreel />
-            </div>
           </div>
         </div>
       </div>

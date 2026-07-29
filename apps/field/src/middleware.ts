@@ -36,9 +36,12 @@ export function middleware(req: NextRequest): NextResponse {
 
 export const config = {
   // Gate everything except Next internals, the PWA service-worker assets, static
-  // files (so the login bounce never blocks JS/CSS/icons), and the keep-warm cron
-  // target (unauthenticated by design — must reach the lambda, not bounce at the edge).
+  // files (so the login bounce never blocks JS/CSS/icons), the keep-warm cron
+  // target (unauthenticated by design — must reach the lambda, not bounce at the edge)
+  // and `/demo` (the public, read-only walk view the marketing site embeds — it renders
+  // fixtures and calls no API, see app/demo/page.tsx). `demo(?:$|/)` so a future
+  // `/demolition` route would still be gated.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|workbox-|worker-|fallback-|images/|icons/|api/warm|.*\\.(?:png|jpg|jpeg|svg|gif|ico|json|js|css|woff2?)).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|workbox-|worker-|fallback-|images/|icons/|api/warm|demo(?:$|/)|.*\\.(?:png|jpg|jpeg|svg|gif|ico|json|js|css|woff2?)).*)",
   ],
 };

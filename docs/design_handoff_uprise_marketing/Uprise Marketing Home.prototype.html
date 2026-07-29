@@ -229,7 +229,7 @@ body{
    ========================================================================= */
 .hero{
   position:relative; min-height:100svh; display:grid; align-items:center;
-  padding:124px 0 84px; overflow:hidden; isolation:isolate;
+  padding:112px 0 72px; overflow:hidden; isolation:isolate;
 }
 .plane{ position:absolute; inset:-10% -5%; z-index:-1; pointer-events:none; will-change:transform }
 
@@ -268,7 +268,9 @@ body{
 @media (pointer:fine){ .hero:hover .spot{ opacity:1 } }
 
 .hero__in{ position:relative; text-align:center; display:grid; justify-items:center; gap:0 }
-.hero .display{ margin:20px 0 0; max-width:16ch }
+/* Three lines, not two – stepped down from the shared .display scale so the whole
+   opening (headline + lede + CTAs + coverage ticker) still clears one viewport. */
+.hero .display{ margin:18px 0 0; max-width:15ch; font-size:clamp(42px,6.2vw,96px) }
 /* Solid brand, not a gradient. A per-word gradient restarts inside every mask
    and reads as three mismatched washes; one flat indigo with a soft bloom
    behind it holds the line together at display size. */
@@ -278,7 +280,7 @@ body{
 
 /* live counter strip — the film's opening numbers */
 .ticker{
-  margin-top:46px; display:flex; gap:0; flex-wrap:wrap; justify-content:center;
+  margin-top:38px; display:flex; gap:0; flex-wrap:wrap; justify-content:center;
   border-top:1px solid var(--line); border-bottom:1px solid var(--line);
   background:rgba(255,255,255,.5);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
@@ -758,12 +760,12 @@ body{
       <span class="mono eyebrow">Australia · multichannel organising</span>
 
       <h1 class="display" id="heroH">
-        <span class="mask"><span style="--d:60ms">Built</span></span>
-        <span class="mask"><span style="--d:120ms">for</span></span>
-        <span class="mask"><span style="--d:180ms">Progress.</span></span><br>
-        <span class="mask"><span class="accent" style="--d:280ms">Ready</span></span>
-        <span class="mask"><span class="accent" style="--d:340ms">for</span></span>
-        <span class="mask"><span class="accent" style="--d:400ms">Power.</span></span>
+        <span class="mask"><span style="--d:60ms">Every</span></span>
+        <span class="mask"><span style="--d:120ms">person.</span></span><br>
+        <span class="mask"><span style="--d:220ms">Every</span></span>
+        <span class="mask"><span style="--d:280ms">channel.</span></span><br>
+        <span class="mask"><span class="accent" style="--d:400ms">One</span></span>
+        <span class="mask"><span class="accent" style="--d:460ms">campaign.</span></span>
       </h1>
 
       <p class="lede" data-rise style="--d:620ms">

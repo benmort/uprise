@@ -16,12 +16,19 @@ const buttonVariants = cva(
         warning: "bg-warning-container text-warning-foreground hover:opacity-90",
         success: "bg-success text-white hover:opacity-90",
         link: "text-primary underline-offset-4 hover:underline",
+        // The marketing CTA pair. `cta` carries a brand glow and a hover lift rather than a
+        // flat hover shade, because it sits on a gradient wash where a colour-only change
+        // reads as nothing happening. Pair with size="pill".
+        cta: "bg-primary text-primary-foreground shadow-[0_12px_28px_-10px_hsl(var(--primary)/0.7)] transition-all hover:bg-brand-600 hover:-translate-y-0.5",
+        ctaOutline:
+          "border border-border bg-background text-foreground transition-all hover:border-foreground hover:-translate-y-0.5",
       },
       size: {
         default: "h-11 px-4 py-2",
         sm: "h-11 px-3 text-sm",
         lg: "h-12 px-6 text-base",
         icon: "h-11 w-11",
+        pill: "h-13 rounded-full px-7 text-base font-semibold",
       },
     },
     defaultVariants: {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   BrandLoadingScreen,
   BrandStyle,
@@ -28,6 +29,18 @@ import { MeDrawerProvider } from "./me-drawer";
  */
 export function FieldShell({ children }: { children: React.ReactNode }) {
   const { counts } = useSyncQueue();
+  /**
+   * The public demo view (`/demo`) has no session BY DESIGN: it renders fixture data so the
+   * marketing site can embed the real canvasser screens. Without this the shell would bounce a
+   * visitor who was never signed in to the volunteer login, and the brand fetch below would 401.
+   * Everything else — the offline banner, the layout, the screens themselves — is identical, which
+   * is the point: the demo is the app, not a mock of it.
+   */
+  const isDemo = usePathname()?.startsWith("/demo") ?? false;
+  // NOT seeded from isDemo: `usePathname()` is empty during SSR, so seeding it would render the
+  // loader on the server and the children on the client — a hydration mismatch that throws the
+  // whole root back to client rendering. Both sides start at the loader and the effect below
+  // flips it on the first client pass instead.
   const [ready, setReady] = useState(false);
   // Volunteer id in React state so the installed-app auto-downloader fires once the session
   // resolves (the lib getter is set imperatively; state makes the hook react to it).
@@ -49,6 +62,14 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
   // instead of waiting behind it (a serial round-trip was the main cold-load delay). A first
   // visit (no cached id) still waits for the check, showing the branded loader.
   useEffect(() => {
+    // No session to resolve on the demo view, and nothing to persist for a visitor who is
+    // browsing fixtures — show it and skip the whole boot path rather than letting it 401 and
+    // bounce a visitor who was never signed in.
+    if (isDemo) {
+      setReady(true);
+      return;
+    }
+
     let alive = true;
     const cached = getTenantBrand();
     if (cached) setBootBrand({ name: cached.name, logoUrl: cached.logoUrl });
@@ -143,7 +164,7 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [isDemo]);
 
   // Until the session resolves (first visit), paint the shell + a branded loader OVER the
   // skeleton — never a blank screen. This component SSRs, so it's in the very first HTML.
@@ -174,8 +195,10 @@ export function FieldShell({ children }: { children: React.ReactNode }) {
         <OfflineBanner pending={counts.PENDING ?? 0} />
         <main className="flex-1 overflow-auto p-4">{children}</main>
       </div>
-      {/* Shift-start location prompt — blocks over the content until granted or dismissed. */}
-      <LocationGate />
+      {/* Shift-start location prompt — blocks over the content until granted or dismissed. Never on
+          the demo: it is read-only, it is usually inside an iframe on the marketing site, and asking
+          a browsing visitor for their location would be both useless and hostile. */}
+      {isDemo ? null : <LocationGate />}
     </MeDrawerProvider>
   );
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { NextRequest } from "next/server";
-import { middleware } from "./middleware";
+import { config, middleware } from "./middleware";
 
 /**
  * The middleware is the app's SSO gate: pass through when the session cookie is
@@ -141,5 +141,37 @@ describe("middleware", () => {
     const url = new URL(res.headers.get("location") as string);
     expect(url.origin).toBe("https://auth.uprise.org.au");
     expect(url.pathname).toBe("/volunteer");
+  });
+});
+
+/**
+ * The matcher is the other half of the gate: the middleware above never runs for a path the
+ * matcher excludes. That's how `/demo` (the public read-only walk view the marketing site embeds)
+ * stays reachable without a session — so it needs asserting, not assuming.
+ */
+describe("config.matcher", () => {
+  const pattern = new RegExp(`^${config.matcher[0]}$`);
+  /** True when the middleware WOULD run for this path (i.e. the path is gated). */
+  const gated = (path: string) => pattern.test(path);
+
+  it("exempts the public demo view and anything under it", () => {
+    expect(gated("/demo")).toBe(false);
+    expect(gated("/demo/glebe")).toBe(false);
+  });
+
+  it("still gates a path that merely starts with the word demo", () => {
+    expect(gated("/demolition")).toBe(true);
+  });
+
+  it("gates the volunteer screens", () => {
+    for (const path of ["/", "/shifts", "/get-turf", "/me", "/texts", "/abc123/door/xyz"]) {
+      expect(gated(path), `${path} should be gated`).toBe(true);
+    }
+  });
+
+  it("exempts the service worker, static assets and the keep-warm cron", () => {
+    for (const path of ["/sw.js", "/manifest.webmanifest", "/icons/icon.png", "/api/warm"]) {
+      expect(gated(path), `${path} should be exempt`).toBe(false);
+    }
   });
 });

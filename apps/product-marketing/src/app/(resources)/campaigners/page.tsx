@@ -1,6 +1,10 @@
 import React from "react";
 import Link from "next/link";
 import { Building2, Globe, Palette, Layers, Users, ShieldCheck } from "lucide-react";
+import FeatureRows from "@/components/marketing/sections/FeatureRows";
+import PillarRows from "@/components/marketing/sections/PillarRows";
+import SurveyBuilder from "@/components/marketing/sections/SurveyBuilder";
+import SectionHeading from "@/components/marketing/SectionHeading";
 
 export const metadata = {
   title: "Campaigners – Multi-tenant & multi-brand portals | Uprise",
@@ -84,6 +88,23 @@ export default function ForCampaignersPage() {
           </div>
         </div>
       </section>
+
+      {/* What every one of those brands gets. The three shared sections the homepage also draws on
+          (components/marketing/sections/*): the pillars, the toolkit rows, and the survey builder —
+          a network buying Scale is buying all of it per tenant, so it belongs on this page too. */}
+      <section className="pt-4">
+        <div className="container">
+          <SectionHeading
+            eyebrow="Included in every tenant"
+            title="The whole platform, in each of your portals"
+            subtitle="Nothing is held back per brand – every tenant gets the same outreach, canvassing and data stack."
+          />
+        </div>
+      </section>
+
+      <PillarRows />
+      <SurveyBuilder />
+      <FeatureRows heading={false} />
 
       <section className="pb-16 md:pb-24">
         <div className="container">

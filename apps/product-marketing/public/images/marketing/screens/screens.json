@@ -1,5 +1,5 @@
 {
-  "_comment": "Written by `pnpm marketing:shots` (apps/admin/scripts/marketing-shots.mjs). Each entry carries the capture's TRUE pixel dimensions so components never hardcode a wrong aspect ratio, plus alt text recorded at capture time so it can't drift from the picture. Empty until the pipeline has been run against a seeded local environment; CapabilityShowcase renders a 'pending capture' placeholder for any missing key.",
+  "_comment": "Written by `pnpm marketing:shots` (apps/admin/scripts/marketing-shots.mjs). Each entry carries the capture's TRUE pixel dimensions so components never hardcode a wrong aspect ratio, plus alt text recorded at capture time so it can't drift from the picture. Empty until the pipeline has been run against a seeded local environment; CapabilityShowcase renders a 'pending capture' placeholder for any missing key. NOTE: four entries are nulled with an `invalidReason` — their PNGs did not show the surface the entry claimed (three were the same ngrok error page, one was the sign-in screen). A nulled entry reads as 'not captured yet', so `screen()` returns null and consumers render nothing rather than the wrong picture. Re-run the pipeline against a live local env to refill them.",
   "branding": {
     "file": "/images/marketing/screens/branding@2x.png",
     "width": 2584,
@@ -23,15 +23,16 @@
     "bytes": 170260
   },
   "dashboard": {
-    "file": "/images/marketing/screens/dashboard@2x.png",
-    "width": 2584,
-    "height": 1672,
-    "alt": "The Uprise campaign dashboard: doors knocked, contact rate and volunteer activity for a live doorknock campaign",
+    "file": null,
+    "width": null,
+    "height": null,
+    "alt": null,
     "route": "/dashboard",
     "clip": "main",
     "theme": "light",
-    "capturedAt": "2026-07-28T01:31:59.420Z",
-    "bytes": 241246
+    "capturedAt": null,
+    "bytes": null,
+    "invalidReason": "light capture is an ngrok ERR_NGROK_8012 error page, not the dashboard"
   },
   "dashboard-dark": {
     "file": "/images/marketing/screens/dashboard-dark@2x.png",
@@ -67,15 +68,16 @@
     "bytes": 367891
   },
   "demographics": {
-    "file": "/images/marketing/screens/demographics@2x.png",
-    "width": 2584,
-    "height": 1672,
-    "alt": "ABS census demographics mapped across Australia in Uprise, shaded by median age",
+    "file": null,
+    "width": null,
+    "height": null,
+    "alt": null,
     "route": "/data/demographics?ind=median_age&view=map",
     "clip": "main",
     "theme": "light",
-    "capturedAt": "2026-07-28T01:31:59.420Z",
-    "bytes": 1092498
+    "capturedAt": null,
+    "bytes": null,
+    "invalidReason": "light capture is an ngrok ERR_NGROK_8012 error page, not the map"
   },
   "demographics-dark": {
     "file": "/images/marketing/screens/demographics-dark@2x.png",
@@ -89,15 +91,16 @@
     "bytes": 846062
   },
   "field-walk": {
-    "file": "/images/marketing/screens/field-walk@2x.png",
-    "width": 804,
-    "height": 1748,
-    "alt": "The Uprise canvasser app on a phone, showing the next doors on a walk list",
+    "file": null,
+    "width": null,
+    "height": null,
+    "alt": null,
     "route": "/cms3ygozx00081fxfjdbvkved",
     "clip": "page",
     "theme": "light",
-    "capturedAt": "2026-07-28T01:39:46.004Z",
-    "bytes": 121388
+    "capturedAt": null,
+    "bytes": null,
+    "invalidReason": "capture is the field sign-in screen, not a walk list"
   },
   "field-walk-dark": {
     "file": "/images/marketing/screens/field-walk-dark@2x.png",
@@ -111,15 +114,16 @@
     "bytes": 121388
   },
   "inbox": {
-    "file": "/images/marketing/screens/inbox@2x.png",
-    "width": 2584,
-    "height": 1672,
-    "alt": "The Uprise shared team inbox, with SMS conversations from supporters claimed across the team",
+    "file": null,
+    "width": null,
+    "height": null,
+    "alt": null,
     "route": "/inbox",
     "clip": "main",
     "theme": "light",
-    "capturedAt": "2026-07-28T01:31:59.420Z",
-    "bytes": 204421
+    "capturedAt": null,
+    "bytes": null,
+    "invalidReason": "light capture is an ngrok ERR_NGROK_8012 error page, not the inbox"
   },
   "inbox-dark": {
     "file": "/images/marketing/screens/inbox-dark@2x.png",
