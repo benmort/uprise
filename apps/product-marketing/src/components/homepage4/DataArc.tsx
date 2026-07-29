@@ -3,6 +3,7 @@ import { MapPinned, Users } from "lucide-react";
 import NotableFeatureRow from "@/components/marketing/NotableFeatureRow";
 import RevealScope from "./RevealScope";
 import { cssVars } from "./parts";
+import { SECTION } from "./content";
 import { ATLAS, AU_GRID, ELECTORATE } from "./sections";
 
 const SEQ = ["--hp4-seq-1", "--hp4-seq-2", "--hp4-seq-3", "--hp4-seq-4", "--hp4-seq-5"];
@@ -39,7 +40,7 @@ export default function DataArc() {
       </section>
 
       {/* Beat two, on ink: the whole country as a census choropleth. */}
-      <RevealScope id="hp4-atlas" className="hp4-atlas">
+      <RevealScope id={SECTION.data} className="hp4-atlas">
         <div className="hp4-shell hp4-agrid">
           <div>
             <div className="hp4-matrix" role="img" aria-label="Australia, shaded by census indicator">

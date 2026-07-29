@@ -2,6 +2,7 @@ import React from "react";
 import Showreel from "@/components/marketing/Showreel";
 import RevealScope from "./RevealScope";
 import { SectionHead, cssVars } from "./parts";
+import { SECTION } from "./content";
 import { USE_CASES } from "./sections";
 
 /**
@@ -14,7 +15,7 @@ import { USE_CASES } from "./sections";
  */
 export default function UseCases() {
   return (
-    <RevealScope id="hp4-campaigns" className="hp4-types">
+    <RevealScope id={SECTION.campaigns} className="hp4-types">
       <div className="hp4-shell">
         <SectionHead eyebrow={USE_CASES.eyebrow} title={USE_CASES.title} />
 

@@ -14,8 +14,8 @@ export default function BlogIndexPage() {
   const posts = getAllPosts();
 
   return (
-    <main className="pt-28 md:pt-32">
-      <div className="container py-16 md:py-24 lg:py-30">
+    <main className="pt-17.5">
+      <div className="container pb-16 pt-17.5 md:pb-24 lg:pb-30">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-wide text-primary">
             Uprise blog

@@ -17,13 +17,14 @@ export const metadata: Metadata = {
  */
 export default function HandbookIndexPage() {
   return (
-    <DocumentationLayout
-      title="The Uprise handbook"
-      description="How organisers actually run a campaign – the scenarios end to end, and the managing in between."
-      navigation={handbookNavigation()}
-      exactMatchHrefs={["/docs"]}
-    >
+    <DocumentationLayout navigation={handbookNavigation()} exactMatchHrefs={["/docs"]} siteChrome>
       <div className="mx-auto max-w-4xl">
+        <h1 className="mb-3 mt-8 text-3xl font-bold text-gray-900">The Uprise handbook</h1>
+        <p className="mb-10 text-lg leading-relaxed text-gray-700">
+          How organisers actually run a campaign – the scenarios end to end, and the managing in
+          between.
+        </p>
+
         <p className="mb-10 text-lg leading-relaxed text-gray-700">
           These pages are about the work, not the software. If you are looking for how Uprise is
           built – services, data flow, deployment – that lives in the{" "}

@@ -40,13 +40,9 @@ export default async function HandbookPage({ params }: HandbookPageProps) {
   const content = readHandbookMarkdown(doc.slug);
   if (content === null) notFound();
 
+  // No title/description passed – the markdown opens with its own h1 and lede.
   return (
-    <DocumentationLayout
-      title={doc.title}
-      description={doc.description}
-      navigation={handbookNavigation()}
-      exactMatchHrefs={["/docs"]}
-    >
+    <DocumentationLayout navigation={handbookNavigation()} exactMatchHrefs={["/docs"]} siteChrome>
       <div className="mx-auto max-w-4xl">
         <MarkdownRenderer content={content} />
         <div className="mt-12 border-t border-gray-200 pt-6">

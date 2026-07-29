@@ -228,6 +228,12 @@
   padding: 132px 0 110px;
   overflow: hidden;
   isolation: isolate;
+  /* The splash is a composed image, not a document: dragging across the masked headline or the
+     counting ticker only smears selection highlight over the wash. Inherited, so it covers the
+     eyebrow, headline, lede, button labels, ticker and scroll cue in one declaration – the links
+     and buttons themselves still behave normally. Sections below the fold stay selectable. */
+  -webkit-user-select: none;
+  user-select: none;
   background-image:
     linear-gradient(to top, var(--hp4-paper) 0%, rgba(255, 255, 255, 0) 22%),
     linear-gradient(to bottom right, var(--hp4-wash-from) 0%, var(--hp4-wash-to) 100%);

@@ -7,7 +7,7 @@ import { authAppUrl } from "@/lib/links";
 import { screen } from "@/lib/screens";
 import MarketingLaunchpad from "../MarketingLaunchpad";
 import { countUp } from "./count-up";
-import { HERO, SCENES, TICKER } from "./content";
+import { HERO, SCENES, SECTION, TICKER } from "./content";
 import "./homepage4.css";
 
 /** Inline CSS custom properties need a cast — React's CSSProperties has no index signature. */
@@ -276,7 +276,7 @@ export default function Homepage4Opening() {
   return (
     <div className="hp4-root" ref={rootRef}>
       {/* ============ HERO ============ */}
-      <section className="hp4-hero" id="hp4-hero">
+      <section className="hp4-hero" id={SECTION.overview}>
         <div className="hp4-plane hp4-aurora" data-rate="0.06">
           <b />
           <b />
@@ -286,7 +286,12 @@ export default function Homepage4Opening() {
         <div className="hp4-plane hp4-spot" />
 
         <div className="hp4-shell hp4-heroin">
-          <span className="hp4-mono hp4-eyebrow">{HERO.eyebrow}</span>
+          {/* Beat zero of the hero cascade. Without a reveal the eyebrow sat fully painted while
+              everything under it rose, which read as a static label above an animating page; at 0ms
+              it overlaps the headline's first word (60ms) closely enough to land as one movement. */}
+          <span className="hp4-mono hp4-eyebrow hp4-rise" style={cssVars({ "--d": "0ms" })}>
+            {HERO.eyebrow}
+          </span>
 
           <h1 className="hp4-display hp4-heroh">
             {HERO.titleLines.map((line, i) => {
@@ -355,7 +360,7 @@ export default function Homepage4Opening() {
       </section>
 
       {/* ============ THE PINNED STAGE ============ */}
-      <section className="hp4-stage" id="hp4-stage">
+      <section className="hp4-stage" id={SECTION.oneShift}>
         <div className="hp4-pin">
           {/* The second cue — see .hp4-cue--stage. Driven by paintStage(), not CSS, because it
               has to answer the pin's progress rather than the page's. */}

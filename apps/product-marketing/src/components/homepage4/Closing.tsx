@@ -5,6 +5,7 @@ import { authAppUrl } from "@/lib/links";
 import MarketingLaunchpad from "../MarketingLaunchpad";
 import RevealScope from "./RevealScope";
 import { cssVars } from "./parts";
+import { SECTION } from "./content";
 import { CLOSING } from "./sections";
 
 /**
@@ -13,7 +14,7 @@ import { CLOSING } from "./sections";
  */
 export default function Closing() {
   return (
-    <RevealScope id="hp4-close" className="hp4-finale">
+    <RevealScope id={SECTION.getStarted} className="hp4-finale">
       <div className="hp4-plane hp4-aurora" aria-hidden>
         <b />
         <b />

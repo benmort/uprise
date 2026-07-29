@@ -75,8 +75,43 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
   // Animate scroll-driven changes, but never the initial sync above.
   const shellTransition = scrollSynced ? "transition-all duration-500" : "";
 
+  /**
+   * The homepage's top-left cluster – wordmark and nav list – rises with the act rail's label
+   * instead of being painted flat before the splash has animated. Deliberately the SAME motion as
+   * homepage4.css `.hp4-rail .lbl`: a 0.35s opacity + 6px inward slide on --hp4-ease. Both start on
+   * the frame after mount, which is the frame <Chrome /> marks its first rail stop `is-on`, so the
+   * two land together.
+   *
+   * Glass mode only — every other route keeps a header that is simply there on arrival. The
+   * wordmark and the nav are driven from one flag rather than a shared wrapper because the nav's
+   * parent also holds the session-gated CTAs, which own their own separate fade (`revealed` above).
+   */
+  const [chromeRevealed, setChromeRevealed] = useState(false);
+  React.useEffect(() => {
+    if (!glass) return;
+    const id = requestAnimationFrame(() => setChromeRevealed(true));
+    return () => cancelAnimationFrame(id);
+  }, [glass]);
+
+  // Transitions `translate`, NOT `transform`: Tailwind v4's translate-x-* utilities set the
+  // standalone `translate` property (via --tw-translate-x), so a transition naming `transform`
+  // fades the opacity while the 6px slide snaps in one frame.
+  //
+  // motion-reduce keeps the cluster present and still: this is chrome a visitor navigates with, so
+  // it must never depend on a transition they've asked not to run.
+  const railReveal = glass
+    ? `transition-[opacity,translate] duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:translate-x-0 motion-reduce:opacity-100 motion-reduce:transition-none ${
+        chromeRevealed ? "translate-x-0 opacity-100" : "-translate-x-1.5 opacity-0"
+      }`
+    : "";
+
+  // select-none in glass mode only, i.e. on the homepage: the bar sits over the splash, which is
+  // deliberately unselectable (see homepage4.css `.hp4-hero`), and a drag that started on the
+  // headline shouldn't pick up the nav on its way past. Inherited, so it also covers the mobile
+  // drawer — <MobileMenu /> renders inside this header element. Every other route keeps its nav
+  // selectable.
   const headerClasses = glass
-    ? `fixed left-0 top-0 z-9999 flex w-full justify-center px-4 pb-2 sm:px-8 xl:px-12.5 ${shellTransition} ${
+    ? `fixed left-0 top-0 z-9999 flex w-full select-none justify-center px-4 pb-2 sm:px-8 xl:px-12.5 ${shellTransition} ${
         isScrolled ? "pt-3" : "pt-5"
       }`
     : isScrolled
@@ -101,7 +136,7 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
           justify-between keeps the CTAs hard right. */}
       <div className={innerClasses}>
         <div className="flex w-full items-center justify-between xl:w-auto xl:shrink-0">
-          <div className="inline-flex items-center gap-1 z-[9999]">
+          <div className={`inline-flex items-center gap-1 z-[9999] ${railReveal}`}>
             <Link aria-label="Uprise logo" href="/">
               <div className="flex items-center gap-2">
                 {/* On the homepage the mark wears the /homepage2 treatment: the flat brand-500
@@ -148,7 +183,7 @@ export default function Header({ glass = false }: { glass?: boolean } = {}) {
         </div>
 
         <div className="invisible hidden h-0 w-full items-center justify-between xl:visible xl:flex xl:h-auto xl:flex-1">
-          <nav>
+          <nav className={railReveal}>
             <ul className="flex flex-col gap-5 xl:flex-row xl:items-center 2xl:gap-8">
               <li className="nav__menu group relative xl:py-4">
                 <button className="inline-flex items-center gap-1.5 font-medium text-text-color group-hover:text-primary dark:text-white/60 dark:group-hover:text-white">

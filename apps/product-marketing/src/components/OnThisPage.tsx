@@ -10,9 +10,12 @@ interface Heading {
 
 interface OnThisPageProps {
   className?: string;
+  /** Sticky offset for the pinned card. Defaults to the standalone docs shell's; the handbook
+   *  passes a larger one so the card pins below the fixed site header instead of behind it. */
+  stickyTop?: string;
 }
 
-export default function OnThisPage({ className = "" }: OnThisPageProps) {
+export default function OnThisPage({ className = "", stickyTop = "top-8" }: OnThisPageProps) {
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeId, setActiveId] = useState<string>("");
 
@@ -82,7 +85,7 @@ export default function OnThisPage({ className = "" }: OnThisPageProps) {
   }
 
   return (
-    <div className={`sticky top-8 ${className}`}>
+    <div className={`sticky ${stickyTop} ${className}`}>
       <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">On This Page</h3>
         <nav className="space-y-1">

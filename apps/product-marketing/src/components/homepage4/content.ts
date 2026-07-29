@@ -17,17 +17,37 @@
  */
 
 /**
- * The left rail's stops, in page order. `id` must match a section id on the page — the rail
- * resolves them from the document, so a stop whose section is absent simply never activates.
+ * The homepage's section anchors, in page order.
+ *
+ * One source of truth for two things that have to agree: the `id` each section carries in its
+ * markup, and the rail stop that scrolls to it. The rail resolves its stops from the document, so
+ * a stop whose id is absent simply never activates — silently. Importing the id rather than
+ * repeating the string in each section is what stops that drifting.
+ *
+ * These are public URL fragments (uprise.org.au/#toolkit), so they say what the section is. The
+ * old `hp4-` prefix named the candidate this page was built as, and the labels had drifted from
+ * the ids besides ("Open" pointing at `#hp4-hero`); the CSS keeps `hp4-` on its classes, which are
+ * internal.
  */
+export const SECTION = {
+  overview: "overview",
+  oneShift: "one-shift",
+  toolkit: "toolkit",
+  data: "data",
+  teams: "teams",
+  campaigns: "campaigns",
+  getStarted: "get-started",
+} as const;
+
+/** The left rail's stops. Each label is its section's id in words – they name the same thing. */
 export const RAIL = [
-  { id: "hp4-hero", label: "Open" },
-  { id: "hp4-stage", label: "One shift" },
-  { id: "hp4-toolkit", label: "Toolkit" },
-  { id: "hp4-atlas", label: "Atlas" },
-  { id: "hp4-teams", label: "Teams" },
-  { id: "hp4-campaigns", label: "Campaigns" },
-  { id: "hp4-close", label: "Close" },
+  { id: SECTION.overview, label: "Overview" },
+  { id: SECTION.oneShift, label: "One shift" },
+  { id: SECTION.toolkit, label: "Toolkit" },
+  { id: SECTION.data, label: "Data" },
+  { id: SECTION.teams, label: "Teams" },
+  { id: SECTION.campaigns, label: "Campaigns" },
+  { id: SECTION.getStarted, label: "Get started" },
 ] as const;
 
 export const HERO = {
@@ -112,8 +132,8 @@ export const SCENES: Scene[] = [
     no: "03",
     heading: "Every reply lands in one claimable queue.",
     body: "SMS and WhatsApp arrive in a shared inbox the whole team works, live over SSE, with claims so nobody doubles up on the same conversation.",
-    facts: ["Shared + claimable", "Live over SSE", "Shown in dark theme"],
-    shotKey: "inbox-dark",
+    facts: ["Shared + claimable", "Live over SSE"],
+    shotKey: "inbox",
     frameWidth: 900,
     url: "app.uprise.org.au/inbox",
     satellites: [{ pos: "tr", cap: "Unified inbox", to: 24 }],

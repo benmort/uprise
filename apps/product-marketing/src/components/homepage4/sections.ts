@@ -326,7 +326,17 @@ export const GALLERY = {
    * the "dark" one is the actual route-ordered walk list (and renders light anyway — the capture's
    * theme metadata is wrong, its picture is right).
    */
-  phoneScreen: "field-walk-dark",
+  /**
+   * The poster behind the live phone embed (CanvassDemoFrame), so the frame is never empty before
+   * the iframe lands. Light, matching the rest of the page and the embed itself.
+   *
+   * KNOWN ISSUE, not introduced here: the `field-walk` shot is mis-captured. Its route resolves
+   * unauthenticated to the field app's public "Become a volunteer" page, so the image is that
+   * landing page rather than a walk list — and the manifest's alt text still claims "the next doors
+   * on a walk list", which is what a screen reader will announce. The dark variant has exactly the
+   * same problem. Needs a fix in the capture script's field-app session, not a key swap here.
+   */
+  phoneScreen: "field-walk",
 } as const;
 
 export const CLOSING = {

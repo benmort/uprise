@@ -1,6 +1,7 @@
 import React from "react";
 import RevealScope from "./RevealScope";
 import { SectionHead, cssVars } from "./parts";
+import { SECTION } from "./content";
 import {
   CANVASS_TILE,
   DISPOSITION_TILE,
@@ -35,7 +36,7 @@ const DOORS: Array<[number, number]> = [
  */
 export default function Toolkit() {
   return (
-    <RevealScope id="hp4-toolkit" className="hp4-const">
+    <RevealScope id={SECTION.toolkit} className="hp4-const">
       <div className="hp4-shell">
         <SectionHead eyebrow={TOOLKIT.eyebrow} title={TOOLKIT.title} lede={TOOLKIT.lede} />
 

@@ -1,6 +1,7 @@
 import React from "react";
 import RevealScope from "./RevealScope";
 import { MockCard, cssVars } from "./parts";
+import { SECTION } from "./content";
 import { TEAMS } from "./sections";
 
 /**
@@ -9,7 +10,7 @@ import { TEAMS } from "./sections";
  */
 export default function Teams() {
   return (
-    <RevealScope id="hp4-teams" className="hp4-split">
+    <RevealScope id={SECTION.teams} className="hp4-split">
       <div className="hp4-shell hp4-sgrid2">
         <div className="hp4-rise">
           <span className="hp4-mono hp4-eyebrow">{TEAMS.eyebrow}</span>
