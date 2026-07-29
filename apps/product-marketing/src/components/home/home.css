@@ -2784,16 +2784,54 @@
 }
 /* The phone sits over the map's bottom-right, the way it does in the field: the national
    picture behind, one door in front. */
+/* The same device shell as scene 02's drawn phone (`.home-phone` / `.home-pscr` /
+   `.home-pnotch`): a near-black bezel with a notch pill and camera dot, rather than the
+   white 6px border this used to have. Two phones on one page reading as two different
+   devices is the kind of detail that makes a page feel assembled rather than designed.
+
+   The notch is drawn with pseudo-elements instead of the `.home-pnotch` element, because
+   this slot's child is whatever <Gallery demo> was handed — the live iframe or the poster
+   — and it must not need a wrapper injected into it. Same trick as `.home-cmpscr`. */
 .home-gphone {
   position: absolute;
   right: -8px;
   bottom: -34px;
   width: clamp(128px, 20vw, 232px);
+  padding: 7px;
+  border-radius: 2rem;
+  background: #06070d;
+  box-shadow:
+    -24px 24px 70px 0 rgba(16, 24, 40, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.home-gphone::before,
+.home-gphone::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  z-index: 3;
+  translate: -50% 0;
+  border-radius: 99px;
+  pointer-events: none;
+}
+.home-gphone::before {
+  top: 11px;
+  width: 30%;
+  height: 11px;
+  background: #06070d;
+}
+.home-gphone::after {
+  top: 14px;
+  width: 4px;
+  height: 4px;
+  background: #1b2233;
+}
+/* The screen: whatever child is in the slot gets the inner radius and the clip, so the
+   live app and the poster are both cropped to the device rather than to a plain box. */
+.home-gphone > * {
   overflow: hidden;
-  border-radius: 22px;
-  border: 6px solid #fff;
+  border-radius: 1.55rem;
   background: #fff;
-  box-shadow: -24px 24px 70px 0 rgba(16, 24, 40, 0.24);
 }
 .home-gphone img,
 .home-gphone iframe {
