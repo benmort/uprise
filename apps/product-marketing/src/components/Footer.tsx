@@ -54,11 +54,21 @@ export default function Footer({
             </div>
           </div>
 
-          <div className="grid gap-8 text-sm sm:grid-cols-2 lg:flex lg:gap-14">
+          {/* Two columns from the smallest screen up. On mobile the short lists (Community,
+              Policies) pair off at half width each and align right, so they read as a block against
+              the long Resources list above them rather than as three ragged left-aligned stacks. The
+              wide list and the newsletter span both cells — Resources' labels wrap at half width,
+              and the signup needs its full measure. */}
+          <div className="grid grid-cols-2 gap-8 text-sm lg:flex lg:gap-14">
             {FOOTER.columns.map((col) => {
               const split = col.cols === 2;
               return (
-                <div key={col.heading} className="flex flex-col gap-2.5">
+                <div
+                  key={col.heading}
+                  className={`flex flex-col gap-2.5 ${
+                    split ? "col-span-2 sm:col-span-1" : "max-sm:text-right"
+                  }`}
+                >
                   <div className="font-semibold text-[#0C0E12]">{col.heading}</div>
                   {/* CSS multi-column fills DOWN then across, so a split list keeps its
                       reading order and needs no row-count maths as links are added.
@@ -80,7 +90,7 @@ export default function Footer({
                 </div>
               );
             })}
-            <div className="flex max-w-[30ch] flex-col gap-2.5">
+            <div className="col-span-2 flex max-w-[30ch] flex-col gap-2.5 sm:col-span-1">
               <div className="font-semibold text-[#0C0E12]">Newsletter</div>
               <div className="text-[#6B7280]">Subscribe for the latest updates</div>
               {/* The wired signup — posts to /marketing/newsletter and handles its own

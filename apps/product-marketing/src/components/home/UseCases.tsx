@@ -25,12 +25,28 @@ export default function UseCases() {
 
         <div className="home-ucards">
           {USE_CASES.cards.map((c, i) => (
-            <article className="home-ucard home-rise" key={c.title} style={cssVars({ "--d": `${(i % 3) * 70}ms` })}>
+            <article
+              className="home-ucard home-rise"
+              key={c.title}
+              style={cssVars({ "--d": `${(i % 3) * 70}ms`, "--img": `url(${c.image})` })}
+            >
               <h3 className="home-h3">{c.title}</h3>
               <p>{c.body}</p>
             </article>
           ))}
         </div>
+
+        {/* Licence attribution for the one image that requires it — see USE_CASES.credit. */}
+        <p className="home-ucredit">
+          {USE_CASES.credit.lead}{" "}
+          <a href={USE_CASES.credit.holderUrl} target="_blank" rel="noreferrer noopener">
+            {USE_CASES.credit.holder}
+          </a>
+          ,{" "}
+          <a href={USE_CASES.credit.licenceUrl} target="_blank" rel="noreferrer noopener">
+            {USE_CASES.credit.licence}
+          </a>
+        </p>
       </div>
     </RevealScope>
   );

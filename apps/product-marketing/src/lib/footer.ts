@@ -31,7 +31,7 @@ export const FOOTER = {
         { label: "Plans", href: "/plans" },
         { label: "Campaigners", href: "/campaigners" },
         { label: "Integrations", href: "/integrations" },
-        { label: "Developers", href: "/developers" },
+        // "Developers" (/developers) is hidden for now – see (community)/developers/page.tsx.
       ],
     },
     {
@@ -48,9 +48,11 @@ export const FOOTER = {
       cols: 1,
       links: [
         { label: "Terms of Service", href: "/terms-of-service" },
-        { label: "Privacy Policy", href: "/privacy-policy" },
+        // Shortened labels: the destinations keep their full "… Policy" headings, but in a
+        // one-word column the repeated "Policy" was the widest thing in it and said nothing.
+        { label: "Privacy", href: "/privacy-policy" },
         { label: "Security", href: "/security" },
-        { label: "Donations Policy", href: "/donations-policy" },
+        { label: "Donations", href: "/donations-policy" },
         { label: "Compliance", href: "/compliance" },
       ],
     },

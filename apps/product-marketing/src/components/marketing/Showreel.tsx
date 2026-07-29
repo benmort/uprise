@@ -44,9 +44,11 @@ type Slide = {
 const SLIDES: Slide[] = [
   {
     key: "comms",
-    // The `-dark` twin, because the light `inbox` capture in the manifest is an ngrok error page
-    // (see screens.json → invalidReason). Swap back once `pnpm marketing:shots` has been re-run.
-    screen: "inbox-dark",
+    // Light again: this used to point at the `-dark` twin because the light `inbox` capture was an
+    // ngrok error page, and `marketing:shots` has since been re-run against a live local env — the
+    // light entry is now the real inbox. The frame around it is `bg-gray-50`, and the homepage it
+    // sits on is light throughout, so the dark twin was the only dark block left in that band.
+    screen: "inbox",
     path: "app.uprise.org.au/inbox",
     title: "Every channel, one shared inbox",
     blurb: "Texts, WhatsApp and calls in one queue, claimed so nobody doubles up.",
@@ -60,16 +62,21 @@ const SLIDES: Slide[] = [
   },
   {
     key: "data",
-    // Likewise the light `demographics` capture — the dark one is the real map.
-    screen: "demographics-dark",
+    // Likewise re-captured: the light `demographics` entry is the same choropleth in the light
+    // theme, not the placeholder the old note described.
+    screen: "demographics",
     path: "app.uprise.org.au/data/demographics",
     title: "The whole country, already loaded",
     blurb: "ABS census, electoral boundaries and polling – no procurement, no import.",
   },
   {
     key: "actions",
-    screen: "segments",
-    path: "app.uprise.org.au/audience/segments",
+    // The public action page, not the segments screen that sits behind it. This slide's claim starts
+    // at the signature, and a petition with a live count toward its goal shows that; a list of
+    // segment rules is the same story told from the operator's end, after the interesting part.
+    // `petition` is hand-supplied rather than captured — see the note on its screens.json entry.
+    screen: "petition",
+    path: "campaign.org.au/hands-off-treaty",
     title: "Turn a signature into a shift",
     blurb: "Forms, petitions and surveys feed segments you can text the same day.",
   },

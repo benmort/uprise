@@ -381,8 +381,11 @@ export const DEMOGRAPHICS = {
   eyebrow: "Where to knock first",
   title: "Census demographics, mapped to your turf",
   body: "Shade SA1s by a blended where-to-knock score – doors, persuadability, supporters, fit, walkability and coverage freshness – and send volunteers where the movement actually is.",
-  /** The dark capture, because this beat sits on ink. */
-  screen: "demographics-dark",
+  /** The LIGHT capture: this beat used to sit on ink and no longer does, and a dark screenshot on
+   *  a light band reads as a hole in the page. The showreel still uses `demographics-dark` with a
+   *  note that the light capture "isn't the real map" — that note predates a re-capture; the light
+   *  one is now the same choropleth, shot in the light theme. */
+  screen: "demographics",
 } as const;
 
 /**
@@ -479,6 +482,40 @@ export const RESEARCH = {
 
 /* ============================================================ use cases, roadmap */
 
+/**
+ * Who it's for. Each card carries a photograph of the WORK behind its copy — the only place on a
+ * page that otherwise draws its own product surfaces where a photograph earns its place, because
+ * the subject here is the campaign rather than the software.
+ *
+ * `image` is a background, so it is decorative and carries no alt text: every card states its
+ * subject in the heading beside it, and a screen reader announcing "suburb photographed from
+ * above" before "Electoral & candidate" would only be noise.
+ *
+ * Files in public/images/marketing/use-cases/. Five are Unsplash (free commercial use, attribution
+ * not required — recorded anyway, because the provenance of a public-facing asset should never be a
+ * mystery); ballot.jpg is the one that carries a licence OBLIGATION, hence `credit` below:
+ *
+ *   electoral.jpg   a suburb from above       Maximillian Conacher · unsplash /photos/top-view-photo-of-houses-sPpe2D7VbpM
+ *   advocacy.jpg    a call taken outdoors     Resume Genius · unsplash /photos/a-woman-talking-on-a-cell-phone-in-a-park-YyWzCbpNXvw
+ *   organising.jpg  briefing a group          Frederick Shaw · unsplash /photos/woman-in-red-shirt-speaking-to-group-outdoors-group-outdoors-group-outdoors-eJjbInxdbVE
+ *   union.jpg       workers in hi-vis         Shubham Verma · unsplash /photos/men-wearing-reflective-vest-and-hard-helmets-Tlyteh1470o
+ *   gotv.jpg        a map open on a phone     Sebastian Hietsch · unsplash /photos/person-touching-smartphone-RUJYUXwj3s0
+ *   ballot.jpg      AEC ballot boxes, 2016    Australian Electoral Commission · CC BY 3.0 AU
+ *                   federal election          commons "File:2016 Australian Election - Ballot boxes 1.jpg"
+ *
+ * Two rules held while picking them. Nothing carrying another organisation's branding — a
+ * community-volunteers shot was dropped for wearing a real charity's livery. And nothing American:
+ * the obvious ballot photographs are all US flags and "VOTE HERE · DISTRICT #12", which on an
+ * Australian non-partisan platform would state something untrue.
+ *
+ * ballot.jpg is the AEC's own photograph of voters posting ballots into the purple cardboard boxes —
+ * unmistakably Australian and party-free, which no photograph OF an Australian polling place is:
+ * every one on Commons is ringed with Greens/Labor/Liberal corflutes and candidate shirts. It is
+ * only 576 × 384, the largest the AEC released, so it is soft on a 2× display. That was the trade:
+ * a slightly soft real AEC photo over a crisp American voting booth.
+ */
+const USE_CASE_IMAGES = "/images/marketing/use-cases";
+
 export const USE_CASES = {
   eyebrow: "Built for the work",
   title: "Whatever kind of campaign you're running",
@@ -486,28 +523,47 @@ export const USE_CASES = {
     {
       title: "Electoral & candidate",
       body: "Turf, doors and texts from the candidate's own number – with the electorate's data already in the account.",
+      image: `${USE_CASE_IMAGES}/electoral.jpg`,
     },
     {
       title: "Advocacy & issue",
       body: "P2P SMS and calls, support captured on a five-point scale, every contact synced back to Action Network.",
+      image: `${USE_CASE_IMAGES}/advocacy.jpg`,
     },
     {
       title: "Community organising",
       body: "Shifts, a shared claimable inbox and a live action room that shows who's out there right now.",
+      image: `${USE_CASE_IMAGES}/organising.jpg`,
     },
     {
       title: "Union & member",
       body: "Reach members by text and phone, survey them at the door, segment by workplace or region.",
+      image: `${USE_CASE_IMAGES}/union.jpg`,
     },
     {
       title: "GOTV & field",
       body: "Optimised walk lists, an offline-first canvasser app and pace-vs-target goals on the day that counts.",
+      image: `${USE_CASE_IMAGES}/gotv.jpg`,
     },
     {
       title: "Referendum & ballot",
       body: "Map the electorate, canvass yes/no with branching surveys, watch the contact funnel close.",
+      image: `${USE_CASE_IMAGES}/ballot.jpg`,
     },
   ],
+  /**
+   * Visible attribution, because CC BY 3.0 AU requires it and the other five images do not — the
+   * Unsplash Licence asks for nothing. A comment in this file credits nobody: the licence wants the
+   * attribution where the work is used. One quiet line under the grid discharges it.
+   */
+  credit: {
+    lead: "Ballot boxes:",
+    holder: "Australian Electoral Commission",
+    holderUrl:
+      "https://commons.wikimedia.org/wiki/File:2016_Australian_Election_-_Ballot_boxes_1.jpg",
+    licence: "CC BY 3.0 AU",
+    licenceUrl: "https://creativecommons.org/licenses/by/3.0/au/",
+  },
 } as const;
 
 export const ROADMAP = {

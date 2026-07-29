@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { BookOpen, LifeBuoy, Mail, MessagesSquare, Rocket, ShieldCheck } from "lucide-react";
+import { LifeBuoy, Mail, MessagesSquare, Rocket, ShieldCheck } from "lucide-react";
 
 export const metadata = {
   title: "Support Centre – Help with Uprise | Uprise",
@@ -16,13 +16,8 @@ const CHANNELS = [
     href: "/campaigners",
     cta: "Explore the platform",
   },
-  {
-    icon: BookOpen,
-    title: "Developer docs",
-    body: "Architecture, data model and integration guides for teams building on or alongside Uprise.",
-    href: "/developers",
-    cta: "Read the docs",
-  },
+  // The "Developer docs" card (/developers) is hidden for now – see
+  // (community)/developers/page.tsx for what to restore.
   {
     icon: MessagesSquare,
     title: "Contact the team",

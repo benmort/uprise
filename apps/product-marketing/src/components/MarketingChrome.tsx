@@ -19,9 +19,21 @@ const BARE_PREFIXES = ["/developers", "/homepage2", "/homepage3"];
 // EXACT paths, for the same reason as the glass list above.
 const FLUSH_FOOTER_PATHS = ["/"];
 
+// Same idea, but by prefix – these sections close themselves on every page beneath them.
+//
+// The handbook's shell (DocumentationLayout, siteChrome) is bg-gray-50 and carries pb-20. The
+// footer's `spaced` margin has to go with it: a margin is exterior, so it is painted by the nearest
+// ancestor with a background – the `bg-background` wrapper in layout.tsx, which is white – and on a
+// grey doc page that showed up as a white band above the footer. The shell's padding is the same
+// 80px in the right colour, so the margin here would only double it.
+const FLUSH_FOOTER_PREFIXES = ["/docs"];
+
 export default function MarketingChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const bare = BARE_PREFIXES.some((p) => pathname?.startsWith(p));
+  const flushFooter =
+    FLUSH_FOOTER_PATHS.includes(pathname ?? "") ||
+    FLUSH_FOOTER_PREFIXES.some((p) => pathname?.startsWith(p));
 
   if (bare) {
     return <>{children}</>;
@@ -34,7 +46,7 @@ export default function MarketingChrome({ children }: { children: React.ReactNod
           the page reads as two different sites. */}
       <Header />
       <div className="flex-1">{children}</div>
-      <Footer spaced={!FLUSH_FOOTER_PATHS.includes(pathname ?? "")} />
+      <Footer spaced={!flushFooter} />
     </>
   );
 }

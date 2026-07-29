@@ -25,13 +25,11 @@ export default function HandbookIndexPage() {
           between.
         </p>
 
+        {/* The paragraph that pointed at /developers is dropped while the developer hub is hidden –
+            see (community)/developers/page.tsx. Restore it alongside the nav links, since it is the
+            only thing that told handbook readers where the architecture docs live. */}
         <p className="mb-10 text-lg leading-relaxed text-gray-700">
-          These pages are about the work, not the software. If you are looking for how Uprise is
-          built – services, data flow, deployment – that lives in the{" "}
-          <Link href="/developers" className="text-primary underline hover:opacity-80">
-            developer documentation
-          </Link>
-          .
+          These pages are about the work, not the software.
         </p>
 
         {HANDBOOK_SECTIONS.map((section) => (

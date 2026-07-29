@@ -1,4 +1,55 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Uprise">
-  <rect width="32" height="32" rx="7.5" fill="#465fff"/>
-  <text x="16" y="23" text-anchor="middle" font-family="Outfit, Helvetica, Arial, sans-serif" font-size="20" font-weight="700" fill="#ffffff">U</text>
+  <!--
+    The Uprise mark. This is a faithful copy of the top-nav logo in Header.tsx, which draws the
+    same square in CSS; keep the two in step. Every non-nav mark on the site comes from this file
+    (Footer, /homepage3, the favicon, apple-touch and the PWA manifest), so until these numbers were
+    derived from the nav the site had a flat #465fff square everywhere and a gradient one only there.
+
+    Why an asset can't just reuse the nav's CSS: loaded through <img> or as a favicon, an SVG is an
+    isolated document. It cannot read the page's brand colour custom properties, and it cannot use
+    the Outfit webfont the page loads — the <text> element this replaced silently fell back to
+    Helvetica, so the footer's U was already a different letterform from the nav's. Both are solved
+    below, by inlining literal hex stops and shipping the glyph as an outline.
+
+    Deliberately NOT copied: the nav's box-shadow glow (0 6px 16px -6px). A shadow drawn inside this
+    viewBox would clip at the edges, and a halo on a 16px favicon reads as blur. It belongs to the
+    nav's context — add it there as a CSS class if another host wants it.
+  -->
+
+  <defs>
+    <!--
+      Equivalent of `linear-gradient(150deg, brand-400, brand-500 55%, brand-700)`.
+      CSS measures the angle clockwise from "to top", so 150deg runs down-and-right as the unit
+      vector (sin150, -cos150) = (0.5, 0.866). Per CSS Images 3 the gradient line is centred on the
+      box and its length is |W·sin A| + |H·cos A| = 16 + 27.713 = 43.713, which gives the endpoints
+      below. Stops are the @uprise/ui brand ramp as literals, since the vars aren't reachable here:
+      brand-400 #7592ff, brand-500 #465fff, brand-700 #2a31d8.
+    -->
+    <linearGradient id="uprise-mark-fill" gradientUnits="userSpaceOnUse"
+                    x1="5.072" y1="-2.928" x2="26.928" y2="34.928">
+      <stop offset="0" stop-color="#7592ff"/>
+      <stop offset="0.55" stop-color="#465fff"/>
+      <stop offset="1" stop-color="#2a31d8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rx 9 matches the nav's rounded-[9px] on its 32px box; it was 7.5 here, which read tighter. -->
+  <rect width="32" height="32" rx="9" fill="url(#uprise-mark-fill)"/>
+
+  <!--
+    Capital U from Outfit at wght 700 — the nav's font and weight — extracted as an outline from the
+    variable font, so it renders identically at every size and needs no font to be present.
+
+    The transform maps the font's 1000-unit em onto this viewBox at the nav's 16px type size
+    (scale 16/1000 = 0.016, negated on y because font y runs up while SVG y runs down). The glyph's
+    ink box is x 57..645, y -11..706 — 9.408 x 11.472 once scaled — so centring that in the 32
+    square puts the origin at x 10.384 and the baseline at y 21.56.
+
+    That centres the mark optically rather than reproducing the nav's line-box maths, which lands
+    the letter 0.36px lower and 0.16px further right (the latter an artefact of the nav's decorative
+    -0.02em tracking). At the 16–26px sizes this asset is actually used at, the difference is well
+    under a device pixel.
+  -->
+  <path fill="#fff" transform="translate(10.384 21.56) scale(0.016 -0.016)"
+        d="M352.2 -11.0Q265.3 -11.0 198.8 26.2Q132.4 63.4 94.7 128.8Q57.0 194.1 57.0 277.5V706.0H214.5V269.0Q214.5 226.5 232.7 195.7Q251.0 164.9 282.3 148.4Q313.6 132.0 352.1 132.0Q391.5 132.0 421.7 148.4Q452.0 164.9 469.5 195.4Q487.0 225.9 487.0 268.0V706.0H645.0V276.5Q645.0 193.0 607.8 128.3Q570.6 63.5 504.8 26.2Q439.0 -11.0 352.2 -11.0Z"/>
 </svg>

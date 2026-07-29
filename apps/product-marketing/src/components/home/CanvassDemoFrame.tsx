@@ -49,7 +49,11 @@ export default function CanvassDemoFrame() {
     return () => io.disconnect();
   }, []);
 
-  const src = `${fieldAppUrl().replace(/\/$/, "")}/demo`;
+  // `?embed=1` suppresses the demo page's own "Demo data" callout — the section around this phone
+  // already states it, and in a phone this size the notice costs a third of the screen. The "Open
+  // the app" link below deliberately points at the plain URL, so anyone leaving the frame gets it.
+  const demoUrl = `${fieldAppUrl().replace(/\/$/, "")}/demo`;
+  const src = `${demoUrl}?embed=1`;
 
   return (
     <div ref={ref} className="home-demoframe">
@@ -71,7 +75,7 @@ export default function CanvassDemoFrame() {
           sizes="(min-width: 1024px) 320px, 60vw"
         />
       ) : null}
-      <a className="home-demoopen" href={src} target="_blank" rel="noreferrer">
+      <a className="home-demoopen" href={demoUrl} target="_blank" rel="noreferrer">
         Open the app
       </a>
     </div>

@@ -118,8 +118,15 @@ export default function DocumentationLayout({
   // The site header is 70px at xl (4.375rem – the CTA slot's reserved height) and 64px below it,
   // and it is fixed, so under the global chrome the whole shell starts below it and the two
   // sticky columns pin to the same line. pt-17.5 is the offset the marketing pages already use.
+  //
+  // pb-20 closes the page from INSIDE this shell, so the space above the footer is this layout's
+  // bg-gray-50. It replaces the footer's own mt-20, which is an exterior margin and therefore
+  // painted by the nearest ancestor that has a background – the `bg-background` wrapper in
+  // layout.tsx, which is white. On a white-ish marketing page that is invisible; on these grey doc
+  // pages it read as a white band between the content and the footer. Same 80px, correct colour.
+  // MarketingChrome drops the footer's margin for /docs to match – see FLUSH_FOOTER_PREFIXES.
   const shellClasses = siteChrome
-    ? "flex bg-gray-50 pt-17.5"
+    ? "flex bg-gray-50 pt-17.5 pb-20"
     : "min-h-screen bg-gray-50 flex";
 
   // Off-canvas on mobile, a pinned column on desktop. Under the site header the open drawer
@@ -170,7 +177,12 @@ export default function DocumentationLayout({
       </div>
 
       {/* Sidebar */}
-      <div className={`w-80 bg-white shadow-lg lg:shadow-none ${sidebarPosition}`}>
+      {/* The nav sits on the page's own bg-gray-50 rather than a white panel: it is a table of
+          contents for the page, not a separate surface beside it, and the white column read as a
+          seam down the left. Opaque rather than transparent because on mobile this same element is
+          an off-canvas drawer over the content — `bg-gray-50` covers what it slides across, which
+          `bg-transparent` would not. */}
+      <div className={`w-80 bg-gray-50 shadow-lg lg:shadow-none ${sidebarPosition}`}>
         <div className="flex flex-col h-full">
           {/* Logo/Brand – standalone only; under the site header the wordmark is already up there. */}
           {!siteChrome && (
@@ -224,7 +236,10 @@ export default function DocumentationLayout({
                             className={`block pl-4 pr-3 py-2 text-sm font-medium rounded-md transition-colors relative ${
                               isActiveLink(item.href)
                                 ? "bg-blue-50 text-blue-700 border-r-2 border-blue-700"
-                                : "text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                                // hover:bg-white, not the old hover:bg-gray-50 — that was a tint
+                                // against a white panel and is invisible now the nav shares the
+                                // page's gray-50. White inverts the same relationship.
+                                : "text-gray-700 hover:bg-white hover:text-gray-900"
                             }`}
                           >
                             <span className="relative z-10">{item.title}</span>

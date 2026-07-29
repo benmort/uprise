@@ -130,8 +130,19 @@ export default function Header() {
   // the nav on its way past. Applied everywhere now that there is one treatment — chrome is not
   // text a visitor needs to copy. Inherited, so it also covers the mobile drawer; <MobileMenu />
   // renders inside this header element.
-  const headerClasses = `fixed left-0 top-0 z-9999 flex w-full select-none justify-center px-4 pb-2 sm:px-8 xl:px-12.5 ${shellTransition} ${
-    condenses && isScrolled ? "pt-3" : "pt-5"
+  // At rest the pill rides half as far from the top edge as it used to (pt-5 → pt-2.5), sitting
+  // over the hero wash that runs edge to edge behind it.
+  //
+  // Scrolled, the top gap closes to nothing (pt-0): that is the state where the page is travelling
+  // up behind the bar, and any gap above the pill is a strip of content sliding past over its top
+  // edge. Keyed on isScrolled, NOT on `condenses` — the glass arrives on scroll on every route (only
+  // the narrowing is homepage-only), so every route has content passing behind it to hide.
+  //
+  // What comes off the top goes onto the bottom, so the header's box stays about where it was. That
+  // box is only the band this fixed element covers and intercepts pointers over; pages clear the
+  // header with their own pt-17.5 rather than by measuring it.
+  const headerClasses = `fixed left-0 top-0 z-9999 flex w-full select-none justify-center px-4 sm:px-8 xl:px-12.5 ${shellTransition} ${
+    isScrolled ? "pt-0 pb-5" : "pt-2.5 pb-4.5"
   }`;
 
   // Skin and geometry are separate so NORMALISE_INNER_HEADER can hold one and keep the other: the
@@ -155,11 +166,15 @@ export default function Header() {
           <div className={`inline-flex items-center gap-1 z-[9999] ${railReveal}`}>
             <Link aria-label="Uprise logo" href="/">
               <div className="flex items-center gap-2">
-                {/* On the homepage the mark wears the /homepage2 treatment: the flat brand-500
-                    square becomes the brand ramp on a diagonal with a soft glow, so it reads as
-                    lit against the hero wash rather than pasted onto it. Same geometry and letter
-                    as uprise-icon.svg — drawn in CSS because an <img> can't carry a gradient.
-                    Every other route keeps the flat asset. */}
+                {/* The mark wears the /homepage2 treatment on every route: the brand ramp on a
+                    diagonal with a soft glow, so it reads as lit rather than pasted on.
+
+                    Drawn in CSS rather than loading uprise-icon.svg so it can track
+                    var(--color-brand-*) and carry the glow — an <img>-loaded SVG is an isolated
+                    document and can do neither. The asset is otherwise a faithful copy of this
+                    square (same ramp, rx 9, and the Outfit 700 U as an outline), and it is what
+                    the footer, /homepage3, the favicon and the PWA manifest render. Change the
+                    ramp or the radius here and you have to change it there too. */}
                 <span
                   aria-hidden
                   className="grid h-8 w-8 place-items-center rounded-[9px] bg-[linear-gradient(150deg,var(--color-brand-400),var(--color-brand-500)_55%,var(--color-brand-700))] text-base font-bold tracking-[-0.02em] text-white shadow-[0_6px_16px_-6px] shadow-brand-500/70"
@@ -219,9 +234,8 @@ export default function Header() {
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/integrations">
                     Integrations
                   </Link>
-                  <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/developers">
-                    Developers
-                  </Link>
+                  {/* "Developers" (/developers) is hidden for now – see
+                      (community)/developers/page.tsx for what to restore. */}
                 </div>
               </li>
               <li className="nav__menu group relative xl:py-4">
@@ -252,7 +266,7 @@ export default function Header() {
                 </button>
                 <div className="invisible absolute left-[120%] top-full w-[270px] -translate-x-1/2 rounded-2xl border bg-white p-3 opacity-0 shadow-lg group-hover:visible group-hover:opacity-100">
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/privacy-policy">
-                    Privacy Policy
+                    Privacy
                   </Link>
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/terms-of-service">
                     Terms of Service
@@ -264,7 +278,7 @@ export default function Header() {
                     Compliance
                   </Link>
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/donations-policy">
-                    Donations Policy
+                    Donations
                   </Link>
                 </div>
               </li>

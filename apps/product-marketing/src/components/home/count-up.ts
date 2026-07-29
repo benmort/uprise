@@ -9,10 +9,23 @@
  *   data-dp      decimal places, default 0 — 0 also switches on en-AU thousands grouping
  *   data-suffix  appended verbatim, e.g. "M" or "%"
  *
- * Counts once per node. Under reduced motion the final value is written immediately: the number is
- * the content, so it must never be reachable only by animating.
+ * Counts once per node, unless `resetCount` clears it. Under reduced motion the final value is
+ * written immediately: the number is the content, so it must never be reachable only by animating.
  */
 const counted = new WeakSet<Element>();
+
+/**
+ * Let a figure count again. Used by RevealScope when a band leaves the viewport, so a number
+ * replays with the band it belongs to rather than sitting at its final value while everything
+ * around it re-animates.
+ *
+ * "0" is what the server renders for every one of these nodes, so a reset node is back to the
+ * markup it arrived as.
+ */
+export function resetCount(node: HTMLElement): void {
+  counted.delete(node);
+  node.textContent = "0";
+}
 
 export function countUp(node: HTMLElement, reduce: boolean): void {
   if (counted.has(node)) return;

@@ -103,13 +103,8 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                   >
                     Integrations
                   </Link>
-                  <Link
-                    href="/developers"
-                    className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
-                    onClick={onClose}
-                  >
-                    Developers
-                  </Link>
+                  {/* "Developers" (/developers) is hidden for now – see
+                      (community)/developers/page.tsx for what to restore. */}
                 </div>
               </div>
             </li>
@@ -174,7 +169,7 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                     className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
                     onClick={onClose}
                   >
-                    Privacy Policy
+                    Privacy
                   </Link>
                   <Link
                     href="/terms-of-service"
@@ -202,7 +197,7 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                     className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
                     onClick={onClose}
                   >
-                    Donations Policy
+                    Donations
                   </Link>
                 </div>
               </div>

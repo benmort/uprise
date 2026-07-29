@@ -43,7 +43,8 @@ export default function LatestPosts() {
               style={cssVars({ "--d": `${i * 80}ms` })}
             >
               <span className="thumb">
-                <BlogCover tone={post.coverTone} category={post.category} />
+                {/* `paper`, not the default ink: this page is light end to end. */}
+                <BlogCover tone={post.coverTone} category={post.category} surface="paper" />
               </span>
               <span className="meta">
                 <span className="home-mono cat">{post.category}</span>

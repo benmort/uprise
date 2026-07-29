@@ -1,4 +1,5 @@
 import React from "react";
+import { PhoneOff } from "lucide-react";
 import RevealScope from "./RevealScope";
 import { SectionHead, cssVars } from "./parts";
 import { SECTION } from "./content";
@@ -78,10 +79,88 @@ export default function Toolkit() {
         <SectionHead eyebrow={TOOLKIT.eyebrow} title={TOOLKIT.title} lede={TOOLKIT.lede} />
 
         <div className="home-bento">
+          {/* White-label — three portals on their own slugs, the theme resolving from stock to the
+              campaign's own, and the phone a volunteer actually meets. */}
+          <article className="home-tile home-t5 home-rise">
+            <span className="home-mono home-eyebrow">{WHITELABEL_TILE.eyebrow}</span>
+            <h3 className="home-h3">{WHITELABEL_TILE.title}</h3>
+            <p>{WHITELABEL_TILE.body}</p>
+
+            <div className="home-portals">
+              <div>
+                {WHITELABEL_TILE.portals.map((p) => (
+                  <div className="home-portal" key={p.slug} style={cssVars({ "--d": `${p.d}ms` })}>
+                    <span className="mark" style={cssVars({ "--c": p.c })}>
+                      {p.initials}
+                    </span>
+                    <span className="who">
+                      <b>{p.name}</b>
+                      <span className="home-mono slug">{p.slug}</span>
+                    </span>
+                  </div>
+                ))}
+
+                <div
+                  className="home-portal home-portal--on"
+                  style={cssVars({ "--d": `${WHITELABEL_TILE.active.d}ms` })}
+                >
+                  <span className="mark" style={cssVars({ "--c": "var(--home-brand)" })}>
+                    {WHITELABEL_TILE.active.initials}
+                  </span>
+                  <span className="who">
+                    <b>{WHITELABEL_TILE.active.name}</b>
+                    <span className="home-mono slug">{WHITELABEL_TILE.active.slug}</span>
+                  </span>
+                  <span className="home-mono on">{WHITELABEL_TILE.active.badge}</span>
+                </div>
+
+                <div className="home-theme home-states">
+                  <span className="stock" aria-hidden="true">
+                    {WHITELABEL_TILE.theme.stock}
+                  </span>
+                  <span className="own" style={cssVars({ "--d": `${WHITELABEL_TILE.theme.d}ms` })}>
+                    {WHITELABEL_TILE.theme.own}
+                  </span>
+                </div>
+
+                <div className="home-tokens">
+                  {WHITELABEL_TILE.tokens.map((t) => (
+                    <span key={t.label} style={cssVars({ "--d": `${t.d}ms` })}>
+                      <i style={cssVars({ "--c": t.c })} />
+                      {t.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Drawn, not captured: the point is the branding, and every real capture carries
+                  Uprise's own. */}
+              <div
+                className="home-cmpdev"
+                aria-hidden="true"
+                style={cssVars({ "--d": `${WHITELABEL_TILE.phone.d}ms` })}
+              >
+                <div className="home-cmpscr home-brandscr">
+                  <div style={cssVars({ "--d": `${WHITELABEL_TILE.phone.screenD}ms` })}>
+                    <span className="row">
+                      <s className="logo" />
+                      <s className="name" />
+                    </span>
+                    <s className="line" style={{ width: "88%" }} />
+                    <s className="line" style={{ width: "72%" }} />
+                    <span className="cta">{WHITELABEL_TILE.phone.cta}</span>
+                    <s className="line is-faint" style={{ width: "64%" }} />
+                    <s className="line is-faint" style={{ width: "80%" }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
           {/* Volunteers — the calendar volunteers read, then the join request resolves, then the
-              action room: one broadcast out and the roster it went to. Same 7/5 pair as the
-              canvassing row below, so the bento opens on a full-width beat. */}
-          <article className="home-tile home-t7 home-rise">
+              action room: one broadcast out and the roster it went to. Sits second in a 5/7 row, so
+              the bento opens narrow and widens rather than leading on its widest tile. */}
+          <article className="home-tile home-t7 home-rise" style={cssVars({ "--d": "80ms" })}>
             <span className="home-mono home-eyebrow">{SHIFTS_TILE.eyebrow}</span>
             <h3 className="home-h3">{SHIFTS_TILE.title}</h3>
             <p>{SHIFTS_TILE.body}</p>
@@ -164,84 +243,6 @@ export default function Toolkit() {
             </div>
           </article>
 
-          {/* White-label — three portals on their own slugs, the theme resolving from stock to the
-              campaign's own, and the phone a volunteer actually meets. */}
-          <article className="home-tile home-t5 home-rise" style={cssVars({ "--d": "80ms" })}>
-            <span className="home-mono home-eyebrow">{WHITELABEL_TILE.eyebrow}</span>
-            <h3 className="home-h3">{WHITELABEL_TILE.title}</h3>
-            <p>{WHITELABEL_TILE.body}</p>
-
-            <div className="home-portals">
-              <div>
-                {WHITELABEL_TILE.portals.map((p) => (
-                  <div className="home-portal" key={p.slug} style={cssVars({ "--d": `${p.d}ms` })}>
-                    <span className="mark" style={cssVars({ "--c": p.c })}>
-                      {p.initials}
-                    </span>
-                    <span className="who">
-                      <b>{p.name}</b>
-                      <span className="home-mono slug">{p.slug}</span>
-                    </span>
-                  </div>
-                ))}
-
-                <div
-                  className="home-portal home-portal--on"
-                  style={cssVars({ "--d": `${WHITELABEL_TILE.active.d}ms` })}
-                >
-                  <span className="mark" style={cssVars({ "--c": "var(--home-brand)" })}>
-                    {WHITELABEL_TILE.active.initials}
-                  </span>
-                  <span className="who">
-                    <b>{WHITELABEL_TILE.active.name}</b>
-                    <span className="home-mono slug">{WHITELABEL_TILE.active.slug}</span>
-                  </span>
-                  <span className="home-mono on">{WHITELABEL_TILE.active.badge}</span>
-                </div>
-
-                <div className="home-theme home-states">
-                  <span className="stock" aria-hidden="true">
-                    {WHITELABEL_TILE.theme.stock}
-                  </span>
-                  <span className="own" style={cssVars({ "--d": `${WHITELABEL_TILE.theme.d}ms` })}>
-                    {WHITELABEL_TILE.theme.own}
-                  </span>
-                </div>
-
-                <div className="home-tokens">
-                  {WHITELABEL_TILE.tokens.map((t) => (
-                    <span key={t.label} style={cssVars({ "--d": `${t.d}ms` })}>
-                      <i style={cssVars({ "--c": t.c })} />
-                      {t.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Drawn, not captured: the point is the branding, and every real capture carries
-                  Uprise's own. */}
-              <div
-                className="home-cmpdev"
-                aria-hidden="true"
-                style={cssVars({ "--d": `${WHITELABEL_TILE.phone.d}ms` })}
-              >
-                <div className="home-cmpscr home-brandscr">
-                  <div style={cssVars({ "--d": `${WHITELABEL_TILE.phone.screenD}ms` })}>
-                    <span className="row">
-                      <s className="logo" />
-                      <s className="name" />
-                    </span>
-                    <s className="line" style={{ width: "88%" }} />
-                    <s className="line" style={{ width: "72%" }} />
-                    <span className="cta">{WHITELABEL_TILE.phone.cta}</span>
-                    <s className="line is-faint" style={{ width: "64%" }} />
-                    <s className="line is-faint" style={{ width: "80%" }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </article>
-
           {/* Canvassing — the turf outline draws, then the doors land in route order. */}
           <article className="home-tile home-t7 home-ttall home-rise">
             <div>
@@ -305,10 +306,71 @@ export default function Toolkit() {
             </div>
           </article>
 
+          {/* Blasts — the lifecycle rail advances, then the recipient board arrives pending and a
+              second wave of colour crosses it as each recipient's state resolves. */}
+          <article className="home-tile home-t5 home-rise">
+            <span className="home-mono home-eyebrow">{BLAST_TILE.eyebrow}</span>
+            <h3 className="home-h3">{BLAST_TILE.title}</h3>
+            <p>{BLAST_TILE.body}</p>
+
+            <div className="home-blast">
+              <div className="home-brail">
+                <div className="home-bsteps">
+                  {BLAST_TILE.rail.map((s) => (
+                    <span
+                      className={`home-bstep${s.on ? " is-on" : ""}`}
+                      key={s.label}
+                      style={cssVars({ "--d": `${s.d}ms` })}
+                    >
+                      {s.label}
+                    </span>
+                  ))}
+                </div>
+                <div className="home-bar">
+                  <i style={cssVars({ "--w": BLAST_TILE.railFill.w, "--d": `${BLAST_TILE.railFill.d}ms` })} />
+                </div>
+              </div>
+
+              <div
+                className="home-bboard"
+                role="img"
+                aria-label="One send batch, each cell a recipient — most delivered, with a few replied, skipped and failed"
+              >
+                {Array.from({ length: BLAST_TILE.board.cols * BLAST_TILE.board.rows }, (_, n) => {
+                  const x = n % BLAST_TILE.board.cols;
+                  const y = Math.floor(n / BLAST_TILE.board.cols);
+                  return (
+                    <s
+                      className="home-bcell"
+                      key={n}
+                      style={cssVars({
+                        "--c": CELL[cellCode(x, y, BLAST_TILE.board.cols, BLAST_TILE.board.rows)],
+                        "--d": `${BLAST_TILE.board.arriveD + x * 9 + y * 22}ms`,
+                        "--d2": `${BLAST_TILE.board.resolveD + x * 11 + y * 26}ms`,
+                      })}
+                    />
+                  );
+                })}
+              </div>
+
+              <div className="home-bnote">
+                <b data-to={BLAST_TILE.batch.to}>0</b> {BLAST_TILE.batch.note}
+              </div>
+              <div className="home-blegend" style={cssVars({ "--d": `${BLAST_TILE.legendD}ms` })}>
+                {BLAST_TILE.legend.map((l) => (
+                  <span key={l.label}>
+                    <i style={cssVars({ "--c": `var(${l.c})` })} />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </article>
+
           {/* Outreach — the composer writes itself and its compliance check clears, then the
               softphone bar arrives and walks its real states. Both surfaces are drawn: no capture
               of either exists. Every string is copied from the product — see OUTREACH_TILE. */}
-          <article className="home-tile home-t7 home-rise">
+          <article className="home-tile home-t7 home-rise" style={cssVars({ "--d": "70ms" })}>
             <span className="home-mono home-eyebrow">{OUTREACH_TILE.eyebrow}</span>
             <h3 className="home-h3">{OUTREACH_TILE.title}</h3>
             <p>{OUTREACH_TILE.body}</p>
@@ -435,12 +497,14 @@ export default function Toolkit() {
                       <path d="M12 19v3" />
                     </svg>
                   </span>
+                  {/* The real lucide `PhoneOff`, the same icon the product's call bar hangs up with
+                      (apps/admin/src/components/softphone/call-bar.tsx:66). It was a hand-drawn
+                      approximation, and the handset never closed: one path was a loose arc floating
+                      inside the outline rather than the receiver's mouthpiece, so the glyph read as
+                      a broken squiggle behind the strike-through. Nothing about a 14px icon is worth
+                      approximating when the dependency is already here. */}
                   <span className="home-cbbtn home-cbbtn--end" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M10.7 13.3a16 16 0 0 0 6 6" />
-                      <path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1" />
-                      <path d="m2 2 20 20" />
-                    </svg>
+                    <PhoneOff strokeWidth={2.2} />
                   </span>
                 </div>
                 <div className="home-clog">
@@ -452,67 +516,6 @@ export default function Toolkit() {
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          </article>
-
-          {/* Blasts — the lifecycle rail advances, then the recipient board arrives pending and a
-              second wave of colour crosses it as each recipient's state resolves. */}
-          <article className="home-tile home-t5 home-rise" style={cssVars({ "--d": "70ms" })}>
-            <span className="home-mono home-eyebrow">{BLAST_TILE.eyebrow}</span>
-            <h3 className="home-h3">{BLAST_TILE.title}</h3>
-            <p>{BLAST_TILE.body}</p>
-
-            <div className="home-blast">
-              <div className="home-brail">
-                <div className="home-bsteps">
-                  {BLAST_TILE.rail.map((s) => (
-                    <span
-                      className={`home-bstep${s.on ? " is-on" : ""}`}
-                      key={s.label}
-                      style={cssVars({ "--d": `${s.d}ms` })}
-                    >
-                      {s.label}
-                    </span>
-                  ))}
-                </div>
-                <div className="home-bar">
-                  <i style={cssVars({ "--w": BLAST_TILE.railFill.w, "--d": `${BLAST_TILE.railFill.d}ms` })} />
-                </div>
-              </div>
-
-              <div
-                className="home-bboard"
-                role="img"
-                aria-label="One send batch, each cell a recipient — most delivered, with a few replied, skipped and failed"
-              >
-                {Array.from({ length: BLAST_TILE.board.cols * BLAST_TILE.board.rows }, (_, n) => {
-                  const x = n % BLAST_TILE.board.cols;
-                  const y = Math.floor(n / BLAST_TILE.board.cols);
-                  return (
-                    <s
-                      className="home-bcell"
-                      key={n}
-                      style={cssVars({
-                        "--c": CELL[cellCode(x, y, BLAST_TILE.board.cols, BLAST_TILE.board.rows)],
-                        "--d": `${BLAST_TILE.board.arriveD + x * 9 + y * 22}ms`,
-                        "--d2": `${BLAST_TILE.board.resolveD + x * 11 + y * 26}ms`,
-                      })}
-                    />
-                  );
-                })}
-              </div>
-
-              <div className="home-bnote">
-                <b data-to={BLAST_TILE.batch.to}>0</b> {BLAST_TILE.batch.note}
-              </div>
-              <div className="home-blegend" style={cssVars({ "--d": `${BLAST_TILE.legendD}ms` })}>
-                {BLAST_TILE.legend.map((l) => (
-                  <span key={l.label}>
-                    <i style={cssVars({ "--c": `var(${l.c})` })} />
-                    {l.label}
-                  </span>
-                ))}
               </div>
             </div>
           </article>

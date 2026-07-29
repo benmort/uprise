@@ -22,6 +22,22 @@ const TONES: Record<string, string> = {
   cyan: "from-sky-900/85",
 };
 
+/**
+ * The `paper` twin of TONES, for the homepage — which is light end to end, so an ink cover there is
+ * the only dark block in its band. Same six hues at the same weight, lifted to the 100 step and
+ * laid over white, so a post keeps its identity while the cover reads as a tinted photograph rather
+ * than a dark tile. /blog and the post hero keep the ink treatment: they are photo-led pages where
+ * a bright cover has nothing to hold it down.
+ */
+const TONES_PAPER: Record<string, string> = {
+  blue: "from-brand-100/95",
+  violet: "from-violet-100/95",
+  pink: "from-rose-100/95",
+  green: "from-teal-100/95",
+  amber: "from-orange-100/95",
+  cyan: "from-sky-100/95",
+};
+
 const CATEGORY_ICON: Record<string, LucideIcon> = {
   Product: BookOpen,
   Canvassing: MapPin,
@@ -68,6 +84,7 @@ export default function BlogCover({
   title,
   size = "card",
   priority,
+  surface = "ink",
 }: {
   tone: BlogCoverTone | string;
   category: string;
@@ -76,16 +93,19 @@ export default function BlogCover({
   /** Eager-load this cover. Defaults on for the hero; set it on any card that lands above the
    *  fold (the blog index's featured post), which would otherwise lazy-load the LCP image. */
   priority?: boolean;
+  /** `paper` for the light twin — see TONES_PAPER. Used by the homepage's blog strip only. */
+  surface?: "ink" | "paper";
 }) {
-  const scrim = TONES[tone] ?? TONES.blue;
+  const paper = surface === "paper";
+  const scrim = (paper ? TONES_PAPER : TONES)[tone] ?? (paper ? TONES_PAPER : TONES).blue;
   const Icon = CATEGORY_ICON[category] ?? BookOpen;
   const image = CATEGORY_IMAGE[category] ?? FALLBACK_IMAGE;
   const isHero = size === "hero";
   return (
     <div
-      className={`relative flex h-full w-full flex-col justify-between overflow-hidden bg-slate-900 ${
-        isHero ? "p-10 md:p-16" : "p-8"
-      }`}
+      className={`relative flex h-full w-full flex-col justify-between overflow-hidden ${
+        paper ? "bg-white" : "bg-slate-900"
+      } ${isHero ? "p-10 md:p-16" : "p-8"}`}
     >
       <Image
         src={image.src}
@@ -99,25 +119,45 @@ export default function BlogCover({
       />
       {/* Legibility scrim, in two layers. The flat one knocks the whole photo back so the icon
           tile and the soft shapes read against a bright frame; the tone gradient then weights the
-          bottom, where the title and category sit. */}
-      <div className="absolute inset-0 bg-slate-950/35" />
+          end the title and category sit at. Both invert with `surface` — on paper the flat layer is
+          white and the gradient runs from a pale tint, so the label reads dark over a lifted photo
+          instead of white over a darkened one. */}
+      <div className={`absolute inset-0 ${paper ? "bg-white/55" : "bg-slate-950/35"}`} />
       <div className={`absolute inset-0 bg-gradient-to-t ${scrim} via-transparent to-transparent`} />
 
-      <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10" />
-      <div className="absolute -bottom-10 -left-6 h-32 w-32 rotate-12 rounded-2xl bg-white/10" />
       <div
-        className={`relative inline-flex items-center justify-center rounded-2xl bg-white/15 backdrop-blur ${
-          isHero ? "h-16 w-16" : "h-12 w-12"
+        className={`absolute -right-8 -top-8 h-40 w-40 rounded-full ${
+          paper ? "bg-white/45" : "bg-white/10"
         }`}
+      />
+      <div
+        className={`absolute -bottom-10 -left-6 h-32 w-32 rotate-12 rounded-2xl ${
+          paper ? "bg-white/45" : "bg-white/10"
+        }`}
+      />
+      <div
+        className={`relative inline-flex items-center justify-center rounded-2xl backdrop-blur ${
+          paper ? "bg-white/70" : "bg-white/15"
+        } ${isHero ? "h-16 w-16" : "h-12 w-12"}`}
       >
-        <Icon className={isHero ? "h-8 w-8 text-white" : "h-6 w-6 text-white"} />
+        <Icon
+          className={`${isHero ? "h-8 w-8" : "h-6 w-6"} ${paper ? "text-brand-700" : "text-white"}`}
+        />
       </div>
       {isHero && title ? (
-        <p className="relative mt-6 max-w-3xl text-2xl font-bold !leading-tight text-white drop-shadow-sm md:text-4xl">
+        <p
+          className={`relative mt-6 max-w-3xl text-2xl font-bold !leading-tight drop-shadow-sm md:text-4xl ${
+            paper ? "text-slate-900" : "text-white"
+          }`}
+        >
           {title}
         </p>
       ) : (
-        <span className="relative text-sm font-semibold uppercase tracking-wide text-white/90 drop-shadow-sm">
+        <span
+          className={`relative text-sm font-semibold uppercase tracking-wide ${
+            paper ? "text-slate-700" : "text-white/90 drop-shadow-sm"
+          }`}
+        >
           {category}
         </span>
       )}

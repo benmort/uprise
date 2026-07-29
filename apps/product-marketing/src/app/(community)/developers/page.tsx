@@ -1,5 +1,20 @@
 import React from "react";
+import type { Metadata } from "next";
 import DocumentationLayout from "@/components/DocumentationLayout";
+
+/**
+ * Hidden for now. The developer hub is kept intact and still builds, but every entry point to it
+ * has been removed — the desktop nav, the mobile menu, the footer's Resources column, the support
+ * centre card and the handbook's cross-link — and it is noindexed so it can't be found while it is
+ * incomplete. The URLs still resolve for anyone who has one; nothing here is gated.
+ *
+ * To publish: drop the `robots` block below and the matching one in architecture/[...slug], then
+ * restore the five links (each is marked with a comment pointing back here).
+ */
+export const metadata: Metadata = {
+  title: "Developers – Uprise",
+  robots: { index: false, follow: false },
+};
 
 export default function DevelopersPage() {
   return (

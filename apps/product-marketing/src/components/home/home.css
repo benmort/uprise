@@ -147,6 +147,9 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
+/* Every eyebrow opens with a 22px hairline rule, set in currentColor at half opacity so it picks up
+   whatever the band around it has set the eyebrow to — brand on the light sections, brand-300 on
+   ink. `inline-flex` + `gap` are what space it from the label. */
 .home-eyebrow {
   color: var(--home-brand);
   display: inline-flex;
@@ -175,6 +178,25 @@
 }
 
 /* --- reveals ------------------------------------------------------------- */
+
+/* Reversal, out direction only. RevealScope stamps `home-reveal` on every element it observes and
+   now REMOVES `is-in` on exit, so each reveal plays backwards as its band leaves — see
+   REVERSE_ON_SCROLL_UP in RevealScope.tsx.
+
+   Every timed layer on this page declares its stagger as `transition-delay: var(--d)` in its BASE
+   rule (42 of them). A base rule applies in both directions, so without this a tile leaving the
+   viewport would come apart in the same order it assembled — out to the ~1.8s the action room's
+   roster reaches — which reads as the tile breaking rather than retreating.
+
+   Transitions take their timing from the state being transitioned TO, so zeroing the delay on the
+   not-`is-in` state is exactly one direction: instant on the way out, still staggered on the way
+   back in. Two classes plus a descendant beats every payload rule's single class, so nothing here
+   needs `!important`. */
+.home-reveal:not(.is-in),
+.home-reveal:not(.is-in) * {
+  transition-delay: 0ms;
+}
+
 .home-rise {
   opacity: 0;
   transform: translate3d(0, 26px, 0);
@@ -2301,8 +2323,8 @@
 .home-demoband {
   position: relative;
   padding: 0 0 clamp(90px, 11vw, 150px);
-  background: var(--home-ink-2);
-  color: #fff;
+  background: var(--home-plate);
+  color: var(--home-body);
   overflow: hidden;
 }
 .home-dgrid {
@@ -2315,7 +2337,8 @@
   width: 100%;
   height: auto;
   border-radius: 14px;
-  box-shadow: 0 40px 80px -30px rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--home-line);
+  box-shadow: 0 40px 80px -34px rgba(11, 15, 28, 0.34);
 }
 
 /* --- split sections: teams, research ----------------------------------- */
@@ -2597,32 +2620,134 @@
 .home-ucards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* `1fr` rather than `auto` rows: with an indefinite grid height, fr row tracks resolve
+     to the tallest track and then apply that to ALL of them, so the two rows are the same
+     height even when one card's copy wraps a line further than the others. `auto` sizes
+     each row independently, which is what left them mismatched. The minmax floor is the
+     card height itself — roughly double what the copy alone needs, so the photograph has
+     room to be a photograph rather than a texture behind two lines of type. */
+  grid-auto-rows: minmax(340px, 1fr);
   gap: 1px;
   background: var(--home-line);
   border: 1px solid var(--home-line);
   border-radius: 16px;
   overflow: hidden;
 }
+/* Each card carries a photograph of the work behind its copy (`--img`, set per card — see
+   USE_CASES in sections.ts for the file and credit table).
+
+   Two layers rather than one multi-layer background: the photo can then scale on hover
+   independently of the scrim, which must NOT move — a scrim that scales with its photo
+   momentarily uncovers the corners and the type flickers.
+
+   The scrim is WHITE: this page is light throughout, so an ink scrim (which is what a photo-backed
+   card wants) would make these six the only dark surface on it.
+
+   It is densest at the BOTTOM, because that is where the copy sits — the two have to move together.
+   It used to run the other way, dense at the top, which was right while the type was top-aligned;
+   bottom-aligning the copy without flipping it would have dropped 15px body text onto the most
+   transparent band on the card. Paper 0.42 → 0.92 lets a good deal more photograph through the
+   upper two-thirds than the old 0.9 → 0.78 did, while keeping the caption band at full contrast.
+   `isolation` keeps the two negative-index layers inside the card instead of punching through to
+   the section behind it. */
 .home-ucard {
-  background: #fff;
+  position: relative;
+  isolation: isolate;
+  /* Clips its own photo on hover. The 1.045 scale below is 15px of overhang on a 340px card, and
+     `overflow: hidden` was only on `.home-ucards` — so the grid clipped the outer edge while every
+     interior card spilled its photograph across the 1px gap onto its neighbours. The container
+     still owns the 16px outer radius; this only bounds the cell. */
+  overflow: hidden;
+  background: var(--home-paper);
   padding: 28px 26px 30px;
   display: grid;
   gap: 9px;
-  align-content: start;
+  /* Copy on the floor of the card, so the photograph reads as the subject and the type as a
+     caption on it. Type sizes are unchanged — a taller card is more room for the picture, not
+     bigger words. */
+  align-content: end;
+}
+.home-ucard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: var(--img) center / cover no-repeat;
+  transition: transform 0.6s var(--home-ease);
+}
+.home-ucard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  /* Whiter under the copy than it used to be, so the type has more to sit on.
+     The 64% stop is the hinge: the card floor is 340px (grid-auto-rows) and the text block —
+     heading, two or three lines at 15px/1.55, and 30px of padding under it — occupies the bottom
+     107-130px, which puts the top of the text at 62-68%. Holding 0.76 there is exactly what the
+     old three-stop ramp interpolated to at that point, so everything ABOVE the text keeps the
+     transparency it had; only the band behind the words gets whiter. */
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.58) 40%,
+    rgba(255, 255, 255, 0.76) 64%,
+    rgba(255, 255, 255, 0.91) 78%,
+    rgba(255, 255, 255, 0.96) 100%
+  );
   transition: background 0.3s var(--home-ease);
 }
-.home-ucard:hover {
-  background: #fcfdff;
+.home-ucard:hover::before {
+  transform: scale(1.045);
+}
+/* Hover lifts the scrim a little rather than tinting the card: the photograph is the only thing
+   here that can answer a pointer. */
+.home-ucard:hover::after {
+  /* Same five stops and the same 64% hinge as the rest state, each kept the amount lighter that
+     the hover scrim already was — so hovering still lifts the photograph by the same margin. */
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.48) 40%,
+    rgba(255, 255, 255, 0.7) 64%,
+    rgba(255, 255, 255, 0.88) 78%,
+    rgba(255, 255, 255, 0.94) 100%
+  );
 }
 .home-ucard p {
   font-size: 15px;
   line-height: 1.55;
 }
 
+/* The one licence credit the card set needs (CC BY 3.0 AU on the AEC ballot-box photo). Sized and
+   coloured to be findable rather than noticeable — this is a legal obligation, not a caption. */
+.home-ucredit {
+  margin-top: 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--home-faint);
+}
+.home-ucredit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.25s var(--home-ease);
+}
+.home-ucredit a:hover {
+  color: var(--home-body);
+}
+
 /* --- roadmap ----------------------------------------------------------- */
 /* Asymmetric bottom padding: the roadmap's bottom edge only ever meets the gallery's
    top, and the two together were ~250px of empty paper. Halved at that seam only, so
    the roadmap keeps its full lead-in from the section above. */
+/* Back on paper. This band was put on ink to match the atlas; the atlas is light now and the page
+   carries no dark section at all, so an ink roadmap was the last one standing.
+   Paper rather than plate: the section above it (.home-types) is plate, so white alternates against
+   it, and the gallery below opens on #fff — its gradient picks this up and carries on down to plate.
+   SectionHead's type defaults to the light palette, so the three colour overrides this band used to
+   need are gone with it.
+   The dashed card borders and "coming soon" tag stay — inverting the band never changed what those
+   are for, which is to stop this reading like the shipped toolkit above. */
 .home-roadmap {
   padding: clamp(70px, 8vw, 110px) 0 clamp(40px, 4.5vw, 64px);
   background: var(--home-paper);
@@ -2638,15 +2763,18 @@
   gap: 9px;
   align-content: start;
   padding: 22px 20px;
+  /* Dashed and a shade off-white: on paper, a card with no fill at all stops reading as a card,
+     and the plate tint is what makes the dashed edge legible as "not built yet". Same pairing as
+     the unclaimed shift in the volunteers tile. */
   border: 1px dashed rgba(11, 15, 28, 0.16);
   border-radius: 14px;
-  background: #fbfcfe;
+  background: var(--home-plate);
 }
 .home-rcard .tag {
   justify-self: start;
   border-radius: 100px;
   padding: 5px 10px;
-  background: #eef0f5;
+  background: rgba(11, 15, 28, 0.05);
   color: var(--home-muted);
   font-size: 9.5px;
 }
@@ -2659,6 +2787,7 @@
 .home-rcard p {
   font-size: 14px;
   line-height: 1.55;
+  color: var(--home-body);
 }
 
 /* --- gallery: the canvassing app --------------------------------------- */
@@ -2843,14 +2972,38 @@
 
 /* The embedded demo (CanvassDemoFrame). The iframe has no intrinsic size, so hold the
    captured walk screen's shape — the poster and the live app then occupy the same box and
-   the section doesn't reflow when the app lands. */
+   the section doesn't reflow when the app lands.
+
+   The shape lives on the CONTAINER rather than on the iframe, because the zoom below has to size
+   the iframe past this box without the phone growing with it: transforms don't affect layout, but
+   width/height do. */
 .home-demoframe {
   position: relative;
+  aspect-ratio: 804 / 1748;
+  overflow: hidden;
+  /* Zoomed OUT: the iframe is laid out 1/zoom larger in both axes and scaled back down, so the app
+     inside lays out against a bigger viewport and more of the walk list fits the little screen.
+     0.75 shows a third more in each direction. This is the one number to tune. */
+  --demo-zoom: 0.75;
 }
 .home-demoframe iframe {
-  aspect-ratio: 804 / 1748;
-  height: auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(100% / var(--demo-zoom));
+  height: calc(100% / var(--demo-zoom));
+  transform: scale(var(--demo-zoom));
+  transform-origin: top left;
   background: #fff;
+  border: 0;
+}
+/* The poster fills the same box. It needs the explicit height because the container now owns the
+   aspect ratio, so the `height: auto` the phone gives its children no longer resolves to it. */
+.home-demoframe img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
 }
 .home-demoopen {
   position: absolute;

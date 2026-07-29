@@ -23,20 +23,43 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function DemoWalkPage() {
+export default function DemoWalkPage({
+  searchParams,
+}: {
+  searchParams?: { embed?: string };
+}) {
+  /**
+   * `?embed=1` drops the "Demo data" callout — set only by the marketing phone frame
+   * (product-marketing CanvassDemoFrame). Two reasons it goes there and only there: the homepage
+   * section around the phone already says the app is running on demo data, so the notice repeats
+   * a disclosure the visitor has just read; and in a ~232px-wide phone it costs a third of the
+   * screen that should be showing the walk list.
+   *
+   * Opened directly, /demo KEEPS it. A page of invented residents with nothing saying so could be
+   * taken for a real volunteer's round, and the "Open the app" link in the frame deliberately
+   * points at the un-embedded URL so anyone who follows it out sees the notice.
+   */
+  const embedded = searchParams?.embed === "1";
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-xl border border-border bg-surface-variant px-3.5 py-2.5">
-        <p className="text-xs font-semibold text-foreground">Demo data</p>
-        <p className="text-xs text-muted-foreground">
-          A sample walk list — every resident and outcome here is invented. Sign up to walk a real
-          one.
-        </p>
-      </div>
+      {embedded ? null : (
+        <div className="rounded-xl border border-border bg-surface-variant px-3.5 py-2.5">
+          <p className="text-xs font-semibold text-foreground">Demo data</p>
+          <p className="text-xs text-muted-foreground">
+            A sample walk list — every resident and outcome here is invented. Sign up to walk a real
+            one.
+          </p>
+        </div>
+      )}
 
       <WalkView
         turfId={DEMO_TURF_ID}
         readOnly
+        // Only in the embed: there the page IS the phone screen, so the map should run to the
+        // bottom. Standalone, the "Demo data" notice sits above it and a viewport-height column
+        // would push itself into a scroll.
+        fillViewport={embedded}
         assignment={DEMO_ASSIGNMENT}
         sampleUserPosition={DEMO_POSITION}
         routeGeometry={DEMO_ROUTE}

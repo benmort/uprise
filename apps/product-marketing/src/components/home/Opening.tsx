@@ -6,7 +6,7 @@ import { Button } from "@uprise/ui";
 import { authAppUrl } from "@/lib/links";
 import { screen } from "@/lib/screens";
 import MarketingLaunchpad from "../MarketingLaunchpad";
-import { countUp } from "./count-up";
+import { countUp, resetCount } from "./count-up";
 import { HERO, SCENES, SECTION, TICKER } from "./content";
 import "./home.css";
 
@@ -57,18 +57,20 @@ export default function Opening() {
     const cleanups: Array<() => void> = [];
 
     /* ---------------------------------------------------------------- reveals */
+    // Reversed on exit, matching RevealScope — see REVERSE_ON_SCROLL_UP there for why, and for the
+    // `home-reveal` marker that keeps a band from staggering itself apart on the way out.
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add("is-in");
-            io.unobserve(e.target);
-          }
+          e.target.classList.toggle("is-in", e.isIntersecting);
         });
       },
       { rootMargin: "0px 0px -12% 0px", threshold: 0.12 },
     );
-    all(".home-rise").forEach((n) => io.observe(n));
+    all(".home-rise").forEach((n) => {
+      n.classList.add("home-reveal");
+      io.observe(n);
+    });
     cleanups.push(() => io.disconnect());
 
     // the hero headline plays on mount rather than on scroll
@@ -91,10 +93,8 @@ export default function Opening() {
     const cio = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          if (e.isIntersecting) {
-            count(e.target as HTMLElement);
-            cio.unobserve(e.target);
-          }
+          if (e.isIntersecting) count(e.target as HTMLElement);
+          else resetCount(e.target as HTMLElement);
         });
       },
       { threshold: 0.6 },
@@ -178,6 +178,12 @@ export default function Opening() {
       );
 
       if (live !== lastLive) {
+        // Reset the outgoing scene's figures so they count again when it comes back — scrolling
+        // back up through the stage otherwise leaves them at their final value while the satellites
+        // around them fade in fresh. lastLive is -1 on the first paint, which matches nothing.
+        root
+          .querySelectorAll<HTMLElement>(`[data-home-sat="${lastLive}"] [data-to]`)
+          .forEach((n) => resetCount(n));
         lastLive = live;
         if (frameUrl) frameUrl.textContent = SCENES[live].url;
         root

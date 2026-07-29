@@ -126,14 +126,21 @@ export async function generateMetadata({ params }: ArchitecturePageProps) {
   const docKey = slug.join("-");
   const docInfo = architectureDocs[docKey as keyof typeof architectureDocs];
 
+  // Hidden for now: the developer hub is kept and still builds, but it is unlinked from the nav,
+  // footer, support centre and handbook, and noindexed here so it can't be found while it is
+  // incomplete. Removing the `robots` line and restoring those links is all it takes to publish.
+  const robots = { index: false, follow: false };
+
   if (!docInfo) {
     return {
       title: "Architecture Documentation - Uprise",
+      robots,
     };
   }
 
   return {
     title: `${docInfo.title} - Uprise Architecture`,
     description: docInfo.description,
+    robots,
   };
 }

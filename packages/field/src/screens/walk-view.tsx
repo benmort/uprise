@@ -48,6 +48,7 @@ function num(v: unknown): number {
 export function WalkView({
   turfId,
   readOnly = false,
+  fillViewport = false,
   assignment: assignmentProp,
   sampleUserPosition,
   routeGeometry: routeGeometryProp,
@@ -55,6 +56,11 @@ export function WalkView({
 }: {
   turfId: string;
   readOnly?: boolean;
+  /** Pin the column to the viewport the way the live app does, so the map's flex-1 grows to the
+   *  bottom instead of stopping at its 60vh floor. For read-only hosts that OWN the whole viewport
+   *  — the marketing phone embed — rather than the organiser preview, which is a panel inside a
+   *  page and would overflow it. */
+  fillViewport?: boolean;
   /** Pre-loaded assignment (organiser preview in apps/admin). When given, the
    *  screen skips the volunteer-scoped fetch and just renders it read-only. */
   assignment?: CanvassAssignment | null;
@@ -398,9 +404,16 @@ export function WalkView({
       // min-h-screen (indefinite height), so h-full alone gives flex-1 nothing definite to grow
       // into. Inline, not a Tailwind arbitrary class — @uprise/field is also built by admin's
       // Tailwind, which won't emit a field-only h-[calc(...)] utility (see the map min-height note).
-      // List mode keeps natural height + page scroll; the admin preview (readOnly) keeps h-full.
+      // List mode keeps natural height + page scroll; the admin preview keeps h-full, because it is
+      // a panel inside a page rather than the whole viewport.
+      //
+      // `fillViewport` opts a read-only host into the same treatment: the marketing phone embed owns
+      // its (iframe) viewport, so without it the map stopped at its 60vh floor and left dead space
+      // under it. The 2rem is FieldShell's p-4, which is what leaves the padding below the map.
       style={
-        !readOnly && !isPreview && showMap ? { height: "calc(100dvh - 2rem)" } : undefined
+        showMap && (fillViewport || (!readOnly && !isPreview))
+          ? { height: "calc(100dvh - 2rem)" }
+          : undefined
       }
     >
       {/* On mobile the turf name gets its own full-width line (the three-segment toggle no
@@ -503,7 +516,26 @@ export function WalkView({
             </TurfMap>
           </div>
           {isSuperAdmin ? <ReplayControls replay={replay} totalStops={locatedStops.length} /> : null}
-          {nextStop && !replay.active ? (
+          {nextStop && !replay.active && readOnly ? (
+            /* Read-only hosts have no Knock button, so the full card is only ever a label — and in
+               the marketing phone it ate a third of the screen it was labelling. One line: the
+               address, plus the distance when directions are up. The resident name, the walking
+               directions and the attribution all belong to a walk someone is actually on, so they
+               go with the button. */
+            <div className="absolute inset-x-3 bottom-3 flex animate-pop-in items-center gap-2 rounded-xl border border-border bg-surface/95 px-3 py-2 shadow-float">
+              <Route className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--success))]" />
+              <p className="min-w-0 flex-1 truncate text-xs font-bold text-foreground">
+                {nextStop.address || "No address"}
+              </p>
+              {/* `> 0` guard: read-only has no live GPS, so the leg can resolve to zero and the
+                  bar would read "0 m" — worse than no distance at all. */}
+              {directions && directions.distanceM > 0 ? (
+                <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+                  {formatDistance(directions.distanceM)}
+                </span>
+              ) : null}
+            </div>
+          ) : nextStop && !replay.active ? (
             <div className="absolute inset-x-3 bottom-3 animate-pop-in rounded-2xl border border-border bg-surface p-4 shadow-float">
               <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[hsl(var(--success))]">
                 <Route className="h-3.5 w-3.5" />

@@ -132,6 +132,16 @@
     "capturedAt": "2026-07-29T02:22:13.748Z",
     "bytes": 212015
   },
+  "petition": {
+    "file": "/images/marketing/screens/petition@2x.png",
+    "width": 2526,
+    "height": 1620,
+    "alt": "A public petition page on a campaign's own domain – “Jess Wilson: hands off Treaty”, with a sign-the-petition form beside it and 3,309 of a 10,000 signature goal",
+    "route": "campaign.org.au/hands-off-treaty",
+    "theme": "light",
+    "bytes": 375364,
+    "note": "Hand-supplied, NOT produced by `pnpm marketing:shots` – it is a public action page on a customer domain, which the pipeline (which signs in to the admin app) cannot reach. The script merges into this file rather than replacing it, so re-running it leaves this entry alone; equally, it will never refresh it. Replace the PNG by hand if the page changes."
+  },
   "results": {
     "file": "/images/marketing/screens/results@2x.png",
     "width": 2584,
