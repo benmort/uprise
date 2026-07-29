@@ -16,7 +16,16 @@ import "./homepage4.css";
  * Under reduced motion the targets are marked in immediately (the CSS also forces them visible with
  * `!important`, so this is belt and braces) and figures are written at their final value.
  */
-const TARGETS = ".hp4-rise, .hp4-minimap, .hp4-thread, .hp4-matrix";
+/**
+ * Every entry is a container with its OWN internal timeline, observed separately from the
+ * `.hp4-rise` article around it — so a tile's visual starts when the tile arrives rather than when
+ * the section does. Adding a container here is required, not cosmetic: `is-in` is added per observed
+ * element and the rules fire off the payload's own class, so a payload that is missing from this
+ * list never receives it and every child stays at its `opacity: 0` initial state — the tile renders
+ * permanently blank.
+ */
+const TARGETS =
+  ".hp4-rise, .hp4-minimap, .hp4-thread, .hp4-matrix, .hp4-outreach, .hp4-blast";
 
 export default function RevealScope({
   children,

@@ -26,25 +26,18 @@ export function AuthBrandSidebar() {
   return (
     <div className="relative hidden w-1/2 items-center justify-center overflow-hidden bg-brand-950 lg:flex">
       <GridShape />
-      {/* On sign-up the column widens with the panel so the illustration can grow; the copy keeps
-          its own narrow measure so the lines don't stretch with it. w-full matters: as a bare flex
-          item the column shrink-wraps to its widest line of text (~274px), and then the
-          illustration's own max-widths never bind. */}
       {isSignUp ? (
-        <div className="relative z-10 flex w-full max-w-xl flex-col items-center px-6 xl:max-w-2xl">
-          <p className="mb-1 max-w-xs text-center font-medium text-gray-300">Welcome to</p>
+        <div className="relative z-10 flex max-w-xs flex-col items-center">
+          <p className="mb-1 text-center font-medium text-gray-300">Welcome to</p>
           <BrandMark />
-          {/* Roughly 2× what this rendered at before (274px). No breakpoint below lg is needed —
-              the whole panel is `hidden lg:flex` — and the caps only bite on wide screens, since
-              w-full already limits the column to half the viewport. */}
           <Image
             src="/images/onboarding-1.png"
             alt=""
             width={548}
             height={561}
-            className="h-auto w-full"
+            className="h-auto w-auto max-w-full"
           />
-          <p className="max-w-xs text-center font-medium text-gray-300">
+          <p className="text-center font-medium text-gray-300">
             Set up your organisation&apos;s account
           </p>
         </div>

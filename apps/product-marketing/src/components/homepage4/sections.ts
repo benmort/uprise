@@ -53,12 +53,144 @@ export const DISPOSITION_TILE = {
 
 export type Tile = { eyebrow: string; title: string; body: string };
 
-export const SMALL_TILES: Tile[] = [
-  {
-    eyebrow: "Reach",
-    title: "P2P texting & browser calls",
-    body: "A peer-to-peer SMS console with a live dual-channel preview, plus a WebRTC softphone that dials from the campaign's own number.",
+/** A run of the composer's message body. `tag` is a merge tag rendered as a chip. */
+export type Run = { d: number; pre: string; tag: string | null; post: string };
+
+/**
+ * The outreach tile. Copy is the former SMALL_TILES[0], unchanged — see the accuracy note below.
+ *
+ * Two panels, in the order the copy's own two clauses read: the composer with its live preview,
+ * then the softphone. Every string is copied from the product, not recalled:
+ *   composer  apps/admin/src/app/(main)/blasts/[id]/composer/page.tsx — :825 panel title,
+ *             :318 maxCharacters, :46 the two tags, :401 the warning, :1090 the pass,
+ *             :721/:729 the buttons, :747-769 the channel toggle
+ *   call bar  apps/admin/src/components/softphone/call-bar.tsx — :24/:26 the statuses,
+ *             :47 the from-number appended to EVERY state, :55 mute disabled unless open
+ *   log rows  CallStatus, packages/db/prisma/schema.prisma:2291-2300
+ *
+ * ACCURACY, knowingly kept: there is no organiser-facing "P2P SMS console". On the organiser side
+ * P2P is a checkbox on this composer ("P2P text bank — volunteers press-send each message",
+ * composer/page.tsx:984-993); the real console is a volunteer app in packages/field. The decision
+ * was to leave the copy, so the VISUAL is grounded in the composer — which genuinely is an
+ * organiser SMS surface with a live dual-channel preview, i.e. what the first clause describes.
+ * Nothing here asserts a console exists.
+ */
+export const OUTREACH_TILE = {
+  eyebrow: "Reach",
+  title: "P2P texting & browser calls",
+  body: "A peer-to-peer SMS console with a live dual-channel preview, plus a WebRTC softphone that dials from the campaign's own number.",
+  composer: {
+    panel: "Message content",
+    /**
+     * 141 is `template.length` with the tags UNRENDERED, which is what the composer counts. The
+     * rendered preview below is 126 characters — shorter on purpose, and that gap is the counter's
+     * whole point. Do not "fix" it to match.
+     */
+    chars: { to: 141, max: 160 },
+    runs: [
+      { d: 220, pre: "Hi ", tag: "{{first_name}}", post: ", it's Sam from the campaign — " },
+      {
+        d: 520,
+        pre: "we're knocking doors in ",
+        tag: "{{location}}",
+        post: " on Saturday 10am. Can you make it? ",
+      },
+      { d: 820, pre: "Reply STOP to opt out", tag: null, post: "" },
+    ] as Run[],
+    /** The draggable chip palette. Server-side fallbacks are "friend" / "your area". */
+    tags: [
+      { text: "{{first_name}}", d: 340 },
+      { text: "{{location}}", d: 400 },
+    ],
+    /**
+     * The flip is the tile. It is literally true — the composer re-runs its opt-out check on every
+     * keystroke, so the warning is genuinely what the card shows until the third run lands.
+     */
+    compliance: {
+      warn: "Missing opt-out language. Include 'Reply STOP to opt out'.",
+      ok: "No compliance warnings detected.",
+      d: 1100,
+    },
+    actions: [
+      { label: "Send Proof", tone: "ghost" as const, d: 1200 },
+      { label: "Send Now", tone: "solid" as const, d: 1260 },
+    ],
+    /**
+     * The channel toggle is STATIC. The WhatsApp path renders an approved template (contentSid),
+     * not the SMS body, so animating a swap between them would compare templates while pretending
+     * to compare channels.
+     */
+    preview: {
+      channels: ["SMS", "WhatsApp"],
+      rendered:
+        "Hi Priya, it's Sam from the campaign — we're knocking doors in Coburg on Saturday 10am. Can you make it? Reply STOP to opt out",
+      deviceD: 900,
+      bubbleD: 1020,
+    },
   },
+  call: {
+    who: "Priya Raman",
+    /** The bar appends this to EVERY state, so it sits outside the state swap. */
+    from: "· from +61 3 7003 ····",
+    d: 1300,
+    /** CallState, in order. The last is what a reduced-motion visitor is left with. */
+    states: [
+      { text: "Connecting…", d: 0, live: false },
+      { text: "Ringing…", d: 1600, live: false },
+      { text: "0:02", d: 1900, live: true },
+    ],
+    /** Mute is disabled until the leg is open. */
+    muteD: 2050,
+    /**
+     * Two rows, not three: one call at a time is a real softphone constraint
+     * (softphone-provider.tsx:126) — the third call is the one in the bar. There is no post-call
+     * disposition anywhere in the product, so the tile does not imply one.
+     */
+    log: [
+      { num: "+61 4·· ··· 118", status: "COMPLETED", dur: "1:42", ok: true, d: 2150 },
+      { num: "+61 4·· ··· 402", status: "NO_ANSWER", dur: "—", ok: false, d: 2230 },
+    ],
+  },
+} as const;
+
+/**
+ * The blasts tile. Two figures, both CONFIGURATION rather than usage: the worker claims PENDING
+ * recipients in batches of BLAST_SEND_BATCH_SIZE (default 475, apps/api/src/blasts/blasts.service.ts
+ * :500-503) against the provider's 500-per-request cap. Nothing here counts anything.
+ *
+ * The board is a SHAPE, not a count — 18 × 8 = 144 cells against a 475 batch. Coarse on purpose,
+ * same spirit as AU_GRID below. Do not try to make the cell count equal 475.
+ *
+ * Rail is BlastStatus (schema.prisma:59-67); the legend is BlastRecipientStatus (:69-80).
+ */
+export const BLAST_TILE = {
+  eyebrow: "Broadcast",
+  title: "Send to a whole audience",
+  body: "Compose once, proof it to your own phone, then send in batches — with every recipient's state tracked from queued through delivered and replied.",
+  /** The path a send-now blast walks; SCHEDULED is the branch a timed send takes. */
+  rail: [
+    { label: "DRAFTED", d: 140, on: false },
+    { label: "PROOFED", d: 210, on: false },
+    { label: "SENDING", d: 280, on: true },
+    { label: "SENT", d: 350, on: false },
+  ],
+  /** The rail fills to the active stop: three of four. */
+  railFill: { w: "67%", d: 260 },
+  batch: { to: 475, note: "per send batch · 500 cap" },
+  legend: [
+    { label: "QUEUED", c: "--hp4-brand-100" },
+    { label: "SENT", c: "--hp4-brand-300" },
+    { label: "DELIVERED", c: "--hp4-brand" },
+    { label: "RESPONDED", c: "--hp4-sup-1" },
+    { label: "SKIPPED", c: "--hp4-seq-1" },
+    { label: "FAILED", c: "--hp4-sup-5" },
+  ],
+  legendD: 1300,
+  board: { cols: 18, rows: 8, arriveD: 220, resolveD: 800 },
+} as const;
+
+/** The two text tiles that close the bento, as a 2-up t6 row. */
+export const SMALL_TILES: Tile[] = [
   {
     eyebrow: "Volunteers",
     title: "Shifts and a live action room",
@@ -72,8 +204,8 @@ export const SMALL_TILES: Tile[] = [
 ];
 
 /**
- * The rest of the toolkit, as numbered cards. Deliberately only what the six tiles above DON'T
- * already state — the tiles cover canvassing, the inbox, dispositions, P2P texting and calls,
+ * The rest of the toolkit, as numbered cards. Deliberately only what the seven tiles above DON'T
+ * already state — the tiles cover canvassing, the inbox, dispositions, P2P texting and calls, blasts,
  * shifts and the action room, and white-label, so those are absent here rather than repeated.
  */
 export const FEATURE_CARDS: Tile[] = [

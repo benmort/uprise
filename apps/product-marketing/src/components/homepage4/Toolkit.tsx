@@ -3,10 +3,12 @@ import RevealScope from "./RevealScope";
 import { SectionHead, cssVars } from "./parts";
 import { SECTION } from "./content";
 import {
+  BLAST_TILE,
   CANVASS_TILE,
   DISPOSITION_TILE,
   FEATURE_CARDS,
   INBOX_TILE,
+  OUTREACH_TILE,
   SMALL_TILES,
   TOOLKIT,
 } from "./sections";
@@ -26,8 +28,42 @@ const DOORS: Array<[number, number]> = [
 ];
 
 /**
- * The toolkit: six bento tiles that SHOW three of the systems working (turf drawn on a minimap, a
- * claimed SMS thread, the five-point support meter), then the rest of the platform as numbered
+ * One send batch, as a board: one cell per recipient in the real BlastRecipientStatus vocabulary.
+ * Geometry, not copy — so it lives here beside DOORS rather than in sections.ts.
+ *
+ * Deterministic, using the same hash as the Atlas grid in DataArc, so a server render and a client
+ * render agree. Coarse on purpose, like AU_GRID: the cell count is a SHAPE (144) and the batch is
+ * 475 — do not try to make them equal.
+ */
+const CELL: Record<string, string> = {
+  q: "var(--hp4-brand-100)", // QUEUED
+  s: "var(--hp4-brand-300)", // SENT — receipt not back yet
+  d: "var(--hp4-brand)", // DELIVERED
+  r: "var(--hp4-sup-1)", // RESPONDED
+  x: "var(--hp4-seq-1)", // SKIPPED — opted out, checked before every send
+  f: "var(--hp4-sup-5)", // FAILED
+  ".": "#e8ebf3", // PENDING — the .hp4-bar track colour, reused
+};
+
+function cellCode(x: number, y: number, cols: number, rows: number): string {
+  const n = cols * rows;
+  // Recipients resolve in the order the batch dispatches them (row-major), with a couple of cells
+  // of ragged edge so the frontier reads as a real send rather than a ruled line.
+  const i = y * cols + x + ((x * 7) % 5) - 2;
+  if (i > n * 0.88) return ".";
+  if (i > n * 0.82) return "q";
+  if (i > n * 0.74) return "s";
+  const h = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+  if (h % 19 === 0) return "r";
+  if (h % 53 === 0) return "x";
+  if (h % 97 === 0) return "f"; // a delivery board with zero failures would be the lie
+  return "d";
+}
+
+/**
+ * The toolkit: seven bento tiles, five of which SHOW a system working (turf drawn on a minimap, a
+ * claimed SMS thread, the five-point support meter, the blast composer with its live compliance
+ * check, and a send resolving across a recipient board), then the rest of the platform as numbered
  * cards.
  *
  * The cards deliberately don't repeat what a tile already states — see FEATURE_CARDS in
@@ -104,9 +140,221 @@ export default function Toolkit() {
             </div>
           </article>
 
+          {/* Outreach — the composer writes itself and its compliance check clears, then the
+              softphone bar arrives and walks its real states. Both surfaces are drawn: no capture
+              of either exists. Every string is copied from the product — see OUTREACH_TILE. */}
+          <article className="hp4-tile hp4-t7 hp4-rise">
+            <span className="hp4-mono hp4-eyebrow">{OUTREACH_TILE.eyebrow}</span>
+            <h3 className="hp4-h3">{OUTREACH_TILE.title}</h3>
+            <p>{OUTREACH_TILE.body}</p>
+
+            <div className="hp4-outreach">
+              <div className="hp4-cmpgrid">
+                <div className="hp4-cmp" style={cssVars({ "--d": "100ms" })}>
+                  <div className="hp4-cmphead">
+                    <span className="hp4-mono">{OUTREACH_TILE.composer.panel}</span>
+                    <span className="hp4-mono hp4-cmpcount">
+                      <b data-to={OUTREACH_TILE.composer.chars.to}>0</b> /{" "}
+                      {OUTREACH_TILE.composer.chars.max} chars
+                    </span>
+                  </div>
+                  <p className="hp4-cmpbody">
+                    {OUTREACH_TILE.composer.runs.map((r) => (
+                      <span className="seg" key={r.d} style={cssVars({ "--d": `${r.d}ms` })}>
+                        {r.pre}
+                        {r.tag ? <b className="tag">{r.tag}</b> : null}
+                        {r.post}
+                      </span>
+                    ))}
+                  </p>
+                  <div className="hp4-cmptags">
+                    {OUTREACH_TILE.composer.tags.map((t) => (
+                      <span className="hp4-cmptag" key={t.text} style={cssVars({ "--d": `${t.d}ms` })}>
+                        {t.text}
+                      </span>
+                    ))}
+                  </div>
+                  {/* aria-hidden on the warning: without it a reader announces both states as one
+                      contradictory sentence. */}
+                  <div className="hp4-cmpsub hp4-states">
+                    <span className="warn" aria-hidden="true">
+                      {OUTREACH_TILE.composer.compliance.warn}
+                    </span>
+                    <span
+                      className="ok"
+                      style={cssVars({ "--d": `${OUTREACH_TILE.composer.compliance.d}ms` })}
+                    >
+                      {OUTREACH_TILE.composer.compliance.ok}
+                    </span>
+                  </div>
+                  <div className="hp4-cmpact">
+                    {OUTREACH_TILE.composer.actions.map((a) => (
+                      <span
+                        className={`hp4-cmpbtn hp4-cmpbtn--${a.tone}`}
+                        key={a.label}
+                        style={cssVars({ "--d": `${a.d}ms` })}
+                      >
+                        {a.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* A rendering of text already present above, so it is decorative to a reader. */}
+                <div className="hp4-cmppre" aria-hidden="true">
+                  <span className="hp4-cmpchan">
+                    {OUTREACH_TILE.composer.preview.channels.map((c, i) => (
+                      <s className={i === 0 ? "is-on" : undefined} key={c}>
+                        {c}
+                      </s>
+                    ))}
+                  </span>
+                  <div
+                    className="hp4-cmpdev"
+                    style={cssVars({ "--d": `${OUTREACH_TILE.composer.preview.deviceD}ms` })}
+                  >
+                    <div className="hp4-cmpscr">
+                      <div
+                        className="hp4-cmpbub"
+                        style={cssVars({ "--d": `${OUTREACH_TILE.composer.preview.bubbleD}ms` })}
+                      >
+                        {OUTREACH_TILE.composer.preview.rendered}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="hp4-cbar" style={cssVars({ "--d": `${OUTREACH_TILE.call.d}ms` })}>
+                  <span className="hp4-cbav">
+                    <span className="hp4-states" aria-hidden="true">
+                      <svg className="hp4-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                        <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+                      </svg>
+                      <svg
+                        style={cssVars({ "--d": `${OUTREACH_TILE.call.states[2].d}ms` })}
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                      >
+                        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1L8.1 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.7 2z" />
+                      </svg>
+                    </span>
+                  </span>
+                  <span className="hp4-cbmeta">
+                    <b>{OUTREACH_TILE.call.who}</b>
+                    <span className="hp4-cbsub">
+                      <span className="hp4-cbstat hp4-states">
+                        {OUTREACH_TILE.call.states.map((st, i) => (
+                          <s
+                            key={st.text}
+                            aria-hidden={i < OUTREACH_TILE.call.states.length - 1 ? "true" : undefined}
+                            style={cssVars({ "--d": `${st.d}ms` })}
+                          >
+                            {st.live ? <span className="live">{st.text}</span> : st.text}
+                          </s>
+                        ))}
+                      </span>
+                      {/* The bar appends the from-number to EVERY state, so it sits outside the
+                          swap — and it is this tile's copy made literal. */}
+                      <span>{OUTREACH_TILE.call.from}</span>
+                    </span>
+                  </span>
+                  <span
+                    className="hp4-cbbtn"
+                    style={cssVars({ "--d": `${OUTREACH_TILE.call.muteD}ms` })}
+                    aria-hidden="true"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <path d="M12 19v3" />
+                    </svg>
+                  </span>
+                  <span className="hp4-cbbtn hp4-cbbtn--end" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.7 13.3a16 16 0 0 0 6 6" />
+                      <path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.4 2.1" />
+                      <path d="m2 2 20 20" />
+                    </svg>
+                  </span>
+                </div>
+                <div className="hp4-clog">
+                  {OUTREACH_TILE.call.log.map((row) => (
+                    <div className="hp4-clogrow" key={row.num} style={cssVars({ "--d": `${row.d}ms` })}>
+                      <span className="num">{row.num}</span>
+                      <span className={`st${row.ok ? " is-ok" : ""}`}>{row.status}</span>
+                      <span className="dur">{row.dur}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </article>
+
+          {/* Blasts — the lifecycle rail advances, then the recipient board arrives pending and a
+              second wave of colour crosses it as each recipient's state resolves. */}
+          <article className="hp4-tile hp4-t5 hp4-rise" style={cssVars({ "--d": "70ms" })}>
+            <span className="hp4-mono hp4-eyebrow">{BLAST_TILE.eyebrow}</span>
+            <h3 className="hp4-h3">{BLAST_TILE.title}</h3>
+            <p>{BLAST_TILE.body}</p>
+
+            <div className="hp4-blast">
+              <div className="hp4-brail">
+                <div className="hp4-bsteps">
+                  {BLAST_TILE.rail.map((s) => (
+                    <span
+                      className={`hp4-bstep${s.on ? " is-on" : ""}`}
+                      key={s.label}
+                      style={cssVars({ "--d": `${s.d}ms` })}
+                    >
+                      {s.label}
+                    </span>
+                  ))}
+                </div>
+                <div className="hp4-bar">
+                  <i style={cssVars({ "--w": BLAST_TILE.railFill.w, "--d": `${BLAST_TILE.railFill.d}ms` })} />
+                </div>
+              </div>
+
+              <div
+                className="hp4-bboard"
+                role="img"
+                aria-label="One send batch, each cell a recipient — most delivered, with a few replied, skipped and failed"
+              >
+                {Array.from({ length: BLAST_TILE.board.cols * BLAST_TILE.board.rows }, (_, n) => {
+                  const x = n % BLAST_TILE.board.cols;
+                  const y = Math.floor(n / BLAST_TILE.board.cols);
+                  return (
+                    <s
+                      className="hp4-bcell"
+                      key={n}
+                      style={cssVars({
+                        "--c": CELL[cellCode(x, y, BLAST_TILE.board.cols, BLAST_TILE.board.rows)],
+                        "--d": `${BLAST_TILE.board.arriveD + x * 9 + y * 22}ms`,
+                        "--d2": `${BLAST_TILE.board.resolveD + x * 11 + y * 26}ms`,
+                      })}
+                    />
+                  );
+                })}
+              </div>
+
+              <div className="hp4-bnote">
+                <b data-to={BLAST_TILE.batch.to}>0</b> {BLAST_TILE.batch.note}
+              </div>
+              <div className="hp4-blegend" style={cssVars({ "--d": `${BLAST_TILE.legendD}ms` })}>
+                {BLAST_TILE.legend.map((l) => (
+                  <span key={l.label}>
+                    <i style={cssVars({ "--c": `var(${l.c})` })} />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </article>
+
           {SMALL_TILES.map((t, i) => (
             <article
-              className="hp4-tile hp4-t4 hp4-rise"
+              className="hp4-tile hp4-t6 hp4-rise"
               key={t.title}
               style={cssVars({ "--d": `${i * 70}ms` })}
             >

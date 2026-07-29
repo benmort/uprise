@@ -5,6 +5,7 @@ import Homepage4Opening from "@/components/homepage4/Homepage4Opening";
 import Toolkit from "@/components/homepage4/Toolkit";
 import DataArc from "@/components/homepage4/DataArc";
 import Teams from "@/components/homepage4/Teams";
+import Electorate from "@/components/homepage4/Electorate";
 import Research from "@/components/homepage4/Research";
 import UseCases from "@/components/homepage4/UseCases";
 import RoadmapBand from "@/components/homepage4/RoadmapBand";
@@ -53,6 +54,9 @@ export default function LandingPage() {
       <Toolkit />
       <DataArc />
       <Teams />
+      {/* Moved out of <DataArc />, where it sat immediately above the Atlas with the same eyebrow.
+          It wears the Teams/Research treatment, mirrored — capture left, copy right. */}
+      <Electorate />
       <Research />
       <UseCases />
       <RoadmapBand />

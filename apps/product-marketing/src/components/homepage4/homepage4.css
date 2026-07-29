@@ -1025,8 +1025,9 @@
 .hp4-t5 {
   grid-column: span 5;
 }
-.hp4-t4 {
-  grid-column: span 4;
+/* Replaces the retired .hp4-t4: the two closing text tiles are a 2-up row now. */
+.hp4-t6 {
+  grid-column: span 6;
 }
 .hp4-ttall {
   grid-row: span 2;
@@ -1135,6 +1136,584 @@
 }
 .hp4-msg--out .who {
   color: rgba(255, 255, 255, 0.72);
+}
+
+/* --- toolkit: the outreach + blast tiles ---------------------------------
+   Both are DRAWN: no capture exists of the composer, the softphone bar or a blast's
+   recipient board. Ported from docs/design_handoff_uprise_outreach_tiles/, where the
+   timelines can be replayed and slowed down.
+
+   Each is its own `.is-in` scope (see RevealScope's TARGETS) so its internal timeline
+   starts when the tile arrives rather than when the section does — the arrangement
+   `.hp4-minimap` and `.hp4-thread` already use. */
+
+/* N states in one box. Each layer is opaque and paints over the one before it, so a
+   value that CHANGES only has to fade IN: one transition per layer, no keyframes, and
+   the LAST layer in source order is what a reduced-motion visitor is left looking at.
+   Named `-states` rather than `-seq` to stay clear of the --hp4-seq-* colour ramp.
+   Every layer but the last must carry aria-hidden, or a reader announces all of them
+   as one contradictory sentence. */
+.hp4-states {
+  display: grid;
+}
+.hp4-states > * {
+  grid-area: 1 / 1;
+  /* `position: relative` is load-bearing, not tidiness. A layer carrying a transform
+     (the connecting spinner does) creates a stacking context and so paints ABOVE its
+     non-transformed siblings whatever the source order — the spinner sat on top of the
+     handset meant to replace it. Positioning every layer puts them all in the same
+     paint step, where source order decides. */
+  position: relative;
+  background: var(--layer, #fff);
+  opacity: 0;
+  transition: opacity 0.34s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-states > :first-child {
+  opacity: 1;
+}
+.is-in .hp4-states > * {
+  opacity: 1;
+}
+
+/* two panels, in the order the tile's own copy reads */
+.hp4-outreach {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+.hp4-cmpgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+}
+.hp4-cmp {
+  border: 1px solid var(--hp4-line);
+  border-radius: 12px;
+  background: #fcfdff;
+  padding: 12px 13px 13px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.48s var(--hp4-ease) var(--d, 0ms),
+    transform 0.48s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cmp {
+  opacity: 1;
+  transform: none;
+}
+.hp4-cmphead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+  color: var(--hp4-muted);
+}
+/* Amber under the limit, red over — the product's own two tones. 141 raw characters
+   against 160, so amber. Values already in this file on `.hp4-pq`. */
+.hp4-cmpcount {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: #fff6ed;
+  border: 1px solid #fadfc2;
+  color: #8a5a1c;
+  font-variant-numeric: tabular-nums;
+}
+/* `display: inline` and opacity only: a run of body copy has to keep flowing inside the
+   paragraph. `transform` does nothing on an inline box, and inline-block would stop the
+   run wrapping mid-sentence. */
+.hp4-cmpbody {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--hp4-ink);
+}
+.hp4-cmpbody .seg {
+  opacity: 0;
+  transition: opacity 0.42s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cmpbody .seg {
+  opacity: 1;
+}
+/* Tags stay tags in the editor and become values in the preview — which is what the
+   product does, and cheaper than animating a token flip whose box cannot animate to
+   `auto` width. */
+.hp4-cmpbody .tag {
+  font-family: var(--hp4-mono-f);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--hp4-brand-50);
+  color: var(--hp4-brand-700);
+  white-space: nowrap;
+}
+/* Dashed — these are the composer's draggable chip palette, not text. */
+.hp4-cmptags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.hp4-cmptag {
+  font-family: var(--hp4-mono-f);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px dashed var(--hp4-line);
+  background: #fff;
+  color: var(--hp4-muted);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.4s var(--hp4-ease) var(--d, 0ms),
+    transform 0.4s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cmptag {
+  opacity: 1;
+  transform: none;
+}
+.hp4-cmpsub {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hp4-line-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.hp4-cmpsub .warn {
+  color: var(--hp4-sup-5);
+}
+.hp4-cmpsub .ok {
+  color: #1f9254;
+}
+.hp4-cmpsub .warn::before,
+.hp4-cmpsub .ok::before {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 99px;
+  background: currentColor;
+}
+.hp4-cmpact {
+  display: flex;
+  gap: 7px;
+  margin-top: 12px;
+}
+.hp4-cmpbtn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.4s var(--hp4-ease) var(--d, 0ms),
+    transform 0.4s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cmpbtn {
+  opacity: 1;
+  transform: none;
+}
+.hp4-cmpbtn--ghost {
+  border: 1px solid var(--hp4-line);
+  background: #fff;
+  color: var(--hp4-ink);
+}
+.hp4-cmpbtn--solid {
+  background: var(--hp4-brand);
+  color: #fff;
+}
+
+/* the live preview. Same construction as `.hp4-phone` and the admin composer's own
+   mock: black bezel, a 486/1024 screen, a notch pill with a camera dot. */
+.hp4-cmppre {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+/* The composer's real channel toggle, static — see the note on `preview` in sections.ts. */
+.hp4-cmpchan {
+  display: inline-flex;
+  border: 1px solid var(--hp4-line);
+  border-radius: 100px;
+  overflow: hidden;
+}
+.hp4-cmpchan s {
+  font-family: var(--hp4-mono-f);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 4px 9px;
+  color: var(--hp4-muted);
+  background: #fff;
+}
+.hp4-cmpchan s.is-on {
+  background: var(--hp4-brand);
+  color: #fff;
+}
+/* 128px: at a 486/1024 aspect every extra 10px of width costs 21px of height, and the
+   preview must not out-tall the editor panel beside it. */
+.hp4-cmpdev {
+  width: 128px;
+  padding: 5px;
+  border-radius: 1.35rem;
+  background: #06070d;
+  box-shadow: 0 18px 34px -18px rgba(11, 15, 28, 0.5);
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.52s var(--hp4-ease) var(--d, 0ms),
+    transform 0.52s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cmpdev {
+  opacity: 1;
+  transform: none;
+}
+.hp4-cmpscr {
+  position: relative;
+  aspect-ratio: 486 / 1024;
+  border-radius: 1.15rem;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 24px 7px 7px;
+}
+.hp4-cmpscr::before,
+.hp4-cmpscr::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  z-index: 3;
+  translate: -50% 0;
+  border-radius: 99px;
+  pointer-events: none;
+}
+.hp4-cmpscr::before {
+  top: 4px;
+  width: 44%;
+  height: 11px;
+  background: #06070d;
+}
+.hp4-cmpscr::after {
+  top: 7.5px;
+  width: 4px;
+  height: 4px;
+  background: #1b2233;
+}
+.hp4-cmpbub {
+  max-width: 88%;
+  padding: 7px 9px;
+  font-size: 9.5px;
+  line-height: 1.42;
+  border-radius: 12px 12px 4px 12px; /* rounded-2xl + rounded-br-md */
+  background: var(--hp4-brand);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.44s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cmpbub {
+  opacity: 1;
+}
+
+/* the softphone. The bar only exists while a call is up (`if (state === "idle") return
+   null`), so it ARRIVES, then walks CallState: connecting → ringing → open, with mute
+   dimmed until the leg is open. No post-call disposition — the product has none. */
+.hp4-cbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 384px; /* w-[min(24rem,…)] */
+  margin-inline: auto;
+  padding: 11px;
+  border: 1px solid var(--hp4-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(11, 15, 28, 0.05),
+    0 10px 22px -10px rgba(11, 15, 28, 0.28);
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.48s var(--hp4-ease) var(--d, 0ms),
+    transform 0.48s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cbar {
+  opacity: 1;
+  transform: none;
+}
+.hp4-cbav {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 99px;
+  background: var(--hp4-brand-50);
+  color: var(--hp4-brand);
+  display: grid;
+  place-items: center;
+}
+.hp4-cbav .hp4-states {
+  --layer: var(--hp4-brand-50);
+  place-items: center;
+}
+.hp4-cbav svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+.hp4-spin {
+  animation: hp4spin 0.9s linear infinite;
+}
+@keyframes hp4spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.hp4-cbmeta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.hp4-cbmeta b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--hp4-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hp4-cbsub {
+  display: flex;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--hp4-muted);
+}
+.hp4-cbstat {
+  font-variant-numeric: tabular-nums;
+}
+.hp4-cbstat s {
+  text-decoration: none;
+}
+.hp4-cbstat .live::after {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 5px;
+  height: 5px;
+  margin-left: 6px;
+  border-radius: 99px;
+  background: var(--hp4-sup-1);
+  animation: hp4pulse 1.6s ease-in-out infinite;
+}
+.hp4-cbbtn {
+  flex: none;
+  width: 31px;
+  height: 31px;
+  border-radius: 99px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hp4-line);
+  color: var(--hp4-ink);
+  opacity: 0.4; /* genuinely disabled until the leg is open */
+  transition: opacity 0.34s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-cbbtn {
+  opacity: 1;
+}
+.hp4-cbbtn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+/* Hang-up is never disabled, so it opens at full strength. Later in source than the
+   base rule, so it wins before `.is-in` lands. */
+.hp4-cbbtn--end {
+  border: 0;
+  background: var(--hp4-sup-5);
+  color: #fff;
+  opacity: 1;
+}
+.hp4-clog {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  max-width: 384px;
+  margin: 10px auto 0;
+}
+.hp4-clogrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 1px solid var(--hp4-line-2);
+  border-radius: 10px;
+  font-size: 12px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.4s var(--hp4-ease) var(--d, 0ms),
+    transform 0.4s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-outreach.is-in .hp4-clogrow {
+  opacity: 1;
+  transform: none;
+}
+.hp4-clogrow .num {
+  flex: 1 1 auto;
+  color: var(--hp4-body);
+  font-variant-numeric: tabular-nums;
+}
+.hp4-clogrow .st {
+  flex: none;
+  font-family: var(--hp4-mono-f);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--hp4-faint);
+}
+.hp4-clogrow .st.is-ok {
+  color: #1f9254;
+}
+.hp4-clogrow .dur {
+  flex: none;
+  width: 34px;
+  text-align: right;
+  color: var(--hp4-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* blasts — the send, and what came back. The rail is the real BlastStatus path for a
+   send-now blast. The board is one send batch, one cell per recipient, in the real
+   BlastRecipientStatus vocabulary. Coarse on purpose, like AU_GRID: the cell count is
+   a SHAPE, not a count. */
+.hp4-blast {
+  margin-top: 18px;
+}
+.hp4-brail {
+  display: grid;
+  gap: 9px;
+}
+.hp4-bsteps {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.hp4-bstep {
+  font-family: var(--hp4-mono-f);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--hp4-faint);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.4s var(--hp4-ease) var(--d, 0ms),
+    transform 0.4s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-blast.is-in .hp4-bstep {
+  opacity: 1;
+  transform: none;
+}
+.hp4-bstep.is-on {
+  color: var(--hp4-brand);
+  font-weight: 500;
+}
+.hp4-bstep.is-on::before {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 99px;
+  background: var(--hp4-brand);
+  animation: hp4pulse 1.6s ease-in-out infinite;
+}
+/* `.hp4-bar` is the opening's width-fill primitive, where a scroll handler sets --w.
+   Here it is gated on `.is-in` instead, and given the delay the primitive doesn't carry. */
+.hp4-brail .hp4-bar {
+  width: 100%;
+  margin-top: 0;
+}
+.hp4-brail .hp4-bar i {
+  width: 0;
+  transition-delay: var(--d, 0ms);
+}
+.hp4-blast.is-in .hp4-brail .hp4-bar i {
+  width: var(--w, 0%);
+}
+.hp4-bboard {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  gap: clamp(1.5px, 0.4vw, 3px);
+  margin-top: 16px;
+}
+/* Two waves off one element: the cells ARRIVE pending (opacity + scale, `--d`), then a
+   second, slower wave of colour crosses the board as each recipient's state RESOLVES
+   (background-color, `--d2`). `.hp4-matrix s`, one property further on. */
+.hp4-bcell {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: #e8ebf3; /* PENDING — the `.hp4-bar` track colour, reused */
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 0.44s var(--hp4-ease) var(--d, 0ms),
+    transform 0.54s var(--hp4-ease) var(--d, 0ms),
+    background-color 0.5s var(--hp4-ease) var(--d2, 0ms);
+}
+.hp4-blast.is-in .hp4-bcell {
+  opacity: 1;
+  transform: none;
+  background-color: var(--c, #e8ebf3);
+}
+.hp4-bnote {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 13px;
+  color: var(--hp4-muted);
+  font-size: 12px;
+}
+.hp4-bnote b {
+  color: var(--hp4-ink);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.hp4-blegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 11px;
+  margin-top: 10px;
+  font-family: var(--hp4-mono-f);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  color: var(--hp4-faint);
+  opacity: 0;
+  transition: opacity 0.5s var(--hp4-ease) var(--d, 0ms);
+}
+.hp4-blast.is-in .hp4-blegend {
+  opacity: 1;
+}
+.hp4-blegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.hp4-blegend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--c);
 }
 
 /* --- toolkit: the numbered cards ---------------------------------------- */
@@ -1323,6 +1902,24 @@
 }
 .hp4-sgrid2 {
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+}
+/* Mirror of the split: the visual takes the left column and the copy the right, so a section can
+   read as the inverse of its neighbours (see <Electorate /> between Teams and Research).
+   Deliberately scoped above the collapse breakpoint — below it the grid is one column and DOM order
+   wins, which keeps the stacked layout leading with the heading rather than with a screenshot. */
+@media (min-width: 1001px) {
+  .hp4-sgrid--flip > :first-child {
+    order: 2;
+  }
+}
+/* The datasets capture inside the mock card: inset like the card's other contents, with its own
+   hairline so it reads as a screenshot rather than bleeding into the white body. */
+.hp4-dsshot .hp4-mockbody img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--hp4-line-2);
 }
 .hp4-sgrid3 {
   grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
@@ -1979,7 +2576,7 @@
   .hp4-t5 {
     grid-column: span 12;
   }
-  .hp4-t4 {
+  .hp4-t6 {
     grid-column: span 6;
   }
   .hp4-ttall {
@@ -2006,8 +2603,23 @@
 }
 
 @media (max-width: 640px) {
-  .hp4-t4 {
+  .hp4-t6 {
     grid-column: span 12;
+  }
+  /* Copy above, preview below: a 128px phone beside a 13.5px paragraph in ~272px of
+     content is neither. */
+  .hp4-cmpgrid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .hp4-cmppre {
+    justify-items: start;
+  }
+  /* The board keeps its 18 columns at every width — the cell delays are computed from
+     (x, y) against an 18-wide grid, so re-columning would garble the resolve frontier.
+     Rows come off instead. */
+  .hp4-bboard > .hp4-bcell:nth-child(n + 109) {
+    display: none;
   }
   .hp4-cards,
   .hp4-ucards,
@@ -2089,11 +2701,23 @@
    content is reachable only by animating.
    ========================================================================= */
 @media (prefers-reduced-motion: reduce) {
+  /* `.hp4-band *` is the fix, not decoration. This blanket used to name `.hp4-root`
+     only — which wraps the opening — so every band below it was untouched and the turf
+     minimap still ran its full 2s draw while the inbox thread still staggered, both
+     firing at LOAD because RevealScope stamps `is-in` immediately in this mode.
+     `transition-delay` matters as much as the duration: zeroing duration alone leaves a
+     1.3s-delayed layer waiting 1.3s before snapping in, so a visitor would sit looking
+     at a red compliance warning and a "Connecting…" call. Widening this also flattens
+     `.hp4-tile:hover`, which under reduced motion is correct. */
   .hp4-root *,
   .hp4-root *::before,
-  .hp4-root *::after {
+  .hp4-root *::after,
+  .hp4-band *,
+  .hp4-band *::before,
+  .hp4-band *::after {
     animation: none !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
   }
   .hp4-rise {
     opacity: 1 !important;
@@ -2101,6 +2725,30 @@
   }
   .hp4-mask > span {
     transform: none !important;
+  }
+  /* Belt and braces, as with `.hp4-rise` above: if the observer never runs, nothing gets
+     `is-in` and these default to invisible. */
+  .hp4-cmp,
+  .hp4-cmpbody .seg,
+  .hp4-cmptag,
+  .hp4-cmpbtn,
+  .hp4-cmpdev,
+  .hp4-cmpbub,
+  .hp4-cbar,
+  .hp4-cbbtn,
+  .hp4-clogrow,
+  .hp4-bstep,
+  .hp4-bcell,
+  .hp4-blegend,
+  .hp4-states > * {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .hp4-bcell {
+    background-color: var(--c, #e8ebf3) !important;
+  }
+  .hp4-brail .hp4-bar i {
+    width: var(--w, 0%) !important;
   }
   .hp4-stage {
     height: auto !important;

@@ -200,6 +200,13 @@ body.lab-insitu .lab-stub { display: block }
 .hp4-states { display: grid }
 .hp4-states > * {
   grid-area: 1 / 1;
+  /* `position: relative` is load-bearing, not tidiness. A layer that carries a
+     transform (the connecting spinner does) creates a stacking context and so
+     paints ABOVE its non-transformed siblings whatever the source order — the
+     spinner sat on top of the handset that was supposed to replace it. Making
+     every layer positioned puts them all in the same paint step, where source
+     order decides. */
+  position: relative;
   background: var(--layer, #fff);
   opacity: 0;
   transition: opacity calc(340ms * var(--lab-t)) var(--hp4-ease) calc(var(--d, 0ms) * var(--lab-t));
@@ -303,7 +310,9 @@ body.lab-insitu .lab-stub { display: block }
 }
 .hp4-cmpchan s.is-on { background: var(--hp4-brand); color: #fff }
 .hp4-cmpdev {
-  width: 150px; padding: 6px; border-radius: 1.5rem; background: #06070d;
+  /* 128px, not 150: at a 486/1024 aspect every extra 10px of width costs 21px of
+     height, and the preview must not out-tall the editor panel beside it. */
+  width: 128px; padding: 5px; border-radius: 1.35rem; background: #06070d;
   box-shadow: 0 18px 34px -18px rgba(11, 15, 28, 0.5);
   opacity: 0; transform: translateY(10px);
   transition:

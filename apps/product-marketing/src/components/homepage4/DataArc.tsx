@@ -1,45 +1,23 @@
 import React from "react";
-import { MapPinned, Users } from "lucide-react";
-import NotableFeatureRow from "@/components/marketing/NotableFeatureRow";
 import RevealScope from "./RevealScope";
 import { cssVars } from "./parts";
 import { SECTION } from "./content";
-import { ATLAS, AU_GRID, ELECTORATE } from "./sections";
+import { ATLAS, AU_GRID } from "./sections";
 
 const SEQ = ["--hp4-seq-1", "--hp4-seq-2", "--hp4-seq-3", "--hp4-seq-4", "--hp4-seq-5"];
 
 /**
- * The data arc — the one part of the platform nothing else on the page can show, told two ways:
- * the electorate row on paper, then the Atlas on ink.
+ * The data arc — the one part of the platform nothing else on the page can show: the whole country
+ * as a census choropleth, on ink.
  *
- * It was three beats; the "Where to knock first" demographics band that closed it on ink is gone
- * (see the note where it used to sit, at the foot of this file).
+ * It was three beats. The "Where to knock first" demographics band that closed it is gone (see the
+ * note where it used to sit, at the foot of this file), and the "Know your electorate" row that
+ * opened it now sits between <Teams /> and <Research /> as <Electorate /> — it and the Atlas were
+ * announcing themselves with the same eyebrow, back to back.
  */
 export default function DataArc() {
   return (
     <>
-      {/* Beat one, on paper: the electorate row from the previous homepage, unchanged — the shared
-          design-system treatment, screenshot and all. */}
-      <section className="py-16 md:py-24">
-        <div className="container">
-          <NotableFeatureRow
-            eyebrow={ELECTORATE.eyebrow}
-            title={ELECTORATE.title}
-            subFeatures={[
-              { icon: Users, ...ELECTORATE.subFeatures[0] },
-              { icon: MapPinned, ...ELECTORATE.subFeatures[1] },
-            ]}
-            image={{
-              src: "/images/marketing/datasets-screenshot.jpg",
-              alt: "The uprise Australian datasets library",
-              width: 1600,
-              height: 868,
-            }}
-          />
-        </div>
-      </section>
-
-      {/* Beat two, on ink: the whole country as a census choropleth. */}
       <RevealScope id={SECTION.data} className="hp4-atlas">
         <div className="hp4-shell hp4-agrid">
           <div>

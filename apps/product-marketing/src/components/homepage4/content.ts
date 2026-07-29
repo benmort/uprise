@@ -60,21 +60,29 @@ export const HERO = {
 export type Stat = { to: number; dp?: number; suffix?: string; label: string };
 
 /**
- * Every figure is a coverage number readable off the product's own Datasets screen, so nothing
- * here is an invented growth stat. Sources:
+ * Two kinds of figure, neither an invented growth stat: data coverage readable off the product's
+ * own Datasets screen, and the shape of the platform itself. Sources:
  *   16.9M  16,905,838 Australian addresses
  *   1,135  150 federal divisions + 438 state electorates (415 lower + 23 upper) + 547 LGAs.
  *          Was three separate cells; one number says "we have every boundary" better than three
  *          competing for the same glance.
- *   2,472  SA2 statistical areas — the level the demographics choropleth shades at
- *   0      the field PWA queues knocks to an on-device outbox and flushes on reconnect, so
- *          recording a knock genuinely needs no signal
+ *   7      the channels a campaign runs from one platform: SMS, WhatsApp, voice calls, the doors,
+ *          branching surveys, action pages and push to volunteers' phones.
+ *          KEEP IN STEP WITH <RoadmapBand />, which states on this same page that email
+ *          broadcasts, social DMs and outbound WhatsApp are NOT available yet — nothing still on
+ *          the roadmap may be counted here, or the page contradicts itself.
+ *   3      the member-facing apps: the organiser workspace (apps/admin), the offline canvasser app
+ *          (apps/field) and supporter action pages (apps/action). api, auth, worker and the two
+ *          marketing sites aren't member-facing, so they aren't counted.
+ *
+ * The SA2 count (2,472) and the "0 bars of signal" line this replaced are both still made
+ * elsewhere: SA2s in ATLAS.stats, and the offline story in SCENES[1] and GALLERY.facts.
  */
 export const TICKER: Stat[] = [
   { to: 16.9, dp: 1, suffix: "M", label: "Australian addresses" },
   { to: 1135, label: "Electorates & councils" },
-  { to: 2472, label: "SA2 statistical areas" },
-  { to: 0, label: "Bars of signal needed" },
+  { to: 7, label: "Comms channels" },
+  { to: 3, label: "Member apps" },
 ];
 
 export type Satellite = {
