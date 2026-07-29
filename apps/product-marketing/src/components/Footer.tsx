@@ -54,11 +54,14 @@ export default function Footer({
             </div>
           </div>
 
-          {/* Two columns from the smallest screen up. On mobile the short lists (Community,
-              Policies) pair off at half width each and align right, so they read as a block against
-              the long Resources list above them rather than as three ragged left-aligned stacks. The
-              wide list and the newsletter span both cells — Resources' labels wrap at half width,
-              and the signup needs its full measure. */}
+          {/* Two columns from the smallest screen up — a 6/6 split of the row.
+              On mobile Resources takes the left half and spans BOTH rows, which is what pushes
+              Community and Policies into the right half stacked one above the other; it used to run
+              full width with those two paired beneath it. Auto-placement does the rest: with
+              Resources holding (row 1, col 1) and (row 2, col 1), the next two items land at
+              (row 1, col 2) and (row 2, col 2) on their own. The short lists stay right-aligned, so
+              each half's links sit against its own outer edge. Only the newsletter still spans both
+              cells — the input needs its full measure. */}
           <div className="grid grid-cols-2 gap-8 text-sm lg:flex lg:gap-14">
             {FOOTER.columns.map((col) => {
               const split = col.cols === 2;
@@ -66,7 +69,7 @@ export default function Footer({
                 <div
                   key={col.heading}
                   className={`flex flex-col gap-2.5 ${
-                    split ? "col-span-2 sm:col-span-1" : "max-sm:text-right"
+                    split ? "max-sm:row-span-2" : "max-sm:text-right"
                   }`}
                 >
                   <div className="font-semibold text-[#0C0E12]">{col.heading}</div>

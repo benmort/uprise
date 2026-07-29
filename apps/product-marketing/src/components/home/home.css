@@ -2740,18 +2740,39 @@
 /* Asymmetric bottom padding: the roadmap's bottom edge only ever meets the gallery's
    top, and the two together were ~250px of empty paper. Halved at that seam only, so
    the roadmap keeps its full lead-in from the section above. */
-/* Back on paper. This band was put on ink to match the atlas; the atlas is light now and the page
-   carries no dark section at all, so an ink roadmap was the last one standing.
-   Paper rather than plate: the section above it (.home-types) is plate, so white alternates against
-   it, and the gallery below opens on #fff — its gradient picks this up and carries on down to plate.
-   SectionHead's type defaults to the light palette, so the three colour overrides this band used to
-   need are gone with it.
-   The dashed card borders and "coming soon" tag stay — inverting the band never changed what those
-   are for, which is to stop this reading like the shipped toolkit above. */
+/* On ink, matching the atlas.
+   This band went to paper for a while on the reasoning that "the atlas is light now, so an ink
+   roadmap is the last one standing" — that premise is gone: the atlas is back on --home-ink-2, so
+   the page has a dark register again and this rejoins it.
+   Unlike the atlas, this band was never dark before, so the values are copied from .home-atlas
+   rather than recovered from history — the point is that the page's two ink bands are the same
+   colour, not two near-blacks. They sit far apart in the stack (Teams, Electorate, Research and
+   UseCases run between them), so this does not recreate the two-dark-bands-in-a-row problem that
+   took the demographics beat off ink.
+   What paper bought was the alternation with .home-types above and the gallery's opening #fff below;
+   that is the real cost of this, and the gallery gradient now starts against ink instead.
+   The dashed card borders and "coming soon" tag stay, inverted — they are what stop this reading
+   like the shipped toolkit above, and that is true in either register.
+
+   `background` has to be restated even though `.home-band` already sets one: this element carries
+   both classes at equal specificity, so the only reason this wins is that it is later in the file.
+   Keep it after .home-band. */
 .home-roadmap {
   padding: clamp(70px, 8vw, 110px) 0 clamp(40px, 4.5vw, 64px);
-  background: var(--home-paper);
-  border-top: 1px solid var(--home-line-2);
+  background: var(--home-ink-2);
+  color: #fff;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* SectionHead's type defaults to the light palette, so the band has to restate it — the same three
+   overrides, and the same values, as .home-atlas. */
+.home-roadmap .home-h2 {
+  color: #fff;
+}
+.home-roadmap .home-lede {
+  color: rgba(255, 255, 255, 0.62);
+}
+.home-roadmap .home-eyebrow {
+  color: var(--home-brand-300);
 }
 .home-rcards {
   display: grid;
@@ -2763,31 +2784,32 @@
   gap: 9px;
   align-content: start;
   padding: 22px 20px;
-  /* Dashed and a shade off-white: on paper, a card with no fill at all stops reading as a card,
-     and the plate tint is what makes the dashed edge legible as "not built yet". Same pairing as
-     the unclaimed shift in the volunteers tile. */
-  border: 1px dashed rgba(11, 15, 28, 0.16);
+  /* Dashed and a shade off the band: a card with no fill at all stops reading as a card, and the
+     tint is what makes the dashed edge legible as "not built yet". Same pairing as the unclaimed
+     shift in the volunteers tile — inverted here, because the band is ink. */
+  border: 1px dashed rgba(255, 255, 255, 0.16);
   border-radius: 14px;
-  background: var(--home-plate);
+  background: rgba(255, 255, 255, 0.035);
 }
 .home-rcard .tag {
   justify-self: start;
   border-radius: 100px;
   padding: 5px 10px;
-  background: rgba(11, 15, 28, 0.05);
-  color: var(--home-muted);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 9.5px;
 }
 .home-rcard h3 {
   font-size: 16.5px;
   font-weight: 600;
   letter-spacing: -0.015em;
-  color: var(--home-ink);
+  color: #fff;
 }
 .home-rcard p {
   font-size: 14px;
   line-height: 1.55;
-  color: var(--home-body);
+  /* Not the inherited #fff — body copy at full white on ink glares. Same 0.62 as the ledes. */
+  color: rgba(255, 255, 255, 0.62);
 }
 
 /* --- gallery: the canvassing app --------------------------------------- */
