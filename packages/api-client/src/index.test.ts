@@ -4,6 +4,8 @@ import {
   getApiUrl,
   getAuthAppUrl,
   getActionAppUrl,
+  getFieldAppUrl,
+  getAdminAppUrl,
   loginRedirectUrl,
   request,
   auth,
@@ -69,6 +71,183 @@ describe("environment URL helpers", () => {
   it("auth + action app URLs fall back to their local dev origins", () => {
     expect(getAuthAppUrl()).toBe("http://localhost:3002");
     expect(getActionAppUrl()).toBe("http://localhost:3004");
+  });
+});
+
+/**
+ * Host-derivation for white-label domains.
+ *
+ * The vitest environment is `node`, so there is no `window` unless a test installs one —
+ * which is exactly the server-render case, and the reason every assertion here that has no
+ * `withHost()` wrapper is testing the RSC path.
+ */
+describe("sibling-origin derivation on a custom parent", () => {
+  /** Run `fn` with a stubbed `window.location`, then restore whatever was there. */
+  function withHost<T>(host: string, fn: () => T, protocol = "https:"): T {
+    const g = globalThis as unknown as { window?: unknown };
+    const had = "window" in g;
+    const prev = g.window;
+    g.window = { location: { host, protocol } };
+    try {
+      return fn();
+    } finally {
+      if (had) g.window = prev;
+      else delete g.window;
+    }
+  }
+
+  /** Set the four env bases to recognisable platform values for the duration of `fn`. */
+  function withPlatformEnv<T>(fn: () => T): T {
+    const keys = [
+      "NEXT_PUBLIC_API_URL",
+      "NEXT_PUBLIC_AUTH_APP_URL",
+      "NEXT_PUBLIC_FIELD_APP_URL",
+      "NEXT_PUBLIC_APP_URL",
+    ] as const;
+    const prev = keys.map((k) => [k, process.env[k]] as const);
+    process.env.NEXT_PUBLIC_API_URL = "https://api.uprise.org.au/api/v1";
+    process.env.NEXT_PUBLIC_AUTH_APP_URL = "https://auth.uprise.org.au";
+    process.env.NEXT_PUBLIC_FIELD_APP_URL = "https://field.uprise.org.au";
+    process.env.NEXT_PUBLIC_APP_URL = "https://admin.uprise.org.au";
+    try {
+      return fn();
+    } finally {
+      for (const [k, v] of prev) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  }
+
+  it("derives every sibling from the tenant's own parent", () => {
+    withPlatformEnv(() =>
+      withHost("admin.commonthreads.org.au", () => {
+        // The API keeps its /api/v1 prefix — it is the Nest global prefix, not part of the origin.
+        expect(getApiUrl()).toBe("https://api.commonthreads.org.au/api/v1");
+        expect(getAuthAppUrl()).toBe("https://auth.commonthreads.org.au");
+        expect(getActionAppUrl()).toBe("https://action.commonthreads.org.au");
+        expect(getFieldAppUrl()).toBe("https://field.commonthreads.org.au");
+        expect(getAdminAppUrl()).toBe("https://admin.commonthreads.org.au");
+      }),
+    );
+  });
+
+  it("derives from any of the five app hosts, not just admin", () => {
+    withPlatformEnv(() => {
+      for (const host of [
+        "admin.commonthreads.org.au",
+        "auth.commonthreads.org.au",
+        "field.commonthreads.org.au",
+        "action.commonthreads.org.au",
+      ]) {
+        withHost(host, () => {
+          expect(getApiUrl()).toBe("https://api.commonthreads.org.au/api/v1");
+        });
+      }
+    });
+  });
+
+  /**
+   * THE regression guard. Derivation must never touch a platform host: the configured value
+   * is legitimately a localhost port, a tunnel host or a preview URL, and rewriting any of
+   * them silently breaks dev, the dev tunnel and preview deploys.
+   */
+  it("returns the configured value UNTOUCHED on every host that exists today", () => {
+    withPlatformEnv(() => {
+      for (const host of [
+        "admin.uprise.org.au",
+        "auth.uprise.org.au",
+        "admin.dev.uprise.org.au",
+        "common-threads.uprise.org.au",
+        "uprise.org.au",
+        "uprise-admin-prog-network.vercel.app",
+        "localhost:3000",
+        "admin.lvh.me:3002",
+        "127.0.0.1",
+      ]) {
+        withHost(host, () => {
+          expect(getApiUrl(), host).toBe("https://api.uprise.org.au/api/v1");
+          expect(getAuthAppUrl(), host).toBe("https://auth.uprise.org.au");
+          expect(getFieldAppUrl(), host).toBe("https://field.uprise.org.au");
+        });
+      }
+    });
+  });
+
+  /**
+   * The shapes the table above MISSED, and that shipped broken. Each of these is reachable in
+   * production and made `isCustomParentHost` return true, so derivation fired and produced an
+   * origin matching no CORS entry and no cookie domain — a request that previously worked
+   * became CORS-rejected and cookieless.
+   *
+   * Kept as a separate case from the table above so the failure message says which class of
+   * host regressed. A green table is not evidence of darkness; it only proves the rows in it.
+   */
+  it("returns the configured value UNTOUCHED on the live shapes that defeated the gate", () => {
+    withPlatformEnv(() => {
+      for (const host of [
+        // trailing-dot FQDN — `https://api.uprise.org.au./api/v1/health` answers 200 today
+        "admin.uprise.org.au.",
+        "auth.uprise.org.au.",
+        "api.uprise.org.au.",
+        "admin.dev.uprise.org.au.",
+        // upriselabs.org — organisation-marketing is deployed there AND transpiles this package
+        "www.upriselabs.org",
+        "admin.upriselabs.org",
+        // deeper subdomains of a domain we own, and `www` on the platform root
+        "admin.staging.uprise.org.au",
+        "www.uprise.org.au",
+      ]) {
+        withHost(host, () => {
+          expect(getApiUrl(), host).toBe("https://api.uprise.org.au/api/v1");
+          expect(getAuthAppUrl(), host).toBe("https://auth.uprise.org.au");
+          expect(getFieldAppUrl(), host).toBe("https://field.uprise.org.au");
+          expect(getAdminAppUrl(), host).toBe("https://admin.uprise.org.au");
+        });
+      }
+    });
+  });
+
+  it("prefers the runtime window override over env on a platform host", () => {
+    withPlatformEnv(() => {
+      const g = globalThis as unknown as { window?: unknown };
+      const had = "window" in g;
+      const prev = g.window;
+      g.window = {
+        location: { host: "admin.uprise.org.au", protocol: "https:" },
+        __API_URL__: "https://api.override.test/api/v1",
+      };
+      try {
+        expect(getApiUrl()).toBe("https://api.override.test/api/v1");
+      } finally {
+        if (had) g.window = prev;
+        else delete g.window;
+      }
+    });
+  });
+
+  it("derivation BEATS the runtime override on a custom parent", () => {
+    // The override is set per-app at build time and names the platform, so on a white-label
+    // host it is the wrong answer for the same reason the env var is.
+    const g = globalThis as unknown as { window?: unknown };
+    const had = "window" in g;
+    const prev = g.window;
+    g.window = {
+      location: { host: "admin.commonthreads.org.au", protocol: "https:" },
+      __API_URL__: "https://api.uprise.org.au/api/v1",
+    };
+    try {
+      expect(getApiUrl()).toBe("https://api.commonthreads.org.au/api/v1");
+    } finally {
+      if (had) g.window = prev;
+      else delete g.window;
+    }
+  });
+
+  it("honours the page protocol", () => {
+    withHost("admin.commonthreads.org.au", () => {
+      expect(getAuthAppUrl()).toBe("http://auth.commonthreads.org.au");
+    }, "http:");
   });
 });
 

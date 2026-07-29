@@ -18,7 +18,8 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
-    "@uprise/contracts": "workspace:*"
+    "@uprise/contracts": "workspace:*",
+    "@uprise/domains": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",

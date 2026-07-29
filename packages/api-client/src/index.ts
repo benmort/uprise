@@ -32,37 +32,113 @@ import type {
   UserProfileResponse,
 } from "@uprise/contracts";
 
+import { type AppName, isCustomParentHost, siblingOrigin } from "@uprise/domains";
+
 export * from "@uprise/contracts";
 
 /** `status` is set for HTTP-level failures (e.g. 403 → render a no-permission
  *  state instead of a generic error); absent on network/parse failures. */
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
 
-/** API base URL — runtime window override wins, else NEXT_PUBLIC_API_URL. */
-export function getApiUrl(): string {
+/** The API's global prefix — `apps/api/src/bootstrap.ts` `setGlobalPrefix("api/v1")`. */
+const API_PATH = "/api/v1";
+
+/**
+ * The origin of a sibling uprise app for the CURRENT host.
+ *
+ * Precedence, and the order is the whole design:
+ *   1. **host-derivation — only on a custom (white-label) parent**
+ *   2. the runtime `window.__*_URL__` override
+ *   3. the build-time `NEXT_PUBLIC_*` env var
+ *   4. the localhost dev default
+ *
+ * Why derivation is gated on `isCustomParentHost` rather than applied to every host: on a
+ * platform host the configured value must win **untouched**. `NEXT_PUBLIC_API_URL` is
+ * legitimately a localhost port in dev, a tunnel host on `*.dev.uprise.org.au`, and a
+ * preview URL on `*.vercel.app`; silently rewriting any of those to `api.<parent>` would
+ * break all three. A custom parent is the one case where the env var is *structurally*
+ * wrong — it names the platform, so any cookie it returns is scoped to the wrong parent and
+ * is simply never sent.
+ *
+ * The `isCustomParentHost` gate is therefore also what lets this ship dark: it is false for
+ * every host that exists today.
+ */
+function resolveSiblingOrigin(
+  app: AppName,
+  runtimeKey: string,
+  envValue: string | undefined,
+  devDefault: string,
+  path = "",
+): string {
   if (typeof window !== "undefined") {
-    const runtime = (window as unknown as { __API_URL__?: string }).__API_URL__;
+    const host = window.location?.host ?? "";
+    if (isCustomParentHost(host)) {
+      const derived = siblingOrigin(host, app, window.location?.protocol ?? "https");
+      if (derived) return `${derived}${path}`;
+    }
+    const runtime = (window as unknown as Record<string, string | undefined>)[runtimeKey];
     if (runtime) return runtime;
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+  return envValue || devDefault;
+}
+
+/** API base URL (including the `/api/v1` prefix). */
+export function getApiUrl(): string {
+  return resolveSiblingOrigin(
+    "api",
+    "__API_URL__",
+    process.env.NEXT_PUBLIC_API_URL,
+    "http://localhost:3001/api/v1",
+    API_PATH,
+  );
 }
 
 /** Standalone auth app origin — where unauthenticated callers are sent to log in. */
 export function getAuthAppUrl(): string {
-  if (typeof window !== "undefined") {
-    const runtime = (window as unknown as { __AUTH_APP_URL__?: string }).__AUTH_APP_URL__;
-    if (runtime) return runtime;
-  }
-  return process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
+  return resolveSiblingOrigin(
+    "auth",
+    "__AUTH_APP_URL__",
+    process.env.NEXT_PUBLIC_AUTH_APP_URL,
+    "http://localhost:3002",
+  );
 }
 
 /** Action app origin — where a freshly-joined volunteer lands after onboarding. */
 export function getActionAppUrl(): string {
-  if (typeof window !== "undefined") {
-    const runtime = (window as unknown as { __ACTION_APP_URL__?: string }).__ACTION_APP_URL__;
-    if (runtime) return runtime;
-  }
-  return process.env.NEXT_PUBLIC_ACTION_APP_URL || "http://localhost:3004";
+  return resolveSiblingOrigin(
+    "action",
+    "__ACTION_APP_URL__",
+    // Two env names are in the wild for this one app; ACTION_APP_URL is the canonical
+    // spelling and ACTION_URL the older one still set in several .env files.
+    process.env.NEXT_PUBLIC_ACTION_APP_URL || process.env.NEXT_PUBLIC_ACTION_URL,
+    "http://localhost:3004",
+  );
+}
+
+/**
+ * Field PWA origin — where an organiser sends a volunteer, and what the admin app iframes.
+ * Previously derived at each call site by string surgery on the current hostname
+ * (`hostname.replace(/^admin\./, "field.")`), which no-ops on any host whose first label
+ * isn't `admin` and silently iframes the admin app into itself.
+ */
+export function getFieldAppUrl(): string {
+  return resolveSiblingOrigin(
+    "field",
+    "__FIELD_APP_URL__",
+    process.env.NEXT_PUBLIC_FIELD_APP_URL,
+    "http://localhost:3005",
+  );
+}
+
+/** Admin (organiser) app origin — used by the action app's insights embed and its
+ *  `postMessage` origin check, which must move together. */
+export function getAdminAppUrl(): string {
+  return resolveSiblingOrigin(
+    "admin",
+    "__APP_URL__",
+    process.env.NEXT_PUBLIC_APP_URL,
+    "http://localhost:3000",
+  );
 }
 
 /** Login path on the auth app. Defaults to the organiser `/sign-in`; an app can override it at
