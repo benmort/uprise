@@ -154,8 +154,13 @@ export function TurfMap({
   boundaryFilter,
   selectedBoundaryCode,
   onBoundaryClick,
+  gestureToggle = true,
 }: {
   mode: "view" | "edit";
+  /** Show the on-map "Scroll to zoom" checkbox. Off for hosts where the preference is not the
+   *  viewer's to set — the marketing demo embed, where the map is a picture of the app inside an
+   *  iframe and letting a visitor turn cooperative gestures off would hijack the page's scroll. */
+  gestureToggle?: boolean;
   stops?: MapStop[];
   turfGeometry?: GeoJSON.Geometry | null;
   activeStopId?: string;
@@ -811,7 +816,7 @@ export function TurfMap({
             Recentre
           </button>
         ) : null}
-        <MapGestureToggle />
+        {gestureToggle ? <MapGestureToggle /> : null}
         <div className="flex gap-1.5">
           {(bounds || focusPoint || focusBounds) && (
             <button

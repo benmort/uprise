@@ -2935,51 +2935,35 @@
 }
 /* The phone sits over the map's bottom-right, the way it does in the field: the national
    picture behind, one door in front. */
-/* The same device shell as scene 02's drawn phone (`.home-phone` / `.home-pscr` /
-   `.home-pnotch`): a near-black bezel with a notch pill and camera dot, rather than the
-   white 6px border this used to have. Two phones on one page reading as two different
-   devices is the kind of detail that makes a page feel assembled rather than designed.
+/* The same device shell as scene 02's drawn phone (`.home-phone` / `.home-pscr`): a near-black
+   bezel rather than the white 6px border this used to have. Two phones on one page reading as two
+   different devices is the kind of detail that makes a page feel assembled rather than designed.
 
-   The notch is drawn with pseudo-elements instead of the `.home-pnotch` element, because
-   this slot's child is whatever <Gallery demo> was handed — the live iframe or the poster
-   — and it must not need a wrapper injected into it. Same trick as `.home-cmpscr`. */
+   NO notch here, unlike scene 02. This phone holds the live app, and a notch pill drawn over the
+   top of it landed on the walk view's own header — "Demo — Glebe blocks" and the List/Map toggle —
+   so the device dressing was covering the thing the device is there to show. Scene 02's phone is a
+   drawing with room reserved for it, so it keeps its notch; that inconsistency is deliberate.
+   The extra top padding below is what the notch used to occupy: the screen needs to start a little
+   in from the bezel, or the app's header reads as though it is falling off the top edge. */
 .home-gphone {
   position: absolute;
   right: -8px;
   bottom: -34px;
-  width: clamp(128px, 20vw, 232px);
-  padding: 7px;
+  /* The section is "See it working", and the mobile app IS the thing working — so the phone is the
+     subject and the dashboard behind it is context, not the other way round. */
+  width: clamp(150px, 24vw, 268px);
+  padding: 13px 7px 7px;
   border-radius: 2rem;
   background: #06070d;
   box-shadow:
     -24px 24px 70px 0 rgba(16, 24, 40, 0.24),
     inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
-.home-gphone::before,
-.home-gphone::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  z-index: 3;
-  translate: -50% 0;
-  border-radius: 99px;
-  pointer-events: none;
-}
-.home-gphone::before {
-  top: 11px;
-  width: 30%;
-  height: 11px;
-  background: #06070d;
-}
-.home-gphone::after {
-  top: 14px;
-  width: 4px;
-  height: 4px;
-  background: #1b2233;
-}
 /* The screen: whatever child is in the slot gets the inner radius and the clip, so the
-   live app and the poster are both cropped to the device rather than to a plain box. */
-.home-gphone > * {
+   live app and the poster are both cropped to the device rather than to a plain box.
+   `:not(.home-demoopen)` because the "Open the app" pill is a sibling of the screen rather than
+   inside it — it has to sit below the device, which means escaping this clip. */
+.home-gphone > *:not(.home-demoopen) {
   overflow: hidden;
   border-radius: 1.55rem;
   background: #fff;
@@ -3027,10 +3011,15 @@
   object-fit: cover;
   object-position: top center;
 }
+/* Hovering BELOW the device, not over the screen. It used to sit at `bottom: 8px` inside the frame,
+   where it covered the walk view's own bottom bar — the next-stop strip and the Mapbox attribution.
+   Anchored to `.home-gphone` (which is the containing block in both layouts — see the narrow-screen
+   override, which is `relative` rather than `static` for exactly this reason) and NOT clipped,
+   because the clip lives on the screen child rather than on the device. */
 .home-demoopen {
   position: absolute;
   left: 50%;
-  bottom: 8px;
+  top: calc(100% + 12px);
   translate: -50% 0;
   padding: 6px 12px;
   border-radius: 100px;
@@ -3273,12 +3262,17 @@
   .home-stats {
     grid-template-columns: 1fr;
   }
-  /* The phone would cover the map at this width — sit it under, full width. */
+  /* The phone would cover the map at this width — sit it under, full width.
+     `relative` rather than `static` only to keep the "Open the app" pill's anchor explicit: the pill
+     is positioned against `top: calc(100% + 12px)`, and under `static` its containing block would be
+     .home-gstage instead. That happens to measure the same today, because the phone is the last box
+     in the stage so the two bottoms coincide — put anything after it and `static` would silently
+     start measuring from the stage. This costs nothing and removes that dependency. */
   .home-gphone {
-    position: static;
+    position: relative;
     right: auto;
     bottom: auto;
-    width: min(232px, 60%);
+    width: min(268px, 66%);
     margin: 18px auto 0;
   }
 }

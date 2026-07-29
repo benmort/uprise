@@ -53,6 +53,8 @@ export function WalkView({
   sampleUserPosition,
   routeGeometry: routeGeometryProp,
   replayVolunteerId,
+  defaultMode = "list",
+  mapGestureToggle = true,
 }: {
   turfId: string;
   readOnly?: boolean;
@@ -74,10 +76,18 @@ export function WalkView({
   /** Enables "Replay shift" for this volunteer's knock history. The live app defaults to
    *  the signed-in volunteer; the admin preview passes the active assignment's volunteer. */
   replayVolunteerId?: string | null;
+  /** Which mode the screen opens in the FIRST time, before the viewer has picked one. The live app
+   *  opens on the list — the walk order is the job, and a volunteer standing at a door wants the
+   *  next address, not a picture of the suburb. Hosts that are showing the app rather than working
+   *  in it pass "map", because the map is what reads as a canvassing app at a glance. Only ever the
+   *  initial value: `uprise.walkMode` still remembers whatever the viewer chooses after that. */
+  defaultMode?: WalkMode;
+  /** Show the map's "Scroll to zoom" checkbox. See TurfMap's `gestureToggle`. */
+  mapGestureToggle?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [mode, setMode] = useLocalStorage<WalkMode>("uprise.walkMode", "list");
+  const [mode, setMode] = useLocalStorage<WalkMode>("uprise.walkMode", defaultMode);
   // Street = the map with a nav-style follow camera; both map-ish modes share the branch.
   const showMap = mode === "map" || mode === "street";
   const [showSteps, setShowSteps] = useState(false);
@@ -485,6 +495,7 @@ export function WalkView({
           <div className="absolute inset-0">
             <TurfMap
               mode="view"
+              gestureToggle={mapGestureToggle}
               stops={stops.map((s) => ({
                 id: s.id,
                 lat: s.lat,

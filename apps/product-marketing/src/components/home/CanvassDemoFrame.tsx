@@ -55,29 +55,35 @@ export default function CanvassDemoFrame() {
   const demoUrl = `${fieldAppUrl().replace(/\/$/, "")}/demo`;
   const src = `${demoUrl}?embed=1`;
 
+  // Two siblings, not a wrapper: both land directly in <Gallery>'s `.home-gphone` slot, where the
+  // screen child is clipped to the device's inner radius and the link deliberately is not — it
+  // hovers just below the phone. Nesting the link inside the frame put it over the walk view's own
+  // bottom bar.
   return (
-    <div ref={ref} className="home-demoframe">
-      {show ? (
-        <iframe
-          src={src}
-          title="The Uprise canvasser app — demo walk list"
-          loading="lazy"
-          // Same-origin scripting is all it needs; no forms, no downloads, no top-level navigation.
-          sandbox="allow-scripts allow-same-origin"
-        />
-      ) : shot ? (
-        // The poster: the captured walk list, so the frame is never an empty rectangle.
-        <Image
-          src={shot.file}
-          alt={shot.alt}
-          width={shot.width}
-          height={shot.height}
-          sizes="(min-width: 1024px) 320px, 60vw"
-        />
-      ) : null}
+    <>
+      <div ref={ref} className="home-demoframe">
+        {show ? (
+          <iframe
+            src={src}
+            title="The Uprise canvasser app — demo walk list"
+            loading="lazy"
+            // Same-origin scripting is all it needs; no forms, no downloads, no top-level navigation.
+            sandbox="allow-scripts allow-same-origin"
+          />
+        ) : shot ? (
+          // The poster: the captured walk list, so the frame is never an empty rectangle.
+          <Image
+            src={shot.file}
+            alt={shot.alt}
+            width={shot.width}
+            height={shot.height}
+            sizes="(min-width: 1024px) 320px, 60vw"
+          />
+        ) : null}
+      </div>
       <a className="home-demoopen" href={demoUrl} target="_blank" rel="noreferrer">
         Open the app
       </a>
-    </div>
+    </>
   );
 }
