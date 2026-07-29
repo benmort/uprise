@@ -57,7 +57,8 @@ export type Tile = { eyebrow: string; title: string; body: string };
 export type Run = { d: number; pre: string; tag: string | null; post: string };
 
 /**
- * The outreach tile. Copy is the former SMALL_TILES[0], unchanged — see the accuracy note below.
+ * The outreach tile. Copy is unchanged from when this was a text-only tile — see the accuracy
+ * note below.
  *
  * Two panels, in the order the copy's own two clauses read: the composer with its live preview,
  * then the softphone. Every string is copied from the product, not recalled:
@@ -190,18 +191,91 @@ export const BLAST_TILE = {
 } as const;
 
 /** The two text tiles that close the bento, as a 2-up t6 row. */
-export const SMALL_TILES: Tile[] = [
-  {
-    eyebrow: "Volunteers",
-    title: "Shifts and a live action room",
-    body: "Roles, invitations and approvals, a calendar volunteers can read, and a one-tap broadcast to every phone in the field.",
+/**
+ * The volunteers tile – copy unchanged from when it was a text-only tile, but the tile now SHOWS
+ * the three things that sentence claims: the calendar volunteers read, an approval resolving, and
+ * the action room with its broadcast and roster.
+ *
+ * Every label is taken from the product, not recalled:
+ *   the day      Shift.type CANVASS, and `capacity` – "max ASSIGNED volunteers; null ⇒ unbounded"
+ *                (packages/db/prisma/schema.prisma:1496-1522), which is what N / N claimed counts
+ *   the claim    ShiftAssignmentStatus – a volunteer self-signup is REQUESTED where the campaign
+ *                requires approval, else ASSIGNED (schema.prisma:250-258)
+ *   the broadcast  the live view's "Notify field" action and the push it sends, titled "Message
+ *                from your organiser" – apps/admin/src/app/(main)/canvass/[campaignId]/live/page.tsx:47,:97
+ *   the roster   that page's Volunteers table: name, turf, "Last action", and the status badge,
+ *                which is ACTIVE or PENDING_SYNC when the volunteer is idle (live/page.tsx:126-142)
+ *
+ * CHECKED_IN / EN_ROUTE were on the design's own roster and are NOT in the product – the statuses
+ * here are the two the live view actually renders. Shift times, suburbs and volunteer initials are
+ * illustrative campaign state, as the canvass tile's block count is; no usage figure is claimed.
+ */
+export const SHIFTS_TILE = {
+  eyebrow: "Volunteers",
+  title: "Shifts and a live action room",
+  body: "Roles, invitations and approvals, a calendar volunteers can read, and a one-tap broadcast to every phone in the field.",
+  day: "Sat 12 Sep · Canvass day",
+  /** ASSIGNED seats against the shift's capacity, and the same ratio as the bar below. */
+  claimed: "12 / 16 claimed",
+  fill: "75%",
+  shifts: [
+    { at: "9:00", place: "Marrickville", who: ["JC", "SO", "DW"], full: true, d: 220 },
+    { at: "11:30", place: "Dulwich Hill", who: ["AR", "TN"], full: false, d: 280 },
+    { at: "14:00", place: "Petersham", who: ["MK", "PL"], full: false, d: 340 },
+  ],
+  /** The seat still open: capacity less ASSIGNED, and the self-claim that fills it. */
+  open: { at: "16:30", need: "Needs 4", action: "Claim", d: 400 },
+  /** A join request resolving, the one flow both halves of this tile share. */
+  approval: {
+    pending: "danielle@campaign.org.au · join request pending",
+    ok: "Approved · Organiser, Inner West field team",
+    d: 900,
   },
-  {
-    eyebrow: "White-label",
-    title: "Many brands, one account",
-    body: "Each campaign gets an isolated portal at its own slug, with its own logo, colours and custom styling.",
+  broadcast: {
+    label: "Notify field · sent to 12 phones",
+    message: "“Rain easing – regroup at the Petersham hall at 2.”",
+    when: "NOW",
+    d: 1000,
   },
-];
+  roster: [
+    { who: "Jess Callahan · Marrickville", status: "ACTIVE", at: "2 min", ok: true, d: 1100 },
+    { who: "Sam Okonkwo · Dulwich Hill", status: "PENDING_SYNC", at: "38 min", ok: false, d: 1160 },
+  ],
+} as const;
+
+/**
+ * The white-label tile – copy unchanged, now showing the portals rather than describing them.
+ *
+ * The slugs are the real shape (a tenant's own subdomain of uprise.org.au), and the token chips are
+ * the brand fields a tenant actually sets: OrgProfile.primaryColour, .secondaryColour,
+ * .logoBlockUrl and .customCss (schema.prisma:2495-2501). The design's INK and SURFACE chips would
+ * have named settings that don't exist.
+ */
+export const WHITELABEL_TILE = {
+  eyebrow: "White-label",
+  title: "Many brands, one account",
+  body: "Each campaign gets an isolated portal at its own slug, with its own logo, colours and custom styling.",
+  portals: [
+    { initials: "SB", name: "Save Our Bay", slug: "saveourbay.uprise.org.au", c: "#0e7c66", d: 180 },
+    { initials: "NU", name: "Nurses United", slug: "nurses-united.uprise.org.au", c: "#b3341f", d: 240 },
+  ],
+  active: {
+    initials: "YC",
+    name: "Your campaign",
+    slug: "yourcampaign.uprise.org.au",
+    badge: "Active",
+    d: 300,
+  },
+  theme: { stock: "Theme · Uprise default", own: "Theme · Your campaign", d: 900 },
+  tokens: [
+    { label: "Primary", c: "var(--home-brand)", d: 1000 },
+    { label: "Secondary", c: "var(--home-ink)", d: 1060 },
+    { label: "Logo", c: "var(--home-plate)", d: 1120 },
+    { label: "Custom CSS", c: "#fff", d: 1180 },
+  ],
+  /** The tenant's own portal, as a volunteer meets it. */
+  phone: { cta: "Volunteer with us", d: 380, screenD: 480 },
+} as const;
 
 /**
  * The rest of the toolkit, as numbered cards. Deliberately only what the seven tiles above DON'T

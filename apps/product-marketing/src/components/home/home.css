@@ -1031,10 +1031,6 @@
 .home-t5 {
   grid-column: span 5;
 }
-/* Replaces the retired .home-t4: the two closing text tiles are a 2-up row now. */
-.home-t6 {
-  grid-column: span 6;
-}
 .home-ttall {
   grid-row: span 2;
   display: grid;
@@ -1593,6 +1589,433 @@
   text-align: right;
   color: var(--home-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================ volunteers + white-label
+
+   The two tiles the bento opens on. Both are payload containers with their own `is-in`
+   timeline — .home-shifts and .home-portals are in RevealScope's TARGETS, so each tile's
+   visual starts when the tile arrives rather than when the section does.
+
+   Colours: the warning pair on the claimed pill and the pending/approved pair are lifted
+   from packages/ui/globals.css (--warning-container / --warning-foreground, and the
+   support scale's #dc5a4e / the .home-clogrow green already in this file), so the two
+   states read the same here as they do in the product. */
+.home-shifts,
+.home-portals {
+  margin-top: 18px;
+}
+.home-shifts {
+  display: grid;
+  gap: 11px;
+}
+.home-day {
+  padding: 13px;
+  border: 1px solid var(--home-line);
+  border-radius: 12px;
+  background: var(--home-plate);
+}
+.home-dayhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+}
+.home-dayhead .home-mono {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--home-muted);
+}
+.home-claimed {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-family: var(--home-mono-f);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  background: #fdf3e2; /* --warning-container */
+  border: 1px solid #f6dcb4;
+  color: #b35309; /* --warning-foreground */
+}
+.home-slots {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.home-slot {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  background: #fff;
+  border: 1px solid var(--home-line-2);
+  border-radius: 9px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.4s var(--home-ease) var(--d, 0ms),
+    transform 0.4s var(--home-ease) var(--d, 0ms);
+}
+.home-shifts.is-in .home-slot {
+  opacity: 1;
+  transform: none;
+}
+.home-slot--open {
+  background: var(--home-plate);
+  border-style: dashed;
+  border-color: rgba(11, 15, 28, 0.16);
+}
+.home-slot .at {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--home-ink);
+}
+.home-slot--open .at {
+  color: var(--home-body);
+}
+.home-slot .place {
+  font-size: 12px;
+  color: var(--home-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-slot .fill {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--home-brand-300);
+}
+.home-slot .fill.is-full {
+  background: var(--home-brand);
+}
+.home-slot--open .fill {
+  background: #e8ebf3; /* the .home-bar track — an empty seat reads as an empty track */
+}
+/* Overlapping initials, the shape a claimed seat makes. Ringed in the tile's own white so
+   the stack reads as separate people at 22px. */
+.home-faces {
+  display: flex;
+}
+.home-face {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--home-brand);
+  margin-left: -6px;
+}
+.home-face:first-child {
+  margin-left: 0;
+}
+.home-face:nth-child(2) {
+  background: var(--home-brand-400);
+}
+.home-face:nth-child(3) {
+  background: #c9cfda;
+}
+.home-claim {
+  justify-self: start;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--home-ink);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+/* The section's bar is a fixed 150px pill; here it spans the day. */
+.home-bar--wide {
+  width: auto;
+  margin-top: 11px;
+}
+.home-approve {
+  --layer: var(--home-plate);
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--home-line-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.home-approve .pending {
+  color: var(--home-sup-5);
+}
+.home-approve .ok {
+  color: #1f9254;
+}
+.home-approve > span::before {
+  content: "";
+  display: inline-block;
+  vertical-align: middle;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 99px;
+  background: currentColor;
+}
+/* the action room: one broadcast, and the roster it reached */
+.home-abar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px;
+  border-radius: 14px;
+  background: var(--home-ink);
+  color: #fff;
+  box-shadow: 0 10px 22px -10px rgba(11, 15, 28, 0.45);
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.5s var(--home-ease) var(--d, 0ms),
+    transform 0.5s var(--home-ease) var(--d, 0ms);
+}
+.home-shifts.is-in .home-abar {
+  opacity: 1;
+  transform: none;
+}
+.home-abar .dot {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.09);
+  display: grid;
+  place-items: center;
+}
+.home-abar .dot::after {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: var(--home-sup-1);
+  animation: home-pulse 1.6s ease-in-out infinite;
+}
+.home-abar .meta {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.home-abar b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.home-abar .meta > span {
+  display: block;
+  font-size: 11.5px;
+  color: #a7adb8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-abar .when {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--home-brand-300);
+}
+/* Same rows as the call log, so a roster and a call list read as one system. */
+.home-roster {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+.home-roster .home-clogrow {
+  font-size: 12px;
+}
+.home-shifts.is-in .home-clogrow {
+  opacity: 1;
+  transform: none;
+}
+.home-roster .dur {
+  width: 44px;
+}
+
+/* white-label: the portals, the theme resolving, and the phone a volunteer meets */
+.home-portals {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+}
+.home-portals > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.home-portal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--home-line);
+  border-radius: 11px;
+  background: var(--home-plate);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.44s var(--home-ease) var(--d, 0ms),
+    transform 0.44s var(--home-ease) var(--d, 0ms);
+}
+.home-portals.is-in .home-portal {
+  opacity: 1;
+  transform: none;
+}
+.home-portal--on {
+  border-color: var(--home-brand-100);
+  background: var(--home-brand-50);
+  box-shadow: 0 10px 22px -16px rgba(70, 95, 255, 0.5);
+}
+.home-portal .mark {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--c, var(--home-brand));
+}
+.home-portal .who {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.home-portal b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--home-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-portal .slug {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--home-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-portal--on .slug {
+  color: var(--home-brand);
+}
+.home-portal .on {
+  flex: none;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--home-muted);
+}
+.home-theme {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--home-line-2);
+  font-family: var(--home-mono-f);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.home-theme .stock {
+  color: var(--home-faint);
+}
+.home-theme .own {
+  color: var(--home-brand);
+}
+.home-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 11px;
+  font-family: var(--home-mono-f);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--home-faint);
+}
+.home-tokens span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transition: opacity 0.5s var(--home-ease) var(--d, 0ms);
+}
+.home-portals.is-in .home-tokens span {
+  opacity: 1;
+}
+.home-tokens i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--c, var(--home-brand));
+  border: 1px solid var(--home-line);
+}
+/* The device is the composer's phone, reused; only what is on the screen differs. */
+.home-portals .home-cmpdev {
+  flex: none;
+  width: 132px;
+}
+.home-portals.is-in .home-cmpdev {
+  opacity: 1;
+  transform: none;
+}
+.home-brandscr {
+  display: block;
+  padding: 22px 8px 8px;
+}
+.home-brandscr > div {
+  display: grid;
+  gap: 7px;
+  opacity: 0;
+  transition: opacity 0.44s var(--home-ease) var(--d, 0ms);
+}
+.home-portals.is-in .home-brandscr > div {
+  opacity: 1;
+}
+.home-brandscr .row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.home-brandscr s {
+  display: block;
+  text-decoration: none;
+  border-radius: 99px;
+}
+.home-brandscr .logo {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--home-brand);
+}
+.home-brandscr .name {
+  height: 5px;
+  width: 52%;
+  background: var(--home-brand);
+}
+.home-brandscr .line {
+  height: 4px;
+  background: #ededf3;
+}
+.home-brandscr .line.is-faint {
+  background: var(--home-plate);
+}
+.home-brandscr .cta {
+  margin-top: 2px;
+  padding: 5px 0;
+  border-radius: 6px;
+  background: var(--home-brand);
+  color: #fff;
+  font-size: 7.5px;
+  font-weight: 600;
+  text-align: center;
 }
 
 /* blasts — the send, and what came back. The rail is the real BlastStatus path for a
@@ -2582,9 +3005,6 @@
   .home-t5 {
     grid-column: span 12;
   }
-  .home-t6 {
-    grid-column: span 6;
-  }
   .home-ttall {
     grid-row: auto;
   }
@@ -2603,14 +3023,20 @@
   .home-sgrid3 {
     grid-template-columns: 1fr;
   }
+  /* Four shift cards across a full-width tile is fine; four across a phone is not. */
+  .home-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .home-demoband {
     padding-top: clamp(40px, 6vw, 70px);
   }
 }
 
 @media (max-width: 640px) {
-  .home-t6 {
-    grid-column: span 12;
+  /* Portal list above, phone below — same reason as the composer preview underneath. */
+  .home-portals {
+    grid-template-columns: 1fr;
+    justify-items: start;
   }
   /* Copy above, preview below: a 128px phone beside a 13.5px paragraph in ~272px of
      content is neither. */
@@ -2746,9 +3172,17 @@
   .home-bstep,
   .home-bcell,
   .home-blegend,
+  .home-slot,
+  .home-abar,
+  .home-portal,
+  .home-tokens span,
+  .home-brandscr > div,
   .home-states > * {
     opacity: 1 !important;
     transform: none !important;
+  }
+  .home-day .home-bar i {
+    width: var(--w, 0%) !important;
   }
   .home-bcell {
     background-color: var(--c, #e8ebf3) !important;

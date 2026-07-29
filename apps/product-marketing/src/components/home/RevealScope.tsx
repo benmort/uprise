@@ -25,7 +25,7 @@ import "./home.css";
  * permanently blank.
  */
 const TARGETS =
-  ".home-rise, .home-minimap, .home-thread, .home-matrix, .home-outreach, .home-blast";
+  ".home-rise, .home-minimap, .home-thread, .home-matrix, .home-outreach, .home-blast, .home-shifts, .home-portals";
 
 export default function RevealScope({
   children,

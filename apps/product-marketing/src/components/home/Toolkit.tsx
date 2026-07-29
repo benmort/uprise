@@ -9,8 +9,9 @@ import {
   FEATURE_CARDS,
   INBOX_TILE,
   OUTREACH_TILE,
-  SMALL_TILES,
+  SHIFTS_TILE,
   TOOLKIT,
+  WHITELABEL_TILE,
 } from "./sections";
 
 /** The door pins on the minimap, in walking order. Staggered so the route draws itself. */
@@ -77,6 +78,170 @@ export default function Toolkit() {
         <SectionHead eyebrow={TOOLKIT.eyebrow} title={TOOLKIT.title} lede={TOOLKIT.lede} />
 
         <div className="home-bento">
+          {/* Volunteers — the calendar volunteers read, then the join request resolves, then the
+              action room: one broadcast out and the roster it went to. Same 7/5 pair as the
+              canvassing row below, so the bento opens on a full-width beat. */}
+          <article className="home-tile home-t7 home-rise">
+            <span className="home-mono home-eyebrow">{SHIFTS_TILE.eyebrow}</span>
+            <h3 className="home-h3">{SHIFTS_TILE.title}</h3>
+            <p>{SHIFTS_TILE.body}</p>
+
+            <div className="home-shifts">
+              <div className="home-day">
+                <div className="home-dayhead">
+                  <span className="home-mono">{SHIFTS_TILE.day}</span>
+                  <span className="home-claimed">{SHIFTS_TILE.claimed}</span>
+                </div>
+
+                <div className="home-slots">
+                  {SHIFTS_TILE.shifts.map((s) => (
+                    <div className="home-slot" key={s.at} style={cssVars({ "--d": `${s.d}ms` })}>
+                      <span className="at">{s.at}</span>
+                      <span className="place">{s.place}</span>
+                      <span className="home-faces">
+                        {s.who.map((w, i) => (
+                          <span className="home-face" key={w} style={cssVars({ "--i": i })}>
+                            {w}
+                          </span>
+                        ))}
+                      </span>
+                      <span className={`fill${s.full ? " is-full" : ""}`} />
+                    </div>
+                  ))}
+
+                  {/* The open seat: dashed, because it is the one thing on the calendar that is
+                      not yet true. */}
+                  <div
+                    className="home-slot home-slot--open"
+                    style={cssVars({ "--d": `${SHIFTS_TILE.open.d}ms` })}
+                  >
+                    <span className="at">{SHIFTS_TILE.open.at}</span>
+                    <span className="place">{SHIFTS_TILE.open.need}</span>
+                    <span className="home-claim">{SHIFTS_TILE.open.action}</span>
+                    <span className="fill" />
+                  </div>
+                </div>
+
+                <div className="home-bar home-bar--wide">
+                  <i style={cssVars({ "--w": SHIFTS_TILE.fill, "--d": "460ms" })} />
+                </div>
+
+                {/* aria-hidden on the pending line, as on the composer's compliance warning:
+                    without it a reader announces both states as one contradictory sentence. */}
+                <div className="home-approve home-states">
+                  <span className="pending" aria-hidden="true">
+                    {SHIFTS_TILE.approval.pending}
+                  </span>
+                  <span className="ok" style={cssVars({ "--d": `${SHIFTS_TILE.approval.d}ms` })}>
+                    {SHIFTS_TILE.approval.ok}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <div
+                  className="home-abar"
+                  style={cssVars({ "--d": `${SHIFTS_TILE.broadcast.d}ms` })}
+                >
+                  <span className="dot" aria-hidden="true" />
+                  <span className="meta">
+                    <b>{SHIFTS_TILE.broadcast.label}</b>
+                    <span>{SHIFTS_TILE.broadcast.message}</span>
+                  </span>
+                  <span className="home-mono when">{SHIFTS_TILE.broadcast.when}</span>
+                </div>
+
+                <div className="home-roster">
+                  {SHIFTS_TILE.roster.map((r) => (
+                    <div className="home-clogrow" key={r.who} style={cssVars({ "--d": `${r.d}ms` })}>
+                      <span className="num">{r.who}</span>
+                      <span className={`st${r.ok ? " is-ok" : ""}`}>{r.status}</span>
+                      <span className="dur">{r.at}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </article>
+
+          {/* White-label — three portals on their own slugs, the theme resolving from stock to the
+              campaign's own, and the phone a volunteer actually meets. */}
+          <article className="home-tile home-t5 home-rise" style={cssVars({ "--d": "80ms" })}>
+            <span className="home-mono home-eyebrow">{WHITELABEL_TILE.eyebrow}</span>
+            <h3 className="home-h3">{WHITELABEL_TILE.title}</h3>
+            <p>{WHITELABEL_TILE.body}</p>
+
+            <div className="home-portals">
+              <div>
+                {WHITELABEL_TILE.portals.map((p) => (
+                  <div className="home-portal" key={p.slug} style={cssVars({ "--d": `${p.d}ms` })}>
+                    <span className="mark" style={cssVars({ "--c": p.c })}>
+                      {p.initials}
+                    </span>
+                    <span className="who">
+                      <b>{p.name}</b>
+                      <span className="home-mono slug">{p.slug}</span>
+                    </span>
+                  </div>
+                ))}
+
+                <div
+                  className="home-portal home-portal--on"
+                  style={cssVars({ "--d": `${WHITELABEL_TILE.active.d}ms` })}
+                >
+                  <span className="mark" style={cssVars({ "--c": "var(--home-brand)" })}>
+                    {WHITELABEL_TILE.active.initials}
+                  </span>
+                  <span className="who">
+                    <b>{WHITELABEL_TILE.active.name}</b>
+                    <span className="home-mono slug">{WHITELABEL_TILE.active.slug}</span>
+                  </span>
+                  <span className="home-mono on">{WHITELABEL_TILE.active.badge}</span>
+                </div>
+
+                <div className="home-theme home-states">
+                  <span className="stock" aria-hidden="true">
+                    {WHITELABEL_TILE.theme.stock}
+                  </span>
+                  <span className="own" style={cssVars({ "--d": `${WHITELABEL_TILE.theme.d}ms` })}>
+                    {WHITELABEL_TILE.theme.own}
+                  </span>
+                </div>
+
+                <div className="home-tokens">
+                  {WHITELABEL_TILE.tokens.map((t) => (
+                    <span key={t.label} style={cssVars({ "--d": `${t.d}ms` })}>
+                      <i style={cssVars({ "--c": t.c })} />
+                      {t.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Drawn, not captured: the point is the branding, and every real capture carries
+                  Uprise's own. */}
+              <div
+                className="home-cmpdev"
+                aria-hidden="true"
+                style={cssVars({ "--d": `${WHITELABEL_TILE.phone.d}ms` })}
+              >
+                <div className="home-cmpscr home-brandscr">
+                  <div style={cssVars({ "--d": `${WHITELABEL_TILE.phone.screenD}ms` })}>
+                    <span className="row">
+                      <s className="logo" />
+                      <s className="name" />
+                    </span>
+                    <s className="line" style={{ width: "88%" }} />
+                    <s className="line" style={{ width: "72%" }} />
+                    <span className="cta">{WHITELABEL_TILE.phone.cta}</span>
+                    <s className="line is-faint" style={{ width: "64%" }} />
+                    <s className="line is-faint" style={{ width: "80%" }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
           {/* Canvassing — the turf outline draws, then the doors land in route order. */}
           <article className="home-tile home-t7 home-ttall home-rise">
             <div>
@@ -352,17 +517,6 @@ export default function Toolkit() {
             </div>
           </article>
 
-          {SMALL_TILES.map((t, i) => (
-            <article
-              className="home-tile home-t6 home-rise"
-              key={t.title}
-              style={cssVars({ "--d": `${i * 70}ms` })}
-            >
-              <span className="home-mono home-eyebrow">{t.eyebrow}</span>
-              <h3 className="home-h3">{t.title}</h3>
-              <p>{t.body}</p>
-            </article>
-          ))}
         </div>
 
         <div className="home-subhead home-rise">
