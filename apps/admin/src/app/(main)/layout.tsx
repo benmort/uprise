@@ -42,6 +42,7 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search";
 import { NotificationsDropdown } from "@/components/topbar/notifications-dropdown";
 import { GettingStartedButton } from "@/components/topbar/getting-started-button";
+import { AiAssistantButton } from "@/components/topbar/ai-assistant-button";
 import { TenantSwitcher } from "@/components/topbar/tenant-switcher";
 import { UserDropdown } from "@/components/topbar/user-dropdown";
 import { loadResponderAlertSettings, playResponderAlertSound } from "@/lib/responder-alerts";
@@ -1340,6 +1341,11 @@ export default function MainLayout({
               <TopbarSearch items={searchItems} />
             </div>
             <div className="flex items-center gap-2.5">
+              {/* Gated to match the sidebar's own AI entry, which lives inside the super-admin-only
+                  "Future" group. The route itself has no guard, so an ungated button here would be
+                  a door into Future for every organiser — hidden in the nav, wide open in the
+                  topbar. Promote both together if the assistant ever ships to everyone. */}
+              {isSuperAdmin ? <AiAssistantButton /> : null}
               <ThemeToggle />
               <NotificationsDropdown unreadCount={inboxUnreadCount} />
               {flagOn("FEATURE_NAV_GETTING_STARTED") && !onboardingDone ? (
