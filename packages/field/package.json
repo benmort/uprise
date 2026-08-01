@@ -33,6 +33,7 @@
   "dependencies": {
     "@turf/bbox": "^7.3.5",
     "@uprise/api-client": "workspace:*",
+    "@uprise/domains": "workspace:*",
     "@uprise/ui": "workspace:*",
     "clsx": "^2.1.1",
     "idb": "^8.0.3",

@@ -9,18 +9,9 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ExternalLink, Megaphone, Play } from "lucide-react";
 import { request } from "@uprise/api-client";
 import { Button, StatusBadge, useToast, cn } from "@uprise/ui";
+import { adminOrigin } from "../lib/app-origin";
 import { getSession } from "../lib/session";
 import { useTextBanks } from "../hooks/use-texting";
-
-/** admin app origin from the field host (field.x.y → admin.x.y); localhost dev → :3000. */
-function adminOrigin(): string {
-  if (typeof window === "undefined") return "";
-  const { protocol, hostname } = window.location;
-  if (hostname === "localhost" || /^[0-9.]+$/.test(hostname)) return `${protocol}//localhost:3000`;
-  const parts = hostname.split(".");
-  parts[0] = "admin";
-  return `${protocol}//${parts.join(".")}`;
-}
 
 export function TextingMenu() {
   const { showToast } = useToast();

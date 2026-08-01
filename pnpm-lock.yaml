@@ -814,6 +814,9 @@ importers:
       '@uprise/api-client':
         specifier: workspace:*
         version: link:../api-client
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../domains
       '@uprise/ui':
         specifier: workspace:*
         version: link:../ui
