@@ -35,18 +35,6 @@ export default function UseCases() {
             </article>
           ))}
         </div>
-
-        {/* Licence attribution for the one image that requires it — see USE_CASES.credit. */}
-        <p className="home-ucredit">
-          {USE_CASES.credit.lead}{" "}
-          <a href={USE_CASES.credit.holderUrl} target="_blank" rel="noreferrer noopener">
-            {USE_CASES.credit.holder}
-          </a>
-          ,{" "}
-          <a href={USE_CASES.credit.licenceUrl} target="_blank" rel="noreferrer noopener">
-            {USE_CASES.credit.licence}
-          </a>
-        </p>
       </div>
     </RevealScope>
   );

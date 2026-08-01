@@ -16,10 +16,36 @@ import { GALLERY } from "./sections";
  * Until then the poster (the captured walk list) stands in — see <Gallery />, which owns the
  * fallback.
  */
+/**
+ * Read at BUILD time, so it is the same string on the server and in the client's first render and
+ * hydration has nothing to reconcile. Empty unless NEXT_PUBLIC_FIELD_APP_URL is set — which it is
+ * not in any environment today, unlike its auth and admin siblings in .env.
+ */
+const ENV_FIELD_ORIGIN = (process.env.NEXT_PUBLIC_FIELD_APP_URL || "").replace(/\/$/, "");
+
 export default function CanvassDemoFrame() {
   const ref = useRef<HTMLDivElement>(null);
   const [show, setShow] = useState(false);
   const shot = screen(GALLERY.phoneScreen);
+
+  /**
+   * The field app's origin, resolved AFTER mount rather than during render.
+   *
+   * `fieldAppUrl()` derives `field.<host>` in the browser and falls back to localhost:3005
+   * everywhere else. This page is statically prerendered, so calling it during render baked
+   * `http://localhost:3005/demo` into the HTML — and hydration did not repair it: an attribute that
+   * differs between the server render and the client's first render is a mismatch React warns about
+   * in development and leaves alone in production. So the button shipped pointing at a port on the
+   * visitor's own machine.
+   *
+   * Setting it from an effect makes the correction a real re-render, which does patch the href. It
+   * self-corrects on every host — no env var required — and setting NEXT_PUBLIC_FIELD_APP_URL just
+   * makes the prerendered HTML right too, before hydration.
+   */
+  const [origin, setOrigin] = useState(ENV_FIELD_ORIGIN);
+  useEffect(() => {
+    setOrigin(fieldAppUrl().replace(/\/$/, ""));
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
@@ -52,8 +78,8 @@ export default function CanvassDemoFrame() {
   // `?embed=1` suppresses the demo page's own "Demo data" callout — the section around this phone
   // already states it, and in a phone this size the notice costs a third of the screen. The "Open
   // the app" link below deliberately points at the plain URL, so anyone leaving the frame gets it.
-  const demoUrl = `${fieldAppUrl().replace(/\/$/, "")}/demo`;
-  const src = `${demoUrl}?embed=1`;
+  const demoUrl = origin ? `${origin}/demo` : null;
+  const src = demoUrl ? `${demoUrl}?embed=1` : null;
 
   // Two siblings, not a wrapper: both land directly in <Gallery>'s `.home-gphone` slot, where the
   // screen child is clipped to the device's inner radius and the link deliberately is not — it
@@ -62,7 +88,7 @@ export default function CanvassDemoFrame() {
   return (
     <>
       <div ref={ref} className="home-demoframe">
-        {show ? (
+        {show && src ? (
           <iframe
             src={src}
             title="The Uprise canvasser app — demo walk list"
@@ -81,9 +107,14 @@ export default function CanvassDemoFrame() {
           />
         ) : null}
       </div>
-      <a className="home-demoopen" href={demoUrl} target="_blank" rel="noreferrer">
-        Open the app
-      </a>
+      {/* Rendered only once the origin is known — an <a> with no href is not focusable and reads as
+          a broken control, and a link to the visitor's own localhost is worse than one that arrives
+          a tick late. With NEXT_PUBLIC_FIELD_APP_URL set it is in the prerendered HTML already. */}
+      {demoUrl ? (
+        <a className="home-demoopen" href={demoUrl} target="_blank" rel="noreferrer">
+          Open the app
+        </a>
+      ) : null}
     </>
   );
 }

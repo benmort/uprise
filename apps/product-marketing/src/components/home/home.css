@@ -2633,14 +2633,14 @@
   border-radius: 16px;
   overflow: hidden;
 }
-/* Each card carries a photograph of the work behind its copy (`--img`, set per card — see
-   USE_CASES in sections.ts for the file and credit table).
+/* Each card carries a scene from the campaign illustration set (`--img`, set per card — see
+   USE_CASES in sections.ts).
 
    Two layers rather than one multi-layer background: the photo can then scale on hover
    independently of the scrim, which must NOT move — a scrim that scales with its photo
    momentarily uncovers the corners and the type flickers.
 
-   The scrim is WHITE: this page is light throughout, so an ink scrim (which is what a photo-backed
+   The scrim is WHITE: this page is light throughout, so an ink scrim (which is what an image-backed
    card wants) would make these six the only dark surface on it.
 
    It is densest at the BOTTOM, because that is where the copy sits — the two have to move together.
@@ -2716,24 +2716,6 @@
 .home-ucard p {
   font-size: 15px;
   line-height: 1.55;
-}
-
-/* The one licence credit the card set needs (CC BY 3.0 AU on the AEC ballot-box photo). Sized and
-   coloured to be findable rather than noticeable — this is a legal obligation, not a caption. */
-.home-ucredit {
-  margin-top: 12px;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--home-faint);
-}
-.home-ucredit a {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: color 0.25s var(--home-ease);
-}
-.home-ucredit a:hover {
-  color: var(--home-body);
 }
 
 /* --- roadmap ----------------------------------------------------------- */
