@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { Flag, HeartHandshake, MapPin, ShieldCheck, Sparkles, Users } from "lucide-react";
+import Showreel from "@/components/marketing/Showreel";
 
 export const metadata = {
   title: "About Us – Built for people-powered campaigns | Uprise",
@@ -110,6 +111,30 @@ export default function AboutPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* The showreel, moved here from the homepage's "Built for the work" section. It belongs on
+          this page: it is the one place that shows the actual product, which is the honest answer to
+          "who are you" — and it sits after the beliefs above so the claims come first and the
+          evidence second.
+
+          <Showreel /> is route-agnostic (its own browser frame, tab rail and play/pause, and it
+          hides any slide whose capture is missing), so it needed no changes to move. It is a client
+          component inside this server component, which is fine — it is its own boundary. */}
+      <section className="py-8 md:py-12">
+        <div className="container">
+          <div className="mx-auto mb-10 w-full max-w-[720px] text-center">
+            <h2 className="mb-3 text-2xl font-bold !leading-[1.2] text-title-color md:text-3xl">
+              What we actually built
+            </h2>
+            <p className="text-base text-text-color-secondary">
+              The real screens organisers work in – not mockups.
+            </p>
+          </div>
+          <div className="mx-auto w-full max-w-[1170px]">
+            <Showreel />
           </div>
         </div>
       </section>

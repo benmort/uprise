@@ -437,10 +437,22 @@
 }
 
 /* --- the pinned stage ---------------------------------------------------- */
-/* 5 scenes = 4 transitions, ~120vh of scroll each. */
+/*
+   This height IS the scroll sensitivity, and it is the only knob for it. The engine
+   normalises progress over `stage.offsetHeight - innerHeight` (see paintStage in
+   Opening.tsx), so the scenes always occupy the whole stage however tall it is — making
+   it taller buys more scroll distance per scene rather than adding empty runway.
+
+   The usable scroll is the height MINUS one viewport, since the last viewport is spent
+   unpinning: 600vh gives 500vh of travel across 4 transitions, so ~125vh each, up from
+   ~95vh at the old 480vh. A given wheel movement therefore advances the stage about a
+   quarter less than it did, which is what stops a scene flicking past before it is read.
+   Below 1000px there is no pin at all and this is overridden to `auto`, so it only
+   governs the desktop deck.
+*/
 .home-stage {
   position: relative;
-  height: 480vh;
+  height: 600vh;
   background: var(--home-paper);
 }
 .home-pin {
@@ -2614,9 +2626,8 @@
   padding: clamp(80px, 10vw, 140px) 0;
   background: var(--home-plate);
 }
-.home-reel {
-  margin-bottom: clamp(40px, 5vw, 66px);
-}
+/* `.home-reel` (the showreel's bottom margin) lived here until the reel moved to /about-us, which
+   spaces it with the page's own section padding. Removed rather than left orphaned. */
 .home-ucards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2680,16 +2691,19 @@
   position: absolute;
   inset: 0;
   z-index: -1;
-  /* Whiter under the copy than it used to be, so the type has more to sit on.
-     The 64% stop is the hinge: the card floor is 340px (grid-auto-rows) and the text block —
-     heading, two or three lines at 15px/1.55, and 30px of padding under it — occupies the bottom
-     107-130px, which puts the top of the text at 62-68%. Holding 0.76 there is exactly what the
-     old three-stop ramp interpolated to at that point, so everything ABOVE the text keeps the
-     transparency it had; only the band behind the words gets whiter. */
+  /* Two jobs, split at the 64% hinge: leave the photograph alone above it, give the type something
+     to sit on below it.
+     The hinge is where the copy starts — the card floor is 340px (grid-auto-rows) and the text block
+     (heading, two or three lines at 15px/1.55, 30px of padding under it) occupies the bottom
+     107-130px, so the top of the text lands at 62-68%.
+     Below the hinge the scrim is heavy (0.76 → 0.96) because that is what makes 15px copy legible
+     over an arbitrary photograph. Above it the scrim is light (0.18 → 0.34): it used to run
+     0.42 → 0.58, which was washing out the top of every image for no benefit, since nothing is
+     written up there. The photographs are the reason these cards work, so the veil comes off them. */
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.42) 0%,
-    rgba(255, 255, 255, 0.58) 40%,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.34) 40%,
     rgba(255, 255, 255, 0.76) 64%,
     rgba(255, 255, 255, 0.91) 78%,
     rgba(255, 255, 255, 0.96) 100%
@@ -2706,8 +2720,8 @@
      the hover scrim already was — so hovering still lifts the photograph by the same margin. */
   background: linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.3) 0%,
-    rgba(255, 255, 255, 0.48) 40%,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.24) 40%,
     rgba(255, 255, 255, 0.7) 64%,
     rgba(255, 255, 255, 0.88) 78%,
     rgba(255, 255, 255, 0.94) 100%

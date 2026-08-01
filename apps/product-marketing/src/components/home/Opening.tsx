@@ -100,8 +100,8 @@ export default function Opening() {
       { threshold: 0.6 },
     );
     // Stage satellites are excluded: they sit absolutely inside the pinned deck, so they are
-    // "in view" for the whole 480vh and an observer fires them all at once, long before their
-    // scene arrives. paint() counts them on live-scene change.
+    // "in view" for the stage's whole height and an observer fires them all at once, long
+    // before their scene arrives. paint() counts them on live-scene change.
     all("[data-to]")
       .filter((n) => !n.closest(".home-sat"))
       .forEach((n) => cio.observe(n));
