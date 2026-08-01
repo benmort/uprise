@@ -432,6 +432,9 @@ importers:
       '@uprise/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@uprise/domains':
+        specifier: workspace:*
+        version: link:../../packages/domains
       '@uprise/field':
         specifier: workspace:*
         version: link:../../packages/field

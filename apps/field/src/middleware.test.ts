@@ -145,6 +145,65 @@ describe("middleware", () => {
 });
 
 /**
+ * The white-label login loop. Bouncing a canvasser on `field.<tenant>` to the platform auth
+ * host sets the session on `.uprise.org.au`; they return to `field.<tenant>`, where that
+ * cookie cannot be read, and this gate bounces them out again — a loop, not an error page.
+ */
+describe("middleware — auth origin on a tenant's own domain", () => {
+  /** The redirect target of an unauthenticated request from `host`. */
+  function bounceFrom(host: string, proto = "https"): URL {
+    const res = middleware(
+      makeReq({ headers: { host, "x-forwarded-proto": proto }, nextUrl: { pathname: "/get-turf" } }),
+    );
+    return new URL(res.headers.get("location") as string);
+  }
+
+  beforeEach(() => {
+    // The platform value as production configures it, so a derivation is visible as a
+    // different origin rather than as the absence of a default.
+    process.env.NEXT_PUBLIC_AUTH_APP_URL = "https://auth.uprise.org.au";
+  });
+
+  it("derives auth.<tenant parent> and keeps the volunteer entry", () => {
+    const url = bounceFrom("field.commonthreads.org.au");
+    expect(url.origin).toBe("https://auth.commonthreads.org.au");
+    expect(url.pathname).toBe("/volunteer");
+    // The round trip has to close on the tenant host, or the derivation bought nothing.
+    expect(url.searchParams.get("return_to")).toBe("https://field.commonthreads.org.au/get-turf");
+  });
+
+  it("carries the request protocol into the derived origin", () => {
+    expect(bounceFrom("field.commonthreads.org.au", "http").origin).toBe(
+      "http://auth.commonthreads.org.au",
+    );
+  });
+
+  /**
+   * Regression guard, including the shapes that defeated an earlier version of the gate:
+   * trailing-dot FQDNs, upriselabs.org, and deeper subdomains of a domain we own.
+   */
+  it("leaves the configured auth origin untouched on every host that exists today", () => {
+    for (const host of [
+      "field.uprise.org.au",
+      "field.dev.uprise.org.au",
+      "uprise.org.au",
+      "uprise-field-prog-network.vercel.app",
+      "field.uprise.org.au.",
+      "www.upriselabs.org",
+      "field.staging.uprise.org.au",
+    ]) {
+      expect(bounceFrom(host).origin, host).toBe("https://auth.uprise.org.au");
+    }
+  });
+
+  it("falls through on local and ported dev hosts, where a sibling is not derivable", () => {
+    for (const host of ["localhost:3005", "field.lvh.me:3005", "127.0.0.1:3005"]) {
+      expect(bounceFrom(host, "http").origin, host).toBe("https://auth.uprise.org.au");
+    }
+  });
+});
+
+/**
  * The matcher is the other half of the gate: the middleware above never runs for a path the
  * matcher excludes. That's how `/demo` (the public read-only walk view the marketing site embeds)
  * stays reachable without a session — so it needs asserting, not assuming.
