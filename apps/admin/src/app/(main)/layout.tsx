@@ -17,11 +17,13 @@ import {
   Lock,
   LogOut,
   MapPin,
+  Megaphone,
   Menu,
   MessageSquareText,
   MessagesSquare,
   NotebookPen,
   PersonStanding,
+  PhoneOutgoing,
   Settings,
   ShieldCheck,
   Users,
@@ -90,6 +92,8 @@ const NAV_DESCRIPTIONS: Record<string, string> = {
   "shared-inbox": "Every conversation across your channels, in one queue.",
   calendar: "Shifts, events and reminders in one place.",
   channels: "Reach people by text and voice.",
+  autodialer: "Voice broadcast, robo-polls and patch-through calling at scale.",
+  actions: "Public action pages supporters use — starting with click-to-call.",
   canvass: "Plan turf, knock doors and run the field.",
   events: "Rallies and town halls your supporters RSVP to.",
   content: "Surveys, scripts, dispositions and canned replies.",
@@ -170,6 +174,27 @@ function buildNav(
       children: [
         { label: "Text", href: "/channels/text", match: (p) => p.startsWith("/channels/text"), flag: "FEATURE_NAV_CHANNELS_TEXT" },
         { label: "Calls", href: "/channels/calls", match: (p) => p.startsWith("/channels/calls") },
+      ],
+    },
+    {
+      // The autodialer keeps the source project's name as its own level-1 section
+      // (locked decision) — campaign types inside spell the source vocabulary.
+      type: "group", key: "autodialer", label: "Autodialer", icon: PhoneOutgoing,
+      match: (p) => p.startsWith("/autodialer"),
+      flag: "FEATURE_NAV_AUTODIALER",
+      children: [
+        { label: "Campaigns", href: "/autodialer", match: (p) => p.startsWith("/autodialer") && !p.startsWith("/autodialer/prompts") },
+        { label: "Audio prompts", href: "/autodialer/prompts", match: (p) => p.startsWith("/autodialer/prompts") },
+      ],
+    },
+    {
+      // Action pages — public supporter-facing surfaces; click-to-call is the
+      // first (and v1 only) creation type.
+      type: "group", key: "actions", label: "Actions", icon: Megaphone,
+      match: (p) => p.startsWith("/actions"),
+      flag: "FEATURE_NAV_ACTIONS",
+      children: [
+        { label: "Pages", href: "/actions/pages", match: (p) => p.startsWith("/actions/pages") },
       ],
     },
     {

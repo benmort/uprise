@@ -11,7 +11,7 @@ datasource db {
   // deploys with P1002. directUrl routes migrate/introspect over the direct connection.
   url       = env("DATABASE_URL")
   directUrl = env("DATABASE_URL_UNPOOLED")
-  schemas   = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "civic", "events", "email", "ops", "payment", "telephony", "ai"]
+  schemas   = ["public", "iam", "tenant", "audience", "messaging", "canvass", "journey", "integration", "analytics", "insights", "civic", "events", "email", "ops", "payment", "telephony", "ai", "autodialer", "actions"]
 }
 
 enum AudienceStatus {
@@ -84,6 +84,9 @@ enum BlastRecipientStatus {
 enum MessageChannel {
   SMS
   WHATSAPP
+  // Voice consent — the autodialer's dial-time opt-out exclusion and the IVR
+  // `*`-to-opt-out write-back key on this channel.
+  VOICE
   @@schema("messaging")
 }
 
@@ -140,6 +143,8 @@ enum EngagementChannel {
   DOOR
   SMS
   BOTH
+  // Robo-poll answers written back as dispositions by the autodialer reaction.
+  PHONE
   @@schema("canvass")
 }
 
@@ -2106,6 +2111,40 @@ model WebhookEvent {
   @@schema("ops")
 }
 
+// ── Durable error capture ────────────────────────────────────────────────────
+// Vercel keeps NO runtime logs on this account (Pro, no Observability add-on, no
+// drains): `vercel logs` tails from now for five minutes and nothing is retained,
+// so a production 5xx is unrecoverable minutes later. This table is the retention
+// — every unhandled server error, plus errors reported by the Next apps' error
+// boundaries, so "what broke for that user?" is a query rather than forensics.
+//
+// Written best-effort and fire-and-forget: recording an error must never fail or
+// delay the response that is already erroring.
+model ErrorLog {
+  id         String   @id @default(cuid())
+  occurredAt DateTime @default(now())
+  // Which app raised it — "api", "admin", "auth", "field", … A client-reported
+  // error is attributed to the app that reported it, not to the API.
+  source     String
+  method     String?
+  path       String?
+  statusCode Int?
+  name       String?
+  message    String
+  stack      String?
+  // Correlates with the `requestId` on the API's error response + http log line,
+  // and with the `digest` Next puts on its error boundaries.
+  requestId  String?
+  tenantId   String?
+  userId     String?
+  context    Json?
+
+  @@index([occurredAt])
+  @@index([source, occurredAt])
+  @@index([tenantId, occurredAt])
+  @@schema("ops")
+}
+
 // ── Payment domain (meld doc 08) ─────────────────────────────────────────────
 enum PaymentStatus {
   RECORDED
@@ -2321,6 +2360,11 @@ model Call {
   errorCode       String?
   errorMessage    String?
   sipCode         String?
+  // Twilio answering-machine detection verdict (AnsweredBy), populated on
+  // autodialer campaign dials with AMD enabled. Generic voice facts, so they
+  // live here rather than on the autodialer attempt.
+  answeredBy      String?
+  machineDetected Boolean?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -2402,6 +2446,10 @@ model PlatformVoiceApp {
   apiKeySid             String
   encryptedApiKeySecret String
   twimlAppSid           String
+  // The autodialer's own TwiML app on this account (voiceUrl → /autodialer/ivr/
+  // answer), so anonymous widget traffic never rides the softphone app. Lazily
+  // created by ensureDialerVoiceApp; null until first use.
+  dialerTwimlAppSid     String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -2770,6 +2818,12 @@ model Politician {
   imageLicence  String?
   /// The source Commons filename — the idempotency key, so a re-sync skips an unchanged photo.
   imageSourceRef String?
+  /// Electorate-office phone number, E.164 — what the autodialer's electoral
+  /// targeting dials. Not carried by the TVFY/Wikidata syncs; populated by the
+  /// civic phone backfill (see scripts/civic) or curated manually.
+  phone         String?
+  /// Where the number came from: "aph_csv" | "parliament_site" | "manual".
+  phoneSource   String?
   lastSyncedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -2872,4 +2926,424 @@ model AiMessage {
 
   @@index([conversationId, createdAt])
   @@schema("ai")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── Autodialer: voice broadcast / robo-poll / transfer campaigns ─────────────
+//
+// Absorbed from the standalone `autodialer` codebase (voice broadcast, IVR
+// surveys with a per-answer branching graph, transfer + electoral-target
+// campaigns) — source naming kept, camelCased. Model names carry a `Dialer`
+// prefix because Prisma model names are one global namespace and `Call`,
+// `Question`, `Event`, `Audience` are taken by other domains.
+//
+// Domain boundaries: every provider call leg is a telephony.Call row (the
+// existing voice webhooks, FSM and CAS status writes own the call lifecycle);
+// this domain layers campaign semantics on top. All cross-schema references
+// are id-only — telephony pattern, no Tenant back-relation.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// Campaign lifecycle. COMPLETED is terminal for dialling (clone to re-run —
+/// source behaviour); ARCHIVED hides it from the default list.
+enum DialerCampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+
+  @@schema("autodialer")
+}
+
+/// Source question-level `type` — SWITCHBOARD plays its prompt then routes the
+/// caller into the electoral-target flow with no Gather.
+enum DialerQuestionType {
+  STANDARD
+  SWITCHBOARD
+
+  @@schema("autodialer")
+}
+
+/// Source answer-level `type`. SMS actually sends (the source only logged);
+/// SET_LANGUAGE updates the leg's language; REDIRECT (with `transfer`) patches
+/// the caller through to a target; SWITCHBOARD jumps to electoral targeting.
+enum DialerAnswerType {
+  SMS
+  SET_LANGUAGE
+  REDIRECT
+  SWITCHBOARD
+
+  @@schema("autodialer")
+}
+
+/// Per-dial outcome, mirrored from the telephony call's terminal status by the
+/// autodialer reaction. PENDING while the leg is live or queued.
+enum DialerAttemptOutcome {
+  PENDING
+  ANSWERED
+  MACHINE
+  NO_ANSWER
+  BUSY
+  FAILED
+  OPTED_OUT
+  CANCELED
+
+  @@schema("autodialer")
+}
+
+/// Which side of the product placed the leg — a dialled phone or the WebRTC
+/// click-to-call widget. Source `call_type`.
+enum DialerCallKind {
+  PHONE
+  WEBRTC
+
+  @@schema("autodialer")
+}
+
+/// Click-to-call widget session lifecycle. BRIDGED = target leg joined the
+/// conference; EXPIRED = never connected before expiresAt.
+enum DialerSessionStatus {
+  CREATED
+  CONNECTED
+  BRIDGED
+  ENDED
+  FAILED
+  EXPIRED
+
+  @@schema("autodialer")
+}
+
+/// A dialling campaign. Behaviour is the source's boolean matrix, not a type
+/// column: outboundOnly ⇒ broadcast engine dials it; survey ⇒ the question
+/// graph runs; electoralTarget ⇒ postcode→MP routing; transparentTargetTransfer
+/// ⇒ answer redirects straight to the transfer flow; targetNumbers ⇒ fixed
+/// transfer destination(s), sampled when several.
+model DialerCampaign {
+  id       String               @id @default(cuid())
+  tenantId String
+  name     String
+  status   DialerCampaignStatus @default(DRAFT)
+
+  outboundOnly              Boolean @default(false)
+  publicVisible             Boolean @default(false)
+  survey                    Boolean @default(false)
+  electoralTarget           Boolean @default(false)
+  transparentTargetTransfer Boolean @default(false)
+
+  /// id-only → audience.Audience — the callee source (no callees table; locked
+  /// decision). Resolution reuses the blast recipient resolver.
+  audienceId String?
+
+  /// Calling window, HH:MM, evaluated in the TENANT's timezone
+  /// (Tenant.settings.timezone, default Australia/Sydney). Overnight wrap
+  /// supported (start > finish).
+  dailyStart          String @default("09:00")
+  dailyFinish         String @default("20:00")
+  /// Minimum minutes between dial ticks for this campaign.
+  dialerPeriodMinutes Int    @default(5)
+  /// Don't re-dial the same number within this many hours.
+  noCallWindowHours   Int    @default(24)
+  maxCallAttempts     Int    @default(3)
+  /// Dials created per tick.
+  batchSize           Int    @default(20)
+
+  /// id-only → telephony.TelephonyPhoneNumber. Null ⇒ TelephonySenderResolver
+  /// purpose fallback, then the platform number.
+  fromNumberId String?
+
+  /// Prompt shape: { name?: string, audio?: fileId | { [lang]: fileId } } where
+  /// fileId → tenant.StoredFile. <Say> TTS of `name` is the fallback and the
+  /// v1 default (campaigns work with zero uploads).
+  intro  Json?
+  outro  Json?
+  optOut Json?
+
+  /// string[] — fixed transfer destination(s); one is sampled when several.
+  targetNumbers Json?
+  /// string[] — party filter for electoral targeting.
+  partyTargets  Json?
+  /// FEDERAL | VIC | NSW | QLD | SA | WA | TAS | ACT | NT. The source overloaded
+  /// electoral_target as this value; split cleanly here.
+  jurisdiction  String?
+  /// "electorate" (lower house, default) | "upper" — which chamber's member to
+  /// route to. Source read a column that never existed; real now.
+  officeTarget  String?
+
+  /// Twilio answering-machine detection on outbound campaign dials. Never
+  /// applied to click-to-call target legs (a human is holding in conference).
+  amdEnabled       Boolean @default(true)
+  recordingEnabled Boolean @default(false)
+  defaultLanguage  String  @default("en")
+
+  lastDialedAt DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  questions DialerQuestion[]
+  answers   DialerAnswer[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@schema("autodialer")
+}
+
+/// One node of the survey graph. `key` is the source's question key ("q1") —
+/// stable across edits, carried in Gather action URLs.
+model DialerQuestion {
+  id          String             @id @default(cuid())
+  tenantId    String
+  campaignId  String
+  key         String
+  /// The spoken text (also the <Say> fallback when audioPrompt is absent).
+  name        String
+  type        DialerQuestionType @default(STANDARD)
+  /// Same prompt shape as campaign intro/outro.
+  audioPrompt Json?
+  orderIndex  Int                @default(0)
+
+  campaign DialerCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  answers  DialerAnswer[]
+
+  @@unique([campaignId, key])
+  @@index([tenantId])
+  @@schema("autodialer")
+}
+
+/// One keypad branch of a question. `nextKey` is another question key, the
+/// literal "outro" (play outro, end) or null (hang up). `dispositionCode` +
+/// `supportLevel` drive the write-back onto uprise dispositions so robo-polls
+/// feed the same targeting loop doorknocking does.
+model DialerAnswer {
+  id         String            @id @default(cuid())
+  tenantId   String
+  campaignId String
+  questionId String
+  digit      String
+  value      String
+  nextKey    String?
+  type       DialerAnswerType?
+  /// SMS body for type=SMS.
+  content    String?
+  transfer   Boolean           @default(false)
+  /// → canvass.DispositionDef.code (id-only by code).
+  dispositionCode String?
+  supportLevel    SupportLevel?
+
+  campaign DialerCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  question DialerQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, digit])
+  @@index([campaignId])
+  @@schema("autodialer")
+}
+
+/// One campaign dial of one number. The provider leg is telephony.Call
+/// (id-only callId); outcome is mirrored from its terminal status by the
+/// autodialer reaction. Attempt caps and no-call windows are COUNT/MAX queries
+/// over this table per phoneE164.
+model DialerAttempt {
+  id         String               @id @default(cuid())
+  tenantId   String
+  campaignId String
+  /// id-only → public.Contact.
+  contactId  String?
+  phoneE164  String
+  attemptNo  Int
+  kind       DialerCallKind       @default(PHONE)
+  /// id-only → telephony.Call.
+  callId     String?
+  /// Per-leg language; SET_LANGUAGE answers update it (source callee.language).
+  language   String               @default("en")
+  /// Caller-entered postcode (electoral routing). Selection state is held here,
+  /// server-side — Gather action URLs carry ids only, never caller input.
+  postcode   String?
+  outcome    DialerAttemptOutcome @default(PENDING)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@unique([campaignId, phoneE164, attemptNo])
+  @@index([campaignId, phoneE164])
+  @@index([campaignId, outcome])
+  @@index([callId])
+  @@index([tenantId, createdAt])
+  @@schema("autodialer")
+}
+
+/// A click-to-call widget session: one supporter, one conference, two legs.
+/// Target identity lives HERE (not in query strings, unlike the source).
+/// actionPageId links the session to the action page that minted it.
+model DialerCallSession {
+  id         String              @id @default(cuid())
+  tenantId   String
+  campaignId String
+  /// id-only → actions.ActionPage — the public surface that created this session.
+  actionPageId String?
+  status     DialerSessionStatus @default(CREATED)
+  /// id-only → telephony.Call: the caller (WebRTC) leg.
+  callId       String?
+  /// id-only → telephony.Call: the dialled target leg.
+  targetCallId String?
+  /// Deterministic: "dialer-{sessionId}" — a retried TwiML fetch reuses the room.
+  conferenceName String? @unique
+
+  /// Supporter-entered fields, captured at session creation per the action
+  /// page's collect toggles.
+  supporterName  String?
+  supporterEmail String?
+  supporterPhone String?
+
+  targetNumber     String?
+  targetName       String?
+  targetParty      String?
+  targetElectorate String?
+  postcode         String?
+  language         String  @default("en")
+  /// Host that embedded the widget (advisory — CSP is the enforcement point).
+  embedAncestor    String?
+
+  expiresAt DateTime
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([tenantId, campaignId, createdAt])
+  @@index([actionPageId, createdAt])
+  @@index([callId])
+  @@index([status, expiresAt])
+  @@schema("autodialer")
+}
+
+/// Durable call-progress ledger — one row per widget-visible event. Backs the
+/// public SSE channel (poll + Last-Event-ID resume via `seq`) and doubles as
+/// the audit trail (replaces the source `events` table). Names are the source
+/// Pusher vocabulary verbatim (call_started, call_redirecting, …).
+model DialerSessionEvent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  sessionId String
+  seq       BigInt   @default(autoincrement())
+  name      String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([sessionId, seq])
+  @@index([tenantId, createdAt])
+  @@schema("autodialer")
+}
+
+/// Append-only transfer ledger — one row per patch-through (source `redirects`).
+model DialerRedirect {
+  id         String   @id @default(cuid())
+  tenantId   String
+  campaignId String
+  /// id-only → telephony.Call (the leg that was transferred).
+  callId     String?
+  sessionId  String?
+  contactId  String?
+  targetNumber   String
+  phoneNumber    String?
+  redirectNumber String?
+  targetName     String?
+  targetParty    String?
+  electorate     String?
+  data           Json?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, campaignId, createdAt])
+  @@index([callId])
+  @@schema("autodialer")
+}
+
+/// One survey answer on one leg. Unique per (callId, questionKey) so Twilio
+/// Gather retries upsert rather than duplicate — keep latest.
+model DialerSurveyResult {
+  id         String  @id @default(cuid())
+  tenantId   String
+  campaignId String
+  /// id-only → telephony.Call — the universal per-leg key (attempts and widget
+  /// sessions both have one).
+  callId     String
+  attemptId  String?
+  sessionId  String?
+  contactId  String?
+  questionKey String
+  answerDigit String
+  answerValue String
+  dispositionCode String?
+  supportLevel    SupportLevel?
+  createdAt   DateTime @default(now())
+
+  @@unique([callId, questionKey])
+  @@index([tenantId, campaignId, questionKey])
+  @@index([campaignId, createdAt])
+  @@schema("autodialer")
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ── Actions: public action pages (first type: click-to-call) ────────────────
+//
+// The action-pages framework. An ActionPage owns presentation + public-surface
+// policy (copy, field collection, captcha, embed allowlist, slug, publish
+// lifecycle); ALL telephony lives on the autodialer campaign it references
+// id-only. Call sessions + results rows live in the autodialer domain carrying
+// actionPageId, so this domain stays presentation-pure.
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum ActionPageType {
+  CLICK_TO_CALL
+
+  @@schema("actions")
+}
+
+enum ActionPageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@schema("actions")
+}
+
+model ActionPage {
+  id       String           @id @default(cuid())
+  tenantId String
+  type     ActionPageType   @default(CLICK_TO_CALL)
+  status   ActionPageStatus @default(DRAFT)
+  /// Internal name (admin list); public copy is below.
+  title    String
+  /// Unguessable public identifier — the ONLY public address of this page.
+  /// randomBytes(16).toString("base64url"): 128 bits.
+  publicSlug String @unique
+
+  headline       String?
+  body           String? @db.Text
+  ctaLabel       String?
+  successMessage String? @db.Text
+
+  collectName    Boolean @default(true)
+  collectEmail   Boolean @default(true)
+  collectPhone   Boolean @default(false)
+  /// Whether embed attributes / query params may prefill supporter fields.
+  allowPrefill   Boolean @default(true)
+  /// Require Turnstile on call-session creation (verified service-side, strict).
+  requireCaptcha Boolean @default(false)
+
+  /// Host-domain allowlist for embeds (hostname or *.hostname only — validated
+  /// at write time so the CSP header can never be injected). Empty ⇒ any site
+  /// may embed.
+  embedDomains String[] @default([])
+
+  /// id-only → autodialer.DialerCampaign (all telephony config).
+  campaignId String?
+
+  publishedAt DateTime?
+  archivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, campaignId])
+  @@schema("actions")
 }

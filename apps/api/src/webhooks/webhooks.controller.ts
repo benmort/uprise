@@ -21,6 +21,7 @@ import { PaymentService, type StripeEvent } from "../payment/payment.service";
 import { StripeService } from "../payment/stripe.service";
 import { CallsService } from "../calls/calls.service";
 import { TelephonyWebhookAuthService } from "../telephony/telephony-webhook-auth.service";
+import { validateTwilioWebhookSignature } from "../common/webhooks/twilio-signature.util";
 import { TelephonyProvisioningService } from "../telephony/telephony-provisioning.service";
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { parseChannelAddress } from "../messaging/message-channel.util";
@@ -111,31 +112,13 @@ export class WebhooksController {
   }
 
   /**
-   * Validate X-Twilio-Signature with the token of the account that SENT the
-   * webhook — per-tenant subaccounts sign with their own tokens, so callers
-   * resolve the token first (by To number / AccountSid / BundleSid) and the
-   * platform env token is only the fallback.
+   * Delegates to the shared util (common/webhooks/twilio-signature.util.ts) —
+   * the autodialer IVR surface validates through the same code path. The env
+   * fallback stays HERE so existing call sites keep their exact behaviour.
    */
   private validateTwilioSignature(req: Request, body: Record<string, unknown>, authToken?: string) {
     const token = authToken ?? this.config.get<string>("TWILIO_AUTH_TOKEN");
-    if (!token) {
-      throw new UnauthorizedException("TWILIO_AUTH_TOKEN not configured");
-    }
-    const signature =
-      (req.headers["x-twilio-signature"] as string) ||
-      (req.headers["X-Twilio-Signature"] as string);
-    if (!signature) {
-      throw new UnauthorizedException("Missing X-Twilio-Signature");
-    }
-    const protocol =
-      (req.headers["x-forwarded-proto"] as string) || req.protocol || "https";
-    const host =
-      (req.headers["x-forwarded-host"] as string) || req.get("host") || "";
-    const url = `${protocol}://${host}${req.originalUrl}`;
-    const isValid = (twilio as any).validateRequest(token, signature, url, body || {});
-    if (!isValid) {
-      throw new UnauthorizedException("Invalid Twilio signature");
-    }
+    validateTwilioWebhookSignature(req, body, token);
   }
 
   @Post("inbound-text-message-hook")

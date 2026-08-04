@@ -167,6 +167,9 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/events/dispatch-due-reminders",
       "/calls/reconcile",
       "/api/v1/calls/reconcile",
+      // Autodialer dial-engine tick (Bearer CRON_SECRET; enqueues due campaign ticks).
+      "/autodialer/dispatch-due",
+      "/api/v1/autodialer/dispatch-due",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));
@@ -211,6 +214,18 @@ export class BasicAuthGuard implements CanActivate {
       // Public health check for uptime monitoring (no auth).
       "/health",
       "/api/v1/health",
+      // Public platform status for the marketing status page. Rolled up server-side to named
+      // services + a mock version — no shas, no project names, no origins (see
+      // platform-status.service.ts publicStatus()).
+      "/platform-status/public",
+      "/api/v1/platform-status/public",
+      // Error intake from the Next apps' error boundaries. Pre-session on purpose: the
+      // errors most worth capturing are the ones where auth failed or the app never
+      // finished booting, so gating this on a session would blind us to them. Write-only
+      // — one capped, validated row into ops.ErrorLog, returning nothing (see
+      // errors.controller.ts).
+      "/ops/client-error",
+      "/api/v1/ops/client-error",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some(
@@ -223,7 +238,14 @@ export class BasicAuthGuard implements CanActivate {
         /^(?:\/api\/v1)?\/insights\/public\//.test(candidate) ||
         // Public event RSVP surface — gated per-event by Event.publicRsvpEnabled + PUBLISHED
         // status in the service. Preview (GET) + RSVP (POST) only.
-        /^(?:\/api\/v1)?\/public-events\//.test(candidate),
+        /^(?:\/api\/v1)?\/public-events\//.test(candidate) ||
+        // Autodialer IVR/TwiML hooks — every handler validates the per-subaccount Twilio
+        // signature and resolves context by our own ids (see DialerIvrController).
+        /^(?:\/api\/v1)?\/autodialer\/ivr\//.test(candidate) ||
+        // Public action pages (click-to-call) — published-only gating in the service; the
+        // call-session mint is rate-limited + optionally captcha-gated (it spends tenant
+        // Twilio money). See PublicActionsController.
+        /^(?:\/api\/v1)?\/actions\/public\//.test(candidate),
     );
   }
 

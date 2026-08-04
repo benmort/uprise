@@ -20,6 +20,8 @@ import { buildEmailProvisioningReactions } from "../../email/email-provisioning.
 import { AudiencesModule } from "../../audiences/audiences.module";
 import { AudiencesService } from "../../audiences/audiences.service";
 import { buildAudienceReactions } from "../../audiences/audience.reactions";
+import { OutboxService } from "../../common/outbox/outbox.service";
+import { buildAutodialerReactions } from "../../autodialer/autodialer.reactions";
 
 /**
  * Wires the reaction registry + the ported cross-domain reactions (meld doc 12).
@@ -42,11 +44,13 @@ import { buildAudienceReactions } from "../../audiences/audience.reactions";
         provisioning: TelephonyProvisioningService,
         emailProvisioning: EmailProvisioningService,
         audiences: AudiencesService,
+        outbox: OutboxService,
       ): ReactionList => [
         ...buildDomainReactions({ prisma, email, sms, stripe, billing, config, logger }),
         ...buildTelephonyProvisioningReactions({ provisioning }),
         ...buildEmailProvisioningReactions({ provisioning: emailProvisioning }),
         ...buildAudienceReactions({ audiences, logger }),
+        ...buildAutodialerReactions({ prisma, outbox, logger }),
       ],
       inject: [
         PrismaService,
@@ -59,6 +63,7 @@ import { buildAudienceReactions } from "../../audiences/audience.reactions";
         TelephonyProvisioningService,
         EmailProvisioningService,
         AudiencesService,
+        OutboxService,
       ],
     },
     ReactionRegistry,

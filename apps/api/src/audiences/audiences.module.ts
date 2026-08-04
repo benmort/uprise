@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AudiencesController } from "./audiences.controller";
 import { AudiencesService } from "./audiences.service";
+import { AudienceRecipientsResolver } from "./audience-recipients.resolver";
 import { SegmentEvaluatorService } from "./segment-evaluator.service";
 import { SegmentLeafResolverService } from "./segment-leaf-resolver.service";
 import { SegmentPreviewService } from "./segment-preview.service";
@@ -18,6 +19,7 @@ import { InsightsModule } from "../insights/insights.module";
   controllers: [AudiencesController, SegmentsController],
   providers: [
     AudiencesService,
+    AudienceRecipientsResolver,
     SegmentEvaluatorService,
     SegmentLeafResolverService,
     SegmentPreviewService,
@@ -25,6 +27,6 @@ import { InsightsModule } from "../insights/insights.module";
     SegmentsService,
     SegmentAuthoringService,
   ],
-  exports: [AudiencesService, SegmentEvaluatorService],
+  exports: [AudiencesService, SegmentEvaluatorService, AudienceRecipientsResolver],
 })
 export class AudiencesModule {}

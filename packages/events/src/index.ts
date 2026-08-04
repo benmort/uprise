@@ -102,6 +102,25 @@ export const EVENT_TYPES = {
   EVENT_RSVP_CANCELLED: "events.rsvp.cancelled",
   EVENT_RSVP_PROMOTED: "events.rsvp.promoted",
   EVENT_RSVP_ATTENDED: "events.rsvp.attended",
+
+  // ── Autodialer (voice broadcast / robo-poll / transfer campaigns) ──
+  DIALER_CAMPAIGN_CREATED: "autodialer.campaign.created",
+  DIALER_CAMPAIGN_ACTIVATED: "autodialer.campaign.activated",
+  DIALER_CAMPAIGN_PAUSED: "autodialer.campaign.paused",
+  DIALER_CAMPAIGN_COMPLETED: "autodialer.campaign.completed",
+  DIALER_CAMPAIGN_ARCHIVED: "autodialer.campaign.archived",
+  DIALER_ATTEMPT_PLACED: "autodialer.attempt.placed",
+  DIALER_ATTEMPT_FINISHED: "autodialer.attempt.finished",
+  DIALER_SURVEY_ANSWER_RECORDED: "autodialer.survey.answer-recorded",
+  DIALER_CONTACT_OPTED_OUT: "autodialer.contact.opted-out",
+  DIALER_TRANSFER_RECORDED: "autodialer.transfer.recorded",
+  DIALER_SESSION_STARTED: "autodialer.session.started",
+  DIALER_SESSION_ENDED: "autodialer.session.ended",
+
+  // ── Actions (public action pages) ──
+  ACTION_PAGE_CREATED: "actions.page.created",
+  ACTION_PAGE_PUBLISHED: "actions.page.published",
+  ACTION_PAGE_ARCHIVED: "actions.page.archived",
 } as const;
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES] | string;
@@ -210,6 +229,61 @@ export interface DomainEventMap {
   "email.email.delivered": { emailId: string; tenantId: string; toAddress: string };
   "email.email.bounced": { emailId: string; tenantId: string; toAddress: string; reason: string };
   "telephony.call.completed": { callId: string; tenantId: string; durationSeconds: number | null };
+  "autodialer.campaign.created": { campaignId: string; tenantId: string; name: string };
+  "autodialer.campaign.activated": { campaignId: string; tenantId: string };
+  "autodialer.campaign.paused": { campaignId: string; tenantId: string };
+  "autodialer.campaign.completed": { campaignId: string; tenantId: string; dialled: number };
+  "autodialer.campaign.archived": { campaignId: string; tenantId: string };
+  "autodialer.attempt.placed": {
+    attemptId: string;
+    campaignId: string;
+    tenantId: string;
+    callId: string;
+    attemptNo: number;
+  };
+  "autodialer.attempt.finished": {
+    attemptId: string;
+    campaignId: string;
+    tenantId: string;
+    callId: string | null;
+    outcome: string;
+  };
+  "autodialer.survey.answer-recorded": {
+    tenantId: string;
+    campaignId: string;
+    callId: string;
+    contactId: string | null;
+    questionKey: string;
+    digit: string;
+    value: string;
+    dispositionCode: string | null;
+    supportLevel: string | null;
+  };
+  "autodialer.contact.opted-out": {
+    tenantId: string;
+    campaignId: string;
+    phoneE164: string;
+    contactId: string | null;
+    source: string;
+  };
+  "autodialer.transfer.recorded": {
+    tenantId: string;
+    campaignId: string;
+    redirectId: string;
+    callId: string | null;
+    targetNumber: string;
+  };
+  "autodialer.session.started": { sessionId: string; tenantId: string; campaignId: string; actionPageId: string | null };
+  "autodialer.session.ended": {
+    sessionId: string;
+    tenantId: string;
+    campaignId: string;
+    status: string;
+    durationSeconds: number | null;
+  };
+  "actions.page.created": { pageId: string; tenantId: string; type: string };
+  "actions.page.published": { pageId: string; tenantId: string; campaignId: string | null };
+  "actions.page.archived": { pageId: string; tenantId: string };
   "iam.user.signed-in": { userId: string; tenantId: string };
   "iam.user.email-verified": { userId: string; tenantId: string };
   "iam.user.email-changed": { userId: string; tenantId: string; newEmail: string };

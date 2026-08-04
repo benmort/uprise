@@ -17,6 +17,8 @@ import { HeatService } from "../../api/src/canvassing/heat.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { IntegrationsService } from "../../api/src/integrations/integrations.service";
 import { JourneysService } from "../../api/src/journeys/journeys.service";
+import { DialerCallPlacerService } from "../../api/src/autodialer/dialer-call-placer.service";
+import { DialerDispatchService } from "../../api/src/autodialer/dialer-dispatch.service";
 import { DomainLogger } from "../../api/src/common/logging/domain-logger.service";
 import { PrismaService } from "../../api/src/prisma/prisma.service";
 import { ReactionRegistry } from "../../api/src/common/reactions/reaction-registry";
@@ -27,6 +29,9 @@ import {
   isBlastSendBatchJobPayload,
   isIntegrationSyncJobPayload,
   isJourneyRunRungJobPayload,
+  isDialerCampaignTickJobPayload,
+  isDialerPlaceCallJobPayload,
+  isDialerPlaceTargetJobPayload,
   isSegmentEvalRunJobPayload,
   isTurfEstimateRunJobPayload,
   isHeatRunJobPayload,
@@ -223,6 +228,8 @@ async function bootstrap(): Promise<void> {
   const blasts = app.get(BlastsService);
   const integrations = app.get(IntegrationsService);
   const journeys = app.get(JourneysService);
+  const dialerDispatch = app.get(DialerDispatchService);
+  const dialerPlacer = app.get(DialerCallPlacerService);
   const prisma = app.get(PrismaService);
   const reactions = app.get(ReactionRegistry);
   const logger = app.get(DomainLogger);
@@ -304,6 +311,38 @@ async function bootstrap(): Promise<void> {
         return journeys.processRungJob(job.data);
       },
       { connection, prefix, concurrency: queueConfig.journeyQueueConcurrency },
+    ),
+    new Worker(
+      QUEUE_NAMES.DIALER_DISPATCH,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.DIALER_CAMPAIGN_TICK) return null;
+        if (!isDialerCampaignTickJobPayload(job.data)) {
+          throw new Error(`Invalid dialler tick job payload for job ${job.id}`);
+        }
+        return dialerDispatch.runTick(job.data);
+      },
+      { connection, prefix, concurrency: queueConfig.dialerDispatchQueueConcurrency },
+    ),
+    new Worker(
+      QUEUE_NAMES.DIALER_CALL,
+      async (job: Job) => {
+        // One queue, two job types: campaign dials and (Phase 4b) click-to-call
+        // target legs — both are outbound placements sharing the concurrency cap.
+        if (job.name === QUEUE_JOB_TYPES.DIALER_PLACE_CALL) {
+          if (!isDialerPlaceCallJobPayload(job.data)) {
+            throw new Error(`Invalid dialler place-call job payload for job ${job.id}`);
+          }
+          return dialerPlacer.placeCall(job.data);
+        }
+        if (job.name === QUEUE_JOB_TYPES.DIALER_PLACE_TARGET) {
+          if (!isDialerPlaceTargetJobPayload(job.data)) {
+            throw new Error(`Invalid dialler place-target job payload for job ${job.id}`);
+          }
+          return dialerPlacer.placeTargetLeg(job.data);
+        }
+        return null;
+      },
+      { connection, prefix, concurrency: queueConfig.dialerQueueConcurrency },
     ),
     new Worker(
       QUEUE_NAMES.DOMAIN_EVENTS,

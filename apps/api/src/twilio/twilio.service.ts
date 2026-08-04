@@ -324,6 +324,22 @@ export class TwilioService {
   }
 
   /**
+   * Create a TwiML App only (no API key) under an account — the autodialer's
+   * dedicated voice app reuses the account's existing voice API key but points
+   * its voiceUrl at the dialler IVR, so widget tokens can never reach the
+   * softphone's TwiML surface.
+   */
+  async createTwimlApp(
+    sender: Pick<ResolvedSender, "accountSid" | "authToken">,
+    voiceUrl: string,
+    friendlyName: string,
+  ): Promise<string> {
+    const client = this.getClient(sender as ResolvedSender);
+    const app = await client.applications.create({ friendlyName, voiceUrl, voiceMethod: "POST" });
+    return app.sid;
+  }
+
+  /**
    * TwiML for a browser-originated outbound call: bridge the softphone leg to the
    * PSTN callee, recording the answered call, threading our Call `callId` through
    * the status + recording callbacks so the existing handlers bind it.
@@ -677,11 +693,22 @@ export class TwilioService {
     from?: string;
     url?: string;
     twiml?: string;
+    /** Dial from a tenant subaccount (its own client + caller id) — the dialler path. */
+    sender?: ResolvedSender;
+    /** Defaults true (existing transactional behaviour); autodialer campaigns pass their toggle. */
+    record?: boolean;
+    /** Override the default voice-status-callback URL builder. */
+    statusCallbackUrl?: string;
+    /** Twilio answering-machine detection (blocking). Only set by campaign dials. */
+    machineDetection?: "Enable";
+    /** Ring timeout in seconds. */
+    timeout?: number;
   }): Promise<{ sid: string; status: string }> {
-    const client = this.getClient();
+    const client = this.getClient(input.sender);
     const to = input.to.trim();
     const from =
       (input.from?.trim() || "") ||
+      (input.sender?.from?.trim() || "") ||
       this.config.get<string>("TWILIO_VOICE_FROM", "").trim() ||
       this.config.get<string>("TWILIO_PHONE_NUMBER", "").trim();
     if (!from) {
@@ -697,16 +724,19 @@ export class TwilioService {
       );
     }
 
-    const statusCallback = this.getVoiceStatusCallbackUrl();
+    const statusCallback = input.statusCallbackUrl ?? this.getVoiceStatusCallbackUrl();
     const recordingCallback = this.getVoiceRecordingCallbackUrl();
+    const record = input.record ?? true;
     const params: Record<string, unknown> = {
       to,
       from,
       ...(url ? { url } : { twiml }),
-      // Record the call (transactional calls are logged for playback). The recording
+      // Record by default (transactional calls are logged for playback). The recording
       // completes after the call, so bind it via the dedicated recording callback.
-      record: true,
-      ...(recordingCallback
+      record,
+      ...(input.machineDetection ? { machineDetection: input.machineDetection } : {}),
+      ...(input.timeout ? { timeout: input.timeout } : {}),
+      ...(record && recordingCallback
         ? { recordingStatusCallback: recordingCallback, recordingStatusCallbackEvent: ["completed"] }
         : {}),
       ...(statusCallback

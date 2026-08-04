@@ -39,7 +39,11 @@ import { InsightsModule } from "./insights/insights.module";
 import { CivicModule } from "./civic/civic.module";
 import { DemographicsModule } from "./demographics/demographics.module";
 import { HealthModule } from "./health/health.module";
+import { PlatformStatusModule } from "./platform-status/platform-status.module";
+import { AutodialerModule } from "./autodialer/autodialer.module";
+import { ActionsModule } from "./actions/actions.module";
 import { LoggingModule } from "./common/logging/logging.module";
+import { ErrorsModule } from "./common/errors/errors.module";
 import { FlagsModule } from "./common/flags/flags.module";
 import { EventsModule } from "./common/events/events.module";
 import { OutboxModule } from "./common/outbox/outbox.module";
@@ -71,6 +75,7 @@ import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
     StorageModule,
     IamModule,
     LoggingModule,
+    ErrorsModule,
     FlagsModule,
     CaptchaModule,
     EventsModule,
@@ -113,6 +118,9 @@ import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
     DemographicsModule,
     InboxModule,
     HealthModule,
+    PlatformStatusModule,
+    AutodialerModule,
+    ActionsModule,
   ],
   controllers: [AuthController],
   providers: [

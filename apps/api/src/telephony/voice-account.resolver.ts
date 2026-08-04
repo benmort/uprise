@@ -21,6 +21,8 @@ type VoiceSettings = {
   voiceApiKeySid?: string;
   voiceApiKeySecret?: string; // encrypted at rest
   voiceTwimlAppSid?: string;
+  /** The autodialer's own TwiML app on this subaccount (voiceUrl → dialler IVR). */
+  voiceDialerTwimlAppSid?: string;
 };
 
 /**
@@ -44,6 +46,12 @@ export class VoiceAccountResolver {
   private voiceOutboundUrl(): string {
     const base = this.config.get<string>("API_BASE_URL", "").trim().replace(/\/+$/, "");
     return `${base}/api/v1/voice-outbound`;
+  }
+
+  /** The dialler TwiML app's voice URL — a widget caller lands on the autodialer IVR. */
+  private dialerVoiceUrl(): string {
+    const base = this.config.get<string>("API_BASE_URL", "").trim().replace(/\/+$/, "");
+    return `${base}/api/v1/autodialer/ivr/session-answer`;
   }
 
   private platformCallerId(): string {
@@ -96,6 +104,35 @@ export class VoiceAccountResolver {
   }
 
   /**
+   * The account a click-to-call widget session's voice token signs against.
+   * Same account selection as `resolveForTenant`, but the VoiceGrant points at
+   * the account's DIALLER TwiML app (voiceUrl → /autodialer/ivr/session-answer),
+   * so anonymous widget tokens can never reach the softphone's TwiML surface.
+   */
+  async resolveDialerForTenant(tenantId: string): Promise<VoiceAccount> {
+    const sender = await this.senders.resolve({ tenantId, purpose: "transactional" });
+    if (!sender?.from || !isVoiceCapable(sender.from)) {
+      const platform = await this.resolvePlatformAccount();
+      // Explicit env pin wins (mirrors TWILIO_TWIML_APP_SID); else the
+      // PlatformVoiceApp row lazily grows its dialler app.
+      const envDialerApp = this.config.get<string>("TWILIO_DIALER_TWIML_APP_SID", "").trim();
+      if (envDialerApp) return { ...platform, twimlAppSid: envDialerApp };
+      const dialerAppSid = await this.ensurePlatformDialerApp(platform.accountSid);
+      return { ...platform, twimlAppSid: dialerAppSid };
+    }
+    const voice = await this.ensureSubaccountVoiceApp(sender);
+    const dialerAppSid = await this.ensureSubaccountDialerApp(sender);
+    return {
+      mode: "subaccount",
+      accountSid: sender.accountSid,
+      callerId: sender.from,
+      apiKeySid: voice.apiKeySid,
+      apiKeySecret: voice.apiKeySecret,
+      twimlAppSid: dialerAppSid,
+    };
+  }
+
+  /**
    * The caller-id for a webhook running under `accountSid` (tenant number or platform).
    * Cheap by design — never triggers lazy voice-app creation (that would run inside a
    * Twilio webhook), so it reads the platform number straight from config.
@@ -129,6 +166,44 @@ export class VoiceAccountResolver {
       update: { apiKeySid: created.apiKeySid, encryptedApiKeySecret, twimlAppSid: created.twimlAppSid },
     });
     return created;
+  }
+
+  /**
+   * Get-or-create the platform account's DIALLER TwiML app, persisted on the
+   * PlatformVoiceApp row (dialerTwimlAppSid). Creates the base voice app first
+   * when no row exists yet (the env-pinned softphone path never writes one).
+   */
+  private async ensurePlatformDialerApp(accountSid: string): Promise<string> {
+    const authToken = this.config.get<string>("TWILIO_AUTH_TOKEN", "").trim();
+    let row = await this.prisma.platformVoiceApp.findUnique({ where: { accountSid } });
+    if (!row) {
+      await this.ensurePlatformVoiceApp(accountSid, authToken);
+      row = await this.prisma.platformVoiceApp.findUnique({ where: { accountSid } });
+    }
+    if (row?.dialerTwimlAppSid) return row.dialerTwimlAppSid;
+    const sid = await this.twilio.createTwimlApp({ accountSid, authToken }, this.dialerVoiceUrl(), "uprise-dialer");
+    await this.prisma.platformVoiceApp.update({
+      where: { accountSid },
+      data: { dialerTwimlAppSid: sid },
+    });
+    return sid;
+  }
+
+  /** Get-or-create the subaccount's dialler TwiML app, cached in settings. */
+  private async ensureSubaccountDialerApp(sender: ResolvedSender): Promise<string> {
+    const account = await this.prisma.telephonyAccount.findFirst({
+      where: { accountSid: sender.accountSid, status: "ACTIVE" },
+    });
+    const settings = (account?.settings ?? {}) as VoiceSettings & Record<string, unknown>;
+    if (settings.voiceDialerTwimlAppSid) return settings.voiceDialerTwimlAppSid;
+    const sid = await this.twilio.createTwimlApp(sender, this.dialerVoiceUrl(), "uprise-dialer");
+    if (account) {
+      await this.prisma.telephonyAccount.update({
+        where: { id: account.id },
+        data: { settings: { ...settings, voiceDialerTwimlAppSid: sid } },
+      });
+    }
+    return sid;
   }
 
   /** Get-or-create the subaccount's voice API key + TwiML App, cached in settings. */

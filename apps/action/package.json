@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node ../../scripts/dev-supervisor.mjs --label action --heal-next -- next dev -p 3004",
     "build": "pnpm -w run build:packages && next build",
+    "build:embed": "node scripts/build-embed.mjs",
     "start": "next start -p 3004",
     "lint": "tsc --noEmit --pretty false",
     "typecheck": "tsc --noEmit --pretty false",
@@ -12,6 +13,7 @@
     "test:cov": "vitest run --coverage"
   },
   "dependencies": {
+    "@twilio/voice-sdk": "^2.18.3",
     "@uprise/api-client": "workspace:*",
     "@uprise/contracts": "workspace:*",
     "@uprise/ui": "workspace:*",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.1",
+    "esbuild": "^0.21.5",
     "@types/node": "^20.17.9",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

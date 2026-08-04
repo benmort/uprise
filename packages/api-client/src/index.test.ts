@@ -13,6 +13,10 @@ import {
   tenants,
   marketing,
   plans,
+  platformStatus,
+  autodialer,
+  actionPages,
+  publicActions,
   telephony,
   messageTemplates,
   transactionalCalls,
@@ -432,6 +436,60 @@ describe("marketing + plans", () => {
     await plans.listPublic();
     expect(call()[0]).toBe(`${BASE}/plans/public`);
   });
+
+  it("platformStatus.publicStatus GETs the public status without bouncing on 401", async () => {
+    await platformStatus.publicStatus();
+    expect(call()[0]).toBe(`${BASE}/platform-status/public`);
+  });
+});
+
+describe("autodialer", () => {
+  it("list builds the filter query string", async () => {
+    await autodialer.list({ status: "ACTIVE", behaviour: "survey", search: "ring", limit: 10, offset: 20 });
+    expect(call()[0]).toBe(
+      `${BASE}/autodialer/campaigns?status=ACTIVE&behaviour=survey&search=ring&limit=10&offset=20`,
+    );
+  });
+
+  it("get / preflight encode the id", async () => {
+    await autodialer.get("dc 1");
+    expect(call(0)[0]).toBe(`${BASE}/autodialer/campaigns/dc%201`);
+    await autodialer.preflight("dc 1");
+    expect(call(1)[0]).toBe(`${BASE}/autodialer/campaigns/dc%201/preflight`);
+  });
+
+  it("create POSTs, update PATCHes, archive DELETEs", async () => {
+    await autodialer.create({ name: "New campaign", survey: true });
+    expect(call(0)[0]).toBe(`${BASE}/autodialer/campaigns`);
+    expect(call(0)[1]?.method).toBe("POST");
+
+    await autodialer.update("dc1", { name: "Renamed" });
+    expect(call(1)[0]).toBe(`${BASE}/autodialer/campaigns/dc1`);
+    expect(call(1)[1]?.method).toBe("PATCH");
+
+    await autodialer.archive("dc1");
+    expect(call(2)[1]?.method).toBe("DELETE");
+  });
+
+  it("lifecycle actions POST to their sub-paths", async () => {
+    await autodialer.activate("dc1");
+    expect(call(0)[0]).toBe(`${BASE}/autodialer/campaigns/dc1/activate`);
+    await autodialer.pause("dc1");
+    expect(call(1)[0]).toBe(`${BASE}/autodialer/campaigns/dc1/pause`);
+    await autodialer.resume("dc1");
+    expect(call(2)[0]).toBe(`${BASE}/autodialer/campaigns/dc1/resume`);
+    await autodialer.complete("dc1");
+    expect(call(3)[0]).toBe(`${BASE}/autodialer/campaigns/dc1/complete`);
+    await autodialer.clone("dc1");
+    expect(call(4)[0]).toBe(`${BASE}/autodialer/campaigns/dc1/clone`);
+  });
+
+  it("upsertQuestions PUTs the graph body", async () => {
+    await autodialer.upsertQuestions("dc1", { authoring: [{ question: "Q?", options: ["Yes"] }] });
+    expect(call()[0]).toBe(`${BASE}/autodialer/campaigns/dc1/questions`);
+    expect(call()[1]?.method).toBe("PUT");
+    expect(bodyOf(call()[1])).toEqual({ authoring: [{ question: "Q?", options: ["Yes"] }] });
+  });
 });
 
 describe("telephony + email provisioning", () => {
@@ -615,5 +673,68 @@ describe("transactionalCalls", () => {
     expect(url).toBe(`${BASE}/calls`);
     expect(init.method).toBe("POST");
     expect(bodyOf(init)).toEqual({ toNumber: "+61400000000", contactId: "c1" });
+  });
+});
+
+describe("actionPages", () => {
+  it("list builds the filter query string", async () => {
+    await actionPages.list({ status: "PUBLISHED", search: "MP", limit: 10, offset: 20 });
+    expect(call()[0]).toBe(`${BASE}/actions/pages?status=PUBLISHED&search=MP&limit=10&offset=20`);
+  });
+
+  it("get / results encode the id", async () => {
+    await actionPages.get("p 1");
+    expect(call(0)[0]).toBe(`${BASE}/actions/pages/p%201`);
+    await actionPages.results("p 1", { limit: 5 });
+    expect(call(1)[0]).toBe(`${BASE}/actions/pages/p%201/results?limit=5`);
+  });
+
+  it("create POSTs, update PATCHes", async () => {
+    await actionPages.create({ title: "Ring your MP" });
+    expect(call(0)[0]).toBe(`${BASE}/actions/pages`);
+    expect(call(0)[1]?.method).toBe("POST");
+    expect(bodyOf(call(0)[1])).toEqual({ title: "Ring your MP" });
+
+    await actionPages.update("p1", { headline: "New headline" });
+    expect(call(1)[0]).toBe(`${BASE}/actions/pages/p1`);
+    expect(call(1)[1]?.method).toBe("PATCH");
+  });
+
+  it("lifecycle + preview-token POST to their sub-paths", async () => {
+    await actionPages.publish("p1");
+    expect(call(0)[0]).toBe(`${BASE}/actions/pages/p1/publish`);
+    await actionPages.unpublish("p1");
+    expect(call(1)[0]).toBe(`${BASE}/actions/pages/p1/unpublish`);
+    await actionPages.archive("p1");
+    expect(call(2)[0]).toBe(`${BASE}/actions/pages/p1/archive`);
+    await actionPages.restore("p1");
+    expect(call(3)[0]).toBe(`${BASE}/actions/pages/p1/restore`);
+    await actionPages.previewToken("p1");
+    expect(call(4)[0]).toBe(`${BASE}/actions/pages/p1/preview-token`);
+    expect(call(4)[1]?.method).toBe("POST");
+  });
+});
+
+describe("publicActions", () => {
+  it("getPage hits the public path and carries the preview token", async () => {
+    await publicActions.getPage("my slug");
+    expect(call(0)[0]).toBe(`${BASE}/actions/public/pages/my%20slug`);
+    await publicActions.getPage("s1", "tok en");
+    expect(call(1)[0]).toBe(`${BASE}/actions/public/pages/s1?previewToken=tok%20en`);
+  });
+
+  it("createCallSession POSTs with the Turnstile header and never auto-redirects", async () => {
+    await publicActions.createCallSession("s1", { supporter: { name: "Sam" } }, "ts-token");
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/actions/public/pages/s1/call-sessions`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual({ supporter: { name: "Sam" } });
+    expect((init.headers as Record<string, string>)["cf-turnstile-response"]).toBe("ts-token");
+  });
+
+  it("sessionEventsUrl builds an absolute SSE URL with the token encoded", () => {
+    expect(publicActions.sessionEventsUrl("s 1", "t/k")).toBe(
+      `${BASE}/actions/public/call-sessions/s%201/events?token=t%2Fk`,
+    );
   });
 });

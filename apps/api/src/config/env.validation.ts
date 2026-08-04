@@ -106,6 +106,11 @@ export type ValidatedEnv = {
   // Blank ⇒ falls back to TWILIO_PHONE_NUMBER. The *_URL overrides default to
   // API_BASE_URL-derived paths when blank.
   TWILIO_VOICE_FROM: string;
+  // Autodialer: an operator-pinned dialler TwiML app on the platform account
+  // (else it's created lazily on PlatformVoiceApp), and optional hold audio for
+  // the click-to-call conference while the caller waits alone.
+  TWILIO_DIALER_TWIML_APP_SID: string;
+  DIALER_CONFERENCE_WAIT_URL: string;
   TWILIO_VOICE_TWIML_URL: string;
   TWILIO_VOICE_STATUS_CALLBACK_URL: string;
   TWILIO_VOICE_RECORDING_CALLBACK_URL: string;
@@ -272,6 +277,8 @@ export function validateEnv(config: Env): ValidatedEnv {
     TWILIO_API_KEY_SECRET: config.TWILIO_API_KEY_SECRET?.trim() || "",
     TWILIO_TWIML_APP_SID: config.TWILIO_TWIML_APP_SID?.trim() || "",
     TWILIO_VOICE_FROM: config.TWILIO_VOICE_FROM?.trim() || "",
+    TWILIO_DIALER_TWIML_APP_SID: config.TWILIO_DIALER_TWIML_APP_SID?.trim() || "",
+    DIALER_CONFERENCE_WAIT_URL: config.DIALER_CONFERENCE_WAIT_URL?.trim() || "",
     TWILIO_VOICE_TWIML_URL: config.TWILIO_VOICE_TWIML_URL?.trim() || "",
     TWILIO_VOICE_STATUS_CALLBACK_URL: config.TWILIO_VOICE_STATUS_CALLBACK_URL?.trim() || "",
     TWILIO_VOICE_RECORDING_CALLBACK_URL: config.TWILIO_VOICE_RECORDING_CALLBACK_URL?.trim() || "",

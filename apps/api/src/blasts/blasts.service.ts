@@ -1,7 +1,5 @@
 import { HttpStatus, Inject, Injectable, Logger, NotFoundException } from "@nestjs/common";
 import {
-  AudienceKind,
-  AudienceSegmentType,
   BlastRecipientStatus,
   BlastStatus,
   ConsentState,
@@ -38,8 +36,8 @@ import { BlastRetryFailedJobPayload, BlastSendBatchJobPayload } from "../common/
 import { WebhookEventService } from "../common/webhooks/webhook-event.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { canTransitionTxSms } from "../messaging/tx-sms-state.machine";
-import { orderByHash } from "@uprise/segmentation";
 import { SegmentEvaluatorService } from "../audiences/segment-evaluator.service";
+import { AudienceRecipientsResolver } from "../audiences/audience-recipients.resolver";
 
 const TWILIO_SMS_PROVIDER = "twilio";
 
@@ -117,6 +115,7 @@ type RecipientTraceInput = {
 @Injectable()
 export class BlastsService {
   private readonly logger = new Logger(BlastsService.name);
+  private readonly recipientsResolver: AudienceRecipientsResolver;
   private readonly flags: Pick<FeatureFlagsService, "isEnabled">;
   private readonly queue: DispatchQueue;
   private readonly webhookEvents: Pick<WebhookEventService, "claim" | "release">;
@@ -138,6 +137,9 @@ export class BlastsService {
     /** Optional (spec-friendly tail param): re-materialises stale v2 segments at send time. */
     private readonly segmentEvaluator?: SegmentEvaluatorService,
   ) {
+    // Composed (not injected) from this service's own deps, so the positional
+    // spec constructors keep exercising the same prisma/config/evaluator mocks.
+    this.recipientsResolver = new AudienceRecipientsResolver(prisma, config, segmentEvaluator);
     this.flags = flags ?? {
       isEnabled: async () => false,
     };
@@ -379,99 +381,13 @@ export class BlastsService {
     channel: MessageChannel;
   }): Promise<RecipientSeed[]> {
     if (!blast.audienceId) return [];
-    const audience = await this.prisma.audience.findFirst({
-      where: { id: blast.audienceId, tenantId: blast.tenantId },
-      select: { kind: true },
-    });
-    const dedup = new Map<string, RecipientSeed>();
-
-    if (audience?.kind === AudienceKind.WHATSAPP_OPTED_IN) {
-      // Dynamic "all WhatsApp opt-ins" audience: members are computed from consent,
-      // not a stored AudienceContact list.
-      const optIns = await this.prisma.contactConsent.findMany({
-        where: {
-          tenantId: blast.tenantId,
-          channel: MessageChannel.WHATSAPP,
-          state: ConsentState.OPTED_IN,
-        },
-        select: { phoneE164: true, contactId: true },
-      });
-      for (const c of optIns) {
-        dedup.set(c.phoneE164, { contactId: c.contactId ?? undefined, phoneE164: c.phoneE164, metadata: {} });
-      }
-    } else {
-      const dynamicSegments = await this.prisma.audienceSegment.findMany({
-        where: {
-          audienceId: blast.audienceId,
-          tenantId: blast.tenantId,
-          type: AudienceSegmentType.DYNAMIC,
-        },
-        select: { id: true, seed: true, lastEvaluatedAt: true },
-      });
-
-      if (dynamicSegments.length > 0) {
-        // Engine-v2 container audiences hold exactly ONE seeded segment — that seed
-        // drives the deterministic send order (preview == send) and the staleness
-        // re-evaluation. Legacy dynamic segments (no seed) keep the old behaviour.
-        const v2 = dynamicSegments.length === 1 && dynamicSegments[0].seed ? dynamicSegments[0] : null;
-        if (v2 && this.segmentEvaluator) {
-          const configured = Number(this.config.get("SEGMENT_STALE_MINUTES"));
-          const staleMinutes = Number.isFinite(configured) && configured > 0 ? configured : 15;
-          const staleBefore = Date.now() - staleMinutes * 60_000;
-          if (!v2.lastEvaluatedAt || v2.lastEvaluatedAt.getTime() < staleBefore) {
-            // Re-materialise inline so the send reflects the definition NOW (blast
-            // sends are queue-driven; the evaluation latency is acceptable here).
-            await this.segmentEvaluator.evaluate(v2.id);
-          }
-        }
-
-        // Dynamic-segment audience: members are the materialised AudienceSegmentMember
-        // set (rewritten by SegmentEvaluatorService), resolved to the Contact spine.
-        const members = await this.prisma.audienceSegmentMember.findMany({
-          where: { segmentId: { in: dynamicSegments.map((s) => s.id) } },
-          select: { contactId: true },
-        });
-        let contactIds = Array.from(new Set(members.map((m) => m.contactId)));
-        if (v2?.seed) {
-          // Deterministic hash order: the preview sample is the head of exactly
-          // this order, so what the organiser saw is who the send starts with.
-          contactIds = orderByHash(contactIds, v2.seed);
-        }
-        if (contactIds.length > 0) {
-          const contacts = await this.prisma.contact.findMany({
-            where: { id: { in: contactIds }, tenantId: blast.tenantId, phoneE164: { not: null } },
-            select: { id: true, phoneE164: true, metadata: true },
-          });
-          // Insert in contactIds order (hash order for v2) — the dedup Map's
-          // insertion order becomes recipient-creation order downstream.
-          const byId = new Map(contacts.map((c) => [c.id, c]));
-          for (const id of contactIds) {
-            const c = byId.get(id);
-            if (!c?.phoneE164) continue;
-            dedup.set(c.phoneE164, {
-              contactId: c.id,
-              phoneE164: c.phoneE164,
-              metadata: (c.metadata as Record<string, unknown>) || {},
-            });
-          }
-        }
-      } else {
-        const contacts = await this.prisma.audienceContact.findMany({
-          where: { audienceId: blast.audienceId },
-          orderBy: { createdAt: "asc" },
-        });
-        for (const contact of contacts) {
-          if (!this.isContactable(contact)) continue;
-          dedup.set(contact.phoneE164, {
-            // Point at the persistent Contact spine, not the per-audience row.
-            // Null until backfill populates AudienceContact.contactId.
-            contactId: contact.contactId ?? undefined,
-            phoneE164: contact.phoneE164,
-            metadata: (contact.metadata as Record<string, unknown>) || {},
-          });
-        }
-      }
-    }
+    // Membership resolution is shared with the autodialer (audience-recipients.resolver);
+    // the channel-specific consent gating below stays here.
+    const members = await this.recipientsResolver.resolvePhoneRecipients(
+      blast.tenantId,
+      blast.audienceId,
+    );
+    const dedup = new Map<string, RecipientSeed>(members.map((m) => [m.phoneE164, m]));
 
     // Consent gating: SMS skips explicit opt-outs; WhatsApp also requires opt-in.
     const phones = Array.from(dedup.keys());

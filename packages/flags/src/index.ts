@@ -135,6 +135,24 @@ const CORE_FLAGS = [
     envVar: "FEATURE_MULTIBRAND_ENABLED",
   },
   {
+    key: "FEATURE_AUTODIALER_ENABLED",
+    description:
+      "Autodialer: voice broadcast, robo-poll/IVR survey and transfer campaigns dialled from tenant numbers at audiences. Off ⇒ campaigns can be drafted but not activated, and the dial engine skips the tenant.",
+    default: false,
+    kind: "release",
+    controllableBy: PLAN_DRIVEN,
+    envVar: "FEATURE_AUTODIALER_ENABLED",
+  },
+  {
+    key: "FEATURE_ACTIONS_CALLS",
+    description:
+      "Action pages, click-to-call type: publish public pages + embeds that place real calls via the autodialer. Off ⇒ pages render but call sessions are refused ('calls paused').",
+    default: false,
+    kind: "release",
+    controllableBy: PLAN_DRIVEN,
+    envVar: "FEATURE_ACTIONS_CALLS",
+  },
+  {
     key: "FEATURE_BULLMQ_UPLOAD_ENABLED",
     description: "Route audience CSV imports through the BullMQ worker (vs inline).",
     default: false,

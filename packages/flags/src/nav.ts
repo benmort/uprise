@@ -21,6 +21,8 @@ export const NAV_FLAGS = [
   { key: "FEATURE_NAV_EVENTS", label: "Events", section: "Events", level: 1 },
   { key: "FEATURE_NAV_ANALYTICS", label: "Analytics", section: "Analytics", level: 1 },
   { key: "FEATURE_NAV_ENGAGEMENT", label: "Engagement", section: "Engagement", level: 1 },
+  { key: "FEATURE_NAV_AUTODIALER", label: "Autodialer", section: "Autodialer", level: 1 },
+  { key: "FEATURE_NAV_ACTIONS", label: "Actions", section: "Actions", level: 1 },
   { key: "FEATURE_NAV_INSIGHTS", label: "Polling", section: "Insights", level: 1 },
   { key: "FEATURE_NAV_COMPLIANCE", label: "Compliance", section: "Compliance", level: 1 },
   { key: "FEATURE_NAV_PROG", label: "Future", section: "Future", level: 1 },

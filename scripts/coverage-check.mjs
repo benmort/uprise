@@ -50,7 +50,15 @@ const BASE_ARG = val("--base", process.env.COVERAGE_BASE ?? "origin/main");
 
 // ── git helpers ───────────────────────────────────────────────────────────────
 function git(cmd) {
-  return execSync(`git ${cmd}`, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  return execSync(`git ${cmd}`, {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    // execSync defaults to a 1 MB buffer and throws ENOBUFS past it. The patch diff spans
+    // everything since the base, which includes committed binaries (screenshots, icons), so
+    // it clears 1 MB easily and the gate dies before checking a single line of coverage.
+    maxBuffer: 512 * 1024 * 1024,
+  });
 }
 function refExists(ref) {
   try { git(`rev-parse --verify --quiet ${ref}`); return true; } catch { return false; }

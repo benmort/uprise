@@ -1669,3 +1669,28 @@ export async function deleteAiConversation(id: string) {
     method: "DELETE",
   });
 }
+
+/**
+ * Platform status — every deployed app, its health and its last deploy. Super-admin only;
+ * a tenant role gets 403, which StateRegion renders as the no-permission state.
+ */
+export type PlatformStatusResponse = {
+  ok: boolean;
+  at: string;
+  warnings?: string[];
+  apps: Array<{
+    key: string;
+    name: string;
+    host: "vercel" | "railway";
+    project: string;
+    url?: string;
+    health: "up" | "degraded" | "down" | "unknown";
+    latencyMs?: number;
+    detail?: string;
+    deploy?: { sha?: string; state?: string; at?: string; target?: string };
+  }>;
+};
+
+export async function getPlatformStatus() {
+  return request<PlatformStatusResponse>("/platform-status");
+}

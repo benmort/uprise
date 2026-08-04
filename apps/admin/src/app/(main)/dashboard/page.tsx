@@ -8,7 +8,9 @@ import {
   LayoutDashboard,
   Inbox as InboxIcon,
   MapPin,
+  Megaphone,
   MessageSquareText,
+  PhoneOutgoing,
   PlusCircle,
   SendHorizontal,
   ShieldCheck,
@@ -17,6 +19,7 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
+import { actionPages, autodialer, type DialerTenantStats } from "@uprise/api-client";
 import {
   getDashboardPerformance,
   getFeatureFlags,
@@ -94,6 +97,8 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<Slice<{ count: number }>>(null);
   const [calendar, setCalendar] = useState<Slice<{ upcoming: number }>>(null);
   const [content, setContent] = useState<Slice<{ surveys: number; scripts: number }>>(null);
+  const [dialler, setDialler] = useState<Slice<DialerTenantStats>>(null);
+  const [actions, setActions] = useState<Slice<{ published: number; total: number }>>(null);
   const [queue, setQueue] = useState<QueueStatsResponse | null>(null);
   const [flags, setFlags] = useState<FeatureFlagsResponse | null>(null);
 
@@ -127,6 +132,17 @@ export default function DashboardPage() {
         if (!r.ok) return setCalendar({ error: r.error });
         const now = Date.now();
         setCalendar({ data: { upcoming: r.data.filter((i) => new Date(i.startsAt).getTime() >= now).length } });
+      });
+      autodialer.tenantStats().then((r) => alive && setDialler(r.ok ? { data: r.data } : { error: r.error }));
+      actionPages.list({ limit: 100 }).then((r) => {
+        if (!alive) return;
+        if (!r.ok) return setActions({ error: r.error });
+        setActions({
+          data: {
+            published: r.data.pages.filter((p) => p.status === "PUBLISHED").length,
+            total: r.data.total,
+          },
+        });
       });
       Promise.all([listSurveys(), listScripts()]).then(([s, sc]) => {
         if (!alive) return;
@@ -432,6 +448,58 @@ export default function DashboardPage() {
             />
             <p className="text-xs text-muted-foreground">
               {channelSplit.sms} text · {channelSplit.wa} WhatsApp blast{channelSplit.wa === 1 ? "" : "s"}
+            </p>
+          </div>
+        </OverviewModuleCard>
+
+        <OverviewModuleCard
+          title="Autodialer"
+          description="Voice broadcast & robo-polls"
+          href="/autodialer"
+          hidden={hideCard("FEATURE_NAV_AUTODIALER")}
+          locked={lockCard("FEATURE_NAV_AUTODIALER")}
+          icon={<PhoneOutgoing className="h-4 w-4" />}
+          loading={dialler === null}
+          error={dialler?.error}
+          isEmpty={Boolean(dialler?.data && dialler.data.active === 0 && dialler.data.callsToday === 0)}
+          empty="No calling campaigns running."
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(dialler?.data?.callsToday ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">calls today</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {(dialler?.data?.active ?? 0).toLocaleString()} active ·{" "}
+              {dialler?.data?.connectRate == null ? "no" : `${dialler.data.connectRate}%`} connect rate ·{" "}
+              {(dialler?.data?.transfers ?? 0).toLocaleString()} transfers
+            </p>
+          </div>
+        </OverviewModuleCard>
+
+        <OverviewModuleCard
+          title="Actions"
+          description="Public action pages"
+          href="/actions/pages"
+          hidden={hideCard("FEATURE_NAV_ACTIONS")}
+          locked={lockCard("FEATURE_NAV_ACTIONS")}
+          icon={<Megaphone className="h-4 w-4" />}
+          loading={actions === null}
+          error={actions?.error}
+          isEmpty={Boolean(actions?.data && actions.data.total === 0)}
+          empty="No action pages yet."
+        >
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {(actions?.data?.published ?? 0).toLocaleString()}
+              </span>{" "}
+              <span className="text-muted-foreground">published</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {(actions?.data?.total ?? 0).toLocaleString()} pages, starting with click-to-call
             </p>
           </div>
         </OverviewModuleCard>

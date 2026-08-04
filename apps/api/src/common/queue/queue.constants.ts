@@ -8,6 +8,8 @@ export const QUEUE_NAMES = {
   SEGMENT_EVAL: "segment-eval",
   TURF_ESTIMATE: "turf-estimate",
   HEAT_RUN: "heat-run",
+  DIALER_DISPATCH: "dialer-dispatch",
+  DIALER_CALL: "dialer-call",
 } as const;
 
 export const QUEUE_JOB_TYPES = {
@@ -20,6 +22,9 @@ export const QUEUE_JOB_TYPES = {
   SEGMENT_EVAL_RUN: "segment.eval.run",
   TURF_ESTIMATE_RUN: "turf.estimate.run",
   HEAT_RUN_COMPUTE: "heat.run.compute",
+  DIALER_CAMPAIGN_TICK: "dialer.campaign.tick",
+  DIALER_PLACE_CALL: "dialer.call.place",
+  DIALER_PLACE_TARGET: "dialer.call.place-target",
 } as const;
 
 export function getAudienceImportJobId(importId: string, chunkKey?: string): string {
@@ -63,4 +68,23 @@ export function getTurfEstimateJobId(turfId: string): string {
 /** Stable per-campaign id — repeated refreshes while one is queued collapse into one run. */
 export function getHeatRunJobId(campaignId: string): string {
   return `heat-run_${campaignId}`;
+}
+
+/**
+ * One tick per campaign per pacing bucket: `bucket` is floor(now / period), so
+ * a double-fired cron (Vercel retries, overlapping invocations) collapses onto
+ * the same jobId and BullMQ dedups it.
+ */
+export function getDialerTickJobId(campaignId: string, bucket: number): string {
+  return `dialer-dispatch_${campaignId}_${bucket}`;
+}
+
+/** One placement per attempt row — a retried tick can never double-dial. */
+export function getDialerPlaceCallJobId(attemptId: string): string {
+  return `dialer-call_${attemptId}`;
+}
+
+/** One target leg per click-to-call session — the bridge dials the MP once. */
+export function getDialerPlaceTargetJobId(sessionId: string): string {
+  return `dialer-call-target_${sessionId}`;
 }

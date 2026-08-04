@@ -57,6 +57,7 @@ export * from "./components/password-strength";
 export * from "./components/phone-number-field";
 export * from "./components/keypad";
 export * from "./components/day-chips";
+export * from "./components/call-widget";
 
 // ── Feedback ──────────────────────────────────────────────────────────────────
 export * from "./components/alert";

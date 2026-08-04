@@ -110,3 +110,43 @@ export function isHeatRunJobPayload(value: unknown): value is HeatRunJobPayload 
   const payload = value as Record<string, unknown>;
   return isNonEmptyString(payload.tenantId) && isNonEmptyString(payload.campaignId);
 }
+
+/** Run one pacing tick for one campaign (candidate selection + placements). */
+export type DialerCampaignTickJobPayload = {
+  campaignId: string;
+  tenantId: string;
+};
+
+/** Place the provider leg for one dial attempt. */
+export type DialerPlaceCallJobPayload = {
+  attemptId: string;
+  tenantId: string;
+};
+
+/** Dial the target leg of a click-to-call session into its conference (Phase 4b consumer). */
+export type DialerPlaceTargetJobPayload = {
+  sessionId: string;
+  tenantId: string;
+};
+
+export function isDialerCampaignTickJobPayload(
+  value: unknown,
+): value is DialerCampaignTickJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  return isNonEmptyString(payload.campaignId) && isNonEmptyString(payload.tenantId);
+}
+
+export function isDialerPlaceCallJobPayload(value: unknown): value is DialerPlaceCallJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  return isNonEmptyString(payload.attemptId) && isNonEmptyString(payload.tenantId);
+}
+
+export function isDialerPlaceTargetJobPayload(
+  value: unknown,
+): value is DialerPlaceTargetJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  return isNonEmptyString(payload.sessionId) && isNonEmptyString(payload.tenantId);
+}

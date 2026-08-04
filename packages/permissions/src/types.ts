@@ -119,6 +119,15 @@ export const UPRISE_RESOURCES = [
   "telephony.provisioning",
   "telephony.all",
 
+  // autodialer — voice broadcast / robo-poll / transfer campaigns
+  "autodialer.campaign",
+  "autodialer.result",
+  "autodialer.all",
+
+  // actions — public action pages (click-to-call v1)
+  "actions.page",
+  "actions.all",
+
   // reserved for later-ported domains (meld docs 06–08)
   "payment.all",
   // email — sender identities (per-tenant SendGrid)

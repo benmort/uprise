@@ -30,6 +30,8 @@ const OPEN_CONTROLLERS = new Set<string>([
   "ProfileController", // self-scoped: operates only on the caller's own userId
   "PublicInsightsController", // public poll viewer (action app): isPublic-only, basic-auth allowlisted
   "PublicEventsController", // public event RSVP: gated per-event by publicRsvpEnabled, basic-auth allowlisted
+  "DialerIvrController", // autodialer IVR/TwiML webhooks; every route verifies the per-subaccount Twilio signature
+  "PublicActionsController", // public action pages: published-only service gating; session mint is rate-limited + captcha-gated
 ]);
 
 // Specific open routes on otherwise-gated controllers, keyed "ControllerClass#method".
@@ -40,6 +42,7 @@ const OPEN_ROUTES = new Set<string>([
   "TenantsController#available", // public sign-up slug-availability check (basic-auth allowlisted)
   "TenantsController#brand", // public tenant brand-by-slug for the volunteer auth panel
   "PlansController#listPublic", // public pricing (marketing) — no tenant data
+  "PlatformStatusController#publicStatus", // public status page (marketing) — named services + mock version only
   // Platform cron (Bearer CRON_SECRET; no session) — dispatch/sweep/poll endpoints. The
   // provisioning polls also carry an inline super-admin check for any user-session caller.
   "BlastsController#dispatchDue",
@@ -50,6 +53,7 @@ const OPEN_ROUTES = new Set<string>([
   "EventsController#dispatchDueReminders", // cron sweep (Bearer CRON_SECRET)
   "EventsController#dispatchDueRemindersGet", // cron sweep (GET variant)
   "CallsController#reconcile", // stale-call reconciliation sweep (cron; inline super-admin check)
+  "AutodialerController#dispatchDue", // dial-engine cron tick (Bearer CRON_SECRET; inline super-admin check)
 ]);
 
 describe("route authorization guardrail", () => {

@@ -101,7 +101,17 @@ export type WalkingCapability = (typeof WALKING_CAPABILITIES)[number];
 export const SESSION_LENGTHS = ["short", "standard", "long", "flexible"] as const;
 export type SessionLength = (typeof SESSION_LENGTHS)[number];
 
-export const acceptInviteSchema = z.object({
+/** Signup attribution captured from the entry URL (utm/source/channel). All optional. */
+export const signupAttributionSchema = z.object({
+  signupSource: z.string().max(120).optional(),
+  utmSource: z.string().max(120).optional(),
+  utmMedium: z.string().max(120).optional(),
+  utmCampaign: z.string().max(120).optional(),
+  referrerChannel: z.string().max(120).optional(),
+});
+export type SignupAttribution = z.infer<typeof signupAttributionSchema>;
+
+export const acceptInviteSchema = signupAttributionSchema.extend({
   token: z.string().min(1),
   displayName: z.string().max(200).optional(),
   password: z.string().min(8).max(200).optional(),
@@ -130,7 +140,7 @@ export const openJoinStartPhoneSchema = z.object({
 });
 export type OpenJoinStartPhoneRequest = z.infer<typeof openJoinStartPhoneSchema>;
 
-export const openJoinAcceptSchema = z.object({
+export const openJoinAcceptSchema = signupAttributionSchema.extend({
   campaignId: z.string().min(1).max(64),
   displayName: z.string().max(200).optional(),
   challengeId: z.string().max(64).optional(),
@@ -196,16 +206,6 @@ export const confirmAccessSchema = z.object({
   tenantSlug: z.string().min(1).max(64),
 });
 export type ConfirmAccessRequest = z.infer<typeof confirmAccessSchema>;
-
-/** Signup attribution captured from the entry URL (utm/source/channel). All optional. */
-export const signupAttributionSchema = z.object({
-  signupSource: z.string().max(120).optional(),
-  utmSource: z.string().max(120).optional(),
-  utmMedium: z.string().max(120).optional(),
-  utmCampaign: z.string().max(120).optional(),
-  referrerChannel: z.string().max(120).optional(),
-});
-export type SignupAttribution = z.infer<typeof signupAttributionSchema>;
 
 // Phone-first self-signup → admin approval (volunteers).
 export const requestAccessByPhoneSchema = signupAttributionSchema.extend({
@@ -606,3 +606,283 @@ export function evaluateOrgSetup(snapshot: OrgSetupSnapshot): OrgSetupResult {
     missing,
   };
 }
+
+// ── Autodialer (voice broadcast / robo-poll / transfer campaigns) ────────────
+
+export const DIALER_CAMPAIGN_STATUSES = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"] as const;
+export type DialerCampaignStatusValue = (typeof DIALER_CAMPAIGN_STATUSES)[number];
+
+export const DIALER_BEHAVIOUR_FILTERS = ["broadcast", "survey", "transfer", "electoral"] as const;
+export type DialerBehaviourFilter = (typeof DIALER_BEHAVIOUR_FILTERS)[number];
+
+export const DIALER_JURISDICTION_VALUES = [
+  "FEDERAL",
+  "VIC",
+  "NSW",
+  "QLD",
+  "SA",
+  "WA",
+  "TAS",
+  "ACT",
+  "NT",
+] as const;
+export type DialerJurisdictionValue = (typeof DIALER_JURISDICTION_VALUES)[number];
+
+/** Prompt shape: <Say> text plus optional per-language audio file ids. */
+export type DialerPromptContent = {
+  name?: string;
+  audio?: string | Record<string, string>;
+};
+
+export type DialerAnswerRecord = {
+  id: string;
+  digit: string;
+  value: string;
+  /** Another question key | "outro" | null (hang up). */
+  nextKey: string | null;
+  type: "SMS" | "SET_LANGUAGE" | "REDIRECT" | "SWITCHBOARD" | null;
+  content: string | null;
+  transfer: boolean;
+  dispositionCode: string | null;
+  supportLevel: string | null;
+};
+
+export type DialerQuestionRecord = {
+  id: string;
+  key: string;
+  name: string;
+  type: "STANDARD" | "SWITCHBOARD";
+  audioPrompt: unknown;
+  orderIndex: number;
+  answers: DialerAnswerRecord[];
+};
+
+export type DialerCampaignRecord = {
+  id: string;
+  tenantId: string;
+  name: string;
+  status: DialerCampaignStatusValue;
+  outboundOnly: boolean;
+  publicVisible: boolean;
+  survey: boolean;
+  electoralTarget: boolean;
+  transparentTargetTransfer: boolean;
+  audienceId: string | null;
+  dailyStart: string;
+  dailyFinish: string;
+  dialerPeriodMinutes: number;
+  noCallWindowHours: number;
+  maxCallAttempts: number;
+  batchSize: number;
+  fromNumberId: string | null;
+  intro: DialerPromptContent | null;
+  outro: DialerPromptContent | null;
+  optOut: DialerPromptContent | null;
+  targetNumbers: string[] | null;
+  partyTargets: string[] | null;
+  jurisdiction: DialerJurisdictionValue | null;
+  officeTarget: "electorate" | "upper" | null;
+  amdEnabled: boolean;
+  recordingEnabled: boolean;
+  defaultLanguage: string;
+  lastDialedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DialerCampaignWithGraph = DialerCampaignRecord & { questions: DialerQuestionRecord[] };
+
+/** The simplified linear authoring shape, expanded server-side. */
+export type DialerAuthoringQuestion = {
+  key?: string;
+  question: string;
+  options: string[];
+  audioPrompt?: unknown;
+};
+
+export type DialerGraphIssue = {
+  severity: "error" | "warning";
+  code: string;
+  questionKey?: string;
+  detail: string;
+};
+
+export type DialerPreflightResult = {
+  ok: boolean;
+  checks: Array<{ key: string; ok: boolean; detail: string }>;
+};
+
+export type ListDialerCampaignsResponse = {
+  campaigns: DialerCampaignRecord[];
+  total: number;
+};
+
+// Read-side reporting (admin list KPIs, monitor + results tabs).
+
+export type DialerTenantStats = {
+  active: number;
+  callsToday: number;
+  connectRate: number | null;
+  transfers: number;
+};
+
+export type DialerCampaignStats = {
+  attempts: { total: number; pending: number; byOutcome: Record<string, number> };
+  callsToday: number;
+  connectRate: number | null;
+  transfers: number;
+  surveyAnswers: number;
+  sessions: { started: number; bridged: number };
+  lastDialedAt: string | null;
+};
+
+export type DialerAttemptRow = {
+  id: string;
+  phoneE164: string;
+  attemptNo: number;
+  kind: string;
+  outcome: string;
+  language: string;
+  callId: string | null;
+  createdAt: string;
+};
+
+export type ListDialerAttemptsResponse = { total: number; attempts: DialerAttemptRow[] };
+
+export type DialerResultsResponse = {
+  questions: Array<{
+    key: string;
+    name: string;
+    total: number;
+    answers: Array<{
+      digit: string;
+      value: string;
+      count: number;
+      dispositionCode: string | null;
+      supportLevel: string | null;
+    }>;
+  }>;
+  transferCount: number;
+  transfers: Array<{
+    id: string;
+    targetNumber: string;
+    targetName: string | null;
+    targetParty: string | null;
+    electorate: string | null;
+    phoneNumber: string | null;
+    createdAt: string;
+  }>;
+};
+
+// ── Actions (public action pages + click-to-call) ────────────────────────────
+
+export const ACTION_PAGE_STATUSES = ["DRAFT", "PUBLISHED", "ARCHIVED"] as const;
+export type ActionPageStatusValue = (typeof ACTION_PAGE_STATUSES)[number];
+
+export const ACTION_PAGE_TYPES = ["CLICK_TO_CALL"] as const;
+export type ActionPageTypeValue = (typeof ACTION_PAGE_TYPES)[number];
+
+/**
+ * Embed-domain grammar shared by the API write-path validator and the admin
+ * form: a bare lowercase hostname (`example.org`, `localhost`) or a single
+ * leading wildcard (`*.example.org`). No scheme, port, path or unicode — the
+ * value is injected into a frame-ancestors CSP header, so the grammar is the
+ * security boundary.
+ */
+export const EMBED_DOMAIN_PATTERN =
+  "^(\\*\\.)?(localhost|[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+)$";
+export const EMBED_DOMAIN_RE = new RegExp(EMBED_DOMAIN_PATTERN);
+
+/** Admin-surface row (dates serialised). */
+export type ActionPageRecord = {
+  id: string;
+  type: ActionPageTypeValue;
+  status: ActionPageStatusValue;
+  title: string;
+  publicSlug: string;
+  headline: string | null;
+  body: string | null;
+  ctaLabel: string | null;
+  successMessage: string | null;
+  collectName: boolean;
+  collectEmail: boolean;
+  collectPhone: boolean;
+  allowPrefill: boolean;
+  requireCaptcha: boolean;
+  embedDomains: string[];
+  campaignId: string | null;
+  publishedAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ListActionPagesResponse = {
+  pages: ActionPageRecord[];
+  total: number;
+};
+
+/** What the anonymous widget sees — copy + field config + brand + campaign kind ONLY. */
+export type PublicActionPagePayload = {
+  page: {
+    publicSlug: string;
+    type: ActionPageTypeValue;
+    preview: boolean;
+    headline: string | null;
+    body: string | null;
+    ctaLabel: string | null;
+    successMessage: string | null;
+    collectName: boolean;
+    collectEmail: boolean;
+    collectPhone: boolean;
+    allowPrefill: boolean;
+    requireCaptcha: boolean;
+    callsEnabled: boolean;
+  };
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+    logoLandscapeUrl: string | null;
+    logoBlockUrl: string | null;
+    primaryColour: string | null;
+    secondaryColour: string | null;
+    customCss: string | null;
+  } | null;
+  campaign: { kind: "TRANSFER" | "ELECTORAL"; targetLabel: string | null } | null;
+};
+
+export type CreateCallSessionRequest = {
+  supporter?: { name?: string; email?: string; phone?: string };
+  /** The embedding page's hostname, for the server-side allowlist re-check. */
+  embedAncestor?: string;
+};
+
+export type CreateCallSessionResponse = {
+  sessionId: string;
+  voice: { token: string; expiresAt: string };
+  progress: { url: string; token: string; expiresAt: string };
+};
+
+export type ActionPageSessionRow = {
+  id: string;
+  status: string;
+  supporterName: string | null;
+  supporterEmail: string | null;
+  embedAncestor: string | null;
+  targetName: string | null;
+  createdAt: string;
+  endedAt: string | null;
+};
+
+export type ActionPageResults = {
+  stats: {
+    started: number;
+    connected: number;
+    bridged: number;
+    averageDurationSeconds: number | null;
+  };
+  sessions: ActionPageSessionRow[];
+};

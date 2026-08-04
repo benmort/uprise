@@ -1,5 +1,12 @@
 import type {
   AcceptInviteRequest,
+  ActionPageRecord,
+  ActionPageResults,
+  ActionPageStatusValue,
+  CreateCallSessionRequest,
+  CreateCallSessionResponse,
+  ListActionPagesResponse,
+  PublicActionPagePayload,
   InviteStartPhoneRequest,
   OpenJoinAcceptRequest,
   OpenJoinStartPhoneRequest,
@@ -410,16 +417,22 @@ export interface TenantMemberSummary {
   user: { email: string; displayName: string | null };
 }
 
-/** A pending/expired/revoked invitation row. */
+/**
+ * A pending/expired/revoked invitation row.
+ *
+ * No `token`: it is a bearer credential granting membership at the invited role, so the list
+ * endpoint deliberately withholds it. `createInvitation` returns it once, to the issuer.
+ */
 export interface TenantInvitationSummary {
   id: string;
   tenantId: string;
-  email: string;
+  email: string | null;
+  phone: string | null;
   role: AppUserRole;
   status: string;
-  token: string | null;
   expiresAt: string | null;
   invitedBy: string | null;
+  invitedChannel: string | null;
   createdAt: string;
 }
 
@@ -667,6 +680,27 @@ export const plans = {
   listPublic: () => request<PublicPlan[]>("/plans/public", undefined, { redirectOn401: false }),
 };
 
+// ── Platform status (public status page) ─────────────────────────────
+export type PublicServiceStatus = "Operational" | "Degraded" | "Outage";
+
+export type PublicStatus = {
+  ok: boolean;
+  summary: string;
+  services: Array<{ key: string; name: string; status: PublicServiceStatus }>;
+  /** A mock version string — the product does not version releases yet. */
+  version: string;
+  at: string;
+};
+
+export const platformStatus = {
+  /**
+   * Public platform status (no auth). Rolled up server-side to named services and a word each —
+   * the internal view, with deploy shas and project names, is a separate super-admin endpoint.
+   */
+  publicStatus: () =>
+    request<PublicStatus>("/platform-status/public", undefined, { redirectOn401: false }),
+};
+
 // ── Telephony (per-tenant Twilio numbers + provisioning) ─────────────
 export type TelephonyProvisioningStatus =
   | "REQUESTED"
@@ -898,6 +932,104 @@ export const transactionalCalls = {
     request<TransactionalCall>("/calls", { method: "POST", body: JSON.stringify(body) }),
 };
 
+// ── Autodialer (voice broadcast / robo-poll / transfer campaigns) ────────────
+
+import type {
+  DialerAuthoringQuestion,
+  DialerBehaviourFilter,
+  DialerCampaignRecord,
+  DialerCampaignStats,
+  DialerCampaignStatusValue,
+  DialerCampaignWithGraph,
+  DialerGraphIssue,
+  DialerPreflightResult,
+  DialerResultsResponse,
+  DialerTenantStats,
+  ListDialerAttemptsResponse,
+  ListDialerCampaignsResponse,
+} from "@uprise/contracts";
+
+export type ListDialerCampaignsParams = {
+  status?: DialerCampaignStatusValue;
+  behaviour?: DialerBehaviourFilter;
+  search?: string;
+  limit?: number;
+  offset?: number;
+};
+
+function dialerQuery(params: ListDialerCampaignsParams): string {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.behaviour) qs.set("behaviour", params.behaviour);
+  if (params.search) qs.set("search", params.search);
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.offset !== undefined) qs.set("offset", String(params.offset));
+  const str = qs.toString();
+  return str ? `?${str}` : "";
+}
+
+export const autodialer = {
+  list: (params: ListDialerCampaignsParams = {}) =>
+    request<ListDialerCampaignsResponse>(`/autodialer/campaigns${dialerQuery(params)}`),
+  get: (id: string) => request<DialerCampaignWithGraph>(`/autodialer/campaigns/${encodeURIComponent(id)}`),
+  create: (body: {
+    name: string;
+    outboundOnly?: boolean;
+    survey?: boolean;
+    electoralTarget?: boolean;
+    transparentTargetTransfer?: boolean;
+  }) => request<DialerCampaignRecord>("/autodialer/campaigns", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<DialerCampaignRecord>) =>
+    request<DialerCampaignRecord>(`/autodialer/campaigns/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  /** Archive – attempts and results are kept for reporting. */
+  archive: (id: string) =>
+    request<DialerCampaignRecord>(`/autodialer/campaigns/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  activate: (id: string) =>
+    request<DialerCampaignRecord>(`/autodialer/campaigns/${encodeURIComponent(id)}/activate`, { method: "POST" }),
+  pause: (id: string) =>
+    request<DialerCampaignRecord>(`/autodialer/campaigns/${encodeURIComponent(id)}/pause`, { method: "POST" }),
+  resume: (id: string) =>
+    request<DialerCampaignRecord>(`/autodialer/campaigns/${encodeURIComponent(id)}/resume`, { method: "POST" }),
+  complete: (id: string) =>
+    request<DialerCampaignRecord>(`/autodialer/campaigns/${encodeURIComponent(id)}/complete`, { method: "POST" }),
+  clone: (id: string) =>
+    request<DialerCampaignRecord>(`/autodialer/campaigns/${encodeURIComponent(id)}/clone`, { method: "POST" }),
+  /** The activation gate as a readable checklist. */
+  preflight: (id: string) =>
+    request<DialerPreflightResult>(`/autodialer/campaigns/${encodeURIComponent(id)}/preflight`),
+  /** Tenant-wide KPIs for the campaign list header. */
+  tenantStats: () => request<DialerTenantStats>("/autodialer/stats"),
+  /** Monitor tab aggregates for one campaign. */
+  stats: (id: string) =>
+    request<DialerCampaignStats>(`/autodialer/campaigns/${encodeURIComponent(id)}/stats`),
+  /** Monitor tab recent dials (paged, newest first). */
+  attempts: (id: string, params: { limit?: number; offset?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    if (params.offset != null) qs.set("offset", String(params.offset));
+    const str = qs.toString();
+    return request<ListDialerAttemptsResponse>(
+      `/autodialer/campaigns/${encodeURIComponent(id)}/attempts${str ? `?${str}` : ""}`,
+    );
+  },
+  /** Results tab: survey distributions + the transfer ledger. */
+  results: (id: string) =>
+    request<DialerResultsResponse>(`/autodialer/campaigns/${encodeURIComponent(id)}/results`),
+  /** Full-graph put. Send either `questions` (the full graph) or `authoring`
+   *  (the simplified linear format, expanded server-side). */
+  upsertQuestions: (
+    id: string,
+    body: { questions?: unknown[]; authoring?: DialerAuthoringQuestion[] },
+  ) =>
+    request<{ campaign: DialerCampaignWithGraph; issues: DialerGraphIssue[] }>(
+      `/autodialer/campaigns/${encodeURIComponent(id)}/questions`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+};
+
 // ── Email identities (per-tenant SendGrid subusers + domain auth) ────
 export type EmailProvisioningStatus =
   | "REQUESTED"
@@ -1038,4 +1170,77 @@ export const emailProvisioning = {
 
   revokeIdentity: (identityId: string) =>
     request<EmailSenderIdentity>(`/email-provisioning/identities/${encodeURIComponent(identityId)}/revoke`, { method: "POST" }),
+};
+
+// ── Actions (admin action pages) ─────────────────────────────────────────────
+
+export interface ListActionPagesParams {
+  status?: ActionPageStatusValue;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+function actionPagesQuery(params: ListActionPagesParams): string {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.search) qs.set("search", params.search);
+  if (params.limit !== undefined) qs.set("limit", String(params.limit));
+  if (params.offset !== undefined) qs.set("offset", String(params.offset));
+  const str = qs.toString();
+  return str ? `?${str}` : "";
+}
+
+export const actionPages = {
+  list: (params: ListActionPagesParams = {}) =>
+    request<ListActionPagesResponse>(`/actions/pages${actionPagesQuery(params)}`),
+  get: (id: string) => request<ActionPageRecord>(`/actions/pages/${encodeURIComponent(id)}`),
+  create: (body: { title: string }) =>
+    request<ActionPageRecord>("/actions/pages", { method: "POST", body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<ActionPageRecord>) =>
+    request<ActionPageRecord>(`/actions/pages/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  publish: (id: string) =>
+    request<ActionPageRecord>(`/actions/pages/${encodeURIComponent(id)}/publish`, { method: "POST" }),
+  unpublish: (id: string) =>
+    request<ActionPageRecord>(`/actions/pages/${encodeURIComponent(id)}/unpublish`, { method: "POST" }),
+  archive: (id: string) =>
+    request<ActionPageRecord>(`/actions/pages/${encodeURIComponent(id)}/archive`, { method: "POST" }),
+  restore: (id: string) =>
+    request<ActionPageRecord>(`/actions/pages/${encodeURIComponent(id)}/restore`, { method: "POST" }),
+  /** Short-lived page-scoped token so admins can view a DRAFT on the public surface. */
+  previewToken: (id: string) =>
+    request<{ token: string; expiresAt: string }>(`/actions/pages/${encodeURIComponent(id)}/preview-token`, {
+      method: "POST",
+    }),
+  results: (id: string, params: { limit?: number; offset?: number } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.limit !== undefined) qs.set("limit", String(params.limit));
+    if (params.offset !== undefined) qs.set("offset", String(params.offset));
+    const str = qs.toString();
+    return request<ActionPageResults>(`/actions/pages/${encodeURIComponent(id)}/results${str ? `?${str}` : ""}`);
+  },
+};
+
+// ── Actions (anonymous public widget surface — no session, never redirect) ───
+
+export const publicActions = {
+  getPage: (slug: string, previewToken?: string) =>
+    request<PublicActionPagePayload>(
+      `/actions/public/pages/${encodeURIComponent(slug)}${previewToken ? `?previewToken=${encodeURIComponent(previewToken)}` : ""}`,
+      undefined,
+      { redirectOn401: false },
+    ),
+  /** Rate-limited + optionally captcha-gated; the Turnstile token rides the header. */
+  createCallSession: (slug: string, body: CreateCallSessionRequest, captchaToken?: string) =>
+    request<CreateCallSessionResponse>(
+      `/actions/public/pages/${encodeURIComponent(slug)}/call-sessions`,
+      { method: "POST", body: JSON.stringify(body) },
+      { redirectOn401: false, captchaToken },
+    ),
+  /** Absolute SSE URL for the widget's EventSource (fetch wrappers don't apply). */
+  sessionEventsUrl: (sessionId: string, token: string) =>
+    `${getApiUrl()}/actions/public/call-sessions/${encodeURIComponent(sessionId)}/events?token=${encodeURIComponent(token)}`,
 };

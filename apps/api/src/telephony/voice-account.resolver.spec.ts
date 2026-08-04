@@ -15,9 +15,14 @@ const ENV_VOICE: Record<string, string> = {
 
 function setup(
   senderValue?: unknown,
-  opts: { accountRow?: unknown; platformRow?: unknown; envVoice?: boolean } = {},
+  opts: {
+    accountRow?: unknown;
+    platformRow?: unknown;
+    envVoice?: boolean;
+    envExtra?: Record<string, string>;
+  } = {},
 ) {
-  const env = { ...BASE_ENV, ...(opts.envVoice ? ENV_VOICE : {}) };
+  const env = { ...BASE_ENV, ...(opts.envVoice ? ENV_VOICE : {}), ...(opts.envExtra ?? {}) };
   const prisma: any = {
     telephonyAccount: {
       findFirst: jest.fn(async () => opts.accountRow ?? null),
@@ -187,5 +192,102 @@ describe("VoiceAccountResolver", () => {
     const mobileSender = { accountSid: "AC_sub", authToken: "tok", from: "+61485052501" };
     const { resolver } = setup(mobileSender);
     expect(await resolver.callerIdForAccount("t1", "AC_sub")).toBe("+61255501111");
+  });
+});
+
+describe("VoiceAccountResolver.resolveDialerForTenant", () => {
+  it("an env-pinned dialler app wins on the platform account", async () => {
+    const { resolver, twilio } = setup(undefined, {
+      envVoice: true,
+      envExtra: { TWILIO_DIALER_TWIML_APP_SID: "AP_dialer_env" },
+    });
+    twilio.createTwimlApp = jest.fn();
+    const account = await resolver.resolveDialerForTenant("t1");
+    expect(account.twimlAppSid).toBe("AP_dialer_env");
+    expect(account.apiKeySid).toBe("SK_platform");
+    expect(twilio.createTwimlApp).not.toHaveBeenCalled();
+  });
+
+  it("grows the dialler app lazily on the PlatformVoiceApp row, pointed at the session-answer IVR", async () => {
+    const platformRow = {
+      accountSid: "AC_platform",
+      apiKeySid: "SK_p",
+      encryptedApiKeySecret: "enc(sec)",
+      twimlAppSid: "AP_p",
+      dialerTwimlAppSid: null,
+    };
+    const { resolver, prisma, twilio } = setup(undefined, { platformRow });
+    twilio.createTwimlApp = jest.fn(async () => "AP_dialer_new");
+    prisma.platformVoiceApp.update = jest.fn(async () => ({}));
+    const account = await resolver.resolveDialerForTenant("t1");
+    expect(twilio.createTwimlApp).toHaveBeenCalledWith(
+      { accountSid: "AC_platform", authToken: "platform-token" },
+      "https://api.test/api/v1/autodialer/ivr/session-answer",
+      "uprise-dialer",
+    );
+    expect(prisma.platformVoiceApp.update).toHaveBeenCalledWith({
+      where: { accountSid: "AC_platform" },
+      data: { dialerTwimlAppSid: "AP_dialer_new" },
+    });
+    // The token signs with the account's existing key but the DIALLER app.
+    expect(account.twimlAppSid).toBe("AP_dialer_new");
+    expect(account.apiKeySid).toBe("SK_p");
+  });
+
+  it("reuses a persisted platform dialler app without touching Twilio", async () => {
+    const platformRow = {
+      accountSid: "AC_platform",
+      apiKeySid: "SK_p",
+      encryptedApiKeySecret: "enc(sec)",
+      twimlAppSid: "AP_p",
+      dialerTwimlAppSid: "AP_dialer",
+    };
+    const { resolver, twilio } = setup(undefined, { platformRow });
+    twilio.createTwimlApp = jest.fn();
+    const account = await resolver.resolveDialerForTenant("t1");
+    expect(account.twimlAppSid).toBe("AP_dialer");
+    expect(twilio.createTwimlApp).not.toHaveBeenCalled();
+  });
+
+  it("a provisioned tenant rides its subaccount with the cached dialler app", async () => {
+    const accountRow = {
+      id: "ta1",
+      settings: {
+        voiceApiKeySid: "SK_sub",
+        voiceApiKeySecret: "enc(sub-secret)",
+        voiceTwimlAppSid: "AP_sub",
+        voiceDialerTwimlAppSid: "AP_sub_dialer",
+      },
+    };
+    const { resolver, twilio } = setup(SUBACCOUNT_SENDER, { accountRow });
+    twilio.createTwimlApp = jest.fn();
+    const account = await resolver.resolveDialerForTenant("t1");
+    expect(account).toMatchObject({
+      mode: "subaccount",
+      accountSid: "AC_sub",
+      twimlAppSid: "AP_sub_dialer",
+      apiKeySid: "SK_sub",
+    });
+    expect(twilio.createTwimlApp).not.toHaveBeenCalled();
+  });
+
+  it("creates the subaccount dialler app once and caches it in settings", async () => {
+    const accountRow = {
+      id: "ta1",
+      settings: {
+        voiceApiKeySid: "SK_sub",
+        voiceApiKeySecret: "enc(sub-secret)",
+        voiceTwimlAppSid: "AP_sub",
+      },
+    };
+    const { resolver, prisma, twilio } = setup(SUBACCOUNT_SENDER, { accountRow });
+    twilio.createTwimlApp = jest.fn(async () => "AP_sub_dialer_new");
+    const account = await resolver.resolveDialerForTenant("t1");
+    expect(account.twimlAppSid).toBe("AP_sub_dialer_new");
+    expect(prisma.telephonyAccount.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { settings: expect.objectContaining({ voiceDialerTwimlAppSid: "AP_sub_dialer_new" }) },
+      }),
+    );
   });
 });

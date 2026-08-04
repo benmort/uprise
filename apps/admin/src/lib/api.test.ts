@@ -451,3 +451,12 @@ describe("AI assistant wrappers", () => {
     expect(mockRequest).toHaveBeenLastCalledWith("/ai/conversations/c%201", { method: "DELETE" });
   });
 });
+
+describe("platform status", () => {
+  it("getPlatformStatus GETs the internal (super-admin) status", async () => {
+    await api.getPlatformStatus();
+    // Not /platform-status/public — that one is the marketing page's, and it is served a
+    // payload with no shas or project names in it.
+    expect(mockRequest).toHaveBeenCalledWith("/platform-status", undefined);
+  });
+});

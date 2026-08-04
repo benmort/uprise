@@ -34,6 +34,20 @@ const nextConfig = {
   transpilePackages: ["@uprise/ui", "@uprise/api-client", "@uprise/contracts"],
   // The resolved admin origin, inlined so the client iframe can point at /embed/insights/*.
   env: { NEXT_PUBLIC_ADMIN_ORIGIN: ADMIN_URL },
+  async headers() {
+    return [
+      {
+        // The <uprise-action> loader external sites hot-link. Path-versioned
+        // (/v1/), so long-ish edge cache + SWR is safe; breaking changes ship
+        // as /v2/ rather than mutating this URL's contract.
+        source: "/embed/v1/:file*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

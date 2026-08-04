@@ -41,6 +41,16 @@ export class QueueConfigService {
     return Number(this.config.get<string>("BULLMQ_JOURNEY_QUEUE_CONCURRENCY", "25"));
   }
 
+  /** Concurrent campaign ticks — each tick is one batched SQL pass, so low is fine. */
+  get dialerDispatchQueueConcurrency(): number {
+    return Number(this.config.get<string>("BULLMQ_DIALER_DISPATCH_CONCURRENCY", "2"));
+  }
+
+  /** Concurrent outbound dial placements across all campaigns. */
+  get dialerQueueConcurrency(): number {
+    return Number(this.config.get<string>("BULLMQ_DIALER_QUEUE_CONCURRENCY", "5"));
+  }
+
   get hasRedisConfigured(): boolean {
     return this.redisUrl.length > 0;
   }

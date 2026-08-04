@@ -60,6 +60,31 @@ describe("major route files", () => {
     expect(helper).toContain("/blasts/");
   });
 
+  it("contains the autodialer screens (list, workbench, prompts) behind the level-1 nav group", () => {
+    const layout = read("layout.tsx");
+    expect(layout).toContain("FEATURE_NAV_AUTODIALER");
+    expect(layout).toContain("FEATURE_NAV_ACTIONS");
+    const list = read("autodialer/page.tsx");
+    expect(list).toContain("createDialerCampaignAndOpen");
+    expect(list).toContain("New campaign");
+    const workbench = read("autodialer/[id]/page.tsx");
+    expect(workbench).toContain("CampaignEditor");
+    expect(workbench).toContain("CampaignMonitor");
+    expect(workbench).toContain("CampaignResults");
+    const prompts = read("autodialer/prompts/page.tsx");
+    expect(prompts).toContain("Audio prompts");
+  });
+
+  it("contains the action-pages screens (list + builder with embed generator)", () => {
+    const list = read("actions/pages/page.tsx");
+    expect(list).toContain("createActionPageAndOpen");
+    expect(list).toContain("Click-to-call");
+    const builder = read("actions/pages/[id]/page.tsx");
+    expect(builder).toContain("uprise-action.js");
+    expect(builder).toContain("previewToken");
+    expect(builder).toContain("embedDomains");
+  });
+
   it("contains the profile page scaffold", () => {
     const source = read("profile/page.tsx");
     expect(source).toContain("Personal information");
