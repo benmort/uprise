@@ -56,6 +56,12 @@ const OPEN_ROUTES = new Set<string>([
   "EventsController#dispatchDueRemindersGet", // cron sweep (GET variant)
   "CallsController#reconcile", // stale-call reconciliation sweep (cron; inline super-admin check)
   "AutodialerController#dispatchDue", // dial-engine cron tick (Bearer CRON_SECRET; inline super-admin check)
+  // Error intake from the Next apps' error boundaries (basic-auth allowlisted). Open on
+  // purpose: the errors most worth capturing are the ones where auth failed or the app
+  // never finished booting, so a gate here would blind us to exactly those. Write-only –
+  // it inserts one capped, validated row into ops.ErrorLog, reads nothing and returns
+  // nothing (204). See errors.controller.ts.
+  "ErrorsController#report",
 ]);
 
 describe("route authorization guardrail", () => {
