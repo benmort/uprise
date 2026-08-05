@@ -171,6 +171,10 @@ export default function AudiencePage() {
   const [validationMessage, setValidationMessage] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // Name filter for the remote-list picker. Action Network returns 25 lists per page and an
+  // account can easily hold dozens, so without this the only way to reach one is to page
+  // through everything and hope you recognise it.
+  const [listQuery, setListQuery] = useState("");
   const [syncJobs, setSyncJobs] = useState<IntegrationSyncJob[]>([]);
   const [segments, setSegments] = useState<AudienceSegmentRow[]>([]);
   const [segmentsLoading, setSegmentsLoading] = useState(true);
@@ -221,7 +225,7 @@ export default function AudiencePage() {
     return preselected ? next.find((s) => s.id === preselected) : undefined;
   };
 
-  const loadIntegrationLists = async (source?: ImportSource) => {
+  const loadIntegrationLists = async (source?: ImportSource, query?: string) => {
     const target = source ?? findSource(sources, selectedSourceId);
     if (!target) {
       setLists([]);
@@ -231,13 +235,17 @@ export default function AudiencePage() {
       return;
     }
     setListsLoading(true);
-    const result = await searchIntegrationLists(target.type, "", target.id);
+    const result = await searchIntegrationLists(target.type, query ?? listQuery, target.id);
     if (result.ok) {
       setLists(result.data.lists);
       setListPage(0);
       setSelectedListId("");
       setListSearchMessage(
-        result.data.lists.length === 0 ? "No remote lists found for this connection." : "",
+        result.data.lists.length === 0
+          ? (query ?? listQuery).trim()
+            ? `No lists match "${(query ?? listQuery).trim()}".`
+            : "No remote lists found for this connection."
+          : "",
       );
     } else {
       setLists([]);
@@ -722,6 +730,37 @@ export default function AudiencePage() {
             )}
             {sources.length > 0 && (
               <>
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void loadIntegrationLists(undefined, listQuery);
+              }}
+            >
+              <Input
+                value={listQuery}
+                onChange={(e) => setListQuery(e.target.value)}
+                placeholder="Search lists by name…"
+                aria-label="Search remote lists by name"
+              />
+              <Button type="submit" size="sm" variant="outline" disabled={listsLoading || !selectedSourceId}>
+                Search
+              </Button>
+              {listQuery ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={listsLoading}
+                  onClick={() => {
+                    setListQuery("");
+                    void loadIntegrationLists(undefined, "");
+                  }}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </form>
             <div className="min-h-[220px] max-h-[260px] overflow-y-auto rounded border border-border">
               {pagedLists.map((list) => {
                 const listId = String(list.id);

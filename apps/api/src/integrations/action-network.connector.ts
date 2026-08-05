@@ -13,6 +13,9 @@ import {
   SyncListInput,
 } from "./connectors.types";
 
+/** How many 25-row pages of `/lists` the picker will walk. 10 pages = 250 lists browsable. */
+const MAX_LIST_PAGES = 10;
+
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
@@ -470,15 +473,37 @@ export class ActionNetworkConnector implements IntegrationConnector {
     return { ok: true };
   }
 
+  /**
+   * Every list on the account, optionally narrowed by name.
+   *
+   * Pages through the collection instead of reading page one. Action Network returns 25 lists
+   * per page and this account has 70 across 3 pages, so the old single-request version could
+   * only ever offer the first 20 — a list like "Together For Treaty All Activists" simply did
+   * not exist as far as the picker was concerned, with no way to search for it.
+   *
+   * The name filter is applied HERE rather than through the API's `filter` parameter: that
+   * parameter is OData over specific fields, not a name search, and passing a bare phrase to it
+   * returns everything. Filtering what we paged is honest about what it does.
+   */
   async searchLists(apiKey: string, input: SearchListsInput, baseUrl = "https://actionnetwork.org/api/v2"): Promise<RemoteAudienceList[]> {
-    const perPage = Math.min(25, input.limit ?? 20);
-    const query = encodeURIComponent(input.query || "");
-    const requestUrl = `${baseUrl}/lists?per_page=${perPage}&filter=${query}`;
-    const json = await this.requestJson(requestUrl, apiKey, "Action Network list search failed");
-    if (!json) return [];
-    const embedded = (json._embedded ?? {}) as Record<string, unknown>;
-    const lists = asArray<Record<string, unknown>>(embedded["osdi:lists"]);
-    const mapped: RemoteAudienceList[] = lists.map((row) => ({
+    const limit = Math.max(1, input.limit ?? 50);
+    const needle = (input.query || "").trim().toLowerCase();
+    const rows: Array<Record<string, unknown>> = [];
+
+    // Bounded: an account with thousands of lists must not turn one picker render into a
+    // hundred upstream requests. MAX_LIST_PAGES * 25 is the ceiling on what is browsable.
+    for (let page = 1; page <= MAX_LIST_PAGES; page += 1) {
+      const requestUrl = `${baseUrl}/lists?per_page=25&page=${page}`;
+      const json = await this.requestJson(requestUrl, apiKey, "Action Network list search failed");
+      if (!json) break;
+      const embedded = (json._embedded ?? {}) as Record<string, unknown>;
+      const pageRows = asArray<Record<string, unknown>>(embedded["osdi:lists"]);
+      rows.push(...pageRows);
+      const totalPages = typeof json.total_pages === "number" ? json.total_pages : page;
+      if (pageRows.length === 0 || page >= totalPages) break;
+    }
+
+    const mapped: RemoteAudienceList[] = rows.map((row) => ({
       id: listIdFromRow(row),
       name: String(row.title || row.name || "Unnamed list"),
       // Action Network reports a list's membership as `total_records` on the list
@@ -489,7 +514,11 @@ export class ActionNetworkConnector implements IntegrationConnector {
       ),
       source: "ACTION_NETWORK" as const,
     }));
-    return mapped;
+
+    const matched = needle
+      ? mapped.filter((list) => list.name.toLowerCase().includes(needle))
+      : mapped;
+    return matched.slice(0, limit);
   }
 
   async sampleListContacts(apiKey: string, listId: string, baseUrl = "https://actionnetwork.org/api/v2"): Promise<RemoteContact[]> {

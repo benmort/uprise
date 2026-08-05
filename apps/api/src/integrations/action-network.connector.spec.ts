@@ -44,6 +44,71 @@ describe("ActionNetworkConnector", () => {
     expect(lists[0].count).toBe(100);
   });
 
+  it("pages through every list page, not just the first", async () => {
+    // The real account has 70 lists across 3 pages of 25. Reading page one only made the other
+    // 45 unreachable — which is how "Together For Treaty All Activists" became invisible.
+    const page = (n: number, total: number, titles: string[]) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        total_pages: total,
+        page: n,
+        _embedded: { "osdi:lists": titles.map((t, i) => ({ id: `l${n}_${i}`, title: t })) },
+      }),
+    }) as Response;
+    const fetchMock = jest.spyOn(global, "fetch" as any).mockImplementation(async (...args: any[]) => {
+      const url = String(args[0]);
+      // Match on `&page=`: the query string also contains `per_page=25`, which trivially
+      // includes the substring "page=2".
+      if (url.includes("&page=1")) return page(1, 3, ["Alpha", "Beta"]);
+      if (url.includes("&page=2")) return page(2, 3, ["Together For Treaty All Activists"]);
+      return page(3, 3, ["Zeta"]);
+    });
+
+    const lists = await connector.searchLists("key", { query: "" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(lists.map((l) => l.name)).toEqual([
+      "Alpha",
+      "Beta",
+      "Together For Treaty All Activists",
+      "Zeta",
+    ]);
+  });
+
+  it("filters by name across the paged results", async () => {
+    jest.spyOn(global, "fetch" as any).mockImplementation(async (...args: any[]) => {
+      const url = String(args[0]);
+      const rows = url.includes("&page=1")
+        ? ["Common Threads newsletter", "VIC MOB"]
+        : ["Together For Treaty All Activists"];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          total_pages: 2,
+          _embedded: { "osdi:lists": rows.map((t, i) => ({ id: `x${i}`, title: t })) },
+        }),
+      } as Response;
+    });
+
+    // Case-insensitive substring, applied to what we paged — Action Network's `filter` param is
+    // OData over specific fields and returns everything for a bare phrase.
+    const lists = await connector.searchLists("key", { query: "treaty" });
+    expect(lists.map((l) => l.name)).toEqual(["Together For Treaty All Activists"]);
+  });
+
+  it("stops at the last page rather than requesting forever", async () => {
+    const fetchMock = jest.spyOn(global, "fetch" as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ total_pages: 1, _embedded: { "osdi:lists": [{ id: "l1", title: "Only" }] } }),
+    } as Response);
+
+    await connector.searchLists("key", { query: "" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("syncs list people across paginated pages", async () => {
     const fetchMock = jest.spyOn(global, "fetch" as any).mockImplementation(async (...args: any[]) => {
       const url = String(args[0]);
