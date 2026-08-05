@@ -324,6 +324,7 @@ export default function DashboardPage() {
           if (ch === "sms") void newBlast("SMS");
           else if (ch === "call") router.push("/channels/calls?new=1");
           else if (ch === "event") router.push("/events");
+          else if (ch === "canvass") router.push("/canvass/new");
         }}
       />
 
