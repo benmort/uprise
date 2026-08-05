@@ -73,6 +73,7 @@ export class TelephonyProvisioningController {
       byoAuthToken: dto.byoAuthToken,
       friendlyName: dto.friendlyName,
       numberType: dto.numberType,
+      chainComplementary: dto.chainComplementary,
       complianceInput: dto.complianceInput,
       requestedById: req.user?.id ?? null,
     });
