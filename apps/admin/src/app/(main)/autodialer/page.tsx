@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Megaphone, PhoneForwarded, PhoneOutgoing, Plus, Vote, Waypoints } from "lucide-react";
 import {
   autodialer,
@@ -102,6 +102,23 @@ export default function AutodialerCampaignsPage() {
   const total = list.data?.total ?? 0;
   const s = stats.data;
   const kpi = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
+
+  /**
+   * `?new=1` opens the create dialog straight away — the "New automated calling campaign" card
+   * in the start-a-conversation picker routes here, and landing on a list of existing campaigns
+   * when you asked to make one is a dead end. Mirrors /channels/calls?new=1.
+   *
+   * Runs once per arrival: the param is stripped after opening so a later close-and-reopen of
+   * the page (or a back navigation) doesn't force the dialog up again.
+   */
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    setCreateOpen(true);
+    router.replace("/autodialer");
+    // Intentionally keyed on the param alone — router/replace identities are stable enough here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const startCreate = async () => {
     if (!behaviour || creating) return;

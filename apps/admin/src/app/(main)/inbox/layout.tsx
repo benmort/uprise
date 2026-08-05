@@ -95,6 +95,7 @@ export default function SharedInboxFolderLayout({ children }: { children: ReactN
                 else if (ch === 'call') router.push('/channels/calls?new=1');
                 else if (ch === 'event') router.push('/events');
                 else if (ch === 'canvass') router.push('/canvass/new');
+                else if (ch === 'autodialer') router.push('/autodialer?new=1');
               }}
             />
             {children}
