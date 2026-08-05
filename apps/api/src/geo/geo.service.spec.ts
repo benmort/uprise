@@ -1,4 +1,4 @@
-import { GeoService, DIVISION_TYPES, TURF_DIVISION_TYPES } from "./geo.service";
+import { GeoService, DIVISION_TYPES, TURF_DIVISION_TYPES, parseBbox } from "./geo.service";
 
 /**
  * Focused unit tests for the vector-tile generator. The DB is mocked (the SQL is
@@ -418,6 +418,32 @@ describe("GeoService polling places", () => {
     const [countSql, ...countParams] = $queryRawUnsafe.mock.calls[1];
     expect(countSql).toContain("COUNT(*)");
     expect(countParams).toEqual(["federal", "NSW", "%bon%"]);
+  });
+
+  it("browsePollingPlaces scopes to the map viewport when a bbox is given", async () => {
+    const $queryRawUnsafe = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 3 }]);
+    await svcOf($queryRawUnsafe).browsePollingPlaces({
+      jurisdiction: "vic",
+      bbox: "144.9,-37.9,145.1,-37.7",
+    });
+    const [rowsSql, ...rowsParams] = $queryRawUnsafe.mock.calls[0];
+    expect(rowsSql).toContain("p.lng BETWEEN $2 AND $3");
+    expect(rowsSql).toContain("p.lat BETWEEN $4 AND $5");
+    // Ordered lng-min, lng-max, lat-min, lat-max after the jurisdiction param.
+    expect(rowsParams).toEqual(["vic", 144.9, 145.1, -37.9, -37.7]);
+    // The count query has to carry the same window, or paging reports a national total
+    // over a city-sized list.
+    const [countSql, ...countParams] = $queryRawUnsafe.mock.calls[1];
+    expect(countSql).toContain("p.lng BETWEEN");
+    expect(countParams).toEqual(["vic", 144.9, 145.1, -37.9, -37.7]);
+  });
+
+  it("browsePollingPlaces ignores a malformed bbox rather than filtering everything away", async () => {
+    const $queryRawUnsafe = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 0 }]);
+    await svcOf($queryRawUnsafe).browsePollingPlaces({ bbox: "not,a,bbox,x" });
+    const [rowsSql, ...rowsParams] = $queryRawUnsafe.mock.calls[0];
+    expect(rowsSql).not.toContain("BETWEEN");
+    expect(rowsParams).toEqual([]);
   });
 
   it("browsePollingPlaces treats 'all' as unfiltered and caps the page size at 100", async () => {
@@ -983,5 +1009,24 @@ describe("GeoService.addressDetail", () => {
     const res = (await svc.addressDetail("t1", "G2")) as Record<string, unknown>;
     expect(res.nearestPolling).toBeNull();
     expect($queryRawUnsafe).toHaveBeenCalledTimes(1); // address only, no polling KNN
+  });
+});
+
+describe("parseBbox", () => {
+  it("accepts a well-formed viewport", () => {
+    expect(parseBbox("144.9,-37.9,145.1,-37.7")).toEqual([144.9, -37.9, 145.1, -37.7]);
+  });
+
+  it("rejects anything that would filter the whole world away", () => {
+    expect(parseBbox(undefined)).toBeNull();
+    expect(parseBbox("")).toBeNull();
+    expect(parseBbox("1,2,3")).toBeNull();
+    expect(parseBbox("a,b,c,d")).toBeNull();
+    // Degenerate span — a map mid-resize reports these, and honouring one hides every booth.
+    expect(parseBbox("145,-37,145,-37")).toBeNull();
+    expect(parseBbox("146,-37,145,-36")).toBeNull();
+    // Off the planet.
+    expect(parseBbox("-181,-37,145,-36")).toBeNull();
+    expect(parseBbox("144,-91,145,-36")).toBeNull();
   });
 });

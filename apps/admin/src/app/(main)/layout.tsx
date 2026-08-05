@@ -228,7 +228,20 @@ function buildNav(
       ],
     },
 
-    { type: "leaf", key: "audience", label: "Audience", href: "/audience", icon: Users, match: (p) => p.startsWith("/audience"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE" },
+    // Audience is a group rather than a leaf: its two halves — the imported/segmented lists and
+    // the saved searches that cut them — are separate destinations, and the searches half was
+    // reachable only by scrolling past the table on /audience.
+    {
+      type: "group", key: "audience", label: "Audience", icon: Users,
+      match: (p) => p.startsWith("/audience"),
+      flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE",
+      children: [
+        // The imported lists themselves (CSV, Action Network, WhatsApp opt-ins) + the import card.
+        { label: "Segmented audiences", href: "/audience", match: (p) => p === "/audience" || /^\/audience\/[^/]+$/.test(p) },
+        // Saved search definitions over those lists, and the builder that creates them.
+        { label: "Searches", href: "/audience/segments", match: (p) => p.startsWith("/audience/segments") },
+      ],
+    },
 
     // ── Manage: workspace admin — data, settings (incl. compliance), business, dev ──
     { type: "section", key: "sec-manage", label: "Manage" },

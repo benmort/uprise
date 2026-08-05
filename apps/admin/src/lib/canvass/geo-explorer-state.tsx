@@ -60,6 +60,15 @@ type GeoExplorerValue = {
   setPollingPlaces: (places: PollingPlacePoint[]) => void;
   pollingSelectedId: string;
   setPollingSelectedId: (id: string) => void;
+
+  /**
+   * The map's current viewport as `[w,s,e,n]`, published on every settled move. Lives here
+   * rather than in the panel because the map is hoisted into the `(geo)` layout and the panels
+   * are swapped underneath it — a panel that wants to scope itself to the view cannot reach the
+   * map directly. Null until the map has reported once (or in list view, where there is no map).
+   */
+  mapBounds: [number, number, number, number] | null;
+  setMapBounds: (bounds: [number, number, number, number]) => void;
 };
 
 const GeoExplorerContext = createContext<GeoExplorerValue | null>(null);
@@ -77,6 +86,15 @@ export function GeoExplorerProvider({ children }: { children: ReactNode }) {
   const [activePid, setActivePid] = useState("");
   const [pollingPlaces, setPollingPlaces] = useState<PollingPlacePoint[]>([]);
   const [pollingSelectedId, setPollingSelectedId] = useState("");
+  const [mapBounds, setMapBoundsState] = useState<[number, number, number, number] | null>(null);
+  // Identity-stable so it can be handed to the map as a prop without re-registering the
+  // moveend handler on every render, and value-stable so an unmoved map does not re-render
+  // the panel (the map fires moveend for zoom-less nudges too).
+  const setMapBounds = useCallback((next: [number, number, number, number]) => {
+    setMapBoundsState((prev) =>
+      prev && prev.every((v, i) => Math.abs(v - next[i]) < 1e-6) ? prev : next,
+    );
+  }, []);
 
   const toggleSelectedArea = useCallback((area: SelectedArea) => {
     setSelectedAreas((cur) => {
@@ -116,6 +134,8 @@ export function GeoExplorerProvider({ children }: { children: ReactNode }) {
       setPollingPlaces,
       pollingSelectedId,
       setPollingSelectedId,
+      mapBounds,
+      setMapBounds,
     }),
     [
       universe,
@@ -133,6 +153,8 @@ export function GeoExplorerProvider({ children }: { children: ReactNode }) {
       activePid,
       pollingPlaces,
       pollingSelectedId,
+      mapBounds,
+      setMapBounds,
     ],
   );
 

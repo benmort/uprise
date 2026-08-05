@@ -171,6 +171,8 @@ export function TurfDrawMap({
   resizeToken,
   recenterToken,
   showDraw = true,
+  onBoundsChange,
+  pointLegend,
 }: {
   existing?: ExistingTurf[];
   center?: { lat: number; lng: number } | null;
@@ -306,6 +308,12 @@ export function TurfDrawMap({
    *  surfaces (demographics/referendum/First Nations) turn it off — nothing there
    *  is turf, so the draw + bin buttons are noise. */
   showDraw?: boolean;
+  /** Called with `[w,s,e,n]` once the map settles (load + every moveend), so a panel can
+   *  scope its list to what is on screen. Fired after the move ends rather than during it —
+   *  a per-frame callback would refetch on every pixel of a drag. */
+  onBoundsChange?: (bbox: [number, number, number, number]) => void;
+  /** Swatch + label pairs for a points-mode legend. Omit for no legend. */
+  pointLegend?: Array<{ label: string; color: string }>;
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
@@ -553,6 +561,25 @@ export function TurfDrawMap({
         : { url },
     [apiOrigin],
   );
+
+  /**
+   * Publish the viewport to whoever asked for it (the polling-places list scopes itself to it).
+   *
+   * Kept out of `syncViewport` deliberately: that one queries rendered features and is tied to
+   * the areas layer, while this is a pure geometry read that must also fire on surfaces with no
+   * areas layer at all.
+   */
+  const onBoundsChangeRef = useRef(onBoundsChange);
+  onBoundsChangeRef.current = onBoundsChange;
+  const reportBounds = useCallback(() => {
+    const cb = onBoundsChangeRef.current;
+    if (!cb) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const b = map.getBounds();
+    if (!b) return;
+    cb([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  }, []);
 
   // Read the areas currently rendered in the viewport off the vector-tile layer,
   // deduped by code — replaces deriving them from a fetched GeoJSON collection.
@@ -840,8 +867,12 @@ export function TurfDrawMap({
             }
           }
           syncViewport();
+          reportBounds();
         }}
-        onMoveEnd={() => syncViewport()}
+        onMoveEnd={() => {
+          syncViewport();
+          reportBounds();
+        }}
         onMouseMove={(e) => {
           if (!useBoundaryAreas || !onAreaHover) return;
           const f = e.features?.find(
@@ -1053,7 +1084,43 @@ export function TurfDrawMap({
         {mode === "points" ? (
           <>
             <Source id="stops" type="geojson" data={stopsGeoJson} cluster clusterRadius={40}>
-              <Layer id="stops-clusters" type="circle" filter={["has", "point_count"]} paint={{ "circle-color": "#94a3b8", "circle-radius": 16 }} />
+              {/* Clusters carry their size in both radius and shade: a flat 16px circle made
+                  twenty booths and two hundred look identical, which is the one thing a
+                  density view has to distinguish. Steps rather than a continuous ramp so the
+                  sizes stay legible against each other at any zoom. */}
+              <Layer
+                id="stops-clusters"
+                type="circle"
+                filter={["has", "point_count"]}
+                paint={{
+                  "circle-color": [
+                    "step",
+                    ["get", "point_count"],
+                    "#cbd5e1", 10, "#94a3b8", 50, "#64748b", 250, "#475569",
+                  ],
+                  "circle-radius": [
+                    "step",
+                    ["get", "point_count"],
+                    14, 10, 18, 50, 24, 250, 30,
+                  ],
+                  "circle-stroke-width": 1.5,
+                  "circle-stroke-color": "#ffffff",
+                  "circle-opacity": 0.9,
+                }}
+              />
+              {/* The number itself — a scaled circle says "more", the count says how many. */}
+              <Layer
+                id="stops-cluster-count"
+                type="symbol"
+                filter={["has", "point_count"]}
+                layout={{
+                  "text-field": ["get", "point_count_abbreviated"],
+                  "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+                  "text-size": 12,
+                  "text-allow-overlap": true,
+                }}
+                paint={{ "text-color": "#0f172a" }}
+              />
               <Layer
                 id="stops-circles"
                 type="circle"
@@ -1151,6 +1218,35 @@ export function TurfDrawMap({
         <FullscreenControl position="top-left" />
         <MapAttribution />
       </Map>
+
+      {/* Bottom-left — the points legend. Bottom-RIGHT is Mapbox's (wordmark + ⓘ) and must stay
+          clear, so the key for what the dots mean lives opposite it. Only drawn when a caller
+          supplies one, which today is the booth map. */}
+      {mode === "points" && pointLegend?.length ? (
+        <MapCorner corner="bottom-left">
+          <div className="rounded-lg border border-border bg-surface/95 px-2.5 py-2 text-xs shadow-card backdrop-blur">
+            <div className="mb-1 font-semibold text-foreground">Jurisdiction</div>
+            <ul className="flex flex-col gap-1">
+              {pointLegend.map((entry) => (
+                <li key={entry.label} className="flex items-center gap-1.5 text-muted-foreground">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full border border-white"
+                    style={{ backgroundColor: entry.color }}
+                    aria-hidden
+                  />
+                  {entry.label}
+                </li>
+              ))}
+            </ul>
+            {/* Clusters are grey and sized by count, so say so rather than leaving a reader to
+                wonder which jurisdiction the grey circles are. */}
+            <div className="mt-1.5 flex items-center gap-1.5 border-t border-border pt-1.5 text-muted-foreground">
+              <span className="h-3.5 w-3.5 shrink-0 rounded-full border border-white bg-slate-400" aria-hidden />
+              Grouped — size by count
+            </div>
+          </div>
+        </MapCorner>
+      ) : null}
 
       {/* Top-right — context/actions: scroll-to-zoom → recentre → areas panel (on-map).
           The areas ternary sits inside: its portaled branch renders elsewhere (createPortal),

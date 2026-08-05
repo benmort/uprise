@@ -47,10 +47,21 @@ const PAGE_SIZE = 10;
 export function PollingPlacesPanel({ view }: { view: WalkMode }) {
   const { q, tab, state, setTab } = useGeoExplorerUrlState({ viewStorageKey: "uprise.pollingPlacesView" });
   const jurisdiction = tab && JURISDICTIONS.some((j) => j.key === tab) ? tab : "all";
-  const { pollingPlaces, setPollingPlaces, pollingSelectedId, setPollingSelectedId } = useGeoExplorer();
+  const { pollingPlaces, setPollingPlaces, pollingSelectedId, setPollingSelectedId, mapBounds } =
+    useGeoExplorer();
+
+  /**
+   * Scope the list to what the map is showing. On by default: opening the booths map over a city
+   * and reading a national list underneath it is the confusing default this replaces. Only
+   * applies in map view — in list view there is no viewport to scope to, and a stale one from a
+   * previous map visit would silently hide rows.
+   */
+  const [scopeToMap, setScopeToMap] = useState(true);
+  const scoping = view === "map" && scopeToMap && !!mapBounds;
+  const bbox = scoping && mapBounds ? mapBounds.map((v) => v.toFixed(5)).join(",") : "";
 
   const [page, setPage] = useState(0);
-  useEffect(() => setPage(0), [jurisdiction, state, q]);
+  useEffect(() => setPage(0), [jurisdiction, state, q, bbox]);
 
   // Booth points for the map — one cached request per jurisdiction/state filter;
   // pushed into the provider so the surface can plot them (mapbox clusters).
@@ -66,8 +77,8 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
   // The paged, filterable list (server-side).
   const offset = page * PAGE_SIZE;
   const list = useApi(
-    `/geo/polling-places?j=${jurisdiction}&s=${state}&q=${q}&o=${offset}`,
-    () => browsePollingPlaces({ jurisdiction, state, q, limit: PAGE_SIZE, offset }),
+    `/geo/polling-places?j=${jurisdiction}&s=${state}&q=${q}&o=${offset}&b=${bbox}`,
+    () => browsePollingPlaces({ jurisdiction, state, q, bbox, limit: PAGE_SIZE, offset }),
     { ttlMs: 120_000 },
   );
   const rows: PollingPlace[] = useMemo(() => list.data?.rows ?? [], [list.data]);
@@ -101,6 +112,24 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
       ))}
     </div>
   );
+
+  // Only offered in map view — see `scoping`. The count is deliberately part of the label:
+  // "showing 12" next to a map is the confirmation that the toggle did something.
+  const scopeToggle =
+    view === "map" ? (
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-border accent-[hsl(var(--primary))]"
+          checked={scopeToMap}
+          onChange={(e) => setScopeToMap(e.target.checked)}
+        />
+        <span className="text-foreground">Scope to map</span>
+        <span className="text-xs">
+          {scoping ? `${total.toLocaleString()} in view` : "showing all"}
+        </span>
+      </label>
+    ) : null;
 
   const detailCard = detail.data ? (
     <CollapsibleCard id={`booth:${detail.data.id}`} title={detail.data.name ?? "Polling place"}>
@@ -157,6 +186,7 @@ export function PollingPlacesPanel({ view }: { view: WalkMode }) {
     return (
       <div className="space-y-4">
         {jurisdictionPills}
+        {scopeToggle}
         <AutoAccordionGroup
           defaultOpen="booths"
           follow={pollingSelectedId && detail.data ? `booth:${detail.data.id}` : ""}

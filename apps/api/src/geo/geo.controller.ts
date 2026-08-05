@@ -230,11 +230,14 @@ export class GeoController {
     @Query("q") q?: string,
     @Query("limit") limit?: string,
     @Query("offset") offset?: string,
+    /** Map viewport "minLng,minLat,maxLng,maxLat" — set when the list is scoped to the map. */
+    @Query("bbox") bbox?: string,
   ) {
     return this.geo.browsePollingPlaces({
       jurisdiction,
       state,
       q,
+      bbox,
       limit: limit ? Number(limit) : undefined,
       offset: offset ? Number(offset) : undefined,
     });

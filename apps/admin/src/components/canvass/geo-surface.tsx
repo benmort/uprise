@@ -64,6 +64,27 @@ const OT_BOUNDS: Record<string, [number, number, number, number]> = {
   "90104": [167.9, -29.12, 168.0, -28.98], // Norfolk Island
 };
 
+/** The booth palette, mirrored from turf-draw-map's `status` match and the panel's pills.
+ *  Federal plus the eight state/territory electoral commissions. */
+const POLLING_LEGEND: Array<{ label: string; color: string }> = [
+  { label: "Federal (AEC)", color: "#dc2626" },
+  { label: "NSW", color: "#0ea5e9" },
+  { label: "VIC", color: "#2563eb" },
+  { label: "QLD", color: "#7c3aed" },
+  { label: "WA", color: "#d97706" },
+  { label: "SA", color: "#db2777" },
+  { label: "TAS", color: "#059669" },
+  { label: "ACT", color: "#0891b2" },
+  { label: "NT", color: "#ea580c" },
+];
+
+/** The polling-places pill (`?tab=`) as a state abbreviation, or "" for federal/all —
+ *  which frame the country rather than any one state. */
+function resolvePollingJurisdiction(tab: string): string {
+  const t = (tab || "all").toLowerCase();
+  return t === "all" || t === "federal" ? "" : t.toUpperCase();
+}
+
 /**
  * The unified geo explorer surface (Phase 2). Rendered once by the persistent
  * `(geo)` layout, so the ONE `<GeoMap>` never remounts — a kind switch only
@@ -106,6 +127,7 @@ export function GeoSurface() {
     pollingPlaces,
     pollingSelectedId,
     setPollingSelectedId,
+    setMapBounds,
   } = provider;
   const { basket, setPolygons: basketSetPolygons } = useTurfBasket();
 
@@ -388,13 +410,23 @@ export function GeoSurface() {
       // Every booth is a clustered point; the status field carries the jurisdiction
       // so the map tints federal vs each state/territory (see turf-draw-map palette).
       const selected = pollingPlaces.find((p) => p.id === pollingSelectedId);
+      // The jurisdiction pill is this kind's primary filter, so it frames the map: a
+      // state/territory zooms to that state, and federal/all pulls back to the country.
+      // The shared State Filter still wins when it is set, since it is the narrower choice.
+      const jurisdictionBounds = stateBounds(resolvePollingJurisdiction(tab));
       return {
         ...common,
+        focusBounds: common.focusBounds ?? jurisdictionBounds ?? AU_BOUNDS,
         mode: "points",
         stops: pollingPlaces.map((p) => ({ id: p.id, lat: p.lat, lng: p.lng, status: p.jurisdiction })),
         activeStopId: pollingSelectedId || undefined,
         onStopTap: (id: string) => setPollingSelectedId(pollingSelectedId === id ? "" : id),
         focusPoint: selected ? { lat: selected.lat, lng: selected.lng } : null,
+        // Booths are reference data, not turf — the polygon + bin controls have nothing to
+        // act on here, matching divisions/states/areas.
+        showDraw: false,
+        onBoundsChange: setMapBounds,
+        pointLegend: POLLING_LEGEND,
       };
     }
     // addresses

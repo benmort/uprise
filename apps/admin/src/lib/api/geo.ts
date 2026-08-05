@@ -495,6 +495,8 @@ export type PollingPlacePoint = {
 export async function browsePollingPlaces(params: {
   jurisdiction?: string;
   state?: string;
+  /** "minLng,minLat,maxLng,maxLat" — set when the list is scoped to the map viewport. */
+  bbox?: string;
   q?: string;
   limit?: number;
   offset?: number;
@@ -503,6 +505,7 @@ export async function browsePollingPlaces(params: {
   if (params.jurisdiction && params.jurisdiction !== "all") qs.set("jurisdiction", params.jurisdiction);
   if (params.state) qs.set("state", params.state);
   if (params.q) qs.set("q", params.q);
+  if (params.bbox) qs.set("bbox", params.bbox);
   if (params.limit) qs.set("limit", String(params.limit));
   if (params.offset) qs.set("offset", String(params.offset));
   return request<{ rows: PollingPlace[]; total: number }>(`/geo/polling-places?${qs}`);

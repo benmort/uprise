@@ -1260,7 +1260,7 @@ export class GeoService {
    *  Columns are qualified to the `p` alias — the browse query joins geo.ced/geo.sed,
    *  which also carry `state`/`name`, so an unqualified ref would be ambiguous. Every
    *  caller therefore aliases geo.polling_place as `p`. */
-  private pollingFilters(opts: { jurisdiction?: string; state?: string }) {
+  private pollingFilters(opts: { jurisdiction?: string; state?: string; bbox?: string }) {
     const params: unknown[] = [];
     const clauses: string[] = [];
     if (opts.jurisdiction && opts.jurisdiction !== "all") {
@@ -1270,6 +1270,19 @@ export class GeoService {
     if (opts.state) {
       params.push(opts.state.toUpperCase());
       clauses.push(`p.state = $${params.length}`);
+    }
+    // Viewport filter for the map's "scope to map" toggle: the list shows what the map shows,
+    // and the total that pages it counts the same set. A malformed bbox is IGNORED rather than
+    // rejected — the caller is a map pan, and a 400 mid-drag would break the page for a
+    // transient value while proving nothing.
+    const bbox = parseBbox(opts.bbox);
+    if (bbox) {
+      const [minLng, minLat, maxLng, maxLat] = bbox;
+      params.push(minLng, maxLng, minLat, maxLat);
+      const i = params.length;
+      clauses.push(
+        `p.lng BETWEEN $${i - 3} AND $${i - 2} AND p.lat BETWEEN $${i - 1} AND $${i}`,
+      );
     }
     return { params, clauses };
   }
@@ -1281,6 +1294,8 @@ export class GeoService {
     jurisdiction?: string;
     state?: string;
     q?: string;
+    /** "minLng,minLat,maxLng,maxLat" — the map viewport, when the list is scoped to it. */
+    bbox?: string;
     limit?: number;
     offset?: number;
   }) {
@@ -1910,6 +1925,23 @@ export type ReferendumRow = {
   yesPct: number | null;
   noPct: number | null;
 };
+
+/**
+ * "minLng,minLat,maxLng,maxLat" → a validated tuple, or null.
+ *
+ * Null for anything that is not four finite numbers inside real world coordinates with a
+ * positive span. A map that reports a degenerate viewport (mid-resize, or before the first
+ * render) would otherwise filter every booth away and read as "no results here".
+ */
+export function parseBbox(raw: string | undefined): [number, number, number, number] | null {
+  if (!raw) return null;
+  const parts = raw.split(",").map((v) => Number(v.trim()));
+  if (parts.length !== 4 || parts.some((v) => !Number.isFinite(v))) return null;
+  const [minLng, minLat, maxLng, maxLat] = parts as [number, number, number, number];
+  if (minLng >= maxLng || minLat >= maxLat) return null;
+  if (minLng < -180 || maxLng > 180 || minLat < -90 || maxLat > 90) return null;
+  return [minLng, minLat, maxLng, maxLat];
+}
 
 /** Postgres returns numeric/bigint columns as strings or bigint; coerce to a JS number or null. */
 function n(v: unknown): number | null {
