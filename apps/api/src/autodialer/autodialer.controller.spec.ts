@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { AutodialerController } from "./autodialer.controller";
+import { AutodialerController, AutodialerOpsController } from "./autodialer.controller";
 import { REQUIRE_PERMISSION_KEY } from "../auth/require-permission.decorator";
 
 describe("AutodialerController", () => {
@@ -24,6 +24,8 @@ describe("AutodialerController", () => {
     results: jest.fn().mockResolvedValue({ questions: [], transfers: [], transferCount: 0 }),
   } as any;
   const c = new AutodialerController(service, reporting);
+  const dispatch = { dispatchDue: jest.fn().mockResolvedValue({ enqueued: 0 }) } as any;
+  const ops = new AutodialerOpsController(reporting, dispatch);
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -71,7 +73,7 @@ describe("AutodialerController", () => {
   });
 
   it("reporting reads delegate to the reporting service with tenant scope", () => {
-    c.tenantStats("t1");
+    ops.tenantStats("t1");
     expect(reporting.tenantStats).toHaveBeenCalledWith("t1");
     c.stats("t1", "dc1");
     expect(reporting.campaignStats).toHaveBeenCalledWith("t1", "dc1");
@@ -97,7 +99,6 @@ describe("AutodialerController", () => {
       "complete",
       "clone",
       "upsertQuestions",
-      "tenantStats",
       "stats",
       "attempts",
       "results",
@@ -107,5 +108,27 @@ describe("AutodialerController", () => {
       expect(meta).toBeDefined();
       expect(String(meta.resource)).toContain("autodialer.");
     }
+    const statsMeta = Reflect.getMetadata(REQUIRE_PERMISSION_KEY, AutodialerOpsController.prototype.tenantStats);
+    expect(statsMeta).toBeDefined();
+    expect(String(statsMeta.resource)).toContain("autodialer.");
+  });
+
+  describe("AutodialerOpsController (routes outside the campaigns prefix)", () => {
+    // Express keeps "../" in a route path literal, so a "../dispatch-due"
+    // declaration registers an unmatchable path — the production cron 404'd.
+    // Pin the real paths: /autodialer + dispatch-due|stats, no traversal.
+    it("registers matchable paths for the cron + stats routes", () => {
+      expect(Reflect.getMetadata("path", AutodialerOpsController)).toBe("autodialer");
+      expect(Reflect.getMetadata("path", AutodialerOpsController.prototype.dispatchDue)).toBe("dispatch-due");
+      expect(Reflect.getMetadata("path", AutodialerOpsController.prototype.tenantStats)).toBe("stats");
+    });
+
+    it("dispatch-due: cron (no user) delegates; a non-super-admin session is refused", () => {
+      ops.dispatchDue({} as any);
+      expect(dispatch.dispatchDue).toHaveBeenCalled();
+      expect(() => ops.dispatchDue({ user: { isSuperAdmin: false } } as any)).toThrow(
+        "Dialler dispatch is operator-only",
+      );
+    });
   });
 });

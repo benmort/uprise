@@ -23,10 +23,15 @@ const CREATE = { action: "create", resource: "autodialer.campaign" } as const;
 const UPDATE = { action: "update", resource: "autodialer.campaign" } as const;
 const REMOVE = { action: "delete", resource: "autodialer.campaign" } as const;
 
-@Controller("autodialer/campaigns")
-export class AutodialerController {
+/**
+ * Routes that live at /autodialer/* – OUTSIDE the campaigns prefix. Express
+ * keeps a "../" in a route path literal (it never normalises it), so these
+ * cannot be declared on the campaigns controller: they'd register unmatchable
+ * paths and 404 – which is exactly what the production cron hit.
+ */
+@Controller("autodialer")
+export class AutodialerOpsController {
   constructor(
-    private readonly autodialer: AutodialerService,
     private readonly reporting: DialerReportingService,
     @Optional() private readonly dispatch?: DialerDispatchService,
   ) {}
@@ -37,8 +42,8 @@ export class AutodialerController {
    * and any USER session reaching it must be a super-admin (the
    * CallsController#reconcile pattern). Listed in the guardrail's OPEN_ROUTES.
    */
-  @Get("../dispatch-due")
-  @Post("../dispatch-due")
+  @Get("dispatch-due")
+  @Post("dispatch-due")
   dispatchDue(@Req() req: Request & { user?: AuthUser }) {
     if (req.user && !req.user.isSuperAdmin) {
       throw new ForbiddenException("Dialler dispatch is operator-only");
@@ -47,18 +52,27 @@ export class AutodialerController {
     return this.dispatch.dispatchDue();
   }
 
+  /** Tenant-wide KPIs for the campaign list header. */
+  @Get("stats")
+  @RequirePermission(READ)
+  tenantStats(@TenantId() tenantId: string) {
+    return this.reporting.tenantStats(tenantId);
+  }
+}
+
+@Controller("autodialer/campaigns")
+export class AutodialerController {
+  constructor(
+    private readonly autodialer: AutodialerService,
+    private readonly reporting: DialerReportingService,
+  ) {}
+
   @Get()
   @RequirePermission(READ)
   list(@TenantId() tenantId: string, @Query() query: ListDialerCampaignsQueryDto) {
     return this.autodialer.list(tenantId, query);
   }
 
-  /** Tenant-wide KPIs for the campaign list header. */
-  @Get("../stats")
-  @RequirePermission(READ)
-  tenantStats(@TenantId() tenantId: string) {
-    return this.reporting.tenantStats(tenantId);
-  }
 
   @Post()
   @RequirePermission(CREATE)

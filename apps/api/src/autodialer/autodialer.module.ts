@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { AutodialerController } from "./autodialer.controller";
+import { AutodialerController, AutodialerOpsController } from "./autodialer.controller";
 import { AutodialerService } from "./autodialer.service";
 import { DialerCallPlacerService } from "./dialer-call-placer.service";
 import { DialerDispatchService } from "./dialer-dispatch.service";
@@ -31,7 +31,7 @@ import { MessagingModule } from "../messaging/messaging.module";
   // the click-to-call target leg was never enqueued). The queue injects are
   // deliberately non-@Optional now so that regression fails the boot smoke.
   imports: [FlagsModule, TelephonyModule, MessagingModule, AudiencesModule, QueueModule],
-  controllers: [AutodialerController, DialerIvrController],
+  controllers: [AutodialerController, AutodialerOpsController, DialerIvrController],
   providers: [
     AutodialerService,
     IvrFlowService,
