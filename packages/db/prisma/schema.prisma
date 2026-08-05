@@ -2145,6 +2145,48 @@ model ErrorLog {
   @@schema("ops")
 }
 
+// ── Status history ──────────────────────────────────────────────────────────
+// The status page (/status on admin + the marketing site) reports a live snapshot;
+// these two tables give it a memory. A cron records one StatusCheck per run — the
+// public rollup only, so the history holds nothing a visitor could not already see
+// — and the recorder opens or resolves a StatusIncident on each transition.
+//
+// Uptime is computed from checks, not from incidents: a gap in the cron then reads
+// as "no data" for that window rather than as uptime nobody observed.
+model StatusCheck {
+  id String @id @default(cuid())
+  at DateTime @default(now())
+  // False when any public service was in Outage — the same flag the page shows.
+  ok Boolean
+  // { "<serviceKey>": "Operational" | "Degraded" | "Outage" | "Unknown" }. JSON rather
+  // than a row per service: the set of services is a code-level registry, not data, and
+  // one row per run keeps 90 days inside ~26k rows.
+  services Json
+
+  @@index([at])
+  @@schema("ops")
+}
+
+// One row per period of trouble on one public service. Open (resolvedAt null) or past.
+// The partial unique index below — raw SQL in the migration, which is why this schema
+// is applied with `migrate deploy` and never `migrate dev` — guarantees at most one open
+// incident per service, so a flapping check cannot fan out into duplicates.
+model StatusIncident {
+  id          String    @id @default(cuid())
+  serviceKey  String
+  // Denormalised so a past incident still reads correctly after a service is renamed.
+  serviceName String
+  // Worst status seen while open: "Degraded" or "Outage". An incident that starts
+  // degraded and gets worse keeps the worse word.
+  status      String
+  startedAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  @@index([serviceKey, startedAt])
+  @@index([startedAt])
+  @@schema("ops")
+}
+
 // ── Payment domain (meld doc 08) ─────────────────────────────────────────────
 enum PaymentStatus {
   RECORDED
@@ -3060,6 +3102,14 @@ model DialerCampaign {
 
   /// string[] — fixed transfer destination(s); one is sampled when several.
   targetNumbers Json?
+  /// Admin-pinned member target(s): [{id, name, party, electorate}] snapshots
+  /// (id-only refs to civic.Politician; identity snapshot so the admin UI and
+  /// public page render without hydration — the id is re-validated and the
+  /// number re-resolved server-side at call time, never from the client).
+  targetPoliticians Json?
+  /// Widget (VOIP) sessions may browse + choose their own member; the
+  /// jurisdiction/chamber/party settings below just narrow what they see.
+  callerChoosesTarget Boolean @default(false)
   /// string[] — party filter for electoral targeting.
   partyTargets  Json?
   /// FEDERAL | VIC | NSW | QLD | SA | WA | TAS | ACT | NT. The source overloaded

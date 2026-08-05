@@ -9,10 +9,12 @@ import type { Host } from "./platform-status.types";
  * Vercel cannot host because it is serverless). Add a deploy target to the estate ⇒ add it here,
  * and both status pages pick it up.
  *
- * `healthPath` is null for apps with no probe of their own. The worker is the honest case: it is a
- * queue consumer with no HTTP server, so it has no endpoint to hit and its health comes from
- * Railway's own deploy state instead. Marketing sites are static — reachable, but a 200 from a
- * static page says nothing beyond "the CDN answered", which is still worth showing.
+ * Every row is probed: each Next app serves `/api/health`, the API serves `/api/v1/health` (with
+ * its per-dependency checks) and the worker serves `/health` off its Bull Board server. A row with
+ * `healthPath: null` would fall back to provider deploy state, which describes the last BUILD, not
+ * whether anything is running — the worker had exactly that problem, sitting on 48 SKIPPED builds
+ * while serving happily. Marketing sites are static, so their 200 says only "the CDN answered",
+ * which is still what a visitor means by "is the website up".
  *
  * `envUrlKey` names the env var holding the origin, so this file never hardcodes a hostname: the
  * same registry resolves to localhost in dev and the real origins in production.
@@ -50,8 +52,11 @@ export const DEPLOYED_APPS: ReadonlyArray<AppDefinition> = [
     name: "API",
     host: "vercel",
     project: "uprise-api",
-    envUrlKey: "PUBLIC_API_BASE_URL",
-    healthPath: "/health",
+    // API_BASE_URL is required env (env.validation.ts), so this row always has an origin.
+    envUrlKey: "API_BASE_URL",
+    // Nest mounts everything under the `api/v1` global prefix set in bootstrap.ts — bare /health
+    // is a 404, which the probe would read as the API being down.
+    healthPath: "/api/v1/health",
     // The API is what every organiser action goes through, so its health IS the workspace's.
     publicService: "workspace",
   },
@@ -97,7 +102,9 @@ export const DEPLOYED_APPS: ReadonlyArray<AppDefinition> = [
     key: "product-marketing",
     name: "Product marketing site",
     host: "vercel",
-    project: "uprise-product-marketing",
+    // The Vercel project predates the `product-marketing` app directory and is still just
+    // `uprise-marketing` — the deploy lookup matches on the provider's name, not ours.
+    project: "uprise-marketing",
     envUrlKey: "MARKETING_APP_URL",
     healthPath: "/api/health",
     publicService: "website",
@@ -117,8 +124,11 @@ export const DEPLOYED_APPS: ReadonlyArray<AppDefinition> = [
     name: "Queue worker",
     host: "railway",
     project: "worker",
-    // No HTTP server — a BullMQ consumer. Health comes from Railway's deploy state.
-    healthPath: null,
+    // It does answer HTTP: apps/worker/src/main.ts mounts /health (and Bull Board) on
+    // WORKER_HEALTH_PORT, published at worker.uprise.org.au. Probing that beats inferring health
+    // from Railway's deploy state, which only ever describes the last BUILD.
+    envUrlKey: "WORKER_HEALTH_URL",
+    healthPath: "/health",
     // Blasts, imports and the outbox relay all drain through here, so when the worker is
     // down messaging is what a customer notices.
     publicService: "messaging",

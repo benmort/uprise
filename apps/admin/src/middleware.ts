@@ -44,13 +44,23 @@ export function middleware(req: NextRequest): NextResponse {
   const authAppUrl = process.env.NEXT_PUBLIC_AUTH_APP_URL || "http://localhost:3002";
   const url = new URL("/sign-in", authAppUrl);
   url.searchParams.set("return_to", publicHref(req));
+  // No `from` marker. This branch is reached only when the cookie is absent, which is the
+  // ordinary state of everyone who has never signed in – a marker set on every bounce says
+  // nothing more than "middleware redirected you", and nothing reads it. The distinction worth
+  // carrying ("you had a session and we could not verify it") cannot be drawn here: in both
+  // reported incidents the cookie WAS present, so the request never reached this line. It needs
+  // a non-httpOnly hint cookie written alongside auth_token at sign-in, plus a consumer on the
+  // auth app's sign-in page – both outside this file. Reported as a follow-up rather than
+  // shipping a marker that would be read as evidence it does not carry.
   return NextResponse.redirect(url);
 }
 
 export const config = {
-  // Gate everything except Next internals, the PWA service-worker assets, and
-  // static files (so the login bounce never blocks JS/CSS/icons).
+  // Gate everything except Next internals, the PWA service-worker assets, static
+  // files (so the login bounce never blocks JS/CSS/icons), and the status page's health
+  // probe (unauthenticated by design – it must reach the function, and a bounce would
+  // redirect to the auth app's 200 and report this app as up when it isn't).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|workbox-|worker-|fallback-|images/|icons/|.*\\.(?:png|jpg|jpeg|svg|gif|ico|json|js|css|woff2?)).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|workbox-|worker-|fallback-|images/|icons/|api/health|.*\\.(?:png|jpg|jpeg|svg|gif|ico|json|js|css|woff2?)).*)",
   ],
 };

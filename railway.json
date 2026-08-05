@@ -2,7 +2,16 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter worker build && pnpm --filter worker deploy --legacy --prod worker-deploy"
+    "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter worker build && pnpm --filter worker deploy --legacy --prod worker-deploy",
+    "watchPatterns": [
+      "apps/worker/**",
+      "packages/db/**",
+      "packages/events/**",
+      "packages/contracts/**",
+      "pnpm-lock.yaml",
+      "package.json",
+      "railway.json"
+    ]
   },
   "deploy": {
     "preDeployCommand": "pnpm --filter @uprise/db exec prisma migrate deploy",

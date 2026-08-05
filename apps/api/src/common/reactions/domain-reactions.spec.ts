@@ -1,7 +1,7 @@
 import { assertReactionsLoopSafe, type EventEnvelope, type Reaction } from "@uprise/events";
 import { buildDomainReactions, type ReactionDeps } from "./domain-reactions";
 
-function setup() {
+function setup(env: Record<string, string> = {}) {
   const prisma: any = {
     tenantInvitation: { findUnique: jest.fn(async () => ({ id: "inv1", email: "new@x.y", token: "tok123" })) },
     tenant: {
@@ -20,7 +20,11 @@ function setup() {
   const sms = { sendSms: jest.fn(async () => undefined), sendEmail: jest.fn(async () => undefined) } as any;
   const stripe = { isConfigured: jest.fn(() => true), createCustomer: jest.fn(async () => ({ id: "cus_1" })) } as any;
   const billing = { projectCustomer: jest.fn(async () => undefined) } as any;
-  const config = { get: jest.fn((k: string, fb?: string) => (k === "AUTH_APP_URL" ? "https://auth.test" : fb ?? "")) } as any;
+  const config = {
+    get: jest.fn((k: string, fb?: string) =>
+      k === "AUTH_APP_URL" ? "https://auth.test" : (env[k] ?? fb ?? ""),
+    ),
+  } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
   const deps: ReactionDeps = { prisma, email, sms, stripe, billing, config, logger };
   const reactions = buildDomainReactions(deps);
@@ -40,8 +44,64 @@ function setup() {
 describe("domain reactions", () => {
   it("are loop-safe (no reaction emits its own trigger)", () => {
     const { reactions } = setup();
-    expect(reactions).toHaveLength(9);
+    expect(reactions).toHaveLength(11);
     expect(() => assertReactionsLoopSafe(reactions)).not.toThrow();
+  });
+
+  it("ops.status-incident.opened → emails the ops address about the outage", async () => {
+    const { byTrigger, ev, email } = setup({ OPS_ALERT_EMAIL: "ops@uprise.test" });
+    await byTrigger("ops.status-incident.opened").handle(
+      ev({
+        incidentId: "i1",
+        serviceKey: "messaging",
+        serviceName: "Messaging",
+        status: "Outage",
+        startedAt: "2026-08-05T01:00:00.000Z",
+      }),
+    );
+    expect(email.sendTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toAddress: "ops@uprise.test",
+        templateKey: "status_incident_opened",
+        purpose: "status_alert",
+        vars: expect.objectContaining({ serviceName: "Messaging", status: "outage" }),
+      }),
+    );
+  });
+
+  it("ops.status-incident.resolved → sends the all-clear with the duration", async () => {
+    const { byTrigger, ev, email } = setup({ OPS_ALERT_EMAIL: "ops@uprise.test, second@uprise.test" });
+    await byTrigger("ops.status-incident.resolved").handle(
+      ev({
+        incidentId: "i1",
+        serviceKey: "messaging",
+        serviceName: "Messaging",
+        status: "Outage",
+        startedAt: "2026-08-05T01:00:00.000Z",
+        resolvedAt: "2026-08-05T02:30:00.000Z",
+        minutes: 90,
+      }),
+    );
+    // A comma-separated OPS_ALERT_EMAIL reaches everyone on it.
+    expect(email.sendTransactional).toHaveBeenCalledTimes(2);
+    expect(email.sendTransactional).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateKey: "status_incident_resolved",
+        vars: expect.objectContaining({ minutes: "90" }),
+      }),
+    );
+  });
+
+  it("falls back to super-admins when no ops address is configured", async () => {
+    const { byTrigger, ev, email, prisma } = setup();
+    await byTrigger("ops.status-incident.opened").handle(
+      ev({ incidentId: "i1", serviceKey: "field", serviceName: "Canvasser app", status: "Degraded", startedAt: "2026-08-05T01:00:00.000Z" }),
+    );
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ isSuperAdmin: true }) }),
+    );
+    // The stub's two super-admins, not a made-up recipient.
+    expect(email.sendTransactional).toHaveBeenCalledTimes(2);
   });
 
   it("tenant.join-request.submitted → emails every organiser", async () => {

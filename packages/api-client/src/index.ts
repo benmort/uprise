@@ -681,14 +681,34 @@ export const plans = {
 };
 
 // ── Platform status (public status page) ─────────────────────────────
-export type PublicServiceStatus = "Operational" | "Degraded" | "Outage";
+/** `Unknown` means the check could not be made — not that the service is fine. */
+export type PublicServiceStatus = "Operational" | "Degraded" | "Outage" | "Unknown";
+
+/** One day of the 90-day bar; `none` is a day with no recorded checks. */
+export type PublicDay = { date: string; state: "up" | "partial" | "down" | "none" };
+
+export type PublicIncident = {
+  id: string;
+  serviceName: string;
+  status: string;
+  startedAt: string;
+  /** Null while the incident is still open. */
+  resolvedAt: string | null;
+  minutes: number;
+};
 
 export type PublicStatus = {
   ok: boolean;
   summary: string;
-  services: Array<{ key: string; name: string; status: PublicServiceStatus }>;
-  /** A mock version string — the product does not version releases yet. */
-  version: string;
+  services: Array<{
+    key: string;
+    name: string;
+    status: PublicServiceStatus;
+    /** Operational share of the last 90 days' checks; null when nothing was recorded. */
+    uptime90d: number | null;
+  }>;
+  days: PublicDay[];
+  incidents: PublicIncident[];
   at: string;
 };
 

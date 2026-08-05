@@ -37,7 +37,108 @@ export function buildDomainReactions(deps: ReactionDeps): Reaction[] {
     subscriptionTenantReaction(deps),
     paymentReceiptReaction(deps),
     paymentRefundReaction(deps),
+    statusIncidentOpenedReaction(deps),
+    statusIncidentResolvedReaction(deps),
   ];
+}
+
+/**
+ * Who hears about an outage.
+ *
+ * OPS_ALERT_EMAIL when set, otherwise every super-admin with an email on file — the people who
+ * can already see everything the alert would say. Returns an empty list when neither exists,
+ * and the reaction then does nothing rather than inventing a recipient.
+ */
+async function opsRecipients({ prisma, config }: ReactionDeps): Promise<string[]> {
+  const configured = config.get<string>("OPS_ALERT_EMAIL", "").trim();
+  if (configured) {
+    return configured
+      .split(",")
+      .map((address) => address.trim())
+      .filter(Boolean);
+  }
+  const admins = await prisma.user.findMany({
+    where: { isSuperAdmin: true, deletedAt: null },
+    select: { email: true },
+  });
+  return admins.map((admin) => admin.email).filter((email): email is string => Boolean(email));
+}
+
+/**
+ * ops.status-incident.opened → tell the operators.
+ *
+ * The point of the whole status subsystem: without this, an outage is only known to whoever
+ * happens to load the page. Best-effort per recipient — one bad address must not stop the rest,
+ * and a thrown reaction would only be logged anyway.
+ */
+function statusIncidentOpenedReaction(deps: ReactionDeps): Reaction {
+  return {
+    trigger: "ops.status-incident.opened",
+    emits: ["email.email.queued"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as {
+        serviceName: string;
+        status: string;
+        startedAt: string;
+        tenantId?: string;
+      };
+      if (!p?.serviceName) return;
+      await notifyOps(deps, event, "status_incident_opened", {
+        serviceName: p.serviceName,
+        status: p.status.toLowerCase(),
+        startedAt: new Date(p.startedAt).toUTCString(),
+      });
+    },
+  };
+}
+
+/** ops.status-incident.resolved → the all-clear, with how long it lasted. */
+function statusIncidentResolvedReaction(deps: ReactionDeps): Reaction {
+  return {
+    trigger: "ops.status-incident.resolved",
+    emits: ["email.email.queued"],
+    async handle(event: EventEnvelope): Promise<void> {
+      const p = event.payload as {
+        serviceName: string;
+        status: string;
+        resolvedAt: string;
+        minutes: number;
+      };
+      if (!p?.serviceName) return;
+      await notifyOps(deps, event, "status_incident_resolved", {
+        serviceName: p.serviceName,
+        status: p.status.toLowerCase(),
+        resolvedAt: new Date(p.resolvedAt).toUTCString(),
+        minutes: String(p.minutes),
+      });
+    },
+  };
+}
+
+async function notifyOps(
+  deps: ReactionDeps,
+  event: EventEnvelope,
+  templateKey: string,
+  vars: Record<string, string>,
+): Promise<void> {
+  const recipients = await opsRecipients(deps);
+  if (recipients.length === 0) {
+    deps.logger.warn("ops", "Status incident with nobody to notify — set OPS_ALERT_EMAIL", vars);
+    return;
+  }
+  for (const toAddress of recipients) {
+    try {
+      await deps.email.sendTransactional({
+        tenantId: event.tenantId,
+        toAddress,
+        templateKey,
+        vars,
+        purpose: "status_alert",
+      });
+    } catch (err) {
+      deps.logger.warn("ops", "Failed to email a status alert", { toAddress, error: String(err) });
+    }
+  }
 }
 
 /** cents → a "$X.XX"-style display string (currency-agnostic). */

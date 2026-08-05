@@ -170,6 +170,10 @@ export class BasicAuthGuard implements CanActivate {
       // Autodialer dial-engine tick (Bearer CRON_SECRET; enqueues due campaign ticks).
       "/autodialer/dispatch-due",
       "/api/v1/autodialer/dispatch-due",
+      // Status history recorder (Bearer CRON_SECRET; writes one ops.StatusCheck row and
+      // opens/resolves incidents — the uptime numbers on the public page come from these).
+      "/platform-status/record",
+      "/api/v1/platform-status/record",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));

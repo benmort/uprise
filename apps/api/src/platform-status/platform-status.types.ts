@@ -32,6 +32,12 @@ export type DeployInfo = {
   at?: string;
   /** Branch or environment the deploy came from. */
   target?: string;
+  /**
+   * Something the provider says about this deploy that health alone doesn't carry — e.g. the
+   * worker is up on an older deploy because the newest build failed. INTERNAL ONLY: it reaches
+   * the admin page through AppStatus.detail and is never part of the public payload.
+   */
+  note?: string;
 };
 
 export type AppStatus = {
@@ -70,8 +76,41 @@ export type PlatformStatus = {
 export type PublicService = {
   key: string;
   name: string;
-  /** Only ever these three words on the public page. */
-  status: "Operational" | "Degraded" | "Outage";
+  /** Only ever these four words on the public page. */
+  status: PublicServiceStatus;
+  /**
+   * Share of the last 90 days' recorded checks that found this service Operational, or null
+   * when nothing was recorded in the window (a fresh install, or the cron stopped) — which is
+   * reported as "no data" rather than as 100%.
+   */
+  uptime90d: number | null;
+};
+
+/**
+ * `Unknown` is not padding: it means the check could not be made (an app with no origin
+ * configured), and a status page that renders that as "Operational" is claiming something it
+ * doesn't know.
+ */
+export type PublicServiceStatus = "Operational" | "Degraded" | "Outage" | "Unknown";
+
+/** One day of the 90-day bar. `none` is a day with no recorded checks. */
+export type PublicDay = {
+  /** YYYY-MM-DD, UTC. */
+  date: string;
+  state: "up" | "partial" | "down" | "none";
+};
+
+/** A past (or current) period of trouble on one service. Public: no internals, ever. */
+export type PublicIncident = {
+  id: string;
+  serviceName: string;
+  /** "Degraded" or "Outage" — the worst the service reached while the incident was open. */
+  status: string;
+  startedAt: string;
+  /** Null while the incident is still open. */
+  resolvedAt: string | null;
+  /** Whole minutes; for an open incident, minutes so far. */
+  minutes: number;
 };
 
 export type PublicStatus = {
@@ -79,10 +118,9 @@ export type PublicStatus = {
   /** Plain-language summary, e.g. "All systems operational". */
   summary: string;
   services: PublicService[];
-  /**
-   * A MOCK version string — see PLATFORM_VERSION in platform-status.service.ts. The product does
-   * not version its releases today; this exists so the page has the shape a status page has.
-   */
-  version: string;
+  /** Oldest first, up to 90 entries. Empty until the recorder has run at least once. */
+  days: PublicDay[];
+  /** Newest first, the handful worth showing. Empty when nothing has gone wrong. */
+  incidents: PublicIncident[];
   at: string;
 };

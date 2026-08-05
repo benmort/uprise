@@ -1687,7 +1687,7 @@ export type PlatformStatusResponse = {
     health: "up" | "degraded" | "down" | "unknown";
     latencyMs?: number;
     detail?: string;
-    deploy?: { sha?: string; state?: string; at?: string; target?: string };
+    deploy?: { sha?: string; state?: string; at?: string; target?: string; note?: string };
   }>;
 };
 

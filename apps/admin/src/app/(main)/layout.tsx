@@ -332,6 +332,10 @@ function buildNav(
               // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version
               // lives on /settings ("Tenant Queue & Redis Stats").
               { label: "Queue & Redis Stats", href: "/super/queues", match: sp("queues") },
+              // Health + last deploy for every app, across Vercel and Railway. Lives here
+              // rather than at the top level because the API gates it to super-admins — the
+              // customer-facing view of the same health is /status on the marketing site.
+              { label: "System status", href: "/status", match: (p) => p.startsWith("/status") },
               // Every route across all six frontend apps (generated manifest).
               { label: "Sitemap", href: "/super/sitemap", match: sp("sitemap") },
               // Live catalogue of the @uprise/ui design system (in-app companion to Storybook).

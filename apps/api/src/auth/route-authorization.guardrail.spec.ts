@@ -42,7 +42,9 @@ const OPEN_ROUTES = new Set<string>([
   "TenantsController#available", // public sign-up slug-availability check (basic-auth allowlisted)
   "TenantsController#brand", // public tenant brand-by-slug for the volunteer auth panel
   "PlansController#listPublic", // public pricing (marketing) — no tenant data
-  "PlatformStatusController#publicStatus", // public status page (marketing) — named services + mock version only
+  "PlatformStatusController#publicStatus", // public status page (marketing) — named services, uptime, incidents
+  "PlatformStatusController#record", // status history cron (Bearer CRON_SECRET)
+  "PlatformStatusController#recordGet", // status history cron (GET variant)
   // Platform cron (Bearer CRON_SECRET; no session) — dispatch/sweep/poll endpoints. The
   // provisioning polls also carry an inline super-admin check for any user-session caller.
   "BlastsController#dispatchDue",

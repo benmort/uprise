@@ -41,6 +41,9 @@ export const FOOTER = {
         { label: "Support Centre", href: "/support-centre" },
         { label: "Contact us", href: "/contact-us" },
         { label: "Request a demo", href: "/request-demo" },
+        // Live platform health + 90-day uptime. In Community rather than Policies because
+        // it is something a customer checks, not something they agree to.
+        { label: "Status", href: "/status" },
       ],
     },
     {

@@ -63,6 +63,8 @@ export const EVENT_TYPES = {
   FILE_UPLOADED: "tenant.file.uploaded",
   FILE_DELETED: "tenant.file.deleted",
   FLAG_CHANGED: "system.flag.changed",
+  STATUS_INCIDENT_OPENED: "ops.status-incident.opened",
+  STATUS_INCIDENT_RESOLVED: "ops.status-incident.resolved",
   TELEPHONY_PROVISIONING_REQUESTED: "telephony.provisioning.requested",
   TELEPHONY_PROVISIONING_SUBACCOUNT_CREATED: "telephony.provisioning.subaccount-created",
   TELEPHONY_PROVISIONING_COMPLIANCE_DRAFTED: "telephony.provisioning.compliance-drafted",
@@ -306,6 +308,11 @@ export interface DomainEventMap {
   "tenant.file.uploaded": { fileId: string; tenantId: string; name: string };
   "tenant.file.deleted": { fileId: string; tenantId: string };
   "system.flag.changed": { flagKey: string; tenantId: string | null; networkId?: string | null; enabled: boolean | null };
+  // Platform-wide, not tenant-scoped: `tenantId` on the envelope is only there because the
+  // outbox row demands one (it carries the platform tenant, or the oldest as a stand-in).
+  // A service is one of the public rollups on the status page — "Messaging", not "the worker".
+  "ops.status-incident.opened": { incidentId: string; serviceKey: string; serviceName: string; status: string; startedAt: string };
+  "ops.status-incident.resolved": { incidentId: string; serviceKey: string; serviceName: string; status: string; startedAt: string; resolvedAt: string; minutes: number };
   "telephony.provisioning.requested": { runId: string; tenantId: string; campaignId?: string | null; mode: string };
   "telephony.provisioning.subaccount-created": { runId: string; tenantId: string; accountId: string; accountSid: string };
   "telephony.provisioning.compliance-drafted": {

@@ -29,6 +29,10 @@
     {
       "path": "/api/v1/calls/reconcile",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/v1/platform-status/record",
+      "schedule": "*/5 * * * *"
     }
   ],
   "routes": [

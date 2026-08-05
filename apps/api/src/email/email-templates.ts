@@ -106,6 +106,17 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<string, EmailTemplateDef> = {
   },
   contact_form: { subject: "New contact form submission", body: "{{message}}" },
   demo_request: { subject: "New demo request", body: "{{message}}" },
+  // Operator notices, not customer mail: deliberately plain-bodied and free of {{tenant}} branding
+  // — an alert about the platform being down should not arrive dressed as a product email, and
+  // whoever reads it at 3am wants the service, the word and the time, in that order.
+  status_incident_opened: {
+    subject: "[uprise] {{serviceName}} is {{status}}",
+    body: "{{serviceName}} started reporting {{status}} at {{startedAt}}.\n\nThis is the automated status check that feeds the public status page. It re-checks every five minutes and will send a second note when the service recovers.",
+  },
+  status_incident_resolved: {
+    subject: "[uprise] {{serviceName}} is back to normal",
+    body: "{{serviceName}} recovered at {{resolvedAt}}, after {{minutes}} minutes {{status}}.\n\nThe incident is now closed and will show on the public status page's recent-incidents list.",
+  },
   newsletter: { subject: "{{subject}}", body: "{{body}}" },
   join_request_submitted: {
     subject: "New request to join {{tenant}}",
