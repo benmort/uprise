@@ -232,7 +232,12 @@ export class DialerCallPlacerService {
       const pinned = await this.senderResolver.resolveByNumberId(tenantId, fromNumberId);
       if (pinned) return pinned;
     }
-    return this.senderResolver.resolve({ tenantId, purpose: "marketing" });
+    // "voice", not "marketing": the dialler PLACES CALLS, and every SendPurpose is a
+    // messaging purpose whose resolution is filtered to SMS-capable numbers. Asking for
+    // "marketing" could only return the tenant's +614 mobile, which the `isVoiceCapable`
+    // guards on both call paths then reject – so a tenant with a provisioned local number
+    // still dialled from the platform env number.
+    return this.senderResolver.resolve({ tenantId, purpose: "voice" });
   }
 
   private answerUrl(campaignId: string, attemptId: string): string {

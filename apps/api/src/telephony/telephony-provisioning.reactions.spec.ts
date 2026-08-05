@@ -69,6 +69,12 @@ describe("telephony provisioning reactions", () => {
     expect(provisioning.maybeChainComplementaryRun).toHaveBeenCalledWith("run-1");
   });
 
+  // NOTE: the softness of a refused chain is NOT testable here – this file mocks the very
+  // service whose refusal is under test, so any assertion about it would pass with the real
+  // behaviour deleted. It is covered for real in telephony-provisioning.service.spec.ts
+  // ("a refused chain never throws into the activated reaction"), which wires the REAL
+  // service into buildTelephonyProvisioningReactions with the plan flag off.
+
   it("falls back to the envelope aggregateId when the payload carries no runId", async () => {
     const { provisioning, by } = setup();
 

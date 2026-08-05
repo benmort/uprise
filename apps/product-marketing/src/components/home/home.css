@@ -2628,6 +2628,264 @@
 }
 /* `.home-reel` (the showreel's bottom margin) lived here until the reel moved to /about-us, which
    spaces it with the page's own section padding. Removed rather than left orphaned. */
+.home-upanorama-reveal {
+  min-width: 0;
+}
+.home-upanorama {
+  position: relative;
+  min-height: 680px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--home-line);
+  border-radius: 18px;
+  background: var(--home-paper);
+  box-shadow: 0 32px 72px -48px color-mix(in srgb, var(--home-ink) 34%, transparent);
+}
+.home-upanorama-scene {
+  position: absolute;
+  inset: 0;
+  background: var(--panorama) center / cover no-repeat;
+  transform: scale(1.002);
+  transform-origin: var(--focus-x) var(--focus-y);
+  transition:
+    transform 0.82s var(--home-ease-io),
+    filter 0.5s var(--home-ease-io);
+  will-change: transform;
+}
+.home-upanorama.is-detail .home-upanorama-scene {
+  filter: blur(1px);
+  transform: scale(1.9);
+}
+.home-upanorama-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  transition:
+    opacity 0.24s var(--home-ease-io),
+    visibility 0s linear 0s;
+}
+.home-upanorama.is-detail .home-upanorama-grid {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition-delay: 0s, 0.24s;
+}
+.home-upanorama-hotspot {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  align-content: end;
+  border: 0;
+  color: var(--home-ink);
+  background: linear-gradient(
+    to bottom,
+    transparent 38%,
+    color-mix(in srgb, var(--home-paper) 12%, transparent) 48%,
+    color-mix(in srgb, var(--home-paper) 82%, transparent) 74%,
+    color-mix(in srgb, var(--home-paper) 96%, transparent) 100%
+  );
+  font: inherit;
+  text-align: left;
+  cursor: zoom-in;
+  transition:
+    background 0.3s var(--home-ease),
+    box-shadow 0.3s var(--home-ease);
+}
+.home-upanorama-hotspot:not(:nth-child(3n)) {
+  border-right: 1px solid color-mix(in srgb, var(--home-ink) 14%, transparent);
+}
+.home-upanorama-hotspot:nth-child(-n + 3) {
+  border-bottom: 1px solid color-mix(in srgb, var(--home-ink) 14%, transparent);
+}
+.home-upanorama-hotspot:hover {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--home-paper) 3%, transparent) 0%,
+    transparent 34%,
+    color-mix(in srgb, var(--home-paper) 9%, transparent) 46%,
+    color-mix(in srgb, var(--home-paper) 76%, transparent) 72%,
+    color-mix(in srgb, var(--home-paper) 94%, transparent) 100%
+  );
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--home-brand) 42%, transparent);
+}
+.home-upanorama-hotspot:focus-visible {
+  z-index: 1;
+  outline: 0;
+  box-shadow: inset 0 0 0 3px var(--home-brand);
+}
+.home-upanorama-copy {
+  display: grid;
+  gap: 7px;
+  padding: 42px 25px 25px;
+}
+.home-upanorama-title {
+  font-size: clamp(19px, 1.65vw, 25px);
+  font-weight: 700;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+.home-upanorama-body {
+  max-width: 36ch;
+  color: var(--home-body);
+  font-size: clamp(13px, 1.05vw, 15px);
+  line-height: 1.48;
+}
+.home-upanorama-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  color: var(--home-brand-700);
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.72;
+  transform: translateY(2px);
+  transition:
+    opacity 0.25s var(--home-ease),
+    transform 0.25s var(--home-ease);
+}
+.home-upanorama-hotspot:hover .home-upanorama-action,
+.home-upanorama-hotspot:focus-visible .home-upanorama-action {
+  opacity: 1;
+  transform: none;
+}
+.home-udetail {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  visibility: hidden;
+  overflow: hidden;
+  background: var(--home-paper);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.38s var(--home-ease-io) 0s,
+    visibility 0s linear 0.38s;
+}
+.home-upanorama.is-detail .home-udetail {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0.34s, 0s;
+}
+.home-udetail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 60%,
+    color-mix(in srgb, var(--home-paper) 22%, transparent) 68%,
+    color-mix(in srgb, var(--home-paper) 88%, transparent) 88%,
+    var(--home-paper) 100%
+  );
+  pointer-events: none;
+}
+.home-udetail-image {
+  position: absolute;
+  inset: 0;
+  background: var(--detail-img) center / cover no-repeat;
+  animation: home-udetail-swap 0.58s var(--home-ease) both;
+}
+@keyframes home-udetail-swap {
+  from {
+    opacity: 0.45;
+    transform: scale(1.055);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.002);
+  }
+}
+.home-udetail-back,
+.home-udetail-nav {
+  position: absolute;
+  top: 22px;
+  z-index: 3;
+  border: 1px solid var(--home-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--home-paper) 84%, transparent);
+  box-shadow: 0 10px 28px -18px color-mix(in srgb, var(--home-ink) 36%, transparent);
+  backdrop-filter: blur(14px);
+}
+.home-udetail-back {
+  left: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px;
+  color: var(--home-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.home-udetail-nav {
+  right: 22px;
+  display: flex;
+  gap: 3px;
+  padding: 5px;
+}
+.home-udetail-nav button {
+  width: 36px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--home-muted);
+  background: transparent;
+  font-family: var(--home-mono-f);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    color 0.2s var(--home-ease),
+    background 0.2s var(--home-ease);
+}
+.home-udetail-nav button:hover {
+  color: var(--home-ink);
+  background: var(--home-line-2);
+}
+.home-udetail-nav button.is-active {
+  color: var(--home-paper);
+  background: var(--home-brand);
+}
+.home-udetail-back:focus-visible,
+.home-udetail-nav button:focus-visible {
+  outline: 2px solid var(--home-brand);
+  outline-offset: 2px;
+}
+.home-udetail-copy {
+  position: absolute;
+  right: clamp(28px, 5vw, 72px);
+  bottom: clamp(27px, 4vw, 58px);
+  left: clamp(28px, 5vw, 72px);
+  z-index: 3;
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+}
+.home-udetail-copy .home-mono {
+  color: var(--home-brand-700);
+}
+.home-udetail-copy h3 {
+  color: var(--home-ink);
+  font-size: clamp(30px, 3.4vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.home-udetail-copy p {
+  max-width: 58ch;
+  color: var(--home-body);
+  font-size: clamp(16px, 1.35vw, 20px);
+  line-height: 1.5;
+}
 .home-ucards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2643,6 +2901,9 @@
   border: 1px solid var(--home-line);
   border-radius: 16px;
   overflow: hidden;
+}
+.home-ucards--stacked {
+  display: none;
 }
 /* Each card carries a scene from the campaign illustration set (`--img`, set per card — see
    USE_CASES in sections.ts).
@@ -2730,6 +2991,27 @@
 .home-ucard p {
   font-size: 15px;
   line-height: 1.55;
+}
+
+/* The type, repeated in white BEHIND itself, so it holds its edge over whatever the illustration
+   is doing under it — not a panel or a block, which would hide the picture the card exists to show.
+   `paint-order: stroke fill` is what makes it "behind": without it the stroke paints ON TOP of the
+   glyph and eats into the letterform, which at 15px turns body copy into a thin outline. With it,
+   the stroke is laid down first and the fill covers it, so only the half that spills outside the
+   letter survives — a white edge of exactly half the stroke width, hugging the shape.
+
+   Stroke widths are the largest that still leave the counters open: 3px on the heading (clamped up
+   to 26px type) and 2px on 15px copy. Past that the whites of an 'a' or an 'e' start to close.
+
+   Not a text-shadow halo: blurred white behind dark type on a busy ground reads as a smudge, and
+   four offset copies cost four paints per glyph on a section that scales its photo on hover. */
+.home-ucard .home-h3,
+.home-ucard p {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px #fff;
+}
+.home-ucard p {
+  -webkit-text-stroke-width: 2px;
 }
 
 /* --- roadmap ----------------------------------------------------------- */
@@ -3212,6 +3494,12 @@
   .home-ucards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .home-upanorama {
+    display: none;
+  }
+  .home-ucards--stacked {
+    display: grid;
+  }
   .home-rcards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3357,6 +3645,14 @@
   .home-rise {
     opacity: 1 !important;
     transform: none !important;
+  }
+  .home-upanorama.is-detail .home-upanorama-scene {
+    filter: none;
+    opacity: 0;
+    transform: none;
+  }
+  .home-udetail-image {
+    animation: none;
   }
   .home-mask > span {
     transform: none !important;

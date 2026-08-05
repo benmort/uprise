@@ -294,3 +294,48 @@ describe("VoiceAccountResolver.resolveDialerForTenant", () => {
     );
   });
 });
+
+/**
+ * Which purpose the voice paths ASK the sender resolver for. This is the whole of the
+ * defect: the resolver filters every SendPurpose to SMS-capable numbers, so a voice path
+ * asking for "transactional" (or the dialler's "marketing") can only ever be handed the
+ * tenant's +614 mobile – which the `isVoiceCapable` guard immediately rejects. The tenant
+ * then dials from the platform number and the local number it paid for, and had a second
+ * human-reviewed Twilio bundle approved for, does nothing at all. Asserted here rather
+ * than through the mock's return value, because a mock that answers every purpose the same
+ * way cannot notice the wrong one being asked for.
+ */
+describe("VoiceAccountResolver asks for the voice purpose", () => {
+  it("resolveForTenant asks for voice, not a messaging purpose", async () => {
+    const { resolver, senders } = setup(SUBACCOUNT_SENDER, {
+      accountRow: {
+        id: "ta1",
+        settings: { voiceApiKeySid: "SK_sub", voiceApiKeySecret: "enc(sub-secret)", voiceTwimlAppSid: "AP_sub" },
+      },
+    });
+    await resolver.resolveForTenant("t1");
+    expect(senders.resolve).toHaveBeenCalledWith({ tenantId: "t1", purpose: "voice" });
+  });
+
+  it("resolveDialerForTenant asks for voice", async () => {
+    const { resolver, senders } = setup(SUBACCOUNT_SENDER, {
+      accountRow: {
+        id: "ta1",
+        settings: {
+          voiceApiKeySid: "SK_sub",
+          voiceApiKeySecret: "enc(sub-secret)",
+          voiceTwimlAppSid: "AP_sub",
+          voiceDialerTwimlAppSid: "AP_sub_dialer",
+        },
+      },
+    });
+    await resolver.resolveDialerForTenant("t1");
+    expect(senders.resolve).toHaveBeenCalledWith({ tenantId: "t1", purpose: "voice" });
+  });
+
+  it("callerIdForAccount asks for voice", async () => {
+    const { resolver, senders } = setup(SUBACCOUNT_SENDER);
+    await resolver.callerIdForAccount("t1", "AC_sub");
+    expect(senders.resolve).toHaveBeenCalledWith({ tenantId: "t1", purpose: "voice" });
+  });
+});

@@ -110,13 +110,68 @@ describe("TelephonySenderResolver", () => {
       expect(await resolver.resolve({ tenantId: "t1", purpose: "marketing" })).toBeUndefined();
     });
 
-    // Guards the pairing directly: "voice" must match no SendPurpose, so even if the capability
-    // filter were ever removed the purpose match alone cannot select a voice number.
-    it("the voice purpose matches no SendPurpose", () => {
-      const purposes = ["transactional", "marketing", "whatsapp"];
-      expect(purposes).not.toContain("voice");
+  });
+
+  // The mirror image, and the reason the tenant buys a second number at all. Every
+  // SendPurpose is a messaging purpose, so before "voice" existed the voice paths asked for
+  // "transactional" – which the SMS filter above excludes a local number from. The local
+  // number the organisation paid for (and had a second human-reviewed bundle approved for)
+  // was therefore never selected by anything, and every call still went out on the platform
+  // number.
+  describe("voice capability", () => {
+    it("resolves the local number, not the mobile, for a voice origination", async () => {
+      const { resolver } = build({
+        numbers: [
+          num({ id: "n_mobile", phoneNumberE164: "+61412000000", numberType: "mobile", purpose: "marketing" }),
+          num({ id: "n_local", phoneNumberE164: "+61255501234", numberType: "local", purpose: "voice" }),
+        ],
+      });
+      const sender = await resolver.resolve({ tenantId: "t1", purpose: "voice" });
+      expect(sender?.from).toBe("+61255501234");
     });
 
+    it("returns undefined rather than a mobile when the tenant has no local number", async () => {
+      const { resolver } = build({
+        numbers: [num({ id: "n_mobile", phoneNumberE164: "+61412000000", numberType: "mobile" })],
+      });
+      // Platform env caller ID is correct here: an AU mobile is never a voice caller ID.
+      expect(await resolver.resolve({ tenantId: "t1", purpose: "voice" })).toBeUndefined();
+    });
+
+    // A run provisioned before the class column existed carries purpose "transactional" on
+    // what is really the voice number; the class filter must still find it.
+    it("selects a local number whose purpose predates the voice label", async () => {
+      const { resolver } = build({
+        numbers: [
+          num({ id: "n_legacy", phoneNumberE164: "+61255501234", numberType: "local", purpose: "transactional" }),
+        ],
+      });
+      const sender = await resolver.resolve({ tenantId: "t1", purpose: "voice" });
+      expect(sender?.from).toBe("+61255501234");
+    });
+
+    it("prefers a campaign-scoped local number over the tenant default", async () => {
+      const { resolver } = build({
+        numbers: [
+          num({ id: "n_default", phoneNumberE164: "+61255501234", numberType: "local", purpose: "voice" }),
+          num({ id: "n_camp", campaignId: "camp_1", phoneNumberE164: "+61255509999", numberType: "local" }),
+        ],
+      });
+      const sender = await resolver.resolve({ tenantId: "t1", campaignId: "camp_1", purpose: "voice" });
+      expect(sender?.from).toBe("+61255509999");
+    });
+
+    it("caches voice separately from the messaging purposes", async () => {
+      const { resolver, prisma } = build({
+        numbers: [
+          num({ id: "n_mobile", phoneNumberE164: "+61412000000", numberType: "mobile", purpose: "marketing" }),
+          num({ id: "n_local", phoneNumberE164: "+61255501234", numberType: "local", purpose: "voice" }),
+        ],
+      });
+      expect((await resolver.resolve({ tenantId: "t1", purpose: "marketing" }))?.from).toBe("+61412000000");
+      expect((await resolver.resolve({ tenantId: "t1", purpose: "voice" }))?.from).toBe("+61255501234");
+      expect(prisma.telephonyPhoneNumber.findMany).toHaveBeenCalledTimes(2);
+    });
   });
 
 

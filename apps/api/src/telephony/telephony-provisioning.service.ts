@@ -23,6 +23,7 @@ import { assertValidProvisioningTransition } from "./telephony-provisioning-stat
 import {
   TwilioProvisioningClient,
   type ComplianceInput,
+  type NumberWebhooks,
   type TwilioCreds,
 } from "./twilio-provisioning.client";
 
@@ -126,8 +127,7 @@ export class TelephonyProvisioningService {
    * built from must be complete. 422 carries machine-readable `missing[]` for the UI.
    */
   private async assertProvisioningAllowed(tenantId: string): Promise<void> {
-    const enabled = await this.flags.isEnabled("FEATURE_TENANT_TELEPHONY_ENABLED", { tenantId });
-    if (!enabled) {
+    if (!(await this.planAllowsTelephony(tenantId))) {
       throw new ApiHttpException(
         "PLAN_UPGRADE_REQUIRED",
         "Your plan does not include a dedicated phone number",
@@ -192,6 +192,15 @@ export class TelephonyProvisioningService {
     }
   }
 
+  /**
+   * The plan half of the gate on its own – the only half that can lapse WHILE a run is in
+   * flight, so it is what the complementary chain re-checks days later (see
+   * `maybeChainComplementaryRun`). One definition, so the flag key cannot drift apart.
+   */
+  private async planAllowsTelephony(tenantId: string): Promise<boolean> {
+    return this.flags.isEnabled("FEATURE_TENANT_TELEPHONY_ENABLED", { tenantId });
+  }
+
   // ── URLs ────────────────────────────────────────────────────────────
   private apiBaseUrl(): string {
     return this.config.get<string>("API_BASE_URL", "").trim().replace(/\/+$/, "");
@@ -199,6 +208,37 @@ export class TelephonyProvisioningService {
 
   private inboundHookUrl(): string {
     return `${this.apiBaseUrl()}/api/v1/inbound-text-message-hook`;
+  }
+
+  /**
+   * The TwiML endpoint an inbound call to a local (calls) number lands on.
+   *
+   * Read this before changing it: uprise has NO purpose-built inbound-call handler. The
+   * voice surface is outbound (`/voice-outbound` is the softphone TwiML app's handler,
+   * `/autodialer/ivr/*` needs a campaign/session context, the rest are status callbacks).
+   * `/voice-outbound` is nonetheless the right target today: it is public-allowlisted,
+   * validates the subaccount's X-Twilio-Signature, and an inbound PSTN call – whose `From`
+   * is a phone number, not a `client:….t<tenant>` identity – takes its guard branch and is
+   * answered with a spoken apology, writing nothing. The alternative is leaving voiceUrl
+   * unset, which has Twilio play a generic application error to anyone ringing the number
+   * the organisation publishes. A real inbound handler (greeting / ring the org's
+   * softphone users) is an open follow-up, not part of this fix.
+   */
+  private inboundVoiceUrl(): string {
+    return `${this.apiBaseUrl()}/api/v1/voice-outbound`;
+  }
+
+  /**
+   * The inbound webhook a number of this class can actually serve. An AU local number
+   * cannot receive SMS and an AU mobile is never a voice caller ID, so a single smsUrl for
+   * both configured a hook that can never fire on the local number while leaving its
+   * inbound calls unanswered. Built here (not in the client) so the class → webhook rule is
+   * one tested decision.
+   */
+  private numberWebhooks(type: "mobile" | "local"): NumberWebhooks {
+    return type === "local"
+      ? { voiceUrl: this.inboundVoiceUrl(), voiceMethod: "POST" }
+      : { smsUrl: this.inboundHookUrl(), smsMethod: "POST" };
   }
 
   private bundleCallbackUrl(): string {
@@ -794,6 +834,20 @@ export class TelephonyProvisioningService {
   async stepPurchaseNumber(runId: string): Promise<void> {
     await this.guarded(runId, "number.purchase", [S.COMPLIANCE_APPROVED], async () => {
       const run = await this.getRunOrThrow(runId);
+      // The gate on the MONEY event, not just on starting a run. Every other check happens
+      // before a run spends days parked in COMPLIANCE_SUBMITTED waiting on a human at
+      // Twilio; entitlement can lapse in that window, and it is this step that buys a
+      // recurring number we cannot claw back. `guarded` turns the throw into a parked
+      // FAILED run with resumeStatus COMPLIANCE_APPROVED – nothing is bought, the approved
+      // bundle is kept, and retry re-enters here (and so re-checks) once the plan is back.
+      // That also closes retry(), which is deliberately ungated at its own entry point.
+      if (!(await this.planAllowsTelephony(run.tenantId))) {
+        throw new ApiHttpException(
+          "PLAN_UPGRADE_REQUIRED",
+          "Your plan no longer includes a dedicated phone number",
+          402,
+        );
+      }
       if (!run.accountId) throw new Error("Run has no account");
       const creds = await this.accountCreds(run.accountId);
       const input = this.complianceInputOf(run);
@@ -807,7 +861,9 @@ export class TelephonyProvisioningService {
         phoneNumber: candidate,
         bundleSid,
         addressSid,
-        smsUrl: this.inboundHookUrl(),
+        // Voice on a local number, SMS on a mobile – the number gets the hook for the job
+        // it exists to do.
+        webhooks: this.numberWebhooks(numberType),
       });
 
       // Number row rides the advance tx (run + number + event atomic — a crash
@@ -831,7 +887,7 @@ export class TelephonyProvisioningService {
               // The regulation class this bundle was approved under, recorded rather than
               // re-guessed from the prefix later – it is what future bundle reuse matches on.
               numberType,
-              // Local numbers are the voice caller-id ("transactional"); mobiles stay SMS ("marketing").
+              // Local numbers are the voice caller-id ("voice"); mobiles stay SMS ("marketing").
               // SendPurpose values are all MESSAGING purposes. A local number is voice-only
               // in Australia, so labelling it "transactional" made it the tenant's SMS sender
               // and every transactional text would have failed at Twilio. "voice" matches no
@@ -851,7 +907,7 @@ export class TelephonyProvisioningService {
     });
   }
 
-  /** NUMBER_PURCHASED → WEBHOOKS_CONFIGURED: (re)assert the inbound SmsUrl. */
+  /** NUMBER_PURCHASED → WEBHOOKS_CONFIGURED: (re)assert the class-appropriate inbound hook. */
   async stepConfigureWebhooks(runId: string): Promise<void> {
     await this.guarded(runId, "webhooks.configure", [S.NUMBER_PURCHASED], async () => {
       const run = await this.getRunOrThrow(runId);
@@ -859,9 +915,12 @@ export class TelephonyProvisioningService {
       const number = await this.prisma.telephonyPhoneNumber.findUnique({ where: { id: run.phoneNumberId } });
       if (!number) throw new Error("Purchased number row missing");
       const creds = await this.accountCreds(run.accountId);
-      await this.twilio.configureNumberWebhook(creds, number.phoneNumberSid, this.inboundHookUrl());
+      // The class recorded on the NUMBER row, which is the class the bundle was approved
+      // under and the number was actually bought as.
+      const webhooks = this.numberWebhooks(this.runNumberType(number));
+      await this.twilio.configureNumberWebhook(creds, number.phoneNumberSid, webhooks);
       await this.advance(runId, {
-        hops: [{ to: S.WEBHOOKS_CONFIGURED, step: "webhooks.configure", detail: { smsUrl: this.inboundHookUrl() } }],
+        hops: [{ to: S.WEBHOOKS_CONFIGURED, step: "webhooks.configure", detail: { ...webhooks } }],
         event: {
           tenantId: run.tenantId,
           eventType: "telephony.provisioning.webhooks-configured",
@@ -916,8 +975,10 @@ export class TelephonyProvisioningService {
    *  2. its class has no successor (`CHAIN_SUCCESSOR.local === null` – this is what
    *     terminates the chain: a completing local run starts nothing);
    *  3. the run opted out (`chainComplementary === false`, which every chained run is);
-   *  4. the tenant already holds a live number of the target class;
-   *  5. a run of the target class already exists for this tenant – in flight, finished
+   *  4. the tenant's plan no longer includes dedicated telephony (it can lapse during the
+   *     days the first bundle spends in review – see the comment at the check);
+   *  5. the tenant already holds a live number of the target class;
+   *  6. a run of the target class already exists for this tenant – in flight, finished
    *     or failed. A failed one is retried explicitly, never silently re-chained.
    *
    * The whole body is caught, never thrown: by this point the first number is ACTIVE and
@@ -936,6 +997,25 @@ export class TelephonyProvisioningService {
       if (source.chainComplementary === false) return { chained: false, reason: "opted-out" };
 
       const tenantId = source.tenantId;
+      // Re-check the PLAN, and ONLY the plan. The source run parks in COMPLIANCE_SUBMITTED
+      // for however long a human at Twilio takes, so entitlement can lapse between the
+      // start gate and here – and a second number is a real recurring cost we cannot claw
+      // back. The org-KYC half of `assertProvisioningAllowed` is deliberately NOT re-run:
+      // those details were complete when the operator started, the chained run submits that
+      // same complianceInput, and an admin tidying a profile field mid-flight must not
+      // strand the voice half (the reason retry/resubmit are ungated too).
+      if (!(await this.planAllowsTelephony(tenantId))) {
+        // SOFT refusal: the mobile number is ACTIVE and must stay usable, so this logs and
+        // skips rather than throwing into the reaction. The operator starts the local run
+        // explicitly once the plan is restored.
+        this.logger.warn("telephony", "Complementary chain skipped – telephony plan not enabled", {
+          sourceRunId: runId,
+          tenantId,
+          numberType: nextType,
+        });
+        return { chained: false, reason: "plan-disabled" };
+      }
+
       const held = await this.prisma.telephonyPhoneNumber.findFirst({
         where: {
           tenantId,
@@ -948,6 +1028,22 @@ export class TelephonyProvisioningService {
       // Compliance details the operator already supplied, minus the source run's own
       // bundle-reuse bookkeeping – the chained run reuses a bundle only of its own class.
       const { reuse: _sourceReuse, ...complianceInput } = this.complianceInputOf(source);
+
+      // The supporting documents the operator uploaded, inherited SID and all. A Twilio
+      // SupportingDocument is an ACCOUNT-scoped resource, not a bundle-scoped one: it is
+      // created by POSTing to /v2/RegulatoryCompliance/SupportingDocuments under the
+      // subaccount's own credentials (see `createSupportingDocument`), and a bundle only
+      // ever REFERENCES it afterwards through an ItemAssignment (`assignBundleItem`). So
+      // the same SID can be assigned to the local bundle as well as the mobile one, and no
+      // re-upload is needed – the chained run inherits `source.accountId`, so it is the
+      // same account the documents live under. Without this the second bundle went to
+      // Twilio's human reviewer with zero supporting documents and was rejected days later.
+      const documents = this.documentsOf(source).map(({ supportingDocumentSid, ...doc }) => ({
+        ...doc,
+        // Defensive: a SID from another account would be rejected on assignment. Drop it and
+        // let stepDraftCompliance re-upload the blob (it skips only documents that HAVE a SID).
+        ...(source.accountId && supportingDocumentSid ? { supportingDocumentSid } : {}),
+      }));
 
       const created = await this.prisma.$transaction(async (tx) => {
         // Lock the source run so two deliveries of the same terminal event serialise
@@ -969,6 +1065,7 @@ export class TelephonyProvisioningService {
             // Belt to the CHAIN_SUCCESSOR braces: a chained run never chains again.
             chainComplementary: false,
             complianceInput: complianceInput as unknown as Prisma.InputJsonValue,
+            documents: documents as unknown as Prisma.InputJsonValue,
             requestedById: source.requestedById,
           },
         });
@@ -983,6 +1080,9 @@ export class TelephonyProvisioningService {
               campaignId: source.campaignId,
               numberType: nextType,
               chainedFromRunId: runId,
+              // Visible in the timeline: a bundle drafted with no documents is the failure
+              // mode this chain had, and it fails days later at a human reviewer.
+              inheritedDocuments: documents.length,
             } as Prisma.InputJsonValue,
           },
         });

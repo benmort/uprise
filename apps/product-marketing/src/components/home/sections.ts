@@ -496,34 +496,35 @@ const USE_CASE_IMAGES = "/images/marketing/use-cases";
 export const USE_CASES = {
   eyebrow: "Built for the work",
   title: "Whatever kind of campaign you're running",
+  panorama: `${USE_CASE_IMAGES}/campaign-panorama-v2.webp`,
   cards: [
     {
-      title: "Electoral & candidate",
-      body: "Turf, doors and texts from the candidate's own number – with the electorate's data already in the account.",
-      image: `${USE_CASE_IMAGES}/electoral-v2.webp`,
-    },
-    {
-      title: "Advocacy & issue",
+      title: "Advocacy & Issue",
       body: "P2P SMS and calls, support captured on a five-point scale, every contact synced back to Action Network.",
       image: `${USE_CASE_IMAGES}/advocacy-v2.webp`,
     },
     {
-      title: "Community organising",
+      title: "Community Organising",
       body: "Shifts, a shared claimable inbox and a live action room that shows who's out there right now.",
       image: `${USE_CASE_IMAGES}/organising-v2.webp`,
     },
     {
-      title: "Union & member",
+      title: "Electoral & Candidate",
+      body: "Turf, doors and texts from the candidate's own number – with the electorate's data already in the account.",
+      image: `${USE_CASE_IMAGES}/electoral-v2.webp`,
+    },
+    {
+      title: "Union & Member",
       body: "Reach members by text and phone, survey them at the door, segment by workplace or region.",
       image: `${USE_CASE_IMAGES}/union-v2.webp`,
     },
     {
-      title: "GOTV & field",
+      title: "GOTV & Field",
       body: "Optimised walk lists, an offline-first canvasser app and pace-vs-target goals on the day that counts.",
       image: `${USE_CASE_IMAGES}/gotv-v2.webp`,
     },
     {
-      title: "Referendum & ballot",
+      title: "Referendum & Ballot",
       body: "Map the electorate, canvass yes/no with branching surveys, watch the contact funnel close.",
       image: `${USE_CASE_IMAGES}/ballot-v2.webp`,
     },

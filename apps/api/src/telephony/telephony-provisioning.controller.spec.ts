@@ -54,6 +54,25 @@ describe("TelephonyProvisioningController", () => {
       );
     });
 
+    // The opt-out is the difference between one number purchase and two, each with its own
+    // human-reviewed Twilio regulatory bundle. A controller that silently dropped the field
+    // would spend real money the caller explicitly declined, so pin the passthrough of BOTH
+    // values – `false` is the whole point of the flag, and `undefined` must stay undefined
+    // so the service's own `!== false` default (chain ON) still applies.
+    it("passes an explicit chainComplementary opt-out through to the service", async () => {
+      const { controller, provisioning } = setup();
+      await controller.startRun({ ...START_DTO, chainComplementary: false }, ownerReq());
+      expect(provisioning.startRun).toHaveBeenCalledWith(
+        expect.objectContaining({ chainComplementary: false }),
+      );
+    });
+
+    it("leaves chainComplementary undefined when the caller omits it (service defaults it on)", async () => {
+      const { controller, provisioning } = setup();
+      await controller.startRun(START_DTO, ownerReq());
+      expect(provisioning.startRun.mock.calls[0][0].chainComplementary).toBeUndefined();
+    });
+
     it("rejects a super-admin run with no tenant at all", async () => {
       const { controller } = setup();
       await expect(controller.startRun(START_DTO, superReq())).rejects.toThrow(ForbiddenException);

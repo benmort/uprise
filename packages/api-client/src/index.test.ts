@@ -737,6 +737,44 @@ describe("telephony + email provisioning", () => {
     expect(bodyOf(call()[1])).toMatchObject({ numberType: "local" });
   });
 
+  const provisioningCompliance = {
+    legalName: "Acme",
+    contactFirstName: "A",
+    contactLastName: "B",
+    email: "a@x.com",
+    address: { street: "1 St", city: "Town", region: "VIC", postalCode: "3000" },
+  };
+
+  it("telephony.startRun forwards chainComplementary when the caller opts out", async () => {
+    // Annotated against the wrapper's own parameter type so `tsc` excess-property
+    // checks the literal: if `chainComplementary` is dropped from the request-body
+    // type again this stops compiling. That omission is what left every tenant with
+    // two purchased numbers and two human-reviewed bundles, with no way to decline.
+    const body: Parameters<typeof telephony.startRun>[0] = {
+      tenantId: "t1",
+      mode: "SUBACCOUNT",
+      numberType: "mobile",
+      chainComplementary: false,
+      complianceInput: provisioningCompliance,
+    };
+    await telephony.startRun(body);
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/telephony/provisioning-runs`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toMatchObject({ chainComplementary: false });
+  });
+
+  it("telephony.startRun omits chainComplementary when the caller does not set it", async () => {
+    // Absent (not `undefined`, not `true`) so the server-side `!== false` default
+    // is what decides – the client must not hard-code the costly branch.
+    await telephony.startRun({ tenantId: "t1", mode: "SUBACCOUNT", complianceInput: provisioningCompliance });
+    expect(bodyOf(call()[1])).toEqual({
+      tenantId: "t1",
+      mode: "SUBACCOUNT",
+      complianceInput: provisioningCompliance,
+    });
+  });
+
   it("emailProvisioning.startRun POSTs to /email-provisioning/runs", async () => {
     await emailProvisioning.startRun({
       tenantId: "t1",

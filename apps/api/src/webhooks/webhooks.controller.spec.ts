@@ -121,6 +121,31 @@ describe("WebhooksController.voiceOutbound", () => {
     expect(calls.startBrowserCall).not.toHaveBeenCalled();
     expect(out).toContain("could not place this call");
   });
+
+  // A provisioned local number points its voiceUrl here, so the public rings this route.
+  // They attempted no outbound call: the softphone's failure copy would read as a broken
+  // greeting on a number the organisation publishes.
+  it("answers an inbound PSTN call with inbound copy, not the outbound-failure line", async () => {
+    const out = await makeController().voiceOutbound(
+      { To: "+61255501234", From: "+61412345678", AccountSid: "AC1" },
+      req,
+    );
+    expect(calls.startBrowserCall).not.toHaveBeenCalled();
+    expect(out).toContain("Thank you for calling");
+    expect(out).not.toContain("could not place this call");
+    expect(out).toContain("<Hangup/>");
+  });
+
+  // `From` is attacker-influenced now that the number is publicly diallable. The identity
+  // guard must assert the whole documented shape, not just a `.t<tenantId>` suffix.
+  it("refuses a From that ends in .t<tenantId> but is not a client identity", async () => {
+    const out = await makeController().voiceOutbound(
+      { To: "+61400000999", From: "+61412345678.tTEN1", AccountSid: "AC1" },
+      req,
+    );
+    expect(calls.startBrowserCall).not.toHaveBeenCalled();
+    expect(out).toContain("Thank you for calling");
+  });
 });
 
 describe("WebhooksController.voiceRecordingCallback", () => {

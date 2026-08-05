@@ -4,8 +4,22 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
 import type { ResolvedSender } from "../twilio/twilio.service";
+import { isVoiceNumber } from "./phone-capabilities";
 
 export type SendPurpose = "transactional" | "marketing" | "whatsapp";
+
+/**
+ * What a resolution is FOR. Every `SendPurpose` is a messaging purpose and resolves
+ * over SMS-capable numbers only; `"voice"` resolves over the tenant's voice numbers
+ * instead, and is the caller ID for an outbound CALL rather than a sender for a text.
+ *
+ * The two are separate because an organisation holds one number of each class and the
+ * classes are mutually exclusive in Australia. Before this existed the voice paths asked
+ * for `"transactional"`, which the SMS-capability filter below excludes a local number
+ * from – so a tenant that had paid for a local number still dialled from the platform
+ * number and the number it bought did no work at all.
+ */
+export type SenderPurpose = SendPurpose | "voice";
 
 /**
  * Can this number send SMS? In Australia only a mobile (+614) can; a local number
@@ -22,17 +36,17 @@ function isSmsCapable(n: { numberType?: string | null; phoneNumberE164: string }
 export type SenderContext = {
   tenantId: string;
   campaignId?: string | null;
-  purpose: SendPurpose;
+  purpose: SenderPurpose;
 };
 
 const CACHE_TTL_MS = 60_000;
 
 /**
- * Resolves which Twilio account/number a send goes out on. Precedence:
- * campaign-scoped number → tenant purpose-matched number → tenant default →
- * `undefined` (⇒ TwilioService uses the platform TWILIO_* env credentials —
- * the pre-multi-tenant behaviour). WhatsApp stays platform-level: per-tenant
- * WhatsApp senders are a separate compliance journey.
+ * Resolves which Twilio account/number a send – or an outbound CALL, with
+ * `purpose: "voice"` – goes out on. Precedence: campaign-scoped number → tenant
+ * purpose-matched number → tenant default → `undefined` (⇒ TwilioService uses the
+ * platform TWILIO_* env credentials — the pre-multi-tenant behaviour). WhatsApp stays
+ * platform-level: per-tenant WhatsApp senders are a separate compliance journey.
  *
  * Gated by FEATURE_TENANT_TELEPHONY_ENABLED per tenant; off ⇒ env. Results
  * (hits AND misses) are cached 60 s so blast loops don't hit the DB per
@@ -141,13 +155,14 @@ export class TelephonySenderResolver {
     const all = await this.prisma.telephonyPhoneNumber.findMany({
       where: { tenantId: ctx.tenantId, status: "ACTIVE" },
     });
-    // Every SendPurpose is a MESSAGING purpose, and an Australian local number cannot send
-    // SMS – only a mobile (+614) can. A tenant now holds both (a mobile to text from, a local
-    // to call from), so resolving a send must never consider the voice number: without this
-    // filter the local number could become the tenant's SMS sender and every text would fail
-    // at Twilio. `numberType` is the authoritative class; the prefix is the fallback for any
-    // row written before that column existed.
-    const numbers = all.filter((n) => isSmsCapable(n));
+    // Split by capability FIRST, so a resolution can only ever return a number that can do
+    // the job asked of it. A tenant holds both classes (a mobile to text from, a local to
+    // call from) and they are mutually exclusive in Australia: without this filter the local
+    // number could become the tenant's SMS sender and every text would fail at Twilio, and
+    // symmetrically a voice resolution would hand back a mobile that cannot be a caller ID.
+    // `numberType` is the authoritative class; the prefix is the fallback for any row
+    // written before that column existed.
+    const numbers = all.filter((n) => (ctx.purpose === "voice" ? isVoiceNumber(n) : isSmsCapable(n)));
     if (numbers.length === 0) return undefined;
 
     const campaignScoped = ctx.campaignId

@@ -84,15 +84,29 @@ export default function AboutPage() {
         </div>
       </section>
 
+      {/* One section: the screens, then the six things they are built to do.
+
+          The showreel was moved here from the homepage's "Built for the work" section, and the
+          six value props were a separate "What we believe" band directly above it. Merging them
+          puts the claim next to the evidence instead of asking the reader to hold one in mind
+          while scrolling past the other — the screens answer "what did you build", the cards
+          answer "what is it for", and neither has to carry the section alone.
+
+          <Showreel /> is route-agnostic (its own browser frame, tab rail and play/pause, and it
+          hides any slide whose capture is missing), so it needed no changes to move. It is a
+          client component inside this server component, which is fine — it is its own boundary. */}
       <section className="py-8 md:py-12">
         <div className="container">
           <div className="mx-auto mb-10 w-full max-w-[720px] text-center">
             <h2 className="mb-3 text-2xl font-bold !leading-[1.2] text-title-color md:text-3xl">
-              What we believe
+              What we actually built
             </h2>
             <p className="text-base text-text-color-secondary">
-              A handful of principles shape everything we build.
+              The real screens organisers work in – not mockups.
             </p>
+          </div>
+          <div className="mx-auto mb-10 w-full max-w-[1170px] md:mb-14">
+            <Showreel />
           </div>
           <div className="mx-auto grid w-full max-w-[1170px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:gap-7.5">
             {VALUES.map(({ icon: Icon, title, body }) => (
@@ -111,30 +125,6 @@ export default function AboutPage() {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* The showreel, moved here from the homepage's "Built for the work" section. It belongs on
-          this page: it is the one place that shows the actual product, which is the honest answer to
-          "who are you" — and it sits after the beliefs above so the claims come first and the
-          evidence second.
-
-          <Showreel /> is route-agnostic (its own browser frame, tab rail and play/pause, and it
-          hides any slide whose capture is missing), so it needed no changes to move. It is a client
-          component inside this server component, which is fine — it is its own boundary. */}
-      <section className="py-8 md:py-12">
-        <div className="container">
-          <div className="mx-auto mb-10 w-full max-w-[720px] text-center">
-            <h2 className="mb-3 text-2xl font-bold !leading-[1.2] text-title-color md:text-3xl">
-              What we actually built
-            </h2>
-            <p className="text-base text-text-color-secondary">
-              The real screens organisers work in – not mockups.
-            </p>
-          </div>
-          <div className="mx-auto w-full max-w-[1170px]">
-            <Showreel />
           </div>
         </div>
       </section>

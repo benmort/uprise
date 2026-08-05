@@ -826,6 +826,8 @@ export interface TelephonyProvisioningRun {
   accountId: string | null;
   /** Regulation class: "local" numbers do voice, "mobile" numbers are SMS-only. */
   numberType?: "mobile" | "local" | string;
+  /** False on a run that deliberately asked for one class only, and on every chained run. */
+  chainComplementary?: boolean;
   status: TelephonyProvisioningStatus;
   resumeStatus: TelephonyProvisioningStatus | null;
   bundleSid: string | null;
@@ -852,6 +854,13 @@ export interface TelephonyPhoneNumber {
   phoneNumberE164: string;
   nickname: string | null;
   purpose: string;
+  /**
+   * Regulation class the number was bought under – "mobile" (SMS-capable) or
+   * "local" (voice caller-id, cannot send SMS). `listNumbers` returns whole rows,
+   * so the API already ships this; declaring it lets a UI label the two numbers
+   * apart instead of guessing from the +614 prefix.
+   */
+  numberType?: "mobile" | "local" | string;
   status: "PENDING" | "ACTIVE" | "RELEASED";
   createdAt: string;
 }
@@ -884,7 +893,17 @@ export const telephony = {
     byoAccountSid?: string;
     byoAuthToken?: string;
     friendlyName?: string;
+    /** Regulation class to provision first: "mobile" (SMS, the default) or "local" (voice caller-id). */
     numberType?: "mobile" | "local";
+    /**
+     * Whether completing this run should chain a run for the complementary class.
+     * Omitting it means TRUE – the tenant ends up with both numbers (a mobile to
+     * text from and a local to call from), which is two number purchases and two
+     * human-reviewed Twilio regulatory bundles. Pass false for a deliberate
+     * single-class request, e.g. a tenant that only ever wants SMS, or to keep the
+     * Twilio spend and the compliance review to one number.
+     */
+    chainComplementary?: boolean;
     complianceInput: TelephonyComplianceInput;
   }) => request<TelephonyProvisioningRun>("/telephony/provisioning-runs", { method: "POST", body: JSON.stringify(body) }),
 

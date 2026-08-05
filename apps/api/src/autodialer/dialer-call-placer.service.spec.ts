@@ -174,7 +174,7 @@ describe("DialerCallPlacerService", () => {
     expect(twilio.placeCall.mock.calls[0][0].machineDetection).toBeUndefined();
   });
 
-  it("prefers the campaign-pinned number, then the tenant marketing sender", async () => {
+  it("prefers the campaign-pinned number, then the tenant voice sender", async () => {
     const { service, prisma, senderResolver, twilio } = makeHarness();
     prisma.dialerAttempt.findFirst.mockResolvedValue(attempt());
     prisma.dialerCampaign.findFirst.mockResolvedValue(campaign({ fromNumberId: "num1" }));
@@ -184,6 +184,31 @@ describe("DialerCallPlacerService", () => {
 
     expect(senderResolver.resolveByNumberId).toHaveBeenCalledWith("t1", "num1");
     expect(twilio.placeCall.mock.calls[0][0].from).toBe("+61370039999");
+  });
+
+  // The dialler PLACES CALLS. Every SendPurpose is a messaging purpose, and the resolver
+  // filters those to SMS-capable numbers – so asking for "marketing" could only be handed
+  // the tenant's +614 mobile, which `isVoiceCapable` then rejects. A tenant that had paid
+  // for a local number still dialled from the platform env number.
+  it("asks the resolver for the VOICE purpose, not a messaging one", async () => {
+    const { service, prisma, senderResolver } = makeHarness();
+    prisma.dialerAttempt.findFirst.mockResolvedValue(attempt());
+    prisma.dialerCampaign.findFirst.mockResolvedValue(campaign({ fromNumberId: null }));
+
+    await service.placeCall(payload, NOW);
+
+    expect(senderResolver.resolve).toHaveBeenCalledWith({ tenantId: "t1", purpose: "voice" });
+  });
+
+  it("dials from the tenant's resolved voice number when no number is pinned", async () => {
+    const { service, prisma, senderResolver, twilio } = makeHarness();
+    prisma.dialerAttempt.findFirst.mockResolvedValue(attempt());
+    prisma.dialerCampaign.findFirst.mockResolvedValue(campaign({ fromNumberId: null }));
+    senderResolver.resolve.mockResolvedValue({ from: "+61255501234" });
+
+    await service.placeCall(payload, NOW);
+
+    expect(twilio.placeCall.mock.calls[0][0].from).toBe("+61255501234");
   });
 
   it("writes a dispatch failure back as terminal FAILED (CAS on INITIATED) + a status event + a FAILED attempt", async () => {

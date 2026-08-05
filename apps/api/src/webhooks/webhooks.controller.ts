@@ -28,6 +28,19 @@ import { parseChannelAddress } from "../messaging/message-channel.util";
 
 const TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 
+/** A softphone leg we could not bridge – copy for the uprise user who dialled. */
+const SAY_OUTBOUND_FAILED =
+  '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, we could not place this call.</Say></Response>';
+
+/**
+ * Copy for a member of the public who RANG a provisioned local number. They attempted no
+ * outbound call, so the softphone's "we could not place this call" line reads to them as a
+ * broken or confused greeting on a number the organisation publishes. Says what is true and
+ * what to do instead, then hangs up.
+ */
+const SAY_INBOUND_UNAVAILABLE =
+  '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Thank you for calling. This number cannot take incoming calls. Please contact us by text message or email instead.</Say><Hangup/></Response>';
+
 @Controller()
 export class WebhooksController {
   private readonly logger = new Logger(WebhooksController.name);
@@ -283,6 +296,14 @@ export class WebhooksController {
    * row and return `<Dial>` bridging the browser to the callee, from the tenant's
    * provisioned number. Tenant is derived from the signed client identity (`From`),
    * never a client param. An invalid request returns a spoken apology, not a bridge.
+   *
+   * It is ALSO the voiceUrl a provisioned local (voice) number is configured with, so a
+   * member of the public ringing the number an organisation publishes lands here too.
+   * uprise has no purpose-built inbound-call handler yet; until it does, such a call is
+   * answered with copy written for an INBOUND caller rather than the softphone's
+   * outbound-failure line, which to a caller reads as a broken greeting. The two cases
+   * are told apart by `From`: a softphone leg is a `client:…` identity, an inbound PSTN
+   * leg is a phone number. Neither branch writes anything.
    */
   @Post("voice-outbound")
   @Header("Content-Type", "application/xml")
@@ -294,9 +315,10 @@ export class WebhooksController {
     this.validateTwilioSignature(req, body as Record<string, unknown>, token);
     const tenantId = tenantFromClientIdentity(body?.From);
     const to = String(body?.To || "").trim();
-    if (!tenantId || !/^\+[1-9]\d{6,14}$/.test(to)) {
-      return '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, we could not place this call.</Say></Response>';
-    }
+    // Not a softphone leg at all – almost always someone ringing the organisation's
+    // published number. Say something they can act on.
+    if (!tenantId) return SAY_INBOUND_UNAVAILABLE;
+    if (!/^\+[1-9]\d{6,14}$/.test(to)) return SAY_OUTBOUND_FAILED;
     const { twiml } = await this.calls.startBrowserCall({
       tenantId,
       // Optional dialler choice; validated tenant-scoped + voice-capable in the service.
@@ -379,8 +401,14 @@ export class WebhooksController {
 /**
  * The tenant id from a browser Voice client identity. The access token identity is
  * `u{userId}.t{tenantId}`; Twilio delivers it as `From: client:u{userId}.t{tenantId}`.
+ *
+ * Anchored on the `client:` prefix, not merely the `.t…` suffix. Since a provisioned local
+ * number points its voiceUrl here, `From` is now attacker-influenced: an unanchored suffix
+ * match would accept any `From` ending in `.t<tenantId>` and hand that tenant to
+ * `startBrowserCall`. A signed subaccount request is still required, so this was never
+ * remotely reachable – but the guard should assert the shape it documents.
  */
 function tenantFromClientIdentity(from?: string): string | null {
-  const match = /\.t([A-Za-z0-9]+)$/.exec(String(from || ""));
+  const match = /^client:[^:]*\.t([A-Za-z0-9]+)$/.exec(String(from || ""));
   return match ? match[1] : null;
 }

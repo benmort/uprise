@@ -20,6 +20,16 @@ export type ComplianceInput = {
   };
 };
 
+/**
+ * The inbound hook a provisioned number is configured with. It is a UNION, not two optional
+ * fields, because the classes are mutually exclusive: an AU local number cannot receive SMS
+ * and an AU mobile is not a voice caller ID. Which arm applies is the service's decision
+ * (`numberWebhooks`); the client only carries it to Twilio.
+ */
+export type NumberWebhooks =
+  | { smsUrl: string; smsMethod: "POST" }
+  | { voiceUrl: string; voiceMethod: "POST" };
+
 export type UploadableDocument = {
   fileName: string;
   contentType: string;
@@ -193,7 +203,7 @@ export class TwilioProvisioningClient {
 
   async purchaseNumber(
     creds: TwilioCreds,
-    input: { phoneNumber: string; bundleSid: string; addressSid: string; smsUrl: string },
+    input: { phoneNumber: string; bundleSid: string; addressSid: string; webhooks: NumberWebhooks },
   ): Promise<{ phoneNumberSid: string; phoneNumberE164: string }> {
     const created = await withRetry(
       () =>
@@ -201,17 +211,20 @@ export class TwilioProvisioningClient {
           phoneNumber: input.phoneNumber,
           bundleSid: input.bundleSid,
           addressSid: input.addressSid,
-          smsUrl: input.smsUrl,
-          smsMethod: "POST",
+          ...input.webhooks,
         }),
       { retries: 2 },
     );
     return { phoneNumberSid: String(created.sid), phoneNumberE164: String(created.phoneNumber) };
   }
 
-  async configureNumberWebhook(creds: TwilioCreds, phoneNumberSid: string, smsUrl: string): Promise<void> {
+  async configureNumberWebhook(
+    creds: TwilioCreds,
+    phoneNumberSid: string,
+    webhooks: NumberWebhooks,
+  ): Promise<void> {
     await withRetry(
-      () => this.client(creds).incomingPhoneNumbers(phoneNumberSid).update({ smsUrl, smsMethod: "POST" }),
+      () => this.client(creds).incomingPhoneNumbers(phoneNumberSid).update({ ...webhooks }),
       { retries: 2 },
     );
   }

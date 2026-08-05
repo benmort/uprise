@@ -28,7 +28,7 @@ type VoiceSettings = {
 /**
  * Resolves which Twilio account a browser (WebRTC) voice call for a tenant runs
  * under, integrating the per-tenant number provisioning (meld doc 09 telephony).
- * When the tenant has an ACTIVE provisioned transactional number, calls originate
+ * When the tenant has an ACTIVE provisioned VOICE number (the local one), calls originate
  * from that number on its subaccount — lazily creating + caching a per-subaccount
  * voice API key + TwiML App in TelephonyAccount.settings. Otherwise the platform
  * account + TWILIO_VOICE_FROM (the pre-provisioning behaviour).
@@ -97,8 +97,13 @@ export class VoiceAccountResolver {
 
   /** The account (+ caller id) a browser call for `tenantId` places calls under. */
   async resolveForTenant(tenantId: string): Promise<VoiceAccount> {
-    const sender = await this.senders.resolve({ tenantId, purpose: "transactional" });
-    // A tenant sender that is an AU mobile (+614) is SMS-only — never dial from it.
+    // "voice", not "transactional": every SendPurpose is a MESSAGING purpose and the
+    // resolver filters those to SMS-capable numbers, so asking for "transactional" could
+    // only ever return the tenant's +614 mobile – which the guard below then rejects,
+    // sending every tenant back to the platform number. The local number the organisation
+    // paid for, and had a second regulatory bundle reviewed for, did no work at all.
+    const sender = await this.senders.resolve({ tenantId, purpose: "voice" });
+    // Belt-and-braces on the E.164 itself: an AU mobile (+614) is never a caller ID.
     if (!sender?.from || !isVoiceCapable(sender.from)) return this.resolvePlatformAccount();
     const voice = await this.ensureSubaccountVoiceApp(sender);
     return {
@@ -118,7 +123,7 @@ export class VoiceAccountResolver {
    * so anonymous widget tokens can never reach the softphone's TwiML surface.
    */
   async resolveDialerForTenant(tenantId: string): Promise<VoiceAccount> {
-    const sender = await this.senders.resolve({ tenantId, purpose: "transactional" });
+    const sender = await this.senders.resolve({ tenantId, purpose: "voice" });
     if (!sender?.from || !isVoiceCapable(sender.from)) {
       const platform = await this.resolvePlatformAccount();
       // Explicit env pin wins (mirrors TWILIO_TWIML_APP_SID); else the
@@ -146,7 +151,7 @@ export class VoiceAccountResolver {
    * Twilio webhook), so it reads the platform number straight from config.
    */
   async callerIdForAccount(tenantId: string, accountSid: string): Promise<string> {
-    const sender = await this.senders.resolve({ tenantId, purpose: "transactional" });
+    const sender = await this.senders.resolve({ tenantId, purpose: "voice" });
     if (sender?.from && isVoiceCapable(sender.from) && sender.accountSid === accountSid) {
       return sender.from;
     }

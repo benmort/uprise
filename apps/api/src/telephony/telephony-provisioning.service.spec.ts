@@ -5,6 +5,7 @@ import {
 } from "@uprise/db";
 import { put } from "@vercel/blob";
 import { TelephonyProvisioningService } from "./telephony-provisioning.service";
+import { buildTelephonyProvisioningReactions } from "./telephony-provisioning.reactions";
 import { ImageUploadService } from "../common/storage/image-upload.service";
 
 // addDocument writes to Vercel Blob — mock the SDK so the unit spec never
@@ -18,6 +19,18 @@ const ACCOUNT_SID = "AC" + "1".repeat(32);
 const NUMBER_ID = "num-1";
 
 const ENV: Record<string, string> = { API_BASE_URL: "https://api.test" };
+
+/** The inbound-voice TwiML route a local (calls) number is pointed at. */
+const VOICE_URL = "https://api.test/api/v1/voice-outbound";
+
+/** A compliance document as `addDocument` stores it, once uploaded to Twilio. */
+const UPLOADED_DOC = {
+  blobUrl: "https://blob.test/telephony-compliance/run-1/reg.pdf",
+  fileName: "reg.pdf",
+  contentType: "application/pdf",
+  type: "business_registration",
+  supportingDocumentSid: "RD" + "7".repeat(32),
+};
 
 function makeRun(overrides: Record<string, unknown> = {}) {
   return {
@@ -291,6 +304,35 @@ describe("TelephonyProvisioningService steps", () => {
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.compliance-drafted"));
     });
 
+    // The other half of the chained-documents fix: a run that CARRIES documents must draft
+    // its bundle with them assigned, and must not re-upload one that already has a SID.
+    it("assigns the run's already-uploaded documents to the new bundle without re-uploading", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        makeRun({
+          status: S.SUBACCOUNT_CREATED,
+          accountId: ACCOUNT_ID,
+          numberType: "local",
+          documents: [UPLOADED_DOC],
+        }),
+      );
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(twilio.createSupportingDocument).not.toHaveBeenCalled();
+      // endUser + address + the inherited document.
+      expect(twilio.assignBundleItem).toHaveBeenCalledTimes(3);
+      expect(twilio.assignBundleItem).toHaveBeenCalledWith(
+        expect.anything(),
+        "BUnew",
+        UPLOADED_DOC.supportingDocumentSid,
+      );
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(
+        statusData(S.COMPLIANCE_DRAFT, { documents: [UPLOADED_DOC] }),
+      );
+    });
+
     it("reuse fast-path: a prior approved bundle skips DRAFT→SUBMITTED→APPROVED and emits compliance-approved", async () => {
       const { service, prisma, twilio, outbox } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(draftRun());
@@ -486,7 +528,12 @@ describe("TelephonyProvisioningService steps", () => {
       expect(twilio.findAvailableAuNumber).toHaveBeenCalledWith(expect.anything(), "mobile");
       expect(twilio.purchaseNumber).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ bundleSid: "BUnew", addressSid: "ADnew", smsUrl: "https://api.test/api/v1/inbound-text-message-hook" }),
+        expect.objectContaining({
+          bundleSid: "BUnew",
+          addressSid: "ADnew",
+          // A mobile is the SMS sender, so it is bought with the inbound SMS hook.
+          webhooks: { smsUrl: "https://api.test/api/v1/inbound-text-message-hook", smsMethod: "POST" },
+        }),
       );
       expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -521,6 +568,24 @@ describe("TelephonyProvisioningService steps", () => {
       );
     });
 
+    // The local number is the one the organisation calls from; buying it with only an SMS
+    // hook left inbound calls to it unanswered and configured a hook that can never fire.
+    it("buys a local number with a VOICE webhook, never the SMS hook", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun({ numberType: "local" }));
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      twilio.findAvailableAuNumber.mockResolvedValue("+61255501234");
+      twilio.purchaseNumber.mockResolvedValue({ phoneNumberSid: "PN" + "8".repeat(32), phoneNumberE164: "+61255501234" });
+
+      await service.stepPurchaseNumber(RUN_ID);
+
+      // An exact object match: an SMS hook alongside the voice one would fail here.
+      expect(twilio.purchaseNumber).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ webhooks: { voiceUrl: VOICE_URL, voiceMethod: "POST" } }),
+      );
+    });
+
     it("records the run's regulation class on the purchased number row (stored class, not a prefix guess)", async () => {
       const { service, prisma, twilio } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun({ numberType: "local" }));
@@ -549,6 +614,42 @@ describe("TelephonyProvisioningService steps", () => {
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.failed"));
     });
 
+    // The gate on the MONEY event. Everything else is checked before the run parks in
+    // COMPLIANCE_SUBMITTED for the days a human at Twilio takes; the plan can lapse in that
+    // window, and this is the step that buys a recurring number. Guarding only the chain's
+    // creation left both the lapse-mid-flight path and the ungated retry() able to spend.
+    it("refuses to buy a number when the tenant's telephony plan has lapsed mid-flight", async () => {
+      const { service, prisma, twilio, outbox, flags } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun());
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      flags.isEnabled.mockResolvedValue(false);
+
+      await service.stepPurchaseNumber(RUN_ID);
+
+      expect(flags.isEnabled).toHaveBeenCalledWith("FEATURE_TENANT_TELEPHONY_ENABLED", { tenantId: TENANT_ID });
+      // Nothing bought, nothing searched – the refusal is before any Twilio call.
+      expect(twilio.findAvailableAuNumber).not.toHaveBeenCalled();
+      expect(twilio.purchaseNumber).not.toHaveBeenCalled();
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+      // Parked, not lost: the approved bundle survives and retry re-enters here (and so
+      // re-checks) once the plan is restored.
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(
+        statusData(S.FAILED, { resumeStatus: S.COMPLIANCE_APPROVED }),
+      );
+      expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.failed"));
+    });
+
+    it("buys the number when the plan is still enabled", async () => {
+      const { service, prisma, twilio, flags } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun());
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      flags.isEnabled.mockResolvedValue(true);
+
+      await service.stepPurchaseNumber(RUN_ID);
+
+      expect(twilio.purchaseNumber).toHaveBeenCalled();
+    });
+
     it("fails when the run has no approved bundle/address", async () => {
       const { service, prisma, twilio, outbox } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
@@ -568,7 +669,7 @@ describe("TelephonyProvisioningService steps", () => {
     const purchasedRun = () =>
       makeRun({ status: S.NUMBER_PURCHASED, accountId: ACCOUNT_ID, phoneNumberId: NUMBER_ID });
 
-    it("NUMBER_PURCHASED → WEBHOOKS_CONFIGURED: asserts the SmsUrl and emits webhooks-configured", async () => {
+    it("NUMBER_PURCHASED → WEBHOOKS_CONFIGURED: asserts the SmsUrl on a mobile and emits webhooks-configured", async () => {
       const { service, prisma, twilio, outbox } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(purchasedRun());
       prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
@@ -579,10 +680,50 @@ describe("TelephonyProvisioningService steps", () => {
       expect(twilio.configureNumberWebhook).toHaveBeenCalledWith(
         expect.anything(),
         makeNumber().phoneNumberSid,
-        "https://api.test/api/v1/inbound-text-message-hook",
+        { smsUrl: "https://api.test/api/v1/inbound-text-message-hook", smsMethod: "POST" },
       );
       expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.WEBHOOKS_CONFIGURED));
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.webhooks-configured"));
+    });
+
+    // A local number cannot receive SMS, so the SMS hook on it was a hook that could never
+    // fire – while inbound calls to the organisation's published calls number went nowhere.
+    it("asserts a VOICE webhook on a local number (and no SMS hook)", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        makeRun({ status: S.NUMBER_PURCHASED, accountId: ACCOUNT_ID, phoneNumberId: NUMBER_ID, numberType: "local" }),
+      );
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(
+        makeNumber({ numberType: "local", phoneNumberE164: "+61255501234" }),
+      );
+
+      await service.stepConfigureWebhooks(RUN_ID);
+
+      expect(twilio.configureNumberWebhook).toHaveBeenCalledWith(
+        expect.anything(),
+        makeNumber().phoneNumberSid,
+        { voiceUrl: VOICE_URL, voiceMethod: "POST" },
+      );
+      // The voice URL is a REAL, signature-validated route in this repo, not an invention;
+      // and the exact-object match above means no smsUrl rides along with it.
+      expect(VOICE_URL).toBe("https://api.test/api/v1/voice-outbound");
+    });
+
+    // The class recorded on the number row is what was actually bought; a run row that
+    // disagrees must not talk the step into configuring the wrong hook.
+    it("follows the NUMBER row's class, not the run's, when they disagree", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(purchasedRun()); // run says mobile
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      prisma.telephonyPhoneNumber.findUnique.mockResolvedValue(makeNumber({ numberType: "local" }));
+
+      await service.stepConfigureWebhooks(RUN_ID);
+
+      expect(twilio.configureNumberWebhook).toHaveBeenCalledWith(expect.anything(), expect.any(String), {
+        voiceUrl: VOICE_URL,
+        voiceMethod: "POST",
+      });
     });
 
     it("parks FAILED (resume NUMBER_PURCHASED) when webhook config throws", async () => {
@@ -701,6 +842,108 @@ describe("TelephonyProvisioningService steps", () => {
       expect(prisma.telephonyProvisioningStep.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ runId: RUN_ID, step: "chain.complementary" }) }),
       );
+    });
+
+    // The chained run drafts a SECOND regulatory bundle that a human at Twilio reviews. It
+    // used to be created with documents: null, so that bundle went in with no supporting
+    // documents at all and was rejected days later.
+    it("the chained run inherits the source's supporting documents", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun({ documents: [UPLOADED_DOC] }));
+      chainCreates(prisma);
+
+      await service.maybeChainComplementaryRun(RUN_ID);
+
+      const created = prisma.telephonyProvisioningRun.create.mock.calls[0][0].data;
+      // SID and all: a Twilio SupportingDocument is account-scoped and the chained run
+      // inherits the same accountId, so the bundle can assign the very same object.
+      expect(created.documents).toEqual([UPLOADED_DOC]);
+      expect(prisma.telephonyProvisioningStep.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ detail: expect.objectContaining({ inheritedDocuments: 1 }) }),
+        }),
+      );
+    });
+
+    // Defensive branch: a supporting-document SID belongs to the account it was uploaded
+    // under, so without that account the SID is dropped and the blob is re-uploaded.
+    it("drops the document SIDs (keeping the blob) when the account is not carried over", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        activeRun({ accountId: null, documents: [UPLOADED_DOC] }),
+      );
+      chainCreates(prisma);
+
+      await service.maybeChainComplementaryRun(RUN_ID);
+
+      const created = prisma.telephonyProvisioningRun.create.mock.calls[0][0].data;
+      expect(created.documents).toEqual([
+        {
+          blobUrl: UPLOADED_DOC.blobUrl,
+          fileName: UPLOADED_DOC.fileName,
+          contentType: UPLOADED_DOC.contentType,
+          type: UPLOADED_DOC.type,
+        },
+      ]);
+      expect(created.documents[0].supportingDocumentSid).toBeUndefined();
+    });
+
+    // A plan can lapse while the first bundle sits in review for days; buying a second
+    // number for a tenant no longer entitled to one is money we cannot claw back.
+    it("refuses to chain when the telephony plan flag has lapsed – softly", async () => {
+      const { service, prisma, outbox, flags, logger } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun());
+      flags.isEnabled.mockResolvedValue(false);
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: false, reason: "plan-disabled" });
+      expect(flags.isEnabled).toHaveBeenCalledWith("FEATURE_TENANT_TELEPHONY_ENABLED", { tenantId: TENANT_ID });
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      expect(outbox.append).not.toHaveBeenCalled();
+      // The mobile number is ACTIVE and must stay that way – a refused chain writes nothing
+      // to the number or the account, and is a warn, not an error.
+      expect(prisma.telephonyPhoneNumber.update).not.toHaveBeenCalled();
+      expect(prisma.telephonyAccount.update).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalled();
+      expect(logger.error).not.toHaveBeenCalled();
+    });
+
+    // The gate is re-run in full only for the PLAN: org-KYC edits made mid-flight (an admin
+    // tidying a profile field) must not strand the voice half of an entitled tenant.
+    it("still chains when org identification has since been emptied – only the plan re-gates", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun());
+      prisma.orgProfile.findFirst.mockResolvedValue(null);
+      chainCreates(prisma);
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: true, reason: "chained", runId: CHAINED_RUN_ID });
+    });
+
+    // "Fails softly" is the whole contract of this edge: the reaction registry swallows
+    // errors, so a throw here would be lost – and the mobile number is already live.
+    it("a refused chain never throws into the activated reaction", async () => {
+      const { service, prisma, flags } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun());
+      flags.isEnabled.mockResolvedValue(false);
+      const reaction = buildTelephonyProvisioningReactions({ provisioning: service }).find(
+        (r) => r.trigger === "telephony.provisioning.activated",
+      )!;
+
+      await expect(
+        reaction.handle({
+          id: "evt-1",
+          eventType: "telephony.provisioning.activated",
+          tenantId: TENANT_ID,
+          aggregateId: RUN_ID,
+          payload: { runId: RUN_ID },
+          metadata: {},
+          occurredAt: "2026-08-05T00:00:00.000Z",
+        } as never),
+      ).resolves.toBeUndefined();
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
     });
 
     it("does NOT chain when the tenant already holds a local number", async () => {
@@ -904,6 +1147,10 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
         "PLAN_UPGRADE_REQUIRED",
       );
       expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      // Pin the KEY, not just the answer. The mock replies false to any key, so without
+      // this the start gate could read a different flag from the chain and the purchase
+      // step and no test would notice the drift.
+      expect(flags.isEnabled).toHaveBeenCalledWith("FEATURE_TENANT_TELEPHONY_ENABLED", { tenantId: TENANT_ID });
     });
 
     it("422s SETUP_INCOMPLETE with machine-readable missing[] when org identification is incomplete", async () => {
