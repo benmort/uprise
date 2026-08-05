@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from "@nestjs/common";
 import { ApiExceptionFilter } from "./common/http/api-exception.filter";
+import { ErrorLogService } from "./common/errors/error-log.service";
 import { ApiResponseInterceptor } from "./common/http/api-response.interceptor";
 import { RequestLoggingInterceptor } from "./common/logging/request-logging.interceptor";
 import { DomainLogger } from "./common/logging/domain-logger.service";
@@ -119,7 +120,7 @@ export async function configureNestApp(app: INestApplication): Promise<void> {
       forbidNonWhitelisted: true,
     }),
   );
-  app.useGlobalFilters(new ApiExceptionFilter(app.get(DomainLogger)));
+  app.useGlobalFilters(new ApiExceptionFilter(app.get(DomainLogger), app.get(ErrorLogService)));
   app.useGlobalInterceptors(
     new ApiResponseInterceptor(),
     new RequestLoggingInterceptor(app.get(DomainLogger)),

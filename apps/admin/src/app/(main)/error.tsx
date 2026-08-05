@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { reportClientError } from "@/lib/report-error";
 
 /**
  * Segment error boundary for the organiser shell – before this existed, ANY
@@ -20,6 +21,9 @@ export default function MainError({
   useEffect(() => {
     // Surface in the console for dev + error tooling; never swallow silently.
     console.error("[admin] page error boundary", error);
+    // …and persist it. Vercel retains no runtime logs, so the console is the only
+    // other record and it dies with the tab.
+    reportClientError("admin", error);
   }, [error]);
 
   return (

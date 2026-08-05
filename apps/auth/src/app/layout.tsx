@@ -1,8 +1,9 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
+import { ClientErrorListener } from "@/components/client-error-listener";
 
-// No `weight` list — Outfit is a Google variable font, so this loads ONE woff2 covering
+// No `weight` list – Outfit is a Google variable font, so this loads ONE woff2 covering
 // 100–900 instead of five static files (and font-extrabold renders a true 800).
 const outfit = Outfit({
   subsets: ["latin"],
@@ -22,11 +23,11 @@ export const metadata: Metadata = {
 };
 
 // Apply the shared (parent-domain) theme cookie before paint so the SSO screens
-// match the admin's light/dark choice. No toggle here — auth follows the admin app.
+// match the admin's light/dark choice. No toggle here – auth follows the admin app.
 const NO_FLASH_THEME_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|;\\s*)theme=([^;]+)/);if(m&&m[1]==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`;
 
 /**
- * Root layout — html/head/body + fonts, the no-flash theme script, and the runtime
+ * Root layout – html/head/body + fonts, the no-flash theme script, and the runtime
  * env globals the api-client reads. The per-audience chrome lives in the route-group
  * layouts: (sso) for organisers, (volunteer) for the mobile phone-first flow.
  */
@@ -44,6 +45,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             __html: `window.__API_URL__=${JSON.stringify(apiUrl)};window.__TURNSTILE_SITE_KEY__=${JSON.stringify(turnstileSiteKey)};`,
           }}
         />
+        {/* Records the async/handler failures the error boundaries cannot catch. Above
+            {children} so it is listening before any screen can throw. */}
+        <ClientErrorListener />
         {children}
       </body>
     </html>

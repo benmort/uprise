@@ -5,12 +5,12 @@ import { reportClientError } from "@/lib/report-error";
 
 /**
  * Root error boundary – catches throws in the root layout itself (below this,
- * (main)/error.tsx handles page errors with the shell intact). Must render its
- * own <html>/<body> because the root layout is what failed.
+ * error.tsx handles page errors). Must render its own <html>/<body> because the
+ * root layout is what failed.
  *
- * Deliberate design-system divergence: the root layout imports the token CSS,
- * so when IT fails the tokens may not exist – inline literals are the only
- * styles guaranteed to render here. Do not "fix" these to token classes.
+ * Deliberate design-system divergence: the root layout imports the token CSS and
+ * the Outfit font, so when IT fails neither may exist – inline literals are the
+ * only styles guaranteed to render here. Do not "fix" these to token classes.
  */
 export default function GlobalError({
   error,
@@ -19,18 +19,18 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  // Persist it — Vercel keeps no runtime logs, so an unrecorded error is gone the
+  // Persist it – Vercel keeps no runtime logs, so an unrecorded error is gone the
   // moment the user closes the tab, and the digest on screen leads nowhere.
   useEffect(() => {
-    reportClientError("admin", error);
+    reportClientError("auth", error);
   }, [error]);
 
   return (
     <html lang="en">
       <body style={{ fontFamily: "system-ui, sans-serif", padding: "4rem 2rem", textAlign: "center" }}>
-        <h1 style={{ fontSize: "1.25rem", fontWeight: 700 }}>uprise hit an unexpected error</h1>
+        <h1 style={{ fontSize: "1.25rem", fontWeight: 700 }}>Uprise hit an unexpected error</h1>
         <p style={{ marginTop: "0.5rem", color: "#555" }}>
-          Reload the page to continue{error.digest ? ` (ref ${error.digest})` : ""}.
+          Reload the page to continue signing in{error.digest ? ` (ref ${error.digest})` : ""}.
         </p>
         <button
           onClick={() => reset()}
