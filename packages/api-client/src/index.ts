@@ -7,6 +7,7 @@ import type {
   CreateCallSessionResponse,
   ListActionPagesResponse,
   PublicActionPagePayload,
+  PublicTargetIdentity,
   InviteStartPhoneRequest,
   OpenJoinAcceptRequest,
   OpenJoinStartPhoneRequest,
@@ -41,9 +42,35 @@ import type {
 
 export * from "@uprise/contracts";
 
-/** `status` is set for HTTP-level failures (e.g. 403 → render a no-permission
- *  state instead of a generic error); absent on network/parse failures. */
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; status?: number };
+/** A failure carries exactly one discriminant, and they mean different things to a user:
+ *
+ *  - `status` – the API answered with an HTTP error (e.g. 403 → render a no-permission
+ *    state instead of a generic error). The call definitely landed.
+ *  - `networkError` – the request definitively never left the browser: offline, DNS/TLS,
+ *    a CORS refusal, an extension or filter blocking it. Nothing reached the server, so
+ *    it is safe to tell the user nothing changed and to retry. `error` then holds the
+ *    browser's own string ("Failed to fetch", "Load failed"), which means nothing to a
+ *    user – branch on the flag and write your own copy.
+ *  - `timedOut` – we gave up waiting. Deliberately NOT `networkError`: the request may
+ *    well have reached the API and committed (a slow invite accept still creates the user,
+ *    the membership and the session). Never tell a timed-out user nothing has changed –
+ *    point them at signing in as well as retrying.
+ *  - `aborted` – the caller cancelled (unmount, latest-wins). Not a failure to report:
+ *    the user navigated away.
+ *
+ *  A 2xx whose body will not parse is NOT a failure here: it resolves as
+ *  `{ ok: true, data: null }`, because an empty body is the normal shape of a 204 and of
+ *  every DELETE endpoint we have. Callers that require a body must check `data`. */
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false;
+      error: string;
+      status?: number;
+      networkError?: boolean;
+      timedOut?: boolean;
+      aborted?: boolean;
+    };
 
 /** API base URL — runtime window override wins, else NEXT_PUBLIC_API_URL. */
 export function getApiUrl(): string {
@@ -108,6 +135,21 @@ function redirectToLogin(): void {
   window.location.assign(loginRedirectUrl(window.location.href));
 }
 
+/** Default ceiling on a single call. Without one, a request that opens a socket and
+ *  never answers leaves the UI spinning forever – the invite "Joining…" button had no
+ *  path back. Multipart gets a longer leash because an upload legitimately streams
+ *  for a while on a weak connection. Endpoints that do real synchronous work (walk-list
+ *  rebuilds, universe loads, segment generation/compilation) must raise their own via
+ *  `opts.timeoutMs` – 30s is a UI-responsiveness default, not a claim about the server. */
+const REQUEST_TIMEOUT_MS = 30_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+/** The abort reason as a readable string, for a caller that cancelled before we dispatched. */
+function abortReason(signal: AbortSignal): string {
+  const reason = (signal as { reason?: unknown }).reason;
+  return reason instanceof Error && reason.message ? reason.message : "The request was cancelled.";
+}
+
 /**
  * Cookie-based request wrapper (meld doc 14). Sends the httpOnly session cookie
  * via `credentials: "include"` — no Authorization header. A 401 means the session
@@ -117,15 +159,33 @@ function redirectToLogin(): void {
 export async function request<T>(
   path: string,
   init?: RequestInit,
-  opts: { redirectOn401?: boolean; captchaToken?: string } = {},
+  opts: { redirectOn401?: boolean; captchaToken?: string; timeoutMs?: number } = {},
 ): Promise<ApiResult<T>> {
   const { redirectOn401 = true, captchaToken } = opts;
   // FormData sets its own multipart Content-Type (with boundary) — don't override it.
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const callerSignal = init?.signal;
+  // Already cancelled: dispatching would burn a request nobody is waiting for, and the
+  // result would be reported as a transport failure the user never caused.
+  if (callerSignal?.aborted) {
+    return { ok: false, error: abortReason(callerSignal), aborted: true };
+  }
+  // Our timeout has to compose with the caller's signal (unmount / latest-wins
+  // cancellation), not replace it: whichever aborts first wins.
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let timedOut = false;
+  const timeoutMs = opts.timeoutMs ?? (isFormData ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  callerSignal?.addEventListener("abort", abort);
   try {
     const res = await fetch(`${getApiUrl()}${path}`, {
       ...init,
       credentials: "include",
+      signal: controller.signal,
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...(captchaToken ? { "cf-turnstile-response": captchaToken } : {}),
@@ -145,7 +205,23 @@ export async function request<T>(
     const data = (json && typeof json === "object" && "data" in json ? json.data : json) as T;
     return { ok: true, data };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    // fetch only rejects when no response arrived, but the three ways that happens need
+    // different copy, so they get different flags rather than one `networkError`.
+    // Timeout first: our own abort fires the same AbortError the caller's would.
+    if (timedOut) {
+      return {
+        ok: false,
+        error: `The request timed out after ${Math.round(timeoutMs / 1000)} seconds.`,
+        timedOut: true,
+      };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    // The caller cancelled mid-flight – their intent, not a broken connection.
+    if (callerSignal?.aborted) return { ok: false, error: message, aborted: true };
+    return { ok: false, error: message, networkError: true };
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", abort);
   }
 }
 
@@ -1259,6 +1335,13 @@ export const publicActions = {
       `/actions/public/pages/${encodeURIComponent(slug)}/call-sessions`,
       { method: "POST", body: JSON.stringify(body) },
       { redirectOn401: false, captchaToken },
+    ),
+  /** Chooser search — leak-safe member identities for the widget's finder. */
+  searchTargets: (slug: string, q: string) =>
+    request<{ targets: PublicTargetIdentity[] }>(
+      `/actions/public/pages/${encodeURIComponent(slug)}/targets${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+      undefined,
+      { redirectOn401: false },
     ),
   /** Absolute SSE URL for the widget's EventSource (fetch wrappers don't apply). */
   sessionEventsUrl: (sessionId: string, token: string) =>

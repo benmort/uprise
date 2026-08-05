@@ -120,10 +120,142 @@ describe("request() transport wrapper", () => {
     expect(res).toEqual({ ok: false, error: "Request failed (500)", status: 500 });
   });
 
-  it("catches a network/throw and returns the error without a status", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("connection refused"));
+  it("flags a fetch rejection as a network error, with no status", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("Failed to fetch"));
     const res = await request("/down");
-    expect(res).toEqual({ ok: false, error: "connection refused" });
+    expect(res).toEqual({ ok: false, error: "Failed to fetch", networkError: true });
+    // A blocked request is the one case where "nothing reached the server" is true, so
+    // it must not be confusable with a timeout or a cancellation.
+    expect(res).not.toHaveProperty("timedOut");
+    expect(res).not.toHaveProperty("aborted");
+  });
+
+  it("stringifies a non-Error rejection and still flags it", async () => {
+    fetchMock.mockRejectedValueOnce("blocked by client");
+    const res = await request("/down");
+    expect(res).toEqual({ ok: false, error: "blocked by client", networkError: true });
+  });
+
+  it("does not flag an HTTP error as a network error – it keeps its status", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: { message: "already a member" } }),
+    });
+    const res = await request("/iam/invite/accept");
+    expect(res).toEqual({ ok: false, error: "already a member", status: 409 });
+    expect(res).not.toHaveProperty("networkError");
+  });
+
+  it("times out a hung request as timedOut, NOT networkError – it may have landed", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => reject(new Error("The operation was aborted.")));
+          }),
+      );
+      const pending = request("/hang");
+      await vi.advanceTimersByTimeAsync(30_000);
+      const res = await pending;
+      expect(res).toEqual({
+        ok: false,
+        error: "The request timed out after 30 seconds.",
+        timedOut: true,
+      });
+      // alex's incident: a timed-out accept POST can still have committed the user,
+      // the membership and the session. Claiming networkError here is how a member
+      // gets told their network is broken.
+      expect(res).not.toHaveProperty("networkError");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives a multipart upload a longer ceiling than a JSON call", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => reject(new Error("The operation was aborted.")));
+          }),
+      );
+      const form = new FormData();
+      form.append("file", new Blob(["x"]), "big.jpg");
+      let settled = false;
+      const pending = request("/upload", { method: "POST", body: form }).then((r) => {
+        settled = true;
+        return r;
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(90_000);
+      await expect(pending).resolves.toEqual({
+        ok: false,
+        error: "The request timed out after 120 seconds.",
+        timedOut: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("honours a caller's timeoutMs, so a known-slow endpoint is not cut off at 30s", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => reject(new Error("The operation was aborted.")));
+          }),
+      );
+      let settled = false;
+      const pending = request("/canvass/walk-lists/rebuild", { method: "POST" }, { timeoutMs: 120_000 }).then((r) => {
+        settled = true;
+        return r;
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(90_000);
+      await expect(pending).resolves.toEqual({
+        ok: false,
+        error: "The request timed out after 120 seconds.",
+        timedOut: true,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a mid-flight caller abort as aborted, not a network failure", async () => {
+    fetchMock.mockImplementationOnce(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new Error("The user aborted a request.")));
+        }),
+    );
+    const ac = new AbortController();
+    const pending = request("/slow", { signal: ac.signal });
+    ac.abort();
+    const res = await pending;
+    // The caller's signal still cancels the fetch (unmount / latest-wins), but "you
+    // navigated away" must never render as "your network is broken".
+    expect(res).toEqual({ ok: false, error: "The user aborted a request.", aborted: true });
+    expect(res).not.toHaveProperty("networkError");
+  });
+
+  it("never dispatches when the caller's signal is already aborted", async () => {
+    const res = await request("/slow", { signal: AbortSignal.abort() });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res).toMatchObject({ ok: false, aborted: true });
+    expect(res).not.toHaveProperty("networkError");
+  });
+
+  it("uses the abort reason as the error when the caller supplies one", async () => {
+    const res = await request("/slow", { signal: AbortSignal.abort(new Error("superseded by a newer search")) });
+    expect(res).toEqual({ ok: false, error: "superseded by a newer search", aborted: true });
   });
 
   it("attaches the captcha token as the cf-turnstile-response header", async () => {

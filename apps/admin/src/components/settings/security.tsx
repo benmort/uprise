@@ -59,6 +59,17 @@ function ChangePasswordCard() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Validate here rather than leaning on the inputs' native constraints – see the noValidate
+    // note on the form. An existing account may well hold a password shorter than today's
+    // minimum, so say so out loud instead of letting the browser eat the submit.
+    if (!currentPassword) {
+      setFeedback({ error: "Enter your current password." });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setFeedback({ error: "New password must be at least 8 characters." });
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setFeedback({ error: "Passwords don't match." });
       return;
@@ -86,18 +97,23 @@ function ChangePasswordCard() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        {/* noValidate: these inputs carry required/minLength, so a browser that enforces them
+            blocks submit with a bubble – handleSubmit never runs, no request is made and the
+            user sees nothing at all (this is what broke a real invite accept). Validate in
+            handleSubmit instead; the constraints stay as hints for password managers. */}
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div>
             <Label variant="form" htmlFor="current-password" className="mb-2">
               Current password
             </Label>
+            {/* No minLength: this confirms an EXISTING credential, which may predate the
+                8-character rule. Length is the API's business here, not the form's. */}
             <Input
               id="current-password"
               name="currentPassword"
               type="password"
               autoComplete="current-password"
               required
-              minLength={8}
               maxLength={100}
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
@@ -142,10 +158,12 @@ function ChangePasswordCard() {
           </div>
           {feedback.error && <Alert variant="error" title="Couldn't update password" message={feedback.error} />}
           {feedback.success && <Alert variant="success" title="Done" message={feedback.success} />}
+          {/* Only `pending` disables submit: a greyed-out button with no stated reason is the
+              same dead end as a swallowed submit. handleSubmit says what is wrong instead. */}
           <Button
             type="submit"
             className="cursor-pointer bg-black hover:bg-gray-800 text-white"
-            disabled={pending || !currentPassword || newPassword.length < 8 || mismatch || !confirmPassword}
+            disabled={pending}
           >
             {pending ? (
               <>
@@ -318,6 +336,12 @@ function DeleteAccountCard({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // See the noValidate note on the form – the browser must not be the thing that decides
+    // whether this submit happens, because when it refuses it does so silently.
+    if (!password) {
+      setFeedback({ error: "Enter your password to confirm." });
+      return;
+    }
     setPending(true);
     setFeedback({});
     const res = await profile.deleteAccount({ password });
@@ -368,7 +392,10 @@ function DeleteAccountCard({
                 Delete account
               </Button>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                {/* noValidate + no minLength: the field confirms an EXISTING password, which may
+                    be shorter than today's minimum. With native validation on, such a password
+                    made the browser block submit with a bubble and nothing happened at all. */}
                 <div>
                   <Label variant="form" htmlFor="delete-password" className="mb-2">
                     Confirm your password
@@ -379,7 +406,6 @@ function DeleteAccountCard({
                     type="password"
                     autoComplete="current-password"
                     required
-                    minLength={8}
                     maxLength={100}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

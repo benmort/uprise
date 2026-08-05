@@ -58,7 +58,12 @@ export class TenantsController {
   /**
    * Bind a path :id to the caller's own tenant (super-admin exempt). The CASL
    * permission checks the *action*, not the tenant instance — without this an
-   * organiser of tenant A could act on tenant B's join requests via the URL.
+   * organiser of tenant A could act on tenant B via the URL.
+   *
+   * Applies to EVERY tenant-scoped handler here. It was previously only on the join-request
+   * and setup routes, which left the member and invitation routes cross-tenant: notably
+   * `GET :id/invitations` returned other tenants' invite tokens, and `DELETE :id/members/:userId`
+   * evicted their members. Add this to any new `:id`-scoped route.
    */
   private assertOwnTenant(req: Request & { user?: AuthUser }, id: string): void {
     if (req.user?.isSuperAdmin) return;
@@ -217,7 +222,8 @@ export class TenantsController {
 
   @Get(":id/members")
   @RequirePermission(MEMBER_MANAGE)
-  listMembers(@Param("id") id: string) {
+  listMembers(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    this.assertOwnTenant(req, id);
     return this.tenants.listMembers(id);
   }
 
@@ -228,6 +234,7 @@ export class TenantsController {
     @Body() dto: AddMemberDto,
     @Req() req: Request & { user?: AuthUser },
   ) {
+    this.assertOwnTenant(req, id);
     return this.tenants.addMember(id, {
       ...dto,
       addedBy: req.user?.id,
@@ -243,6 +250,7 @@ export class TenantsController {
     @Body() dto: UpdateMemberRoleDto,
     @Req() req: Request & { user?: AuthUser },
   ) {
+    this.assertOwnTenant(req, id);
     return this.tenants.updateMemberRole(id, userId, dto.role, {
       userId: req.user?.id,
       isSuperAdmin: req.user?.isSuperAdmin,
@@ -251,8 +259,16 @@ export class TenantsController {
 
   @Delete(":id/members/:userId")
   @RequirePermission(MEMBER_MANAGE)
-  removeMember(@Param("id") id: string, @Param("userId") userId: string) {
-    return this.tenants.removeMember(id, userId);
+  removeMember(
+    @Param("id") id: string,
+    @Param("userId") userId: string,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    this.assertOwnTenant(req, id);
+    return this.tenants.removeMember(id, userId, {
+      userId: req.user?.id,
+      isSuperAdmin: req.user?.isSuperAdmin,
+    });
   }
 
   @Post(":id/invitations")
@@ -262,6 +278,7 @@ export class TenantsController {
     @Body() dto: CreateInvitationDto,
     @Req() req: Request & { user?: AuthUser },
   ) {
+    this.assertOwnTenant(req, id);
     return this.tenants.createInvitation(id, {
       ...dto,
       invitedBy: req.user?.id,
@@ -271,13 +288,19 @@ export class TenantsController {
 
   @Get(":id/invitations")
   @RequirePermission(INVITE_MANAGE)
-  listInvitations(@Param("id") id: string) {
+  listInvitations(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    this.assertOwnTenant(req, id);
     return this.tenants.listInvitations(id);
   }
 
   @Delete(":id/invitations/:invitationId")
   @RequirePermission(INVITE_MANAGE)
-  revokeInvitation(@Param("id") id: string, @Param("invitationId") invitationId: string) {
+  revokeInvitation(
+    @Param("id") id: string,
+    @Param("invitationId") invitationId: string,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    this.assertOwnTenant(req, id);
     return this.tenants.revokeInvitation(id, invitationId);
   }
 

@@ -88,6 +88,24 @@ export interface CreateInvitationInput {
 }
 
 /**
+ * Normalise a configured app origin for use as an invite link's `return_to`, or "" when it is
+ * unusable. A `return_to` is only meaningful as an ABSOLUTE http(s) URL: apps/auth resolves the
+ * value against its own origin, so a schemeless `APP_URL=admin.uprise.org.au` doesn't get rejected
+ * – it becomes a path on the auth app and lands the invitee on a 404. Returning "" makes the
+ * caller omit the parameter entirely, which is the safe degradation.
+ */
+function absoluteAppOrigin(raw: string | undefined): string {
+  const value = (raw ?? "").trim().replace(/\/+$/, "");
+  if (!value) return "";
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:" ? value : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Fold the accept link + recipient name into a composed invite body: substitute the
  * `{{invite_link}}` placeholder (or append the link when the author didn't place one, so it can
  * never go missing) and the `{{firstname}}` merge tag (→ the given name, or "there" when unknown).
@@ -424,11 +442,22 @@ export class TenantsService {
     });
   }
 
-  async removeMember(tenantId: string, userId: string): Promise<{ ok: true }> {
+  async removeMember(tenantId: string, userId: string, actor?: TenantActor): Promise<{ ok: true }> {
     const existing = await this.prisma.tenantMember.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
     });
     if (!existing) throw new NotFoundException("Membership not found");
+    // Role-hierarchy: you may remove someone at or below your own level, or yourself. Removal
+    // was the one membership mutation with no rank check at all, so an organiser could evict an
+    // owner. Note this is deliberately looser than updateMemberRole's peer rule: that guards
+    // privilege *escalation*, whereas removing a co-owner is ordinary team admin (and
+    // assertNotLastOwner below already stops the workspace being orphaned). Super-admins bypass.
+    if (!actor?.isSuperAdmin && actor?.userId !== userId) {
+      const rankOf = await this.actorRank(tenantId, actor);
+      if (this.roleRank(existing.role) > rankOf) {
+        throw new ForbiddenException("You can't remove a member above your own level");
+      }
+    }
     await this.assertNotLastOwner(tenantId, userId);
     await this.prisma.$transaction(async (tx) => {
       await tx.tenantMember.delete({ where: { tenantId_userId: { tenantId, userId } } });
@@ -535,6 +564,17 @@ export class TenantsService {
     const authAppUrl = this.config
       .get<string>("AUTH_APP_URL", "http://localhost:3002")
       .replace(/\/+$/, "");
+    // Name the destination on the link rather than letting the auth app fall back to
+    // defaultReturnTo() – the FIRST entry of its build-time NEXT_PUBLIC_ALLOWED_RETURN_ORIGINS.
+    // That coupling means a reorder or a missing var in ANOTHER app's build silently lands every
+    // accepted invite somewhere else, with the API looking perfectly healthy. Per role, because a
+    // VOLUNTEER's home is the field app and admin's layout bounces them straight back out of it.
+    // Unset or malformed ⇒ NO parameter at all, which keeps today's behaviour (and validateReturnTo
+    // still gates whatever we do emit, so this can't open-redirect).
+    const destination = absoluteAppOrigin(
+      this.config.get<string>(input.role === AppUserRole.VOLUNTEER ? "FIELD_APP_URL" : "APP_URL", ""),
+    );
+    const returnTo = destination ? `?return_to=${encodeURIComponent(destination)}` : "";
     try {
       if (phone && !email) {
         const smsLink = `${authAppUrl}/volunteer/invite/${result.token}`;
@@ -547,7 +587,7 @@ export class TenantsService {
           purpose: "invitation",
         });
       } else if (email) {
-        const emailLink = `${authAppUrl}/invite/${result.token}`;
+        const emailLink = `${authAppUrl}/invite/${result.token}${returnTo}`;
         const composed = composeInviteBody(input.message, emailLink, input.firstName);
         if (composed) {
           // Composed invite from the compose view: send the author's copy verbatim through the
@@ -580,7 +620,7 @@ export class TenantsService {
           toAddress: email,
           templateKey: "invitation",
           vars: {
-            link: `${authAppUrl}/invite/${result.token}`,
+            link: emailLink,
             tenant: tenant.name,
             roleSuffix,
             expiryNote: `This invitation expires on ${expiryHuman}.`,
@@ -595,9 +635,31 @@ export class TenantsService {
     return result;
   }
 
-  async listInvitations(tenantId: string): Promise<TenantInvitation[]> {
+  /**
+   * The admin team page's invitation list. The `token` is deliberately NOT selected: it is a
+   * bearer credential that grants membership at the invited role (up to OWNER), so listing it
+   * would hand every organiser a ready-made way to join as someone else – or to pass that
+   * capability on. `createInvitation` returns the token once, to the issuer, which is the only
+   * caller that needs it.
+   */
+  async listInvitations(tenantId: string): Promise<Omit<TenantInvitation, "token">[]> {
     await this.getTenant(tenantId);
-    return this.prisma.tenantInvitation.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } });
+    return this.prisma.tenantInvitation.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        tenantId: true,
+        email: true,
+        phone: true,
+        role: true,
+        status: true,
+        expiresAt: true,
+        invitedBy: true,
+        invitedChannel: true,
+        createdAt: true,
+      },
+    });
   }
 
   /** Join requests for the admin approval queue (defaults to actionable "pending"). */

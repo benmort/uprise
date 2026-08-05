@@ -39,6 +39,26 @@ import {
  * flows are allowlisted in BasicAuthGuard; select-tenant requires a session.
  * Grants set the parent-domain session cookie (SSO).
  */
+/**
+ * The signup-attribution subset of a body. Pulled out because BOTH accept paths carry it and
+ * both map their DTO field-by-field — a hand-mapped field is a field that gets forgotten.
+ */
+function attributionOf(dto: {
+  signupSource?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  referrerChannel?: string;
+}) {
+  return {
+    signupSource: dto.signupSource,
+    utmSource: dto.utmSource,
+    utmMedium: dto.utmMedium,
+    utmCampaign: dto.utmCampaign,
+    referrerChannel: dto.referrerChannel,
+  };
+}
+
 @Controller("iam")
 export class AuthFlowsController {
   constructor(
@@ -164,6 +184,7 @@ export class AuthFlowsController {
       availabilityDays: dto.availabilityDays,
       walkingCapability: dto.walkingCapability,
       sessionLength: dto.sessionLength,
+      ...attributionOf(dto),
     });
     return this.grantResponse(req, res, grant);
   }
@@ -205,6 +226,7 @@ export class AuthFlowsController {
       availabilityDays: dto.availabilityDays,
       walkingCapability: dto.walkingCapability,
       sessionLength: dto.sessionLength,
+      ...attributionOf(dto),
     });
     return this.grantResponse(req, res, grant);
   }

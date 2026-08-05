@@ -59,6 +59,12 @@ export type ValidatedEnv = {
   // are excluded (session-based, unchanged).
   PLATFORM_BASE_DOMAIN: string;
   AUTH_APP_URL: string;
+  // Origins of the two apps an accepted invite can land in: the organiser workspace (admin) and
+  // the canvasser app (field). Read to pin `?return_to=` on an emailed invite link, and by
+  // platform-status to probe each app's /api/health. Optional – blank means the invite link carries
+  // no return_to and the auth app falls back to its own default (today's behaviour).
+  APP_URL: string;
+  FIELD_APP_URL: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
   DATABASE_URL: string;
@@ -169,6 +175,8 @@ export function validateEnv(config: Env): ValidatedEnv {
     SESSION_COOKIE_DOMAIN: config.SESSION_COOKIE_DOMAIN?.trim() || "",
     PLATFORM_BASE_DOMAIN: config.PLATFORM_BASE_DOMAIN?.trim() || "uprise.org.au",
     AUTH_APP_URL: config.AUTH_APP_URL?.trim() || "",
+    APP_URL: config.APP_URL?.trim() || "",
+    FIELD_APP_URL: config.FIELD_APP_URL?.trim() || "",
     RATE_LIMIT_WINDOW_MS: numberInRange(config, "RATE_LIMIT_WINDOW_MS", 1000, 3600000, 60000, errors),
     RATE_LIMIT_MAX_REQUESTS: numberInRange(config, "RATE_LIMIT_MAX_REQUESTS", 10, 10000, 300, errors),
     DATABASE_URL: required(config, "DATABASE_URL", errors),

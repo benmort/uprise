@@ -117,6 +117,31 @@ export type SignInResult =
  * templates (magic_link/recovery/verification) and SMS (purpose "2fa"). Tokens are
  * single-use; presence of an account is never leaked on request endpoints.
  */
+/** Signup attribution from the entry URL. Structurally mirrors SignupAttribution in
+ *  @uprise/contracts — the api deliberately doesn't depend on that package. */
+type SignupAttribution = {
+  signupSource?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  referrerChannel?: string;
+};
+
+/**
+ * The attribution columns to stamp on a brand-new account. `fallback` records the flow the user
+ * arrived through when the link carried no explicit `?source=`, so every account has a
+ * provenance rather than a null.
+ */
+function signupAttributionOf(input: SignupAttribution, fallback: string) {
+  return {
+    signupSource: input.signupSource ?? fallback,
+    utmSource: input.utmSource ?? null,
+    utmMedium: input.utmMedium ?? null,
+    utmCampaign: input.utmCampaign ?? null,
+    referrerChannel: input.referrerChannel ?? null,
+  };
+}
+
 @Injectable()
 export class IamFlowsService {
   constructor(
@@ -932,7 +957,7 @@ export class IamFlowsService {
       availabilityDays?: string[];
       walkingCapability?: string;
       sessionLength?: string;
-    },
+    } & SignupAttribution,
   ): Promise<SessionGrant> {
     const invite = await this.loadValidInvite(token);
     const isPhone = Boolean(invite.phone) && !invite.email;
@@ -960,6 +985,7 @@ export class IamFlowsService {
               mobile,
               // Holding the link SMS'd to this number proves control of it.
               mobileVerified: true,
+              ...signupAttributionOf(input, "invite"),
             },
           }));
       } else {
@@ -979,6 +1005,8 @@ export class IamFlowsService {
               displayName: input.displayName?.trim() || email,
               passwordHash: await hashPassword(input.password),
               emailVerified: true, // an invite to this address proves control of it
+              // Where this account came from, if the invite link carried tracking.
+              ...signupAttributionOf(input, "invite"),
             },
           });
         }

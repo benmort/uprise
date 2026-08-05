@@ -40,6 +40,12 @@ export function DeleteWorkspaceCard({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // See the noValidate note on the form – the browser must not be the thing that decides
+    // whether this submit happens, because when it refuses it does so silently.
+    if (!password) {
+      setFeedback({ error: "Enter your password to confirm." });
+      return;
+    }
     setPending(true);
     setFeedback({});
     const res = await tenants.deleteSelf({ password });
@@ -104,7 +110,10 @@ export function DeleteWorkspaceCard({
                 Delete workspace
               </Button>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                {/* noValidate + no minLength: the field confirms an EXISTING password, which may
+                    be shorter than today's minimum. With native validation on, such a password
+                    made the browser block submit with a bubble and nothing happened at all. */}
                 <div>
                   <Label variant="form" htmlFor="delete-workspace-password" className="mb-2">
                     Confirm your password
@@ -115,7 +124,6 @@ export function DeleteWorkspaceCard({
                     type="password"
                     autoComplete="current-password"
                     required
-                    minLength={8}
                     maxLength={100}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

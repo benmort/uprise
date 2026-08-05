@@ -1,3 +1,4 @@
+import { ForbiddenException } from "@nestjs/common";
 import { IamFlowsService } from "./iam-flows.service";
 import { hashPassword } from "./password.util";
 
@@ -810,6 +811,138 @@ describe("IamFlowsService", () => {
         expect.objectContaining({ data: expect.objectContaining({ mobile: "+61400000000", mobileVerified: true }) }),
       );
       expect(prisma.tenantMember.upsert).toHaveBeenCalled();
+    });
+
+    // ── The granted role ────────────────────────────────────────────────────
+    // Every accept test above asserts `tenantMember.upsert` with a bare toHaveBeenCalled(),
+    // so nothing ever checked WHICH role an accept grants. An OWNER invite is the highest-
+    // privilege thing this flow does and had no coverage at all.
+    it.each(["OWNER", "ORGANISER", "VOLUNTEER"])(
+      "accept grants exactly the role on the invitation (%s)",
+      async (role) => {
+        const { svc, prisma } = setup();
+        prisma.tenantInvitation.findUnique.mockResolvedValue({ ...validInvite, role });
+        prisma.user.findUnique.mockResolvedValue(null);
+        await svc.acceptInvite("tok", { displayName: "U", password: "longenoughpw" });
+        expect(prisma.tenantMember.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({ create: expect.objectContaining({ role }) }),
+        );
+      },
+    );
+
+    // ── loadValidInvite, reached through acceptInvite ────────────────────────
+    // Only the "not pending" branch was covered, and only via previewInvite. A token that is
+    // expired, unknown, declined or already used must write nothing at all.
+    it.each([
+      ["an unknown token", null],
+      ["an expired invitation", { expiresAt: new Date(Date.now() - 1000) }],
+      ["a declined invitation", { status: "declined" }],
+      ["a revoked invitation", { status: "revoked" }],
+      ["an already-accepted invitation", { status: "accepted" }],
+    ])("accept rejects %s and writes nothing", async (_label, patch) => {
+      const { svc, prisma } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(
+        patch === null ? null : { ...validInvite, ...patch },
+      );
+      await expect(
+        svc.acceptInvite("tok", { displayName: "U", password: "longenoughpw" }),
+      ).rejects.toThrow();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it("accept rejects a new user whose password is present but too short", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(svc.acceptInvite("tok", { password: "short" })).rejects.toThrow(
+        /at least 8 characters/,
+      );
+    });
+
+    // ── Plan seat limits ────────────────────────────────────────────────────
+    // setup() stubs these to always resolve (40+ tests depend on that), so the PLAN_LIMIT
+    // throw had never actually been observed on the accept path. Inject the rejection here
+    // only, leaving the permissive default alone.
+    it("accept surfaces the plan seat limit and creates no membership", async () => {
+      const { svc, prisma, planLimits } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.user.findUnique.mockResolvedValue(null);
+      // The seat check only runs for a genuinely NEW seat. setup() defaults this mock to
+      // returning a row, which is why no existing test ever reached the guard.
+      prisma.tenantMember.findUnique.mockResolvedValue(null);
+      planLimits.assertTeamSeatAvailable.mockRejectedValueOnce(
+        new ForbiddenException("Your plan allows up to 2 team members. Upgrade your plan to add more."),
+      );
+      await expect(
+        svc.acceptInvite("tok", { displayName: "U", password: "longenoughpw" }),
+      ).rejects.toThrow(/Upgrade your plan/);
+      expect(prisma.tenantMember.upsert).not.toHaveBeenCalled();
+    });
+
+    it("accept skips the seat check for someone who is already a member", async () => {
+      const { svc, prisma, planLimits } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.user.findUnique.mockResolvedValue({ id: "existing", email: "new@x.y" });
+      prisma.tenantMember.findUnique.mockResolvedValue({ userId: "existing" });
+      await svc.acceptInvite("tok", {});
+      // A re-run must be a no-op, not something that trips the limit.
+      expect(planLimits.assertTeamSeatAvailable).not.toHaveBeenCalled();
+    });
+
+    // ── Signup attribution ──────────────────────────────────────────────────
+    it("accept records the signup attribution on a brand-new user", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.user.findUnique.mockResolvedValue(null);
+      await svc.acceptInvite("tok", {
+        displayName: "U",
+        password: "longenoughpw",
+        utmSource: "facebook",
+        utmCampaign: "spring",
+      });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ utmSource: "facebook", utmCampaign: "spring" }),
+        }),
+      );
+    });
+
+    it("accept defaults signupSource to 'invite' when the link carried no tracking", async () => {
+      const { svc, prisma } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.user.findUnique.mockResolvedValue(null);
+      await svc.acceptInvite("tok", { displayName: "U", password: "longenoughpw" });
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ signupSource: "invite" }) }),
+      );
+    });
+
+    // ── Outbox ──────────────────────────────────────────────────────────────
+    // The accept → welcome-email link: the reaction bails unless iam.user.created carries
+    // both email and tenantId, and no accept test asserted that payload.
+    it("accept emits iam.user.created carrying the email + tenantId the welcome email needs", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.user.findUnique.mockResolvedValue(null);
+      await svc.acceptInvite("tok", { displayName: "U", password: "longenoughpw" });
+      expect(outbox.append).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          eventType: "iam.user.created",
+          payload: expect.objectContaining({ email: "new@x.y", tenantId: "t1" }),
+        }),
+      );
+    });
+
+    it("accept emits tenant.invitation.accepted, and no user.created for an existing user", async () => {
+      const { svc, prisma, outbox } = setup();
+      prisma.tenantInvitation.findUnique.mockResolvedValue(validInvite);
+      prisma.user.findUnique.mockResolvedValue({ id: "existing", email: "new@x.y" });
+      await svc.acceptInvite("tok", {});
+      const types = outbox.append.mock.calls.map((c: any[]) => c[1].eventType);
+      expect(types).toContain("tenant.invitation.accepted");
+      expect(types).not.toContain("iam.user.created");
     });
 
     it("rejects an expired or non-pending invitation", async () => {

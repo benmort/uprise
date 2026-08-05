@@ -195,6 +195,132 @@ describe("TenantsService", () => {
     );
   });
 
+  it("createInvitation pins the emailed link's return_to to the configured app URL", async () => {
+    const { svc, config, dispatcher } = setup();
+    // Trailing slash included: the link must not end up with a doubled separator.
+    config.get.mockImplementation((k: string, fb?: string) =>
+      k === "APP_URL" ? "https://admin.uprise.org.au/" : (fb ?? ""),
+    );
+    const res = await svc.createInvitation("t1", {
+      email: "x@y.z",
+      role: AppUserRole.ORGANISER,
+      actor: { isSuperAdmin: true },
+    });
+    const expected = `http://localhost:3002/invite/${res.token}?return_to=${encodeURIComponent(
+      "https://admin.uprise.org.au",
+    )}`;
+    expect(dispatcher.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ vars: expect.objectContaining({ link: expected }) }),
+    );
+  });
+
+  it("createInvitation carries return_to into a composed email body too", async () => {
+    const { svc, config, dispatcher } = setup();
+    config.get.mockImplementation((k: string, fb?: string) =>
+      k === "APP_URL" ? "https://admin.uprise.org.au" : (fb ?? ""),
+    );
+    const res = await svc.createInvitation("t1", {
+      email: "x@y.z",
+      role: AppUserRole.ORGANISER,
+      message: "Tap here: {{invite_link}}",
+      actor: { isSuperAdmin: true },
+    });
+    expect(dispatcher.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateKey: "newsletter",
+        vars: expect.objectContaining({
+          body: `Tap here: http://localhost:3002/invite/${res.token}?return_to=${encodeURIComponent(
+            "https://admin.uprise.org.au",
+          )}`,
+        }),
+      }),
+    );
+  });
+
+  it("createInvitation pins a VOLUNTEER email invite at the field app, not the workspace", async () => {
+    const { svc, config, dispatcher } = setup();
+    // A volunteer's home is the canvasser app; admin's layout bounces them straight back out.
+    config.get.mockImplementation((k: string, fb?: string) => {
+      if (k === "APP_URL") return "https://admin.uprise.org.au";
+      if (k === "FIELD_APP_URL") return "https://field.uprise.org.au";
+      return fb ?? "";
+    });
+    const res = await svc.createInvitation("t1", {
+      email: "x@y.z",
+      role: AppUserRole.VOLUNTEER,
+      actor: { isSuperAdmin: true },
+    });
+    expect(dispatcher.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vars: expect.objectContaining({
+          link: `http://localhost:3002/invite/${res.token}?return_to=${encodeURIComponent(
+            "https://field.uprise.org.au",
+          )}`,
+        }),
+      }),
+    );
+  });
+
+  it("createInvitation emits NO return_to parameter when the destination is unconfigured", async () => {
+    const { svc, config, dispatcher } = setup();
+    // Both keys blank (the default everywhere until the Vercel vars are set): omitting the
+    // parameter keeps today's behaviour, whereas `?return_to=` with an empty value is worse.
+    config.get.mockImplementation((k: string, fb?: string) =>
+      k === "APP_URL" || k === "FIELD_APP_URL" ? "  " : (fb ?? "http://localhost:3002"),
+    );
+    const res = await svc.createInvitation("t1", {
+      email: "x@y.z",
+      role: AppUserRole.ORGANISER,
+      actor: { isSuperAdmin: true },
+    });
+    expect(dispatcher.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vars: expect.objectContaining({ link: `http://localhost:3002/invite/${res.token}` }),
+      }),
+    );
+    const { link } = dispatcher.sendEmail.mock.calls[0][0].vars;
+    expect(link).not.toContain("return_to");
+  });
+
+  it("createInvitation drops a schemeless or non-http APP_URL rather than emitting a relative return_to", async () => {
+    // A relative value isn't rejected by the auth app – it resolves against the AUTH origin and
+    // lands the invitee on a 404 there, so it must never reach the link.
+    for (const misconfigured of ["admin.uprise.org.au", "//admin.uprise.org.au", "ftp://admin.uprise.org.au"]) {
+      const { svc, config, dispatcher } = setup();
+      config.get.mockImplementation((k: string, fb?: string) =>
+        k === "APP_URL" ? misconfigured : (fb ?? "http://localhost:3002"),
+      );
+      const res = await svc.createInvitation("t1", {
+        email: "x@y.z",
+        role: AppUserRole.ORGANISER,
+        actor: { isSuperAdmin: true },
+      });
+      const { link } = dispatcher.sendEmail.mock.calls[0][0].vars;
+      expect(link).toBe(`http://localhost:3002/invite/${res.token}`);
+      expect(link).not.toContain("return_to");
+    }
+  });
+
+  it("createInvitation leaves the volunteer SMS link alone (it lands in the field app, not admin)", async () => {
+    const { svc, config, dispatcher } = setup();
+    config.get.mockImplementation((k: string, fb?: string) =>
+      k === "APP_URL" ? "https://admin.uprise.org.au" : (fb ?? ""),
+    );
+    const res = await svc.createInvitation("t1", {
+      phone: "+61400000000",
+      role: AppUserRole.VOLUNTEER,
+      actor: { isSuperAdmin: true },
+    });
+    expect(dispatcher.sendSms).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining(`http://localhost:3002/volunteer/invite/${res.token}`),
+      }),
+    );
+    expect(dispatcher.sendSms).not.toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining("return_to") }),
+    );
+  });
+
   it("createInvitation still succeeds when the inline send throws (best-effort)", async () => {
     const { svc, dispatcher } = setup();
     dispatcher.sendEmail.mockRejectedValueOnce(new Error("smtp down"));
@@ -259,12 +385,63 @@ describe("TenantsService", () => {
   it("removeMember rejects a non-existent membership", async () => {
     const { svc, prisma } = setup();
     prisma.tenantMember.findUnique.mockResolvedValueOnce(null);
-    await expect(svc.removeMember("t1", "u9")).rejects.toThrow();
+    await expect(svc.removeMember("t1", "u9", { isSuperAdmin: true })).rejects.toThrow();
   });
 
   it("removeMember emits tenant.member.removed", async () => {
     const { svc, outbox } = setup();
-    await svc.removeMember("t1", "u1");
+    await svc.removeMember("t1", "u1", { isSuperAdmin: true });
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.member.removed" }),
+    );
+  });
+
+  // Removal was the one membership mutation with no rank check: an organiser could evict an
+  // owner. Mirrors the hierarchy updateMemberRole already enforces.
+  it("removeMember forbids an organiser evicting an owner", async () => {
+    const { svc, prisma } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({
+      tenantId: "t1",
+      userId: "u2",
+      role: AppUserRole.OWNER,
+    });
+    // The actor is an ORGANISER in this tenant – below the OWNER they are trying to remove.
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({
+      tenantId: "t1",
+      userId: "u1",
+      role: AppUserRole.ORGANISER,
+    });
+    await expect(svc.removeMember("t1", "u2", { userId: "u1" })).rejects.toThrow(
+      /above your own level/,
+    );
+  });
+
+  // Deliberately allowed: removing a co-owner is ordinary team admin, and assertNotLastOwner
+  // already stops the workspace being orphaned. Only a rank ABOVE yours is refused.
+  it("removeMember lets an owner remove a co-owner", async () => {
+    const { svc, prisma, outbox } = setup();
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({
+      tenantId: "t1",
+      userId: "u2",
+      role: AppUserRole.OWNER,
+    });
+    prisma.tenantMember.findUnique.mockResolvedValueOnce({
+      tenantId: "t1",
+      userId: "u1",
+      role: AppUserRole.OWNER,
+    });
+    prisma.tenantMember.count.mockResolvedValue(2);
+    await svc.removeMember("t1", "u2", { userId: "u1" });
+    expect(outbox.append).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventType: "tenant.member.removed" }),
+    );
+  });
+
+  it("removeMember lets you remove yourself regardless of rank", async () => {
+    const { svc, outbox } = setup();
+    await svc.removeMember("t1", "u1", { userId: "u1" });
     expect(outbox.append).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ eventType: "tenant.member.removed" }),

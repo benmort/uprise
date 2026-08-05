@@ -79,6 +79,15 @@ export class AcceptInviteDto {
   // Doorknocker-only prefs (advisory) — assembled into TenantMember.canvassPrefs.
   @IsOptional() @IsIn(WALKING_CAPABILITIES) walkingCapability?: string;
   @IsOptional() @IsIn(SESSION_LENGTHS) sessionLength?: string;
+  // Signup attribution from the entry URL, sent by the onboarding wizard (captureAttribution).
+  // These MUST be declared: bootstrap.ts runs the global ValidationPipe with
+  // `forbidNonWhitelisted`, so an undeclared property is a 400 – which silently broke every
+  // invite/open-join link carrying ?utm_source=/?source=/?ref=.
+  @IsOptional() @IsString() @MaxLength(120) signupSource?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmSource?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmMedium?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmCampaign?: string;
+  @IsOptional() @IsString() @MaxLength(120) referrerChannel?: string;
 }
 
 // Tokenless open-join (per-campaign): same wizard, no invite token – campaignId is
@@ -98,6 +107,15 @@ export class OpenJoinAcceptDto {
   // Doorknocker-only prefs (advisory) — assembled into TenantMember.canvassPrefs.
   @IsOptional() @IsIn(WALKING_CAPABILITIES) walkingCapability?: string;
   @IsOptional() @IsIn(SESSION_LENGTHS) sessionLength?: string;
+  // Signup attribution from the entry URL, sent by the onboarding wizard (captureAttribution).
+  // These MUST be declared: bootstrap.ts runs the global ValidationPipe with
+  // `forbidNonWhitelisted`, so an undeclared property is a 400 – which silently broke every
+  // invite/open-join link carrying ?utm_source=/?source=/?ref=.
+  @IsOptional() @IsString() @MaxLength(120) signupSource?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmSource?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmMedium?: string;
+  @IsOptional() @IsString() @MaxLength(120) utmCampaign?: string;
+  @IsOptional() @IsString() @MaxLength(120) referrerChannel?: string;
 }
 
 export class SelectTenantDto {

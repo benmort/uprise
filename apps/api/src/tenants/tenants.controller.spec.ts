@@ -161,7 +161,7 @@ describe("TenantsController", () => {
   });
 
   it("listMembers delegates with id", () => {
-    c.listMembers("t1");
+    c.listMembers("t1", ownReq);
     expect(tenants.listMembers).toHaveBeenCalledWith("t1");
   });
 
@@ -183,9 +183,12 @@ describe("TenantsController", () => {
     });
   });
 
-  it("removeMember delegates with id + userId", () => {
-    c.removeMember("t1", "u2");
-    expect(tenants.removeMember).toHaveBeenCalledWith("t1", "u2");
+  it("removeMember delegates with id + userId + actor", () => {
+    c.removeMember("t1", "u2", ownReq);
+    expect(tenants.removeMember).toHaveBeenCalledWith("t1", "u2", {
+      userId: "u1",
+      isSuperAdmin: false,
+    });
   });
 
   it("createInvitation delegates with id + dto + invitedBy + actor", () => {
@@ -199,13 +202,53 @@ describe("TenantsController", () => {
   });
 
   it("listInvitations delegates with id", () => {
-    c.listInvitations("t1");
+    c.listInvitations("t1", ownReq);
     expect(tenants.listInvitations).toHaveBeenCalledWith("t1");
   });
 
   it("revokeInvitation delegates with id + invitationId", () => {
-    c.revokeInvitation("t1", "i1");
+    c.revokeInvitation("t1", "i1", ownReq);
     expect(tenants.revokeInvitation).toHaveBeenCalledWith("t1", "i1");
+  });
+
+  // Cross-tenant guard on the member + invitation surface. Before this, CASL checked the
+  // ACTION and nothing checked the tenant instance, so an organiser of t1 could pass t2's id
+  // and read its invitations (tokens included), evict its members, or revoke its invites.
+  describe("cross-tenant guard (an organiser of t1 acting on t2)", () => {
+    it("refuses to list another tenant's members", () => {
+      expect(() => c.listMembers("t2", otherReq)).toThrow(ForbiddenException);
+    });
+
+    it("refuses to add a member to another tenant", () => {
+      expect(() => c.addMember("t2", {} as any, otherReq)).toThrow(ForbiddenException);
+    });
+
+    it("refuses to change a role in another tenant", () => {
+      expect(() => c.updateMemberRole("t2", "u2", {} as any, otherReq)).toThrow(ForbiddenException);
+    });
+
+    it("refuses to remove a member from another tenant", () => {
+      expect(() => c.removeMember("t2", "u2", otherReq)).toThrow(ForbiddenException);
+    });
+
+    it("refuses to create an invitation in another tenant", () => {
+      expect(() => c.createInvitation("t2", {} as any, otherReq)).toThrow(ForbiddenException);
+    });
+
+    // The one that leaked bearer tokens.
+    it("refuses to list another tenant's invitations", () => {
+      expect(() => c.listInvitations("t2", otherReq)).toThrow(ForbiddenException);
+    });
+
+    it("refuses to revoke another tenant's invitation", () => {
+      expect(() => c.revokeInvitation("t2", "i1", otherReq)).toThrow(ForbiddenException);
+    });
+
+    it("still lets a super-admin cross tenants", () => {
+      const superReq = { user: { id: "s1", tenantId: "t1", isSuperAdmin: true } } as any;
+      expect(() => c.listInvitations("t2", superReq)).not.toThrow();
+      expect(tenants.listInvitations).toHaveBeenCalledWith("t2");
+    });
   });
 
   it("listJoinRequests delegates when acting on own tenant", () => {

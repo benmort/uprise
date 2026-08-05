@@ -39,6 +39,7 @@ import { tenants, type AuthPrincipal } from "@uprise/api-client";
 import { tenantSlugFromPlatformHost } from "@uprise/domains";
 import { createBlastAndOpen } from "@/lib/blasts";
 import { getSession, getSessionOutcome, goToLogin, logout } from "@/lib/session";
+import { reportClientError } from "@/lib/report-error";
 import { setupComplete, overallProgress } from "@/lib/setup/setup-state";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { TopbarSearch, type SearchItem } from "@/components/topbar/topbar-search";
@@ -467,6 +468,12 @@ export default function MainLayout({
   // A valid session that is not a member of this host's forced tenant (a tenant
   // subdomain / white-label host) → show an access-denied screen, not a login loop.
   const [deniedWorkspace, setDeniedWorkspace] = useState(false);
+  // The session check never reached a verdict (rejected fetch, or a 5xx from the API/edge).
+  // Kept distinct from "no session": bouncing to sign-in here is how a perfectly good – often
+  // brand-new – session gets abandoned on one flaky first load, with nothing recorded anywhere.
+  const [sessionUnreachable, setSessionUnreachable] = useState(false);
+  // Bumped by the retry button to re-run the resolve effect.
+  const [sessionAttempt, setSessionAttempt] = useState(0);
   // The tenant slug this host is scoped to (bare `<slug>.<platform>` subdomain), or null
   // on a platform app host. When set, the switcher is locked (the URL fixes the tenant).
   const hostScopedTenant = useMemo(
@@ -503,13 +510,21 @@ export default function MainLayout({
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const { user: session, deniedWorkspace: denied } = await getSessionOutcome();
+      const { user: session, deniedWorkspace: denied, unreachable } = await getSessionOutcome();
       if (!alive) return;
       // Middleware gates on the cookie; this resolves the principal. A 403 means the
       // session is valid but has no access to THIS host's tenant (a subdomain / white-label
       // host) — show an access-denied screen rather than looping through login.
       if (denied) {
         setDeniedWorkspace(true);
+        return;
+      }
+      // The check failed without ever judging the session (no reply at all, or a 5xx). That is
+      // a broken call, not an expired session, so offer a retry instead of signing the user out –
+      // and record it, because Vercel keeps no runtime logs and this is otherwise invisible.
+      if (unreachable) {
+        reportClientError("admin", new Error("Session check unreachable: /auth/check returned no verdict"));
+        setSessionUnreachable(true);
         return;
       }
       // A present cookie that no longer resolves (expired/revoked) → back to the auth app.
@@ -531,7 +546,7 @@ export default function MainLayout({
     return () => {
       alive = false;
     };
-  }, [router]);
+  }, [router, sessionAttempt]);
 
   useEffect(() => {
     if (!ready) return;
@@ -1146,6 +1161,41 @@ export default function MainLayout({
             className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-surface-variant"
           >
             Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionUnreachable) {
+    // We could not reach a verdict on the session. Deliberately NOT a sign-in bounce: the
+    // session is probably fine and the user keeps it by retrying. Sign-in stays available for
+    // the case where they really do need to start over.
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <h1 className="text-xl font-semibold text-foreground">We couldn’t reach the server</h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          You’re still signed in – we just couldn’t confirm it. This is usually a dropped
+          connection, or a browser extension, VPN or network filter blocking the request. Check
+          your connection, disable any content blocker for this page, then try again.
+        </p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setSessionUnreachable(false);
+              setSessionAttempt((n) => n + 1);
+            }}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+          >
+            Try again
+          </button>
+          <button
+            type="button"
+            onClick={() => goToLogin()}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-surface-variant"
+          >
+            Sign in again
           </button>
         </div>
       </div>
