@@ -9,6 +9,9 @@ const regulationFetch = jest.fn();
 const addressFetch = jest.fn();
 const addressCreate = jest.fn(async () => ({ sid: "AD" + "1".repeat(32) }));
 
+const incomingList = jest.fn();
+const incomingFetch = jest.fn();
+
 const twilioFactory = jest.fn(() => {
   // `addresses` is both a list resource (`.create`) and a context accessor (`(sid).fetch`).
   const addresses = ((_sid: string) => ({ fetch: addressFetch })) as unknown as {
@@ -16,8 +19,15 @@ const twilioFactory = jest.fn(() => {
     create: jest.Mock;
   };
   addresses.create = addressCreate;
+  // Same dual shape: `incomingPhoneNumbers.list()` and `incomingPhoneNumbers(sid).fetch()`.
+  const incomingPhoneNumbers = ((_sid: string) => ({ fetch: incomingFetch })) as unknown as {
+    (sid: string): { fetch: jest.Mock };
+    list: jest.Mock;
+  };
+  incomingPhoneNumbers.list = incomingList;
   return {
     addresses,
+    incomingPhoneNumbers,
     numbers: {
       v2: {
         regulatoryCompliance: {
@@ -60,6 +70,126 @@ beforeEach(() => {
   regulationFetch.mockReset().mockResolvedValue({ numberType: "mobile", isoCountry: "AU" });
   addressFetch.mockReset().mockResolvedValue({ isoCountry: "AU" });
   addressCreate.mockClear();
+  incomingList.mockReset().mockResolvedValue([]);
+  incomingFetch.mockReset();
+});
+
+/**
+ * Reading what the account ALREADY owns. This is the whole basis of adoption – without it
+ * the only way a number enters uprise is by buying another one the organisation already has.
+ */
+describe("TwilioProvisioningClient owned numbers", () => {
+  const OWNED_SID = "PN" + "c".repeat(32);
+  const twilioNumber = (overrides: Record<string, unknown> = {}) => ({
+    sid: OWNED_SID,
+    phoneNumber: "+61400000001",
+    friendlyName: "Campaign line",
+    capabilities: { voice: true, sms: true, mms: true },
+    // What the real BYO account looks like: a working voice configuration belonging to the
+    // organisation's own autodialer, and messaging never configured at all.
+    voiceUrl: "https://example-autodialer.test/voice",
+    voiceApplicationSid: "AP" + "d".repeat(32),
+    voiceFallbackUrl: "https://example-autodialer.test/voice-fallback",
+    trunkSid: "",
+    smsUrl: "",
+    smsApplicationSid: "",
+    smsFallbackUrl: "",
+    ...overrides,
+  });
+
+  it("lists each owned number with its capabilities and CURRENT configuration", async () => {
+    const client = setup();
+    incomingList.mockResolvedValue([twilioNumber()]);
+
+    await expect(client.listOwnedNumbers(CREDS)).resolves.toEqual([
+      {
+        phoneNumberE164: "+61400000001",
+        phoneNumberSid: OWNED_SID,
+        friendlyName: "Campaign line",
+        capabilities: { voice: true, sms: true, mms: true },
+        voiceUrl: "https://example-autodialer.test/voice",
+        voiceApplicationSid: "AP" + "d".repeat(32),
+        voiceFallbackUrl: "https://example-autodialer.test/voice-fallback",
+        trunkSid: null,
+        smsUrl: null,
+        smsApplicationSid: null,
+        smsFallbackUrl: null,
+      },
+    ]);
+  });
+
+  /**
+   * Every field Twilio routes on is read, not just the two primary URLs. A trunk binding
+   * overrides voice routing outright and a fallback URL takes traffic whenever the primary
+   * errors – a reader that missed either would report an occupied hook as free, and adoption
+   * decides whether it is safe to claim a hook from exactly this read.
+   */
+  it("reads the trunk binding and the fallback URLs, not just the primary hooks", async () => {
+    const client = setup();
+    const trunkSid = "TK" + "f".repeat(32);
+    incomingList.mockResolvedValue([
+      twilioNumber({ trunkSid, smsFallbackUrl: "https://example-crm.test/sms-fallback" }),
+    ]);
+
+    const [number] = await client.listOwnedNumbers(CREDS);
+
+    expect(number).toMatchObject({
+      trunkSid,
+      voiceFallbackUrl: "https://example-autodialer.test/voice-fallback",
+      smsFallbackUrl: "https://example-crm.test/sms-fallback",
+    });
+  });
+
+  /**
+   * The premise of adoption is an account holding piles of unused inventory, so a list that
+   * silently stopped at a low page ceiling would show a missing number as one Twilio does not
+   * report – indistinguishable, to the operator, from a number that is not there.
+   */
+  it("pages well past any real account rather than capping the candidate list at 100", async () => {
+    const client = setup();
+    await client.listOwnedNumbers(CREDS);
+
+    expect(incomingList).toHaveBeenCalledWith({ limit: 1000 });
+  });
+
+  // Absent capabilities must read FALSE, never true: a number uprise cannot prove is
+  // SMS-capable must never be adopted as an SMS sender.
+  it("reads missing capabilities as false rather than assuming them", async () => {
+    const client = setup();
+    incomingList.mockResolvedValue([twilioNumber({ capabilities: null })]);
+
+    const [number] = await client.listOwnedNumbers(CREDS);
+    expect(number.capabilities).toEqual({ voice: false, sms: false, mms: false });
+  });
+
+  it("fetches one owned number by SID", async () => {
+    const client = setup();
+    incomingFetch.mockResolvedValue(twilioNumber());
+
+    await expect(client.fetchOwnedNumber(CREDS, OWNED_SID)).resolves.toMatchObject({
+      phoneNumberSid: OWNED_SID,
+      phoneNumberE164: "+61400000001",
+    });
+  });
+
+  // Null is the OWNERSHIP verdict – the fetch runs under the account's own credentials, so a
+  // SID belonging to anyone else cannot resolve.
+  it("returns null when the SID is not on this account, without retrying a settled answer", async () => {
+    const client = setup();
+    incomingFetch.mockRejectedValue(Object.assign(new Error("not found"), { status: 404, code: 20404 }));
+
+    await expect(client.fetchOwnedNumber(CREDS, OWNED_SID)).resolves.toBeNull();
+    expect(incomingFetch).toHaveBeenCalledTimes(1);
+  });
+
+  // "We could not ask" must never read as "not yours" – an auth failure or an outage has to
+  // surface, or a credential problem would silently look like a number the tenant lost.
+  it("throws (not null) when the lookup fails for any other reason", async () => {
+    const client = setup();
+    incomingFetch.mockRejectedValue(Object.assign(new Error("Authenticate"), { status: 401 }));
+
+    await expect(client.fetchOwnedNumber(CREDS, OWNED_SID)).rejects.toThrow("Authenticate");
+  });
 });
 
 /**

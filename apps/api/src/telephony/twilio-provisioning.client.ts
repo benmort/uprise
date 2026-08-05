@@ -50,10 +50,110 @@ export type ComplianceInput = {
  * fields, because the classes are mutually exclusive: an AU local number cannot receive SMS
  * and an AU mobile is not a voice caller ID. Which arm applies is the service's decision
  * (`numberWebhooks`); the client only carries it to Twilio.
+ *
+ * The optional fields beyond the URL are there for ADOPTION, where the hook is rarely blank.
+ * A TwiML application OVERRIDES the URL on the same hook at Twilio, and a `trunkSid` overrides
+ * voice routing entirely, so a number carrying either would keep routing where it always did
+ * no matter what URL we write; the fallback URL keeps receiving traffic whenever ours errors.
+ * Claiming a hook therefore has to clear all of them on THAT hook in the same update – and
+ * only that one, so the other class's configuration is untouched. `""` is Twilio's "unset",
+ * which is also why these are plain strings rather than nullable: restoring a hook writes the
+ * previous value back, or `""` where there was none.
  */
 export type NumberWebhooks =
-  | { smsUrl: string; smsMethod: "POST" }
-  | { voiceUrl: string; voiceMethod: "POST" };
+  | { smsUrl: string; smsMethod: "POST"; smsApplicationSid?: string; smsFallbackUrl?: string }
+  | {
+      voiceUrl: string;
+      voiceMethod: "POST";
+      voiceApplicationSid?: string;
+      voiceFallbackUrl?: string;
+      trunkSid?: string;
+    };
+
+/**
+ * A number the account ALREADY owns, as Twilio reports it.
+ *
+ * The current configuration is part of the read, not an afterthought: a BYO account's numbers
+ * are usually already wired to something the organisation depends on, and uprise cannot decide
+ * whether adopting one is safe without seeing what is there. Every routing field Twilio honours
+ * is read, not just the primary URL – an application SID with a blank URL is a CONFIGURED hook,
+ * a `trunkSid` sends voice to a SIP trunk and ignores the URL altogether, and a fallback URL
+ * keeps taking traffic whenever the primary errors. A reader that only looked at the two
+ * primary URLs would call all three of those free.
+ */
+export type OwnedNumber = {
+  phoneNumberE164: string;
+  phoneNumberSid: string;
+  friendlyName: string | null;
+  /** What Twilio says the number can actually do – the authority on capability. */
+  capabilities: { voice: boolean; sms: boolean; mms: boolean };
+  voiceUrl: string | null;
+  voiceApplicationSid: string | null;
+  voiceFallbackUrl: string | null;
+  /** Elastic SIP trunk the number's voice is bound to; overrides `voiceUrl` at Twilio. */
+  trunkSid: string | null;
+  smsUrl: string | null;
+  smsApplicationSid: string | null;
+  smsFallbackUrl: string | null;
+};
+
+/** Twilio resource shape for an incoming phone number (only the fields adoption reads). */
+type TwilioIncomingNumber = {
+  sid?: string;
+  phoneNumber?: string;
+  friendlyName?: string | null;
+  capabilities?: { voice?: boolean; sms?: boolean; mms?: boolean } | null;
+  voiceUrl?: string | null;
+  voiceApplicationSid?: string | null;
+  voiceFallbackUrl?: string | null;
+  trunkSid?: string | null;
+  smsUrl?: string | null;
+  smsApplicationSid?: string | null;
+  smsFallbackUrl?: string | null;
+};
+
+/** Empty string is Twilio's "unset", so it is normalised to null here rather than at each reader. */
+const orNull = (value: string | null | undefined): string | null => {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed ? trimmed : null;
+};
+
+const toOwnedNumber = (n: TwilioIncomingNumber): OwnedNumber => ({
+  phoneNumberE164: String(n.phoneNumber ?? ""),
+  phoneNumberSid: String(n.sid ?? ""),
+  friendlyName: orNull(n.friendlyName),
+  // Absent capabilities are read as FALSE, never as true: a number uprise cannot prove is
+  // SMS-capable must not be adopted as an SMS sender.
+  capabilities: {
+    voice: n.capabilities?.voice === true,
+    sms: n.capabilities?.sms === true,
+    mms: n.capabilities?.mms === true,
+  },
+  voiceUrl: orNull(n.voiceUrl),
+  voiceApplicationSid: orNull(n.voiceApplicationSid),
+  voiceFallbackUrl: orNull(n.voiceFallbackUrl),
+  trunkSid: orNull(n.trunkSid),
+  smsUrl: orNull(n.smsUrl),
+  smsApplicationSid: orNull(n.smsApplicationSid),
+  smsFallbackUrl: orNull(n.smsFallbackUrl),
+});
+
+/**
+ * A Twilio "no such resource on this account" answer. It is a FACT, not a fault: it is how
+ * ownership is proved, so it must neither be retried nor confused with an outage or a bad
+ * credential – both of which have to surface as errors rather than as "not yours".
+ */
+/**
+ * How many owned numbers one `listOwnedNumbers` call will page through. Far above any real
+ * BYO account (the account this was built for holds single digits), so the ceiling is a
+ * runaway guard rather than a page size an operator could hit.
+ */
+const OWNED_NUMBER_PAGE_CEILING = 1000;
+
+const isTwilioNotFound = (error: unknown): boolean => {
+  const e = error as { status?: number; code?: number } | null;
+  return e?.status === 404 || e?.code === 20404;
+};
 
 export type UploadableDocument = {
   fileName: string;
@@ -289,6 +389,47 @@ export class TwilioProvisioningClient {
   /** Back-compat alias for the historical mobile-only flow. */
   async findAvailableAuMobile(creds: TwilioCreds): Promise<string> {
     return this.findAvailableAuNumber(creds, "mobile");
+  }
+
+  /**
+   * Every number the account ALREADY owns, with its capabilities and current configuration.
+   *
+   * This is the read that makes adoption possible: a tenant's BYO account routinely holds
+   * numbers it has already paid for and regulated, and without this list the only way one
+   * enters uprise is by buying another.
+   *
+   * `limit` is a ceiling on the SDK's auto-paging, and it is set high deliberately: the whole
+   * premise of adoption is an account holding piles of inventory, and a list that silently
+   * stopped short would show the operator a missing number as one Twilio does not report.
+   */
+  async listOwnedNumbers(creds: TwilioCreds, limit = OWNED_NUMBER_PAGE_CEILING): Promise<OwnedNumber[]> {
+    const numbers = await withRetry<TwilioIncomingNumber[]>(
+      () => this.client(creds).incomingPhoneNumbers.list({ limit }),
+      { retries: 2 },
+    );
+    return numbers.map(toOwnedNumber);
+  }
+
+  /**
+   * One owned number, or null when this account does not own that SID.
+   *
+   * Null is the ownership verdict, which is why adoption fetches instead of trusting the
+   * caller: the fetch runs under the ACCOUNT's own credentials, so a SID belonging to anyone
+   * else cannot resolve. Only a genuine not-found becomes null – an auth failure or an outage
+   * still throws, because "we could not ask" must never read as "not yours".
+   */
+  async fetchOwnedNumber(creds: TwilioCreds, phoneNumberSid: string): Promise<OwnedNumber | null> {
+    try {
+      const number = await withRetry<TwilioIncomingNumber>(
+        () => this.client(creds).incomingPhoneNumbers(phoneNumberSid).fetch(),
+        // A not-found is a settled answer; retrying it only delays the refusal.
+        { retries: 2, shouldRetry: (error) => !isTwilioNotFound(error) },
+      );
+      return toOwnedNumber(number);
+    } catch (error) {
+      if (isTwilioNotFound(error)) return null;
+      throw error;
+    }
   }
 
   async purchaseNumber(

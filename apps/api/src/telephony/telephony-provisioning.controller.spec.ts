@@ -17,6 +17,8 @@ function setup() {
     releaseNumber: jest.fn(async () => ({})),
     setNickname: jest.fn(async () => ({})),
     pollSubmittedBundles: jest.fn(async () => ({ polled: 0 })),
+    listAdoptableNumbers: jest.fn(async () => []),
+    adoptNumber: jest.fn(async () => ({ number: { id: "num-1" } })),
   };
   const controller = new TelephonyProvisioningController(provisioning);
   return { controller, provisioning };
@@ -155,6 +157,62 @@ describe("TelephonyProvisioningController", () => {
       const { controller, provisioning } = setup();
       await controller.setNickname("num1", { nickname: "Calls line" } as any, superReq());
       expect(provisioning.setNickname).toHaveBeenCalledWith("num1", "Calls line", undefined, undefined);
+    });
+  });
+
+  /**
+   * Adoption is account-scoped, and the account id comes off the wire – so the binding of
+   * that id to the caller's own tenant is the whole security surface of these two routes.
+   */
+  describe("number adoption scoping", () => {
+    const ACCOUNT_ID = "acct-1";
+    const PHONE_SID = "PN" + "c".repeat(32);
+
+    it("binds an owner's listing to their own tenant", async () => {
+      const { controller, provisioning } = setup();
+      await controller.listAdoptableNumbers(ACCOUNT_ID, ownerReq());
+      expect(provisioning.listAdoptableNumbers).toHaveBeenCalledWith(ACCOUNT_ID, TENANT_ID);
+    });
+
+    it("leaves a super-admin unscoped (the service takes the account's own tenant)", async () => {
+      const { controller, provisioning } = setup();
+      await controller.listAdoptableNumbers(ACCOUNT_ID, superReq());
+      expect(provisioning.listAdoptableNumbers).toHaveBeenCalledWith(ACCOUNT_ID, undefined);
+    });
+
+    // An undefined scope reads downstream as "unscoped". A tenant-less non-super-admin
+    // session must therefore be refused here, not passed through as one.
+    it("refuses a tenant-less non-super-admin rather than passing an unscoped call through", async () => {
+      const { controller, provisioning } = setup();
+      const noTenant = { user: { id: "u2", tenantId: null, isSuperAdmin: false } } as any;
+
+      await expect(controller.listAdoptableNumbers(ACCOUNT_ID, noTenant)).rejects.toThrow(ForbiddenException);
+      await expect(
+        controller.adoptNumber(ACCOUNT_ID, { phoneNumberSid: PHONE_SID } as any, noTenant),
+      ).rejects.toThrow(ForbiddenException);
+      expect(provisioning.listAdoptableNumbers).not.toHaveBeenCalled();
+      expect(provisioning.adoptNumber).not.toHaveBeenCalled();
+    });
+
+    // A dropped claim flag is invisible and irreversible in opposite directions: dropped
+    // `false` would overwrite a live configuration, dropped `true` would silently no-op.
+    it("passes the SID, nickname and both hook opt-ins through with the tenant scope", async () => {
+      const { controller, provisioning } = setup();
+
+      await controller.adoptNumber(
+        ACCOUNT_ID,
+        { phoneNumberSid: PHONE_SID, nickname: "Field line", claimVoiceHook: true } as any,
+        ownerReq(),
+      );
+
+      expect(provisioning.adoptNumber).toHaveBeenCalledWith({
+        accountId: ACCOUNT_ID,
+        phoneNumberSid: PHONE_SID,
+        nickname: "Field line",
+        claimSmsHook: undefined,
+        claimVoiceHook: true,
+        scopeTenantId: TENANT_ID,
+      });
     });
   });
 

@@ -168,6 +168,38 @@ export class SetNumberNicknameDto {
   purpose?: "transactional" | "marketing" | "whatsapp";
 }
 
+export class AdoptNumberDto {
+  /**
+   * The Twilio SID of a number the account ALREADY owns (`PN` + 32 hex). Pasted from the
+   * adoptable-numbers listing, so it is trimmed before it is matched. Shape-checked here
+   * because a malformed SID would otherwise only surface as a Twilio lookup failure, which
+   * is indistinguishable from "not your number".
+   */
+  @Transform(trimmed)
+  @Matches(/^PN[0-9a-fA-F]{32}$/, { message: "phoneNumberSid must be a Twilio phone number SID (PN…)" })
+  phoneNumberSid!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  nickname?: string;
+
+  /**
+   * Take over an inbound hook that is ALREADY configured. Default (absent) is to leave the
+   * existing configuration alone and report it – the numbers on a real BYO account carry a
+   * working voice configuration belonging to the organisation's own systems, and silently
+   * overwriting it would break a running service. Each hook opts in separately, and adoption
+   * only ever touches the hook matching the number's class.
+   */
+  @IsOptional()
+  @IsBoolean()
+  claimSmsHook?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  claimVoiceHook?: boolean;
+}
+
 export class BundleStatusCallbackDto {
   @IsString()
   @IsNotEmpty()

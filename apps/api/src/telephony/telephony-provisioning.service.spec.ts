@@ -99,6 +99,42 @@ function makeNumber(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The SID of a number the BYO account already owns. Obviously fake, correctly shaped. */
+const OWNED_SID = "PN" + "c".repeat(32);
+/** A TwiML application on a hook – the organisation's own autodialer, not ours. */
+const FOREIGN_APP_SID = "AP" + "d".repeat(32);
+
+/**
+ * A number the tenant's Twilio account ALREADY owns, as the client reports it. The defaults
+ * mirror the real BYO account: a +614 mobile, BOTH voice and SMS enabled, a live voice
+ * configuration pointing at the organisation's existing autodialer, and messaging blank.
+ */
+function makeOwnedNumber(overrides: Record<string, unknown> = {}) {
+  return {
+    phoneNumberE164: "+61400000001",
+    phoneNumberSid: OWNED_SID,
+    friendlyName: "Existing line",
+    capabilities: { voice: true, sms: true, mms: true },
+    voiceUrl: "https://example-autodialer.test/voice",
+    voiceApplicationSid: FOREIGN_APP_SID,
+    voiceFallbackUrl: null as string | null,
+    trunkSid: null as string | null,
+    smsUrl: null as string | null,
+    smsApplicationSid: null as string | null,
+    smsFallbackUrl: null as string | null,
+    ...overrides,
+  };
+}
+
+/** The `existing` shape every hook report carries; overridden per-case. */
+const freeHook = (overrides: Record<string, unknown> = {}) => ({
+  url: null,
+  applicationSid: null,
+  fallbackUrl: null,
+  trunkSid: null,
+  ...overrides,
+});
+
 /**
  * Evaluate the class-match OR the service builds against a candidate row. The where
  * clause IS the reuse behaviour (prisma is mocked), so asserting it against real rows
@@ -171,8 +207,12 @@ function setup() {
     fetchAddressCountry: jest.fn(async () => "AU" as string | null),
     findAvailableAuNumber: jest.fn(async () => "+61400000000"),
     purchaseNumber: jest.fn(async () => ({ phoneNumberSid: "PN" + "9".repeat(32), phoneNumberE164: "+61400000000" })),
-    configureNumberWebhook: jest.fn(async () => undefined),
+    configureNumberWebhook: jest.fn(async (..._args: any[]) => undefined),
     releaseNumber: jest.fn(async () => undefined),
+    // What the BYO account already owns. Default: the real account's shape – an AU mobile
+    // with BOTH capabilities, a working foreign voice configuration, and messaging blank.
+    listOwnedNumbers: jest.fn(async (): Promise<any[]> => [makeOwnedNumber()]),
+    fetchOwnedNumber: jest.fn(async (): Promise<any> => makeOwnedNumber()),
   };
   const outbox = { append: jest.fn(async () => undefined) };
   const logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn(), debug: jest.fn() };
@@ -2162,6 +2202,628 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
         service.addDocument(RUN_ID, { buffer: Buffer.from("x"), originalname: "x.pdf", mimetype: "application/pdf" }, "t"),
         "DOCUMENT_STORAGE_NOT_CONFIGURED",
       );
+    });
+  });
+});
+
+/**
+ * Adopting a number the tenant's own Twilio account ALREADY owns.
+ *
+ * The point of the whole path: a real BYO account has seven-plus unused AU numbers on it,
+ * and before this the only way one entered uprise was to BUY another – real money on
+ * inventory the organisation holds, plus a fresh regulatory bundle and days of human review
+ * at Twilio. None of that is a provisioning run, so none of it goes through the FSM.
+ */
+describe("TelephonyProvisioningService number adoption", () => {
+  const SMS_HOOK = "https://api.test/api/v1/inbound-text-message-hook";
+  const VOICE_HOOK = "https://api.test/api/v1/voice-outbound";
+
+  /** An adoption setup with the BYO account already in place. */
+  function adoptSetup(accountOverrides: Record<string, unknown> = {}) {
+    const ctx = setup();
+    ctx.prisma.telephonyAccount.findUnique.mockResolvedValue(
+      makeAccount({ mode: "BYO", ...accountOverrides }),
+    );
+    return ctx;
+  }
+
+  describe("listAdoptableNumbers", () => {
+    it("returns each owned number with its current configuration, class and hook plan", async () => {
+      const { service, twilio } = adoptSetup();
+
+      const [candidate] = await service.listAdoptableNumbers(ACCOUNT_ID);
+
+      expect(twilio.listOwnedNumbers).toHaveBeenCalled();
+      expect(candidate).toMatchObject({
+        phoneNumberE164: "+61400000001",
+        phoneNumberSid: OWNED_SID,
+        capabilities: { voice: true, sms: true, mms: true },
+        // The configuration that is ALREADY there – the operator has to see the conflict.
+        voiceUrl: "https://example-autodialer.test/voice",
+        voiceApplicationSid: FOREIGN_APP_SID,
+        classification: { numberType: "mobile" },
+        blockedReason: null,
+        // A mobile is adopted for messaging, so the SMS hook is the one in play – and it is
+        // free, so adoption would claim it. The occupied voice hook is not even a candidate.
+        hook: { hook: "sms", action: "claimed", existing: freeHook() },
+      });
+    });
+
+    it("marks a number this tenant has already adopted, and one another tenant holds", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.listOwnedNumbers.mockResolvedValue([
+        makeOwnedNumber(),
+        makeOwnedNumber({ phoneNumberE164: "+61400000002", phoneNumberSid: "PN" + "e".repeat(32) }),
+      ]);
+      prisma.telephonyPhoneNumber.findMany.mockResolvedValue([
+        makeNumber({ phoneNumberE164: "+61400000001", tenantId: TENANT_ID }),
+        makeNumber({ phoneNumberE164: "+61400000002", tenantId: "other-tenant" }),
+      ]);
+
+      const candidates = await service.listAdoptableNumbers(ACCOUNT_ID);
+
+      expect(candidates.map((c) => c.blockedReason)).toEqual([
+        "ALREADY_ADOPTED",
+        "ADOPTED_BY_ANOTHER_TENANT",
+      ]);
+    });
+
+    // The listing and the adopt call have to agree on what "already held" means, or the
+    // listing offers a number the adopt call then 409s on. A row carrying the SID under a
+    // different E.164 (reassigned at Twilio) is that number's row either way.
+    it("marks a number held by SID alone, matching what adoption would refuse", async () => {
+      const { service, prisma } = adoptSetup();
+      prisma.telephonyPhoneNumber.findMany.mockResolvedValue([
+        makeNumber({ phoneNumberE164: "+61499999999", phoneNumberSid: OWNED_SID, tenantId: TENANT_ID }),
+      ]);
+
+      const [candidate] = await service.listAdoptableNumbers(ACCOUNT_ID);
+
+      expect(candidate.blockedReason).toBe("ALREADY_ADOPTED");
+      // Prisma is mocked, so the WHERE clause is the behaviour: a query that asked about the
+      // E.164 alone would never see this row in the first place, and the listing would offer
+      // a number the adopt call then 409s on.
+      expect(prisma.telephonyPhoneNumber.findMany).toHaveBeenCalledWith({
+        where: {
+          OR: [
+            { phoneNumberE164: { in: ["+61400000001"] } },
+            { phoneNumberSid: { in: [OWNED_SID] } },
+          ],
+        },
+      });
+    });
+
+    it("lists a number Twilio says cannot do its class's job, but does not offer it", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.listOwnedNumbers.mockResolvedValue([
+        makeOwnedNumber({ capabilities: { voice: false, sms: false, mms: false } }),
+      ]);
+
+      const [candidate] = await service.listAdoptableNumbers(ACCOUNT_ID);
+
+      expect(candidate.blockedReason).toBe("NUMBER_NOT_USABLE");
+      expect(candidate.classification).toBeNull();
+    });
+
+    it("lists a non-Australian number, but does not offer it", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.listOwnedNumbers.mockResolvedValue([makeOwnedNumber({ phoneNumberE164: "+12025550123" })]);
+
+      const [candidate] = await service.listAdoptableNumbers(ACCOUNT_ID);
+
+      expect(candidate.blockedReason).toBe("NUMBER_NOT_AUSTRALIAN");
+      expect(candidate.classification).toBeNull();
+    });
+
+    it("refuses to list another tenant's account", async () => {
+      const { service } = adoptSetup();
+      await expect(service.listAdoptableNumbers(ACCOUNT_ID, "other-tenant")).rejects.toThrow(
+        /your own organisation/i,
+      );
+    });
+  });
+
+  describe("adoptNumber", () => {
+    it("registers an owned mobile as an SMS sender – no purchase, no bundle, no run", async () => {
+      const { service, prisma, twilio, senderResolver } = adoptSetup();
+
+      const result = await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(twilio.purchaseNumber).not.toHaveBeenCalled();
+      expect(twilio.createBundle).not.toHaveBeenCalled();
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: TENANT_ID,
+          accountId: ACCOUNT_ID,
+          phoneNumberE164: "+61400000001",
+          phoneNumberSid: OWNED_SID,
+          numberType: "mobile",
+          purpose: "marketing",
+          status: TelephonyNumberStatus.ACTIVE,
+          // uprise holds no compliance artefacts for a number it did not provision.
+          bundleSid: null,
+          addressSid: null,
+        }),
+      });
+      expect(result.classification).toMatchObject({ numberType: "mobile" });
+      expect(senderResolver.invalidate).toHaveBeenCalledWith(TENANT_ID);
+    });
+
+    // The row and the account flip go together, exactly as the purchase path writes them –
+    // otherwise a crash between the two leaves an ACTIVE number under a PROVISIONING account,
+    // which the sender resolver cannot resolve and nothing would ever retry.
+    it("writes the number and the account flip in one transaction", async () => {
+      const { service, prisma } = adoptSetup({ status: "PROVISIONING" });
+
+      await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const tx = prisma.$transaction.mock.calls[0][0];
+      expect(typeof tx).toBe("function");
+    });
+
+    it("classes a +612 local from its prefix and gives it the voice purpose", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(makeOwnedNumber({ phoneNumberE164: "+61212341234" }));
+
+      const result = await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(result.classification).toMatchObject({ numberType: "local" });
+      // "voice" matches no SendPurpose, and numberType "local" fails isSmsCapable – two
+      // independent reasons the sender resolver can never text from it.
+      expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ numberType: "local", purpose: "voice" }),
+      });
+    });
+
+    /**
+     * The class NEVER contradicts the prefix. A +614 Twilio says cannot text has no job here:
+     * classing it "local" (as a capability-led rule would) puts it in the tenant's voice pool,
+     * where it can displace their real +612 – and then every voice path rejects it by prefix
+     * and the tenant's autodialer stops. Refusing is the only outcome that cannot break them.
+     */
+    it("refuses a +614 Twilio says cannot send SMS rather than classing it local", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ capabilities: { voice: true, sms: false, mms: false } }),
+      );
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID, claimVoiceHook: true }),
+        "NUMBER_NOT_USABLE",
+      );
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+    });
+
+    // The mirror: a local number is adopted to be a caller ID, so one that cannot take calls
+    // is equally useless – and must not be written "local" and handed to the voice resolver.
+    it("refuses a +612 Twilio says cannot take calls", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({
+          phoneNumberE164: "+61212341234",
+          capabilities: { voice: false, sms: true, mms: false },
+        }),
+      );
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "NUMBER_NOT_USABLE",
+      );
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses a number Twilio says can neither text nor call", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ capabilities: { voice: false, sms: false, mms: false } }),
+      );
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "NUMBER_NOT_USABLE",
+      );
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+    });
+
+    // uprise's telephony is AU-regulated end to end. A US number on the BYO account must not
+    // slide in as the tenant's marketing sender on a "well, it can text" fallback.
+    it("refuses a number outside the Australian numbering plan", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(makeOwnedNumber({ phoneNumberE164: "+12025550123" }));
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "NUMBER_NOT_AUSTRALIAN",
+      );
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+    });
+
+    // Ownership is proved against Twilio, not taken from the request – otherwise a caller
+    // could attach any SID, including one belonging to someone else's account.
+    it("refuses a SID the account does not own, writing nothing", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(null);
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "NUMBER_NOT_ON_ACCOUNT",
+      );
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+    });
+
+    it("fails cleanly when the tenant has already adopted the number", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      prisma.telephonyPhoneNumber.findFirst.mockResolvedValue(makeNumber({ tenantId: TENANT_ID }));
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "NUMBER_ALREADY_ADOPTED",
+      );
+      // Nothing at Twilio is touched on the way to failing.
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+    });
+
+    it("fails cleanly – and anonymously – when another tenant holds the number", async () => {
+      const { service, prisma } = adoptSetup();
+      prisma.telephonyPhoneNumber.findFirst.mockResolvedValue(makeNumber({ tenantId: "other-tenant" }));
+
+      const attempt = service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      await expectApiError(attempt, "NUMBER_ADOPTED_BY_ANOTHER_TENANT");
+      // The other organisation is never named back to this caller.
+      await attempt.catch((e: any) => expect(e.response.error.message).not.toContain("other-tenant"));
+    });
+
+    // The UNIQUE index is the last line of defence when two adoptions race. It must surface
+    // as the same machine-readable code, never as a raw Prisma constraint error – and the
+    // loser must not leave the number pointing at uprise with no row behind it.
+    it("turns a racing unique-constraint violation into the same clean code, and puts the hook back", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      prisma.telephonyPhoneNumber.create.mockRejectedValue(
+        Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+      );
+      prisma.telephonyPhoneNumber.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(makeNumber({ tenantId: "other-tenant" }));
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "NUMBER_ADOPTED_BY_ANOTHER_TENANT",
+      );
+      expect(twilio.configureNumberWebhook).toHaveBeenLastCalledWith(expect.anything(), OWNED_SID, {
+        smsUrl: "",
+        smsMethod: "POST",
+        smsApplicationSid: "",
+        smsFallbackUrl: "",
+      });
+    });
+
+    /**
+     * The one deliberately destructive action in the path. If the row cannot be written the
+     * organisation's live voice configuration has to come back – nothing else records it, so
+     * without this it is simply gone, and the number answers to uprise with no row saying why.
+     */
+    it("restores a taken-over voice hook when the row cannot be written", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      const trunkSid = "TK" + "f".repeat(32);
+      // Every field the take-over cleared has to come back, not just the primary URL – the
+      // organisation's trunk binding and fallback are as much a part of their configuration.
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({
+          phoneNumberE164: "+61212341234",
+          voiceFallbackUrl: "https://example-autodialer.test/voice-fallback",
+          trunkSid,
+        }),
+      );
+      prisma.telephonyPhoneNumber.create.mockRejectedValue(new Error("connection reset"));
+
+      await expect(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID, claimVoiceHook: true }),
+      ).rejects.toThrow("connection reset");
+
+      expect(twilio.configureNumberWebhook).toHaveBeenLastCalledWith(expect.anything(), OWNED_SID, {
+        voiceUrl: "https://example-autodialer.test/voice",
+        voiceMethod: "POST",
+        voiceApplicationSid: FOREIGN_APP_SID,
+        voiceFallbackUrl: "https://example-autodialer.test/voice-fallback",
+        trunkSid,
+      });
+    });
+
+    // Nothing was written, so nothing is restored – a rollback that wrote anyway would itself
+    // be the destructive change it exists to undo.
+    it("writes nothing back when the failed adoption never touched the hook", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(makeOwnedNumber({ phoneNumberE164: "+61212341234" }));
+      prisma.telephonyPhoneNumber.create.mockRejectedValue(new Error("connection reset"));
+
+      await expect(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+      ).rejects.toThrow("connection reset");
+
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+    });
+
+    // A restore that fails has nothing left to try, but it must not mask the real failure.
+    it("reports the original failure even when the hook cannot be restored", async () => {
+      const { service, prisma, twilio, logger } = adoptSetup();
+      prisma.telephonyPhoneNumber.create.mockRejectedValue(new Error("connection reset"));
+      twilio.configureNumberWebhook
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error("twilio down"));
+
+      await expect(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+      ).rejects.toThrow("connection reset");
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it("refuses to adopt into another tenant's account", async () => {
+      const { service, prisma } = adoptSetup();
+      await expect(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID, scopeTenantId: "other-tenant" }),
+      ).rejects.toThrow(/your own organisation/i);
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+    });
+
+    // Adoption is for numbers the ORGANISATION owns. A uprise-managed subaccount's numbers
+    // were bought by uprise and already have rows; there is nothing there to adopt.
+    it("refuses a uprise-managed subaccount", async () => {
+      const { service, prisma, twilio } = adoptSetup({ mode: "SUBACCOUNT" });
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "ACCOUNT_NOT_BYO",
+      );
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+      expect(twilio.fetchOwnedNumber).not.toHaveBeenCalled();
+    });
+
+    it("activates a BYO account that is still PROVISIONING, so the number can actually send", async () => {
+      const { service, prisma } = adoptSetup({ status: "PROVISIONING" });
+
+      await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(prisma.telephonyAccount.update).toHaveBeenCalledWith({
+        where: { id: ACCOUNT_ID },
+        data: { status: "ACTIVE" },
+      });
+    });
+
+    it("leaves an already-ACTIVE account's status alone", async () => {
+      const { service, prisma } = adoptSetup({ status: "ACTIVE" });
+
+      await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(prisma.telephonyAccount.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Adoption ends by putting an account ACTIVE, so an unguarded adopt call would be a back
+     * door that reinstates sending on an account somebody deliberately switched off. Only
+     * PROVISIONING → ACTIVE is a transition adoption may make.
+     */
+    it.each(["SUSPENDED", "CLOSED"])("refuses to adopt onto a %s account", async (status) => {
+      const { service, prisma } = adoptSetup({ status });
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "ACCOUNT_NOT_USABLE",
+      );
+      expect(prisma.telephonyAccount.update).not.toHaveBeenCalled();
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * The overwrite policy. Every number in the real account carries a working voice
+   * configuration belonging to the organisation's own autodialer; messaging is unconfigured.
+   */
+  describe("inbound hook policy", () => {
+    it("claims a blank SMS hook, clearing anything that would override or shadow the URL", async () => {
+      const { service, twilio } = adoptSetup();
+
+      const result = await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(twilio.configureNumberWebhook).toHaveBeenCalledWith(expect.anything(), OWNED_SID, {
+        smsUrl: SMS_HOOK,
+        smsMethod: "POST",
+        smsApplicationSid: "",
+        smsFallbackUrl: "",
+      });
+      expect(result.hook).toMatchObject({ hook: "sms", action: "claimed" });
+    });
+
+    // The asymmetry, and the reason it is safe: a mobile is adopted for MESSAGING, so only
+    // its SMS hook is ever written. The occupied voice hook is not a candidate at all.
+    it("never touches the voice hook when adopting a mobile, however configured it is", async () => {
+      const { service, twilio } = adoptSetup();
+
+      await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      const [, , webhooks] = twilio.configureNumberWebhook.mock.calls[0];
+      expect(webhooks).not.toHaveProperty("voiceUrl");
+      expect(webhooks).not.toHaveProperty("voiceApplicationSid");
+      expect(webhooks).not.toHaveProperty("trunkSid");
+    });
+
+    /**
+     * A local number is adopted to be an outbound caller ID; its inbound hook does nothing
+     * uprise needs (`inboundVoiceUrl` only answers with a spoken apology), so the
+     * organisation's own configuration simply wins and the adoption still lands.
+     */
+    it("leaves an occupied voice hook alone without an explicit opt-in, and reports it", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(makeOwnedNumber({ phoneNumberE164: "+61212341234" }));
+
+      const result = await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+      expect(result.hook).toEqual({
+        hook: "voice",
+        action: "left-in-place",
+        existing: freeHook({
+          url: "https://example-autodialer.test/voice",
+          applicationSid: FOREIGN_APP_SID,
+        }),
+      });
+    });
+
+    it("takes the voice hook over only when the caller explicitly claims it", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(makeOwnedNumber({ phoneNumberE164: "+61212341234" }));
+
+      const result = await service.adoptNumber({
+        accountId: ACCOUNT_ID,
+        phoneNumberSid: OWNED_SID,
+        claimVoiceHook: true,
+      });
+
+      expect(twilio.configureNumberWebhook).toHaveBeenCalledWith(expect.anything(), OWNED_SID, {
+        voiceUrl: VOICE_HOOK,
+        voiceMethod: "POST",
+        voiceApplicationSid: "",
+        voiceFallbackUrl: "",
+        trunkSid: "",
+      });
+      expect(result.hook).toMatchObject({ action: "taken-over" });
+    });
+
+    /**
+     * A messaging number is a different matter from a voice one. uprise's ONLY opt-out capture
+     * is the inbound SMS hook – STOP lands there, InboxService records it, and every blast is
+     * gated on that state. Landing this row ACTIVE would make the tenant a live blast sender
+     * that can never see a STOP: an unsubscribe failure under the Spam Act. So it is refused,
+     * not reported.
+     */
+    it("refuses a messaging number whose SMS hook belongs to someone else", async () => {
+      const { service, prisma, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ smsUrl: "https://example-crm.test/sms" }),
+      );
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "SMS_HOOK_OCCUPIED",
+      );
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+      expect(prisma.telephonyPhoneNumber.create).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Each hook has its own opt-in, and only the hook of the class being adopted is in play.
+     * A voice opt-in must never authorise writing over somebody's MESSAGING configuration –
+     * cross-wire the two flags and this is the direction that silently destroys a third
+     * party's webhook, so it is asserted explicitly.
+     */
+    it("does not let a voice opt-in claim an occupied SMS hook", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ smsUrl: "https://example-crm.test/sms" }),
+      );
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID, claimVoiceHook: true }),
+        "SMS_HOOK_OCCUPIED",
+      );
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+    });
+
+    it("takes an occupied SMS hook over when the caller explicitly claims it", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ smsUrl: "https://example-crm.test/sms" }),
+      );
+
+      const result = await service.adoptNumber({
+        accountId: ACCOUNT_ID,
+        phoneNumberSid: OWNED_SID,
+        claimSmsHook: true,
+      });
+
+      expect(twilio.configureNumberWebhook).toHaveBeenCalledWith(expect.anything(), OWNED_SID, {
+        smsUrl: SMS_HOOK,
+        smsMethod: "POST",
+        smsApplicationSid: "",
+        smsFallbackUrl: "",
+      });
+      expect(result.hook).toMatchObject({ action: "taken-over" });
+    });
+
+    // A blank URL with an application SID is CONFIGURED – the application overrides the URL
+    // at Twilio – so it must read as occupied, not as free.
+    it("treats a bare application SID as an occupied hook", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ smsUrl: null, smsApplicationSid: FOREIGN_APP_SID }),
+      );
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "SMS_HOOK_OCCUPIED",
+      );
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+    });
+
+    // A fallback URL takes the traffic whenever the primary errors, so a hook whose primary is
+    // blank but whose fallback is the organisation's is NOT free.
+    it("treats a lone fallback URL as an occupied hook", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ smsUrl: null, smsFallbackUrl: "https://example-crm.test/sms-fallback" }),
+      );
+
+      await expectApiError(
+        service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID }),
+        "SMS_HOOK_OCCUPIED",
+      );
+    });
+
+    // A SIP-trunk binding overrides voice routing entirely – the URL is never consulted – so a
+    // trunk-bound number's voice hook is occupied however blank its URLs look.
+    it("treats a SIP trunk binding as an occupied voice hook", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({
+          phoneNumberE164: "+61212341234",
+          voiceUrl: null,
+          voiceApplicationSid: null,
+          trunkSid: "TK" + "f".repeat(32),
+        }),
+      );
+
+      const result = await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+      expect(result.hook).toMatchObject({ action: "left-in-place" });
+    });
+
+    // Twilio hands a new number its own demo URL; that is not the organisation's
+    // configuration, and treating it as a conflict would force a pointless opt-in.
+    it("treats Twilio's demo placeholder as a free hook", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(
+        makeOwnedNumber({ smsUrl: "https://demo.twilio.com/welcome/sms/reply" }),
+      );
+
+      const result = await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(result.hook).toMatchObject({ action: "claimed" });
+    });
+
+    // Re-adopting a number uprise itself configured is not a conflict.
+    it("treats a hook already pointing at uprise as free", async () => {
+      const { service, twilio } = adoptSetup();
+      twilio.fetchOwnedNumber.mockResolvedValue(makeOwnedNumber({ smsUrl: SMS_HOOK }));
+
+      const result = await service.adoptNumber({ accountId: ACCOUNT_ID, phoneNumberSid: OWNED_SID });
+
+      expect(result.hook).toMatchObject({ action: "claimed" });
     });
   });
 });

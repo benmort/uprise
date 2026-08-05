@@ -17,6 +17,7 @@ import { RequirePermission } from "../auth/require-permission.decorator";
 import type { AuthUser } from "../auth/auth-user";
 import { TelephonyProvisioningService } from "./telephony-provisioning.service";
 import {
+  AdoptNumberDto,
   ResubmitRunDto,
   SetNumberNicknameDto,
   StartProvisioningRunDto,
@@ -140,6 +141,49 @@ export class TelephonyProvisioningController {
     const tenantId = this.scopeTenant(req);
     if (!tenantId) throw new ForbiddenException("No tenant in scope");
     return this.provisioning.compliancePrefill(tenantId);
+  }
+
+  /**
+   * The tenant an account-scoped call is bound to. Super-admin ⇒ undefined (the service then
+   * takes the account's own tenant). Anyone else MUST have a tenant: `scopeTenant` returns
+   * undefined for a tenant-less session, and undefined reads downstream as "unscoped", which
+   * would let such a session reach any tenant's account.
+   */
+  private accountScope(req: Request & { user?: AuthUser }): string | undefined {
+    const user = req.user;
+    if (user?.isSuperAdmin) return undefined;
+    const own = user?.tenantId ?? undefined;
+    if (!own) throw new ForbiddenException("No tenant in scope for this telephony account");
+    return own;
+  }
+
+  /**
+   * Numbers the tenant's own Twilio account ALREADY owns, and whether uprise can adopt each.
+   * Read-only – it changes nothing at Twilio, and exists so an operator can see the
+   * candidates (and any configuration already on them) before choosing.
+   */
+  @Get("accounts/:id/adoptable-numbers")
+  @RequirePermission(READ)
+  async listAdoptableNumbers(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    return this.provisioning.listAdoptableNumbers(id, this.accountScope(req));
+  }
+
+  /** Register an already-owned number against the tenant. No purchase, no bundle, no run. */
+  @Post("accounts/:id/adopt-number")
+  @RequirePermission(PROVISION_TENANT)
+  async adoptNumber(
+    @Param("id") id: string,
+    @Body() dto: AdoptNumberDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    return this.provisioning.adoptNumber({
+      accountId: id,
+      phoneNumberSid: dto.phoneNumberSid,
+      nickname: dto.nickname,
+      claimSmsHook: dto.claimSmsHook,
+      claimVoiceHook: dto.claimVoiceHook,
+      scopeTenantId: this.accountScope(req),
+    });
   }
 
   @Get("numbers")

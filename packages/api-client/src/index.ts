@@ -865,6 +865,70 @@ export interface TelephonyPhoneNumber {
   createdAt: string;
 }
 
+/**
+ * How an adopted number is classed. The AU numbering plan (the E.164 prefix) is the only
+ * thing that sets it – the whole platform decides what a number may do from its prefix, so a
+ * class that disagreed with it would be unusable. Twilio's capabilities are reported for
+ * transparency; they can only ever VETO an adoption, never re-class the number.
+ */
+export interface TelephonyNumberClassification {
+  numberType: "mobile" | "local";
+  capabilities: { voice: boolean; sms: boolean; mms: boolean };
+}
+
+/** Everything on one inbound hook that Twilio routes on. `trunkSid` is voice-only. */
+export interface TelephonyHookConfiguration {
+  url: string | null;
+  applicationSid: string | null;
+  fallbackUrl: string | null;
+  trunkSid: string | null;
+}
+
+/**
+ * What adoption did – or deliberately did NOT do – to the number's inbound hook.
+ * "left-in-place" means something the organisation depends on is already there and adoption
+ * refused to overwrite it; re-send with the matching claim flag to take it over.
+ *
+ * On a MOBILE that is not merely informational: adoption is refused outright
+ * (`SMS_HOOK_OCCUPIED`) unless `claimSmsHook` is set, because uprise would otherwise send
+ * marketing from a number whose STOP replies it can never see.
+ */
+export interface TelephonyAdoptionHook {
+  hook: "sms" | "voice";
+  action: "claimed" | "taken-over" | "left-in-place";
+  existing: TelephonyHookConfiguration;
+}
+
+/** One number the BYO account already owns, as a candidate for adoption. */
+export interface AdoptableNumber {
+  phoneNumberE164: string;
+  phoneNumberSid: string;
+  friendlyName: string | null;
+  capabilities: { voice: boolean; sms: boolean; mms: boolean };
+  voiceUrl: string | null;
+  voiceApplicationSid: string | null;
+  voiceFallbackUrl: string | null;
+  trunkSid: string | null;
+  smsUrl: string | null;
+  smsApplicationSid: string | null;
+  smsFallbackUrl: string | null;
+  classification: TelephonyNumberClassification | null;
+  /** Null when adoptable. Never names the other organisation. */
+  blockedReason:
+    | "ALREADY_ADOPTED"
+    | "ADOPTED_BY_ANOTHER_TENANT"
+    | "NUMBER_NOT_USABLE"
+    | "NUMBER_NOT_AUSTRALIAN"
+    | null;
+  hook: TelephonyAdoptionHook;
+}
+
+export interface AdoptedNumberResult {
+  number: TelephonyPhoneNumber;
+  classification: TelephonyNumberClassification;
+  hook: TelephonyAdoptionHook;
+}
+
 // Transactional message templates (meld doc 09/12) — the pickable copy for the invite
 // compose view and other 1:1 sends. SMS + WhatsApp channels; `kind` splits transactional
 // from marketing.
@@ -969,6 +1033,32 @@ export const telephony = {
     request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}`, {
       method: "PATCH",
       body: JSON.stringify({ purpose }),
+      headers: { "Content-Type": "application/json" },
+    }),
+
+  /**
+   * Numbers the tenant's own (BYO) Twilio account ALREADY owns, each annotated with how
+   * uprise would class it, whether it can be adopted, and what is already configured on the
+   * hook adoption would write. Read-only – nothing at Twilio changes.
+   */
+  listAdoptableNumbers: (accountId: string) =>
+    request<AdoptableNumber[]>(`/telephony/accounts/${encodeURIComponent(accountId)}/adoptable-numbers`),
+
+  /**
+   * Adopt one of those numbers – register it against the tenant with no purchase, no
+   * regulatory bundle and no provisioning run. `claimSmsHook`/`claimVoiceHook` are the
+   * explicit opt-in to TAKE OVER a hook that is already configured; omit them and an existing
+   * VOICE configuration is left exactly as it is and reported back in `hook`, while an
+   * occupied MESSAGING hook fails the call with `SMS_HOOK_OCCUPIED` rather than landing a
+   * sender whose STOP replies would go to somebody else.
+   */
+  adoptNumber: (
+    accountId: string,
+    body: { phoneNumberSid: string; nickname?: string; claimSmsHook?: boolean; claimVoiceHook?: boolean },
+  ) =>
+    request<AdoptedNumberResult>(`/telephony/accounts/${encodeURIComponent(accountId)}/adopt-number`, {
+      method: "POST",
+      body: JSON.stringify(body),
       headers: { "Content-Type": "application/json" },
     }),
 

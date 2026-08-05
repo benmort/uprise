@@ -758,6 +758,29 @@ describe("telephony + email provisioning", () => {
     expect(bodyOf(init)).toEqual({ purpose: "transactional" });
   });
 
+  it("telephony.listAdoptableNumbers GETs the account's adoptable numbers, id encoded", async () => {
+    await telephony.listAdoptableNumbers("acct 1");
+    expect(call()[0]).toBe(`${BASE}/telephony/accounts/acct%201/adoptable-numbers`);
+  });
+
+  // The claim flags are the difference between leaving a live production voice configuration
+  // alone and overwriting it, so the body has to carry exactly what the caller passed.
+  it("telephony.adoptNumber POSTs the SID and hook opt-ins to the account's adopt path", async () => {
+    await telephony.adoptNumber("acct 1", {
+      phoneNumberSid: `PN${"c".repeat(32)}`,
+      nickname: "Field line",
+      claimVoiceHook: true,
+    });
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/telephony/accounts/acct%201/adopt-number`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual({
+      phoneNumberSid: `PN${"c".repeat(32)}`,
+      nickname: "Field line",
+      claimVoiceHook: true,
+    });
+  });
+
   it("telephony.compliancePrefill GETs the prefill", async () => {
     await telephony.compliancePrefill();
     expect(call()[0]).toBe(`${BASE}/telephony/compliance-prefill`);

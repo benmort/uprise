@@ -25,6 +25,7 @@ import {
   type BundleFacts,
   type ComplianceInput,
   type NumberWebhooks,
+  type OwnedNumber,
   type TwilioCreds,
 } from "./twilio-provisioning.client";
 
@@ -111,6 +112,93 @@ export type StartRunInput = {
   complianceInput: ComplianceInput;
   requestedById?: string | null;
 };
+
+/**
+ * Adopting a number the tenant's BYO account ALREADY owns. No purchase, no bundle, no
+ * regulatory review and no provisioning run – there is nothing to provision, so forcing this
+ * through the FSM would invent states (COMPLIANCE_APPROVED, NUMBER_PURCHASED) that never
+ * happened.
+ */
+export type AdoptNumberInput = {
+  /** The tenant's `TelephonyAccount` the number will be registered under. */
+  accountId: string;
+  phoneNumberSid: string;
+  nickname?: string | null;
+  /**
+   * Explicit opt-in to TAKE OVER a hook that is already configured. Absent/false means the
+   * existing configuration wins and is reported back untouched – see `claimAdoptionHook`.
+   */
+  claimSmsHook?: boolean;
+  claimVoiceHook?: boolean;
+  /** Set for non-super-admin callers: the tenant the request is bound to. */
+  scopeTenantId?: string;
+};
+
+/**
+ * The regulation class of an adopted number, and what Twilio says it can do.
+ *
+ * There is no "which signal won" field because there is no contest: the AU numbering plan
+ * (the E.164 prefix) is the ONLY thing that may set the class – see `classifyOwnedNumber`.
+ * The capabilities travel with it so a caller can see what was checked.
+ */
+export type AdoptionClassification = {
+  numberType: "mobile" | "local";
+  capabilities: { voice: boolean; sms: boolean; mms: boolean };
+};
+
+/** Why uprise will not adopt a number at all – a property of the number, not of the request. */
+export type AdoptionBlockedReason =
+  | "ALREADY_ADOPTED"
+  | "ADOPTED_BY_ANOTHER_TENANT"
+  | "NUMBER_NOT_USABLE"
+  | "NUMBER_NOT_AUSTRALIAN";
+
+/** The refusals `classifyOwnedNumber` can return, i.e. the ones about the number itself. */
+type UnusableNumberReason = Extract<AdoptionBlockedReason, "NUMBER_NOT_USABLE" | "NUMBER_NOT_AUSTRALIAN">;
+
+/** Everything on one inbound hook that Twilio routes on and adoption would overwrite. */
+export type HookConfiguration = {
+  url: string | null;
+  applicationSid: string | null;
+  fallbackUrl: string | null;
+  /** Voice only – a SIP-trunk binding overrides the URL. Always null for the SMS hook. */
+  trunkSid: string | null;
+};
+
+/** What adoption did – or deliberately did NOT do – to the number's inbound hook. */
+export type AdoptionHookReport = {
+  hook: "sms" | "voice";
+  action: "claimed" | "taken-over" | "left-in-place";
+  /** The configuration found on that hook BEFORE adoption (all null ⇒ it was free). */
+  existing: HookConfiguration;
+};
+
+/** A number on the account, annotated with whether uprise can actually adopt it. */
+export type AdoptableNumber = OwnedNumber & {
+  classification: AdoptionClassification | null;
+  /**
+   * Why this number cannot be adopted, or null when it can. Never names the other
+   * organisation – the caller owns the Twilio account, not the other tenant's data.
+   */
+  blockedReason: AdoptionBlockedReason | null;
+  /**
+   * The hook adoption would write, and what is sitting on it right now. `action:
+   * "left-in-place"` on the SMS hook is not merely informational: adoption REFUSES a
+   * messaging number whose SMS hook belongs to someone else unless `claimSmsHook` is set,
+   * because uprise would otherwise send from a number whose STOP replies it never sees.
+   */
+  hook: AdoptionHookReport;
+};
+
+/**
+ * Twilio's own demo placeholders. A brand-new number is handed these by Twilio, not by the
+ * organisation, so treating them as a real configuration would make every untouched number
+ * look like a conflict and force a needless opt-in.
+ */
+const TWILIO_DEMO_HOOKS = [
+  "https://demo.twilio.com/welcome/sms/reply",
+  "https://demo.twilio.com/welcome/voice",
+];
 
 /**
  * The one and only chain edge, and the reason the chain terminates.
@@ -1536,6 +1624,420 @@ export class TelephonyProvisioningService {
         ...(purpose ? { purpose } : {}),
       },
     });
+  }
+
+  // ── adoption: numbers the tenant's own Twilio account already owns ──────────
+  //
+  // A BYO tenant arrives with Australian numbers it has already bought and already had
+  // regulated. Before this, the only way one of them entered uprise was to buy ANOTHER –
+  // real money on inventory the organisation holds, plus (for a regulated AU number) a fresh
+  // bundle and days of human review at Twilio for no reason. Adoption registers what is
+  // already there.
+
+  /**
+   * The account an adoption call may act on, bound to the caller's tenant.
+   *
+   * Two guards beyond the tenant binding, both about what adoption MEANS. It only makes sense
+   * for a BYO account – the numbers on a uprise-managed subaccount were bought by uprise and
+   * already have their rows, so "adopting" one would be registering our own inventory a second
+   * time. And a SUSPENDED or CLOSED account is deliberately not in service: adoption ends by
+   * putting an account into ACTIVE, so allowing it here would make an adopt call a back door
+   * that reinstates sending on an account somebody switched off.
+   */
+  private async accountForAdoption(accountId: string, scopeTenantId?: string) {
+    const account = await this.prisma.telephonyAccount.findUnique({ where: { id: accountId } });
+    if (!account) throw new NotFoundException("Telephony account not found");
+    // A non-super-admin caller carries a scope; anything outside it is not theirs to see.
+    // Phrased as a 403 rather than a 404 only because the id came from their own listing.
+    if (scopeTenantId && account.tenantId !== scopeTenantId) {
+      throw new ForbiddenException("You can only manage your own organisation's telephony");
+    }
+    if (account.mode !== TelephonyAccountMode.BYO) {
+      throw new ApiHttpException(
+        "ACCOUNT_NOT_BYO",
+        "Numbers can only be adopted onto your own (bring-your-own) Twilio account – a uprise-managed account provisions its numbers instead",
+        422,
+      );
+    }
+    if (
+      account.status !== TelephonyAccountStatus.ACTIVE &&
+      account.status !== TelephonyAccountStatus.PROVISIONING
+    ) {
+      throw new ApiHttpException(
+        "ACCOUNT_NOT_USABLE",
+        "That telephony account isn't in service, so numbers can't be adopted onto it",
+        422,
+      );
+    }
+    return account;
+  }
+
+  /**
+   * The regulation class of a number uprise did not buy – or the reason it cannot have one.
+   *
+   * The E.164 prefix is the ONLY thing that sets the class, and that is a hard rule rather
+   * than a preference. The rest of uprise decides what a number may do from its prefix:
+   * `isVoiceCapable` in `phone-capabilities.ts` refuses any +614 as a caller ID, and the voice
+   * resolver, the dialler and the browser-call TwiML all enforce that by prefix. Only
+   * `numberType` is consulted the other way round, by the sender resolver. So a row whose
+   * `numberType` disagreed with its prefix would be one no path can use AND one the resolver
+   * still hands out – e.g. a +614 written "local" joins the tenant's voice pool, can displace
+   * their real +612, and then every call is refused downstream by prefix. The purchase path
+   * could never produce that pairing; adoption must not either.
+   *
+   * Twilio's `capabilities` is therefore a VETO, not a second opinion on the class: a number
+   * that cannot do the job its class implies is refused outright, because uprise has no other
+   * job to give it. (In the real account every number reports both voice and SMS – an AU
+   * mobile can carry both, since "local" is about geographic caller ID, not capability – so
+   * the veto is the rare path, not the normal one.)
+   */
+  private classifyOwnedNumber(number: OwnedNumber): AdoptionClassification | UnusableNumberReason {
+    const e164 = number.phoneNumberE164.trim();
+    const numberType = /^\+614/.test(e164) ? "mobile" : /^\+61[2378]/.test(e164) ? "local" : null;
+    // uprise's telephony is AU-regulated end to end (AU bundles, AU addresses, the +61
+    // capability rules above). A number outside the plan has no class here, so it is refused
+    // rather than guessed into the tenant's sending pool.
+    if (!numberType) return "NUMBER_NOT_AUSTRALIAN";
+    const { sms, voice } = number.capabilities;
+    if (numberType === "mobile" ? !sms : !voice) return "NUMBER_NOT_USABLE";
+    return { numberType, capabilities: number.capabilities };
+  }
+
+  /** The refusal for a number uprise can find no use for, worded for the operator. */
+  private unusableNumber(reason: UnusableNumberReason): ApiHttpException {
+    return new ApiHttpException(
+      reason,
+      reason === "NUMBER_NOT_AUSTRALIAN"
+        ? "uprise can only use Australian numbers, so that one can't be adopted"
+        : "Twilio reports that number can't do the job its number type implies, so uprise can't use it",
+      422,
+    );
+  }
+
+  /**
+   * Is this hook already doing someone's work?
+   *
+   * Every field Twilio actually routes on counts, not just the primary URL: an application SID
+   * overrides the URL, a SIP-trunk binding overrides voice routing entirely, and a fallback URL
+   * takes the traffic whenever the primary errors. Twilio's own demo placeholder does not count
+   * (Twilio put it there, not the organisation), nor does a URL that is already ours –
+   * re-adopting a number uprise previously configured is not a conflict.
+   */
+  private hookOccupied(current: HookConfiguration): boolean {
+    if (current.applicationSid || current.trunkSid) return true;
+    return [current.url, current.fallbackUrl].some((url) => this.foreignHookUrl(url));
+  }
+
+  /** A URL on a hook that belongs to somebody other than uprise. */
+  private foreignHookUrl(url: string | null): boolean {
+    if (!url) return false;
+    if (TWILIO_DEMO_HOOKS.some((demo) => url.startsWith(demo))) return false;
+    const ours = this.apiBaseUrl();
+    return !(ours && url.startsWith(ours));
+  }
+
+  private hookFor(number: OwnedNumber, hook: "sms" | "voice"): HookConfiguration {
+    return hook === "voice"
+      ? {
+          url: number.voiceUrl,
+          applicationSid: number.voiceApplicationSid,
+          fallbackUrl: number.voiceFallbackUrl,
+          trunkSid: number.trunkSid,
+        }
+      : {
+          url: number.smsUrl,
+          applicationSid: number.smsApplicationSid,
+          fallbackUrl: number.smsFallbackUrl,
+          // A trunk binds voice only, so it can never occupy the messaging hook.
+          trunkSid: null,
+        };
+  }
+
+  /**
+   * The hook adoption would write for a number of this class, and what is on it now.
+   *
+   * The asymmetry the real account forces, encoded deliberately: adoption only ever touches
+   * the hook for the class it is adopting the number AS. A +614 mobile is adopted for
+   * messaging, so only its SMS hook is in play and the organisation's existing VOICE
+   * configuration – an external autodialer URL and TwiML application SIDs, a running
+   * production system – is never a candidate for overwrite, not even by mistake. In that
+   * account messaging is unconfigured on every number (the console offers "Set up" against a
+   * blank messaging hook), so the SMS hook is free and adoption simply claims it, while a
+   * voice hook is occupied and needs an operator to say so explicitly.
+   */
+  private plannedHook(number: OwnedNumber, numberType: "mobile" | "local"): AdoptionHookReport {
+    const hook = numberType === "local" ? "voice" : "sms";
+    const existing = this.hookFor(number, hook);
+    return { hook, action: this.hookOccupied(existing) ? "left-in-place" : "claimed", existing };
+  }
+
+  /**
+   * Claim the class's inbound hook, unless something is already on it and the caller has not
+   * explicitly asked to take it over. Default is NEVER overwrite: silently replacing a
+   * working configuration would break whatever the organisation is running today, and the
+   * number would keep answering – just to us.
+   *
+   * The two classes part company when the hook is occupied and no opt-in was given, and the
+   * asymmetry is deliberate. A LOCAL number is adopted to be an outbound caller ID; its
+   * inbound hook is not load-bearing for uprise (all it would do is answer with a spoken
+   * apology – see `inboundVoiceUrl`), so the organisation's own configuration simply wins and
+   * adoption proceeds. A MOBILE is adopted to SEND MARKETING, and uprise's only opt-out
+   * capture is the inbound SMS hook: STOP arrives there, `InboxService` records it, and every
+   * blast is gated on that state. Adopting a messaging number whose inbound goes to somebody
+   * else would make the tenant a live blast sender that can never see a STOP – an unsubscribe
+   * failure under the Spam Act, not an inconvenience – so it is refused instead.
+   */
+  private async claimAdoptionHook(
+    creds: TwilioCreds,
+    number: OwnedNumber,
+    numberType: "mobile" | "local",
+    opts: { claimSmsHook?: boolean; claimVoiceHook?: boolean },
+  ): Promise<AdoptionHookReport> {
+    const planned = this.plannedHook(number, numberType);
+    // Each hook has its OWN opt-in, and only the hook of the class being adopted is in play –
+    // a voice opt-in can never authorise writing over somebody's messaging configuration.
+    const optedIn = planned.hook === "voice" ? opts.claimVoiceHook === true : opts.claimSmsHook === true;
+    if (planned.action === "left-in-place" && !optedIn) {
+      if (planned.hook === "sms") {
+        throw new ApiHttpException(
+          "SMS_HOOK_OCCUPIED",
+          "That number's inbound messaging already goes somewhere else, so uprise could never see a STOP reply from it. Clear the messaging webhook at Twilio, or re-send with claimSmsHook to point it at uprise.",
+          422,
+        );
+      }
+      return planned;
+    }
+    await this.twilio.configureNumberWebhook(creds, number.phoneNumberSid, this.adoptionWebhooks(numberType));
+    return { ...planned, action: planned.action === "left-in-place" ? "taken-over" : "claimed" };
+  }
+
+  /**
+   * The hook to write when adopting. Same URL as a provisioned number of this class, plus a
+   * clear of everything else Twilio routes on ON THAT HOOK ONLY: an application SID overrides
+   * the URL, a trunk overrides voice routing, and a surviving fallback URL would keep sending
+   * the organisation traffic every time our endpoint errored. Writing the URL alone would
+   * leave the callback going to the old destination and uprise would never receive it. The
+   * other class's configuration is left untouched.
+   */
+  private adoptionWebhooks(numberType: "mobile" | "local"): NumberWebhooks {
+    const base = this.numberWebhooks(numberType);
+    return "voiceUrl" in base
+      ? { ...base, voiceApplicationSid: "", voiceFallbackUrl: "", trunkSid: "" }
+      : { ...base, smsApplicationSid: "", smsFallbackUrl: "" };
+  }
+
+  /**
+   * Put a hook back exactly as it was. The compensating write for an adoption that touched
+   * Twilio and then failed to land its row – without it the number is left pointing at uprise
+   * (or, on a take-over, with the organisation's live configuration destroyed) and nothing in
+   * the database says why. `""` is Twilio's unset, so a field that was empty stays empty.
+   */
+  private restoreWebhooks(report: AdoptionHookReport): NumberWebhooks {
+    const { url, applicationSid, fallbackUrl, trunkSid } = report.existing;
+    return report.hook === "voice"
+      ? {
+          voiceUrl: url ?? "",
+          voiceMethod: "POST",
+          voiceApplicationSid: applicationSid ?? "",
+          voiceFallbackUrl: fallbackUrl ?? "",
+          trunkSid: trunkSid ?? "",
+        }
+      : {
+          smsUrl: url ?? "",
+          smsMethod: "POST",
+          smsApplicationSid: applicationSid ?? "",
+          smsFallbackUrl: fallbackUrl ?? "",
+        };
+  }
+
+  /**
+   * Undo the Twilio write when the row could not be created. Best-effort by necessity – if
+   * the restore itself fails there is nothing further to try – but it is logged so an operator
+   * can repair it by hand. No Twilio identifiers go into the log line.
+   */
+  private async rollbackAdoptionHook(
+    creds: TwilioCreds,
+    number: OwnedNumber,
+    report: AdoptionHookReport,
+    accountId: string,
+  ): Promise<void> {
+    if (report.action === "left-in-place") return;
+    try {
+      await this.twilio.configureNumberWebhook(creds, number.phoneNumberSid, this.restoreWebhooks(report));
+    } catch (error) {
+      this.logger.error("telephony", "Could not restore an adopted number's inbound hook", undefined, {
+        accountId,
+        hook: report.hook,
+        error: String(error),
+      });
+    }
+  }
+
+  /** The clean refusal for a number some `TelephonyPhoneNumber` row already holds. */
+  private duplicateAdoption(existingTenantId: string, tenantId: string): ApiHttpException {
+    return existingTenantId === tenantId
+      ? new ApiHttpException(
+          "NUMBER_ALREADY_ADOPTED",
+          "That number is already registered to your organisation on uprise",
+          409,
+        )
+      : new ApiHttpException(
+          "NUMBER_ADOPTED_BY_ANOTHER_TENANT",
+          "That number is already registered to another organisation on uprise",
+          409,
+        );
+  }
+
+  /**
+   * What "uprise already holds this number" MEANS – one definition, used by both the listing
+   * and the adopt call. Either unique column counts: a row that carries the SID under a
+   * different E.164 (a number reassigned at Twilio) is still that number's row, and matching
+   * on only one column would let the listing offer something the adopt call then rejects.
+   */
+  private heldNumberFilter(numbers: Array<{ phoneNumberE164: string; phoneNumberSid: string }>) {
+    return {
+      OR: [
+        { phoneNumberE164: { in: numbers.map((n) => n.phoneNumberE164) } },
+        { phoneNumberSid: { in: numbers.map((n) => n.phoneNumberSid) } },
+      ],
+    };
+  }
+
+  /** Any `TelephonyPhoneNumber` row holding this number, by either unique column. */
+  private async existingRowFor(number: { phoneNumberE164: string; phoneNumberSid: string }) {
+    return this.prisma.telephonyPhoneNumber.findFirst({ where: this.heldNumberFilter([number]) });
+  }
+
+  /**
+   * Everything the account already owns, annotated with whether uprise can adopt it, how it
+   * would be classed, and what is already on the hook adoption would write. Read-only – it
+   * changes nothing at Twilio.
+   */
+  async listAdoptableNumbers(accountId: string, scopeTenantId?: string): Promise<AdoptableNumber[]> {
+    const account = await this.accountForAdoption(accountId, scopeTenantId);
+    const creds = await this.accountCreds(account.id);
+    const owned = await this.twilio.listOwnedNumbers(creds);
+    if (owned.length === 0) return [];
+
+    const existing = await this.prisma.telephonyPhoneNumber.findMany({
+      where: this.heldNumberFilter(owned),
+    });
+
+    return owned.map((number) => {
+      const classified = this.classifyOwnedNumber(number);
+      const classification = typeof classified === "string" ? null : classified;
+      // A number uprise can find no use for is listed but not offered – the operator should
+      // see that it is there, and see why it is not a candidate.
+      let blockedReason: AdoptionBlockedReason | null = typeof classified === "string" ? classified : null;
+      const taken = existing.find(
+        (row) =>
+          row.phoneNumberE164 === number.phoneNumberE164 || row.phoneNumberSid === number.phoneNumberSid,
+      );
+      if (taken) {
+        blockedReason = taken.tenantId === account.tenantId ? "ALREADY_ADOPTED" : "ADOPTED_BY_ANOTHER_TENANT";
+      }
+      return {
+        ...number,
+        classification,
+        blockedReason,
+        hook: this.plannedHook(number, classification?.numberType ?? "mobile"),
+      };
+    });
+  }
+
+  /**
+   * Register a number the account already owns against the tenant.
+   *
+   * Ownership is verified against Twilio under the ACCOUNT's own credentials rather than
+   * taken from the request, so a caller cannot attach a SID belonging to someone else. The
+   * row lands ACTIVE: unlike a purchase there is nothing to wait for – the number exists and
+   * works – and it can only get that far once uprise holds the inbound hook that matters for
+   * its class, which is the same invariant `stepActivate` enforces on the purchase path.
+   *
+   * The row and the account flip are one transaction, and a Twilio write that has already
+   * happened is rolled back if that transaction fails: an adoption either lands completely or
+   * leaves the number as it found it.
+   */
+  async adoptNumber(input: AdoptNumberInput) {
+    const account = await this.accountForAdoption(input.accountId, input.scopeTenantId);
+    const tenantId = account.tenantId;
+    const creds = await this.accountCreds(account.id);
+
+    const owned = await this.twilio.fetchOwnedNumber(creds, input.phoneNumberSid);
+    if (!owned) {
+      throw new ApiHttpException(
+        "NUMBER_NOT_ON_ACCOUNT",
+        "That number isn't on this Twilio account, so it can't be adopted",
+        422,
+      );
+    }
+    const classified = this.classifyOwnedNumber(owned);
+    if (typeof classified === "string") throw this.unusableNumber(classified);
+    const classification = classified;
+
+    // Checked BEFORE anything is written to Twilio, so a duplicate cannot reconfigure a hook
+    // on the way to failing. `phoneNumberE164` is UNIQUE across all tenants, so this is the
+    // cross-tenant case too – and it fails with a code, never a raw Prisma constraint error.
+    const clash = await this.existingRowFor(owned);
+    if (clash) throw this.duplicateAdoption(clash.tenantId, tenantId);
+
+    const hook = await this.claimAdoptionHook(creds, owned, classification.numberType, input);
+
+    const nickname = input.nickname?.trim();
+    let number;
+    try {
+      // One transaction, matching the purchase path: `stepPurchaseNumber`/`stepActivate` write
+      // the row and the account flip together. Split apart, a crash between them leaves an
+      // ACTIVE number under a PROVISIONING account – which the sender resolver cannot resolve,
+      // and which nothing would ever retry.
+      number = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.telephonyPhoneNumber.create({
+          data: {
+            tenantId,
+            accountId: account.id,
+            phoneNumberE164: owned.phoneNumberE164,
+            phoneNumberSid: owned.phoneNumberSid,
+            // No bundle and no address: the organisation regulated this number on its own
+            // account, and uprise holds no compliance artefacts for it. Left null rather than
+            // guessed – bundle reuse matches on a bundle uprise actually knows.
+            bundleSid: null,
+            addressSid: null,
+            nickname: nickname ? nickname : null,
+            numberType: classification.numberType,
+            // Same rule as a purchase: a local number is the voice caller ID and "voice"
+            // matches no SendPurpose, so the sender resolver can never pick it for a text.
+            purpose: classification.numberType === "local" ? "voice" : "marketing",
+            status: TelephonyNumberStatus.ACTIVE,
+          },
+        });
+        // A BYO account still waiting on its first number is in use the moment it holds one,
+        // and the sender resolver only resolves through an ACTIVE account. Narrowed to exactly
+        // that transition: SUSPENDED/CLOSED are refused upstream in `accountForAdoption`
+        // rather than quietly reinstated here.
+        if (account.status === TelephonyAccountStatus.PROVISIONING) {
+          await tx.telephonyAccount.update({
+            where: { id: account.id },
+            data: { status: TelephonyAccountStatus.ACTIVE },
+          });
+        }
+        return created;
+      });
+    } catch (error) {
+      // Nothing landed, so the hook we repointed at uprise has to go back – otherwise the
+      // number answers to uprise with no row to explain it (and, after a take-over, the
+      // organisation's own configuration is gone with nothing recording that it ever existed).
+      await this.rollbackAdoptionHook(creds, owned, hook, account.id);
+      // A concurrent adoption of the same number lands here on the UNIQUE index. Re-read to
+      // report the same clean codes rather than leaking P2002 to the client.
+      if ((error as { code?: string }).code === "P2002") {
+        const raced = await this.existingRowFor(owned);
+        throw this.duplicateAdoption(raced?.tenantId ?? tenantId, tenantId);
+      }
+      throw error;
+    }
+
+    this.senderResolver.invalidate(tenantId);
+    return { number, classification, hook };
   }
 
   async releaseNumber(numberId: string) {

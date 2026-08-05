@@ -1,5 +1,5 @@
 import { ValidationPipe } from "@nestjs/common";
-import { StartProvisioningRunDto } from "./telephony.dto";
+import { AdoptNumberDto, StartProvisioningRunDto } from "./telephony.dto";
 
 /**
  * The global pipe from bootstrap.ts. The controller spec calls `controller.startRun(dto)`
@@ -74,5 +74,52 @@ describe("StartProvisioningRunDto BYO extras", () => {
 
   it("rejects an undeclared property outright", async () => {
     await expect(throughPipe(body({ byoBundleSidTypo: BUNDLE_SID }))).rejects.toBeDefined();
+  });
+});
+
+/**
+ * AdoptNumberDto. The SID is pasted from the adoptable-numbers listing and is the only thing
+ * that names WHICH number is adopted – a malformed one reaches Twilio as a lookup failure,
+ * which is indistinguishable from "not your number", so it is refused at the wire.
+ */
+describe("AdoptNumberDto", () => {
+  const adoptPipe = (b: Record<string, unknown>) =>
+    pipe.transform(b, { type: "body", metatype: AdoptNumberDto });
+  const PHONE_SID = `PN${"c".repeat(32)}`;
+
+  it("accepts a well-formed phone number SID and trims a pasted one", async () => {
+    await expect(adoptPipe({ phoneNumberSid: `  ${PHONE_SID}  ` })).resolves.toMatchObject({
+      phoneNumberSid: PHONE_SID,
+    });
+  });
+
+  it.each([
+    ["PNtooshort"],
+    [`BU${"a".repeat(32)}`], // right length, wrong prefix
+    [`PN${"z".repeat(32)}`], // not hex
+  ])("rejects %s", async (value) => {
+    await expect(adoptPipe({ phoneNumberSid: value })).rejects.toMatchObject({
+      response: { message: [expect.stringContaining("phoneNumberSid")] },
+    });
+  });
+
+  it("requires a phone number SID at all", async () => {
+    await expect(adoptPipe({})).rejects.toBeDefined();
+  });
+
+  // The claim flags are booleans, not truthy strings: "false" from a hand-rolled form must
+  // not read as an opt-in to overwrite a live configuration.
+  it("carries both hook opt-ins as booleans and rejects a string", async () => {
+    await expect(
+      adoptPipe({ phoneNumberSid: PHONE_SID, claimSmsHook: true, claimVoiceHook: false }),
+    ).resolves.toMatchObject({ claimSmsHook: true, claimVoiceHook: false });
+
+    await expect(adoptPipe({ phoneNumberSid: PHONE_SID, claimVoiceHook: "true" })).rejects.toBeDefined();
+  });
+
+  it("strips anything the DTO does not declare", async () => {
+    await expect(
+      adoptPipe({ phoneNumberSid: PHONE_SID, tenantId: "someone-elses-tenant" }),
+    ).rejects.toBeDefined();
   });
 });
