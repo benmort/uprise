@@ -26,6 +26,12 @@ const MARKETING_URL = process.env.MARKETING_URL || (IS_NGROK ? "https://dev.upri
 // and use the volunteer storageState (e2e/.auth/volunteer.json, minted by global-setup).
 const FIELD_URL = process.env.FIELD_URL || (IS_NGROK ? "https://field.dev.uprise.org.au" : "http://localhost:3005");
 const API_HEALTH = API_BASE + "/health";
+// How long a webServer entry may take to become ready. Locally the apps are usually already
+// running (reuseExistingServer), so this never bites. In CI every one boots cold with no .next
+// cache and Nest additionally waits on Postgres, and 120s was not enough - the job failed with
+// "Timed out waiting 120000ms from config.webServer" before a single test ran. The e2e job's
+// own timeout-minutes is the real ceiling.
+const WEBSERVER_TIMEOUT_MS = process.env.CI ? 300_000 : 120_000;
 // The one spec that needs a real service worker, and so belongs to exactly one project.
 const PWA_ONLY = /service-worker\.spec\.ts/;
 
@@ -101,7 +107,7 @@ export default defineConfig({
           command: "npm --prefix ../api run dev",
           url: API_HEALTH,
           reuseExistingServer: true,
-          timeout: 120_000,
+          timeout: WEBSERVER_TIMEOUT_MS,
         },
         {
           command: "npm run dev",
@@ -109,19 +115,19 @@ export default defineConfig({
           // unauthenticated, which Playwright accepts as "ready".
           url: WEB,
           reuseExistingServer: true,
-          timeout: 120_000,
+          timeout: WEBSERVER_TIMEOUT_MS,
         },
         {
           command: "npm --prefix ../auth run dev",
           url: `${AUTH_APP_URL}/sign-in`,
           reuseExistingServer: true,
-          timeout: 120_000,
+          timeout: WEBSERVER_TIMEOUT_MS,
         },
         {
           command: "npm --prefix ../product-marketing run dev",
           url: MARKETING_URL,
           reuseExistingServer: true,
-          timeout: 120_000,
+          timeout: WEBSERVER_TIMEOUT_MS,
         },
         {
           // The canvasser PWA. Its root 307-redirects when unauthenticated (SSO gate), which
@@ -129,7 +135,7 @@ export default defineConfig({
           command: "npm --prefix ../field run dev",
           url: FIELD_URL,
           reuseExistingServer: true,
-          timeout: 120_000,
+          timeout: WEBSERVER_TIMEOUT_MS,
         },
       ],
 });
