@@ -73,6 +73,29 @@ describe("TelephonyProvisioningController", () => {
       expect(provisioning.startRun.mock.calls[0][0].chainComplementary).toBeUndefined();
     });
 
+    // A dropped byoBundleSid is invisible: the run simply drafts its own bundle and waits
+    // days on a human reviewer the tenant had already satisfied. Pin the passthrough of all
+    // four BYO extras (the service is what rejects them for a non-BYO run).
+    it("passes the BYO bundle/address and region/edge through to the service", async () => {
+      const { controller, provisioning } = setup();
+      const bundleSid = "BU" + "a".repeat(32);
+      const addressSid = "AD" + "b".repeat(32);
+
+      await controller.startRun(
+        { ...START_DTO, mode: "BYO", byoBundleSid: bundleSid, byoAddressSid: addressSid, byoRegion: "au1", byoEdge: "sydney" } as any,
+        ownerReq(),
+      );
+
+      expect(provisioning.startRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          byoBundleSid: bundleSid,
+          byoAddressSid: addressSid,
+          byoRegion: "au1",
+          byoEdge: "sydney",
+        }),
+      );
+    });
+
     it("rejects a super-admin run with no tenant at all", async () => {
       const { controller } = setup();
       await expect(controller.startRun(START_DTO, superReq())).rejects.toThrow(ForbiddenException);

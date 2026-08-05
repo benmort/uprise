@@ -18,6 +18,11 @@ const ACCOUNT_ID = "acct-1";
 const ACCOUNT_SID = "AC" + "1".repeat(32);
 const NUMBER_ID = "num-1";
 
+// Obviously-fake, correctly-SHAPED Twilio SIDs: BU/AD + 32 hex. The shape is the point –
+// the service refuses anything else rather than passing junk to Twilio.
+const SUPPLIED_BUNDLE_SID = "BU" + "a".repeat(32);
+const SUPPLIED_ADDRESS_SID = "AD" + "b".repeat(32);
+
 const ENV: Record<string, string> = { API_BASE_URL: "https://api.test" };
 
 /** The inbound-voice TwiML route a local (calls) number is pointed at. */
@@ -70,6 +75,9 @@ function makeAccount(overrides: Record<string, unknown> = {}) {
     status: "ACTIVE",
     mode: "SUBACCOUNT",
     friendlyName: "uprise",
+    // Non-regional by default – the column is null on every account that predates it.
+    region: null as string | null,
+    edge: null as string | null,
     settings: {},
     ...overrides,
   };
@@ -153,6 +161,14 @@ function setup() {
     assignBundleItem: jest.fn(async () => undefined),
     submitBundle: jest.fn(async () => undefined),
     fetchBundleStatus: jest.fn(async () => ({ status: "twilio-approved", failureReason: null })),
+    // What Twilio says a SUPPLIED bundle/address actually are. Approved, Australian and
+    // mobile by default – the class of the run `makeRun()` builds.
+    fetchBundleFacts: jest.fn(async () => ({
+      status: "twilio-approved",
+      numberType: "mobile" as string | null,
+      isoCountry: "AU" as string | null,
+    })),
+    fetchAddressCountry: jest.fn(async () => "AU" as string | null),
     findAvailableAuNumber: jest.fn(async () => "+61400000000"),
     purchaseNumber: jest.fn(async () => ({ phoneNumberSid: "PN" + "9".repeat(32), phoneNumberE164: "+61400000000" })),
     configureNumberWebhook: jest.fn(async () => undefined),
@@ -346,6 +362,151 @@ describe("TelephonyProvisioningService steps", () => {
       // three SKIPPED timeline hops recorded
       expect(prisma.telephonyProvisioningStep.create).toHaveBeenCalledTimes(3);
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.compliance-approved"));
+      // The stored bookkeeping still names the prior NUMBER row it came from – the
+      // operator-supplied provenance must not have swallowed this branch.
+      const stored = prisma.telephonyProvisioningRun.update.mock.calls[0][0].data.complianceInput;
+      expect(stored.reuse).toEqual(
+        expect.objectContaining({
+          bundleSid: "BUprior",
+          addressSid: "ADprior",
+          sourceNumberId: NUMBER_ID,
+          source: "prior-number",
+        }),
+      );
+    });
+
+    // A tenant that brings its own Twilio account has ALREADY been through the AU regulatory
+    // journey on it: approved bundle, registered address. `startRun` stores that pair as the
+    // run's reuse bookkeeping, stamped with the class it is approved for.
+    const suppliedRun = (
+      numberType: "mobile" | "local" = "mobile",
+      approvedFor = numberType,
+      overrides: Record<string, unknown> = {},
+    ) =>
+      makeRun({
+        status: S.SUBACCOUNT_CREATED,
+        accountId: ACCOUNT_ID,
+        numberType,
+        ...overrides,
+        complianceInput: {
+          ...makeRun().complianceInput,
+          reuse: {
+            bundleSid: SUPPLIED_BUNDLE_SID,
+            addressSid: SUPPLIED_ADDRESS_SID,
+            source: "operator-supplied",
+            numberType: approvedFor,
+          },
+        },
+      });
+
+    it("an operator-supplied bundle+address skips DRAFT→SUBMITTED→APPROVED with SKIPPED steps", async () => {
+      const { service, prisma, outbox } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(suppliedRun());
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount({ mode: "BYO" }));
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(
+        // The bundle SID is deliberately NOT written onto the run (it is unique per run and
+        // the supplied bundle is not this run's to own) – only the address it buys against.
+        statusData(S.COMPLIANCE_APPROVED, { addressSid: SUPPLIED_ADDRESS_SID }),
+      );
+      const steps = prisma.telephonyProvisioningStep.create.mock.calls.map((c: any) => c[0].data);
+      expect(steps.map((s: any) => [s.step, s.status])).toEqual([
+        ["compliance.draft", TelephonyStepStatus.SKIPPED],
+        ["compliance.submit", TelephonyStepStatus.SKIPPED],
+        ["compliance.review", TelephonyStepStatus.SKIPPED],
+      ]);
+      expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.compliance-approved"));
+    });
+
+    // The whole point: the human review at Twilio has already happened on this account, so
+    // nothing may be drafted, uploaded or submitted a second time.
+    it("creates no bundle, uploads no document and never queries a prior number on the supplied path", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(suppliedRun());
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount({ mode: "BYO" }));
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(twilio.createBundle).not.toHaveBeenCalled();
+      expect(twilio.createAddress).not.toHaveBeenCalled();
+      expect(twilio.createEndUser).not.toHaveBeenCalled();
+      expect(twilio.createSupportingDocument).not.toHaveBeenCalled();
+      expect(twilio.assignBundleItem).not.toHaveBeenCalled();
+      expect(twilio.submitBundle).not.toHaveBeenCalled();
+      expect(prisma.telephonyPhoneNumber.findFirst).not.toHaveBeenCalled();
+    });
+
+    // A run carrying a supplied bundle can only reach COMPLIANCE_REJECTED if that bundle
+    // turned out unusable, so a resubmit must draft a FRESH one. Re-taking the fast-path
+    // would re-approve the same rejected bundle and the operator's resubmit would fix
+    // nothing, forever.
+    it("a resubmit after rejection drafts a fresh bundle instead of re-taking the supplied fast-path", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        suppliedRun("mobile", "mobile", { status: S.COMPLIANCE_REJECTED }),
+      );
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount({ mode: "BYO" }));
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(twilio.createBundle).toHaveBeenCalled();
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.COMPLIANCE_DRAFT));
+    });
+
+    // Honest about what this pins: `startRun` writes the run's class and the stamp together
+    // (after checking the class against Twilio – see `SUPPLIED_BUNDLE_WRONG_CLASS`), so a
+    // mismatch cannot arrive through the API. What it CAN come from is the stored JSON,
+    // which is hand-editable and sits for days. This is that consistency assertion, and the
+    // point of it is the direction of the failure: fall back to drafting a fresh bundle,
+    // never buy against a bundle of the wrong regulation.
+    it("drafts a fresh bundle when the stored stamp disagrees with the run's class", async () => {
+      const { service, prisma, twilio, logger } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(suppliedRun("local", "mobile"));
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount({ mode: "BYO" }));
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(twilio.createBundle).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        "local",
+      );
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.COMPLIANCE_DRAFT));
+      expect(logger.warn).toHaveBeenCalled();
+    });
+
+    // Region/edge are a property of the ACCOUNT row, so every Twilio call made on that
+    // account's behalf has to carry them or it routes to the wrong Twilio region.
+    it("threads the account's region + edge into the creds it hands the Twilio client", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(draftRun());
+      prisma.telephonyAccount.findUnique.mockResolvedValue(
+        makeAccount({ mode: "BYO", region: "au1", edge: "sydney" }),
+      );
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(twilio.createAddress).toHaveBeenCalledWith(
+        expect.objectContaining({ accountSid: ACCOUNT_SID, region: "au1", edge: "sydney" }),
+        expect.anything(),
+      );
+    });
+
+    it("passes a null region for a non-regional account (today's behaviour, unchanged)", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(draftRun());
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      expect(twilio.createAddress).toHaveBeenCalledWith(
+        expect.objectContaining({ region: null, edge: null }),
+        expect.anything(),
+      );
     });
 
     /** The OR the reuse query was called with, for `matchesClass`. */
@@ -549,6 +710,72 @@ describe("TelephonyProvisioningService steps", () => {
       );
       expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.NUMBER_PURCHASED));
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.number-purchased"));
+    });
+
+    /**
+     * The single load-bearing line of the whole supplied-bundle feature.
+     *
+     * The fast-path deliberately never writes `bundleSid` onto the run row (the supplied
+     * bundle is not this run's to own, and `applyBundleStatus` looks runs up BY that column),
+     * so the `?? input.reuse?.bundleSid` fallback here is the ONLY thing that carries the
+     * operator's bundle to the purchase. Break it and every supplied-bundle run throws "Run
+     * has no approved bundle/address to purchase with" and parks FAILED – the exact outcome
+     * the feature exists to avoid. Both provenances are pinned: prior-number reuse stores its
+     * pair the same way.
+     */
+    it.each([
+      ["operator-supplied", { source: "operator-supplied", numberType: "mobile", classVerified: true }],
+      ["prior-number", { source: "prior-number", sourceNumberId: NUMBER_ID }],
+    ])("purchases against the %s bundle carried in reuse when the run row has none", async (_name, provenance) => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        approvedRun({
+          bundleSid: null,
+          addressSid: null,
+          complianceInput: {
+            ...makeRun().complianceInput,
+            reuse: { bundleSid: SUPPLIED_BUNDLE_SID, addressSid: SUPPLIED_ADDRESS_SID, ...provenance },
+          },
+        }),
+      );
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount({ mode: "BYO" }));
+
+      await service.stepPurchaseNumber(RUN_ID);
+
+      expect(twilio.purchaseNumber).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ bundleSid: SUPPLIED_BUNDLE_SID, addressSid: SUPPLIED_ADDRESS_SID }),
+      );
+      // And the number row records the pair it was actually bought against, so a later run
+      // of the same class can reuse it.
+      expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ bundleSid: SUPPLIED_BUNDLE_SID, addressSid: SUPPLIED_ADDRESS_SID }),
+        }),
+      );
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.NUMBER_PURCHASED));
+    });
+
+    // The run row wins when it HAS a bundle: a run that drafted its own must never buy
+    // against stale reuse bookkeeping left in its compliance JSON.
+    it("prefers the run's own bundle over the reuse bookkeeping", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        approvedRun({
+          complianceInput: {
+            ...makeRun().complianceInput,
+            reuse: { bundleSid: SUPPLIED_BUNDLE_SID, addressSid: SUPPLIED_ADDRESS_SID, source: "operator-supplied" },
+          },
+        }),
+      );
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+
+      await service.stepPurchaseNumber(RUN_ID);
+
+      expect(twilio.purchaseNumber).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ bundleSid: "BUnew", addressSid: "ADnew" }),
+      );
     });
 
     it('a "local" run searches local inventory and lands a voice-purpose number, never an SMS one', async () => {
@@ -844,6 +1071,33 @@ describe("TelephonyProvisioningService steps", () => {
       );
     });
 
+    // The operator-supplied bundle was approved for ONE regulation class. Inheriting it would
+    // have the local run buy a local number against a mobile bundle; the local half must
+    // draft (and have reviewed) its own.
+    it("the chained run does NOT inherit an operator-supplied bundle", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        activeRun({
+          complianceInput: {
+            ...makeRun().complianceInput,
+            reuse: {
+              bundleSid: SUPPLIED_BUNDLE_SID,
+              addressSid: SUPPLIED_ADDRESS_SID,
+              source: "operator-supplied",
+              numberType: "mobile",
+            },
+          },
+        }),
+      );
+      chainCreates(prisma);
+
+      await service.maybeChainComplementaryRun(RUN_ID);
+
+      const created = prisma.telephonyProvisioningRun.create.mock.calls[0][0].data;
+      expect(created.numberType).toBe("local");
+      expect(created.complianceInput.reuse).toBeUndefined();
+    });
+
     // The chained run drafts a SECOND regulatory bundle that a human at Twilio reviews. It
     // used to be created with documents: null, so that bundle went in with no supporting
     // documents at all and was rejected days later.
@@ -1083,6 +1337,288 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.requested"));
     });
 
+    // A tenant bringing an established Twilio account has already been through Twilio's AU
+    // regulatory review on it. These cases pin what `startRun` accepts, and what it refuses
+    // rather than discovering days later at the purchase call.
+    describe("operator-supplied bundle + address", () => {
+      const byo = (extra: Record<string, unknown> = {}) => ({
+        tenantId: TENANT_ID,
+        mode: "BYO" as const,
+        byoAccountSid: ACCOUNT_SID,
+        byoAuthToken: "byo-token",
+        complianceInput: makeRun().complianceInput as any,
+        ...extra,
+      });
+
+      it("stores the supplied pair as the run's reuse bookkeeping, stamped with its class", async () => {
+        const { service, prisma, twilio } = setup();
+        // The class comes from TWILIO's record of the bundle, not from the request.
+        twilio.fetchBundleFacts.mockResolvedValue({
+          status: "twilio-approved",
+          numberType: "local",
+          isoCountry: "AU",
+        });
+
+        await service.startRun(
+          byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID, numberType: "local" }),
+        );
+
+        expect(twilio.fetchBundleFacts).toHaveBeenCalledWith(
+          expect.objectContaining({ accountSid: ACCOUNT_SID }),
+          SUPPLIED_BUNDLE_SID,
+        );
+        const data = prisma.telephonyProvisioningRun.create.mock.calls[0][0].data;
+        expect(data.complianceInput.reuse).toEqual({
+          bundleSid: SUPPLIED_BUNDLE_SID,
+          addressSid: SUPPLIED_ADDRESS_SID,
+          source: "operator-supplied",
+          numberType: "local",
+          classVerified: true,
+        });
+        // The timeline says why this run will never draft a bundle.
+        expect(prisma.telephonyProvisioningStep.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ detail: expect.objectContaining({ suppliedBundle: true }) }) }),
+        );
+      });
+
+      // The class the OPERATOR asked for and the class the BUNDLE is approved for are two
+      // different facts. Only Twilio knows the second one, and buying a local number against
+      // a mobile-approved bundle is the expensive mistake this call exists to stop – it is
+      // otherwise found at the purchase step, after the run has skipped its review.
+      it("refuses a bundle Twilio says is approved for the OTHER regulation class", async () => {
+        const { service, prisma, twilio } = setup();
+        twilio.fetchBundleFacts.mockResolvedValue({
+          status: "twilio-approved",
+          numberType: "mobile",
+          isoCountry: "AU",
+        });
+
+        await expectApiError(
+          service.startRun(
+            byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID, numberType: "local" }),
+          ),
+          "SUPPLIED_BUNDLE_WRONG_CLASS",
+        );
+        expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      });
+
+      it("refuses a bundle that is not twilio-approved – there is no review to skip", async () => {
+        const { service, prisma, twilio } = setup();
+        twilio.fetchBundleFacts.mockResolvedValue({
+          status: "pending-review",
+          numberType: "mobile",
+          isoCountry: "AU",
+        });
+
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "SUPPLIED_BUNDLE_NOT_APPROVED",
+        );
+        expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      });
+
+      it("refuses a bundle regulated for another country", async () => {
+        const { service, twilio } = setup();
+        twilio.fetchBundleFacts.mockResolvedValue({
+          status: "twilio-approved",
+          numberType: "mobile",
+          isoCountry: "US",
+        });
+
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "SUPPLIED_BUNDLE_WRONG_COUNTRY",
+        );
+      });
+
+      // A fat-fingered-but-well-shaped SID is the likely mistake, and it is the one the
+      // regex cannot catch. Caught here, it is a 422 on the operator's screen; caught at the
+      // purchase step it is a run that no retry can rescue.
+      it("refuses a bundle or address that cannot be read on the account", async () => {
+        const { service, prisma, twilio } = setup();
+        twilio.fetchBundleFacts.mockRejectedValue(new Error("The requested resource was not found"));
+
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "SUPPLIED_BUNDLE_UNREADABLE",
+        );
+
+        twilio.fetchBundleFacts.mockResolvedValue({
+          status: "twilio-approved",
+          numberType: "mobile",
+          isoCountry: "AU",
+        });
+        twilio.fetchAddressCountry.mockRejectedValue(new Error("The requested resource was not found"));
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "SUPPLIED_ADDRESS_UNREADABLE",
+        );
+        expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      });
+
+      it("refuses an address registered outside Australia", async () => {
+        const { service, twilio } = setup();
+        twilio.fetchAddressCountry.mockResolvedValue("NZ");
+
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "SUPPLIED_ADDRESS_WRONG_COUNTRY",
+        );
+      });
+
+      // Twilio knowing the bundle is approved but not what class it is (the regulation
+      // lookup failed) must not read as "the class matches" – it is recorded as unverified.
+      it("stamps classVerified false when Twilio cannot say what class the bundle is", async () => {
+        const { service, prisma, twilio } = setup();
+        twilio.fetchBundleFacts.mockResolvedValue({
+          status: "twilio-approved",
+          numberType: null,
+          isoCountry: null,
+        });
+
+        await service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: SUPPLIED_ADDRESS_SID }));
+
+        expect(prisma.telephonyProvisioningRun.create.mock.calls[0][0].data.complianceInput.reuse).toEqual(
+          expect.objectContaining({ numberType: "mobile", classVerified: false }),
+        );
+      });
+
+      it("leaves reuse unset – and asks Twilio nothing – when no pair is supplied", async () => {
+        const { service, prisma, twilio } = setup();
+        await service.startRun(byo());
+        expect(prisma.telephonyProvisioningRun.create.mock.calls[0][0].data.complianceInput.reuse).toBeUndefined();
+        expect(twilio.fetchBundleFacts).not.toHaveBeenCalled();
+        expect(twilio.fetchAddressCountry).not.toHaveBeenCalled();
+      });
+
+      it("rejects half a pair – a bundle cannot buy a number without its address", async () => {
+        const { service, prisma } = setup();
+
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID })),
+          "BUNDLE_REUSE_PAIR_REQUIRED",
+        );
+        await expectApiError(
+          service.startRun(byo({ byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "BUNDLE_REUSE_PAIR_REQUIRED",
+        );
+        expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      });
+
+      it("rejects a malformed SID rather than passing junk to Twilio", async () => {
+        const { service, prisma } = setup();
+
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: "BUtooshort", byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "INVALID_TWILIO_SID",
+        );
+        // Right length, wrong prefix – an address SID passed as the bundle.
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_ADDRESS_SID, byoAddressSid: SUPPLIED_ADDRESS_SID })),
+          "INVALID_TWILIO_SID",
+        );
+        await expectApiError(
+          service.startRun(byo({ byoBundleSid: SUPPLIED_BUNDLE_SID, byoAddressSid: "AD" + "z".repeat(32) })),
+          "INVALID_TWILIO_SID",
+        );
+        expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      });
+
+      // Rejected, not ignored: a subaccount under the platform master cannot use a bundle
+      // that lives under someone else's account, and silently dropping the field would leave
+      // the operator believing a days-long review had been skipped.
+      it("rejects a supplied pair on a SUBACCOUNT run", async () => {
+        const { service, prisma } = setup();
+
+        await expectApiError(
+          service.startRun({
+            tenantId: TENANT_ID,
+            mode: "SUBACCOUNT",
+            byoBundleSid: SUPPLIED_BUNDLE_SID,
+            byoAddressSid: SUPPLIED_ADDRESS_SID,
+            complianceInput: makeRun().complianceInput as any,
+          }),
+          "BYO_ONLY_FIELD",
+        );
+        expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("regional BYO account", () => {
+      const byo = (extra: Record<string, unknown> = {}) => ({
+        tenantId: TENANT_ID,
+        mode: "BYO" as const,
+        byoAccountSid: ACCOUNT_SID,
+        byoAuthToken: "byo-token",
+        complianceInput: makeRun().complianceInput as any,
+        ...extra,
+      });
+
+      it("persists region + edge on the account", async () => {
+        const { service, prisma } = setup();
+
+        await service.startRun(byo({ byoRegion: "AU1", byoEdge: "Sydney" }));
+
+        const args = prisma.telephonyAccount.upsert.mock.calls[0][0];
+        // Normalised to the lowercase form the Twilio SDK expects.
+        expect(args.create).toEqual(expect.objectContaining({ region: "au1", edge: "sydney" }));
+        expect(args.update).toEqual(expect.objectContaining({ region: "au1", edge: "sydney" }));
+        expect(prisma.telephonyProvisioningStep.create).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ detail: expect.objectContaining({ regional: true }) }) }),
+        );
+      });
+
+      it("writes null on create and touches nothing on update when no region is stated", async () => {
+        const { service, prisma } = setup();
+
+        await service.startRun(byo());
+
+        const args = prisma.telephonyAccount.upsert.mock.calls[0][0];
+        expect(args.create).toEqual(expect.objectContaining({ region: null, edge: null }));
+        // An omitted region means "unchanged", never "clear the one the account has".
+        expect(args.update).not.toHaveProperty("region");
+        expect(args.update).not.toHaveProperty("edge");
+      });
+
+      // Region and edge name ONE host between them (numbers.<edge>.<region>.twilio.com), so
+      // a run that states a new region must not leave the previous region's edge behind: an
+      // account at au1/sydney re-run as us1 would otherwise be stored as us1/sydney, a host
+      // that does not exist and that the edge-needs-a-region guard cannot catch (both are set).
+      it("a stated region rewrites the edge too, rather than leaving a stale half behind", async () => {
+        const { service, prisma } = setup();
+
+        await service.startRun(byo({ byoRegion: "us1" }));
+
+        const args = prisma.telephonyAccount.upsert.mock.calls[0][0];
+        expect(args.update).toEqual(expect.objectContaining({ region: "us1", edge: null }));
+      });
+
+      it("rejects an edge with no region, and a malformed region or edge", async () => {
+        const { service } = setup();
+
+        await expectApiError(service.startRun(byo({ byoEdge: "sydney" })), "TWILIO_REGION_REQUIRED");
+        await expectApiError(service.startRun(byo({ byoRegion: "australia" })), "INVALID_TWILIO_REGION");
+        await expectApiError(
+          service.startRun(byo({ byoRegion: "au1", byoEdge: "Sydney NSW" })),
+          "INVALID_TWILIO_REGION",
+        );
+      });
+
+      it("rejects a region on a SUBACCOUNT run (it inherits the master's)", async () => {
+        const { service } = setup();
+
+        await expectApiError(
+          service.startRun({
+            tenantId: TENANT_ID,
+            mode: "SUBACCOUNT",
+            byoRegion: "au1",
+            complianceInput: makeRun().complianceInput as any,
+          }),
+          "BYO_ONLY_FIELD",
+        );
+      });
+    });
+
     it("BYO mode without credentials throws BYO_CREDENTIALS_REQUIRED", async () => {
       const { service } = setup();
 
@@ -1237,6 +1773,87 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       // draft step ran (new bundle built)
       expect(twilio.createBundle).toHaveBeenCalled();
       expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.COMPLIANCE_DRAFT));
+    });
+
+    /**
+     * The one FAILED state `retry` cannot fix. A run using a supplied bundle that falls over
+     * at the purchase step parks FAILED with resumeStatus COMPLIANCE_APPROVED, and retry
+     * re-enters exactly there – re-attempting the purchase with the SAME two SIDs, forever.
+     * It can never reach COMPLIANCE_REJECTED either (its bundle is deliberately not on the
+     * run row, so no webhook or poll resolves to it), so without this branch the operator's
+     * only remedy is abandoning the run and starting again.
+     */
+    it("rescues a run stuck FAILED at purchase on a supplied bundle by drafting a fresh one", async () => {
+      const { service, prisma, twilio } = setup();
+      const stuck = makeRun({
+        status: S.FAILED,
+        resumeStatus: S.COMPLIANCE_APPROVED,
+        accountId: ACCOUNT_ID,
+        addressSid: SUPPLIED_ADDRESS_SID,
+        lastError: "Bundle not found",
+        complianceInput: {
+          ...makeRun().complianceInput,
+          reuse: {
+            bundleSid: SUPPLIED_BUNDLE_SID,
+            addressSid: SUPPLIED_ADDRESS_SID,
+            source: "operator-supplied",
+            numberType: "mobile",
+          },
+        },
+      });
+      prisma.telephonyProvisioningRun.findUnique
+        // resubmit's own read, then advance's re-read inside the transaction …
+        .mockResolvedValueOnce(stuck)
+        .mockResolvedValueOnce(stuck)
+        // … and the redraft hop lands the run back at SUBACCOUNT_CREATED for every later read.
+        .mockResolvedValue(makeRun({ status: S.SUBACCOUNT_CREATED, accountId: ACCOUNT_ID }));
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount({ mode: "BYO" }));
+
+      await service.resubmit(RUN_ID);
+
+      // The supplied pair is DISCARDED – leaving `reuse` in place would send the redraft
+      // straight back down the fast-path to the same failing purchase.
+      const redraft = prisma.telephonyProvisioningRun.update.mock.calls[0][0].data;
+      expect(redraft.status).toBe(S.SUBACCOUNT_CREATED);
+      expect(redraft.bundleSid).toBeNull();
+      expect(redraft.addressSid).toBeNull();
+      expect(redraft.complianceInput.reuse).toBeUndefined();
+      // …and a bundle of uprise's own is drafted, which is the whole point of the rescue.
+      expect(twilio.createBundle).toHaveBeenCalled();
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(statusData(S.COMPLIANCE_DRAFT));
+    });
+
+    // Only the supplied-bundle dead end is rescued this way. A run that failed anywhere else
+    // has a working `retry`, and re-entering it at SUBACCOUNT_CREATED would throw away an
+    // approved bundle uprise itself paid a human review for.
+    it("does not rescue a FAILED run that has no supplied bundle", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        makeRun({ status: S.FAILED, resumeStatus: S.COMPLIANCE_APPROVED, accountId: ACCOUNT_ID, bundleSid: "BUnew" }),
+      );
+
+      await expectApiError(service.resubmit(RUN_ID), "NOT_REJECTED");
+    });
+
+    it("does not rescue a supplied-bundle run that failed at a different step", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        makeRun({
+          status: S.FAILED,
+          resumeStatus: S.REQUESTED,
+          accountId: ACCOUNT_ID,
+          complianceInput: {
+            ...makeRun().complianceInput,
+            reuse: {
+              bundleSid: SUPPLIED_BUNDLE_SID,
+              addressSid: SUPPLIED_ADDRESS_SID,
+              source: "operator-supplied",
+            },
+          },
+        }),
+      );
+
+      await expectApiError(service.resubmit(RUN_ID), "NOT_REJECTED");
     });
   });
 

@@ -22,6 +22,7 @@ import { TelephonySenderResolver } from "./telephony-sender.resolver";
 import { assertValidProvisioningTransition } from "./telephony-provisioning-state.machine";
 import {
   TwilioProvisioningClient,
+  type BundleFacts,
   type ComplianceInput,
   type NumberWebhooks,
   type TwilioCreds,
@@ -37,10 +38,49 @@ type RunDocument = {
   supportingDocumentSid?: string;
 };
 
+/**
+ * A bundle/address pair this run may purchase against without drafting anything, plus where
+ * it came from. Two provenances:
+ *  - "prior-number": derived from an earlier `TelephonyPhoneNumber` of this tenant;
+ *  - "operator-supplied": handed in at `startRun` by a tenant whose OWN Twilio account has
+ *    already been through the AU regulatory journey (BYO only).
+ * `numberType` is the regulation class the pair may be used for – load-bearing, because a
+ * bundle approved for mobile cannot purchase a local number and vice versa. For
+ * "prior-number" it is the class the reuse query matched on; for "operator-supplied" it is
+ * the class Twilio itself reported for the bundle, unless `classVerified` says otherwise.
+ */
+type StoredReuse = {
+  bundleSid: string;
+  addressSid: string;
+  /** Only set for "prior-number" – the row the pair was copied from. */
+  sourceNumberId?: string;
+  source?: "prior-number" | "operator-supplied";
+  numberType?: "mobile" | "local";
+  /**
+   * Was `numberType` read from TWILIO (the bundle's own regulation), or is it only what the
+   * run asked for? False/absent means unverified – Twilio could not tell us the class – and
+   * the purchase is the first place a mismatch would show. Recorded rather than assumed so
+   * the stored provenance never overstates what is actually known.
+   */
+  classVerified?: boolean;
+};
+
 /** complianceInput JSON = ComplianceInput + service-owned reuse bookkeeping. */
 type StoredComplianceInput = ComplianceInput & {
-  reuse?: { bundleSid: string; addressSid: string; sourceNumberId: string };
+  reuse?: StoredReuse;
 };
+
+/**
+ * Twilio resource SIDs are prefixed and fixed-length (2-letter prefix + 32 hex). Validated
+ * here rather than passed through, because a malformed SID is only discovered at the
+ * purchase call – after the run has already skipped its compliance review.
+ */
+const BUNDLE_SID_RE = /^BU[0-9a-fA-F]{32}$/;
+const ADDRESS_SID_RE = /^AD[0-9a-fA-F]{32}$/;
+/** Twilio home regions are two letters + a digit ("au1", "us1", "ie1"). */
+const TWILIO_REGION_RE = /^[a-z]{2}[0-9]$/;
+/** Twilio edges are lowercase place names ("sydney", "sao-paulo", "ashburn"). */
+const TWILIO_EDGE_RE = /^[a-z][a-z-]{2,19}$/;
 
 export type StartRunInput = {
   tenantId: string;
@@ -48,6 +88,17 @@ export type StartRunInput = {
   mode: "SUBACCOUNT" | "BYO";
   byoAccountSid?: string;
   byoAuthToken?: string;
+  /**
+   * An ALREADY-APPROVED regulatory bundle and its registered address on the BYO account
+   * (`BU…` / `AD…`). Supplying them takes the run straight to purchase: no bundle drafted,
+   * no documents uploaded, no second trip through Twilio's human review. Both or neither –
+   * a bundle without its address cannot buy a number.
+   */
+  byoBundleSid?: string;
+  byoAddressSid?: string;
+  /** Twilio home region / edge of the BYO account, e.g. "au1" / "sydney". */
+  byoRegion?: string;
+  byoEdge?: string;
   friendlyName?: string;
   /** "mobile" (SMS, historical default) or "local" (voice caller-id capable). */
   numberType?: "mobile" | "local";
@@ -259,6 +310,10 @@ export class TelephonyProvisioningService {
       id: account.id,
       accountSid: account.accountSid,
       authToken: this.crypto.decrypt(account.encryptedAuthToken),
+      // Null on every account that is not regional (the platform's subaccounts, and every
+      // row that predates the column) – the client then builds itself exactly as before.
+      region: account.region,
+      edge: account.edge,
     };
   }
 
@@ -413,26 +468,213 @@ export class TelephonyProvisioningService {
     };
   }
 
+  /**
+   * Validate the four BYO-account-shaped extras before anything is written.
+   *
+   * These exist for a tenant that arrives with an established Twilio account: Common Threads
+   * already holds an APPROVED AU bundle and a registered address, and their account runs in
+   * a region. Every branch here refuses rather than guesses, because both failure modes are
+   * silent and late – a wrong SID fails at the purchase call after the run has already
+   * skipped compliance review, and a wrong region routes calls to the wrong Twilio edge.
+   *
+   * All four are meaningless outside BYO: a subaccount created under the platform master
+   * cannot use a bundle that lives under someone else's account, and it inherits the
+   * master's region. Supplying them on a SUBACCOUNT run is therefore REJECTED, not ignored –
+   * ignoring it would leave the operator believing a days-long human review had been skipped
+   * until the run visibly drafted its own bundle anyway.
+   */
+  private byoExtras(input: StartRunInput): {
+    reuse: { bundleSid: string; addressSid: string } | null;
+    region: string | null;
+    edge: string | null;
+  } {
+    const bundleSid = input.byoBundleSid?.trim() || undefined;
+    const addressSid = input.byoAddressSid?.trim() || undefined;
+    const region = input.byoRegion?.trim().toLowerCase() || undefined;
+    const edge = input.byoEdge?.trim().toLowerCase() || undefined;
+    if (!bundleSid && !addressSid && !region && !edge) {
+      return { reuse: null, region: null, edge: null };
+    }
+    if (input.mode !== "BYO") {
+      throw new ApiHttpException(
+        "BYO_ONLY_FIELD",
+        "An existing bundle, address, region or edge only applies to a BYO Twilio account",
+      );
+    }
+    // Half a pair is a mistake, not a partial optimisation: Twilio requires BOTH on the
+    // number purchase, so a bundle without its address buys nothing.
+    if (Boolean(bundleSid) !== Boolean(addressSid)) {
+      throw new ApiHttpException(
+        "BUNDLE_REUSE_PAIR_REQUIRED",
+        "Supply both the regulatory bundle SID and its address SID, or neither",
+      );
+    }
+    if (bundleSid && !BUNDLE_SID_RE.test(bundleSid)) {
+      throw new ApiHttpException("INVALID_TWILIO_SID", "The bundle SID must look like BU… (34 characters)");
+    }
+    if (addressSid && !ADDRESS_SID_RE.test(addressSid)) {
+      throw new ApiHttpException("INVALID_TWILIO_SID", "The address SID must look like AD… (34 characters)");
+    }
+    // An edge without its region would have the SDK log a deprecation warning and route on
+    // a half-specified host; make the operator state the region they mean.
+    if (edge && !region) {
+      throw new ApiHttpException("TWILIO_REGION_REQUIRED", "An edge needs its region (for example au1 with sydney)");
+    }
+    if (region && !TWILIO_REGION_RE.test(region)) {
+      throw new ApiHttpException("INVALID_TWILIO_REGION", "The region must look like au1");
+    }
+    if (edge && !TWILIO_EDGE_RE.test(edge)) {
+      throw new ApiHttpException("INVALID_TWILIO_REGION", "The edge must look like sydney");
+    }
+    return {
+      reuse: bundleSid && addressSid ? { bundleSid, addressSid } : null,
+      region: region ?? null,
+      edge: edge ?? null,
+    };
+  }
+
+  /**
+   * Ask Twilio what a supplied bundle/address actually ARE, before any run row exists.
+   *
+   * The operator hand-pastes two SIDs off another system. Every way that can be wrong – a
+   * typo, a bundle belonging to a different account, one still in review, one approved for
+   * the OTHER regulation class – is otherwise discovered at the purchase call, days of
+   * skipped review later, where the run parks FAILED at a step `retry` can only re-attempt
+   * with the same bad SIDs. Asking here turns all of it into an immediate 422 on the
+   * operator's own screen.
+   *
+   * It is also the ONLY thing that establishes the bundle's class INDEPENDENTLY of what the
+   * operator claimed: the class comes from the bundle's own regulation at Twilio, never from
+   * the `numberType` the run was started with. Returns the verified class, or undefined when
+   * Twilio could not tell us (unknown ⇒ never treated as a match).
+   */
+  private async verifySuppliedPair(
+    creds: TwilioCreds,
+    reuse: { bundleSid: string; addressSid: string },
+    wantType: "mobile" | "local",
+  ): Promise<"mobile" | "local" | undefined> {
+    let facts: BundleFacts;
+    try {
+      facts = await this.twilio.fetchBundleFacts(creds, reuse.bundleSid);
+    } catch (err) {
+      this.logger.warn("telephony", "Supplied regulatory bundle could not be read", {
+        error: String(err instanceof Error ? err.message : err),
+      });
+      throw new ApiHttpException(
+        "SUPPLIED_BUNDLE_UNREADABLE",
+        "That regulatory bundle could not be read on this Twilio account – check the SID and that the bundle belongs to the account you supplied",
+        422,
+      );
+    }
+    if (facts.status !== "twilio-approved") {
+      throw new ApiHttpException(
+        "SUPPLIED_BUNDLE_NOT_APPROVED",
+        `That regulatory bundle is "${facts.status || "unknown"}", not approved by Twilio – only an already-approved bundle can skip compliance review`,
+        422,
+      );
+    }
+    if (facts.isoCountry && facts.isoCountry.toUpperCase() !== "AU") {
+      throw new ApiHttpException(
+        "SUPPLIED_BUNDLE_WRONG_COUNTRY",
+        `That regulatory bundle is for ${facts.isoCountry}, and uprise buys Australian numbers`,
+        422,
+      );
+    }
+    // The expensive mistake this whole check exists for: a mobile-approved bundle cannot
+    // buy a local number, and Twilio is the only thing that knows which it is.
+    if (facts.numberType && facts.numberType !== wantType) {
+      throw new ApiHttpException(
+        "SUPPLIED_BUNDLE_WRONG_CLASS",
+        `That regulatory bundle is approved for ${facts.numberType} numbers, but this run is provisioning a ${wantType} number`,
+        422,
+      );
+    }
+    let addressCountry: string | null;
+    try {
+      addressCountry = await this.twilio.fetchAddressCountry(creds, reuse.addressSid);
+    } catch (err) {
+      this.logger.warn("telephony", "Supplied address could not be read", {
+        error: String(err instanceof Error ? err.message : err),
+      });
+      throw new ApiHttpException(
+        "SUPPLIED_ADDRESS_UNREADABLE",
+        "That address could not be read on this Twilio account – check the SID and that the address belongs to the account you supplied",
+        422,
+      );
+    }
+    if (addressCountry && addressCountry.toUpperCase() !== "AU") {
+      throw new ApiHttpException(
+        "SUPPLIED_ADDRESS_WRONG_COUNTRY",
+        `That address is registered in ${addressCountry}, and an Australian number needs an Australian address`,
+        422,
+      );
+    }
+    return facts.numberType === "mobile" || facts.numberType === "local" ? facts.numberType : undefined;
+  }
+
   async startRun(input: StartRunInput) {
     // Read-only gate BEFORE the transaction (no external calls in tx): plan + org KYC.
     await this.assertProvisioningAllowed(input.tenantId);
+    const extras = this.byoExtras(input);
     const friendlyName = input.friendlyName?.trim() || `uprise ${input.tenantId}`;
+    const numberType = input.numberType === "local" ? "local" : "mobile";
+    const byoAccountSid = input.byoAccountSid;
+    const byoAuthToken = input.byoAuthToken;
+
+    // The supplied pair is stored as the run's reuse bookkeeping – the same slot the
+    // prior-number fast-path uses, so ONE code path in stepDraftCompliance and
+    // stepPurchaseNumber serves both provenances – stamped with the class Twilio says the
+    // bundle is approved for, and with whether that class is known at all. The verification
+    // is an external call, so it happens HERE, before the transaction is opened.
+    let complianceInput: StoredComplianceInput = input.complianceInput;
+    if (extras.reuse) {
+      if (!byoAccountSid || !byoAuthToken) {
+        throw new ApiHttpException("BYO_CREDENTIALS_REQUIRED", "BYO mode needs an account SID and auth token");
+      }
+      const verifiedType = await this.verifySuppliedPair(
+        { accountSid: byoAccountSid, authToken: byoAuthToken, region: extras.region, edge: extras.edge },
+        extras.reuse,
+        numberType,
+      );
+      complianceInput = {
+        ...input.complianceInput,
+        reuse: {
+          ...extras.reuse,
+          source: "operator-supplied",
+          // Equal by construction – `verifySuppliedPair` refuses any bundle Twilio says is
+          // a different class, so the only way to get here is agreement (or Twilio not
+          // knowing, which `classVerified` is what records).
+          numberType,
+          classVerified: Boolean(verifiedType),
+        },
+      };
+    }
     return this.prisma.$transaction(async (tx) => {
       let accountId: string | null = null;
       if (input.mode === "BYO") {
-        if (!input.byoAccountSid || !input.byoAuthToken) {
+        if (!byoAccountSid || !byoAuthToken) {
           throw new ApiHttpException("BYO_CREDENTIALS_REQUIRED", "BYO mode needs an account SID and auth token");
         }
         const account = await tx.telephonyAccount.upsert({
-          where: { accountSid: input.byoAccountSid },
+          where: { accountSid: byoAccountSid },
           create: {
             tenantId: input.tenantId,
             mode: TelephonyAccountMode.BYO,
-            accountSid: input.byoAccountSid,
-            encryptedAuthToken: this.crypto.encrypt(input.byoAuthToken),
+            accountSid: byoAccountSid,
+            encryptedAuthToken: this.crypto.encrypt(byoAuthToken),
             friendlyName,
+            region: extras.region,
+            edge: extras.edge,
           },
-          update: { encryptedAuthToken: this.crypto.encrypt(input.byoAuthToken) },
+          update: {
+            encryptedAuthToken: this.crypto.encrypt(byoAuthToken),
+            // Region and edge move as ONE pair, or not at all. An omitted region means
+            // "unchanged", never "clear what the account has"; but a STATED region replaces
+            // both halves (edge := stated-or-null). Writing them independently let a re-run
+            // that named only a new region keep the previous region's edge, leaving the row
+            // as e.g. us1/sydney – a host that does not exist.
+            ...(extras.region ? { region: extras.region, edge: extras.edge } : {}),
+          },
         });
         accountId = account.id;
       }
@@ -442,9 +684,9 @@ export class TelephonyProvisioningService {
           campaignId: input.campaignId ?? null,
           accountId,
           status: S.REQUESTED,
-          numberType: input.numberType === "local" ? "local" : "mobile",
+          numberType,
           chainComplementary: input.chainComplementary !== false,
-          complianceInput: input.complianceInput as unknown as Prisma.InputJsonValue,
+          complianceInput: complianceInput as unknown as Prisma.InputJsonValue,
           requestedById: input.requestedById ?? null,
         },
       });
@@ -454,7 +696,14 @@ export class TelephonyProvisioningService {
           tenantId: input.tenantId,
           step: "run.requested",
           status: TelephonyStepStatus.SUCCEEDED,
-          detail: { mode: input.mode, campaignId: input.campaignId ?? null } as Prisma.InputJsonValue,
+          detail: {
+            mode: input.mode,
+            campaignId: input.campaignId ?? null,
+            // Visible in the timeline: this run is about to skip a human review, and an
+            // operator reading the timeline should see WHY it never drafted a bundle.
+            suppliedBundle: Boolean(extras.reuse),
+            regional: Boolean(extras.region),
+          } as Prisma.InputJsonValue,
         },
       });
       await this.outbox.append(tx, {
@@ -650,9 +899,54 @@ export class TelephonyProvisioningService {
       const creds = await this.accountCreds(run.accountId);
       const input = this.complianceInputOf(run);
 
-      // Reuse: a prior number of this tenant with an approved bundle – but only of
-      // the SAME regulation class (a mobile bundle cannot purchase a local number).
       const wantType = this.runNumberType(run);
+
+      // Reuse, provenance 1: a bundle+address the OPERATOR supplied at start, already
+      // approved on their own (BYO) Twilio account. Nothing is drafted, nothing is uploaded
+      // and no human at Twilio reviews anything a second time – the run walks straight to
+      // APPROVED and buys the number.
+      //
+      // The class check that MATTERS happens at `startRun`, against Twilio's own record of
+      // what the bundle is approved for (`verifySuppliedPair`) – a mobile bundle cannot buy
+      // a local number, and only Twilio knows which it is. The comparison below is not that
+      // check: `startRun` writes the run's class and the stamp together, so they agree by
+      // construction. It is a cheap consistency assertion on the stored JSON, which is
+      // hand-editable and long-lived (a run can sit for days), and it fails SAFE – falling
+      // through to a fresh draft rather than buying against the wrong regulation. Note the
+      // chained complementary run never sees any of this – `maybeChainComplementaryRun`
+      // strips `reuse` – so the local half of a chain drafts its own local bundle, as it must.
+      const supplied = input.reuse?.source === "operator-supplied" ? input.reuse : null;
+      if (supplied && run.status === S.SUBACCOUNT_CREATED) {
+        if (supplied.numberType && supplied.numberType !== wantType) {
+          this.logger.warn("telephony", "Supplied bundle is for another regulation class – drafting a fresh one", {
+            runId,
+            approvedFor: supplied.numberType,
+            wanted: wantType,
+          });
+        } else {
+          await this.advance(runId, {
+            hops: [
+              { to: S.COMPLIANCE_DRAFT, step: "compliance.draft", stepStatus: TelephonyStepStatus.SKIPPED, detail: { reusedBundleSid: supplied.bundleSid, source: "operator-supplied" } },
+              { to: S.COMPLIANCE_SUBMITTED, step: "compliance.submit", stepStatus: TelephonyStepStatus.SKIPPED },
+              { to: S.COMPLIANCE_APPROVED, step: "compliance.review", stepStatus: TelephonyStepStatus.SKIPPED, detail: { reused: true, source: "operator-supplied" } },
+            ],
+            // `bundleSid` is deliberately NOT written to the run: it is unique per run
+            // (applyBundleStatus looks a run up by it) and the supplied bundle is not this
+            // run's to own. stepPurchaseNumber reads it back out of `reuse`.
+            data: { addressSid: supplied.addressSid },
+            event: {
+              tenantId: run.tenantId,
+              eventType: "telephony.provisioning.compliance-approved",
+              aggregateId: runId,
+              payload: { runId, tenantId: run.tenantId, bundleSid: supplied.bundleSid },
+            },
+          });
+          return;
+        }
+      }
+
+      // Reuse, provenance 2: a prior number of this tenant with an approved bundle – but only
+      // of the SAME regulation class (a mobile bundle cannot purchase a local number).
       const prior = await this.prisma.telephonyPhoneNumber.findFirst({
         where: {
           tenantId: run.tenantId,
@@ -666,7 +960,15 @@ export class TelephonyProvisioningService {
       if (prior?.bundleSid && prior.addressSid && run.status === S.SUBACCOUNT_CREATED) {
         const stored: StoredComplianceInput = {
           ...input,
-          reuse: { bundleSid: prior.bundleSid, addressSid: prior.addressSid, sourceNumberId: prior.id },
+          reuse: {
+            bundleSid: prior.bundleSid,
+            addressSid: prior.addressSid,
+            sourceNumberId: prior.id,
+            source: "prior-number",
+            // The class the prior number (and so its bundle) was approved under; the query
+            // above already matched on it, recorded here so provenance is self-describing.
+            numberType: wantType,
+          },
         };
         await this.advance(runId, {
           hops: [
@@ -811,11 +1113,54 @@ export class TelephonyProvisioningService {
     return { polled: runs.length, advanced };
   }
 
-  /** COMPLIANCE_REJECTED: update details and re-run the draft step (new bundle). */
+  /**
+   * COMPLIANCE_REJECTED: update details and re-run the draft step (new bundle).
+   *
+   * ALSO the escape hatch for the one FAILED state `retry` cannot fix: a run carrying an
+   * operator-supplied bundle that fell over at the purchase step. `retry` re-enters at
+   * `resumeStatus` – COMPLIANCE_APPROVED – and re-attempts the purchase with the SAME two
+   * SIDs, forever; and such a run can never reach COMPLIANCE_REJECTED, because its supplied
+   * bundle is deliberately not written to the run row, so no webhook or poll can resolve to
+   * it. Without this branch the operator's only remedy is abandoning the run. Here the
+   * supplied pair is DISCARDED and the run walks back to SUBACCOUNT_CREATED to draft a
+   * bundle of its own – the slow path, but a self-service one.
+   */
   async resubmit(runId: string, complianceInput?: ComplianceInput) {
     const run = await this.getRunOrThrow(runId);
-    if (run.status !== S.COMPLIANCE_REJECTED) {
-      throw new ApiHttpException("NOT_REJECTED", "Only a COMPLIANCE_REJECTED run can be resubmitted", 409);
+    const stored = this.complianceInputOf(run);
+    const stuckOnSuppliedBundle =
+      run.status === S.FAILED &&
+      run.resumeStatus === S.COMPLIANCE_APPROVED &&
+      stored.reuse?.source === "operator-supplied";
+    if (run.status !== S.COMPLIANCE_REJECTED && !stuckOnSuppliedBundle) {
+      throw new ApiHttpException(
+        "NOT_REJECTED",
+        "Only a rejected run – or one that failed on a supplied regulatory bundle – can be resubmitted",
+        409,
+      );
+    }
+    if (stuckOnSuppliedBundle) {
+      // Strip `reuse` as well as the SIDs: leaving it would have stepDraftCompliance take
+      // the supplied fast-path straight back to the same failing purchase.
+      const { reuse: _discarded, ...withoutReuse } = complianceInput
+        ? ({ ...complianceInput } as StoredComplianceInput)
+        : stored;
+      await this.advance(runId, {
+        hops: [
+          {
+            to: S.SUBACCOUNT_CREATED,
+            step: "compliance.redraft",
+            detail: { discardedSuppliedBundle: true, lastError: run.lastError },
+          },
+        ],
+        data: {
+          complianceInput: withoutReuse as unknown as Prisma.InputJsonValue,
+          bundleSid: null,
+          addressSid: null,
+        },
+      });
+      await this.stepDraftCompliance(runId);
+      return this.getRunOrThrow(runId);
     }
     if (complianceInput) {
       await this.prisma.telephonyProvisioningRun.update({

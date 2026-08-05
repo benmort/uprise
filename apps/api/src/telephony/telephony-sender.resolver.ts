@@ -112,6 +112,11 @@ export class TelephonySenderResolver {
             accountSid: account.accountSid,
             authToken: this.crypto.decrypt(account.encryptedAuthToken),
             from: number.phoneNumberE164,
+            // A regional (BYO) account has to be DRIVEN regionally on every request, not
+            // only by the provisioning calls that bought the number – otherwise the number
+            // is bought in au1 and every message it sends is routed through the default region.
+            region: account.region,
+            edge: account.edge,
           }
         : undefined;
     this.cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
@@ -145,6 +150,11 @@ export class TelephonySenderResolver {
             accountSid: account.accountSid,
             authToken: this.crypto.decrypt(account.encryptedAuthToken),
             from: number.phoneNumberE164,
+            // A regional (BYO) account has to be DRIVEN regionally on every request, not
+            // only by the provisioning calls that bought the number – otherwise the number
+            // is bought in au1 and every message it sends is routed through the default region.
+            region: account.region,
+            edge: account.edge,
           }
         : undefined;
     this.cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
@@ -183,6 +193,9 @@ export class TelephonySenderResolver {
       accountSid: account.accountSid,
       authToken: this.crypto.decrypt(account.encryptedAuthToken),
       from: number.phoneNumberE164,
+      // See `resolveByNumber`: the account's region travels with its credentials.
+      region: account.region,
+      edge: account.edge,
       ratePerSecond: typeof settings.sendRatePerSecond === "number" ? settings.sendRatePerSecond : undefined,
       maxConcurrent: typeof settings.maxConcurrent === "number" ? settings.maxConcurrent : undefined,
     };
