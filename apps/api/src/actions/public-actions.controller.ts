@@ -4,7 +4,7 @@ import type { Request, Response } from "express";
 import { PrismaService } from "../prisma/prisma.service";
 import { ActionsService } from "./actions.service";
 import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
-import { CreateCallSessionDto } from "./dto/actions.dto";
+import { CreateActionRsvpDto, CreateCallSessionDto } from "./dto/actions.dto";
 import { resolveActionsTokenSecret, verifySessionToken } from "./session-token.util";
 
 /**
@@ -56,6 +56,18 @@ export class PublicActionsController {
       clientIp: this.clientIp(req),
       captchaToken: this.captchaToken(req),
     });
+  }
+
+  /**
+   * Take an RSVP from a published EVENT_RSVP page.
+   *
+   * Turnstile-gated "strict", exactly like a call session: an RSVP form embedded on someone
+   * else's site is as scriptable as a call button, and the capacity it consumes is real.
+   */
+  @Post("pages/:slug/rsvp")
+  @RequireCaptcha("strict")
+  createRsvp(@Param("slug") slug: string, @Body() dto: CreateActionRsvpDto, @Req() req: Request) {
+    return this.actions.createPublicRsvp(slug, dto, { clientIp: this.clientIp(req) });
   }
 
   /**

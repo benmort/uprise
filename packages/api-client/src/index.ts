@@ -3,6 +3,8 @@ import type {
   ActionPageRecord,
   ActionPageResults,
   ActionPageStatusValue,
+  CreateActionRsvpRequest,
+  CreateActionRsvpResponse,
   CreateCallSessionRequest,
   CreateCallSessionResponse,
   ListActionPagesResponse,
@@ -1491,6 +1493,14 @@ export const publicActions = {
   createCallSession: (slug: string, body: CreateCallSessionRequest, captchaToken?: string) =>
     request<CreateCallSessionResponse>(
       `/actions/public/pages/${encodeURIComponent(slug)}/call-sessions`,
+      { method: "POST", body: JSON.stringify(body) },
+      { redirectOn401: false, captchaToken },
+    ),
+  /** Take an RSVP from an EVENT_RSVP page. Rate-limited + Turnstile-gated like a call session:
+   *  the capacity it consumes is real, and an embedded form is as scriptable as a call button. */
+  createRsvp: (slug: string, body: CreateActionRsvpRequest, captchaToken?: string) =>
+    request<CreateActionRsvpResponse>(
+      `/actions/public/pages/${encodeURIComponent(slug)}/rsvp`,
       { method: "POST", body: JSON.stringify(body) },
       { redirectOn401: false, captchaToken },
     ),

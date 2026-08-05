@@ -794,7 +794,7 @@ export type DialerResultsResponse = {
 export const ACTION_PAGE_STATUSES = ["DRAFT", "PUBLISHED", "ARCHIVED"] as const;
 export type ActionPageStatusValue = (typeof ACTION_PAGE_STATUSES)[number];
 
-export const ACTION_PAGE_TYPES = ["CLICK_TO_CALL"] as const;
+export const ACTION_PAGE_TYPES = ["CLICK_TO_CALL", "EVENT_RSVP"] as const;
 export type ActionPageTypeValue = (typeof ACTION_PAGE_TYPES)[number];
 
 /**
@@ -830,7 +830,10 @@ export type ActionPageRecord = {
    */
   requireCaptcha: boolean;
   embedDomains: string[];
+  /** CLICK_TO_CALL only — the dialler campaign behind the widget. */
   campaignId: string | null;
+  /** EVENT_RSVP only — the event this page collects RSVPs for. */
+  eventId: string | null;
   publishedAt: string | null;
   archivedAt: string | null;
   createdAt: string;
@@ -840,6 +843,38 @@ export type ActionPageRecord = {
 export type ListActionPagesResponse = {
   pages: ActionPageRecord[];
   total: number;
+};
+
+/** Public RSVP submit from an action page. Mirrors the call-session body so an embed can post
+ *  the same collected supporter fields either way. */
+export type CreateActionRsvpRequest = {
+  supporter?: { name?: string; email?: string; phone?: string };
+  guests?: number;
+  embedAncestor?: string;
+};
+
+export type CreateActionRsvpResponse = {
+  rsvpId: string;
+  /** CONFIRMED or WAITLISTED — a full event waitlists exactly as the public events page does. */
+  status: string;
+  /** Self-manage token, when the event issues one. */
+  manageToken: string | null;
+};
+
+/** The event an EVENT_RSVP page fronts, as a visitor may see it — never organiser detail. */
+export type PublicActionEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  capacity: number | null;
+  spotsLeft: number | null;
+  attendeeCount: number;
+  imageUrl: string | null;
+  /** "UPCOMING" | "IN_PROGRESS" | "ENDED" | "CANCELLED" — drives whether the form is offered. */
+  derivedStatus: string;
 };
 
 /** What the anonymous widget sees — copy + field config + brand + campaign kind ONLY. */
@@ -859,6 +894,8 @@ export type PublicActionPagePayload = {
     /** Advisory only — the widget always executes Turnstile; the server enforces. */
     requireCaptcha: boolean;
     callsEnabled: boolean;
+    /** EVENT_RSVP: whether the page may currently take an RSVP (published, event open). */
+    rsvpEnabled: boolean;
   };
   tenant: {
     id: string;
@@ -878,6 +915,8 @@ export type PublicActionPagePayload = {
     /** The widget may browse + choose a member (narrowed by the campaign's filters). */
     chooser: boolean;
   } | null;
+  /** Present only for EVENT_RSVP pages. */
+  event: PublicActionEvent | null;
 };
 
 /** A member as the public widget may see them — identity only, never a number. */

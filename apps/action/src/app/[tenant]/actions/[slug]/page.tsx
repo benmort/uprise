@@ -4,6 +4,7 @@ import { BrandStyle } from "@uprise/ui";
 import { tenantLogoUrl } from "@uprise/api-client";
 import { getPublicActionPage } from "@/lib/actions";
 import { ClickToCallWidget } from "@/components/click-to-call/click-to-call-widget";
+import { EventRsvpWidget } from "@/components/event-rsvp/event-rsvp-widget";
 
 type Params = { tenant: string; slug: string };
 
@@ -25,7 +26,7 @@ function initials(name: string): string {
 }
 
 /**
- * The public click-to-call action page: tenant identity on top (insights
+ * The public action page — click-to-call or event RSVP, picked by the page's type: tenant identity on top (insights
  * precedent), the widget centred beneath. The tenant in the PATH must own the
  * page — a mismatched slug 404s rather than serving one tenant's action under
  * another's URL. Draft pages render only with a preview token (admin preview).
@@ -64,7 +65,11 @@ export default async function PublicActionPage({
           </p>
         </div>
       </header>
-      <ClickToCallWidget slug={params.slug} page={payload} />
+      {payload.page.type === "EVENT_RSVP" ? (
+        <EventRsvpWidget slug={params.slug} page={payload} />
+      ) : (
+        <ClickToCallWidget slug={params.slug} page={payload} />
+      )}
     </main>
   );
 }

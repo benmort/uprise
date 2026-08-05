@@ -10,8 +10,10 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { ACTION_PAGE_TYPES } from "@uprise/contracts";
 
 /**
  * Embed-domain grammar: bare lowercase hostname (labels of [a-z0-9-], ≥ 1 dot,
@@ -42,6 +44,9 @@ export class UpdateActionPageDto {
   @Matches(EMBED_DOMAIN_RE, { each: true, message: "embedDomains entries must be bare hostnames (optionally *.host)" })
   embedDomains?: string[];
   @IsOptional() @IsString() campaignId?: string | null;
+  @IsOptional() @IsIn(ACTION_PAGE_TYPES) type?: string;
+  /** EVENT_RSVP pages only — the event this page collects RSVPs for. */
+  @IsOptional() @IsString() eventId?: string | null;
 }
 
 export class ListActionPagesQueryDto {
@@ -57,8 +62,20 @@ export class SupporterDto {
   @IsOptional() @Matches(/^\+?[0-9 ()-]{6,20}$/) phone?: string;
 }
 
+/**
+ * Public RSVP submit. `supporter` mirrors the call-session shape so an embed can post the same
+ * collected fields either way; `guests` is the only RSVP-specific field, capped low because a
+ * public form is not where a coach party gets booked.
+ */
+export class CreateActionRsvpDto {
+  @IsOptional() @ValidateNested() @Type(() => SupporterDto) supporter?: SupporterDto;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(20) guests?: number;
+  /** Host page origin as observed by the embed (advisory — CSP is the control). */
+  @IsOptional() @IsString() @MaxLength(300) embedAncestor?: string;
+}
+
 export class CreateCallSessionDto {
-  @IsOptional() @Type(() => SupporterDto) supporter?: SupporterDto;
+  @IsOptional() @ValidateNested() @Type(() => SupporterDto) supporter?: SupporterDto;
   /** Caller-selected member id (pinned set or chooser) — validated server-side. */
   @IsOptional() @IsString() @MaxLength(64) targetPoliticianId?: string;
   /** Host page origin as observed by the embed (advisory — CSP is the control). */

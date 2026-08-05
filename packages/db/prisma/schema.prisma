@@ -3370,6 +3370,9 @@ model DialerSurveyResult {
 
 enum ActionPageType {
   CLICK_TO_CALL
+  /// Collect RSVPs for one event — the same shareable/embeddable surface as a call page,
+  /// pointed at events.Event instead of a dialler campaign.
+  EVENT_RSVP
 
   @@schema("actions")
 }
@@ -3411,8 +3414,14 @@ model ActionPage {
   /// may embed.
   embedDomains String[] @default([])
 
-  /// id-only → autodialer.DialerCampaign (all telephony config).
+  /// id-only → autodialer.DialerCampaign (all telephony config). CLICK_TO_CALL pages only.
   campaignId String?
+
+  /// id-only → events.Event. EVENT_RSVP pages only. The event owns capacity, waitlisting and
+  /// the RSVP records themselves; this page is just a branded front door onto it, so an event
+  /// can be promoted through several pages (or embedded on a partner's site) without copying
+  /// any of that state.
+  eventId String?
 
   publishedAt DateTime?
   archivedAt  DateTime?
@@ -3421,5 +3430,6 @@ model ActionPage {
 
   @@index([tenantId, status])
   @@index([tenantId, campaignId])
+  @@index([tenantId, eventId])
   @@schema("actions")
 }

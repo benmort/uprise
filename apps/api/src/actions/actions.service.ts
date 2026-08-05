@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomBytes } from "node:crypto";
-import { ActionPageStatus, DialerCampaignStatus, Prisma } from "@uprise/db";
+import { ActionPageStatus, ActionPageType, DialerCampaignStatus, Prisma } from "@uprise/db";
 import { EVENT_TYPES } from "@uprise/events";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
@@ -11,9 +11,15 @@ import { ApiHttpException } from "../common/http/api-response";
 import { BRAND_SELECT, brandFields } from "../common/brand";
 import { assertValidActionPageTransition } from "./action-page-state.machine";
 import { AUTODIALER_FACADE, type AutodialerFacade } from "./autodialer.facade";
+import { EVENTS_FACADE, type EventsFacade } from "./events.facade";
 import { ActionsRateLimitService } from "./actions-rate-limit.service";
 import { createSessionToken, resolveActionsTokenSecret, verifySessionToken } from "./session-token.util";
-import { EMBED_DOMAIN_RE, type CreateCallSessionDto, type UpdateActionPageDto } from "./dto/actions.dto";
+import {
+  EMBED_DOMAIN_RE,
+  type CreateActionRsvpDto,
+  type CreateCallSessionDto,
+  type UpdateActionPageDto,
+} from "./dto/actions.dto";
 
 const PREVIEW_TOKEN_TTL_SECONDS = 600;
 
@@ -34,6 +40,7 @@ export class ActionsService {
     private readonly rateLimit: ActionsRateLimitService,
     private readonly config: ConfigService,
     @Inject(AUTODIALER_FACADE) private readonly autodialer: AutodialerFacade,
+    @Inject(EVENTS_FACADE) private readonly events: EventsFacade,
   ) {}
 
   // ── Admin CRUD ─────────────────────────────────────────────────────────────
@@ -98,6 +105,16 @@ export class ActionsService {
       const summary = await this.autodialer.getCampaignSummary(tenantId, dto.campaignId);
       if (!summary) throw new ApiHttpException("CAMPAIGN_NOT_FOUND", "That calling campaign does not exist.", 400);
     }
+    // Attaching an event is checked against THIS tenant, so a page can never be pointed at
+    // another organisation's event by id. Whether it is publishable (published, RSVPs on, not
+    // over) is a separate question, answered at publish time so a draft can be built early.
+    if (dto.eventId) {
+      const event = await this.events.checkPublishable(tenantId, dto.eventId);
+      if (!event.exists) throw new ApiHttpException("EVENT_NOT_FOUND", "That event does not exist.", 400);
+    }
+    // Switching type must not leave the other type's link behind: a page flipped to EVENT_RSVP
+    // while still carrying a campaignId would publish against stale checks.
+    const switchingTo = dto.type && dto.type !== page.type ? dto.type : null;
     return this.prisma.actionPage.update({
       where: { id: page.id },
       data: {
@@ -113,6 +130,10 @@ export class ActionsService {
         ...(dto.requireCaptcha !== undefined ? { requireCaptcha: dto.requireCaptcha } : {}),
         ...(dto.embedDomains !== undefined ? { embedDomains: dto.embedDomains } : {}),
         ...(dto.campaignId !== undefined ? { campaignId: dto.campaignId } : {}),
+        ...(dto.eventId !== undefined ? { eventId: dto.eventId } : {}),
+        ...(dto.type !== undefined ? { type: dto.type as ActionPageType } : {}),
+        ...(switchingTo === ActionPageType.EVENT_RSVP ? { campaignId: null } : {}),
+        ...(switchingTo === ActionPageType.CLICK_TO_CALL ? { eventId: null } : {}),
       },
     });
   }
@@ -124,17 +145,32 @@ export class ActionsService {
     if (!page.ctaLabel?.trim()) problems.push("call-to-action label is required");
     const badDomains = page.embedDomains.filter((d) => !EMBED_DOMAIN_RE.test(d));
     if (badDomains.length) problems.push(`invalid embed domains: ${badDomains.join(", ")}`);
-    if (!(await this.flags.isEnabled("FEATURE_ACTIONS_CALLS", { tenantId }))) {
-      problems.push("click-to-call is not enabled on this plan");
-    }
-    if (!page.campaignId) {
-      problems.push("a calling campaign must be attached");
+    if (page.type === ActionPageType.EVENT_RSVP) {
+      // An RSVP page's promises are the event's: if the event is not publicly RSVP-able, or is
+      // already over, publishing this page would collect names for nothing.
+      if (!page.eventId) {
+        problems.push("an event must be attached");
+      } else {
+        const event = await this.events.checkPublishable(tenantId, page.eventId);
+        if (!event.exists) problems.push("the attached event no longer exists");
+        else if (event.cancelled) problems.push("the attached event is cancelled");
+        else if (!event.publiclyRsvpable) {
+          problems.push("the attached event is not published with public RSVPs enabled");
+        } else if (event.ended) problems.push("the attached event has already finished");
+      }
     } else {
-      const summary = await this.autodialer.getCampaignSummary(tenantId, page.campaignId);
-      if (!summary) problems.push("the attached calling campaign no longer exists");
-      else {
-        if (summary.status !== DialerCampaignStatus.ACTIVE) problems.push("the attached campaign is not active");
-        if (!summary.voiceReady) problems.push("the attached campaign has no caller number available");
+      if (!(await this.flags.isEnabled("FEATURE_ACTIONS_CALLS", { tenantId }))) {
+        problems.push("click-to-call is not enabled on this plan");
+      }
+      if (!page.campaignId) {
+        problems.push("a calling campaign must be attached");
+      } else {
+        const summary = await this.autodialer.getCampaignSummary(tenantId, page.campaignId);
+        if (!summary) problems.push("the attached calling campaign no longer exists");
+        else {
+          if (summary.status !== DialerCampaignStatus.ACTIVE) problems.push("the attached campaign is not active");
+          if (!summary.voiceReady) problems.push("the attached campaign has no caller number available");
+        }
       }
     }
     if (problems.length) {
@@ -240,17 +276,23 @@ export class ActionsService {
   /** The public payload — copy + field config + brand + campaign kind ONLY. */
   async getPublicPage(slug: string, previewToken?: string) {
     const page = await this.loadPublicPage(slug, previewToken);
-    const [tenant, profile, campaign, targeting, flagOn] = await Promise.all([
+    const isRsvp = page.type === ActionPageType.EVENT_RSVP;
+    // An RSVP page has no campaign and no targets, so don't pay for those lookups; a call page
+    // has no event. Each branch resolves only what its own type can render.
+    const [tenant, profile, campaign, targeting, flagOn, event] = await Promise.all([
       this.prisma.tenant.findUnique({
         where: { id: page.tenantId },
         select: { id: true, name: true, slug: true },
       }),
       this.prisma.orgProfile.findFirst({ where: { tenantId: page.tenantId }, select: BRAND_SELECT }),
-      page.campaignId ? this.autodialer.getCampaignSummary(page.tenantId, page.campaignId) : Promise.resolve(null),
-      page.campaignId
+      !isRsvp && page.campaignId
+        ? this.autodialer.getCampaignSummary(page.tenantId, page.campaignId)
+        : Promise.resolve(null),
+      !isRsvp && page.campaignId
         ? this.autodialer.getPublicTargets(page.tenantId, page.campaignId)
         : Promise.resolve({ chooser: false, targets: [] }),
       this.flags.isEnabled("FEATURE_ACTIONS_CALLS", { tenantId: page.tenantId }),
+      isRsvp && page.eventId ? this.events.getPublicEvent(page.eventId) : Promise.resolve(null),
     ]);
     return {
       page: {
@@ -267,7 +309,18 @@ export class ActionsService {
         allowPrefill: page.allowPrefill,
         requireCaptcha: page.requireCaptcha,
         callsEnabled:
-          flagOn && page.status === ActionPageStatus.PUBLISHED && campaign?.status === DialerCampaignStatus.ACTIVE,
+          !isRsvp &&
+          flagOn &&
+          page.status === ActionPageStatus.PUBLISHED &&
+          campaign?.status === DialerCampaignStatus.ACTIVE,
+        // A preview never takes a real RSVP, and neither does a page whose event has ended or
+        // been cancelled — the widget still renders the event, it just withholds the form.
+        rsvpEnabled:
+          isRsvp &&
+          page.status === ActionPageStatus.PUBLISHED &&
+          !!event &&
+          event.derivedStatus !== "ENDED" &&
+          event.derivedStatus !== "CANCELLED",
       },
       tenant: tenant ? { id: tenant.id, name: tenant.name, slug: tenant.slug, ...brandFields(profile) } : null,
       campaign: campaign
@@ -280,6 +333,7 @@ export class ActionsService {
             chooser: targeting.chooser,
           }
         : null,
+      event,
     };
   }
 
@@ -308,6 +362,67 @@ export class ActionsService {
       }
       return h === entry;
     });
+  }
+
+  /**
+   * Take an RSVP from a published EVENT_RSVP page.
+   *
+   * Deliberately the same door policy as a call session — previews never write, rate limits
+   * come first, the captcha is enforced by the route guard, and the embed ancestor is checked —
+   * because an RSVP form on someone else's site is exactly as abusable as a call button.
+   *
+   * The RSVP itself is handed straight to Events. Capacity, waitlisting, dedupe and the outbox
+   * event live there and are not reimplemented here: a page pointed at a full event waitlists
+   * precisely as the public events page does.
+   */
+  async createPublicRsvp(
+    slug: string,
+    dto: CreateActionRsvpDto,
+    ctx: { clientIp: string | null },
+  ) {
+    const page = await this.loadPublicPage(slug);
+    if (page.type !== ActionPageType.EVENT_RSVP) {
+      throw new ApiHttpException("RSVP_DISABLED", "This page does not collect RSVPs.", 409);
+    }
+    if (page.status !== ActionPageStatus.PUBLISHED) {
+      throw new ApiHttpException("RSVP_DISABLED", "RSVPs are disabled on previews.", 409);
+    }
+    if (!page.eventId) throw new ApiHttpException("RSVP_DISABLED", "This page has no event.", 409);
+
+    // Rate limits BEFORE the write, same as calls.
+    await this.rateLimit.assertWithinLimits(page.id, ctx.clientIp);
+
+    const ancestor = dto.embedAncestor?.trim() || null;
+    if (page.embedDomains.length > 0 && ancestor) {
+      let host: string;
+      try {
+        host = new URL(ancestor.includes("://") ? ancestor : `https://${ancestor}`).hostname;
+      } catch {
+        throw new ApiHttpException("EMBED_NOT_ALLOWED", "This site may not embed this page.", 403);
+      }
+      if (!this.hostAllowed(host, page.embedDomains)) {
+        throw new ApiHttpException("EMBED_NOT_ALLOWED", "This site may not embed this page.", 403);
+      }
+    }
+
+    // The page's own field config decides what is mandatory — an organiser who turned email off
+    // must not have the form reject for it. A name is always needed: the RSVP list is names.
+    const supporter = dto.supporter ?? {};
+    const missing: string[] = [];
+    if (!supporter.name?.trim()) missing.push("name");
+    if (page.collectEmail && !supporter.email?.trim()) missing.push("email");
+    if (page.collectPhone && !supporter.phone?.trim()) missing.push("phone");
+    if (missing.length) {
+      throw new ApiHttpException("MISSING_FIELDS", `Missing required fields: ${missing.join(", ")}`, 400, { missing });
+    }
+
+    const rsvp = await this.events.rsvp(page.eventId, {
+      name: supporter.name!.trim(),
+      email: supporter.email?.trim() || null,
+      phone: supporter.phone?.trim() || null,
+      guests: dto.guests ?? null,
+    });
+    return { rsvpId: rsvp.id, status: rsvp.status, manageToken: rsvp.manageToken };
   }
 
   async createPublicCallSession(

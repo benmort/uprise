@@ -3,6 +3,7 @@ import { ActionPageStatus, DialerCampaignStatus } from "@uprise/db";
 import { ActionsService } from "./actions.service";
 import { createSessionToken } from "./session-token.util";
 import type { ApiHttpException } from "../common/http/api-response";
+import type { PublicActionEventView } from "./events.facade";
 
 const SECRET = "actions-test-secret";
 
@@ -80,6 +81,30 @@ function makeHarness(pageOverrides: Record<string, unknown> = {}) {
     listSessions: jest.fn(async () => []),
     sessionStats: jest.fn(async () => ({ started: 0, connected: 0, bridged: 0, averageDurationSeconds: null })),
   };
+  // Events facade — an open, publicly-RSVP-able event by default, so EVENT_RSVP tests only
+  // override the case they are about.
+  const events = {
+    getPublicEvent: jest.fn(async (): Promise<PublicActionEventView | null> => ({
+      id: "ev1",
+      title: "Community forum",
+      description: null,
+      location: "Town hall",
+      startsAt: "2100-01-01T09:00:00.000Z",
+      endsAt: "2100-01-01T11:00:00.000Z",
+      capacity: 50,
+      spotsLeft: 12,
+      attendeeCount: 38,
+      imageUrl: null,
+      derivedStatus: "UPCOMING",
+    })),
+    checkPublishable: jest.fn(async () => ({
+      exists: true,
+      publiclyRsvpable: true,
+      ended: false,
+      cancelled: false,
+    })),
+    rsvp: jest.fn(async () => ({ id: "rsvp1", status: "CONFIRMED", manageToken: "mt1" })),
+  };
   const service = new ActionsService(
     prisma as never,
     outbox as never,
@@ -88,8 +113,9 @@ function makeHarness(pageOverrides: Record<string, unknown> = {}) {
     rateLimit as never,
     config as never as ConfigService,
     facade as never,
+    events as never,
   );
-  return { service, prisma, tx, outbox, flags, turnstile, rateLimit, facade, page };
+  return { service, prisma, tx, outbox, flags, turnstile, rateLimit, facade, events, page };
 }
 
 function errCode(err: unknown): string | undefined {
@@ -325,5 +351,136 @@ describe("ActionsService", () => {
       }
       expect(facade.createPublicCallSession).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("ActionsService — EVENT_RSVP pages", () => {
+  /** A published RSVP page pointed at an open event — overrides fed straight to the harness. */
+  const rsvpPage = (over: Record<string, unknown> = {}) => ({
+    type: "EVENT_RSVP",
+    eventId: "ev1",
+    campaignId: null,
+    embedDomains: [],
+    collectName: true,
+    collectEmail: true,
+    collectPhone: false,
+    ...over,
+  });
+
+  const openEvent = { exists: true, publiclyRsvpable: true, ended: false, cancelled: false };
+
+  it("refuses to publish for an event that has finished", async () => {
+    const { service, events } = makeHarness(rsvpPage({ status: ActionPageStatus.DRAFT }));
+    events.checkPublishable.mockResolvedValue({ ...openEvent, ended: true });
+    // Taking names for an event that is already over is the failure this guards.
+    await expect(service.publish("t1", "p1")).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("refuses to publish when the event is not publicly RSVP-able", async () => {
+    const { service, events } = makeHarness(rsvpPage({ status: ActionPageStatus.DRAFT }));
+    events.checkPublishable.mockResolvedValue({ ...openEvent, publiclyRsvpable: false });
+    // Otherwise the page renders a form the event itself would reject.
+    await expect(service.publish("t1", "p1")).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("publishes without a calling campaign or the calls flag", async () => {
+    // The point of branching the publish gate: an RSVP page has no campaign, and the
+    // click-to-call plan flag must not gate it.
+    const { service, events, flags, facade } = makeHarness(rsvpPage({ status: ActionPageStatus.DRAFT }));
+    events.checkPublishable.mockResolvedValue(openEvent);
+    flags.isEnabled.mockResolvedValue(false);
+
+    await expect(service.publish("t1", "p1")).resolves.toBeDefined();
+    expect(facade.getCampaignSummary).not.toHaveBeenCalled();
+  });
+
+  it("serves the event on the public payload and skips the campaign lookups", async () => {
+    const { service, facade, events } = makeHarness(rsvpPage());
+
+    const payload = await service.getPublicPage("slug");
+
+    expect(payload.event).toMatchObject({ id: "ev1", title: "Community forum", spotsLeft: 12 });
+    expect(payload.page.rsvpEnabled).toBe(true);
+    expect(payload.page.callsEnabled).toBe(false);
+    expect(payload.campaign).toBeNull();
+    expect(facade.getPublicTargets).not.toHaveBeenCalled();
+    expect(events.getPublicEvent).toHaveBeenCalledWith("ev1");
+  });
+
+  it("withholds the form on a preview", async () => {
+    const { service } = makeHarness(rsvpPage({ status: ActionPageStatus.DRAFT }));
+    const token = createSessionToken(SECRET, "preview", 60, "t1", "p1").token;
+    const preview = await service.getPublicPage("slug-1", token);
+    expect(preview.page.preview).toBe(true);
+    expect(preview.page.rsvpEnabled).toBe(false);
+  });
+
+  it("still renders a finished event, but without the form", async () => {
+    const { service, events } = makeHarness(rsvpPage());
+    events.getPublicEvent.mockResolvedValue({
+      id: "ev1",
+      title: "Community forum",
+      description: null,
+      location: null,
+      startsAt: "2000-01-01T00:00:00.000Z",
+      endsAt: "2000-01-01T01:00:00.000Z",
+      capacity: null,
+      spotsLeft: null,
+      attendeeCount: 3,
+      imageUrl: null,
+      derivedStatus: "ENDED",
+    });
+
+    const ended = await service.getPublicPage("slug");
+    // People should see WHY there is no form, so the event still renders.
+    expect(ended.event).toMatchObject({ derivedStatus: "ENDED" });
+    expect(ended.page.rsvpEnabled).toBe(false);
+  });
+
+  it("hands the RSVP to Events rather than writing one itself", async () => {
+    const { service, events, rateLimit } = makeHarness(rsvpPage());
+
+    const res = await service.createPublicRsvp(
+      "slug",
+      { supporter: { name: "Ada", email: "ada@example.org" } } as never,
+      { clientIp: "1.2.3.4" },
+    );
+
+    // Rate limit before the write, and capacity/waitlisting left to the events domain.
+    expect(rateLimit.assertWithinLimits).toHaveBeenCalled();
+    expect(events.rsvp).toHaveBeenCalledWith(
+      "ev1",
+      expect.objectContaining({ name: "Ada", email: "ada@example.org" }),
+    );
+    expect(res).toMatchObject({ rsvpId: "rsvp1", status: "CONFIRMED" });
+  });
+
+  it("takes no RSVP for an unpublished page at all", async () => {
+    // The submit route carries no preview token, so a DRAFT page is not publicly addressable:
+    // it 404s at load, before the service's own preview guard. Same posture as call sessions.
+    const { service } = makeHarness(rsvpPage({ status: ActionPageStatus.DRAFT }));
+    await expect(
+      service.createPublicRsvp("slug", { supporter: { name: "Ada" } } as never, { clientIp: null }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("refuses an RSVP against a click-to-call page", async () => {
+    const { service } = makeHarness({ type: "CLICK_TO_CALL" });
+    await expect(
+      service.createPublicRsvp("slug", { supporter: { name: "Ada" } } as never, { clientIp: null }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("enforces the fields the page says it collects", async () => {
+    // collectEmail is on, so an RSVP without one is incomplete; a page with it off must not.
+    const withEmail = makeHarness(rsvpPage());
+    await expect(
+      withEmail.service.createPublicRsvp("slug", { supporter: { name: "Ada" } } as never, { clientIp: null }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    const withoutEmail = makeHarness(rsvpPage({ collectEmail: false }));
+    await expect(
+      withoutEmail.service.createPublicRsvp("slug", { supporter: { name: "Ada" } } as never, { clientIp: null }),
+    ).resolves.toMatchObject({ rsvpId: "rsvp1" });
   });
 });
