@@ -8,8 +8,8 @@ export class CreateAudienceDto {
   name!: string;
 
   @IsOptional()
-  @IsIn(["MANUAL", "CSV", "ACTION_NETWORK", "INTERNAL"])
-  source?: "MANUAL" | "CSV" | "ACTION_NETWORK" | "INTERNAL";
+  @IsIn(["MANUAL", "CSV", "ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
+  source?: "MANUAL" | "CSV" | "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
   @IsOptional()
   @IsIn(["SMS", "WHATSAPP", "ALL"])
@@ -26,8 +26,8 @@ export class ListAudiencesDto extends PaginationDto {
   status?: "ACTIVE" | "ARCHIVED";
 
   @IsOptional()
-  @IsIn(["MANUAL", "CSV", "ACTION_NETWORK", "INTERNAL"])
-  source?: "MANUAL" | "CSV" | "ACTION_NETWORK" | "INTERNAL";
+  @IsIn(["MANUAL", "CSV", "ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
+  source?: "MANUAL" | "CSV" | "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
   @IsOptional()
   @IsIn(["SMS", "WHATSAPP", "ALL"])

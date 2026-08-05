@@ -105,6 +105,7 @@ describe("IntegrationsService — sync queue", () => {
       { decrypt: () => "apikey" } as any,
       actionNetwork as any,
       {} as any,
+      {} as any,
       { log: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,
       contacts as any,
       outbox as any,

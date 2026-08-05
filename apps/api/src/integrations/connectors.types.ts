@@ -2,7 +2,7 @@ export type RemoteAudienceList = {
   id: string;
   name: string;
   count?: number;
-  source: "ACTION_NETWORK" | "INTERNAL";
+  source: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 };
 
 export type RemoteContact = {
@@ -26,7 +26,7 @@ export type SyncListInput = {
 };
 
 export type SyncListStats = {
-  provider: "ACTION_NETWORK" | "INTERNAL";
+  provider: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
   listId: string;
   listName?: string;
   pagesFetched: number;

@@ -20,15 +20,17 @@ import { useToast } from "@/components/ui/toast";
 import { Button, ConfirmDialog, Field, FormDialog, FormSelect, Input, StatusBadge } from "@uprise/ui";
 import { SectionCard } from "@uprise/field";
 
-type ConnectionType = "ACTION_NETWORK" | "INTERNAL";
+type ConnectionType = "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
 const PROVIDER_LABEL: Record<string, string> = {
   ACTION_NETWORK: "Action Network",
+  NATION_BUILDER: "NationBuilder",
   INTERNAL: "Internal source",
 };
 
 const TYPE_OPTIONS: { value: ConnectionType; label: string }[] = [
   { value: "ACTION_NETWORK", label: "Action Network" },
+  { value: "NATION_BUILDER", label: "NationBuilder" },
   { value: "INTERNAL", label: "Internal source" },
 ];
 
@@ -58,9 +60,12 @@ export function IntegrationsSettings() {
 
   const rows = data ?? [];
   const needsBaseUrl = type === "INTERNAL";
-  // Action Network issues one API key per group, so connections are keyed per
-  // (type, group) — a new group is a CREATE even when another group is connected.
-  const groupKey = type === "ACTION_NETWORK" ? group.trim() : "";
+  // Action Network issues one API key per group and NationBuilder one token per nation,
+  // so those connections are keyed per (type, group) — a new group/nation is a CREATE
+  // even when another one is connected. The NationBuilder "group" is the nation slug
+  // (it also derives the endpoint), so it is required.
+  const groupKey = type === "ACTION_NETWORK" || type === "NATION_BUILDER" ? group.trim() : "";
+  const needsGroup = type === "NATION_BUILDER";
   // Connecting a (type, group) the tenant has no row for is a CREATE, and a create needs
   // a key. A blank key used to be accepted and silently substituted with the platform env
   // key, which connected the tenant to whichever organisation owned that key — and
@@ -70,6 +75,7 @@ export function IntegrationsSettings() {
   const canSubmit =
     name.trim().length > 0 &&
     (!needsBaseUrl || baseUrl.trim().length > 0) &&
+    (!needsGroup || groupKey.length > 0) &&
     (!needsApiKey || apiKey.trim().length > 0);
 
   function openConnect() {
@@ -163,9 +169,10 @@ export function IntegrationsSettings() {
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Integrations</h3>
           {!noPermission ? (
             <p className="mt-1 text-sm text-muted-foreground">
-              Connect Action Network or an internal source with your own API key. Action Network keys are
-              scoped per group, so connect one per group you administer – reconnecting the same type and group
-              updates it. Only accounts you connect here are available to import from.
+              Connect Action Network, NationBuilder or an internal source with your own API key. Action
+              Network keys are scoped per group and NationBuilder tokens per nation, so connect one per
+              group or nation you administer – reconnecting the same type and group updates it. Only
+              accounts you connect here are available to import from.
             </p>
           ) : null}
         </div>
@@ -277,7 +284,22 @@ export function IntegrationsSettings() {
           >
             <Input
               id="connection-group"
-              placeholder="e.g. GetUp Victoria"
+              placeholder="e.g. Victorian chapter"
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              disabled={saving}
+            />
+          </Field>
+        ) : null}
+        {type === "NATION_BUILDER" ? (
+          <Field
+            label="Nation slug"
+            htmlFor="connection-group"
+            hint="The <slug> in <slug>.nationbuilder.com. Each nation has its own token and endpoint — every nation you connect becomes its own selectable source."
+          >
+            <Input
+              id="connection-group"
+              placeholder="e.g. your-nation"
               value={group}
               onChange={(e) => setGroup(e.target.value)}
               disabled={saving}

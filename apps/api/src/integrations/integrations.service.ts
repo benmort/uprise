@@ -16,6 +16,7 @@ import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metada
 import { CredentialCryptoService } from "./credential-crypto.service";
 import { ActionNetworkConnector } from "./action-network.connector";
 import { InternalSourceConnector } from "./internal-source.connector";
+import { NationBuilderConnector } from "./nation-builder.connector";
 import {
   SampleIntegrationListDto,
   SearchIntegrationListsDto,
@@ -30,7 +31,7 @@ import { getIntegrationSyncJobId, QUEUE_JOB_TYPES, QUEUE_NAMES } from "../common
 import { DISPATCH_QUEUE_TOKEN } from "../common/queue/queue.tokens";
 import { IntegrationSyncJobPayload } from "../common/queue/queue.payloads";
 
-type IntegrationConnectionType = "ACTION_NETWORK" | "INTERNAL";
+type IntegrationConnectionType = "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 type SyncReasonCounts = Record<string, number>;
 
 /**
@@ -87,6 +88,7 @@ export class IntegrationsService {
     private readonly crypto: CredentialCryptoService,
     private readonly actionNetwork: ActionNetworkConnector,
     private readonly internalSource: InternalSourceConnector,
+    private readonly nationBuilder: NationBuilderConnector,
     private readonly logger: DomainLogger,
     private readonly contacts: ContactsService,
     private readonly outbox: OutboxService,
@@ -98,11 +100,22 @@ export class IntegrationsService {
   }
 
   private connector(type: IntegrationConnectionType) {
-    return type === "ACTION_NETWORK" ? this.actionNetwork : this.internalSource;
+    if (type === "ACTION_NETWORK") return this.actionNetwork;
+    if (type === "NATION_BUILDER") return this.nationBuilder;
+    return this.internalSource;
   }
 
   private defaultConnectionName(type: IntegrationConnectionType) {
-    return type === "ACTION_NETWORK" ? "Action Network" : "Internal Source";
+    if (type === "ACTION_NETWORK") return "Action Network";
+    if (type === "NATION_BUILDER") return "NationBuilder";
+    return "Internal Source";
+  }
+
+  /** The audience source column value a connection type's syncs write. */
+  private audienceSourceOf(type: IntegrationConnectionType): AudienceSource {
+    if (type === "ACTION_NETWORK") return AudienceSource.ACTION_NETWORK;
+    if (type === "NATION_BUILDER") return AudienceSource.NATION_BUILDER;
+    return AudienceSource.INTERNAL;
   }
 
   private baseUrlFromSettings(settings: unknown): string | undefined {
@@ -123,6 +136,9 @@ export class IntegrationsService {
    * explicitly granted it through a network. Nothing else.
    */
   private envBaseUrl(type: IntegrationConnectionType): string | undefined {
+    // NationBuilder has no platform-wide default on purpose — every nation has its own
+    // endpoint, derived from the nation slug at connect time.
+    if (type === "NATION_BUILDER") return undefined;
     const key = type === "ACTION_NETWORK" ? "ACTION_NETWORK_API_BASE_URL" : "INTERNAL_SOURCE_API_BASE_URL";
     return (this.config.get<string>(key) || "").trim() || undefined;
   }
@@ -140,6 +156,9 @@ export class IntegrationsService {
     }
     if (type === "INTERNAL" && !baseUrl) {
       throw new IntegrationValidationError("A base URL is required for an internal source");
+    }
+    if (type === "NATION_BUILDER" && !baseUrl) {
+      throw new IntegrationValidationError("A nation slug is required to connect NationBuilder");
     }
 
     return { apiKey, baseUrl };
@@ -193,9 +212,18 @@ export class IntegrationsService {
   }
 
   async upsertConnection(tenantId: string, dto: UpsertIntegrationConnectionDto) {
-    // Only Action Network has per-group credentials; everything else collapses to the
-    // "" group so it keeps its one-per-type upsert behaviour.
-    const externalGroup = dto.type === "ACTION_NETWORK" ? (dto.group?.trim() ?? "") : "";
+    // Action Network keys and NationBuilder tokens are per-group/per-nation; everything
+    // else collapses to the "" group so it keeps its one-per-type upsert behaviour.
+    const externalGroup =
+      dto.type === "ACTION_NETWORK" || dto.type === "NATION_BUILDER" ? (dto.group?.trim() ?? "") : "";
+    if (dto.type === "NATION_BUILDER") {
+      // The nation slug doubles as the group AND derives the endpoint — it is not optional.
+      if (!/^[a-z0-9][a-z0-9-]*$/i.test(externalGroup)) {
+        throw new IntegrationValidationError(
+          "A NationBuilder connection needs its nation slug (the <slug> in <slug>.nationbuilder.com)",
+        );
+      }
+    }
     const existing = await this.prisma.integrationConnection.findUnique({
       where: { tenantId_type_externalGroup: { tenantId, type: dto.type as IntegrationType, externalGroup } },
       select: { id: true, encryptedCredential: true, settings: true },
@@ -208,7 +236,14 @@ export class IntegrationsService {
     const apiKey = suppliedKey || (existing ? this.crypto.decrypt(existing.encryptedCredential) : "");
     const credentials = this.resolveCredentials(dto.type, {
       apiKey,
-      baseUrl: dto.baseUrl?.trim() || this.baseUrlFromSettings(existing?.settings),
+      // NationBuilder: the nation slug derives the default endpoint, but a supplied base
+      // URL wins — some clients run the API on a custom (white-labelled) domain.
+      baseUrl:
+        dto.type === "NATION_BUILDER"
+          ? dto.baseUrl?.trim() ||
+            this.baseUrlFromSettings(existing?.settings) ||
+            `https://${externalGroup.toLowerCase()}.nationbuilder.com`
+          : dto.baseUrl?.trim() || this.baseUrlFromSettings(existing?.settings),
     });
     const encrypted = suppliedKey ? this.crypto.encrypt(credentials.apiKey) : existing!.encryptedCredential;
 
@@ -278,8 +313,8 @@ export class IntegrationsService {
     return { contacts: sample };
   }
 
-  private mapExternalContact(type: "ACTION_NETWORK" | "INTERNAL", contact: any): MappedExternalContact {
-    const source = type === "ACTION_NETWORK" ? AudienceSource.ACTION_NETWORK : AudienceSource.INTERNAL;
+  private mapExternalContact(type: IntegrationConnectionType, contact: any): MappedExternalContact {
+    const source = this.audienceSourceOf(type);
     const rawMetadata =
       contact?.metadata && typeof contact.metadata === "object"
         ? (contact.metadata as Record<string, unknown>)
@@ -336,7 +371,9 @@ export class IntegrationsService {
 
   /** Provenance source-system key for a connection type (drives ContactSourceRecord). */
   private sourceSystemFor(type: IntegrationConnectionType): string {
-    return type === "ACTION_NETWORK" ? "action_network" : "internal_source";
+    if (type === "ACTION_NETWORK") return "action_network";
+    if (type === "NATION_BUILDER") return "nation_builder";
+    return "internal_source";
   }
 
   /**
@@ -402,10 +439,11 @@ export class IntegrationsService {
     listName?: string;
     audienceName?: string;
   }): string {
-    if (dto.type === "ACTION_NETWORK") {
+    if (dto.type === "ACTION_NETWORK" || dto.type === "NATION_BUILDER") {
+      const label = dto.type === "ACTION_NETWORK" ? "Action Network" : "NationBuilder";
       const candidate = dto.listName?.trim() || dto.audienceName?.trim() || dto.listId;
-      const cleaned = candidate.replace(/^Action Network:\s*/i, "").trim() || dto.listId;
-      return `Action Network: ${cleaned}`;
+      const cleaned = candidate.replace(new RegExp(`^${label}:\\s*`, "i"), "").trim() || dto.listId;
+      return `${label}: ${cleaned}`;
     }
     return dto.audienceName?.trim() || dto.listName?.trim() || `Internal: ${dto.listId}`;
   }
@@ -493,8 +531,7 @@ export class IntegrationsService {
       listName: dto.listName,
       audienceName: dto.audienceName,
     });
-    const source =
-      connection.type === "ACTION_NETWORK" ? AudienceSource.ACTION_NETWORK : AudienceSource.INTERNAL;
+    const source = this.audienceSourceOf(connection.type);
 
     const initialPayload: IntegrationSyncJobPayload = {
       syncJobId: "",
@@ -656,10 +693,7 @@ export class IntegrationsService {
           data: {
             tenantId: syncJob.tenantId,
             name: checkpoint.audienceName,
-            source:
-              connectionType === "ACTION_NETWORK"
-                ? AudienceSource.ACTION_NETWORK
-                : AudienceSource.INTERNAL,
+            source: this.audienceSourceOf(connectionType),
             externalListId: payload.listId,
             status: "ACTIVE",
           },

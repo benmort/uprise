@@ -66,18 +66,24 @@ describe("IntegrationsService — connection resolution", () => {
       searchLists: jest.fn().mockResolvedValue([]),
       sampleListContacts: jest.fn().mockResolvedValue([]),
     };
+    const nationBuilder = {
+      testConnection: jest.fn().mockResolvedValue({ ok: true }),
+      searchLists: jest.fn().mockResolvedValue([]),
+      sampleListContacts: jest.fn().mockResolvedValue([]),
+    };
     const service = new IntegrationsService(
       prisma,
       { get: (k: string, d?: unknown) => ENV[k] ?? d } as any,
       crypto as any,
       actionNetwork as any,
       internalSource as any,
+      nationBuilder as any,
       { log: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,
       {} as any,
       {} as any,
       { enqueue: jest.fn() } as any,
     );
-    return { service, prisma, crypto, actionNetwork, internalSource };
+    return { service, prisma, crypto, actionNetwork, internalSource, nationBuilder };
   }
 
   // ── 1. A read path never creates a connection ──────────────────────────────
@@ -155,7 +161,7 @@ describe("IntegrationsService — connection resolution", () => {
       type: "ACTION_NETWORK",
       name: "AN Victoria",
       apiKey: "vic-key",
-      group: "  GetUp Victoria  ",
+      group: "  Riverside West  ",
     } as any);
     expect(prisma.integrationConnection.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -163,7 +169,7 @@ describe("IntegrationsService — connection resolution", () => {
           tenantId_type_externalGroup: {
             tenantId: "org1",
             type: "ACTION_NETWORK",
-            externalGroup: "GetUp Victoria",
+            externalGroup: "Riverside West",
           },
         },
       }),
@@ -174,10 +180,10 @@ describe("IntegrationsService — connection resolution", () => {
           tenantId_type_externalGroup: {
             tenantId: "org1",
             type: "ACTION_NETWORK",
-            externalGroup: "GetUp Victoria",
+            externalGroup: "Riverside West",
           },
         },
-        create: expect.objectContaining({ externalGroup: "GetUp Victoria" }),
+        create: expect.objectContaining({ externalGroup: "Riverside West" }),
       }),
     );
   });
@@ -190,10 +196,39 @@ describe("IntegrationsService — connection resolution", () => {
       service.upsertConnection("org1", {
         type: "ACTION_NETWORK",
         name: "AN NSW",
-        group: "GetUp NSW",
+        group: "Riverside North",
       } as any),
     ).rejects.toBeInstanceOf(IntegrationValidationError);
     expect(prisma.integrationConnection.upsert).not.toHaveBeenCalled();
+  });
+
+  it("NationBuilder requires the nation slug and derives the endpoint from it", async () => {
+    const { service, prisma } = build();
+    await expect(
+      service.upsertConnection("org1", {
+        type: "NATION_BUILDER",
+        name: "Nation",
+        apiKey: "nb-token",
+      } as any),
+    ).rejects.toBeInstanceOf(IntegrationValidationError);
+
+    await service.upsertConnection("org1", {
+      type: "NATION_BUILDER",
+      name: "Riverside nation",
+      apiKey: "nb-token",
+      group: "Riverside",
+    } as any);
+    expect(prisma.integrationConnection.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId_type_externalGroup: { tenantId: "org1", type: "NATION_BUILDER", externalGroup: "Riverside" },
+        },
+        create: expect.objectContaining({
+          externalGroup: "Riverside",
+          settings: { baseUrl: "https://riverside.nationbuilder.com" },
+        }),
+      }),
+    );
   });
 
   it("an internal source ignores group and stays keyed one per type", async () => {
@@ -239,6 +274,7 @@ describe("IntegrationsService — connection resolution", () => {
       { integrationConnection: { findUnique: jest.fn().mockResolvedValue(null) } } as any,
       { get: (_k: string, d?: unknown) => d } as any,
       { encrypt: (s: string) => s, decrypt: (s: string) => s } as any,
+      {} as any,
       {} as any,
       {} as any,
       { log: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,

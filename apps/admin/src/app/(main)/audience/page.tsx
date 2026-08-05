@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   createAudience,
   createWhatsappOptInAudience,
@@ -23,6 +23,7 @@ import {
   audienceSourceFor,
   autoSelectedSourceId,
   findSource,
+  nationBuilderNationOptions,
   syncCardTitle,
   toImportSources,
   type ImportSource,
@@ -33,6 +34,7 @@ import {
   type IntegrationSyncJob,
 } from "@/lib/audience-sync";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AudienceTabs, resolveAudienceTab } from "@/components/audience/audience-tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -143,6 +145,7 @@ function getUploadProgressDetails(uploadState: UploadState): string {
 
 export default function AudiencePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const segmentsEnabled = useFlag("FEATURE_SEGMENTS_ENABLED");
   const filterRef = useRef<HTMLInputElement | null>(null);
@@ -410,6 +413,9 @@ export default function AudiencePage() {
     [sources, selectedSourceId],
   );
   const anGroups = useMemo(() => actionNetworkGroupOptions(sources), [sources]);
+  const nbNations = useMemo(() => nationBuilderNationOptions(sources), [sources]);
+
+  const tab = resolveAudienceTab(searchParams.get("tab"));
 
   const pageSize = 8;
   const paged = filtered.slice(tablePage * pageSize, tablePage * pageSize + pageSize);
@@ -437,7 +443,10 @@ export default function AudiencePage() {
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <AudienceTabs active={tab} />
+
+      <div className="grid gap-4">
+        {tab === "import" ? (
         <Card id="import-audience-card" className="lg:order-2">
           <CardHeader>
             <CardTitle>Import Subscribers</CardTitle>
@@ -658,7 +667,9 @@ export default function AudiencePage() {
             </div>
           </CardContent>
         </Card>
+        ) : null}
 
+        {tab === "sync" ? (
         <Card id="tour-audience-sync" className="lg:order-1">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>{syncCardTitle(selectedSource)}</CardTitle>
@@ -745,9 +756,32 @@ export default function AudiencePage() {
                     ))}
                   </Select>
                 )}
+                {nbNations.length > 1 && (
+                  // Same shape for NationBuilder: one connection per nation (slug), so
+                  // picking a nation picks the connection.
+                  <Select
+                    value={selectedSource?.type === "NATION_BUILDER" ? selectedSourceId : ""}
+                    onValueChange={(v) => {
+                      setSelectedSourceId(v);
+                      setLists([]);
+                      setSelectedListId("");
+                      setListSearchMessage("");
+                      void loadIntegrationLists(findSource(sources, v));
+                    }}
+                    title="Which NationBuilder nation to sync from"
+                    placeholder="Choose a NationBuilder nation…"
+                  >
+                    {nbNations.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.label}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                )}
                 {!selectedSourceId && (
                   <p className="text-xs text-muted-foreground">
-                    Choose which connected account{anGroups.length > 1 ? " and group" : ""} to import from.
+                    Choose which connected account
+                    {anGroups.length > 1 || nbNations.length > 1 ? " and group" : ""} to import from.
                   </p>
                 )}
               </>
@@ -837,8 +871,10 @@ export default function AudiencePage() {
             {syncMessage && <p className="text-xs text-muted-foreground">{syncMessage}</p>}
           </CardContent>
         </Card>
+        ) : null}
       </div>
 
+      {tab === "audiences" ? (
       <Card id="tour-audience-table">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Segmented Audiences</CardTitle>
@@ -1003,7 +1039,9 @@ export default function AudiencePage() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
+      {tab === "searches" ? (
       <Card id="tour-audience-segments">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Searches</CardTitle>
@@ -1083,6 +1121,7 @@ export default function AudiencePage() {
           )}
         </CardContent>
       </Card>
+      ) : null}
     </div>
   );
 }

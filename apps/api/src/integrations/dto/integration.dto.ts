@@ -1,8 +1,8 @@
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
 
 export class UpsertIntegrationConnectionDto {
-  @IsIn(["ACTION_NETWORK", "INTERNAL"])
-  type!: "ACTION_NETWORK" | "INTERNAL";
+  @IsIn(["ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
+  type!: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
   @IsString()
   @MinLength(2)
@@ -35,8 +35,8 @@ export class UpdateConnectionStatusDto {
 
 /** Blank apiKey + a connectionId tests the stored credential; a supplied apiKey tests that. */
 export class TestIntegrationConnectionDto {
-  @IsIn(["ACTION_NETWORK", "INTERNAL"])
-  type!: "ACTION_NETWORK" | "INTERNAL";
+  @IsIn(["ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
+  type!: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
   @IsOptional()
   @IsString()
@@ -52,8 +52,8 @@ export class TestIntegrationConnectionDto {
 }
 
 export class SearchIntegrationListsDto {
-  @IsIn(["ACTION_NETWORK", "INTERNAL"])
-  type!: "ACTION_NETWORK" | "INTERNAL";
+  @IsIn(["ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
+  type!: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
   @IsOptional()
   @IsString()
@@ -67,8 +67,8 @@ export class SearchIntegrationListsDto {
 }
 
 export class SampleIntegrationListDto {
-  @IsIn(["ACTION_NETWORK", "INTERNAL"])
-  type!: "ACTION_NETWORK" | "INTERNAL";
+  @IsIn(["ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
+  type!: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
   @IsString()
   listId!: string;
@@ -79,8 +79,8 @@ export class SampleIntegrationListDto {
 }
 
 export class SyncIntegrationListDto {
-  @IsIn(["ACTION_NETWORK", "INTERNAL"])
-  type!: "ACTION_NETWORK" | "INTERNAL";
+  @IsIn(["ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
+  type!: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
   @IsString()
   listId!: string;

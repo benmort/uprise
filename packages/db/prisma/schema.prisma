@@ -24,6 +24,7 @@ enum AudienceSource {
   MANUAL
   CSV
   ACTION_NETWORK
+  NATION_BUILDER
   INTERNAL
   @@schema("audience")
 }
@@ -121,6 +122,7 @@ enum TxSmsStatus {
 
 enum IntegrationType {
   ACTION_NETWORK
+  NATION_BUILDER
   INTERNAL
   @@schema("integration")
 }

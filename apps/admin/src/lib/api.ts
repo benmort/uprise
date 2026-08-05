@@ -299,7 +299,7 @@ export async function getAudienceImportStatus(audienceId: string, importId: stri
  * there is none it returns INTEGRATION_NOT_CONNECTED rather than inventing one.
  */
 export async function searchIntegrationLists(
-  type: "ACTION_NETWORK" | "INTERNAL",
+  type: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL",
   query: string,
   connectionId?: string,
 ) {
@@ -324,7 +324,7 @@ export type SyncIntegrationListResult = {
 };
 
 export async function syncIntegrationList(input: {
-  type: "ACTION_NETWORK" | "INTERNAL";
+  type: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
   listId: string;
   audienceName: string;
   listName?: string;
@@ -363,7 +363,7 @@ export async function getAudienceSegments() {
 }
 
 export async function upsertIntegrationConnection(input: {
-  type: "ACTION_NETWORK" | "INTERNAL";
+  type: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
   name: string;
   apiKey?: string;
   baseUrl?: string;
@@ -379,7 +379,7 @@ export async function upsertIntegrationConnection(input: {
 
 /** With an apiKey, tests that candidate. Without one, tests the tenant's stored credential. */
 export async function testIntegrationConnection(input: {
-  type: "ACTION_NETWORK" | "INTERNAL";
+  type: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
   apiKey?: string;
   baseUrl?: string;
   connectionId?: string;

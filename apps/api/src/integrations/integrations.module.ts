@@ -5,6 +5,7 @@ import { IntegrationsService } from "./integrations.service";
 import { CredentialCryptoService } from "./credential-crypto.service";
 import { ActionNetworkConnector } from "./action-network.connector";
 import { InternalSourceConnector } from "./internal-source.connector";
+import { NationBuilderConnector } from "./nation-builder.connector";
 import { QueueModule } from "../common/queue/queue.module";
 import { ContactsModule } from "../contacts/contacts.module";
 
@@ -16,6 +17,7 @@ import { ContactsModule } from "../contacts/contacts.module";
     CredentialCryptoService,
     ActionNetworkConnector,
     InternalSourceConnector,
+    NationBuilderConnector,
   ],
   exports: [IntegrationsService],
 })

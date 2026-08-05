@@ -14,7 +14,7 @@ export type BlastRetryFailedJobPayload = {
 
 export type IntegrationSyncJobPayload = {
   syncJobId: string;
-  type: "ACTION_NETWORK" | "INTERNAL";
+  type: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
   listId: string;
   audienceName: string;
   listName?: string;

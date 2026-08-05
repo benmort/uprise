@@ -10,10 +10,11 @@ import type { IntegrationConnectionRow } from "@/lib/api";
  * sync reads from, and offers nothing when the tenant has connected nothing.
  */
 
-export type IntegrationSourceType = "ACTION_NETWORK" | "INTERNAL";
+export type IntegrationSourceType = "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 
 export const PROVIDER_LABEL: Record<string, string> = {
   ACTION_NETWORK: "Action Network",
+  NATION_BUILDER: "NationBuilder",
   INTERNAL: "Internal source",
 };
 
@@ -78,6 +79,15 @@ export function actionNetworkGroupOptions(
     .map((s) => ({ id: s.id, label: s.group || s.name }));
 }
 
+/** The NationBuilder nation choices — the exact analogue of the AN group selector. */
+export function nationBuilderNationOptions(
+  sources: ImportSource[],
+): Array<{ id: string; label: string }> {
+  return sources
+    .filter((s) => s.type === "NATION_BUILDER")
+    .map((s) => ({ id: s.id, label: s.group || s.name }));
+}
+
 /**
  * Which source to preselect. Exactly one ⇒ select it, because there is no ambiguity about
  * whose account it is. Two or more ⇒ select nothing and make the organiser choose; a
@@ -109,13 +119,19 @@ export function audienceNameForList(
 }
 
 /** The audience `source` column value a sync through this connection writes. */
-export function audienceSourceFor(type: IntegrationSourceType): "ACTION_NETWORK" | "INTERNAL" {
-  return type === "ACTION_NETWORK" ? "ACTION_NETWORK" : "INTERNAL";
+export function audienceSourceFor(
+  type: IntegrationSourceType,
+): "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL" {
+  if (type === "ACTION_NETWORK") return "ACTION_NETWORK";
+  if (type === "NATION_BUILDER") return "NATION_BUILDER";
+  return "INTERNAL";
 }
 
-/** Card title for the sync panel — provider-specific once a source is chosen. */
+/** Card title for the sync panel — provider-neutral; the chosen provider trails it. */
 export function syncCardTitle(source: ImportSource | undefined): string {
-  return source ? `${source.providerLabel} list sync` : "Import from a connected source";
+  return source
+    ? `External integration list sync – ${source.providerLabel}`
+    : "External integration list sync";
 }
 
 function escapeRegExp(value: string): string {
