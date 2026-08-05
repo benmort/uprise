@@ -128,11 +128,20 @@ describe("audienceSourceFor / providerLabel / syncCardTitle", () => {
     expect(providerLabel("SOMETHING_NEW")).toBe("SOMETHING_NEW");
   });
 
-  it("titles the card neutrally, trailing the provider once a source is chosen", () => {
-    expect(syncCardTitle(undefined)).toBe("External integration list sync");
-    expect(syncCardTitle(toImportSources([row()])[0])).toBe(
+  it("titles the card with every connected provider, deduped, in connection order", () => {
+    expect(syncCardTitle([])).toBe("External integration list sync");
+    expect(syncCardTitle(toImportSources([row()]))).toBe(
       "External integration list sync – Action Network",
     );
+    expect(
+      syncCardTitle(
+        toImportSources([
+          row({ id: "an1", group: "Riverside West" }),
+          row({ id: "an2", group: "Riverside North" }),
+          row({ id: "nb1", type: "NATION_BUILDER", name: "Nation", group: "riverside" }),
+        ]),
+      ),
+    ).toBe("External integration list sync – Action Network + NationBuilder");
   });
 });
 

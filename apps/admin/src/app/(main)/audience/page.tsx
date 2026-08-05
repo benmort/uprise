@@ -672,7 +672,7 @@ export default function AudiencePage() {
         {tab === "sync" ? (
         <Card id="tour-audience-sync" className="lg:order-1">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
-            <CardTitle>{syncCardTitle(selectedSource)}</CardTitle>
+            <CardTitle>{syncCardTitle(sources)}</CardTitle>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"

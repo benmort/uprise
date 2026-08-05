@@ -127,10 +127,11 @@ export function audienceSourceFor(
   return "INTERNAL";
 }
 
-/** Card title for the sync panel — provider-neutral; the chosen provider trails it. */
-export function syncCardTitle(source: ImportSource | undefined): string {
-  return source
-    ? `External integration list sync – ${source.providerLabel}`
+/** Card title for the sync panel — every connected provider trails it ("A + B"). */
+export function syncCardTitle(sources: ImportSource[]): string {
+  const providers = [...new Set(sources.map((s) => s.providerLabel))];
+  return providers.length
+    ? `External integration list sync – ${providers.join(" + ")}`
     : "External integration list sync";
 }
 
