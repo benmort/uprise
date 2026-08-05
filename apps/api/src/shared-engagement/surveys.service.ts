@@ -164,12 +164,43 @@ function questionCreate(q: SurveyQuestionInput): Prisma.QuestionCreateWithoutSur
 // Reconcile a question's options by stable `value`: update kept rows IN PLACE (so a
 // QuestionResponse.optionId keeps pointing at the same row), create new, delete removed
 // (a removed option SetNulls its responses' optionId — the row survives).
+/**
+ * Both reconcilers key off a value the database has a unique index on — `Question.key` per
+ * survey, `QuestionOption.value` per question. A payload that repeats one is not obviously
+ * wrong to an author (two options can carry the same label), but it reaches Prisma as a P2002
+ * and leaves the caller with a 500 and no idea which field to fix. Name it instead.
+ */
+function assertUniqueKeys(keys: string[]): void {
+  const seen = new Set<string>();
+  const duplicate = keys.find((k) => (seen.has(k) ? true : (seen.add(k), false)));
+  if (duplicate !== undefined) {
+    throw new ApiHttpException(
+      "SURVEY_DUPLICATE_QUESTION_KEY",
+      `Two questions share the key "${duplicate}". Question keys must be unique within a survey.`,
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
+
+function assertUniqueOptionValues(values: string[]): void {
+  const seen = new Set<string>();
+  const duplicate = values.find((v) => (seen.has(v) ? true : (seen.add(v), false)));
+  if (duplicate !== undefined) {
+    throw new ApiHttpException(
+      "SURVEY_DUPLICATE_OPTION_VALUE",
+      `Two answer options share the value "${duplicate}". Option values must be unique within a question.`,
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
+
 async function reconcileOptions(
   tx: Prisma.TransactionClient,
   questionId: string,
   options: SurveyOptionInput[] | undefined,
 ): Promise<void> {
   const opts = options ?? [];
+  assertUniqueOptionValues(opts.map((o) => o.value));
   const existing = await tx.questionOption.findMany({ where: { questionId }, select: { id: true, value: true } });
   const byValue = new Map(existing.map((o) => [o.value, o.id]));
   const incoming = new Set(opts.map((o) => o.value));
@@ -192,6 +223,7 @@ async function reconcileQuestions(
   incoming: SurveyQuestionInput[],
 ): Promise<void> {
   const withKeys = incoming.map((q) => ({ q, key: q.key || randomUUID() }));
+  assertUniqueKeys(withKeys.map((w) => w.key));
   const existing = await tx.question.findMany({ where: { surveyId }, select: { id: true, key: true } });
   const byKey = new Map(existing.map((q) => [q.key, q.id]));
   const incomingKeys = new Set(withKeys.map((w) => w.key));

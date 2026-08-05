@@ -1,4 +1,13 @@
-import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString } from "class-validator";
+import {
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from "class-validator";
+import { Type } from "class-transformer";
 import { EngagementChannel, QuestionType, SupportLevel } from "@uprise/db";
 
 // ── Surveys ────────────────────────────────────────────────────────────────
@@ -24,21 +33,24 @@ export class SurveyQuestionDto {
   @IsOptional() @IsInt() scaleMin?: number;
   @IsOptional() @IsInt() scaleMax?: number;
   @IsOptional() @IsString() defaultNextQuestionKey?: string;
-  @IsOptional() @IsArray() options?: SurveyOptionDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SurveyOptionDto)
+  options?: SurveyOptionDto[];
 }
 
 export class CreateSurveyDto {
   @IsString() name!: string;
   @IsOptional() @IsString() entryQuestionKey?: string;
   @IsOptional() @IsBoolean() opensAfterDisposition?: boolean;
-  @IsOptional() @IsArray() questions?: SurveyQuestionDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SurveyQuestionDto)
+  questions?: SurveyQuestionDto[];
 }
 
 export class UpdateSurveyDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() entryQuestionKey?: string;
   @IsOptional() @IsBoolean() opensAfterDisposition?: boolean;
-  @IsOptional() @IsArray() questions?: SurveyQuestionDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SurveyQuestionDto)
+  questions?: SurveyQuestionDto[];
 }
 
 // ── Scripts ────────────────────────────────────────────────────────────────

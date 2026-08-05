@@ -68,6 +68,53 @@ describe("SurveysService branching persistence", () => {
     return prisma;
   }
 
+  // A duplicated key/value is not obviously wrong to an author — two options can share a
+  // label — but the DB has a unique index on each, so it used to arrive as a 500 with nothing
+  // to act on. These pin the 400 that names the offending field instead.
+  it("rejects two questions sharing a key rather than letting Prisma 500 on the unique index", async () => {
+    const prisma = makeReconcilePrisma();
+    const service = new SurveysService(prisma);
+    await expect(
+      service.update("org1", "s1", {
+        questions: [
+          { key: "k1", prompt: "A", type: "single_choice" as any },
+          { key: "k1", prompt: "B", type: "single_choice" as any },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(prisma.question.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects two options sharing a value within one question", async () => {
+    const prisma = makeReconcilePrisma([{ id: "q_db", key: "k1" }]);
+    const service = new SurveysService(prisma);
+    await expect(
+      service.update("org1", "s1", {
+        questions: [
+          {
+            key: "k1",
+            prompt: "A",
+            type: "single_choice" as any,
+            options: [
+              { value: "yes", label: "Yes" },
+              { value: "yes", label: "Yes (again)" },
+            ],
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(prisma.questionOption.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a null entryQuestionKey — clearing the entry point is a real edit", async () => {
+    const prisma = makeReconcilePrisma();
+    const service = new SurveysService(prisma);
+    await service.update("org1", "s1", { name: "Vic Election", entryQuestionKey: null as never, opensAfterDisposition: true });
+    expect(prisma.survey.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ entryQuestionKey: null }) }),
+    );
+  });
+
   it("persists flow fields and UPDATES a matched question in place (no wipe → responses survive)", async () => {
     const prisma = makeReconcilePrisma([{ id: "q_db", key: "k1" }]);
     const service = new SurveysService(prisma);
