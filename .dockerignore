@@ -1,0 +1,20 @@
+# Keep the worker build context to source. Host node_modules are platform-specific (and this
+# workspace's are symlink farms), so copying them in produces an image that either fails to run or
+# silently uses the wrong binaries.
+node_modules
+**/node_modules
+.git
+.next
+**/.next
+**/.next-validate*
+**/dist
+**/worker-deploy
+**/.turbo
+**/coverage
+playwright-report
+test-results
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+.DS_Store
