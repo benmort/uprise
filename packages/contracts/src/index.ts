@@ -333,7 +333,14 @@ export interface UserProfileResponse {
   displayName: string | null;
   givenName: string | null;
   familyName: string | null;
+  /** Free text the user typed into their profile. NOT the verified 2FA number — see `mobile`. */
   phone: string | null;
+  /**
+   * The verified mobile from the identity row (2FA/OTP). Read-only here: it is changed through
+   * `PUT /profile/mobile`, which re-verifies. Most users have this and no `phone`, so anything
+   * wanting "the user's number" should prefer `phone` and fall back to this.
+   */
+  mobile: string | null;
   avatarUrl: string | null;
   bio: string | null;
   dateOfBirth: string | null;

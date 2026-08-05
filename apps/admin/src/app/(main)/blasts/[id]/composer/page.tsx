@@ -141,6 +141,10 @@ function deriveAudiencePersonalization(
   };
 }
 
+/** Where the organiser's chosen proof number is remembered (per browser). An empty stored
+ *  value is meaningful: it records a deliberate delete, so the field is not re-seeded. */
+const PROOF_NUMBER_KEY = "uprise.blastProofNumber";
+
 export default function BlastComposerPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -411,13 +415,29 @@ export default function BlastComposerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template, channel, complianceEnabled]);
 
-  // Default the Proof Number to the current user's own phone — they almost always proof to
-  // themselves. Best-effort + only when the field is still empty, so it never clobbers a typed value.
+  /**
+   * The Proof Number defaults to the organiser's own number and then stays whatever they made
+   * it — including empty.
+   *
+   * Two sources, in order: the profile's `phone` (free text they typed) then the verified
+   * `mobile` from 2FA enrolment. Most people only ever set the second, which is why this field
+   * used to sit empty for users who plainly had a number on file.
+   *
+   * Their choice is remembered locally rather than re-derived on every visit, so clearing the
+   * field is a decision that sticks — a stored empty string means "deleted", which is why the
+   * check below is `!== null` rather than a truthiness test. Per-browser on purpose: it is a
+   * convenience for whoever is sitting here, not account state worth a round trip.
+   */
   useEffect(() => {
     let alive = true;
+    const stored = typeof window === "undefined" ? null : window.localStorage.getItem(PROOF_NUMBER_KEY);
+    if (stored !== null) {
+      setProofNumber((cur) => cur || stored);
+      return;
+    }
     void profile.get().then((res) => {
       if (!alive || !res.ok) return;
-      const mine = res.data.phone?.trim();
+      const mine = res.data.phone?.trim() || res.data.mobile?.trim();
       if (mine) setProofNumber((cur) => cur || mine);
     });
     return () => {
@@ -997,7 +1017,14 @@ export default function BlastComposerPage() {
                   <label className="mb-1 block text-xs font-label uppercase tracking-[0.08em] text-muted-foreground">
                     Proof Number
                   </label>
-                  <PhoneInput value={proofNumber} onChange={setProofNumber} />
+                  <PhoneInput
+                    value={proofNumber}
+                    onChange={(v) => {
+                      setProofNumber(v);
+                      // Remember the choice — including "" for a deliberate delete.
+                      if (typeof window !== "undefined") window.localStorage.setItem(PROOF_NUMBER_KEY, v);
+                    }}
+                  />
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="w-full max-w-xs">

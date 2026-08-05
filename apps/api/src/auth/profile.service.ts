@@ -30,14 +30,30 @@ export class ProfileService {
     private readonly images: ImageUploadService,
   ) {}
 
-  async getProfile(userId: string): Promise<UserProfile> {
+  /**
+   * The caller's own profile, plus the verified mobile from their identity row.
+   *
+   * There are two phone numbers on a user and they are not the same thing: `UserProfile.phone`
+   * is free text they typed into their profile, while `User.mobile` is the number they verified
+   * for 2FA/OTP. Most people only ever set the second one, so a caller reading `phone` alone
+   * concludes they have no number at all — which is why the blast composer's proof field sat
+   * empty for users who plainly had a mobile on file.
+   *
+   * Self-scoped like every method here (the controller resolves userId from the session), so
+   * this returns the caller their own number and nobody else's.
+   */
+  async getProfile(userId: string): Promise<UserProfile & { mobile: string | null }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true, mobile: true },
+    });
     const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
-    if (existing) return existing;
+    if (existing) return { ...existing, mobile: user?.mobile ?? null };
     // Lazily seed from the User identity row.
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    return this.prisma.userProfile.create({
+    const created = await this.prisma.userProfile.create({
       data: { userId, displayName: user?.displayName ?? null },
     });
+    return { ...created, mobile: user?.mobile ?? null };
   }
 
   async upsertProfile(userId: string, input: UserProfileInput): Promise<UserProfile> {

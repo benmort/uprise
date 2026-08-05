@@ -2,7 +2,7 @@ import { ProfileService } from "./profile.service";
 
 function setup() {
   const prisma: any = {
-    user: { findUnique: jest.fn(async () => ({ id: "u1", displayName: "Ada" })) },
+    user: { findUnique: jest.fn(async () => ({ id: "u1", displayName: "Ada", mobile: "+61400000001" })) },
     userProfile: {
       findUnique: jest.fn(async () => null),
       create: jest.fn(async ({ data }: any) => ({ ...data })),
@@ -37,6 +37,29 @@ describe("ProfileService", () => {
       data: { userId: "u1", displayName: "Ada" },
     });
     expect(profile.displayName).toBe("Ada");
+  });
+
+  it("returns the verified mobile alongside the profile", async () => {
+    // Two different numbers live on a user: UserProfile.phone (free text) and User.mobile (the
+    // verified 2FA one). Callers that read only `phone` conclude a user with a mobile has no
+    // number — which is exactly how the blast composer's proof field ended up empty.
+    const { svc } = setup();
+    const profile = await svc.getProfile("u1");
+    expect(profile.mobile).toBe("+61400000001");
+  });
+
+  it("returns the mobile on the existing-profile path too, not just the seeding one", async () => {
+    const { svc, prisma } = setup();
+    prisma.userProfile.findUnique.mockResolvedValue({ userId: "u1", displayName: "Ada", phone: null });
+    const profile = await svc.getProfile("u1");
+    expect(prisma.userProfile.create).not.toHaveBeenCalled();
+    expect(profile.mobile).toBe("+61400000001");
+  });
+
+  it("reports a null mobile rather than throwing when the user has none", async () => {
+    const { svc, prisma } = setup();
+    prisma.user.findUnique.mockResolvedValue({ id: "u1", displayName: "Ada", mobile: null });
+    await expect(svc.getProfile("u1")).resolves.toMatchObject({ mobile: null });
   });
 
   it("upserts profile fields", async () => {
