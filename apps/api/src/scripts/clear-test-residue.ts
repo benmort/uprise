@@ -70,6 +70,24 @@ async function main(): Promise<void> {
       where: { tenantId, OR: CONTENT_PATTERNS.map((p) => ({ name: { startsWith: p } })) },
     });
 
+    // Invitation-journey residue. Unlike the content above this MUST be swept, not merely
+    // tidied: every accepted invite consumes a team seat, and the demo tenant falls back to
+    // the default Growth plan (teamMembers: 10). Left alone, the journey starts failing with
+    // PLAN_LIMIT 403 after a handful of local runs — a confusing failure that looks like a
+    // product bug rather than accumulated test data.
+    const e2eUsers = await prisma.user.findMany({
+      where: { email: { startsWith: "e2e.invite." } },
+      select: { id: true },
+    });
+    const e2eUserIds = e2eUsers.map((u) => u.id);
+    await prisma.tenantMember.deleteMany({ where: { userId: { in: e2eUserIds } } });
+    await prisma.session.deleteMany({ where: { userId: { in: e2eUserIds } } });
+    await prisma.userProfile.deleteMany({ where: { userId: { in: e2eUserIds } } });
+    const removedUsers = await prisma.user.deleteMany({ where: { id: { in: e2eUserIds } } });
+    const removedInvites = await prisma.tenantInvitation.deleteMany({
+      where: { email: { startsWith: "e2e.invite." } },
+    });
+
     // eslint-disable-next-line no-console
     console.log(
       [
@@ -79,6 +97,8 @@ async function main(): Promise<void> {
         `canned: ${removedCanned.count}`,
         `surveys: ${removedSurveys.count}`,
         `scripts: ${removedScripts.count}`,
+        `e2e-invite users: ${removedUsers.count}`,
+        `e2e invitations: ${removedInvites.count}`,
       ].join("  "),
     );
   } finally {

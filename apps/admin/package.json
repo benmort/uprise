@@ -11,9 +11,15 @@
     "typecheck": "tsc --noEmit --pretty false",
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
-    "e2e": "playwright test",
+    "e2e": "playwright test --project=chromium",
     "e2e:ui": "playwright test --ui",
-    "marketing:shots": "node scripts/marketing-shots.mjs"
+    "marketing:shots": "node scripts/marketing-shots.mjs",
+    "e2e:firefox": "playwright test --project=firefox",
+    "e2e:webkit": "playwright test --project=webkit",
+    "e2e:all": "playwright test --project=chromium --project=firefox --project=webkit",
+    "e2e:pwa": "playwright test --project=chromium-pwa",
+    "e2e:install": "playwright install chromium firefox webkit",
+    "e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

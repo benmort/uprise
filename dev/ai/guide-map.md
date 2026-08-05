@@ -17,6 +17,7 @@ Single entry point and router to layer-local guides. Read this, then read every 
 |---|---|
 | Know the cross-layer commands / language / build rules | `dev/ai/conventions.md` |
 | Check whether work is actually done | `dev/ai/how-to/definition-of-done.md` |
+| Run or write browser e2e (Chromium/Firefox/WebKit), or chase a one-browser bug | `dev/ai/how-to/e2e-browser-testing.md` |
 | Run the development cycle (work shapes, gates, hand-off) | `dev/ai/how-to/development-cycle.md` |
 | Phrase a brief or sub-agent prompt so the model follows it | `dev/ai/how-to/prompting-agents.md` |
 | Model a new backend domain (schema namespace + events + FSM) | `dev/ai/how-to/domain-modelling.md` |
