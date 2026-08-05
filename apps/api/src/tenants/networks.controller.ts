@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { IsOptional, IsString, MaxLength } from "class-validator";
 import type { Request } from "express";
 import { TenantsService } from "./tenants.service";
@@ -37,19 +37,34 @@ export class NetworksController {
 
   @Get(":id")
   @RequirePermission(NETWORK_READ)
-  get(@Param("id") id: string) {
+  async get(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    await this.assertNetworkAccess(req, id);
     return this.tenants.getNetwork(id);
   }
 
   @Get(":id/tenants")
   @RequirePermission(NETWORK_READ)
-  tenantsIn(@Param("id") id: string) {
+  async tenantsIn(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
+    await this.assertNetworkAccess(req, id);
     return this.tenants.listTenantsByNetwork(id);
   }
 
+  // Billing writes change plan entitlements for every tenant in the network — a
+  // platform action (nothing else writes Network.planName today). CASL checks the
+  // ACTION only, never the instance, so without @SuperAdmin any owner could repoint
+  // any network's plan by id (the ced3164 bug class).
   @Patch(":id/billing")
+  @SuperAdmin()
   @RequirePermission(NETWORK_MANAGE)
   updateBilling(@Param("id") id: string, @Body() dto: UpdateNetworkBillingDto) {
     return this.tenants.updateNetworkBilling(id, dto);
+  }
+
+  /** Instance guard: super-admin, or the caller's active tenant belongs to the network. */
+  private async assertNetworkAccess(req: Request & { user?: AuthUser }, networkId: string): Promise<void> {
+    if (req.user?.isSuperAdmin) return;
+    const tenantId = req.user?.tenantId;
+    const inNetwork = tenantId ? await this.tenants.tenantBelongsToNetwork(tenantId, networkId) : false;
+    if (!inNetwork) throw new ForbiddenException("This network is not available to your organisation");
   }
 }

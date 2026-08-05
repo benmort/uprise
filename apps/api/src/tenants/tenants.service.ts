@@ -702,6 +702,15 @@ export class TenantsService {
     });
   }
 
+  /** Instance-scope check for the network read endpoints. */
+  async tenantBelongsToNetwork(tenantId: string, networkId: string): Promise<boolean> {
+    const tenant = await this.prisma.tenant.findFirst({
+      where: { id: tenantId, networkId, deletedAt: null },
+      select: { id: true },
+    });
+    return Boolean(tenant);
+  }
+
   async getNetwork(id: string): Promise<Network> {
     const network = await this.prisma.network.findUnique({ where: { id } });
     if (!network) throw new NotFoundException("Network not found");

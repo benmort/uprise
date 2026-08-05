@@ -48,6 +48,7 @@
     "civic:phones": "ts-node src/scripts/civic/backfill-politician-phones.ts",
     "civic:phones:aph": "ts-node src/scripts/civic/fetch-aph-phones.ts --load",
     "seed:org-logos": "ts-node src/scripts/civic/seed-org-logos.ts",
+    "seed:climate-200": "ts-node src/scripts/networks/seed-climate-200.ts",
     "canvass:cut-turf": "ts-node src/scripts/canvass/cut-turf.ts",
     "canvass:vic-campaigns": "ts-node src/scripts/canvass/vic-campaigns.ts",
     "email:link-branding": "ts-node src/scripts/email/setup-link-branding.ts"
