@@ -18,6 +18,16 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   prisma: true
+  # Our own package, whose postinstall IS `prisma generate`. Allowed on evidence: `pnpm --filter
+  # worker deploy` re-installs it as `@uprise/db@file:packages/db`, and pnpm 11 treats an ignored
+  # build there as a hard ERR_PNPM_IGNORED_BUILDS — which is what failed the worker's Docker build
+  # after everything else in it had succeeded. Without the generate, the deployed worker would
+  # also carry a @uprise/db with no client in it.
+  #
+  # Keyed by the full specifier, not the bare name: in the deploy install this package arrives as
+  # a file: dependency, and pnpm matches the allowlist on what it resolved (a bare '@uprise/db'
+  # here is silently not a match — it re-asks for this exact key).
+  '@uprise/db@file:packages/db': true
   # Postinstall only prints a funding/telemetry notice.
   '@nestjs/core': false
   # Platform binaries arrive via optionalDependencies on modern esbuild; its postinstall is a
