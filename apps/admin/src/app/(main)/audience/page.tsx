@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import {
   audienceNameForList,
+  actionNetworkGroupOptions,
   audienceSourceFor,
   autoSelectedSourceId,
   findSource,
@@ -408,6 +409,7 @@ export default function AudiencePage() {
     () => findSource(sources, selectedSourceId),
     [sources, selectedSourceId],
   );
+  const anGroups = useMemo(() => actionNetworkGroupOptions(sources), [sources]);
 
   const pageSize = 8;
   const paged = filtered.slice(tablePage * pageSize, tablePage * pageSize + pageSize);
@@ -721,9 +723,31 @@ export default function AudiencePage() {
                     </SelectItem>
                   ))}
                 </Select>
+                {anGroups.length > 1 && (
+                  // Each connected Action Network group is its own connection (AN issues
+                  // one API key per group), so picking a group picks the connection.
+                  <Select
+                    value={selectedSource?.type === "ACTION_NETWORK" ? selectedSourceId : ""}
+                    onValueChange={(v) => {
+                      setSelectedSourceId(v);
+                      setLists([]);
+                      setSelectedListId("");
+                      setListSearchMessage("");
+                      void loadIntegrationLists(findSource(sources, v));
+                    }}
+                    title="Which Action Network group to sync from"
+                    placeholder="Choose an Action Network group…"
+                  >
+                    {anGroups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.label}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                )}
                 {!selectedSourceId && (
                   <p className="text-xs text-muted-foreground">
-                    Choose which connected account to import from.
+                    Choose which connected account{anGroups.length > 1 ? " and group" : ""} to import from.
                   </p>
                 )}
               </>

@@ -141,8 +141,75 @@ describe("IntegrationsService — connection resolution", () => {
     expect(crypto.encrypt).toHaveBeenCalledWith("my-own-key");
     expect(prisma.integrationConnection.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { tenantId_type: { tenantId: "org1", type: "ACTION_NETWORK" } },
-        create: expect.objectContaining({ encryptedCredential: "enc:my-own-key" }),
+        where: {
+          tenantId_type_externalGroup: { tenantId: "org1", type: "ACTION_NETWORK", externalGroup: "" },
+        },
+        create: expect.objectContaining({ encryptedCredential: "enc:my-own-key", externalGroup: "" }),
+      }),
+    );
+  });
+
+  it("keys Action Network connections per group — a second group is its own create", async () => {
+    const { service, prisma } = build();
+    await service.upsertConnection("org1", {
+      type: "ACTION_NETWORK",
+      name: "AN Victoria",
+      apiKey: "vic-key",
+      group: "  GetUp Victoria  ",
+    } as any);
+    expect(prisma.integrationConnection.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId_type_externalGroup: {
+            tenantId: "org1",
+            type: "ACTION_NETWORK",
+            externalGroup: "GetUp Victoria",
+          },
+        },
+      }),
+    );
+    expect(prisma.integrationConnection.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId_type_externalGroup: {
+            tenantId: "org1",
+            type: "ACTION_NETWORK",
+            externalGroup: "GetUp Victoria",
+          },
+        },
+        create: expect.objectContaining({ externalGroup: "GetUp Victoria" }),
+      }),
+    );
+  });
+
+  it("a new group with no API key is a create and is rejected — the other group's key is never borrowed", async () => {
+    const { service, prisma } = build();
+    // The tenant has a different group connected; the lookup for THIS group finds nothing.
+    prisma.integrationConnection.findUnique.mockResolvedValue(null);
+    await expect(
+      service.upsertConnection("org1", {
+        type: "ACTION_NETWORK",
+        name: "AN NSW",
+        group: "GetUp NSW",
+      } as any),
+    ).rejects.toBeInstanceOf(IntegrationValidationError);
+    expect(prisma.integrationConnection.upsert).not.toHaveBeenCalled();
+  });
+
+  it("an internal source ignores group and stays keyed one per type", async () => {
+    const { service, prisma } = build();
+    await service.upsertConnection("org1", {
+      type: "INTERNAL",
+      name: "Warehouse",
+      apiKey: "internal-key",
+      baseUrl: "https://internal.example/api",
+      group: "should-be-ignored",
+    } as any);
+    expect(prisma.integrationConnection.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId_type_externalGroup: { tenantId: "org1", type: "INTERNAL", externalGroup: "" },
+        },
       }),
     );
   });

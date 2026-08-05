@@ -193,8 +193,11 @@ export class IntegrationsService {
   }
 
   async upsertConnection(tenantId: string, dto: UpsertIntegrationConnectionDto) {
+    // Only Action Network has per-group credentials; everything else collapses to the
+    // "" group so it keeps its one-per-type upsert behaviour.
+    const externalGroup = dto.type === "ACTION_NETWORK" ? (dto.group?.trim() ?? "") : "";
     const existing = await this.prisma.integrationConnection.findUnique({
-      where: { tenantId_type: { tenantId, type: dto.type as IntegrationType } },
+      where: { tenantId_type_externalGroup: { tenantId, type: dto.type as IntegrationType, externalGroup } },
       select: { id: true, encryptedCredential: true, settings: true },
     });
 
@@ -210,11 +213,12 @@ export class IntegrationsService {
     const encrypted = suppliedKey ? this.crypto.encrypt(credentials.apiKey) : existing!.encryptedCredential;
 
     const row = await this.prisma.integrationConnection.upsert({
-      where: { tenantId_type: { tenantId, type: dto.type as IntegrationType } },
+      where: { tenantId_type_externalGroup: { tenantId, type: dto.type as IntegrationType, externalGroup } },
       create: {
         tenantId,
         type: dto.type as IntegrationType,
         name: dto.name,
+        externalGroup,
         encryptedCredential: encrypted,
         status: IntegrationConnectionStatus.ACTIVE,
         settings: credentials.baseUrl ? { baseUrl: credentials.baseUrl } : undefined,
@@ -232,6 +236,7 @@ export class IntegrationsService {
       id: row.id,
       type: row.type,
       name: row.name,
+      group: row.externalGroup,
       status: row.status,
       updatedAt: row.updatedAt,
     };
@@ -907,18 +912,20 @@ export class IntegrationsService {
 
   /** Configured connections for the settings/integrations surface. Never returns the credential. */
   async listConnections(tenantId: string) {
-    return this.prisma.integrationConnection.findMany({
+    const rows = await this.prisma.integrationConnection.findMany({
       where: { tenantId },
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,
         type: true,
         name: true,
+        externalGroup: true,
         status: true,
         settings: true,
         createdAt: true,
         updatedAt: true,
       },
     });
+    return rows.map(({ externalGroup, ...row }) => ({ ...row, group: externalGroup }));
   }
 }

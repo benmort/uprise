@@ -824,14 +824,19 @@ model IntegrationConnection {
   status         IntegrationConnectionStatus @default(ACTIVE)
   encryptedCredential String
   settings       Json?
+  // Which provider-side group this credential is scoped to. Action Network issues one
+  // API key per group, so a tenant administering several groups holds one connection
+  // per group. "" (not NULL) for INTERNAL and single-group rows, so the compound
+  // unique below still upserts them one-per-type (NULLs would be distinct).
+  externalGroup  String                      @default("")
   createdAt      DateTime                    @default(now())
   updatedAt      DateTime                    @updatedAt
   tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   syncJobs       IntegrationSyncJob[]
 
-  // One connection per (tenant, type) — makes upsertConnection a real upsert instead
-  // of the racy findFirst-inside-where it used to be.
-  @@unique([tenantId, type])
+  // One connection per (tenant, type, group) — a real upsert key. externalGroup "" keeps
+  // the previous one-per-type behaviour for everything that has no group concept.
+  @@unique([tenantId, type, externalGroup])
   @@index([tenantId, type, status])
   @@schema("integration")
 }

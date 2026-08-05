@@ -16,6 +16,15 @@ export class UpsertIntegrationConnectionDto {
   @IsOptional()
   @IsString()
   baseUrl?: string;
+
+  /**
+   * Provider-side group this credential belongs to (Action Network issues one API key
+   * per group). Distinct groups are distinct connections; blank joins the "" upsert key.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  group?: string;
 }
 
 /** Disconnect / reconnect a connection by flipping its status. */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionNetworkGroupOptions,
   audienceNameForList,
   audienceSourceFor,
   autoSelectedSourceId,
@@ -49,6 +50,12 @@ describe("toImportSources", () => {
     const [source] = toImportSources([row({ name: "   " })]);
     expect(source.name).toBe("Action Network");
     expect(source.optionLabel).toBe("Action Network");
+  });
+
+  it("leads with the group when the connection is group-scoped", () => {
+    const [source] = toImportSources([row({ name: "Main", group: "GetUp Victoria" })]);
+    expect(source.group).toBe("GetUp Victoria");
+    expect(source.optionLabel).toBe("Action Network – GetUp Victoria");
   });
 
   it("maps the internal provider", () => {
@@ -122,5 +129,24 @@ describe("audienceSourceFor / providerLabel / syncCardTitle", () => {
   it("titles the card generically until a source is chosen", () => {
     expect(syncCardTitle(undefined)).toBe("Import from a connected source");
     expect(syncCardTitle(toImportSources([row()])[0])).toBe("Action Network list sync");
+  });
+});
+
+describe("actionNetworkGroupOptions", () => {
+  it("lists one option per connected Action Network group, labelled by group", () => {
+    const sources = toImportSources([
+      row({ id: "vic", group: "GetUp Victoria" }),
+      row({ id: "nsw", group: "GetUp NSW" }),
+      row({ id: "int", type: "INTERNAL", name: "Warehouse" }),
+    ]);
+    expect(actionNetworkGroupOptions(sources)).toEqual([
+      { id: "vic", label: "GetUp Victoria" },
+      { id: "nsw", label: "GetUp NSW" },
+    ]);
+  });
+
+  it("falls back to the connection name for a legacy group-less connection", () => {
+    const sources = toImportSources([row({ id: "a", name: "Main account" })]);
+    expect(actionNetworkGroupOptions(sources)).toEqual([{ id: "a", label: "Main account" }]);
   });
 });

@@ -367,6 +367,8 @@ export async function upsertIntegrationConnection(input: {
   name: string;
   apiKey?: string;
   baseUrl?: string;
+  /** Action Network group this key belongs to — distinct groups are distinct connections. */
+  group?: string;
 }) {
   return request<Record<string, unknown>>("/integrations/connections", {
     method: "POST",
@@ -995,6 +997,8 @@ export type IntegrationConnectionRow = {
   id: string;
   type: string;
   name: string;
+  /** Provider-side group this key is scoped to (Action Network: one key per group). */
+  group?: string;
   status: "ACTIVE" | "INACTIVE";
   settings: Record<string, unknown> | null;
   createdAt: string;

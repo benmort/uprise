@@ -44,6 +44,7 @@ export function IntegrationsSettings() {
   const [connectOpen, setConnectOpen] = useState(false);
   const [type, setType] = useState<ConnectionType>("ACTION_NETWORK");
   const [name, setName] = useState("");
+  const [group, setGroup] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [saving, setSaving] = useState(false);
@@ -57,11 +58,14 @@ export function IntegrationsSettings() {
 
   const rows = data ?? [];
   const needsBaseUrl = type === "INTERNAL";
-  // Connecting a provider the tenant has no row for is a CREATE, and a create needs a key.
-  // A blank key used to be accepted and silently substituted with the platform env key,
-  // which connected the tenant to whichever organisation owned that key — and reported
-  // success. Blank still means "keep the stored key", but only when there IS one.
-  const isUpdate = rows.some((c) => c.type === type);
+  // Action Network issues one API key per group, so connections are keyed per
+  // (type, group) — a new group is a CREATE even when another group is connected.
+  const groupKey = type === "ACTION_NETWORK" ? group.trim() : "";
+  // Connecting a (type, group) the tenant has no row for is a CREATE, and a create needs
+  // a key. A blank key used to be accepted and silently substituted with the platform env
+  // key, which connected the tenant to whichever organisation owned that key — and
+  // reported success. Blank still means "keep the stored key", but only when there IS one.
+  const isUpdate = rows.some((c) => c.type === type && (c.group ?? "") === groupKey);
   const needsApiKey = !isUpdate;
   const canSubmit =
     name.trim().length > 0 &&
@@ -71,6 +75,7 @@ export function IntegrationsSettings() {
   function openConnect() {
     setType("ACTION_NETWORK");
     setName("");
+    setGroup("");
     setApiKey("");
     setBaseUrl("");
     setTestResult(null);
@@ -101,6 +106,7 @@ export function IntegrationsSettings() {
       name: name.trim(),
       apiKey: apiKey.trim() || undefined,
       baseUrl: baseUrl.trim() || undefined,
+      group: groupKey || undefined,
     });
     setSaving(false);
     if (!res.ok) {
@@ -157,9 +163,9 @@ export function IntegrationsSettings() {
           <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">Integrations</h3>
           {!noPermission ? (
             <p className="mt-1 text-sm text-muted-foreground">
-              Connect Action Network or an internal source with your own API key. Connections are keyed one per
-              type – reconnecting the same type updates it. Only accounts you connect here are available to
-              import from.
+              Connect Action Network or an internal source with your own API key. Action Network keys are
+              scoped per group, so connect one per group you administer – reconnecting the same type and group
+              updates it. Only accounts you connect here are available to import from.
             </p>
           ) : null}
         </div>
@@ -190,7 +196,10 @@ export function IntegrationsSettings() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-foreground">{c.name}</p>
-                  <p className="text-xs text-muted-foreground">{PROVIDER_LABEL[c.type] ?? c.type}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {PROVIDER_LABEL[c.type] ?? c.type}
+                    {c.group ? ` · ${c.group}` : ""}
+                  </p>
                 </div>
                 <StatusBadge status={c.status} />
               </div>
@@ -260,6 +269,21 @@ export function IntegrationsSettings() {
             disabled={saving}
           />
         </Field>
+        {type === "ACTION_NETWORK" ? (
+          <Field
+            label="Group (optional)"
+            htmlFor="connection-group"
+            hint="Action Network issues one API key per group. Name the group this key belongs to — each group you connect becomes its own selectable source."
+          >
+            <Input
+              id="connection-group"
+              placeholder="e.g. GetUp Victoria"
+              value={group}
+              onChange={(e) => setGroup(e.target.value)}
+              disabled={saving}
+            />
+          </Field>
+        ) : null}
         <Field
           label={needsApiKey ? "API key" : "API key (optional)"}
           htmlFor="connection-api-key"

@@ -23,6 +23,8 @@ export type ImportSource = {
   type: IntegrationSourceType;
   /** The connection's own name, e.g. "Main Action Network". */
   name: string;
+  /** Provider-side group the key is scoped to (Action Network: one key per group). */
+  group: string;
   /** Provider label, e.g. "Action Network". */
   providerLabel: string;
   /** What the picker shows. Disambiguates two connections of the same provider. */
@@ -44,16 +46,36 @@ export function toImportSources(rows: IntegrationConnectionRow[] | null | undefi
     .map((row) => {
       const label = providerLabel(row.type);
       const name = row.name?.trim() || label;
+      const group = row.group?.trim() || "";
+      // The group is what distinguishes several Action Network connections, so it leads
+      // the label when present; otherwise only repeat the provider when the connection
+      // was given a different name ("Action Network", not "Action Network – Action Network").
+      const optionLabel = group
+        ? `${label} – ${group}`
+        : name === label
+          ? label
+          : `${label} – ${name}`;
       return {
         id: row.id,
         type: row.type as IntegrationSourceType,
         name,
+        group,
         providerLabel: label,
-        // Only repeat the provider when the connection was given a different name, so the
-        // common case reads "Action Network" rather than "Action Network – Action Network".
-        optionLabel: name === label ? label : `${label} – ${name}`,
+        optionLabel,
       };
     });
+}
+
+/**
+ * The Action Network group choices for the sync frame's group selector — one entry per
+ * connected AN group. Only meaningful when at least two exist (one group needs no picker).
+ */
+export function actionNetworkGroupOptions(
+  sources: ImportSource[],
+): Array<{ id: string; label: string }> {
+  return sources
+    .filter((s) => s.type === "ACTION_NETWORK")
+    .map((s) => ({ id: s.id, label: s.group || s.name }));
 }
 
 /**
