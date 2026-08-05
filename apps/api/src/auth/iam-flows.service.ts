@@ -79,6 +79,8 @@ export interface Membership {
   logoUrl: string | null;
   /** Plan key of the owning network, flattened for the client (null when network-less). */
   planName: string | null;
+  /** True when this tenant is the owning network's own hub organisation (chipped "Network"). */
+  isNetworkHub: boolean;
   /** Billing context from the owning network (null for network-less tenants). */
   network: { id: string; planName: string | null; subscriptionStatus: string | null } | null;
 }
@@ -237,7 +239,7 @@ export class IamFlowsService {
           select: {
             name: true,
             slug: true,
-            network: { select: { id: true, planName: true, subscriptionStatus: true } },
+            network: { select: { id: true, planName: true, subscriptionStatus: true, hubTenantId: true } },
           },
         },
       },
@@ -255,6 +257,9 @@ export class IamFlowsService {
       role: m.role,
       logoUrl: logoByTenant.get(m.tenantId) ?? null,
       planName: m.tenant.network?.planName ?? null,
+      // The network organisation's own tenant (vs its client campaigns) — chipped
+      // "Network" in the switcher and select-organisation lists.
+      isNetworkHub: m.tenant.network?.hubTenantId === m.tenantId,
       network: m.tenant.network
         ? {
             id: m.tenant.network.id,

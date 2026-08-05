@@ -23,6 +23,8 @@ export interface Membership {
   logoUrl?: string | null;
   /** Plan key of the tenant's owning network ("grassroots"|"starter"|"growth"|"scale"), null when network-less. */
   planName?: string | null;
+  /** True when this tenant is the owning network's own hub organisation (chipped "Network"). */
+  isNetworkHub?: boolean;
 }
 
 export interface AuthPrincipal {

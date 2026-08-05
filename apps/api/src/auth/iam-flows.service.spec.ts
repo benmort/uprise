@@ -532,6 +532,20 @@ describe("IamFlowsService", () => {
     });
   });
 
+  describe("membershipsFor", () => {
+    it("marks the owning network's hub tenant — the row the pickers chip as Network", async () => {
+      const { svc, prisma } = setup();
+      const network = { id: "n1", planName: "scale", subscriptionStatus: "active", hubTenantId: "hub" };
+      prisma.tenantMember.findMany.mockResolvedValueOnce([
+        { tenantId: "hub", role: "OWNER", tenant: { name: "Climate 200", slug: "climate-200", network } },
+        { tenantId: "t2", role: "OWNER", tenant: { name: "Monique Ryan – Kooyong", slug: "monique-ryan", network } },
+        { tenantId: "t3", role: "OWNER", tenant: { name: "Solo org", slug: "solo", network: null } },
+      ]);
+      const rows = await svc.membershipsFor("u1");
+      expect(rows.map((r) => r.isNetworkHub)).toEqual([true, false, false]);
+    });
+  });
+
   describe("delete account", () => {
     it("soft-deletes, removes memberships, revokes sessions and emits the event", async () => {
       const { svc, prisma, sessions, outbox } = setup();

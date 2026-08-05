@@ -91,6 +91,11 @@ export default function SelectTenantPage() {
                       <span className="flex min-w-0 items-center gap-3">
                         <TenantAvatar seed={m.tenantId} logoUrl={m.logoUrl} name={m.tenantName} className="h-[4.375rem] w-[4.375rem]" />
                         <span className="truncate">{m.tenantName}</span>
+                        {m.isNetworkHub ? (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                            Network
+                          </span>
+                        ) : null}
                       </span>
                       <span className="shrink-0 text-xs text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
                     </Button>

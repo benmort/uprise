@@ -89,6 +89,7 @@ async function main(): Promise<void> {
               ownerId: user.id,
               planName: NETWORK_PLAN,
               subscriptionStatus: "active",
+              hubTenantId: hub.id,
             },
           });
           networkCreated = true;
@@ -101,10 +102,10 @@ async function main(): Promise<void> {
               metadata: {},
             },
           });
-        } else if (network.planName !== NETWORK_PLAN) {
+        } else if (network.planName !== NETWORK_PLAN || network.hubTenantId !== hub.id) {
           network = await tx.network.update({
             where: { id: network.id },
-            data: { planName: NETWORK_PLAN },
+            data: { planName: NETWORK_PLAN, hubTenantId: hub.id },
           });
         }
 

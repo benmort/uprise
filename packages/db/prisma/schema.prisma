@@ -1615,6 +1615,10 @@ model Network {
   ownerId            String?
   planName           String?
   subscriptionStatus String?
+  // The network organisation's own tenant (e.g. Climate 200's hub, as opposed to its
+  // client campaigns). Id-only on purpose — a relation here would be circular with
+  // `tenants` for a single "which one is home" pointer the UI chips as "Network".
+  hubTenantId        String?
   createdAt          DateTime @default(now())
   tenants            Tenant[]
 

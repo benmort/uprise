@@ -18,7 +18,15 @@ import { CreateTenantDialog } from "./create-tenant-dialog";
 const TENANT_CREATE_PLANS_UI = ["starter", "growth", "scale"];
 
 /** A row the dropdown can render + switch into (from a membership or an all-tenants search). */
-type SwitchRow = { tenantId: string; tenantName: string; tenantSlug?: string; planName?: string | null; logoUrl?: string | null };
+type SwitchRow = {
+  tenantId: string;
+  tenantName: string;
+  tenantSlug?: string;
+  planName?: string | null;
+  logoUrl?: string | null;
+  /** The owning network's own hub organisation — chipped "Network" in the list. */
+  isNetworkHub?: boolean;
+};
 
 function PlanPill({ plan }: { plan: string }) {
   const label = plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -223,6 +231,7 @@ export function TenantSwitcher({
         tenantSlug: m.tenantSlug,
         planName: m.planName,
         logoUrl: m.logoUrl ?? null,
+        isNetworkHub: m.isNetworkHub,
       }));
 
   const switchTo = async (tenantId: string, name: string, logoUrl: string | null = null) => {
@@ -407,7 +416,13 @@ export function TenantSwitcher({
                       <span className="block truncate text-xs text-muted-foreground">{r.tenantSlug}</span>
                     ) : null}
                   </span>
-                  {r.planName ? <PlanPill plan={r.planName} /> : null}
+                  {r.isNetworkHub ? (
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                      Network
+                    </span>
+                  ) : r.planName ? (
+                    <PlanPill plan={r.planName} />
+                  ) : null}
                   {active ? <Check className="h-4 w-4 shrink-0 text-success" /> : null}
                 </button>
               );
