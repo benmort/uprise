@@ -168,6 +168,38 @@ export class SetNumberNicknameDto {
   purpose?: "transactional" | "marketing" | "whatsapp";
 }
 
+/**
+ * Connect a tenant's own Twilio account without provisioning anything. Until this existed the
+ * only thing that created a BYO account was a provisioning run, so an organisation that already
+ * owned numbers had to BUY one it did not need before it could adopt the ones it did.
+ */
+export class ConnectByoAccountDto {
+  @Transform(trimmed)
+  @Matches(/^AC[0-9a-fA-F]{32}$/, { message: "accountSid must be a Twilio account SID (AC…)" })
+  accountSid!: string;
+
+  /** Verified against Twilio before it is stored, then encrypted at rest. */
+  @Transform(trimmed)
+  @IsString()
+  @MaxLength(200)
+  authToken!: string;
+
+  @IsOptional()
+  @Transform(trimmed)
+  @Matches(/^[a-z]{2}[0-9]$/, { message: "region must look like au1" })
+  region?: string;
+
+  @IsOptional()
+  @Transform(trimmed)
+  @Matches(/^[a-z][a-z-]{2,19}$/, { message: "edge must look like sydney" })
+  edge?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  friendlyName?: string;
+}
+
 export class AdoptNumberDto {
   /**
    * The Twilio SID of a number the account ALREADY owns (`PN` + 32 hex). Pasted from the

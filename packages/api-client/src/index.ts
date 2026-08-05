@@ -899,6 +899,19 @@ export interface TelephonyAdoptionHook {
   existing: TelephonyHookConfiguration;
 }
 
+/**
+ * A tenant's own Twilio account, after it has been connected. The auth token is never
+ * returned – it is encrypted at rest and only ever travels inbound.
+ */
+export interface ConnectedTelephonyAccount {
+  accountId: string;
+  accountSid: string;
+  tenantId: string;
+  status: string;
+  region: string | null;
+  edge: string | null;
+}
+
 /** One number the BYO account already owns, as a candidate for adoption. */
 export interface AdoptableNumber {
   phoneNumberE164: string;
@@ -1033,6 +1046,29 @@ export const telephony = {
     request<TelephonyPhoneNumber>(`/telephony/numbers/${encodeURIComponent(numberId)}`, {
       method: "PATCH",
       body: JSON.stringify({ purpose }),
+      headers: { "Content-Type": "application/json" },
+    }),
+
+  /**
+   * Connect a tenant's own Twilio account – no purchase, no regulatory bundle, no provisioning
+   * run. The credentials are proved against Twilio before anything is stored, and the token is
+   * encrypted at rest. Idempotent on the account SID: re-connecting rotates the stored token
+   * rather than failing, so this is also how an operator updates a rotated one.
+   *
+   * This is the step that makes `listAdoptableNumbers`/`adoptNumber` reachable – both need an
+   * `accountId`, and before this existed the only thing that minted one was a run that bought
+   * a number the organisation did not need.
+   */
+  connectByoAccount: (body: {
+    accountSid: string;
+    authToken: string;
+    region?: string;
+    edge?: string;
+    friendlyName?: string;
+  }) =>
+    request<ConnectedTelephonyAccount>("/telephony/accounts/connect", {
+      method: "POST",
+      body: JSON.stringify(body),
       headers: { "Content-Type": "application/json" },
     }),
 

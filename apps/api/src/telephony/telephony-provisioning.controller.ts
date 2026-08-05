@@ -18,6 +18,7 @@ import type { AuthUser } from "../auth/auth-user";
 import { TelephonyProvisioningService } from "./telephony-provisioning.service";
 import {
   AdoptNumberDto,
+  ConnectByoAccountDto,
   ResubmitRunDto,
   SetNumberNicknameDto,
   StartProvisioningRunDto,
@@ -166,6 +167,34 @@ export class TelephonyProvisioningController {
   @RequirePermission(READ)
   async listAdoptableNumbers(@Param("id") id: string, @Req() req: Request & { user?: AuthUser }) {
     return this.provisioning.listAdoptableNumbers(id, this.accountScope(req));
+  }
+
+  /**
+   * Connect a tenant's own Twilio account. Separate from startRun because connecting is not
+   * provisioning: there is nothing to buy and nothing to review, and requiring a purchase run
+   * just to obtain an accountId is what made adoption unreachable for the organisations it was
+   * built for.
+   */
+  @Post("accounts/connect")
+  @RequirePermission(PROVISION_TENANT)
+  async connectByoAccount(
+    @Body() dto: ConnectByoAccountDto,
+    @Req() req: Request & { user?: AuthUser },
+  ) {
+    const scope = this.accountScope(req);
+    const tenantId = scope ?? req.user?.tenantId;
+    if (!tenantId) {
+      throw new ForbiddenException("A tenant is required to connect a telephony account");
+    }
+    return this.provisioning.connectByoAccount({
+      tenantId,
+      accountSid: dto.accountSid,
+      authToken: dto.authToken,
+      region: dto.region,
+      edge: dto.edge,
+      friendlyName: dto.friendlyName,
+      scopeTenantId: scope,
+    });
   }
 
   /** Register an already-owned number against the tenant. No purchase, no bundle, no run. */

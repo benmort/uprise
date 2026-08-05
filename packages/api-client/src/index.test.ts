@@ -758,6 +758,27 @@ describe("telephony + email provisioning", () => {
     expect(bodyOf(init)).toEqual({ purpose: "transactional" });
   });
 
+  // The auth token only ever travels inbound, so the body has to carry it verbatim – and the
+  // path must be the connect endpoint, not an account-scoped one: there is no account id yet,
+  // which is the entire reason this call exists.
+  it("telephony.connectByoAccount POSTs the credentials to the unscoped connect path", async () => {
+    await telephony.connectByoAccount({
+      accountSid: `AC${"a".repeat(32)}`,
+      authToken: "s3cr3t",
+      region: "au1",
+      edge: "sydney",
+    });
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/telephony/accounts/connect`);
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual({
+      accountSid: `AC${"a".repeat(32)}`,
+      authToken: "s3cr3t",
+      region: "au1",
+      edge: "sydney",
+    });
+  });
+
   it("telephony.listAdoptableNumbers GETs the account's adoptable numbers, id encoded", async () => {
     await telephony.listAdoptableNumbers("acct 1");
     expect(call()[0]).toBe(`${BASE}/telephony/accounts/acct%201/adoptable-numbers`);

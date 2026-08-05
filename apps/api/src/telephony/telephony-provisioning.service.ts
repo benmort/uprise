@@ -603,6 +603,24 @@ export class TelephonyProvisioningService {
     if (addressSid && !ADDRESS_SID_RE.test(addressSid)) {
       throw new ApiHttpException("INVALID_TWILIO_SID", "The address SID must look like AD… (34 characters)");
     }
+    const { region: checkedRegion, edge: checkedEdge } = this.normaliseRegionEdge(region, edge);
+    return {
+      reuse: bundleSid && addressSid ? { bundleSid, addressSid } : null,
+      region: checkedRegion,
+      edge: checkedEdge,
+    };
+  }
+
+  /**
+   * Validate and normalise a Twilio home region/edge pair. Shared by the provisioning path and
+   * by connectByoAccount, so the two can never drift on what a valid region looks like.
+   */
+  private normaliseRegionEdge(
+    rawRegion?: string,
+    rawEdge?: string,
+  ): { region: string | null; edge: string | null } {
+    const region = rawRegion?.trim().toLowerCase() || undefined;
+    const edge = rawEdge?.trim().toLowerCase() || undefined;
     // An edge without its region would have the SDK log a deprecation warning and route on
     // a half-specified host; make the operator state the region they mean.
     if (edge && !region) {
@@ -614,11 +632,7 @@ export class TelephonyProvisioningService {
     if (edge && !TWILIO_EDGE_RE.test(edge)) {
       throw new ApiHttpException("INVALID_TWILIO_REGION", "The edge must look like sydney");
     }
-    return {
-      reuse: bundleSid && addressSid ? { bundleSid, addressSid } : null,
-      region: region ?? null,
-      edge: edge ?? null,
-    };
+    return { region: region ?? null, edge: edge ?? null };
   }
 
   /**
@@ -1633,6 +1647,108 @@ export class TelephonyProvisioningService {
   // real money on inventory the organisation holds, plus (for a regulated AU number) a fresh
   // bundle and days of human review at Twilio for no reason. Adoption registers what is
   // already there.
+
+  /**
+   * Register a tenant's own Twilio account WITHOUT provisioning anything.
+   *
+   * Adoption needs an accountId, but until now the only thing that created a BYO
+   * TelephonyAccount was `startRun` – a full provisioning run that BUYS a number. So an
+   * organisation that already owned numbers had to purchase one it did not need before it
+   * could adopt the ones it did, which defeats the point of adopting.
+   *
+   * The credentials are verified against Twilio BEFORE they are stored. A token that does not
+   * work is the single most likely thing to be wrong here, and finding out at connect time
+   * beats finding out later inside an adopt call, where the failure would read as a problem
+   * with the number rather than with the account. Verification uses the same listing the
+   * adoptable-numbers view uses, so a successful connect also proves the account is readable.
+   *
+   * Idempotent on accountSid: re-connecting rotates the stored token in place rather than
+   * failing, which is what an operator does after rotating credentials at Twilio.
+   */
+  async connectByoAccount(input: {
+    tenantId: string;
+    accountSid: string;
+    authToken: string;
+    region?: string;
+    edge?: string;
+    friendlyName?: string;
+    scopeTenantId?: string;
+  }) {
+    if (input.scopeTenantId && input.scopeTenantId !== input.tenantId) {
+      throw new ForbiddenException("You can only manage your own organisation's telephony");
+    }
+    const accountSid = input.accountSid.trim();
+    const authToken = input.authToken.trim();
+    if (!/^AC[0-9a-fA-F]{32}$/.test(accountSid)) {
+      throw new ApiHttpException(
+        "INVALID_TWILIO_SID",
+        "An account SID must look like AC followed by 32 hex characters",
+        400,
+      );
+    }
+    if (!authToken) {
+      throw new ApiHttpException("BYO_CREDENTIALS_REQUIRED", "An auth token is required", 400);
+    }
+    const extras = this.normaliseRegionEdge(input.region, input.edge);
+
+    // A different tenant already holds this Twilio account. Refuse rather than move it: the
+    // other organisation's numbers and sends resolve through it.
+    const existing = await this.prisma.telephonyAccount.findUnique({ where: { accountSid } });
+    if (existing && existing.tenantId !== input.tenantId) {
+      throw new ApiHttpException(
+        "ACCOUNT_HELD_BY_ANOTHER_TENANT",
+        "That Twilio account is already connected to another organisation",
+        409,
+      );
+    }
+
+    // Prove the credentials work before persisting them. Anything other than a clean read is
+    // surfaced as a credential problem, because that is what it almost always is.
+    try {
+      await this.twilio.listOwnedNumbers({
+        accountSid,
+        authToken,
+        region: extras.region,
+        edge: extras.edge,
+      });
+    } catch {
+      throw new ApiHttpException(
+        "TWILIO_CREDENTIALS_REJECTED",
+        "Twilio rejected those credentials. Check the account SID and auth token, and that the token has not been rotated",
+        422,
+      );
+    }
+
+    const account = await this.prisma.telephonyAccount.upsert({
+      where: { accountSid },
+      create: {
+        tenantId: input.tenantId,
+        mode: TelephonyAccountMode.BYO,
+        accountSid,
+        encryptedAuthToken: this.crypto.encrypt(authToken),
+        friendlyName: input.friendlyName?.trim() || `uprise ${input.tenantId}`,
+        region: extras.region,
+        edge: extras.edge,
+        // Nothing to provision – the account exists and we have just read from it.
+        status: TelephonyAccountStatus.ACTIVE,
+      },
+      update: {
+        encryptedAuthToken: this.crypto.encrypt(authToken),
+        // Region and edge move as ONE pair, matching startRun: a stated region replaces both
+        // halves, an omitted one leaves the account as it was.
+        ...(extras.region ? { region: extras.region, edge: extras.edge } : {}),
+      },
+    });
+    this.senderResolver.invalidate(input.tenantId);
+    return {
+      accountId: account.id,
+      accountSid: account.accountSid,
+      tenantId: account.tenantId,
+      status: account.status,
+      region: account.region,
+      edge: account.edge,
+    };
+  }
 
   /**
    * The account an adoption call may act on, bound to the caller's tenant.

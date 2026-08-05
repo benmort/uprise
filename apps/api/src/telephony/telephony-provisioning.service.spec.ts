@@ -2019,6 +2019,111 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
     });
   });
 
+  // Adoption needs an accountId, but until connectByoAccount existed the only thing that created
+  // a BYO account was a provisioning run - which BUYS a number. An organisation that already owned
+  // numbers had to purchase one it did not need before it could adopt the ones it did.
+  describe("connectByoAccount", () => {
+    const SID = "AC" + "a".repeat(32);
+    const connect = (over: Record<string, unknown> = {}) => ({
+      tenantId: TENANT_ID,
+      accountSid: SID,
+      authToken: "tok-live",
+      ...over,
+    });
+
+    it("verifies the credentials against Twilio BEFORE storing them", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue(null);
+      await service.connectByoAccount(connect());
+      expect(twilio.listOwnedNumbers).toHaveBeenCalled();
+      const verifiedAt = twilio.listOwnedNumbers.mock.invocationCallOrder[0];
+      const storedAt = prisma.telephonyAccount.upsert.mock.invocationCallOrder[0];
+      expect(verifiedAt).toBeLessThan(storedAt);
+    });
+
+    it("stores nothing when Twilio rejects the credentials", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue(null);
+      twilio.listOwnedNumbers.mockRejectedValueOnce(new Error("401"));
+      await expectApiError(service.connectByoAccount(connect()), "TWILIO_CREDENTIALS_REJECTED");
+      expect(prisma.telephonyAccount.upsert).not.toHaveBeenCalled();
+    });
+
+    it("encrypts the auth token at rest and never stores it raw", async () => {
+      const { service, prisma, crypto } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue(null);
+      await service.connectByoAccount(connect({ authToken: "super-secret" }));
+      expect(crypto.encrypt).toHaveBeenCalledWith("super-secret");
+      const written = JSON.stringify(prisma.telephonyAccount.upsert.mock.calls[0][0]);
+      expect(written).not.toContain("super-secret");
+    });
+
+    it("lands ACTIVE - there is nothing to provision on an account we just read from", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue(null);
+      await service.connectByoAccount(connect());
+      expect(prisma.telephonyAccount.upsert.mock.calls[0][0].create.status).toBe("ACTIVE");
+    });
+
+    it("refuses an account another organisation already holds, without naming them", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue({
+        id: "acct-other", accountSid: SID, tenantId: "some-other-tenant",
+      });
+      const err = await service.connectByoAccount(connect()).catch((e) => e);
+      expect(err.response?.error?.code).toBe("ACCOUNT_HELD_BY_ANOTHER_TENANT");
+      // The other organisation is never named back to the caller.
+      expect(JSON.stringify(err.response)).not.toContain("some-other-tenant");
+      expect(prisma.telephonyAccount.upsert).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed account SID before calling Twilio at all", async () => {
+      const { service, twilio } = setup();
+      await expectApiError(service.connectByoAccount(connect({ accountSid: "AC-nope" })), "INVALID_TWILIO_SID");
+      expect(twilio.listOwnedNumbers).not.toHaveBeenCalled();
+    });
+
+    it("refuses to connect on behalf of a tenant outside the caller's scope", async () => {
+      const { service, twilio } = setup();
+      await expect(
+        service.connectByoAccount(connect({ scopeTenantId: "not-my-tenant" })),
+      ).rejects.toThrow(/your own organisation/i);
+      expect(twilio.listOwnedNumbers).not.toHaveBeenCalled();
+    });
+
+    it("carries the region and edge onto the account", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue(null);
+      await service.connectByoAccount(connect({ region: "au1", edge: "sydney" }));
+      expect(prisma.telephonyAccount.upsert.mock.calls[0][0].create).toMatchObject({
+        region: "au1",
+        edge: "sydney",
+      });
+    });
+
+    it("rejects an edge with no region", async () => {
+      const { service } = setup();
+      await expectApiError(service.connectByoAccount(connect({ edge: "sydney" })), "TWILIO_REGION_REQUIRED");
+    });
+
+    // Re-connecting is what an operator does after rotating credentials at Twilio.
+    it("rotates the token in place on re-connect rather than failing", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue({
+        id: "acct-1", accountSid: SID, tenantId: TENANT_ID,
+      });
+      await service.connectByoAccount(connect({ authToken: "rotated" }));
+      expect(prisma.telephonyAccount.upsert.mock.calls[0][0].update.encryptedAuthToken).toBeDefined();
+    });
+
+    it("invalidates the sender cache so the new account is used immediately", async () => {
+      const { service, prisma, senderResolver } = setup();
+      prisma.telephonyAccount.findUnique.mockResolvedValue(null);
+      await service.connectByoAccount(connect());
+      expect(senderResolver.invalidate).toHaveBeenCalledWith(TENANT_ID);
+    });
+  });
+
   describe("compliancePrefill", () => {
     it("maps the org profile (credential legal name, primary contact, registered address) to a compliance input", async () => {
       const { service, prisma } = setup();
