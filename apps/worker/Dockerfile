@@ -33,4 +33,11 @@ RUN pnpm install --frozen-lockfile \
 
 ENV NODE_ENV=production
 
+# The npm-distributed pnpm 11 defaults verify-deps-before-run to "install", so any `pnpm run/exec`
+# in the running container (Railway's preDeployCommand migrate) spawned `pnpm install --production`,
+# which demanded a TTY to purge the dev-dep modules dir and killed the deploy. This env var is
+# pnpm's own child-process suppression switch (it sets exactly this in extraEnv) — the image is
+# immutable at run time, never re-verify or reinstall on run.
+ENV pnpm_config_verify_deps_before_run=false
+
 CMD ["node", "worker-deploy/dist/worker/src/main.js"]
