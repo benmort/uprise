@@ -55,7 +55,11 @@ const OPEN_ROUTES = new Set<string>([
   "EventsController#dispatchDueReminders", // cron sweep (Bearer CRON_SECRET)
   "EventsController#dispatchDueRemindersGet", // cron sweep (GET variant)
   "CallsController#reconcile", // stale-call reconciliation sweep (cron; inline super-admin check)
-  "AutodialerController#dispatchDue", // dial-engine cron tick (Bearer CRON_SECRET; inline super-admin check)
+  // Dial-engine cron tick (Bearer CRON_SECRET; inline super-admin check for any user session).
+  // Keyed to AutodialerOpsController: the routes that live at /autodialer/* were split out of
+  // AutodialerController into their own class, and this allowlist key kept the old name — which
+  // is precisely the gap this guardrail exists to catch, so it failed until renamed.
+  "AutodialerOpsController#dispatchDue",
   // Error intake from the Next apps' error boundaries (basic-auth allowlisted). Open on
   // purpose: the errors most worth capturing are the ones where auth failed or the app
   // never finished booting, so a gate here would blind us to exactly those. Write-only –
