@@ -97,7 +97,11 @@ jobs:
         project: ${{ github.event_name == 'pull_request' && fromJSON('["chromium"]') || fromJSON('["chromium","firefox","webkit"]') }}
     services:
       postgres:
-        image: postgres:16
+        # PostGIS, not plain postgres: the init migration opens with
+        # `CREATE EXTENSION IF NOT EXISTS postgis` (geo/turf boundaries), and on the stock
+        # image that fails with 0A000 "extension postgis is not available" — killing the
+        # whole e2e job at "Prepare database" before a browser ever launches.
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
