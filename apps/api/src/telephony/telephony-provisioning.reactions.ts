@@ -62,5 +62,19 @@ export function buildTelephonyProvisioningReactions(deps: {
         await provisioning.stepActivate(runId(event));
       },
     },
+    /**
+     * The both-numbers requirement: an organisation needs a mobile to text from and a
+     * local to call from, so a completed mobile run starts the local run itself rather
+     * than waiting for somebody to remember. The service holds every guard (idempotency,
+     * opt-out, and the one-way mobile → local edge that terminates the chain) and never
+     * throws – a failed chain must leave the first number usable.
+     */
+    {
+      trigger: "telephony.provisioning.activated",
+      emits: ["telephony.provisioning.chained", "telephony.provisioning.requested"],
+      async handle(event) {
+        await provisioning.maybeChainComplementaryRun(runId(event));
+      },
+    },
   ];
 }

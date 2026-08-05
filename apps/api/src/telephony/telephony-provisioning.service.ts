@@ -50,8 +50,27 @@ export type StartRunInput = {
   friendlyName?: string;
   /** "mobile" (SMS, historical default) or "local" (voice caller-id capable). */
   numberType?: "mobile" | "local";
+  /**
+   * Chain a run for the complementary class when this one completes (default true) –
+   * an organisation needs a mobile to text and a local to call. Pass false to request a
+   * single class deliberately: an existing tenant that only wants SMS, or a test run.
+   */
+  chainComplementary?: boolean;
   complianceInput: ComplianceInput;
   requestedById?: string | null;
+};
+
+/**
+ * The one and only chain edge, and the reason the chain terminates.
+ *
+ * A mobile run (SMS) pulls a local run (voice) behind it; a local run has NO successor,
+ * so the chain is a single directed edge that cannot cycle even if every other guard were
+ * removed. Do NOT rewrite this as a symmetric "the other class" lookup – that would let a
+ * completing local run start a mobile run, and the two would chase each other forever.
+ */
+const CHAIN_SUCCESSOR: Readonly<Record<"mobile" | "local", "local" | null>> = {
+  mobile: "local",
+  local: null,
 };
 
 /** Entry event that drives each state's step — re-emitted on retry. */
@@ -305,6 +324,21 @@ export class TelephonyProvisioningService {
     return run.numberType === "local" ? "local" : "mobile";
   }
 
+  /**
+   * Match a number's regulation class. `numberType` decides it, full stop.
+   *
+   * An earlier form ORed the "+614" prefix in as a "fallback for legacy rows". That was
+   * wrong twice over: the column is NOT NULL with a default and the migration back-fills
+   * every pre-existing row from that same prefix, so no row can lack a class – and where
+   * the two ever disagreed the OR matched BOTH arms, which is the exact opposite of
+   * treating the stored class as authoritative. A number explicitly recorded as local must
+   * never satisfy a mobile reuse query, or a mobile run inherits a local bundle and buys a
+   * number it cannot text from.
+   */
+  private numberClassMatch(type: "mobile" | "local"): Prisma.TelephonyPhoneNumberWhereInput[] {
+    return [{ numberType: type }];
+  }
+
   /** Org KYC → a best-effort ComplianceInput prefill (empty strings where unknown). */
   async compliancePrefill(tenantId: string): Promise<ComplianceInput> {
     const profile = await this.prisma.orgProfile.findFirst({
@@ -369,6 +403,7 @@ export class TelephonyProvisioningService {
           accountId,
           status: S.REQUESTED,
           numberType: input.numberType === "local" ? "local" : "mobile",
+          chainComplementary: input.chainComplementary !== false,
           complianceInput: input.complianceInput as unknown as Prisma.InputJsonValue,
           requestedById: input.requestedById ?? null,
         },
@@ -575,7 +610,7 @@ export class TelephonyProvisioningService {
       const creds = await this.accountCreds(run.accountId);
       const input = this.complianceInputOf(run);
 
-      // Reuse: a prior number of this tenant with an approved bundle — but only of
+      // Reuse: a prior number of this tenant with an approved bundle – but only of
       // the SAME regulation class (a mobile bundle cannot purchase a local number).
       const wantType = this.runNumberType(run);
       const prior = await this.prisma.telephonyPhoneNumber.findFirst({
@@ -584,7 +619,7 @@ export class TelephonyProvisioningService {
           accountId: run.accountId,
           bundleSid: { not: null },
           addressSid: { not: null },
-          phoneNumberE164: wantType === "mobile" ? { startsWith: "+614" } : { not: { startsWith: "+614" } },
+          OR: this.numberClassMatch(wantType),
         },
         orderBy: { createdAt: "desc" },
       });
@@ -793,8 +828,15 @@ export class TelephonyProvisioningService {
               phoneNumberSid: purchased.phoneNumberSid,
               bundleSid,
               addressSid,
+              // The regulation class this bundle was approved under, recorded rather than
+              // re-guessed from the prefix later – it is what future bundle reuse matches on.
+              numberType,
               // Local numbers are the voice caller-id ("transactional"); mobiles stay SMS ("marketing").
-              purpose: numberType === "local" ? "transactional" : "marketing",
+              // SendPurpose values are all MESSAGING purposes. A local number is voice-only
+              // in Australia, so labelling it "transactional" made it the tenant's SMS sender
+              // and every transactional text would have failed at Twilio. "voice" matches no
+              // SendPurpose, so the resolver can never select it for a send.
+              purpose: numberType === "local" ? "voice" : "marketing",
               status: TelephonyNumberStatus.PENDING,
             },
           });
@@ -861,6 +903,136 @@ export class TelephonyProvisioningService {
       });
       this.senderResolver.invalidate(run.tenantId);
     });
+  }
+
+  /**
+   * Terminal success (ACTIVE) → start the run for the complementary class, so ONE
+   * provisioning process yields both of an organisation's numbers: a mobile to text
+   * from and a local to call from. Driven by the `activated` reaction, not a loop, so
+   * the second run walks the same guarded FSM and shows up in the same timelines.
+   *
+   * Guards, in order – any one of them stops the chain:
+   *  1. the source run is not ACTIVE (a stale or replayed event);
+   *  2. its class has no successor (`CHAIN_SUCCESSOR.local === null` – this is what
+   *     terminates the chain: a completing local run starts nothing);
+   *  3. the run opted out (`chainComplementary === false`, which every chained run is);
+   *  4. the tenant already holds a live number of the target class;
+   *  5. a run of the target class already exists for this tenant – in flight, finished
+   *     or failed. A failed one is retried explicitly, never silently re-chained.
+   *
+   * The whole body is caught, never thrown: by this point the first number is ACTIVE and
+   * usable, and SMS – the primary capability – must not be held hostage to the voice half.
+   */
+  async maybeChainComplementaryRun(
+    runId: string,
+  ): Promise<{ chained: boolean; reason: string; runId?: string }> {
+    try {
+      const source = await this.prisma.telephonyProvisioningRun.findUnique({ where: { id: runId } });
+      if (!source) return { chained: false, reason: "run-missing" };
+      if (source.status !== S.ACTIVE) return { chained: false, reason: "not-terminal" };
+
+      const nextType = CHAIN_SUCCESSOR[this.runNumberType(source)];
+      if (!nextType) return { chained: false, reason: "chain-terminates" };
+      if (source.chainComplementary === false) return { chained: false, reason: "opted-out" };
+
+      const tenantId = source.tenantId;
+      const held = await this.prisma.telephonyPhoneNumber.findFirst({
+        where: {
+          tenantId,
+          status: { not: TelephonyNumberStatus.RELEASED },
+          OR: this.numberClassMatch(nextType),
+        },
+      });
+      if (held) return { chained: false, reason: "number-exists" };
+
+      // Compliance details the operator already supplied, minus the source run's own
+      // bundle-reuse bookkeeping – the chained run reuses a bundle only of its own class.
+      const { reuse: _sourceReuse, ...complianceInput } = this.complianceInputOf(source);
+
+      const created = await this.prisma.$transaction(async (tx) => {
+        // Lock the source run so two deliveries of the same terminal event serialise
+        // here; the re-read below is what makes the second one a no-op.
+        await tx.$queryRaw`SELECT "id" FROM "telephony"."TelephonyProvisioningRun" WHERE "id" = ${runId} FOR UPDATE`;
+        const existingRun = await tx.telephonyProvisioningRun.findFirst({
+          where: { tenantId, numberType: nextType },
+        });
+        if (existingRun) return null;
+
+        const run = await tx.telephonyProvisioningRun.create({
+          data: {
+            tenantId,
+            campaignId: source.campaignId,
+            // The subaccount the first run created; stepCreateSubaccount reuses it.
+            accountId: source.accountId,
+            status: S.REQUESTED,
+            numberType: nextType,
+            // Belt to the CHAIN_SUCCESSOR braces: a chained run never chains again.
+            chainComplementary: false,
+            complianceInput: complianceInput as unknown as Prisma.InputJsonValue,
+            requestedById: source.requestedById,
+          },
+        });
+        await tx.telephonyProvisioningStep.create({
+          data: {
+            runId: run.id,
+            tenantId,
+            step: "run.requested",
+            status: TelephonyStepStatus.SUCCEEDED,
+            detail: {
+              mode: "SUBACCOUNT",
+              campaignId: source.campaignId,
+              numberType: nextType,
+              chainedFromRunId: runId,
+            } as Prisma.InputJsonValue,
+          },
+        });
+        // The SOURCE run's timeline says why a second run appeared, so it does not read
+        // as an operator double-click.
+        await tx.telephonyProvisioningStep.create({
+          data: {
+            runId,
+            tenantId,
+            step: "chain.complementary",
+            status: TelephonyStepStatus.SUCCEEDED,
+            detail: { chainedRunId: run.id, numberType: nextType } as Prisma.InputJsonValue,
+          },
+        });
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "telephony.provisioning.chained",
+          aggregateId: run.id,
+          payload: {
+            runId: run.id,
+            tenantId,
+            sourceRunId: runId,
+            numberType: nextType,
+            sourceNumberType: this.runNumberType(source),
+          },
+        });
+        await this.outbox.append(tx, {
+          tenantId,
+          eventType: "telephony.provisioning.requested",
+          aggregateId: run.id,
+          payload: { runId: run.id, tenantId, campaignId: source.campaignId, mode: "SUBACCOUNT" },
+        });
+        return run;
+      });
+      if (!created) return { chained: false, reason: "run-exists" };
+
+      this.logger.log("telephony", "Chained complementary provisioning run", {
+        sourceRunId: runId,
+        runId: created.id,
+        numberType: nextType,
+      });
+      return { chained: true, reason: "chained", runId: created.id };
+    } catch (err) {
+      // Isolated by design: the first number is live regardless of what happened here.
+      this.logger.error("telephony", "Complementary provisioning chain failed", undefined, {
+        runId,
+        error: String(err instanceof Error ? err.message : err),
+      });
+      return { chained: false, reason: "error" };
+    }
   }
 
   // ── reads + number management ───────────────────────────────────────

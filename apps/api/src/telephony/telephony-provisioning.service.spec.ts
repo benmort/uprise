@@ -32,6 +32,8 @@ function makeRun(overrides: Record<string, unknown> = {}) {
     phoneNumberId: null as string | null,
     resumeStatus: null as (typeof S)[keyof typeof S] | null,
     numberType: "mobile" as string,
+    chainComplementary: true as boolean,
+    requestedById: null as string | null,
     lastError: null as string | null,
     complianceInput: {
       email: "compliance@example.org",
@@ -70,15 +72,36 @@ function makeNumber(overrides: Record<string, unknown> = {}) {
     phoneNumberE164: "+61400000000",
     bundleSid: "BUprior",
     addressSid: "ADprior",
+    numberType: "mobile" as string | null,
     status: TelephonyNumberStatus.PENDING,
     ...overrides,
   };
+}
+
+/**
+ * Evaluate the class-match OR the service builds against a candidate row. The where
+ * clause IS the reuse behaviour (prisma is mocked), so asserting it against real rows
+ * beats echoing its shape back.
+ */
+type ClassClause = {
+  numberType?: string;
+  phoneNumberE164?: { startsWith?: string; not?: { startsWith: string } };
+};
+function matchesClass(or: ClassClause[], row: { numberType?: string | null; phoneNumberE164: string }) {
+  return or.some((clause) => {
+    if (clause.numberType !== undefined) return row.numberType === clause.numberType;
+    const prefix = clause.phoneNumberE164;
+    if (prefix?.startsWith !== undefined) return row.phoneNumberE164.startsWith(prefix.startsWith);
+    if (prefix?.not?.startsWith !== undefined) return !row.phoneNumberE164.startsWith(prefix.not.startsWith);
+    return false;
+  });
 }
 
 function setup() {
   const prisma: any = {
     telephonyProvisioningRun: {
       findUnique: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(async (args: any) => ({ id: RUN_ID, ...args.data })),
       update: jest.fn(async (args: any) => ({ id: RUN_ID, ...args.data })),
@@ -283,18 +306,40 @@ describe("TelephonyProvisioningService steps", () => {
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.compliance-approved"));
     });
 
-    it("bundle reuse is scoped to the run's regulation class (a mobile bundle can't buy a local number)", async () => {
+    /** The OR the reuse query was called with, for `matchesClass`. */
+    const classClauseOf = (prisma: any): ClassClause[] =>
+      prisma.telephonyPhoneNumber.findFirst.mock.calls[0][0].where.OR;
+
+    it("bundle reuse for a local run matches ONLY the stored local class", async () => {
       const { service, prisma } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(makeRun({ status: S.SUBACCOUNT_CREATED, accountId: ACCOUNT_ID, numberType: "local" }));
       prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
 
       await service.stepDraftCompliance(RUN_ID);
 
-      expect(prisma.telephonyPhoneNumber.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ phoneNumberE164: { not: { startsWith: "+614" } } }),
-        }),
-      );
+      const or = classClauseOf(prisma);
+      // The stored class decides, full stop.
+      expect(matchesClass(or, { numberType: "local", phoneNumberE164: "+61255501234" })).toBe(true);
+      // A mobile bundle can never buy a local number.
+      expect(matchesClass(or, { numberType: "mobile", phoneNumberE164: "+61400000000" })).toBe(false);
+      // A mobile-LOOKING number explicitly recorded as local is still local. An earlier form
+      // ORed the "+614" prefix in and matched both arms here, handing a mobile run a local
+      // bundle - the precise opposite of treating the stored class as authoritative.
+      expect(matchesClass(or, { numberType: "mobile", phoneNumberE164: "+61255501234" })).toBe(false);
+    });
+
+    it("bundle reuse for a mobile run matches ONLY the stored mobile class", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(draftRun());
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+
+      await service.stepDraftCompliance(RUN_ID);
+
+      const or = classClauseOf(prisma);
+      expect(matchesClass(or, { numberType: "mobile", phoneNumberE164: "+61400000000" })).toBe(true);
+      expect(matchesClass(or, { numberType: "local", phoneNumberE164: "+61255501234" })).toBe(false);
+      // A local number that happens to carry a mobile prefix must NOT satisfy a mobile run.
+      expect(matchesClass(or, { numberType: "local", phoneNumberE164: "+61400000000" })).toBe(false);
     });
 
     it('passes the run\'s numberType through to the Twilio bundle ("local" regulation)', async () => {
@@ -448,7 +493,9 @@ describe("TelephonyProvisioningService steps", () => {
           data: expect.objectContaining({
             status: TelephonyNumberStatus.PENDING,
             phoneNumberE164: "+61400000000",
-            // A mobile number is SMS-only — never the voice caller id.
+            // The regulation class is recorded, not left to be re-guessed from the prefix.
+            numberType: "mobile",
+            // A mobile number is SMS-only – never the voice caller id.
             purpose: "marketing",
           }),
         }),
@@ -457,7 +504,7 @@ describe("TelephonyProvisioningService steps", () => {
       expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.number-purchased"));
     });
 
-    it('a "local" run searches local inventory and lands the number purpose "transactional" (voice)', async () => {
+    it('a "local" run searches local inventory and lands a voice-purpose number, never an SMS one', async () => {
       const { service, prisma, twilio } = setup();
       prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun({ numberType: "local" }));
       prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
@@ -469,8 +516,22 @@ describe("TelephonyProvisioningService steps", () => {
       expect(twilio.findAvailableAuNumber).toHaveBeenCalledWith(expect.anything(), "local");
       expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ phoneNumberE164: "+61255501234", purpose: "transactional" }),
+          data: expect.objectContaining({ phoneNumberE164: "+61255501234", purpose: "voice" }),
         }),
+      );
+    });
+
+    it("records the run's regulation class on the purchased number row (stored class, not a prefix guess)", async () => {
+      const { service, prisma, twilio } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(approvedRun({ numberType: "local" }));
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      twilio.findAvailableAuNumber.mockResolvedValue("+61255501234");
+      twilio.purchaseNumber.mockResolvedValue({ phoneNumberSid: "PN" + "8".repeat(32), phoneNumberE164: "+61255501234" });
+
+      await service.stepPurchaseNumber(RUN_ID);
+
+      expect(prisma.telephonyPhoneNumber.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ numberType: "local" }) }),
       );
     });
 
@@ -576,6 +637,173 @@ describe("TelephonyProvisioningService steps", () => {
       expect(senderResolver.invalidate).not.toHaveBeenCalled();
     });
   });
+
+  // One provisioning process must yield BOTH of an organisation's numbers: a mobile to
+  // text from and a local to call from.
+  describe("maybeChainComplementaryRun", () => {
+    const CHAINED_RUN_ID = "run-2";
+    const activeRun = (overrides: Record<string, unknown> = {}) =>
+      makeRun({
+        status: S.ACTIVE,
+        accountId: ACCOUNT_ID,
+        phoneNumberId: NUMBER_ID,
+        requestedById: "user-1",
+        ...overrides,
+      });
+
+    /** Make the chained run come back with its own id, so the events are distinguishable. */
+    const chainCreates = (prisma: any) =>
+      prisma.telephonyProvisioningRun.create.mockImplementation(async (args: any) => ({
+        id: CHAINED_RUN_ID,
+        ...args.data,
+      }));
+
+    it("a completed mobile run starts a local run when the tenant has no local number", async () => {
+      const { service, prisma, outbox } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        activeRun({
+          complianceInput: {
+            ...makeRun().complianceInput,
+            // Source-run bookkeeping – the local run must not inherit a mobile bundle.
+            reuse: { bundleSid: "BUprior", addressSid: "ADprior", sourceNumberId: NUMBER_ID },
+          },
+        }),
+      );
+      chainCreates(prisma);
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: true, reason: "chained", runId: CHAINED_RUN_ID });
+      expect(prisma.telephonyProvisioningRun.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            tenantId: TENANT_ID,
+            status: S.REQUESTED,
+            numberType: "local",
+            // The chained run never chains again.
+            chainComplementary: false,
+            // Subaccount already created by the first run.
+            accountId: ACCOUNT_ID,
+            requestedById: "user-1",
+          }),
+        }),
+      );
+      // Compliance details are carried over so the operator supplies them once…
+      const created = prisma.telephonyProvisioningRun.create.mock.calls[0][0].data;
+      expect(created.complianceInput).toEqual(
+        expect.objectContaining({ legalName: "Legal Co", email: "compliance@example.org" }),
+      );
+      // …but the mobile bundle's reuse bookkeeping is dropped.
+      expect(created.complianceInput.reuse).toBeUndefined();
+      // The second run reads as a continuation, not a duplicate.
+      expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.chained"));
+      expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.requested"));
+      expect(prisma.telephonyProvisioningStep.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ runId: RUN_ID, step: "chain.complementary" }) }),
+      );
+    });
+
+    it("does NOT chain when the tenant already holds a local number", async () => {
+      const { service, prisma, outbox } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun());
+      prisma.telephonyPhoneNumber.findFirst.mockResolvedValue(
+        makeNumber({ id: "num-2", numberType: "local", phoneNumberE164: "+61255501234" }),
+      );
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: false, reason: "number-exists" });
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      expect(outbox.append).not.toHaveBeenCalled();
+    });
+
+    it("does NOT chain when a local run is already in flight", async () => {
+      const { service, prisma, outbox } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun());
+      prisma.telephonyProvisioningRun.findFirst.mockResolvedValue(
+        makeRun({ id: CHAINED_RUN_ID, numberType: "local", status: S.COMPLIANCE_SUBMITTED }),
+      );
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: false, reason: "run-exists" });
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      expect(outbox.append).not.toHaveBeenCalled();
+    });
+
+    it("a completed LOCAL run starts nothing – the chain terminates", async () => {
+      const { service, prisma, outbox } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun({ numberType: "local" }));
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: false, reason: "chain-terminates" });
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      expect(outbox.append).not.toHaveBeenCalled();
+    });
+
+    it("the opt-out (chainComplementary false) suppresses the chain", async () => {
+      const { service, prisma, outbox } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun({ chainComplementary: false }));
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: false, reason: "opted-out" });
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+      expect(outbox.append).not.toHaveBeenCalled();
+    });
+
+    it("ignores a replayed event for a run that is not (yet) ACTIVE", async () => {
+      const { service, prisma } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun({ status: S.NUMBER_PURCHASED }));
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: false, reason: "not-terminal" });
+      expect(prisma.telephonyProvisioningRun.create).not.toHaveBeenCalled();
+    });
+
+    it("swallows and logs a chain failure rather than throwing – SMS is already live", async () => {
+      const { service, prisma, logger } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(activeRun());
+      prisma.$transaction.mockRejectedValue(new Error("db gone"));
+
+      const result = await service.maybeChainComplementaryRun(RUN_ID);
+
+      expect(result).toEqual({ chained: false, reason: "error" });
+      expect(logger.error).toHaveBeenCalled();
+    });
+
+    it("a FAILED local run leaves the mobile number untouched (SMS is not held hostage)", async () => {
+      const { service, prisma, twilio, outbox } = setup();
+      prisma.telephonyProvisioningRun.findUnique.mockResolvedValue(
+        makeRun({
+          id: CHAINED_RUN_ID,
+          status: S.COMPLIANCE_APPROVED,
+          numberType: "local",
+          chainComplementary: false,
+          accountId: ACCOUNT_ID,
+          bundleSid: "BUlocal",
+          addressSid: "ADlocal",
+        }),
+      );
+      prisma.telephonyAccount.findUnique.mockResolvedValue(makeAccount());
+      twilio.findAvailableAuNumber.mockRejectedValue(new Error("no local inventory"));
+
+      await service.stepPurchaseNumber(CHAINED_RUN_ID);
+
+      expect(prisma.telephonyProvisioningRun.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: CHAINED_RUN_ID },
+          data: expect.objectContaining({ status: S.FAILED, resumeStatus: S.COMPLIANCE_APPROVED }),
+        }),
+      );
+      expect(outbox.append).toHaveBeenCalledWith(prisma, emitOf("telephony.provisioning.failed"));
+      // The mobile number and the account are never written by the local run's failure.
+      expect(prisma.telephonyPhoneNumber.update).not.toHaveBeenCalled();
+      expect(prisma.telephonyAccount.update).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("TelephonyProvisioningService lifecycle + reads", () => {
@@ -641,6 +869,29 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       });
       expect(prisma.telephonyProvisioningRun.create).toHaveBeenLastCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ numberType: "mobile" }) }),
+      );
+    });
+
+    it("chains the complementary class by default, and records an explicit opt-out", async () => {
+      const { service, prisma } = setup();
+
+      await service.startRun({
+        tenantId: TENANT_ID,
+        mode: "SUBACCOUNT",
+        complianceInput: makeRun().complianceInput as any,
+      });
+      expect(prisma.telephonyProvisioningRun.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ chainComplementary: true }) }),
+      );
+
+      await service.startRun({
+        tenantId: TENANT_ID,
+        mode: "SUBACCOUNT",
+        chainComplementary: false,
+        complianceInput: makeRun().complianceInput as any,
+      });
+      expect(prisma.telephonyProvisioningRun.create).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ chainComplementary: false }) }),
       );
     });
 

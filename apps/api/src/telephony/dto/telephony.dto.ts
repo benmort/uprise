@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import {
+  IsBoolean,
   IsEmail,
   IsIn,
   IsNotEmpty,
@@ -74,6 +75,15 @@ export class StartProvisioningRunDto {
   @IsOptional()
   @IsIn(["mobile", "local"])
   numberType?: "mobile" | "local";
+
+  /**
+   * Also provision the complementary class when this run completes (default true) –
+   * an organisation needs both a mobile to text and a local to call. Send false to
+   * request this class only.
+   */
+  @IsOptional()
+  @IsBoolean()
+  chainComplementary?: boolean;
 
   @IsOptional()
   @IsString()

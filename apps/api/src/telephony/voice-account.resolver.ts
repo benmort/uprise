@@ -54,6 +54,14 @@ export class VoiceAccountResolver {
     return `${base}/api/v1/autodialer/ivr/session-answer`;
   }
 
+  /** Status callback for calls the dialler app places (same fallback chain as placeCall). */
+  private voiceStatusCallbackUrl(): string {
+    const explicit = this.config.get<string>("TWILIO_VOICE_STATUS_CALLBACK_URL", "").trim();
+    if (explicit) return explicit;
+    const base = this.config.get<string>("API_BASE_URL", "").trim().replace(/\/+$/, "");
+    return `${base}/api/v1/voice-status-callback`;
+  }
+
   private platformCallerId(): string {
     // AU mobiles are never a voice caller ID — a +614 platform number yields ""
     // (the "no voice number" marker voiceToken turns into VOICE_NUMBER_REQUIRED).
@@ -181,7 +189,12 @@ export class VoiceAccountResolver {
       row = await this.prisma.platformVoiceApp.findUnique({ where: { accountSid } });
     }
     if (row?.dialerTwimlAppSid) return row.dialerTwimlAppSid;
-    const sid = await this.twilio.createTwimlApp({ accountSid, authToken }, this.dialerVoiceUrl(), "uprise-dialer");
+    const sid = await this.twilio.createTwimlApp(
+      { accountSid, authToken },
+      this.dialerVoiceUrl(),
+      "uprise-dialer",
+      this.voiceStatusCallbackUrl(),
+    );
     await this.prisma.platformVoiceApp.update({
       where: { accountSid },
       data: { dialerTwimlAppSid: sid },
@@ -196,7 +209,12 @@ export class VoiceAccountResolver {
     });
     const settings = (account?.settings ?? {}) as VoiceSettings & Record<string, unknown>;
     if (settings.voiceDialerTwimlAppSid) return settings.voiceDialerTwimlAppSid;
-    const sid = await this.twilio.createTwimlApp(sender, this.dialerVoiceUrl(), "uprise-dialer");
+    const sid = await this.twilio.createTwimlApp(
+      sender,
+      this.dialerVoiceUrl(),
+      "uprise-dialer",
+      this.voiceStatusCallbackUrl(),
+    );
     if (account) {
       await this.prisma.telephonyAccount.update({
         where: { id: account.id },

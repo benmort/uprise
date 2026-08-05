@@ -7,6 +7,18 @@ import type { ResolvedSender } from "../twilio/twilio.service";
 
 export type SendPurpose = "transactional" | "marketing" | "whatsapp";
 
+/**
+ * Can this number send SMS? In Australia only a mobile (+614) can; a local number
+ * (+612/3/7/8) is voice-only. `numberType` is authoritative – it records the regulation
+ * class the number was provisioned under. The prefix is consulted ONLY when the class is
+ * absent, i.e. a row written before that column existed; a stored class must never be
+ * overridden by a guess about its prefix.
+ */
+function isSmsCapable(n: { numberType?: string | null; phoneNumberE164: string }): boolean {
+  if (n.numberType) return n.numberType === "mobile";
+  return n.phoneNumberE164.startsWith("+614");
+}
+
 export type SenderContext = {
   tenantId: string;
   campaignId?: string | null;
@@ -126,9 +138,16 @@ export class TelephonySenderResolver {
   }
 
   private async lookup(ctx: SenderContext): Promise<ResolvedSender | undefined> {
-    const numbers = await this.prisma.telephonyPhoneNumber.findMany({
+    const all = await this.prisma.telephonyPhoneNumber.findMany({
       where: { tenantId: ctx.tenantId, status: "ACTIVE" },
     });
+    // Every SendPurpose is a MESSAGING purpose, and an Australian local number cannot send
+    // SMS – only a mobile (+614) can. A tenant now holds both (a mobile to text from, a local
+    // to call from), so resolving a send must never consider the voice number: without this
+    // filter the local number could become the tenant's SMS sender and every text would fail
+    // at Twilio. `numberType` is the authoritative class; the prefix is the fallback for any
+    // row written before that column existed.
+    const numbers = all.filter((n) => isSmsCapable(n));
     if (numbers.length === 0) return undefined;
 
     const campaignScoped = ctx.campaignId

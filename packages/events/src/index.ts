@@ -76,6 +76,7 @@ export const EVENT_TYPES = {
   TELEPHONY_PROVISIONING_ACTIVATED: "telephony.provisioning.activated",
   TELEPHONY_PROVISIONING_FAILED: "telephony.provisioning.failed",
   TELEPHONY_PROVISIONING_RETRY_REQUESTED: "telephony.provisioning.retry-requested",
+  TELEPHONY_PROVISIONING_CHAINED: "telephony.provisioning.chained",
   EMAIL_PROVISIONING_REQUESTED: "email.provisioning.requested",
   EMAIL_PROVISIONING_SUBUSER_CREATED: "email.provisioning.subuser-created",
   EMAIL_PROVISIONING_DOMAIN_AUTH_CREATED: "email.provisioning.domain-auth-created",
@@ -335,6 +336,16 @@ export interface DomainEventMap {
   "telephony.provisioning.activated": { runId: string; tenantId: string; phoneNumberE164: string };
   "telephony.provisioning.failed": { runId: string; tenantId: string; step: string; error: string };
   "telephony.provisioning.retry-requested": { runId: string; tenantId: string; resumeStatus: string };
+  // A completed run automatically started a run for the complementary number class
+  // (mobile for SMS → local for voice), so a second run in the timeline reads as a
+  // continuation rather than a duplicate. `runId` is the NEW run.
+  "telephony.provisioning.chained": {
+    runId: string;
+    tenantId: string;
+    sourceRunId: string;
+    numberType: string;
+    sourceNumberType: string;
+  };
   "email.provisioning.requested": { runId: string; tenantId: string; campaignId?: string | null; mode: string; kind: string };
   "email.provisioning.subuser-created": {
     runId: string;

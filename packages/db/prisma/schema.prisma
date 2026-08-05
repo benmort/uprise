@@ -2512,6 +2512,10 @@ model TelephonyPhoneNumber {
   addressSid      String?
   nickname        String?               // human label shown in the from-number selector
   purpose         String                @default("marketing")
+  // Regulation class the number was provisioned under: "mobile" (SMS) or "local"
+  // (voice caller-id capable). Authoritative for bundle reuse – a Twilio bundle is
+  // class-specific, and the +614 prefix is only a fallback guess for legacy rows.
+  numberType      String                @default("mobile")
   status          TelephonyNumberStatus @default(PENDING)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
@@ -2532,6 +2536,11 @@ model TelephonyProvisioningRun {
   resumeStatus    TelephonyProvisioningStatus?
   // "mobile" (SMS-capable, the historical default) or "local" (voice caller-id capable).
   numberType      String                    @default("mobile")
+  // Whether completing this run should chain a run for the complementary class
+  // (mobile → local). Default true: an organisation needs a mobile to text and a
+  // local to call, so one provisioning process yields both. Set false to request a
+  // single class deliberately; the chained run itself is always created with false.
+  chainComplementary Boolean                @default(true)
   complianceInput Json
   documents       Json?
   bundleSid       String?                      @unique

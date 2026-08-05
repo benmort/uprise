@@ -224,6 +224,9 @@ describe("VoiceAccountResolver.resolveDialerForTenant", () => {
       { accountSid: "AC_platform", authToken: "platform-token" },
       "https://api.test/api/v1/autodialer/ivr/session-answer",
       "uprise-dialer",
+      // Without the status callback, the widget's caller-leg Call row would
+      // stick at IN_PROGRESS forever (live-smoke finding).
+      "https://api.test/api/v1/voice-status-callback",
     );
     expect(prisma.platformVoiceApp.update).toHaveBeenCalledWith({
       where: { accountSid: "AC_platform" },

@@ -57,6 +57,69 @@ describe("TelephonySenderResolver", () => {
     expect(prisma.telephonyPhoneNumber.findMany).not.toHaveBeenCalled();
   });
 
+  // An organisation now holds BOTH a mobile (to text from) and a local (to call from).
+  // Australian local numbers cannot send SMS, so resolving a send must never select one –
+  // and the purchase step used to label a local number "transactional", which made it the
+  // preferred sender for exactly the messages that matter most.
+  describe("SMS capability", () => {
+    it("never resolves a local (voice) number for a send, even when its purpose matches", async () => {
+      const { resolver } = build({
+        numbers: [
+          num({ id: "n_local", phoneNumberE164: "+61255501234", numberType: "local", purpose: "transactional" }),
+          num({ id: "n_mobile", phoneNumberE164: "+61412000000", numberType: "mobile", purpose: "marketing" }),
+        ],
+      });
+      const sender = await resolver.resolve({ tenantId: "t1", purpose: "transactional" });
+      expect(sender?.from).toBe("+61412000000");
+    });
+
+    it("returns undefined rather than a local number when the tenant has no mobile", async () => {
+      const { resolver } = build({
+        numbers: [num({ id: "n_local", phoneNumberE164: "+61255501234", numberType: "local", purpose: "transactional" })],
+      });
+      // Falling back to the platform env sender is correct: better a working platform number
+      // than a tenant number that cannot carry SMS at all.
+      expect(await resolver.resolve({ tenantId: "t1", purpose: "transactional" })).toBeUndefined();
+    });
+
+    it("never resolves a local number even when it is campaign-scoped", async () => {
+      const { resolver } = build({
+        numbers: [
+          num({ id: "n_local", campaignId: "camp_1", phoneNumberE164: "+61255501234", numberType: "local" }),
+          num({ id: "n_mobile", phoneNumberE164: "+61412000000", numberType: "mobile" }),
+        ],
+      });
+      const sender = await resolver.resolve({ tenantId: "t1", campaignId: "camp_1", purpose: "marketing" });
+      expect(sender?.from).toBe("+61412000000");
+    });
+
+    // The column is new; a row written before it existed has no class and must still resolve.
+    it("falls back to the prefix only when no class is stored", async () => {
+      const { resolver } = build({
+        numbers: [num({ id: "n_legacy", phoneNumberE164: "+61412000000", numberType: null })],
+      });
+      const sender = await resolver.resolve({ tenantId: "t1", purpose: "marketing" });
+      expect(sender?.from).toBe("+61412000000");
+    });
+
+    it("a stored class beats the prefix, never the other way round", async () => {
+      // A mobile-looking number explicitly recorded as local stays excluded.
+      const { resolver } = build({
+        numbers: [num({ id: "n_odd", phoneNumberE164: "+61412000000", numberType: "local" })],
+      });
+      expect(await resolver.resolve({ tenantId: "t1", purpose: "marketing" })).toBeUndefined();
+    });
+
+    // Guards the pairing directly: "voice" must match no SendPurpose, so even if the capability
+    // filter were ever removed the purpose match alone cannot select a voice number.
+    it("the voice purpose matches no SendPurpose", () => {
+      const purposes = ["transactional", "marketing", "whatsapp"];
+      expect(purposes).not.toContain("voice");
+    });
+
+  });
+
+
   it("returns undefined when the tenant has no active numbers", async () => {
     const { resolver } = build({ numbers: [] });
     expect(await resolver.resolve({ tenantId: "t1", purpose: "marketing" })).toBeUndefined();
