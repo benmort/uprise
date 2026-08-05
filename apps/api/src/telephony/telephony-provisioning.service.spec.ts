@@ -2124,6 +2124,195 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
     });
   });
 
+  describe("syncPrivatePool", () => {
+    const POOL_SID = "AC" + "b".repeat(32);
+    const POOL_ENV = {
+      PRIVATE_TELEPHONY_TENANT_SLUG: "common-threads",
+      PRIVATE_TELEPHONY_ACCOUNT_SID: POOL_SID,
+      PRIVATE_TELEPHONY_AUTH_TOKEN: "pool-token",
+      PRIVATE_TELEPHONY_REGION: "au1",
+      PRIVATE_TELEPHONY_EDGE: "sydney",
+    };
+    const configurePool = (over: Record<string, string> = {}) => {
+      Object.assign(ENV, POOL_ENV, over);
+    };
+    // ENV is module-level and shared by every setup(), so a pool-configured test must not
+    // leak into the rest of the file – every other case asserts on the UNconfigured default.
+    afterEach(() => {
+      for (const key of Object.keys(POOL_ENV)) delete ENV[key];
+    });
+
+    /**
+     * `telephonyAccount.findUnique` serves BOTH halves of a sync: the pre-connect
+     * "does anyone hold this SID" check (by accountSid ⇒ nobody does) and the post-connect
+     * lookup adoption does (by id ⇒ the account just connected). Keying on the where-clause
+     * is what lets one mock answer both.
+     */
+    const poolAccountLookups = (prisma: any) => {
+      const connected = makeAccount({ mode: "BYO", accountSid: POOL_SID, region: "au1", edge: "sydney" });
+      prisma.telephonyAccount.upsert.mockResolvedValue(connected);
+      prisma.telephonyAccount.findUnique.mockImplementation(async (args: any) =>
+        args?.where?.accountSid ? null : connected,
+      );
+    };
+
+    /** Three owned mobiles, matching the real account: SMS-capable, messaging hook free. */
+    const threeOwned = () => [
+      makeOwnedNumber({ phoneNumberE164: "+61468006466", phoneNumberSid: "PN" + "1".repeat(32) }),
+      makeOwnedNumber({ phoneNumberE164: "+61468018690", phoneNumberSid: "PN" + "2".repeat(32) }),
+      makeOwnedNumber({ phoneNumberE164: "+61468018989", phoneNumberSid: "PN" + "3".repeat(32) }),
+    ];
+
+    it("is inert when the env vars are absent – every other tenant's state", async () => {
+      const { service, prisma, twilio } = setup();
+      await expect(service.syncPrivatePool()).resolves.toEqual({ configured: false });
+      expect(twilio.listOwnedNumbers).not.toHaveBeenCalled();
+      expect(prisma.telephonyAccount.upsert).not.toHaveBeenCalled();
+    });
+
+    // A half-filled config is a mistake, not an intention to connect: acting on it would try
+    // to reach Twilio with no token and report a credential failure for a typo.
+    it("stays inert when the config is only half-supplied", async () => {
+      const { service, twilio } = setup();
+      configurePool({ PRIVATE_TELEPHONY_AUTH_TOKEN: "" });
+      await expect(service.syncPrivatePool()).resolves.toEqual({ configured: false });
+      expect(twilio.listOwnedNumbers).not.toHaveBeenCalled();
+    });
+
+    it("connects the account and registers EVERY usable number as the pool", async () => {
+      const { service, prisma, twilio } = setup();
+      configurePool();
+      poolAccountLookups(prisma);
+      twilio.listOwnedNumbers.mockResolvedValue(threeOwned());
+      twilio.fetchOwnedNumber.mockImplementation(async (...args: any[]) =>
+        threeOwned().find((n) => n.phoneNumberSid === args[1]),
+      );
+
+      const result = await service.syncPrivatePool();
+
+      expect(result).toMatchObject({ configured: true, tenantId: TENANT_ID });
+      // The pool is the whole set – not one designated number.
+      expect((result as any).adopted).toEqual(["+61468006466", "+61468018690", "+61468018989"]);
+    });
+
+    it("drives the account regionally, from the env pair", async () => {
+      const { service, prisma, twilio } = setup();
+      configurePool();
+      poolAccountLookups(prisma);
+      twilio.listOwnedNumbers.mockResolvedValue([]);
+      await service.syncPrivatePool();
+      expect(twilio.listOwnedNumbers).toHaveBeenCalledWith(
+        expect.objectContaining({ accountSid: POOL_SID, region: "au1", edge: "sydney" }),
+      );
+    });
+
+    // Adopting a MOBILE writes its messaging hook and clears only what overrides that hook.
+    // The organisation's live voice application has to survive untouched: four of the real
+    // numbers are carrying dialler traffic on it, and taking it would break a running service.
+    it("writes only the messaging hook, leaving a live voice application alone", async () => {
+      const { service, prisma, twilio } = setup();
+      configurePool();
+      poolAccountLookups(prisma);
+      twilio.listOwnedNumbers.mockResolvedValue([makeOwnedNumber()]);
+
+      await service.syncPrivatePool();
+
+      expect(twilio.configureNumberWebhook).toHaveBeenCalledTimes(1);
+      const written = twilio.configureNumberWebhook.mock.calls[0][2];
+      expect(Object.keys(written).some((k) => k.startsWith("voice") || k === "trunkSid")).toBe(false);
+      expect(written).toEqual(expect.objectContaining({ smsApplicationSid: "", smsFallbackUrl: "" }));
+    });
+
+    // A LOCAL number in the pool is adopted as a caller ID, and its inbound voice hook is the
+    // organisation's own. `claimVoiceHook: false` is what leaves it in place – with an opt-in
+    // the sync would overwrite a working configuration.
+    it("never takes over a local number's occupied voice hook", async () => {
+      const { service, prisma, twilio } = setup();
+      configurePool();
+      poolAccountLookups(prisma);
+      const local = makeOwnedNumber({
+        phoneNumberE164: "+61300000001",
+        phoneNumberSid: "PN" + "4".repeat(32),
+      });
+      twilio.listOwnedNumbers.mockResolvedValue([local]);
+      twilio.fetchOwnedNumber.mockResolvedValue(local);
+
+      const result: any = await service.syncPrivatePool();
+
+      expect(result.adopted).toEqual(["+61300000001"]);
+      // Adoption still happened – but nothing was written to Twilio's hooks.
+      expect(twilio.configureNumberWebhook).not.toHaveBeenCalled();
+    });
+
+    // The blocked-reason branch handles a number uprise can classify as unusable. This is the
+    // OTHER failure: adoption itself throwing part-way. It must not abandon the rest either.
+    it("skips a number whose adoption throws, and still registers the rest", async () => {
+      const { service, prisma, twilio } = setup();
+      configurePool();
+      poolAccountLookups(prisma);
+      const good = makeOwnedNumber({ phoneNumberE164: "+61468018989", phoneNumberSid: "PN" + "3".repeat(32) });
+      twilio.listOwnedNumbers.mockResolvedValue([
+        makeOwnedNumber({ phoneNumberE164: "+61468006466", phoneNumberSid: "PN" + "1".repeat(32) }),
+        good,
+      ]);
+      // The first number vanishes from the account between the listing and the adoption.
+      twilio.fetchOwnedNumber.mockImplementation(async (...args: any[]) =>
+        args[1] === good.phoneNumberSid ? good : null,
+      );
+
+      const result: any = await service.syncPrivatePool();
+
+      expect(result.adopted).toEqual(["+61468018989"]);
+      expect(result.skipped).toEqual([
+        { phoneNumberE164: "+61468006466", reason: "NUMBER_NOT_ON_ACCOUNT" },
+      ]);
+    });
+
+    it("reports numbers it already holds instead of re-adopting them", async () => {
+      const { service, prisma, twilio } = setup();
+      configurePool();
+      poolAccountLookups(prisma);
+      twilio.listOwnedNumbers.mockResolvedValue([makeOwnedNumber()]);
+      prisma.telephonyPhoneNumber.findMany.mockResolvedValue([
+        { phoneNumberE164: "+61400000001", phoneNumberSid: OWNED_SID, tenantId: TENANT_ID },
+      ]);
+      const result: any = await service.syncPrivatePool();
+      expect(result.alreadyHeld).toEqual(["+61400000001"]);
+      expect(result.adopted).toEqual([]);
+    });
+
+    // A pool is a set. One member uprise has no use for is not a reason to register none of
+    // the others, so an unusable number is skipped with its reason rather than thrown.
+    it("skips an unusable number and still registers the rest", async () => {
+      const { service, prisma, twilio } = setup();
+      configurePool();
+      poolAccountLookups(prisma);
+      twilio.listOwnedNumbers.mockResolvedValue([
+        makeOwnedNumber({
+          phoneNumberE164: "+61468006466",
+          phoneNumberSid: "PN" + "1".repeat(32),
+          capabilities: { voice: true, sms: false, mms: false },
+        }),
+        makeOwnedNumber({ phoneNumberE164: "+61468018989", phoneNumberSid: "PN" + "3".repeat(32) }),
+      ]);
+      twilio.fetchOwnedNumber.mockImplementation(async () =>
+        makeOwnedNumber({ phoneNumberE164: "+61468018989", phoneNumberSid: "PN" + "3".repeat(32) }),
+      );
+
+      const result: any = await service.syncPrivatePool();
+
+      expect(result.adopted).toEqual(["+61468018989"]);
+      expect(result.skipped).toEqual([{ phoneNumberE164: "+61468006466", reason: "NUMBER_NOT_USABLE" }]);
+    });
+
+    it("names the misconfigured var when the slug matches no tenant", async () => {
+      const { service, prisma } = setup();
+      configurePool({ PRIVATE_TELEPHONY_TENANT_SLUG: "no-such-org" });
+      prisma.tenant.findUnique.mockResolvedValue(null);
+      await expectApiError(service.syncPrivatePool(), "PRIVATE_POOL_TENANT_NOT_FOUND");
+    });
+  });
+
   describe("compliancePrefill", () => {
     it("maps the org profile (credential legal name, primary contact, registered address) to a compliance input", async () => {
       const { service, prisma } = setup();

@@ -21,6 +21,7 @@
     "seed:demo": "ts-node src/scripts/seed-demo.ts",
     "seed:clear": "ts-node src/scripts/seed-demo.ts --clear",
     "clear:test-residue": "ts-node src/scripts/clear-test-residue.ts",
+    "telephony:sync-private-pool": "ts-node src/scripts/telephony-sync-private-pool.ts",
     "seed:plans": "ts-node src/scripts/seed-plans.ts",
     "seed:admin": "ts-node src/scripts/seed-admin-user.ts",
     "reset:tenants": "ts-node src/scripts/reset-to-tenants.ts",

@@ -1751,6 +1751,122 @@ export class TelephonyProvisioningService {
   }
 
   /**
+   * The private telephony pool, read from env. Absent (or half-filled) ⇒ null, and the sync
+   * below becomes a no-op: this is an opt-in escape hatch for an organisation that arrives
+   * holding its own Twilio account and its own numbers, not a path every tenant takes.
+   */
+  private privatePoolConfig(): {
+    tenantSlug: string;
+    accountSid: string;
+    authToken: string;
+    region?: string;
+    edge?: string;
+  } | null {
+    const read = (key: string) => (this.config.get<string>(key) ?? "").trim();
+    const tenantSlug = read("PRIVATE_TELEPHONY_TENANT_SLUG");
+    const accountSid = read("PRIVATE_TELEPHONY_ACCOUNT_SID");
+    const authToken = read("PRIVATE_TELEPHONY_AUTH_TOKEN");
+    if (!tenantSlug || !accountSid || !authToken) return null;
+    return {
+      tenantSlug,
+      accountSid,
+      authToken,
+      region: read("PRIVATE_TELEPHONY_REGION") || undefined,
+      edge: read("PRIVATE_TELEPHONY_EDGE") || undefined,
+    };
+  }
+
+  /**
+   * Register an organisation's OWN Twilio account and every number on it as one
+   * interchangeable pool, from env rather than from a provisioning run.
+   *
+   * This exists for the organisation that already has an account and a block of numbers it
+   * uses elsewhere. Nothing is bought, nothing goes to Twilio's compliance review, and no
+   * number is singled out – every usable one is registered, so sender resolution can pick any
+   * of them and they stay interchangeable.
+   *
+   * Two things it deliberately does NOT do. It never claims a VOICE hook: the numbers on such
+   * an account are usually carrying live traffic for the organisation's own systems, and
+   * taking their voice configuration would break a running service. And it skips rather than
+   * fails on a number it cannot use, because a pool is a set – one member uprise has no use
+   * for is not a reason to register none of the others.
+   */
+  async syncPrivatePool(): Promise<
+    | { configured: false }
+    | {
+        configured: true;
+        tenantId: string;
+        accountId: string;
+        adopted: string[];
+        alreadyHeld: string[];
+        skipped: { phoneNumberE164: string; reason: string }[];
+      }
+  > {
+    const cfg = this.privatePoolConfig();
+    if (!cfg) return { configured: false };
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { slug: cfg.tenantSlug } });
+    if (!tenant) {
+      throw new ApiHttpException(
+        "PRIVATE_POOL_TENANT_NOT_FOUND",
+        `No tenant with slug "${cfg.tenantSlug}" – check PRIVATE_TELEPHONY_TENANT_SLUG`,
+        404,
+      );
+    }
+
+    const account = await this.connectByoAccount({
+      tenantId: tenant.id,
+      accountSid: cfg.accountSid,
+      authToken: cfg.authToken,
+      region: cfg.region,
+      edge: cfg.edge,
+      friendlyName: `${tenant.name} (private pool)`,
+    });
+
+    const candidates = await this.listAdoptableNumbers(account.accountId);
+    const adopted: string[] = [];
+    const alreadyHeld: string[] = [];
+    const skipped: { phoneNumberE164: string; reason: string }[] = [];
+
+    for (const candidate of candidates) {
+      if (candidate.blockedReason === "ALREADY_ADOPTED") {
+        alreadyHeld.push(candidate.phoneNumberE164);
+        continue;
+      }
+      if (candidate.blockedReason) {
+        skipped.push({ phoneNumberE164: candidate.phoneNumberE164, reason: candidate.blockedReason });
+        continue;
+      }
+      try {
+        await this.adoptNumber({
+          accountId: account.accountId,
+          phoneNumberSid: candidate.phoneNumberSid,
+          // The pool is interchangeable, so a per-number nickname would be noise; the class
+          // is what distinguishes them and it is already stored.
+          claimSmsHook: true,
+          claimVoiceHook: false,
+        });
+        adopted.push(candidate.phoneNumberE164);
+      } catch (error) {
+        // One number refusing adoption must not abandon the rest of the pool.
+        skipped.push({
+          phoneNumberE164: candidate.phoneNumberE164,
+          reason: this.adoptionFailureReason(error),
+        });
+      }
+    }
+
+    return { configured: true, tenantId: tenant.id, accountId: account.accountId, adopted, alreadyHeld, skipped };
+  }
+
+  /** The machine-readable code behind a failed pool adoption, for the skipped-list. */
+  private adoptionFailureReason(error: unknown): string {
+    const response = (error as { response?: { error?: { code?: unknown } } })?.response;
+    const code = response?.error?.code;
+    return typeof code === "string" ? code : "ADOPTION_FAILED";
+  }
+
+  /**
    * The account an adoption call may act on, bound to the caller's tenant.
    *
    * Two guards beyond the tenant binding, both about what adoption MEANS. It only makes sense

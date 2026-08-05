@@ -107,6 +107,15 @@ export type ValidatedEnv = {
   TWILIO_API_KEY_SID: string;
   TWILIO_API_KEY_SECRET: string;
   TWILIO_TWIML_APP_SID: string;
+  // Private telephony pool: ONE organisation's own Twilio account, whose numbers are
+  // registered as an interchangeable sending pool instead of being provisioned. All blank ⇒
+  // the sync is a no-op, which is the state every other tenant is in. Never the platform
+  // account — pointing these at it would register uprise's own inventory to one tenant.
+  PRIVATE_TELEPHONY_TENANT_SLUG: string;
+  PRIVATE_TELEPHONY_ACCOUNT_SID: string;
+  PRIVATE_TELEPHONY_AUTH_TOKEN: string;
+  PRIVATE_TELEPHONY_REGION: string;
+  PRIVATE_TELEPHONY_EDGE: string;
   // Outbound-voice caller ID the callee sees on browser calls — must be a
   // voice-capable number (AU mobiles are SMS-only and get rejected → 13214).
   // Blank ⇒ falls back to TWILIO_PHONE_NUMBER. The *_URL overrides default to
@@ -287,6 +296,11 @@ export function validateEnv(config: Env): ValidatedEnv {
     TWILIO_API_KEY_SID: config.TWILIO_API_KEY_SID?.trim() || "",
     TWILIO_API_KEY_SECRET: config.TWILIO_API_KEY_SECRET?.trim() || "",
     TWILIO_TWIML_APP_SID: config.TWILIO_TWIML_APP_SID?.trim() || "",
+    PRIVATE_TELEPHONY_TENANT_SLUG: config.PRIVATE_TELEPHONY_TENANT_SLUG?.trim() || "",
+    PRIVATE_TELEPHONY_ACCOUNT_SID: config.PRIVATE_TELEPHONY_ACCOUNT_SID?.trim() || "",
+    PRIVATE_TELEPHONY_AUTH_TOKEN: config.PRIVATE_TELEPHONY_AUTH_TOKEN?.trim() || "",
+    PRIVATE_TELEPHONY_REGION: config.PRIVATE_TELEPHONY_REGION?.trim() || "",
+    PRIVATE_TELEPHONY_EDGE: config.PRIVATE_TELEPHONY_EDGE?.trim() || "",
     TWILIO_VOICE_FROM: config.TWILIO_VOICE_FROM?.trim() || "",
     TWILIO_DIALER_TWIML_APP_SID: config.TWILIO_DIALER_TWIML_APP_SID?.trim() || "",
     DIALER_CONFERENCE_WAIT_URL: config.DIALER_CONFERENCE_WAIT_URL?.trim() || "",
