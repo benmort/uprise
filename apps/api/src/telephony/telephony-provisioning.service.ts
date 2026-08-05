@@ -67,6 +67,17 @@ const ENTRY_EVENT: Partial<Record<TelephonyProvisioningStatus, keyof DomainEvent
 };
 
 /**
+ * An ABN/ACN as Twilio wants it: digits only. Australians write these grouped ("43 687 271 227")
+ * and the value arrives from a free-text admin field, so it can carry grouping spaces or stray
+ * leading whitespace. It is submitted verbatim into a regulatory bundle that a human at Twilio
+ * reviews, and a mismatch there fails days later with nothing useful to read.
+ */
+export function normaliseBusinessNumber(raw: string | null | undefined): string | undefined {
+  const digits = (raw ?? "").replace(/\D/g, "");
+  return digits || undefined;
+}
+
+/**
  * Drives a provisioning run through the FSM. Every step follows the outbox
  * canon: the external Twilio call happens FIRST, then one `$transaction`
  * reloads the run FOR UPDATE, asserts the FSM hop, updates the run, inserts
@@ -302,16 +313,23 @@ export class TelephonyProvisioningService {
     });
     const contact =
       profile?.contacts.find((c) => c.isPrimaryContact) ?? profile?.contacts[0] ?? null;
-    const address = profile?.addresses[0] ?? null;
+    // The REGISTERED address, not merely the first one. A tenant can hold several (billing,
+    // postal, registered), and Twilio's regulatory bundle is matched against the address
+    // registered to the ABN — submitting a billing address gets the bundle rejected by a
+    // human reviewer days later, with no useful error.
+    const address =
+      profile?.addresses.find((a) => a.addressType?.toLowerCase() === "registered") ??
+      profile?.addresses[0] ??
+      null;
     return {
       legalName: profile?.credential?.legalTradingName || profile?.name || "",
       contactFirstName: contact?.firstName || "",
       contactLastName: contact?.lastName || "",
       email: contact?.email || "",
-      businessNumber:
+      businessNumber: normaliseBusinessNumber(
         profile?.credential?.australianBusinessNumber ||
-        profile?.credential?.australianCompanyNumber ||
-        undefined,
+          profile?.credential?.australianCompanyNumber,
+      ),
       address: {
         street: [address?.line1, address?.line2].filter(Boolean).join(", "),
         city: address?.suburb || address?.city || "",

@@ -865,7 +865,7 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
   });
 
   describe("compliancePrefill", () => {
-    it("maps the org profile (credential legal name, primary contact, first address) to a compliance input", async () => {
+    it("maps the org profile (credential legal name, primary contact, registered address) to a compliance input", async () => {
       const { service, prisma } = setup();
       prisma.orgProfile.findFirst.mockResolvedValue({
         name: "Trading Name",
@@ -884,9 +884,82 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
         contactFirstName: "Ada",
         contactLastName: "Lovelace",
         email: "ada@example.org",
-        businessNumber: "12 345 678 901",
+        businessNumber: "12345678901",
         address: { street: "1 Test St, Level 2", city: "Sydney", region: "NSW", postalCode: "2000" },
       });
+    });
+
+
+    // Twilio matches the bundle against the address registered to the ABN. A tenant can hold
+    // several addresses and the billing one is commonly first, so picking addresses[0] would
+    // submit the wrong one and get rejected by a human reviewer days later.
+    it("prefers the REGISTERED address over a billing address listed first", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Org",
+        credential: { legalTradingName: "Org Ltd", australianBusinessNumber: "43687271227", australianCompanyNumber: null },
+        contacts: [{ isPrimaryContact: true, firstName: "A", lastName: "B", email: "a@b.org" }],
+        addresses: [
+          { addressType: "billing", line1: "99 Finance Way", suburb: "Docklands", city: null, state: "VIC", postcode: "3008" },
+          { addressType: "registered", line1: "3 Albert Coates Ln", suburb: "Melbourne", city: null, state: "VIC", postcode: "3000" },
+        ],
+      });
+
+      const prefill = await service.compliancePrefill(TENANT_ID);
+
+      expect(prefill.address).toEqual({
+        street: "3 Albert Coates Ln",
+        city: "Melbourne",
+        region: "VIC",
+        postalCode: "3000",
+      });
+    });
+
+    it("falls back to the first address when none is marked registered", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Org",
+        credential: null,
+        contacts: [],
+        addresses: [{ addressType: "postal", line1: "1 Only St", suburb: "Perth", city: null, state: "WA", postcode: "6000" }],
+      });
+
+      const prefill = await service.compliancePrefill(TENANT_ID);
+
+      expect(prefill.address.street).toBe("1 Only St");
+    });
+
+    // A real tenant's stored ABN carried a leading space, which went to Twilio verbatim.
+    it.each([
+      ["a grouped ABN", "43 687 271 227"],
+      ["a leading space", " 43687271227"],
+      ["an ABN written with the ABN prefix", "ABN 43 687 271 227"],
+    ])("normalises %s to digits", async (_label, stored) => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Org",
+        credential: { legalTradingName: "Org Ltd", australianBusinessNumber: stored, australianCompanyNumber: null },
+        contacts: [],
+        addresses: [],
+      });
+
+      const prefill = await service.compliancePrefill(TENANT_ID);
+
+      expect(prefill.businessNumber).toBe("43687271227");
+    });
+
+    it("returns undefined rather than an empty string when the number is only punctuation", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Org",
+        credential: { legalTradingName: "Org Ltd", australianBusinessNumber: "  -  ", australianCompanyNumber: null },
+        contacts: [],
+        addresses: [],
+      });
+
+      const prefill = await service.compliancePrefill(TENANT_ID);
+
+      expect(prefill.businessNumber).toBeUndefined();
     });
 
     it("returns empty fields when the tenant has no org profile", async () => {
