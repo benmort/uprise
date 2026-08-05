@@ -161,6 +161,11 @@ export class BasicAuthGuard implements CanActivate {
       "/api/v1/journeys/sweep-due",
       "/telephony/provisioning/poll",
       "/api/v1/telephony/provisioning/poll",
+      // Private-pool re-sync (Bearer CRON_SECRET; connects the configured BYO account and
+      // registers any number on it uprise does not hold yet). Runs in-deployment so the
+      // credential-encryption key and the inbound webhook's API_BASE_URL are the real ones.
+      "/telephony/accounts/sync-private-pool",
+      "/api/v1/telephony/accounts/sync-private-pool",
       "/email-provisioning/poll",
       "/api/v1/email-provisioning/poll",
       "/events/dispatch-due-reminders",

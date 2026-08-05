@@ -204,6 +204,25 @@ describe("BasicAuthGuard", () => {
     expect(guard.canActivate(context)).toBe(true);
   });
 
+  it("allows the private-pool sync with a valid cron bearer token", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/telephony/accounts/sync-private-pool",
+      headers: { authorization: "Bearer cron-secret" },
+    });
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  // The path being allowlisted must not make it open – it is the SECRET that authorises it.
+  it("rejects the private-pool sync with a wrong cron bearer token", () => {
+    const guard = createGuard();
+    const context = executionContextWithRequest({
+      path: "/api/v1/telephony/accounts/sync-private-pool",
+      headers: { authorization: "Bearer not-the-secret" },
+    });
+    expect(() => guard.canActivate(context)).toThrow();
+  });
+
   it("allows analytics stream requests with a valid signed stream token", () => {
     const guard = createGuard();
     const streamToken = createStreamToken("stream-secret", 300, "tenant-a").token;

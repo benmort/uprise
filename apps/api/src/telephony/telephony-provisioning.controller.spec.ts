@@ -18,6 +18,7 @@ function setup() {
     setNickname: jest.fn(async () => ({})),
     pollSubmittedBundles: jest.fn(async () => ({ polled: 0 })),
     listAdoptableNumbers: jest.fn(async () => []),
+    syncPrivatePool: jest.fn(async () => ({ configured: false })),
     adoptNumber: jest.fn(async () => ({ number: { id: "num-1" } })),
   };
   const controller = new TelephonyProvisioningController(provisioning);
@@ -227,6 +228,28 @@ describe("TelephonyProvisioningController", () => {
       const { controller, provisioning } = setup();
       await expect(controller.poll(ownerReq())).rejects.toThrow(ForbiddenException);
       expect(provisioning.pollSubmittedBundles).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("syncPrivatePool", () => {
+    it("runs for the user-less cron request", async () => {
+      const { controller, provisioning } = setup();
+      await controller.syncPrivatePool(cronReq());
+      expect(provisioning.syncPrivatePool).toHaveBeenCalled();
+    });
+
+    // The sync connects an account and rewrites inbound hooks on live numbers – an owner of
+    // some other tenant reaching it would act on an organisation that is not theirs.
+    it("forbids a session-authed non-super-admin", async () => {
+      const { controller, provisioning } = setup();
+      await expect(controller.syncPrivatePool(ownerReq())).rejects.toThrow(ForbiddenException);
+      expect(provisioning.syncPrivatePool).not.toHaveBeenCalled();
+    });
+
+    it("allows a super-admin session", async () => {
+      const { controller, provisioning } = setup();
+      await controller.syncPrivatePool(superReq());
+      expect(provisioning.syncPrivatePool).toHaveBeenCalled();
     });
   });
 });

@@ -257,4 +257,27 @@ export class TelephonyProvisioningController {
     }
     return this.provisioning.pollSubmittedBundles();
   }
+
+  /**
+   * Re-sync the private telephony pool from PRIVATE_TELEPHONY_*, in-process.
+   *
+   * It exists as an endpoint rather than only as the CLI script because the sync ENCRYPTS an
+   * auth token and writes an inbound webhook URL, and both are environment-derived: run from
+   * a developer's machine against the production database, a mismatched
+   * INTEGRATION_CREDENTIAL_SECRET stores a token production cannot decrypt, and a local
+   * API_BASE_URL points live numbers' inbound hooks at a dev tunnel. Running it inside the
+   * deployment makes both correct by construction.
+   *
+   * Same auth shape as the poll above: CRON_SECRET bearer (no user attached, so no
+   * @RequirePermission — AbilityGuard would deny it), or a super-admin session. Idempotent,
+   * so re-running after the organisation buys another number picks up just the new one.
+   */
+  @Get("accounts/sync-private-pool")
+  @Post("accounts/sync-private-pool")
+  async syncPrivatePool(@Req() req: Request & { user?: AuthUser }) {
+    if (req.user && !req.user.isSuperAdmin) {
+      throw new ForbiddenException("Private pool sync is operator-only");
+    }
+    return this.provisioning.syncPrivatePool();
+  }
 }

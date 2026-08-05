@@ -51,6 +51,13 @@ const OPEN_ROUTES = new Set<string>([
   "AudiencesController#dispatchImports",
   "JourneysController#sweepDue",
   "TelephonyProvisioningController#poll",
+  // Private-pool re-sync (Bearer CRON_SECRET; inline super-admin check for any user session).
+  // Deliberately an endpoint and not only the CLI script: it encrypts an auth token and writes
+  // an inbound webhook URL, both environment-derived, so it has to run inside the deployment.
+  "TelephonyProvisioningController#syncPrivatePool",
+  // Private-pool re-sync (Bearer CRON_SECRET; inline super-admin check for any user session).
+  // Deliberately an endpoint and not only the CLI script: it encrypts an auth token and writes
+  // an inbound webhook URL, both environment-derived, so it has to run inside the deployment.
   "EmailProvisioningController#poll",
   "EventsController#dispatchDueReminders", // cron sweep (Bearer CRON_SECRET)
   "EventsController#dispatchDueRemindersGet", // cron sweep (GET variant)
