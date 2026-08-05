@@ -85,6 +85,16 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # One job per engine, each with its own Postgres/Redis. The suite is serial by design
+    # (workers: 1 against a shared seeded DB), so sharding by project is what makes three
+    # engines fit the time budget without touching that constraint.
+    strategy:
+      fail-fast: false
+      matrix:
+        # Chromium on every PR; the other engines only where the extra minutes are warranted.
+        # A Firefox-only regression on the auth path is exactly what this exists to catch, so
+        # main and manual runs get the full matrix.
+        project: ${{ github.event_name == 'pull_request' && fromJSON('["chromium"]') || fromJSON('["chromium","firefox","webkit"]') }}
     services:
       postgres:
         image: postgres:16
@@ -105,6 +115,11 @@ jobs:
     env:
       NODE_ENV: development
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/uprise?schema=public
+      # schema.prisma routes migrate/introspect over `directUrl = env("DATABASE_URL_UNPOOLED")`.
+      # Without it `prisma migrate deploy` fails validation (P1012) and this whole job dies at
+      # "Prepare database" before a browser ever launches — which is exactly what it did on every
+      # run from late July. CI Postgres is a direct connection, so it is the same url.
+      DATABASE_URL_UNPOOLED: postgresql://postgres:postgres@localhost:5432/uprise?schema=public
       REDIS_URL: redis://localhost:6379
       BULLMQ_REDIS_URL: redis://localhost:6379
       API_BASE_URL: http://localhost:3001
@@ -148,20 +163,20 @@ jobs:
           pnpm --filter @uprise/db exec prisma migrate deploy
           pnpm --filter @uprise/db exec prisma generate
 
-      - name: Install Playwright (chromium)
-        run: pnpm --filter admin exec playwright install --with-deps chromium
+      - name: Install Playwright (${{ matrix.project }})
+        run: pnpm --filter admin exec playwright install --with-deps ${{ matrix.project }}
 
       # Playwright's webServer boots api/admin/auth/field/product-marketing; global-setup seeds the
       # demo tenant + mints the organiser/volunteer sessions. Geo/ABS-data journeys degrade to smoke
       # (no boundary data loaded in CI); the demo seed covers the canvass/walklists/field journeys.
-      - name: Run e2e
-        run: pnpm --filter admin run e2e
+      - name: Run e2e (${{ matrix.project }})
+        run: pnpm --filter admin exec playwright test --project=${{ matrix.project }}
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: |
             apps/admin/playwright-report
             apps/admin/test-results

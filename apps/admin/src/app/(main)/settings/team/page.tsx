@@ -330,9 +330,13 @@ export default function TeamPage() {
   const doResend = async (invite: TenantInvitationSummary) => {
     if (!tenantId) return;
     setResendingId(invite.id);
-    // Resend = re-issue: createInvitation upserts on (tenant, email), resetting the
+    // Resend = re-issue: createInvitation upserts on (tenant, channel-value), resetting the
     // token + expiry and re-emitting tenant.invitation.sent (the email/SMS reaction).
-    const res = await tenants.createInvitation(tenantId, { email: invite.email, role: invite.role });
+    // The API requires EXACTLY one of email/phone, so resend on whichever channel the invite
+    // was issued on – sending `email: null` for an SMS invite is a 400.
+    const channel = invite.email ? { email: invite.email } : { phone: invite.phone ?? "" };
+    const destination = invite.email ?? invite.phone ?? "them";
+    const res = await tenants.createInvitation(tenantId, { ...channel, role: invite.role });
     setResendingId(null);
     if (!res.ok) {
       showToast({ tone: "error", title: "Couldn't resend", description: res.error });
@@ -341,7 +345,7 @@ export default function TeamPage() {
     showToast({
       tone: "success",
       title: "Invitation resent",
-      description: `A fresh invite link is on its way to ${invite.email}.`,
+      description: `A fresh invite link is on its way to ${destination}.`,
     });
     void loadInvitations(tenantId);
   };
@@ -421,7 +425,8 @@ export default function TeamPage() {
   const inviteRows: PendingRow[] = (invites ?? []).map((i) => ({
     kind: "invitation",
     id: `inv:${i.id}`,
-    email: i.email,
+    // A phone invite carries no email – show the number it was SMS'd to instead of a blank cell.
+    email: i.email ?? i.phone ?? "–",
     role: i.role,
     status: i.status,
     createdAt: i.createdAt,
