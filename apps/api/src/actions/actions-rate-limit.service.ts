@@ -22,6 +22,7 @@ type CounterBucket = { windowStartMs: number; count: number };
 @Injectable()
 export class ActionsRateLimitService {
   private readonly ipMinute = new Map<string, CounterBucket>();
+  private readonly searchIpMinute = new Map<string, CounterBucket>();
   private readonly ipHour = new Map<string, CounterBucket>();
   private readonly pageMinute = new Map<string, CounterBucket>();
 
@@ -51,6 +52,14 @@ export class ActionsRateLimitService {
   }
 
   /** Throws 429 when any window or durable cap is exceeded. Call BEFORE any spend. */
+  /** The target finder's own per-IP window (type-ahead friendly, scrape hostile). */
+  assertSearchWithinLimits(clientIp: string | null, now = Date.now()): void {
+    const perIpMinute = this.intEnv("ACTIONS_SEARCH_RATE_IP_PER_MINUTE", 30, 1, 10_000);
+    if (!this.bump(this.searchIpMinute, clientIp || "unknown", 60_000, perIpMinute, now)) {
+      throw new ApiHttpException("RATE_LIMITED", "Too many searches — slow down a little.", 429);
+    }
+  }
+
   async assertWithinLimits(pageId: string, clientIp: string | null, now = Date.now()): Promise<void> {
     const perIpMinute = this.intEnv("ACTIONS_RATE_IP_PER_MINUTE", 5, 1, 1000);
     const perIpHour = this.intEnv("ACTIONS_RATE_IP_PER_HOUR", 20, 1, 10_000);

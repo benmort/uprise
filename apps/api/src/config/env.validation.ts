@@ -154,6 +154,9 @@ export type ValidatedEnv = {
   REQUIRE_OPTOUT_LANGUAGE: boolean;
   TURNSTILE_SECRET_KEY: string;
   TURNSTILE_TIMEOUT_MS: number;
+  ACTIONS_SSE_POLL_MS: number;
+  BLOB_READ_WRITE_TOKEN: string;
+  BLOB_STORE_ID: string;
 };
 
 export function validateEnv(config: Env): ValidatedEnv {
@@ -413,6 +416,12 @@ export function validateEnv(config: Env): ValidatedEnv {
     // Cloudflare Turnstile (bot protection). Blank secret → the guard is a no-op.
     TURNSTILE_SECRET_KEY: config.TURNSTILE_SECRET_KEY?.trim() || "",
     TURNSTILE_TIMEOUT_MS: numberInRange(config, "TURNSTILE_TIMEOUT_MS", 1000, 30000, 5000, errors),
+    ACTIONS_SSE_POLL_MS: numberInRange(config, "ACTIONS_SSE_POLL_MS", 200, 5000, 400, errors),
+    // With `validate`, @nestjs/config assigns ONLY this object's keys to process.env —
+    // keys left out of ValidatedEnv never reach code that reads process.env directly
+    // (ImageUploadService.enabled), even when present in .env. Pass the Blob pair through.
+    BLOB_READ_WRITE_TOKEN: config.BLOB_READ_WRITE_TOKEN?.trim() || "",
+    BLOB_STORE_ID: config.BLOB_STORE_ID?.trim() || "",
   };
 
   if (errors.length > 0) {

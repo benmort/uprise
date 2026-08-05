@@ -7,6 +7,7 @@ import { listAudiences } from "@/lib/api";
 import { listFiles } from "@/lib/api/files";
 import { useApi } from "@/lib/use-api";
 import { behaviourOf } from "@/components/autodialer/behaviour";
+import { ElectoralTargetingCard, type ElectoralConfig } from "@/components/autodialer/electoral-targeting-card";
 import { SurveyGraphBuilder } from "@/components/autodialer/survey-graph-builder";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -106,10 +107,19 @@ export function CampaignEditor({
   const [outroText, setOutroText] = useState(promptText(campaign.outro));
   const [outroAudio, setOutroAudio] = useState(promptAudio(campaign.outro));
   const [optOutText, setOptOutText] = useState(promptText(campaign.optOut));
-  const [targetNumbers, setTargetNumbers] = useState((campaign.targetNumbers ?? []).join("\n"));
-  const [jurisdiction, setJurisdiction] = useState<string>(campaign.jurisdiction ?? "FEDERAL");
-  const [officeTarget, setOfficeTarget] = useState<string>(campaign.officeTarget ?? "electorate");
-  const [partyTargets, setPartyTargets] = useState((campaign.partyTargets ?? []).join(", "));
+  // Transfer + electoral routing live behind ONE conditional toggle — the
+  // fallback/transfer numbers field is shared between the two modes.
+  const [electoral, setElectoral] = useState<ElectoralConfig>({
+    enabled: campaign.electoralTarget,
+    jurisdiction: campaign.jurisdiction ?? "FEDERAL",
+    officeTarget: campaign.officeTarget ?? "electorate",
+    partyTargets: campaign.partyTargets ?? [],
+    pinned: Array.isArray((campaign as { targetPoliticians?: unknown }).targetPoliticians)
+      ? ((campaign as { targetPoliticians?: unknown }).targetPoliticians as ElectoralConfig["pinned"])
+      : [],
+    callerChooses: Boolean((campaign as { callerChoosesTarget?: unknown }).callerChoosesTarget),
+    fallbackNumbers: (campaign.targetNumbers ?? []).join("\n"),
+  });
   const [saving, setSaving] = useState(false);
 
   const audiences = useApi("/audiences|dialer-editor", () => listAudiences({ limit: 100, offset: 0 }), {
@@ -148,26 +158,19 @@ export function CampaignEditor({
       intro: buildPrompt(introText, introAudio),
       outro: buildPrompt(outroText, outroAudio),
       optOut: optOutText.trim() ? { name: optOutText.trim() } : null,
-      ...(behaviour === "transfer" || behaviour === "broadcast"
+      ...(behaviour === "transfer" || behaviour === "target"
         ? {
-            targetNumbers:
-              behaviour === "transfer"
-                ? targetNumbers
-                    .split(/\n+/)
-                    .map((n) => n.trim())
-                    .filter(Boolean)
-                : (campaign.targetNumbers ?? null),
-          }
-        : {}),
-      ...(behaviour === "target"
-        ? {
-            jurisdiction: jurisdiction as DialerCampaignRecord["jurisdiction"],
-            officeTarget: officeTarget as DialerCampaignRecord["officeTarget"],
-            partyTargets: partyTargets
-              .split(",")
-              .map((p) => p.trim())
-              .filter(Boolean),
-            targetNumbers: targetNumbers
+            electoralTarget: electoral.enabled,
+            targetPoliticians: electoral.pinned,
+            callerChoosesTarget: electoral.callerChooses,
+            jurisdiction: electoral.enabled
+              ? (electoral.jurisdiction as DialerCampaignRecord["jurisdiction"])
+              : null,
+            officeTarget: electoral.enabled
+              ? (electoral.officeTarget as DialerCampaignRecord["officeTarget"])
+              : null,
+            partyTargets: electoral.enabled ? electoral.partyTargets : [],
+            targetNumbers: electoral.fallbackNumbers
               .split(/\n+/)
               .map((n) => n.trim())
               .filter(Boolean),
@@ -294,60 +297,8 @@ export function CampaignEditor({
         </Field>
       </Card>
 
-      {behaviour === "transfer" ? (
-        <Card className="space-y-3 p-4">
-          <h3 className="text-sm font-semibold">Transfer targets</h3>
-          <Field label="Target numbers" hint="One per line, +61 format. When several, one is picked per call.">
-            <Textarea
-              value={targetNumbers}
-              onChange={(e) => setTargetNumbers(e.target.value)}
-              rows={4}
-              placeholder="+61262774022"
-              disabled={locked}
-              className="font-mono"
-            />
-          </Field>
-        </Card>
-      ) : null}
-
-      {behaviour === "target" ? (
-        <Card className="space-y-3 p-4">
-          <h3 className="text-sm font-semibold">Electoral routing</h3>
-          <p className="text-xs text-muted-foreground">
-            Callers enter a postcode and are connected to their own member's office, resolved from
-            the platform's civic data.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Jurisdiction">
-              <Select value={jurisdiction} onValueChange={setJurisdiction} disabled={locked} className="w-full">
-                {["FEDERAL", "NSW", "VIC", "QLD", "SA", "WA", "TAS", "ACT", "NT"].map((j) => (
-                  <SelectItem key={j} value={j}>
-                    {j}
-                  </SelectItem>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Chamber">
-              <Select value={officeTarget} onValueChange={setOfficeTarget} disabled={locked} className="w-full">
-                <SelectItem value="electorate">Lower house (local member)</SelectItem>
-                <SelectItem value="upper">Upper house (senators)</SelectItem>
-              </Select>
-            </Field>
-          </div>
-          <Field label="Party filter" hint="Comma-separated; leave blank to connect whoever holds the seat.">
-            <Input value={partyTargets} onChange={(e) => setPartyTargets(e.target.value)} disabled={locked} />
-          </Field>
-          <Field label="Fallback numbers" hint="Dialled when no member (or no office number) resolves. One per line.">
-            <Textarea
-              value={targetNumbers}
-              onChange={(e) => setTargetNumbers(e.target.value)}
-              rows={3}
-              placeholder="+61262774022"
-              disabled={locked}
-              className="font-mono"
-            />
-          </Field>
-        </Card>
+      {behaviour === "transfer" || behaviour === "target" ? (
+        <ElectoralTargetingCard value={electoral} onChange={setElectoral} locked={locked} />
       ) : null}
 
       {behaviour === "survey" ? (

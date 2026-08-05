@@ -10,6 +10,7 @@ import { IvrFlowService } from "./ivr-flow.service";
 import { SessionProgressService } from "./session-progress.service";
 import { AudiencesModule } from "../audiences/audiences.module";
 import { FlagsModule } from "../common/flags/flags.module";
+import { QueueModule } from "../common/queue/queue.module";
 import { TelephonyModule } from "../telephony/telephony.module";
 import { MessagingModule } from "../messaging/messaging.module";
 
@@ -25,7 +26,11 @@ import { MessagingModule } from "../messaging/messaging.module";
   // Messaging supplies TRANSACTIONAL_DISPATCHER for the SMS answer type;
   // Audiences supplies the shared AudienceRecipientsResolver the dial engine
   // selects candidates through.
-  imports: [FlagsModule, TelephonyModule, MessagingModule, AudiencesModule],
+  // QueueModule is NOT global — without this import the DISPATCH_QUEUE_TOKEN
+  // injections below silently resolved to undefined (found by the live smoke:
+  // the click-to-call target leg was never enqueued). The queue injects are
+  // deliberately non-@Optional now so that regression fails the boot smoke.
+  imports: [FlagsModule, TelephonyModule, MessagingModule, AudiencesModule, QueueModule],
   controllers: [AutodialerController, DialerIvrController],
   providers: [
     AutodialerService,

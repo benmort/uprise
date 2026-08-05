@@ -43,7 +43,11 @@ describe("CivicService", () => {
         party: { equals: "ALP", mode: "insensitive" },
         geoKind: "ced",
         geoCode: "c1",
-        name: { contains: "ali", mode: "insensitive" },
+        // Search spans the member and their division, so "Wills" finds the member for Wills.
+        OR: [
+          { name: { contains: "ali", mode: "insensitive" } },
+          { electorate: { contains: "ali", mode: "insensitive" } },
+        ],
       });
     });
 

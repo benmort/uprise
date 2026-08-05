@@ -31,6 +31,9 @@ export type ElectoralTarget = {
   name: string;
   party: string | null;
   electorate: string | null;
+  /** Re-hosted Commons headshot + the credit its licence requires (civic sync). */
+  imageUrl: string | null;
+  imageCredit: string | null;
 };
 
 const AU_POSTCODE_RE = /^\d{4}$/;
@@ -157,6 +160,8 @@ export class ElectoralLookupService {
       name: member.name,
       party: member.party,
       electorate: member.electorate ?? electorateLabel,
+      imageUrl: member.imageUrl,
+      imageCredit: member.imageCredit,
     };
   }
 }

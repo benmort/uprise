@@ -240,13 +240,16 @@ export class ActionsService {
   /** The public payload — copy + field config + brand + campaign kind ONLY. */
   async getPublicPage(slug: string, previewToken?: string) {
     const page = await this.loadPublicPage(slug, previewToken);
-    const [tenant, profile, campaign, flagOn] = await Promise.all([
+    const [tenant, profile, campaign, targeting, flagOn] = await Promise.all([
       this.prisma.tenant.findUnique({
         where: { id: page.tenantId },
         select: { id: true, name: true, slug: true },
       }),
       this.prisma.orgProfile.findFirst({ where: { tenantId: page.tenantId }, select: BRAND_SELECT }),
       page.campaignId ? this.autodialer.getCampaignSummary(page.tenantId, page.campaignId) : Promise.resolve(null),
+      page.campaignId
+        ? this.autodialer.getPublicTargets(page.tenantId, page.campaignId)
+        : Promise.resolve({ chooser: false, targets: [] }),
       this.flags.isEnabled("FEATURE_ACTIONS_CALLS", { tenantId: page.tenantId }),
     ]);
     return {
@@ -267,8 +270,27 @@ export class ActionsService {
           flagOn && page.status === ActionPageStatus.PUBLISHED && campaign?.status === DialerCampaignStatus.ACTIVE,
       },
       tenant: tenant ? { id: tenant.id, name: tenant.name, slug: tenant.slug, ...brandFields(profile) } : null,
-      campaign: campaign ? { kind: campaign.kind, targetLabel: campaign.targetLabel } : null,
+      campaign: campaign
+        ? {
+            kind: campaign.kind,
+            targetLabel: campaign.targetLabel,
+            // Pinned member identities (photo included — never a number), and
+            // whether this page's widget lets the caller find their own.
+            targets: targeting.targets,
+            chooser: targeting.chooser,
+          }
+        : null,
     };
+  }
+
+  /** Chooser search for the public widget — empty unless the campaign allows it. */
+  async searchPublicTargets(slug: string, q: string, clientIp: string | null = null) {
+    const page = await this.loadPublicPage(slug);
+    if (!page.campaignId) return { targets: [] };
+    // Bot-scrape protection: its own (looser) per-IP window — captcha rides
+    // the route decorator like the auth flows.
+    this.rateLimit.assertSearchWithinLimits(clientIp);
+    return { targets: await this.autodialer.searchPublicTargets(page.tenantId, page.campaignId, q) };
   }
 
   async getFramePolicy(slug: string): Promise<{ embedDomains: string[] }> {
@@ -306,14 +328,9 @@ export class ActionsService {
     // Rate limits BEFORE anything that costs money.
     await this.rateLimit.assertWithinLimits(page.id, ctx.clientIp);
 
-    // Captcha — strict (fail-closed) when the page requires it and verification
-    // is configured for this environment: this endpoint spends tenant money.
-    if (page.requireCaptcha && this.turnstile.isConfigured()) {
-      const outcome = await this.turnstile.verify(ctx.captchaToken, ctx.clientIp ?? undefined);
-      if (outcome !== "pass") {
-        throw new ApiHttpException("CAPTCHA_FAILED", "Captcha verification failed — reload and try again.", 400);
-      }
-    }
+    // Captcha: enforced by the globally-registered TurnstileGuard via
+    // @RequireCaptcha("strict") on the route — the same posture as login.
+    // Tokens are single-use, so the service must NOT verify a second time.
 
     // Embed-ancestor allowlist — defence in depth; the frame-ancestors CSP on
     // the embed route is the enforcement point (the browser refuses the frame).
@@ -348,6 +365,7 @@ export class ActionsService {
         email: supporter.email?.trim() || undefined,
         phone: supporter.phone?.trim() || undefined,
       },
+      targetPoliticianId: dto.targetPoliticianId?.trim() || null,
       embedAncestor: ancestor,
       clientIp: ctx.clientIp,
     });
@@ -359,6 +377,7 @@ export class ActionsService {
         url: `/api/v1/actions/public/call-sessions/${created.sessionId}/events`,
         ...created.progressToken,
       },
+      target: created.target,
     };
   }
 }

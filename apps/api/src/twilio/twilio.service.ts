@@ -333,9 +333,19 @@ export class TwilioService {
     sender: Pick<ResolvedSender, "accountSid" | "authToken">,
     voiceUrl: string,
     friendlyName: string,
+    statusCallbackUrl?: string,
   ): Promise<string> {
     const client = this.getClient(sender as ResolvedSender);
-    const app = await client.applications.create({ friendlyName, voiceUrl, voiceMethod: "POST" });
+    const app = await client.applications.create({
+      friendlyName,
+      voiceUrl,
+      voiceMethod: "POST",
+      // Without this the app's calls (the widget's browser leg) never report
+      // their terminal status and the Call ledger row sticks at IN_PROGRESS.
+      ...(statusCallbackUrl
+        ? { statusCallback: statusCallbackUrl, statusCallbackMethod: "POST" as const }
+        : {}),
+    });
     return app.sid;
   }
 

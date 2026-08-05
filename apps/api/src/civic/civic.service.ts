@@ -60,7 +60,13 @@ export class CivicService {
     if (filters.party) where.party = { equals: filters.party, mode: "insensitive" };
     if (filters.geoKind) where.geoKind = filters.geoKind;
     if (filters.geoCode) where.geoCode = filters.geoCode;
-    if (filters.q) where.name = { contains: filters.q, mode: "insensitive" };
+    // Search matches the member OR their division — "Wills" finds its member.
+    if (filters.q) {
+      where.OR = [
+        { name: { contains: filters.q, mode: "insensitive" } },
+        { electorate: { contains: filters.q, mode: "insensitive" } },
+      ];
+    }
     const rows = await this.prisma.politician.findMany({ where, orderBy: { name: "asc" } });
     return rows.map((p) => this.mapPoliticianSummary(p));
   }

@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import type { Request, Response } from "express";
 import { PrismaService } from "../prisma/prisma.service";
 import { ActionsService } from "./actions.service";
+import { RequireCaptcha } from "../common/captcha/require-captcha.decorator";
 import { CreateCallSessionDto } from "./dto/actions.dto";
 import { resolveActionsTokenSecret, verifySessionToken } from "./session-token.util";
 
@@ -38,7 +39,18 @@ export class PublicActionsController {
     return this.actions.getFramePolicy(slug);
   }
 
+  /** Chooser search — leak-safe member identities for the widget's finder.
+   *  Same bot protection as the auth flows: Turnstile (soft tier — an outage
+   *  must not blank the finder) + its own per-IP rate window. */
+  @Get("pages/:slug/targets")
+  @RequireCaptcha("soft")
+  @Header("Cache-Control", "private, max-age=30")
+  searchTargets(@Param("slug") slug: string, @Query("q") q: string | undefined, @Req() req: Request) {
+    return this.actions.searchPublicTargets(slug, q ?? "", this.clientIp(req));
+  }
+
   @Post("pages/:slug/call-sessions")
+  @RequireCaptcha("strict")
   createCallSession(@Param("slug") slug: string, @Body() dto: CreateCallSessionDto, @Req() req: Request) {
     return this.actions.createPublicCallSession(slug, dto, {
       clientIp: this.clientIp(req),
@@ -72,6 +84,13 @@ export class PublicActionsController {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    // Compressing an event stream buffers it — a gzip edge (ngrok, some CDNs)
+    // would hold every event until the stream closes and the widget would sit
+    // on "Connecting" through a whole live call (found by the live smoke).
+    // An explicit identity encoding stops edges re-compressing; the nginx-ism
+    // is belt-and-braces for proxies that buffer for other reasons.
+    res.setHeader("Content-Encoding", "identity");
+    res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
 
     const lastEventHeader = req.headers["last-event-id"];
@@ -92,7 +111,7 @@ export class PublicActionsController {
 
     const startedAt = Date.now();
     const MAX_MS = 25_000;
-    const POLL_MS = 1_500;
+    const POLL_MS = this.config.get<number>("ACTIONS_SSE_POLL_MS", 400);
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     res.write(`: connected\n\n`);

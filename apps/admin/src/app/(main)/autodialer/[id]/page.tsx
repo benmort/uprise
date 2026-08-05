@@ -9,6 +9,7 @@ import { behaviourOf } from "@/components/autodialer/behaviour";
 import { CampaignEditor } from "@/components/autodialer/campaign-editor";
 import { CampaignMonitor } from "@/components/autodialer/campaign-monitor";
 import { CampaignResults } from "@/components/autodialer/campaign-results";
+import { CampaignShare } from "@/components/autodialer/campaign-share";
 import { PageShell } from "@/components/shell/page-shell";
 import { StateRegion } from "@/components/shell/state-region";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -18,12 +19,13 @@ import { Card } from "@/components/ui/card";
 import { ConfirmDialog, SegmentedControl, TooltipHint } from "@uprise/ui";
 import { useToast } from "@/components/ui/toast";
 
-type Tab = "overview" | "edit" | "monitor" | "results";
+type Tab = "overview" | "edit" | "monitor" | "results" | "share";
 const TABS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: "overview", label: "Overview" },
   { value: "edit", label: "Edit" },
   { value: "monitor", label: "Monitor" },
   { value: "results", label: "Results" },
+  { value: "share", label: "Share" },
 ];
 
 /**
@@ -40,7 +42,7 @@ export default function AutodialerCampaignPage() {
   const { showToast } = useToast();
   const tab = ((): Tab => {
     const t = searchParams.get("tab");
-    return t === "edit" || t === "monitor" || t === "results" ? t : "overview";
+    return t === "edit" || t === "monitor" || t === "results" || t === "share" ? t : "overview";
   })();
 
   const detail = useApi(`/autodialer/campaigns/${id}`, () => autodialer.get(id));
@@ -237,6 +239,7 @@ export default function AutodialerCampaignPage() {
 
             {tab === "monitor" ? <CampaignMonitor campaignId={id} /> : null}
             {tab === "results" ? <CampaignResults campaignId={id} behaviour={behaviour?.key ?? "broadcast"} /> : null}
+            {tab === "share" ? <CampaignShare campaignId={id} /> : null}
           </div>
         ) : null}
       </StateRegion>

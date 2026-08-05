@@ -45,7 +45,9 @@ export class DialerDispatchService {
     private readonly prisma: PrismaService,
     private readonly recipients: AudienceRecipientsResolver,
     private readonly autodialer: AutodialerService,
-    @Optional() @Inject(DISPATCH_QUEUE_TOKEN) private readonly queue?: DispatchQueue,
+    // NOT @Optional — a missing QueueModule import must fail the boot smoke,
+    // not silently stop the dial engine enqueueing (live-smoke finding).
+    @Inject(DISPATCH_QUEUE_TOKEN) private readonly queue?: DispatchQueue,
     @Optional() flags?: FeatureFlagsService,
   ) {
     this.flags = flags ?? { isEnabled: async () => false };

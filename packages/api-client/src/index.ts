@@ -1336,12 +1336,13 @@ export const publicActions = {
       { method: "POST", body: JSON.stringify(body) },
       { redirectOn401: false, captchaToken },
     ),
-  /** Chooser search — leak-safe member identities for the widget's finder. */
-  searchTargets: (slug: string, q: string) =>
+  /** Chooser search — leak-safe member identities for the widget's finder.
+   *  Turnstile-gated like the auth flows: the token rides the same header. */
+  searchTargets: (slug: string, q: string, captchaToken?: string) =>
     request<{ targets: PublicTargetIdentity[] }>(
       `/actions/public/pages/${encodeURIComponent(slug)}/targets${q ? `?q=${encodeURIComponent(q)}` : ""}`,
       undefined,
-      { redirectOn401: false },
+      { redirectOn401: false, captchaToken },
     ),
   /** Absolute SSE URL for the widget's EventSource (fetch wrappers don't apply). */
   sessionEventsUrl: (sessionId: string, token: string) =>

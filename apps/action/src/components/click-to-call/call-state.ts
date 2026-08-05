@@ -1,4 +1,4 @@
-import type { CallWidgetScreen } from "@uprise/ui";
+import type { CallTargetIdentity, CallWidgetScreen } from "@uprise/ui";
 
 /**
  * The widget's screen state machine: SSE progress events (the source's Pusher
@@ -15,6 +15,29 @@ const str = (value: unknown): string | undefined => (typeof value === "string" ?
 /** True for the screens a progress event may act on (a live call). */
 function inFlight(screen: CallWidgetScreen): boolean {
   return screen.kind === "connecting" || screen.kind === "in-call";
+}
+
+/** The target identity already on screen (redirecting/connected views carry it forward). */
+function currentTarget(screen: CallWidgetScreen): CallTargetIdentity | null {
+  if (screen.kind !== "in-call") return null;
+  const view = screen.view;
+  return view.kind === "redirecting" || view.kind === "connected" ? (view.target ?? null) : null;
+}
+
+/** Build/refresh the target identity from an event payload, keeping known fields. */
+function mergeTarget(
+  previous: CallTargetIdentity | null,
+  payload: Record<string, unknown>,
+): CallTargetIdentity | null {
+  const name = str(payload.name) ?? previous?.name;
+  if (!name) return previous;
+  return {
+    name,
+    party: str(payload.party) ?? previous?.party ?? null,
+    electorate: str(payload.electorate) ?? previous?.electorate ?? null,
+    imageUrl: str(payload.imageUrl) ?? previous?.imageUrl ?? null,
+    imageCredit: str(payload.imageCredit) ?? previous?.imageCredit ?? null,
+  };
 }
 
 export function reduceProgress(screen: CallWidgetScreen, event: ProgressEvent): CallWidgetScreen {
@@ -49,8 +72,10 @@ export function reduceProgress(screen: CallWidgetScreen, event: ProgressEvent): 
     case "call_select_electorate":
       return { kind: "in-call", view: { kind: "waiting" } };
     case "call_electoral_target":
-    case "call_redirecting":
-      return { kind: "in-call", view: { kind: "redirecting", name: str(payload.name) ?? null } };
+    case "call_redirecting": {
+      const target = mergeTarget(currentTarget(screen), payload);
+      return { kind: "in-call", view: { kind: "redirecting", name: target?.name ?? null, target } };
+    }
     case "call_survey": {
       const rawOptions = Array.isArray(payload.options) ? (payload.options as unknown[]) : [];
       const options = rawOptions
@@ -68,8 +93,10 @@ export function reduceProgress(screen: CallWidgetScreen, event: ProgressEvent): 
     }
     case "call_survey_result":
       return { kind: "in-call", view: { kind: "waiting" } };
-    case "call_connected_conference":
-      return { kind: "in-call", view: { kind: "connected", name: str(payload.name) ?? null } };
+    case "call_connected_conference": {
+      const target = mergeTarget(currentTarget(screen), payload);
+      return { kind: "in-call", view: { kind: "connected", name: target?.name ?? null, target } };
+    }
     case "call_target_hangup":
       return { kind: "in-call", view: { kind: "target-gone" } };
     case "call_disconnected": {

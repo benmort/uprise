@@ -59,6 +59,8 @@ export class SupporterDto {
 
 export class CreateCallSessionDto {
   @IsOptional() @Type(() => SupporterDto) supporter?: SupporterDto;
+  /** Caller-selected member id (pinned set or chooser) — validated server-side. */
+  @IsOptional() @IsString() @MaxLength(64) targetPoliticianId?: string;
   /** Host page origin as observed by the embed (advisory — CSP is the control). */
   @IsOptional() @IsString() @MaxLength(300) embedAncestor?: string;
 }

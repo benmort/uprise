@@ -37,12 +37,24 @@ describe("reduceProgress", () => {
     expect(multi).toEqual(inCall({ kind: "districts", options: ["Wills", "Cooper"] }));
   });
 
-  it("target resolution and transfer show the redirecting screen with the member's name", () => {
+  it("target resolution shows the redirecting screen with the member's full identity", () => {
     const target = reduceProgress(inCall({ kind: "districts", options: ["Wills", "Cooper"] }), {
       name: "call_electoral_target",
-      payload: { name: "Alex Example", party: "ALP", electorate: "Wills" },
+      payload: { name: "Alex Example", party: "ALP", electorate: "Wills", imageUrl: "https://img/a.jpg" },
     });
-    expect(target).toEqual(inCall({ kind: "redirecting", name: "Alex Example" }));
+    expect(target).toEqual(
+      inCall({
+        kind: "redirecting",
+        name: "Alex Example",
+        target: {
+          name: "Alex Example",
+          party: "ALP",
+          electorate: "Wills",
+          imageUrl: "https://img/a.jpg",
+          imageCredit: null,
+        },
+      }),
+    );
   });
 
   it("survey questions render their options; an answer returns to waiting until the next question", () => {
@@ -71,12 +83,29 @@ describe("reduceProgress", () => {
     );
   });
 
-  it("conference join and target hangup drive connected → target-gone", () => {
-    const connected = reduceProgress(inCall({ kind: "redirecting", name: "Alex Example" }), {
-      name: "call_connected_conference",
-      payload: { name: "Alex Example" },
+  it("conference join keeps the identity (photo carried from redirecting); hangup → target-gone", () => {
+    const redirecting = reduceProgress(inCall({ kind: "waiting" }), {
+      name: "call_electoral_target",
+      payload: { name: "Alex Example", party: "ALP", imageUrl: "https://img/a.jpg" },
     });
-    expect(connected).toEqual(inCall({ kind: "connected", name: "Alex Example" }));
+    // The conference event carries name/party only — the photo rides through.
+    const connected = reduceProgress(redirecting, {
+      name: "call_connected_conference",
+      payload: { name: "Alex Example", electorate: "Wills" },
+    });
+    expect(connected).toEqual(
+      inCall({
+        kind: "connected",
+        name: "Alex Example",
+        target: {
+          name: "Alex Example",
+          party: "ALP",
+          electorate: "Wills",
+          imageUrl: "https://img/a.jpg",
+          imageCredit: null,
+        },
+      }),
+    );
     expect(reduceProgress(connected, { name: "call_target_hangup" })).toEqual(
       inCall({ kind: "target-gone" }),
     );

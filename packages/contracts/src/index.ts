@@ -679,6 +679,10 @@ export type DialerCampaignRecord = {
   outro: DialerPromptContent | null;
   optOut: DialerPromptContent | null;
   targetNumbers: string[] | null;
+  /** Admin-pinned member snapshots (id-only civic refs + display identity). */
+  targetPoliticians: Array<{ id: string; name: string; party?: string | null; electorate?: string | null }> | null;
+  /** Widget (VOIP) callers may browse + choose their member. */
+  callerChoosesTarget: boolean;
   partyTargets: string[] | null;
   jurisdiction: DialerJurisdictionValue | null;
   officeTarget: "electorate" | "upper" | null;
@@ -810,6 +814,11 @@ export type ActionPageRecord = {
   collectEmail: boolean;
   collectPhone: boolean;
   allowPrefill: boolean;
+  /**
+   * Advisory page-level signal (show the challenge up-front). The public call
+   * + member-search routes are ALWAYS Turnstile-gated in production
+   * (strict/soft, like login) regardless of this flag — the server decides.
+   */
   requireCaptcha: boolean;
   embedDomains: string[];
   campaignId: string | null;
@@ -838,6 +847,7 @@ export type PublicActionPagePayload = {
     collectEmail: boolean;
     collectPhone: boolean;
     allowPrefill: boolean;
+    /** Advisory only — the widget always executes Turnstile; the server enforces. */
     requireCaptcha: boolean;
     callsEnabled: boolean;
   };
@@ -851,11 +861,30 @@ export type PublicActionPagePayload = {
     secondaryColour: string | null;
     customCss: string | null;
   } | null;
-  campaign: { kind: "TRANSFER" | "ELECTORAL"; targetLabel: string | null } | null;
+  campaign: {
+    kind: "TRANSFER" | "ELECTORAL";
+    targetLabel: string | null;
+    /** Pinned member identities — photo included, never a number. */
+    targets: PublicTargetIdentity[];
+    /** The widget may browse + choose a member (narrowed by the campaign's filters). */
+    chooser: boolean;
+  } | null;
+};
+
+/** A member as the public widget may see them — identity only, never a number. */
+export type PublicTargetIdentity = {
+  id: string;
+  name: string;
+  party: string | null;
+  electorate: string | null;
+  imageUrl: string | null;
+  imageCredit: string | null;
 };
 
 export type CreateCallSessionRequest = {
   supporter?: { name?: string; email?: string; phone?: string };
+  /** Caller-selected member (pinned set or chooser) — validated server-side. */
+  targetPoliticianId?: string;
   /** The embedding page's hostname, for the server-side allowlist re-check. */
   embedAncestor?: string;
 };
@@ -864,6 +893,8 @@ export type CreateCallSessionResponse = {
   sessionId: string;
   voice: { token: string; expiresAt: string };
   progress: { url: string; token: string; expiresAt: string };
+  /** The resolved target's identity (chosen or single-pinned), for display. */
+  target: PublicTargetIdentity | null;
 };
 
 export type ActionPageSessionRow = {

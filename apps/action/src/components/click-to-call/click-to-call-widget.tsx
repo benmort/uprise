@@ -6,8 +6,10 @@ import { publicActions } from "@uprise/api-client";
 import {
   CallWidget,
   TurnstileWidget,
+  type CallTargetIdentity,
   type CallWidgetScreen,
   type CallWidgetValues,
+  type SelectableTarget,
   type TurnstileHandle,
 } from "@uprise/ui";
 import { reduceProgress } from "./call-state";
@@ -32,6 +34,53 @@ export function ClickToCallWidget({
 }) {
   const [screen, setScreen] = React.useState<CallWidgetScreen>({ kind: "idle" });
   const [values, setValues] = React.useState<CallWidgetValues>({ name: "", email: "", phone: "" });
+  // Member targeting: pinned identities come with the page payload; the
+  // chooser searches server-side (name OR electorate), narrowed by the
+  // campaign's filters. Only the ID ever goes back to the server.
+  const pinnedTargets = React.useMemo<SelectableTarget[]>(
+    () => (page.campaign?.targets ?? []).map((t) => ({ ...t })),
+    [page.campaign],
+  );
+  const chooser = Boolean(page.campaign?.chooser) && pinnedTargets.length === 0;
+  const [selectedTargetId, setSelectedTargetId] = React.useState<string | null>(
+    pinnedTargets.length === 1 ? pinnedTargets[0].id : null,
+  );
+  const [targetQuery, setTargetQuery] = React.useState("");
+  const [targetResults, setTargetResults] = React.useState<SelectableTarget[]>([]);
+  const [targetsLoading, setTargetsLoading] = React.useState(false);
+  const [activeTarget, setActiveTarget] = React.useState<CallTargetIdentity | null>(null);
+  // Postcode keypad echo — purely visual; the digits themselves ride DTMF.
+  const [typedDigits, setTypedDigits] = React.useState("");
+  const inPostcode = screen.kind === "in-call" && screen.view.kind === "postcode";
+  React.useEffect(() => {
+    if (!inPostcode) setTypedDigits("");
+  }, [inPostcode]);
+
+  React.useEffect(() => {
+    if (!chooser) return;
+    const q = targetQuery.trim();
+    if (!q) {
+      setTargetResults([]);
+      return;
+    }
+    let alive = true;
+    setTargetsLoading(true);
+    const t = setTimeout(() => {
+      // Turnstile tokens are single-use, so each search mints a fresh one
+      // (invisible interaction-only widget; inert when unconfigured).
+      void (async () => {
+        const captchaToken = (await turnstileRef.current?.execute()) ?? undefined;
+        const res = await publicActions.searchTargets(slug, q, captchaToken);
+        if (!alive) return;
+        setTargetsLoading(false);
+        if (res.ok) setTargetResults(res.data.targets.map((r) => ({ ...r })));
+      })();
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [chooser, slug, targetQuery]);
   const turnstileRef = React.useRef<TurnstileHandle>(null);
   const screenKindRef = React.useRef(screen.kind);
   screenKindRef.current = screen.kind;
@@ -99,9 +148,10 @@ export function ClickToCallWidget({
     if (screenKindRef.current !== "idle" && screenKindRef.current !== "error") return;
     setScreen({ kind: "creating" });
 
-    const captchaToken = page.page.requireCaptcha
-      ? ((await turnstileRef.current?.execute()) ?? undefined)
-      : undefined;
+    // Always execute — the call endpoint is captcha-gated like login (strict
+    // in production, inert in dev). page.requireCaptcha remains an advisory
+    // signal; the server decides.
+    const captchaToken = (await turnstileRef.current?.execute()) ?? undefined;
 
     let embedAncestor: string | undefined;
     if (embedded && typeof document !== "undefined" && document.referrer) {
@@ -117,7 +167,11 @@ export function ClickToCallWidget({
     if (page.page.collectEmail && values.email.trim()) supporter.email = values.email.trim();
     if (page.page.collectPhone && values.phone.trim()) supporter.phone = values.phone.trim();
 
-    const res = await publicActions.createCallSession(slug, { supporter, embedAncestor }, captchaToken);
+    const res = await publicActions.createCallSession(
+      slug,
+      { supporter, embedAncestor, ...(selectedTargetId ? { targetPoliticianId: selectedTargetId } : {}) },
+      captchaToken,
+    );
     if (!res.ok) {
       const message =
         res.status === 429
@@ -127,10 +181,16 @@ export function ClickToCallWidget({
       return;
     }
 
+    setActiveTarget(
+      res.data.target ??
+        pinnedTargets.find((t) => t.id === selectedTargetId) ??
+        targetResults.find((t) => t.id === selectedTargetId) ??
+        null,
+    );
     setScreen({ kind: "connecting" });
     progress.connect(publicActions.sessionEventsUrl(res.data.sessionId, res.data.progress.token));
     await voice.start(res.data.voice.token, res.data.sessionId);
-  }, [embedded, page.page, progress, slug, values, voice]);
+  }, [embedded, page.page, pinnedTargets, progress, selectedTargetId, slug, targetResults, values, voice]);
 
   const fullPageUrl = React.useMemo(() => {
     if (!embedded || typeof window === "undefined") return null;
@@ -151,13 +211,26 @@ export function ClickToCallWidget({
       }}
       values={values}
       onValuesChange={setValues}
+      targets={pinnedTargets}
+      selectedTargetId={selectedTargetId}
+      onSelectTarget={(id) => setSelectedTargetId(id || null)}
+      chooser={chooser}
+      targetQuery={targetQuery}
+      onTargetQueryChange={setTargetQuery}
+      targetResults={targetResults}
+      targetsLoading={targetsLoading}
+      activeTarget={activeTarget}
       onStart={() => void start()}
-      onDigit={voice.sendDigits}
+      onDigit={(digit) => {
+        voice.sendDigits(digit);
+        if (inPostcode) setTypedDigits((current) => (current + digit).slice(0, 4));
+      }}
+      typedDigits={typedDigits}
       onHangUp={voice.hangUp}
       onRetry={() => setScreen({ kind: "idle" })}
       muted={voice.muted}
       onToggleMute={voice.toggleMute}
-      captchaSlot={page.page.requireCaptcha ? <TurnstileWidget ref={turnstileRef} /> : null}
+      captchaSlot={<TurnstileWidget ref={turnstileRef} />}
       fullPageUrl={fullPageUrl}
     />
   );

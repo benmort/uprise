@@ -91,7 +91,10 @@ export class IvrFlowService {
     @Optional() outbox?: OutboxService,
     @Optional() @Inject(TRANSACTIONAL_DISPATCHER) dispatcher?: TransactionalDispatcher,
     @Optional() electoral?: ElectoralLookupService,
-    @Optional() @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+    // NOT @Optional: the click-to-call bridge is dead without the queue, and
+    // an optional inject turns a missing QueueModule import into a silent
+    // no-op instead of a boot failure (the live smoke found exactly that).
+    @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
     @Optional() webhookEvents?: WebhookEventService,
   ) {
     // Optional-with-fallback tail params (the blasts pattern) so unit specs can
@@ -217,6 +220,15 @@ export class IvrFlowService {
 
     // Transparent transfer: no intro, no IVR — straight to the bridge.
     if (campaign.transparentTargetTransfer) {
+      vr.redirect(this.ivrUrl("redirect", this.idParams(ctx)));
+      return vr.toString();
+    }
+
+    // A widget session with a pre-chosen member (pinned or caller-selected at
+    // mint) skips the postcode IVR — the target is already on the session.
+    if (session && (session.targetNumber || session.targetName)) {
+      const urls = await this.promptUrls(campaign, []);
+      this.sayOrPlay(vr, campaign.intro, ctx.language, urls);
       vr.redirect(this.ivrUrl("redirect", this.idParams(ctx)));
       return vr.toString();
     }
@@ -465,6 +477,8 @@ export class IvrFlowService {
       await this.progress.publish(session.id, campaign.tenantId, "call_redirecting", {
         message: session.targetName ? `Connecting you to ${session.targetName}.` : "Connecting you now.",
         name: session.targetName ?? undefined,
+        party: session.targetParty ?? undefined,
+        electorate: session.targetElectorate ?? undefined,
       });
 
       // Caller creates the conference and owns its lifetime; the status
@@ -638,6 +652,8 @@ export class IvrFlowService {
           });
           await this.progress.publish(session.id, campaign.tenantId, "call_connected_conference", {
             name: session.targetName ?? undefined,
+            party: session.targetParty ?? undefined,
+            electorate: session.targetElectorate ?? undefined,
           });
         } else {
           await this.progress.publish(session.id, campaign.tenantId, "call_target_hangup", {});
@@ -847,6 +863,8 @@ export class IvrFlowService {
         name: target.name,
         party: target.party,
         electorate: target.electorate,
+        imageUrl: target.imageUrl,
+        imageCredit: target.imageCredit,
       });
       vr.say(`Connecting you to ${target.name}. Please hold.`);
       vr.redirect(this.ivrUrl("redirect", this.idParams(ctx)));
@@ -870,7 +888,9 @@ export class IvrFlowService {
   /**
    * No member / no number: fall back to the campaign's fixed targetNumbers
    * when configured (the source's graceful degradation), else end the call
-   * politely. The apology is already on `vr`.
+   * politely. The apology is already on `vr`. Widget sessions take the
+   * fallback THROUGH the conference bridge (persist the number, re-enter
+   * /redirect); PSTN legs dial it directly.
    */
   private async electoralFallback(
     ctx: IvrContext,
@@ -878,7 +898,17 @@ export class IvrFlowService {
     vr: InstanceType<typeof Twilio.twiml.VoiceResponse>,
   ): Promise<string> {
     const fallback = this.resolveTargetNumber(ctx.campaign);
-    if (fallback && !ctx.session && ctx.attempt?.kind !== "WEBRTC") {
+    if (fallback && ctx.session) {
+      await this.prisma.dialerCallSession.update({
+        where: { id: ctx.session.id },
+        data: { targetNumber: fallback },
+      });
+      ctx.session = { ...ctx.session, targetNumber: fallback };
+      vr.say("Connecting you now.");
+      vr.redirect(this.ivrUrl("redirect", this.idParams(ctx)));
+      return vr.toString();
+    }
+    if (fallback && ctx.attempt?.kind !== "WEBRTC") {
       const callId = ctx.callId ?? (await this.resolveCallId(body.CallSid));
       await this.recordTransfer(ctx, fallback, callId);
       vr.say("Connecting you now.");

@@ -58,6 +58,7 @@ export const InCallPostcode: Story = {
   args: {
     screen: { kind: "in-call", view: { kind: "postcode" } },
     ...COPY,
+    typedDigits: "30",
     onDigit: () => {},
     onHangUp: () => {},
   },
@@ -94,7 +95,20 @@ export const InCallSurvey: Story = {
 
 export const InCallConnected: Story = {
   args: {
-    screen: { kind: "in-call", view: { kind: "connected", name: "Alex Example MP" } },
+    screen: {
+      kind: "in-call",
+      view: {
+        kind: "connected",
+        name: "Alex Example MP",
+        target: {
+          name: "Alex Example MP",
+          party: "Australian Labor Party",
+          electorate: "Wills",
+          imageUrl: null,
+          imageCredit: null,
+        },
+      },
+    },
     ...COPY,
     onHangUp: () => {},
     onToggleMute: () => {},

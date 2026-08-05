@@ -74,6 +74,8 @@ function makeHarness(pageOverrides: Record<string, unknown> = {}) {
       voiceToken: { token: "voice-jwt", expiresAt: "2100-01-01T00:00:00.000Z" },
       progressToken: { token: "progress-token", expiresAt: "2100-01-01T00:00:00.000Z" },
     })),
+    getPublicTargets: jest.fn(async () => ({ chooser: false, targets: [] })),
+    searchPublicTargets: jest.fn(async () => []),
     countSessions: jest.fn(async () => 0),
     listSessions: jest.fn(async () => []),
     sessionStats: jest.fn(async () => ({ started: 0, connected: 0, bridged: 0, averageDurationSeconds: null })),
@@ -211,7 +213,12 @@ describe("ActionsService", () => {
       expect(serialised).not.toContain("dc1"); // campaignId
       expect(serialised).not.toContain("embedDomains");
       expect(serialised).not.toContain("publishedAt");
-      expect(out.campaign).toEqual({ kind: "TRANSFER", targetLabel: "1 configured target" });
+      expect(out.campaign).toEqual({
+        kind: "TRANSFER",
+        targetLabel: "1 configured target",
+        targets: [],
+        chooser: false,
+      });
       expect(out.page.callsEnabled).toBe(true);
       expect(out.tenant).toMatchObject({ name: "Org", slug: "org" });
     });
@@ -247,17 +254,17 @@ describe("ActionsService", () => {
       expect(facade.createPublicCallSession).not.toHaveBeenCalled();
     });
 
-    it("fails closed on captcha when required and configured", async () => {
-      const { service, turnstile, facade } = makeHarness({ requireCaptcha: true });
-      (turnstile.isConfigured as jest.Mock).mockReturnValue(true);
-      (turnstile.verify as jest.Mock).mockResolvedValueOnce("unavailable");
-      try {
-        await service.createPublicCallSession("slug-1", { supporter: { name: "Sam" } }, { clientIp: "1.1.1.1" });
-        throw new Error("expected captcha failure");
-      } catch (err) {
-        expect(errCode(err)).toBe("CAPTCHA_FAILED");
-      }
-      expect(facade.createPublicCallSession).not.toHaveBeenCalled();
+    it("captcha rides the route decorator (strict), not a second in-service verify", () => {
+      // Single-use tokens: the globally-registered TurnstileGuard verifies via
+      // @RequireCaptcha("strict") — the service must NOT verify again.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { REQUIRE_CAPTCHA_KEY } = require("../common/captcha/require-captcha.decorator");
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { PublicActionsController } = require("./public-actions.controller");
+      expect(Reflect.getMetadata(REQUIRE_CAPTCHA_KEY, PublicActionsController.prototype.createCallSession)).toBe(
+        "strict",
+      );
+      expect(Reflect.getMetadata(REQUIRE_CAPTCHA_KEY, PublicActionsController.prototype.searchTargets)).toBe("soft");
     });
 
     it("enforces the embed-ancestor allowlist (wildcard aware) as defence in depth", async () => {

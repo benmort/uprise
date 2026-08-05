@@ -225,13 +225,26 @@ export class AutodialerService {
       }
     }
 
-    const { targetNumbers, partyTargets, intro, outro, optOut, ...rest } = dto;
+    const { targetNumbers, partyTargets, targetPoliticians, intro, outro, optOut, ...rest } = dto;
     return this.prisma.dialerCampaign.update({
       where: { id: campaign.id },
       data: {
         ...rest,
         ...(targetNumbers !== undefined ? { targetNumbers: targetNumbers ?? Prisma.DbNull } : {}),
         ...(partyTargets !== undefined ? { partyTargets: partyTargets ?? Prisma.DbNull } : {}),
+        ...(targetPoliticians !== undefined
+          ? {
+              targetPoliticians:
+                targetPoliticians === null
+                  ? Prisma.DbNull
+                  : (targetPoliticians.map((p) => ({
+                      id: p.id,
+                      name: p.name,
+                      party: p.party ?? null,
+                      electorate: p.electorate ?? null,
+                    })) as Prisma.InputJsonValue),
+            }
+          : {}),
         ...(intro !== undefined ? { intro: (intro ?? Prisma.DbNull) as Prisma.InputJsonValue } : {}),
         ...(outro !== undefined ? { outro: (outro ?? Prisma.DbNull) as Prisma.InputJsonValue } : {}),
         ...(optOut !== undefined ? { optOut: (optOut ?? Prisma.DbNull) as Prisma.InputJsonValue } : {}),

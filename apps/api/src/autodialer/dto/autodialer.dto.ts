@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -69,6 +70,30 @@ export class CreateDialerCampaignDto {
   @IsOptional()
   @IsBoolean()
   transparentTargetTransfer?: boolean;
+}
+
+/** An admin-pinned member: id-only civic ref + display snapshot. The id is
+ *  re-validated and the office number re-resolved server-side at call time. */
+export class PinnedPoliticianDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(64)
+  id!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  party?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  electorate?: string | null;
 }
 
 export class UpdateDialerCampaignDto {
@@ -153,6 +178,18 @@ export class UpdateDialerCampaignDto {
   @IsArray()
   @IsString({ each: true })
   targetNumbers?: string[] | null;
+
+  /** Admin-pinned member snapshots: [{id, name, party?, electorate?}] (≤ 20). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => PinnedPoliticianDto)
+  targetPoliticians?: PinnedPoliticianDto[] | null;
+
+  @IsOptional()
+  @IsBoolean()
+  callerChoosesTarget?: boolean;
 
   @IsOptional()
   @IsArray()

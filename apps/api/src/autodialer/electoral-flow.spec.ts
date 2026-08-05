@@ -250,6 +250,20 @@ describe("connect degradations", () => {
     expect(twiml).toContain(`<Dial>${FALLBACK}</Dial>`);
   });
 
+  it("a widget session with no dialable member takes the fallback THROUGH the bridge", async () => {
+    const { service, prisma, electoral } = setup();
+    electoral.resolveTarget.mockResolvedValue(null);
+    const ctx = ctxOf({ attempt: null, session: makeSession(), callId: "callS" });
+    const twiml = await service.handleElectoralLookup(ctx, { Digits: "3058" });
+    // The fallback number lands on the session, then the call re-enters /redirect
+    // (the conference path) — never an inline <Dial> for a widget leg.
+    expect(prisma.dialerCallSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { targetNumber: FALLBACK } }),
+    );
+    expect(twiml).toContain("redirect?campaignId=dc1&amp;sessionId=sess1");
+    expect(twiml).not.toContain("<Dial>");
+  });
+
   it("a widget session persists the resolved target for the Phase 4b bridge instead of dialling", async () => {
     const { service, prisma, progress } = setup();
     const ctx = ctxOf({ attempt: null, session: makeSession(), callId: "callS" });

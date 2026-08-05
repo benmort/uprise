@@ -6,6 +6,7 @@ import { Copy as CopyIcon, ExternalLink, Megaphone } from "lucide-react";
 import { actionPages, autodialer, type AuthPrincipal } from "@uprise/api-client";
 import type { ActionPageRecord, ActionPageSessionRow } from "@uprise/contracts";
 import { getSession } from "@/lib/session";
+import { actionAppOrigin } from "@/lib/action-app-origin";
 import { useApi, invalidateApi } from "@/lib/use-api";
 import { behaviourOf } from "@/components/autodialer/behaviour";
 import { PageShell } from "@/components/shell/page-shell";
@@ -21,8 +22,6 @@ import { ConfirmDialog, Field, SegmentedControl, Select, SelectItem, Switch, Tag
 import { useToast } from "@/components/ui/toast";
 
 type Tab = "build" | "embed" | "results";
-
-const ACTION_APP_URL = process.env.NEXT_PUBLIC_ACTION_APP_URL || "http://localhost:3004";
 
 /** Same hostname / *.wildcard grammar the API enforces at write time. */
 const DOMAIN_RE = /^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i;
@@ -73,7 +72,7 @@ export default function ActionPageBuilderPage() {
   const page = detail.data;
   const tenantSlug = tenantSlugOf(principal);
   const publicPath = page && tenantSlug ? `/${tenantSlug}/actions/${page.publicSlug}` : null;
-  const publicUrl = publicPath ? `${ACTION_APP_URL}${publicPath}` : null;
+  const publicUrl = publicPath ? `${actionAppOrigin()}${publicPath}` : null;
 
   const setTab = (next: Tab) =>
     router.replace(next === "build" ? pathname : `${pathname}?tab=${next}`, { scroll: false });
@@ -328,6 +327,11 @@ function BuildTab({
               <Switch checked={value} onCheckedChange={setter} />
             </div>
           ))}
+          <p className="text-xs text-muted-foreground">
+            Calling and member search are always Turnstile-protected in production (the same
+            strict/soft checks as login). The captcha switch is a page-level signal for showing the
+            challenge up-front – turning it off never removes the protection.
+          </p>
         </Card>
 
         <Card className="space-y-3 p-4">
@@ -448,8 +452,9 @@ function EmbedTab({
 }) {
   const [form, setForm] = useState<"script" | "iframe">("script");
   const org = tenantSlug ?? "your-workspace";
-  const scriptSnippet = `<script async src="${ACTION_APP_URL}/embed/v1/uprise-action.js"></script>\n<uprise-action org="${org}" page="${page.publicSlug}"></uprise-action>`;
-  const iframeSnippet = `<iframe\n  src="${ACTION_APP_URL}/${org}/actions/${page.publicSlug}/embed"\n  title="${page.headline ?? "Take action"}"\n  style="border:0;width:100%;max-width:480px;height:480px"\n  allow="microphone ${ACTION_APP_URL}"\n></iframe>`;
+  const base = actionAppOrigin();
+  const scriptSnippet = `<script async src="${base}/embed/v1/uprise-action.js"></script>\n<uprise-action org="${org}" page="${page.publicSlug}"></uprise-action>`;
+  const iframeSnippet = `<iframe\n  src="${base}/${org}/actions/${page.publicSlug}/embed"\n  title="${page.headline ?? "Take action"}"\n  style="border:0;width:100%;max-width:480px;height:480px"\n  allow="microphone ${base}"\n></iframe>`;
   const snippet = form === "script" ? scriptSnippet : iframeSnippet;
 
   const copy = async () => {
@@ -501,7 +506,7 @@ function EmbedTab({
         <h3 className="text-sm font-semibold">Embedded preview</h3>
         {tenantSlug ? (
           <iframe
-            src={`${ACTION_APP_URL}/${tenantSlug}/actions/${page.publicSlug}/embed`}
+            src={`${base}/${tenantSlug}/actions/${page.publicSlug}/embed`}
             title="Embed preview"
             sandbox="allow-scripts allow-same-origin allow-forms"
             className="h-[480px] w-full max-w-[480px] rounded-xl border border-border bg-surface"
