@@ -62,6 +62,29 @@ describe("engagement api client — surveys", () => {
     expect(url).toBe("/engagement/surveys/s1");
     expect(opts?.method).toBe("DELETE");
   });
+
+  it("save payloads strip server-owned row fields (the API whitelist rejects them)", async () => {
+    // A question round-tripped from getSurvey carries id/surveyId (+ option
+    // id/questionId); the whitelist ValidationPipe 400s on any of them.
+    const fetched = {
+      id: "q1",
+      surveyId: "s1",
+      key: "k1",
+      prompt: "Will you volunteer?",
+      type: "single_choice",
+      options: [
+        { id: "o1", questionId: "q1", value: "yes", label: "Yes", nextQuestionKey: null, isTerminal: false },
+      ],
+    } as never;
+    await updateSurvey("s1", { name: "Renamed", questions: [fetched] });
+    const sent = body(mockReq.mock.calls[0][1]);
+    expect(sent.questions[0]).not.toHaveProperty("id");
+    expect(sent.questions[0]).not.toHaveProperty("surveyId");
+    expect(sent.questions[0].options[0]).not.toHaveProperty("id");
+    expect(sent.questions[0].options[0]).not.toHaveProperty("questionId");
+    expect(sent.questions[0]).toMatchObject({ key: "k1", prompt: "Will you volunteer?" });
+    expect(sent.questions[0].options[0]).toMatchObject({ value: "yes", label: "Yes" });
+  });
 });
 
 describe("engagement api client — scripts", () => {

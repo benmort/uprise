@@ -55,18 +55,49 @@ export async function getSurvey(id: string) {
   return request<Survey>(`/engagement/surveys/${encodeURIComponent(id)}`);
 }
 type SurveyFlowInput = { entryQuestionKey?: string | null; opensAfterDisposition?: boolean };
+// The authoring API reconciles questions by stable `key` and its whitelist pipe
+// rejects unknown fields — server-owned row fields (question/option `id`,
+// `surveyId`, `questionId`) that ride in on a fetched Survey must not go back
+// in a save payload. Serialise only the authorable shape.
+function toQuestionPayload(q: SurveyQuestion) {
+  return {
+    key: q.key,
+    prompt: q.prompt,
+    type: q.type,
+    orderIndex: q.orderIndex,
+    required: q.required,
+    scaleMin: q.scaleMin,
+    scaleMax: q.scaleMax,
+    defaultNextQuestionKey: q.defaultNextQuestionKey,
+    options: q.options?.map((o) => ({
+      value: o.value,
+      label: o.label,
+      orderIndex: o.orderIndex,
+      dispositionCode: o.dispositionCode,
+      supportLevel: o.supportLevel,
+      cannedReplyText: o.cannedReplyText,
+      nextQuestionKey: o.nextQuestionKey,
+      isTerminal: o.isTerminal,
+    })),
+  };
+}
+
+function toSurveyPayload<T extends { questions?: SurveyQuestion[] }>(input: T) {
+  return { ...input, ...(input.questions ? { questions: input.questions.map(toQuestionPayload) } : {}) };
+}
+
 export async function createSurvey(input: { name: string; questions?: SurveyQuestion[] } & SurveyFlowInput) {
   return request<Survey>("/engagement/surveys", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify(toSurveyPayload(input)),
   });
 }
 export async function updateSurvey(id: string, input: { name?: string; questions?: SurveyQuestion[] } & SurveyFlowInput) {
   return request<Survey>(`/engagement/surveys/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify(toSurveyPayload(input)),
   });
 }
 export async function deleteSurvey(id: string) {
