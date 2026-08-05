@@ -266,4 +266,46 @@ describe("TelephonySenderResolver", () => {
     prisma.telephonyPhoneNumber.findFirst.mockResolvedValue(null);
     expect(await resolver.resolveByNumberId("t1", "missing")).toBeUndefined();
   });
+
+  /**
+   * A BYO account can live in Twilio region au1 (edge sydney) while the platform master does
+   * not, and the region travels with the CREDENTIALS: it is TwilioService that builds the SDK
+   * client from a ResolvedSender, so a resolution that drops the region has the tenant's
+   * number bought in au1 and then texted from through the default region. Every one of the
+   * three resolution paths has to carry it.
+   */
+  describe("regional account", () => {
+    const regional = {
+      id: "acc_1",
+      accountSid: "ACsub",
+      encryptedAuthToken: "tok",
+      status: "ACTIVE",
+      settings: null,
+      region: "au1",
+      edge: "sydney",
+    };
+
+    it("carries the account's region and edge on every resolution path", async () => {
+      const { resolver } = build({ numbers: [num({ id: "num_pick", numberType: "mobile" })], account: regional });
+
+      expect(await resolver.resolve({ tenantId: "t1", purpose: "marketing" })).toMatchObject({
+        region: "au1",
+        edge: "sydney",
+      });
+      expect(await resolver.resolveByNumber("t1", "+61485052501")).toMatchObject({ region: "au1", edge: "sydney" });
+      expect(await resolver.resolveByNumberId("t1", "num_pick")).toMatchObject({ region: "au1", edge: "sydney" });
+    });
+
+    it("carries null for a non-regional account (the platform's subaccounts)", async () => {
+      const { resolver } = build({
+        numbers: [num({ numberType: "mobile" })],
+        account: { ...regional, region: null, edge: null },
+      });
+
+      expect(await resolver.resolve({ tenantId: "t1", purpose: "marketing" })).toMatchObject({
+        region: null,
+        edge: null,
+      });
+    });
+  });
 });

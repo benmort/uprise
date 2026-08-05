@@ -892,6 +892,19 @@ export const telephony = {
     mode: "SUBACCOUNT" | "BYO";
     byoAccountSid?: string;
     byoAuthToken?: string;
+    /**
+     * BYO only: an ALREADY-APPROVED Twilio regulatory bundle (`BU…`) and the registered
+     * address it was approved against (`AD…`). A tenant bringing an established Twilio
+     * account has been through the AU regulatory journey once already; supplying the pair
+     * skips it – no bundle drafted, no documents uploaded, no days waiting on a human
+     * reviewer. Both or neither, and only for the regulation class the bundle was approved
+     * for (the complementary run still drafts its own).
+     */
+    byoBundleSid?: string;
+    byoAddressSid?: string;
+    /** BYO only: the account's Twilio home region / edge, e.g. "au1" / "sydney". */
+    byoRegion?: string;
+    byoEdge?: string;
     friendlyName?: string;
     /** Regulation class to provision first: "mobile" (SMS, the default) or "local" (voice caller-id). */
     numberType?: "mobile" | "local";

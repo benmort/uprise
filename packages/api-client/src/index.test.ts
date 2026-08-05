@@ -678,6 +678,47 @@ describe("telephony + email provisioning", () => {
     expect(bodyOf(init)).toMatchObject({ tenantId: "t1", mode: "SUBACCOUNT" });
   });
 
+  /**
+   * A BYO tenant whose Twilio account has already cleared the AU regulatory review supplies
+   * its approved bundle + address (and the account's region) at start.
+   *
+   * Be precise about what guards what here. `startRun` is `JSON.stringify(body)`, a straight
+   * pass-through, and the client-side change is a TYPE-only widening – types erase, so no
+   * runtime assertion in this file can fail if those four fields are deleted from the
+   * declaration. What DOES fail is `tsc`: the literal below is an excess-property check
+   * against the parameter type, so dropping a field from the type turns this file red under
+   * `pnpm --filter @uprise/api-client typecheck` (which includes src/*.test.ts). The
+   * assertion is still worth having – it pins that the body is sent verbatim rather than
+   * rebuilt field-by-field, which is how a field would go missing at runtime.
+   */
+  it("telephony.startRun carries the BYO bundle, address, region and edge", async () => {
+    const bundleSid = `BU${"a".repeat(32)}`;
+    const addressSid = `AD${"b".repeat(32)}`;
+    await telephony.startRun({
+      mode: "BYO",
+      byoAccountSid: `AC${"1".repeat(32)}`,
+      byoAuthToken: "test-token",
+      byoBundleSid: bundleSid,
+      byoAddressSid: addressSid,
+      byoRegion: "au1",
+      byoEdge: "sydney",
+      complianceInput: {
+        legalName: "Acme",
+        contactFirstName: "A",
+        contactLastName: "B",
+        email: "a@x.com",
+        address: { street: "1 St", city: "Town", region: "VIC", postalCode: "3000" },
+      },
+    });
+    expect(bodyOf(call()[1])).toMatchObject({
+      mode: "BYO",
+      byoBundleSid: bundleSid,
+      byoAddressSid: addressSid,
+      byoRegion: "au1",
+      byoEdge: "sydney",
+    });
+  });
+
   it("telephony.listRuns appends an encoded tenantId query only when provided", async () => {
     await telephony.listRuns("t/1");
     expect(call()[0]).toBe(`${BASE}/telephony/provisioning-runs?tenantId=t%2F1`);

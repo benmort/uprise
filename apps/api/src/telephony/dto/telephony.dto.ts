@@ -1,4 +1,4 @@
-import { Type } from "class-transformer";
+import { Transform, Type, type TransformFnParams } from "class-transformer";
 import {
   IsBoolean,
   IsEmail,
@@ -7,9 +7,13 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   ValidateNested,
 } from "class-validator";
+
+/** Trim a pasted string; anything else is left alone for the validator to reject. */
+const trimmed = ({ value }: TransformFnParams) => (typeof value === "string" ? value.trim() : value);
 
 export class ComplianceAddressDto {
   @IsString()
@@ -92,6 +96,39 @@ export class StartProvisioningRunDto {
   @IsOptional()
   @IsString()
   byoAuthToken?: string;
+
+  /**
+   * An ALREADY-APPROVED regulatory bundle and its registered address on the BYO account.
+   * Supplying both skips Twilio's human compliance review entirely, so the shape is pinned
+   * here as well as in the service: a bundle SID is BU + 32 hex, an address AD + 32 hex.
+   *
+   * Every one of these four is hand-pasted from another console, so each is TRIMMED before
+   * it is matched – a trailing space off a copy is not a 400 – and the case rules match the
+   * service's normaliser exactly (region/edge are accepted in any case and lowercased
+   * there). Where the two layers disagreed, the stricter one silently made the other's
+   * behaviour unreachable.
+   */
+  @IsOptional()
+  @Transform(trimmed)
+  @Matches(/^BU[0-9a-fA-F]{32}$/, { message: "byoBundleSid must be a Twilio bundle SID (BU…)" })
+  byoBundleSid?: string;
+
+  @IsOptional()
+  @Transform(trimmed)
+  @Matches(/^AD[0-9a-fA-F]{32}$/, { message: "byoAddressSid must be a Twilio address SID (AD…)" })
+  byoAddressSid?: string;
+
+  /** Twilio home region of the BYO account, e.g. "au1". */
+  @IsOptional()
+  @Transform(trimmed)
+  @Matches(/^[A-Za-z]{2}[0-9]$/, { message: "byoRegion must be a Twilio region, e.g. au1" })
+  byoRegion?: string;
+
+  /** Twilio edge of the BYO account, e.g. "sydney". */
+  @IsOptional()
+  @Transform(trimmed)
+  @Matches(/^[A-Za-z][A-Za-z-]{2,19}$/, { message: "byoEdge must be a Twilio edge, e.g. sydney" })
+  byoEdge?: string;
 
   @IsOptional()
   @IsString()

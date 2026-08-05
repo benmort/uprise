@@ -2,8 +2,33 @@ import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Twilio from "twilio";
 import { withRetry } from "../common/utils/retry.utils";
+import { twilioRegionOptions } from "../twilio/twilio-region";
 
-export type TwilioCreds = { accountSid: string; authToken: string };
+export type TwilioCreds = {
+  accountSid: string;
+  authToken: string;
+  /**
+   * Twilio home region of the account, e.g. "au1". A property of the ACCOUNT, not of the
+   * platform – a BYO account can be regional while the platform master is not. Null/absent
+   * means the default (us1) routing, i.e. exactly what every account did before this field
+   * existed.
+   */
+  region?: string | null;
+  /** Twilio edge, e.g. "sydney". Absent with a region ⇒ the region's default edge. */
+  edge?: string | null;
+};
+
+/**
+ * What an operator-supplied regulatory bundle actually IS, read from Twilio rather than
+ * taken on trust. `numberType`/`isoCountry` come from the bundle's REGULATION (the bundle
+ * resource itself only names a `regulationSid`), and are null when that lookup could not be
+ * made – the caller must treat null as "unknown", never as "matches".
+ */
+export type BundleFacts = {
+  status: string;
+  numberType: string | null;
+  isoCountry: string | null;
+};
 
 export type ComplianceInput = {
   legalName: string;
@@ -55,7 +80,29 @@ export class TwilioProvisioningClient {
     if (!sid || !token) {
       throw new ServiceUnavailableException("Twilio master credentials are not configured");
     }
-    return Twilio(sid, token);
+    // The third argument is omitted (not passed as `{}`) when the account is not regional,
+    // so a non-regional account constructs its client exactly as it did before. An edge with
+    // no region is ignored rather than half-applied – `twilioRegionOptions` owns that rule,
+    // so the SDK client and `regulatoryHost` below can never disagree about where a given
+    // account's requests go.
+    const options = twilioRegionOptions(creds?.region, creds?.edge);
+    return options ? Twilio(sid, token, options) : Twilio(sid, token);
+  }
+
+  /**
+   * The regulatory-compliance host for these creds.
+   *
+   * The SDK rewrites every request host to `<product>.<edge>.<region>.twilio.com` for a
+   * regional account (`BaseTwilio.getHostname`). `createSupportingDocument` is the one call
+   * that bypasses the SDK – multipart upload, which the Node client has no support for – so
+   * it has to apply the same rule by hand. Without it a regional (au1) account uploads its
+   * supporting documents into us1, where the bundle they belong to cannot see them, and the
+   * bundle is rejected days later by a human reviewer with nothing useful to read.
+   */
+  private regulatoryHost(creds: TwilioCreds): string {
+    const options = twilioRegionOptions(creds.region, creds.edge);
+    if (!options) return "numbers.twilio.com";
+    return ["numbers", options.edge, options.region, "twilio.com"].filter(Boolean).join(".");
   }
 
   /** Create a subaccount under the platform MASTER account. */
@@ -111,7 +158,7 @@ export class TwilioProvisioningClient {
     form.append("FriendlyName", doc.fileName);
     form.append("Type", doc.type);
     form.append("File", new Blob([new Uint8Array(doc.content)], { type: doc.contentType }), doc.fileName);
-    const res = await fetch("https://numbers.twilio.com/v2/RegulatoryCompliance/SupportingDocuments", {
+    const res = await fetch(`https://${this.regulatoryHost(creds)}/v2/RegulatoryCompliance/SupportingDocuments`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${Buffer.from(`${creds.accountSid}:${creds.authToken}`).toString("base64")}`,
@@ -180,6 +227,49 @@ export class TwilioProvisioningClient {
       status: String(bundle.status ?? ""),
       failureReason: (bundle as { failureReason?: string | null }).failureReason ?? null,
     };
+  }
+
+  /**
+   * What a bundle IS, under these credentials: its review status and the regulation class
+   * it was approved for.
+   *
+   * This is the only way to learn the class of a bundle uprise did not create. The bundle
+   * resource carries a `regulationSid`, not a `numberType` – the class and country live on
+   * the Regulation – so this is two calls. A failure to read the REGULATION is not fatal
+   * (null ⇒ unknown, and the caller decides); a failure to read the BUNDLE is, and throws,
+   * because it means the SID does not exist on this account.
+   */
+  async fetchBundleFacts(creds: TwilioCreds, bundleSid: string): Promise<BundleFacts> {
+    const bundle = await withRetry(
+      () => this.client(creds).numbers.v2.regulatoryCompliance.bundles(bundleSid).fetch(),
+      { retries: 2 },
+    );
+    const regulationSid = String((bundle as { regulationSid?: string }).regulationSid ?? "");
+    let numberType: string | null = null;
+    let isoCountry: string | null = null;
+    if (regulationSid) {
+      try {
+        const regulation = await this.client(creds)
+          .numbers.v2.regulatoryCompliance.regulations(regulationSid)
+          .fetch();
+        numberType = regulation.numberType ? String(regulation.numberType) : null;
+        isoCountry = regulation.isoCountry ? String(regulation.isoCountry) : null;
+      } catch {
+        // Unknown, not mismatched. Swallowed deliberately: an outage on the regulation
+        // lookup must not block a bundle Twilio has plainly already approved.
+        numberType = null;
+        isoCountry = null;
+      }
+    }
+    return { status: String(bundle.status ?? ""), numberType, isoCountry };
+  }
+
+  /** The country a registered address belongs to (throws when the SID is not on the account). */
+  async fetchAddressCountry(creds: TwilioCreds, addressSid: string): Promise<string | null> {
+    const address = await withRetry(() => this.client(creds).addresses(addressSid).fetch(), {
+      retries: 2,
+    });
+    return address.isoCountry ? String(address.isoCountry) : null;
   }
 
   /** First available AU number of the given type (throws when inventory is empty — retryable). */

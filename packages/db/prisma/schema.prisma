@@ -2471,6 +2471,12 @@ model TelephonyAccount {
   accountSid         String                 @unique
   encryptedAuthToken String
   friendlyName       String
+  // Twilio home region / edge of THIS account, e.g. "au1" / "sydney". A property of the
+  // account, not of the platform: a BYO account can be regional while the platform master
+  // (and every subaccount created under it, which inherits the master's region) is not.
+  // NULL on both = today's behaviour, the default us1 routing – existing rows are unchanged.
+  region             String?
+  edge               String?
   settings           Json?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt

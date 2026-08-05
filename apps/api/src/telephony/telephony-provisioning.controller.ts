@@ -71,6 +71,12 @@ export class TelephonyProvisioningController {
       mode: dto.mode,
       byoAccountSid: dto.byoAccountSid,
       byoAuthToken: dto.byoAuthToken,
+      // An already-approved bundle/address and the account's region – the service validates
+      // and rejects them for non-BYO runs; the controller only carries them.
+      byoBundleSid: dto.byoBundleSid,
+      byoAddressSid: dto.byoAddressSid,
+      byoRegion: dto.byoRegion,
+      byoEdge: dto.byoEdge,
       friendlyName: dto.friendlyName,
       numberType: dto.numberType,
       chainComplementary: dto.chainComplementary,
