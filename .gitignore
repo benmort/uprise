@@ -70,3 +70,7 @@ packages/ui/.ds-styles.css
 
 # Licensed poll source data (crosstab xlsx) — curated key-findings JSON stays tracked
 /data/insights/**/*.xlsx
+
+# Isolated validation builds (NEXT_DIST_DIR=.next-validate*) — 369065b committed 480
+# webpack cache files this way, two of them over GitHub's 100MB limit.
+.next-validate*/
