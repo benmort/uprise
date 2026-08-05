@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import Twilio from "twilio";
 import { withRetry } from "../common/utils/retry.utils";
+import { twilioRegionOptions } from "./twilio-region";
 
 export type TwilioMessage = {
   sid: string;
@@ -40,6 +41,14 @@ export type ResolvedSender = {
   /** Per-account rate overrides (TelephonyAccount.settings). */
   ratePerSecond?: number;
   maxConcurrent?: number;
+  /**
+   * Twilio home region / edge of the SENDING account (TelephonyAccount.region/edge). A BYO
+   * account can live in au1/sydney while the platform master does not; every request made
+   * on its behalf – a text, a call, a lookup – has to be routed there, not only the
+   * provisioning calls that bought its number. Absent ⇒ the default routing, unchanged.
+   */
+  region?: string | null;
+  edge?: string | null;
 };
 
 export interface SendOptions {
@@ -147,7 +156,8 @@ const MAX_CACHED_ACCOUNTS = 500;
 export class TwilioService {
   private readonly platformAccountSid: string | null;
   private readonly client: Twilio.Twilio | null;
-  private readonly clients = new Map<string, Twilio.Twilio>();
+  /** Per-account SDK clients, with the routing each was built for (see `getClient`). */
+  private readonly clients = new Map<string, { client: Twilio.Twilio; routing: string }>();
   private readonly buckets = new Map<string, RateBucket>();
   private readonly sendRatePerSecond: number;
   private readonly maxConcurrentSends: number;
@@ -186,11 +196,19 @@ export class TwilioService {
 
   private getClient(sender?: ResolvedSender): Twilio.Twilio {
     if (sender && sender.accountSid !== this.platformAccountSid) {
+      const options = twilioRegionOptions(sender.region, sender.edge);
+      // The cache is keyed by account (so `evictIdleAccounts`, which evicts by the bucket's
+      // account key, still clears it) but a cached client is only reusable if it routes the
+      // same way: a region added to – or changed on – the account must take effect on the
+      // next send, not after an eventual eviction.
+      const routing = options ? `${options.region}:${options.edge ?? ""}` : "";
       const cached = this.clients.get(sender.accountSid);
-      if (cached) return cached;
-      const created = Twilio(sender.accountSid, sender.authToken);
+      if (cached && cached.routing === routing) return cached.client;
+      const created = options
+        ? Twilio(sender.accountSid, sender.authToken, options)
+        : Twilio(sender.accountSid, sender.authToken);
       this.evictIdleAccounts();
-      this.clients.set(sender.accountSid, created);
+      this.clients.set(sender.accountSid, { client: created, routing });
       return created;
     }
     if (!this.client) {

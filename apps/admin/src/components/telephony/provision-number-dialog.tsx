@@ -45,6 +45,11 @@ export function ProvisionNumberDialog({
   defaultNumberType?: NumberType;
 }) {
   const [numberType, setNumberType] = useState<NumberType>(defaultNumberType);
+  // Default ON, matching the API's own default: an organisation needs a mobile to text
+  // from AND a local to call from, and the second run is chained automatically once the
+  // first number goes live. Unticking it is the only way to ask for one class only – the
+  // second number is a second purchase and a second bundle a human at Twilio reviews.
+  const [bothNumbers, setBothNumbers] = useState(true);
   const [input, setInput] = useState<TelephonyComplianceInput>(EMPTY);
   const [prefilling, setPrefilling] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,6 +61,7 @@ export function ProvisionNumberDialog({
     if (!open) return;
     let alive = true;
     setNumberType(defaultNumberType);
+    setBothNumbers(true);
     setError(null);
     setPrefilling(true);
     void telephony.compliancePrefill().then((res) => {
@@ -90,6 +96,7 @@ export function ProvisionNumberDialog({
     const res = await telephony.startRun({
       mode: "SUBACCOUNT",
       numberType,
+      chainComplementary: bothNumbers,
       complianceInput: {
         ...input,
         businessNumber: input.businessNumber?.trim() || undefined,
@@ -152,6 +159,25 @@ export function ProvisionNumberDialog({
           </button>
         ))}
       </div>
+
+      <label className="flex items-start gap-2 rounded-xl border border-border p-3 text-sm">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={bothNumbers}
+          onChange={(e) => setBothNumbers(e.target.checked)}
+        />
+        <span>
+          <span className="block font-medium text-foreground">
+            Also set up a {numberType === "local" ? "mobile number for text messages" : "local number for calls"}
+          </span>
+          <span className="block text-xs text-muted-foreground">
+            Australian numbers can do one job each, so most organisations want both. The second
+            number starts automatically once the first is live, and needs its own identity check.
+            Untick to set up only the {numberType === "local" ? "local" : "mobile"} number.
+          </span>
+        </span>
+      </label>
 
       {prefilling ? (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">

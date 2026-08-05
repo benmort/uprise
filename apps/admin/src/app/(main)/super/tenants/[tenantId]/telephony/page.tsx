@@ -36,6 +36,13 @@ const EMPTY_FORM = {
   mode: 'SUBACCOUNT' as 'SUBACCOUNT' | 'BYO',
   byoAccountSid: '',
   byoAuthToken: '',
+  // Which class to buy first, and whether to chain the other one. An organisation needs a
+  // local number to CALL from and a mobile to TEXT from; an AU local cannot send SMS.
+  // Both default to the API's own defaults, but a super-admin starting a run on someone
+  // else's behalf should see – and be able to decline – the second purchase, since each
+  // number costs a second regulatory bundle that a human at Twilio reviews.
+  numberType: 'local' as 'local' | 'mobile',
+  chainComplementary: true,
 };
 
 /**
@@ -111,6 +118,8 @@ export default function TenantTelephonyPage() {
     const res = await telephony.startRun({
       tenantId,
       mode: form.mode,
+      numberType: form.numberType,
+      chainComplementary: form.chainComplementary,
       ...(form.mode === 'BYO' ? { byoAccountSid: form.byoAccountSid, byoAuthToken: form.byoAuthToken } : {}),
       complianceInput,
     });
@@ -301,6 +310,33 @@ export default function TenantTelephonyPage() {
                       onChange={() => setForm((f) => ({ ...f, mode: 'BYO' }))}
                     />
                     Bring-your-own Twilio account
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={form.numberType === 'local'}
+                      onChange={() => setForm((f) => ({ ...f, numberType: 'local' }))}
+                    />
+                    Local number (calls)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      checked={form.numberType === 'mobile'}
+                      onChange={() => setForm((f) => ({ ...f, numberType: 'mobile' }))}
+                    />
+                    Mobile number (SMS)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.chainComplementary}
+                      onChange={(e) => setForm((f) => ({ ...f, chainComplementary: e.target.checked }))}
+                    />
+                    Also provision the {form.numberType === 'local' ? 'mobile' : 'local'} number
+                    (second bundle, reviewed separately)
                   </label>
                 </div>
                 {form.mode === 'BYO' ? (

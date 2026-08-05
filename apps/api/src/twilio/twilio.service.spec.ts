@@ -10,11 +10,14 @@ const clients = new Map<
   }
 >();
 const constructorCalls: string[] = [];
+/** Every argument list the SDK factory was called with – the region options live in [2]. */
+const constructorArgs: unknown[][] = [];
 
 jest.mock("twilio", () => ({
   __esModule: true,
-  default: jest.fn((sid: string) => {
+  default: jest.fn((sid: string, ...rest: unknown[]) => {
     constructorCalls.push(sid);
+    constructorArgs.push([sid, ...rest]);
     if (!clients.has(sid)) {
       clients.set(sid, {
         messages: { create: jest.fn() },
@@ -58,6 +61,7 @@ describe("TwilioService multi-account", () => {
   beforeEach(() => {
     clients.clear();
     constructorCalls.length = 0;
+    constructorArgs.length = 0;
     service = new TwilioService(config);
   });
 
@@ -82,6 +86,52 @@ describe("TwilioService multi-account", () => {
     const params = clients.get(SUB_SID)!.messages.create.mock.calls[0][0];
     expect(params.from).toBe("+61485052501");
     expect(clients.get(PLATFORM_SID)!.messages.create).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The reason the column exists. A BYO account can live in Twilio region au1 (edge sydney)
+   * while the platform master does not, and it is not only the provisioning calls that have
+   * to go there – every message the account sends does. Before this, region reached the
+   * provisioning client alone: Common Threads' numbers were bought in au1 and then texted
+   * from through the default region.
+   */
+  it("drives a regional sender's client with its region and edge", async () => {
+    const s = sender(SUB_SID, { region: "au1", edge: "sydney" });
+    clients.set(SUB_SID, { messages: { create: jest.fn().mockResolvedValue(createdMessage("SM9")) } });
+
+    await service.sendMessage("+61400000000", "hi", { sender: s });
+
+    expect(constructorArgs.find((a) => a[0] === SUB_SID)).toEqual([
+      SUB_SID,
+      "sub-token",
+      { region: "au1", edge: "sydney" },
+    ]);
+  });
+
+  it("constructs a non-regional sender's client with the same two arguments as before", async () => {
+    const s = sender(SUB_SID);
+    clients.set(SUB_SID, { messages: { create: jest.fn().mockResolvedValue(createdMessage("SM10")) } });
+
+    await service.sendMessage("+61400000000", "hi", { sender: s });
+
+    expect(constructorArgs.find((a) => a[0] === SUB_SID)).toEqual([SUB_SID, "sub-token"]);
+  });
+
+  // The client cache is keyed by account, so a region added to an account later must not be
+  // served the pre-regional client that is sitting in it.
+  it("rebuilds a cached client when the account's routing changes", async () => {
+    clients.set(SUB_SID, { messages: { create: jest.fn().mockResolvedValue(createdMessage("SM11")) } });
+
+    await service.sendMessage("+61400000000", "hi", { sender: sender(SUB_SID) });
+    await service.sendMessage("+61400000000", "hi", { sender: sender(SUB_SID, { region: "au1" }) });
+    await service.sendMessage("+61400000000", "hi", { sender: sender(SUB_SID, { region: "au1" }) });
+
+    const forSub = constructorArgs.filter((a) => a[0] === SUB_SID);
+    // Twice, not three times: no options, then au1 – and the third send reuses the au1 client.
+    expect(forSub).toEqual([
+      [SUB_SID, "sub-token"],
+      [SUB_SID, "sub-token", { region: "au1", edge: "sydney" }],
+    ]);
   });
 
   it("keeps rate-limit cooldowns isolated per account", async () => {
