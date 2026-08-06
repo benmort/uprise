@@ -136,7 +136,8 @@ export default function ActionPagesPage() {
         />
       </FormDialog>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* id: spotlighted by the full app walkthrough's supporter-actions step. */}
+      <div id="tour-action-pages" className="flex flex-wrap items-center gap-2">
         <MultiSelectFilter label="Status" options={PAGE_STATUSES} selected={statuses} onChange={setStatuses} />
         <SearchInput
           value={q}

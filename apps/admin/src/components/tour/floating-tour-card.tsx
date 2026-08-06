@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Pause, Play, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronsUpDown, Clock, Pause, Play, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -11,6 +11,9 @@ import { AUTO_DWELL_MS, useUpriseTour } from "@/lib/tours/use-uprise-tour";
 // ─── Layout constants ────────────────────────────────────────────────────────
 const CARD_W = 320;
 const CARD_H = 268;
+/** Extra height a staged tour's card carries: the stage bar plus the key-message line. Placement
+ *  math has to know, or the card is positioned as if it were short and runs off the bottom. */
+const STAGE_CHROME_H = 74;
 const ARROW_H = 10;
 const ARROW_W = 22;
 const GAP = ARROW_H + 6;
@@ -33,23 +36,24 @@ interface TargetInfo {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-function computeTargetInfo(rect: DOMRect, forceAbove = false): TargetInfo {
+/** `cardH` varies: a staged tour's card carries the stage bar + key message (see STAGE_CHROME_H). */
+function computeTargetInfo(rect: DOMRect, forceAbove = false, cardH: number = CARD_H): TargetInfo {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const cx = clamp(rect.left + rect.width / 2 - CARD_W / 2, MARGIN, vw - CARD_W - MARGIN);
-  const ay = clamp(rect.top, MARGIN, vh - CARD_H - MARGIN);
+  const ay = clamp(rect.top, MARGIN, vh - cardH - MARGIN);
 
   if (forceAbove) {
     return {
-      pos: { x: cx, y: clamp(rect.top - GAP - CARD_H, MARGIN, vh - CARD_H - MARGIN) },
+      pos: { x: cx, y: clamp(rect.top - GAP - cardH, MARGIN, vh - cardH - MARGIN) },
       side: "above",
       rect,
     };
   }
 
-  if (rect.top - GAP - CARD_H >= MARGIN)
-    return { pos: { x: cx, y: rect.top - GAP - CARD_H }, side: "above", rect };
-  if (rect.bottom + GAP + CARD_H + MARGIN <= vh)
+  if (rect.top - GAP - cardH >= MARGIN)
+    return { pos: { x: cx, y: rect.top - GAP - cardH }, side: "above", rect };
+  if (rect.bottom + GAP + cardH + MARGIN <= vh)
     return { pos: { x: cx, y: rect.bottom + GAP }, side: "below", rect };
   if (rect.right + GAP + CARD_W + MARGIN <= vw)
     return { pos: { x: rect.right + GAP, y: ay }, side: "right", rect };
@@ -60,7 +64,8 @@ function computeTargetInfo(rect: DOMRect, forceAbove = false): TargetInfo {
 }
 
 // ─── Arrow ───────────────────────────────────────────────────────────────────
-function Arrow({ side }: { side: Side }) {
+/** `cardH` matters only for the left/right arrows, which centre vertically on the card. */
+function Arrow({ side, cardH = CARD_H }: { side: Side; cardH?: number }) {
   if (side === "none") return null;
 
   const fill = "hsl(var(--background))";
@@ -101,7 +106,7 @@ function Arrow({ side }: { side: Side }) {
     case "right":
       return (
         <svg
-          style={{ ...s, left: -ARROW_H, top: CARD_H / 2 - ARROW_W / 2 }}
+          style={{ ...s, left: -ARROW_H, top: cardH / 2 - ARROW_W / 2 }}
           width={ARROW_H}
           height={ARROW_W}
           overflow="visible"
@@ -119,7 +124,7 @@ function Arrow({ side }: { side: Side }) {
     case "left":
       return (
         <svg
-          style={{ ...s, right: -ARROW_H, top: CARD_H / 2 - ARROW_W / 2 }}
+          style={{ ...s, right: -ARROW_H, top: cardH / 2 - ARROW_W / 2 }}
           width={ARROW_H}
           height={ARROW_W}
           overflow="visible"
@@ -269,7 +274,12 @@ export function FloatingTourCard() {
     resumeAuto,
     switchToManual,
     close,
+    stages,
+    currentStage,
+    currentStageNumber,
+    goToStage,
   } = useUpriseTour();
+  const [stagesOpen, setStagesOpen] = useState(false);
 
   const [target, setTarget] = useState<TargetInfo | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -288,6 +298,9 @@ export function FloatingTourCard() {
     }
     setVisible(false);
   }, [active]);
+
+  // Staged cards are taller, and placement must account for it before measuring.
+  const cardHeight = currentStage ? CARD_H + STAGE_CHROME_H : CARD_H;
 
   // On each step: navigate to its route (if any), run its onEnter, wait for the page,
   // scroll the target into view, then measure for the spotlight + card placement.
@@ -323,7 +336,7 @@ export function FloatingTourCard() {
             await new Promise<void>((r) => setTimeout(r, 180));
             if (cancelled) return;
           }
-          setTarget(computeTargetInfo(el.getBoundingClientRect(), overlay));
+          setTarget(computeTargetInfo(el.getBoundingClientRect(), overlay, cardHeight));
           return;
         }
       }
@@ -332,7 +345,7 @@ export function FloatingTourCard() {
     return () => {
       cancelled = true;
     };
-  }, [active, step, currentStep]);
+  }, [active, step, currentStep, cardHeight]);
 
   const handleClose = useCallback(() => {
     setVisible(false);
@@ -425,9 +438,67 @@ export function FloatingTourCard() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <Arrow side={side} />
+        <Arrow side={side} cardH={cardHeight} />
 
         <div className="overflow-hidden rounded-xl border bg-background shadow-2xl">
+          {/* Stage bar — only on staged tours. Doubles as the presenter's running order: which
+              section we're in, how long it should take, and a jump list to re-cut on the fly. */}
+          {currentStage ? (
+            <div className="border-b border-[hsl(var(--border))] bg-primary/5">
+              <button
+                type="button"
+                onClick={() => setStagesOpen((o) => !o)}
+                onPointerDown={(e) => e.stopPropagation()}
+                aria-expanded={stagesOpen}
+                className="flex w-full items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-primary/10"
+              >
+                <currentStage.icon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  Stage {currentStageNumber} of {stages.length}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground">
+                  {currentStage.label}
+                </span>
+                <span className="flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {currentStage.minutes}m
+                </span>
+                <ChevronsUpDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </button>
+              {stagesOpen ? (
+                <div className="max-h-52 overflow-y-auto border-t border-[hsl(var(--border))] bg-background py-1">
+                  {stages.map((stage, i) => {
+                    const StageIcon = stage.icon;
+                    const isCurrent = stage.id === currentStage.id;
+                    return (
+                      <button
+                        key={stage.id}
+                        type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => {
+                          setStagesOpen(false);
+                          goToStage(stage.id);
+                        }}
+                        className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-surface-variant ${
+                          isCurrent ? "bg-primary/10 font-semibold text-primary" : "text-foreground"
+                        }`}
+                      >
+                        {isCurrent ? (
+                          <Check className="h-3 w-3 shrink-0" />
+                        ) : (
+                          <StageIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="w-3 shrink-0 tabular-nums text-muted-foreground">{i + 1}</span>
+                        <span className="min-w-0 flex-1 truncate">{stage.label}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{stage.minutes}m</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* Header — drag handle */}
           <div
             className="flex cursor-grab select-none items-start gap-2.5 px-4 pb-2 pt-4 active:cursor-grabbing"
@@ -467,6 +538,15 @@ export function FloatingTourCard() {
             ) : (
               <div className="pb-3" />
             )}
+            {/* The stage's takeaway, kept on screen for every step of the stage rather than only
+                its first — a presenter glancing down mid-section needs the line, and mild
+                repetition beats it vanishing exactly when they look for it. */}
+            {currentStage ? (
+              <p className="mx-4 mb-3 border-l-2 border-primary/40 pl-2.5 text-[11px] leading-relaxed text-foreground/80">
+                <span className="font-semibold text-primary">Key message · </span>
+                {currentStage.keyMessage}
+              </p>
+            ) : null}
           </div>
 
           {/* Controls */}

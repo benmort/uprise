@@ -105,3 +105,48 @@ describe("validateEnv — the committed .env.example values validate", () => {
     expect(() => validateEnv(env as never)).not.toThrow();
   });
 });
+
+/**
+ * Every env key platform-status reads must survive validation.
+ *
+ * @nestjs/config assigns ONLY the keys validateEnv returns to process.env
+ * (ConfigModule.assignVariablesToProcess iterates the validated object's own keys), so a key
+ * set in .env but absent from ValidatedEnv is silently dropped. That is not a theoretical
+ * hazard: all nine of these were present in apps/api/.env while the status page reported
+ * "No ACTION_APP_URL configured" and "VERCEL_TOKEN not configured", because none were declared.
+ * Adding a probe to platform-status.registry.ts ⇒ add its envUrlKey here.
+ */
+describe("validateEnv — platform-status env keys survive validation", () => {
+  const STATUS_KEYS = [
+    "APP_URL",
+    "AUTH_APP_URL",
+    "FIELD_APP_URL",
+    "ACTION_APP_URL",
+    "MARKETING_APP_URL",
+    "ORG_MARKETING_APP_URL",
+    "WORKER_HEALTH_URL",
+    "VERCEL_TOKEN",
+    "VERCEL_TEAM_ID",
+    "RAILWAY_TOKEN",
+    "RAILWAY_SERVICE_ID",
+    "RAILWAY_ENVIRONMENT_ID",
+  ] as const;
+
+  it.each(STATUS_KEYS)("passes %s through to the validated env", (key) => {
+    const value = `sentinel-${key}`;
+    const validated = validateEnv({ ...requiredEnv(), [key]: value } as never) as Record<
+      string,
+      unknown
+    >;
+    expect(validated[key]).toBe(value);
+  });
+
+  it("defaults every status key to a blank string rather than dropping it", () => {
+    const validated = validateEnv(requiredEnv() as never) as Record<string, unknown>;
+    for (const key of STATUS_KEYS) {
+      // Present-and-empty, not absent: absent is what made the probe report "not configured".
+      expect(Object.prototype.hasOwnProperty.call(validated, key)).toBe(true);
+      expect(validated[key]).toBe("");
+    }
+  });
+});

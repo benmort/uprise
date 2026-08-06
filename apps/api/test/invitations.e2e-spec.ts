@@ -1,5 +1,5 @@
 import type { INestApplication } from "@nestjs/common";
-import { bootE2EApp, client, data } from "./utils/e2e-app";
+import { bootE2EApp, client, data, disposeTenants } from "./utils/e2e-app";
 
 /**
  * Invitation accept e2e – the SESSION COOKIE on the wire (meld doc 14).
@@ -63,6 +63,8 @@ describe("API e2e – invitation accept + session cookie", () => {
     tenantId = data(created.body).id as string;
   });
   afterAll(async () => {
+    // Before close, or the app the client posts through is already gone.
+    await disposeTenants(api, [tenantId]);
     await app?.close();
   });
 

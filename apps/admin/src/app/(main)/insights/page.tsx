@@ -36,7 +36,9 @@ export default function InsightsPage() {
         emptyDescription="Ingested polls appear here — run the insights loader to import a dataset."
         skeleton={<Skeleton className="h-40 w-full" />}
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        {/* id: spotlighted by the full app walkthrough. Inside StateRegion, so it only exists
+            once the polls have loaded — the tour card retries for ~4s, then shows unanchored. */}
+        <div id="tour-insights-polls" className="grid gap-4 sm:grid-cols-2">
           {polls.map((p) => (
             <Link key={p.id} href={`/insights/${p.id}`} className="group block">
               <SectionCard>

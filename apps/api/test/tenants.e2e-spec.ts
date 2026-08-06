@@ -1,5 +1,5 @@
 import type { INestApplication } from "@nestjs/common";
-import { bootE2EApp, client, data } from "./utils/e2e-app";
+import { bootE2EApp, client, data, disposeTenants } from "./utils/e2e-app";
 
 /**
  * Tenant + user creation e2e (meld doc 12 / WS1) — the prog onboarding coverage,
@@ -11,12 +11,15 @@ describe("API e2e — tenant + user creation", () => {
   let app: INestApplication;
   let api: ReturnType<typeof client>;
   const stamp = Date.now();
+  // Tenants are created inside the tests here (not beforeAll), so they collect as they go.
+  const createdTenantIds: Array<string | undefined> = [];
 
   beforeAll(async () => {
     app = await bootE2EApp();
     api = client(app);
   });
   afterAll(async () => {
+    await disposeTenants(api, createdTenantIds);
     await app?.close();
   });
 
@@ -30,6 +33,9 @@ describe("API e2e — tenant + user creation", () => {
     const res = await api.raw.post("/api/v1/auth/register").send(body);
     expect([200, 201]).toContain(res.status);
     const grant = data(res.body);
+    // Self-registration mints a tenant of its own — it needs disposing as much as an
+    // explicitly created one, and it is the row this suite used to leave behind.
+    createdTenantIds.push(grant.memberships?.[0]?.tenantId);
     expect(grant.token).toEqual(expect.any(String));
     expect(grant.memberships?.[0]?.role).toBe("ORGANISER");
   });
@@ -50,6 +56,7 @@ describe("API e2e — tenant + user creation", () => {
     const created = await api.post("/api/v1/tenants").send({ slug: `e2e-inv-${stamp}`, name: `E2E Invite ${stamp}` });
     expect([200, 201]).toContain(created.status);
     const tenantId = data(created.body).id as string;
+    createdTenantIds.push(tenantId);
     expect(tenantId).toEqual(expect.any(String));
 
     // 2. issue an invitation

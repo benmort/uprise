@@ -6,6 +6,7 @@ import type { TransactionalDispatcher } from "../../messaging/transactional-disp
 import type { StripeService } from "../../payment/stripe.service";
 import type { BillingService } from "../../payment/billing.service";
 import type { DomainLogger } from "../logging/domain-logger.service";
+import type { FeatureFlagsService } from "../flags/feature-flags.service";
 
 /**
  * Cross-domain reactions (meld doc 12 / prog choreography). The outbox/reactions backbone
@@ -24,6 +25,7 @@ export interface ReactionDeps {
   billing: BillingService;
   config: ConfigService;
   logger: DomainLogger;
+  flags: FeatureFlagsService;
 }
 
 export function buildDomainReactions(deps: ReactionDeps): Reaction[] {
@@ -121,6 +123,14 @@ async function notifyOps(
   templateKey: string,
   vars: Record<string, string>,
 ): Promise<void> {
+  // The super-admin mute (Platform tab on /super/flags). Checked here rather than per-reaction
+  // so one switch covers the whole open/resolve pair. Incidents are still recorded and still
+  // reach the public status page — this only silences the mail. The flag is GLOBAL_ONLY, so a
+  // null tenantId resolves it without a per-tenant lookup.
+  if (!(await deps.flags.isEnabled("FEATURE_STATUS_ALERT_EMAILS_ENABLED", { tenantId: null }))) {
+    deps.logger.log("ops", "Status alert email suppressed by the platform flag", vars);
+    return;
+  }
   const recipients = await opsRecipients(deps);
   if (recipients.length === 0) {
     deps.logger.warn("ops", "Status incident with nobody to notify — set OPS_ALERT_EMAIL", vars);

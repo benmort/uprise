@@ -1,7 +1,7 @@
 import { assertReactionsLoopSafe, type EventEnvelope, type Reaction } from "@uprise/events";
 import { buildDomainReactions, type ReactionDeps } from "./domain-reactions";
 
-function setup(env: Record<string, string> = {}) {
+function setup(env: Record<string, string> = {}, opts: { statusAlertsEnabled?: boolean } = {}) {
   const prisma: any = {
     tenantInvitation: { findUnique: jest.fn(async () => ({ id: "inv1", email: "new@x.y", token: "tok123" })) },
     tenant: {
@@ -26,7 +26,10 @@ function setup(env: Record<string, string> = {}) {
     ),
   } as any;
   const logger = { debug: jest.fn(), error: jest.fn(), warn: jest.fn(), log: jest.fn() } as any;
-  const deps: ReactionDeps = { prisma, email, sms, stripe, billing, config, logger };
+  const flags = {
+    isEnabled: jest.fn(async () => opts.statusAlertsEnabled ?? true),
+  } as any;
+  const deps: ReactionDeps = { prisma, email, sms, stripe, billing, config, logger, flags };
   const reactions = buildDomainReactions(deps);
   const byTrigger = (t: string) => reactions.find((r) => r.trigger === t) as Reaction;
   const ev = (payload: unknown): EventEnvelope => ({
@@ -38,7 +41,7 @@ function setup(env: Record<string, string> = {}) {
     metadata: {},
     occurredAt: "2026-01-01T00:00:00.000Z",
   });
-  return { reactions, byTrigger, ev, prisma, email, sms, stripe, billing };
+  return { reactions, byTrigger, ev, prisma, email, sms, stripe, billing, flags };
 }
 
 describe("domain reactions", () => {
@@ -90,6 +93,34 @@ describe("domain reactions", () => {
         vars: expect.objectContaining({ minutes: "90" }),
       }),
     );
+  });
+
+  it("sends no status alert at all when the platform flag is off", async () => {
+    const { byTrigger, ev, email, prisma, flags } = setup(
+      { OPS_ALERT_EMAIL: "ops@uprise.test" },
+      { statusAlertsEnabled: false },
+    );
+    await byTrigger("ops.status-incident.opened").handle(
+      ev({ incidentId: "i1", serviceKey: "messaging", serviceName: "Messaging", status: "Outage", startedAt: "2026-08-05T01:00:00.000Z" }),
+    );
+    await byTrigger("ops.status-incident.resolved").handle(
+      ev({
+        incidentId: "i1",
+        serviceKey: "messaging",
+        serviceName: "Messaging",
+        status: "Outage",
+        startedAt: "2026-08-05T01:00:00.000Z",
+        resolvedAt: "2026-08-05T02:30:00.000Z",
+        minutes: 90,
+      }),
+    );
+    // One switch mutes both halves of the pair, and it short-circuits before the
+    // recipient lookup — a muted alert costs no query.
+    expect(email.sendTransactional).not.toHaveBeenCalled();
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(flags.isEnabled).toHaveBeenCalledWith("FEATURE_STATUS_ALERT_EMAILS_ENABLED", {
+      tenantId: null,
+    });
   });
 
   it("falls back to super-admins when no ops address is configured", async () => {

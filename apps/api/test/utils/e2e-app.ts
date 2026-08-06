@@ -36,6 +36,34 @@ export function client(app: INestApplication) {
   };
 }
 
+/**
+ * Soft-delete the tenants a spec created, so a run leaves no workspace behind.
+ *
+ * These specs create REAL tenants in the target database and, until this existed, abandoned
+ * them — a dev database accumulated `e2e-cookie-*` and `e2e-org-*` workspaces that then showed
+ * up in the tenant list like customers.
+ *
+ * Soft, via the app's own DELETE (tenants.service.deleteTenant → sets `deletedAt`, emits
+ * tenant.tenant.deleted), not a row delete. Two reasons: every tenant query filters
+ * `deletedAt: null`, so the workspace leaves the UI either way; and a cleanup that only ever
+ * marks rows cannot cascade a real tenant into oblivion if an id is ever wrong.
+ *
+ * Best-effort per id: a failed cleanup must never fail a run whose assertions passed.
+ */
+export async function disposeTenants(
+  api: ReturnType<typeof client>,
+  ids: Array<string | null | undefined>,
+): Promise<void> {
+  for (const id of ids) {
+    if (!id) continue;
+    try {
+      await api.del(`/api/v1/tenants/${id}`);
+    } catch {
+      // Teardown is advisory — swallow so the suite's own result stands.
+    }
+  }
+}
+
 /** Unwrap the ApiResponseInterceptor envelope { ok, data } → data (or the body). */
 export function data<T = any>(body: any): T {
   return (body && typeof body === "object" && "data" in body ? body.data : body) as T;

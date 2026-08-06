@@ -176,6 +176,17 @@ const CORE_FLAGS = [
     controllableBy: GLOBAL_ONLY,
     envVar: "BLAST_DRY_RUN",
   },
+  {
+    // Both halves of the pair, deliberately: silencing only the all-clear would leave
+    // operators told a service broke and never told it recovered. The incidents are still
+    // recorded and still show on the public status page — this only stops the mail.
+    key: "FEATURE_STATUS_ALERT_EMAILS_ENABLED",
+    description: "Email operators when a status incident opens or resolves.",
+    default: true,
+    kind: "ops",
+    controllableBy: GLOBAL_ONLY,
+    envVar: "FEATURE_STATUS_ALERT_EMAILS_ENABLED",
+  },
 ] as const satisfies readonly FlagDef[];
 
 // Navigation flags (one per gateable admin menu item, 1st + 2nd level) are generated

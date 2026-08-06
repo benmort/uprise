@@ -1,22 +1,23 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
-import { getFeatureFlags } from "@/lib/api";
 import { useLocalStorage } from "@uprise/field";
 
 import {
   getTourById,
   resetExampleData,
   seedExampleData,
-  WHATSAPP_TOUR_ID,
+  stageEntryPoints,
+  stageOfStep,
+  ONBOARDING_TOUR_ID,
   UPRISE_TOURS,
-  UPRISE_TOUR_ID,
   type TourDefinition,
+  type TourStage,
   type TourStep,
 } from "./uprise-tour";
 
-export type { TourStep };
+export type { TourStep, TourStage };
 
 export type TourMode = "manual" | "auto";
 
@@ -25,6 +26,15 @@ export const AUTO_DWELL_MS = 3700;
 
 const TOUR_PROGRESS_KEY = "uprise.tour.progress";
 const TOUR_ACTIVE_ID_KEY = "uprise.tour.activeId";
+/**
+ * Whether a tour was running when the page went away.
+ *
+ * Needed because switching workspace reloads the whole app to re-scope the session
+ * (components/topbar/tenant-switcher.tsx). Without this the Climate 200 tour would die at the
+ * exact moment it crosses from the network into a campaign — the most important transition it
+ * has. Persisting `active` lets the tour pick itself back up on mount.
+ */
+const TOUR_RUNNING_KEY = "uprise.tour.running";
 
 export interface UpriseTourState {
   active: boolean;
@@ -39,6 +49,14 @@ export interface UpriseTourState {
   tours: TourDefinition[];
   /** Which tour is active (or was last run, for resume). */
   activeTourId: string;
+  /** The running tour's stages (empty for a flat tour). */
+  stages: TourStage[];
+  /** The stage the current step sits in, or null for a flat tour. */
+  currentStage: TourStage | null;
+  /** 1-based index of the current stage, or 0 for a flat tour. */
+  currentStageNumber: number;
+  /** Jump straight to a stage's first step — lets a presenter re-cut a demo live. */
+  goToStage: (stageId: string) => void;
   /** Start a specific tour in the given mode. */
   startTour: (tourId: string, mode: TourMode) => void;
   start: () => void;
@@ -60,14 +78,18 @@ const noop = () => {};
 export const UpriseTourContext = createContext<UpriseTourState>({
   active: false,
   currentStep: 0,
-  totalSteps: getTourById(UPRISE_TOUR_ID).steps.length,
+  totalSteps: getTourById(ONBOARDING_TOUR_ID).steps.length,
   step: null,
   mode: "manual",
   paused: false,
   savedStep: null,
   canResume: false,
   tours: UPRISE_TOURS,
-  activeTourId: UPRISE_TOUR_ID,
+  activeTourId: ONBOARDING_TOUR_ID,
+  stages: [],
+  currentStage: null,
+  currentStageNumber: 0,
+  goToStage: noop,
   startTour: noop,
   start: noop,
   startManual: noop,
@@ -88,28 +110,32 @@ export function useUpriseTourState(): UpriseTourState {
   const [mode, setMode] = useState<TourMode>("manual");
   const [paused, setPaused] = useState(false);
   const [savedStep, setSavedStep] = useLocalStorage<number | null>(TOUR_PROGRESS_KEY, null);
-  const [activeTourId, setActiveTourId] = useLocalStorage<string>(TOUR_ACTIVE_ID_KEY, UPRISE_TOUR_ID);
+  const [activeTourId, setActiveTourId] = useLocalStorage<string>(TOUR_ACTIVE_ID_KEY, ONBOARDING_TOUR_ID);
+  const [running, setRunning] = useLocalStorage<boolean>(TOUR_RUNNING_KEY, false);
 
-  // The WhatsApp tour walks composer/inbox controls that only render when the
-  // FEATURE_WHATSAPP_ENABLED flag is on. Hide it from the menu when the flag is off
-  // so steps never spotlight an element that will never appear.
-  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
+  const tours = UPRISE_TOURS;
+
+  const tour = getTourById(activeTourId);
+  const steps = tour.steps;
+
+  /**
+   * Re-enter a tour that a workspace switch reloaded out from under us.
+   *
+   * Only on mount, and only when the tour genuinely was running — `running` is cleared on
+   * close/finish, so a user who quit the tour and later switched workspace is not ambushed by it
+   * reappearing. Always resumes in manual mode: auto-play mid-reload would start advancing
+   * before the presenter has their bearings.
+   */
+  const rehydratedRef = useRef(false);
   useEffect(() => {
-    let alive = true;
-    void getFeatureFlags().then((r) => {
-      if (alive && r.ok) setWhatsappEnabled(Boolean(r.data.FEATURE_WHATSAPP_ENABLED));
-    });
-    return () => {
-      alive = false;
-    };
+    if (rehydratedRef.current) return;
+    rehydratedRef.current = true;
+    if (!running || savedStep == null) return;
+    setCurrentStep(savedStep);
+    setMode("manual");
+    setActive(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only rehydrate
   }, []);
-
-  const tours = useMemo(
-    () => (whatsappEnabled ? UPRISE_TOURS : UPRISE_TOURS.filter((tour) => tour.id !== WHATSAPP_TOUR_ID)),
-    [whatsappEnabled],
-  );
-
-  const steps = getTourById(activeTourId).steps;
   // Callbacks read the live step list through a ref so switching tours doesn't
   // need every callback in its dependency array.
   const stepsRef = useRef(steps);
@@ -123,6 +149,7 @@ export function useUpriseTourState(): UpriseTourState {
       const nextStep = cur + 1;
       if (nextStep >= stepsRef.current.length) {
         setActive(false);
+        setRunning(false);
         setSavedStep(null);
         setCurrentStep(0);
       } else {
@@ -130,7 +157,7 @@ export function useUpriseTourState(): UpriseTourState {
         setCurrentStep(nextStep);
       }
     },
-    [setSavedStep],
+    [setSavedStep, setRunning],
   );
 
   const next = useCallback(() => advance(stepRef.current), [advance]);
@@ -156,12 +183,13 @@ export function useUpriseTourState(): UpriseTourState {
       setCurrentStep(0);
       setSavedStep(0);
       setActive(true);
+      setRunning(true);
     },
-    [setActiveTourId, setSavedStep],
+    [setActiveTourId, setSavedStep, setRunning],
   );
 
-  const startManual = useCallback(() => startTour(UPRISE_TOUR_ID, "manual"), [startTour]);
-  const startAuto = useCallback(() => startTour(UPRISE_TOUR_ID, "auto"), [startTour]);
+  const startManual = useCallback(() => startTour(ONBOARDING_TOUR_ID, "manual"), [startTour]);
+  const startAuto = useCallback(() => startTour(ONBOARDING_TOUR_ID, "auto"), [startTour]);
 
   const resume = useCallback(() => {
     void seedExampleData();
@@ -169,7 +197,21 @@ export function useUpriseTourState(): UpriseTourState {
     setPaused(false);
     setCurrentStep(savedStep ?? 0);
     setActive(true);
-  }, [savedStep]);
+    setRunning(true);
+  }, [savedStep, setRunning]);
+
+  /** Jump to a stage's first step. Manual mode: a presenter jumping stages wants control. */
+  const goToStage = useCallback(
+    (stageId: string) => {
+      const entry = stageEntryPoints(getTourById(activeTourId)).find((e) => e.stage.id === stageId);
+      if (!entry) return;
+      setMode("manual");
+      setPaused(false);
+      setSavedStep(entry.stepIndex);
+      setCurrentStep(entry.stepIndex);
+    },
+    [activeTourId, setSavedStep],
+  );
 
   const pauseAuto = useCallback(() => setPaused(true), []);
   const resumeAuto = useCallback(() => setPaused(false), []);
@@ -178,11 +220,14 @@ export function useUpriseTourState(): UpriseTourState {
   const close = useCallback(() => {
     setSavedStep(stepRef.current);
     setActive(false);
+    // Deliberately clears the running flag: a closed tour must not resurrect itself on the next
+    // reload. `savedStep` survives, so "Resume" in the menu still works.
+    setRunning(false);
     setMode("manual");
     setPaused(false);
     setCurrentStep(0);
     resetExampleData();
-  }, [setSavedStep]);
+  }, [setSavedStep, setRunning]);
 
   // Auto-play: after the current navigation settles + a dwell, advance.
   useEffect(() => {
@@ -199,6 +244,11 @@ export function useUpriseTourState(): UpriseTourState {
     };
   }, [active, mode, paused, currentStep, next]);
 
+  const currentStage = active ? stageOfStep(tour, currentStep) : null;
+  const currentStageNumber = currentStage
+    ? (tour.stages ?? []).findIndex((s) => s.id === currentStage.id) + 1
+    : 0;
+
   return {
     active,
     currentStep,
@@ -210,6 +260,10 @@ export function useUpriseTourState(): UpriseTourState {
     canResume: savedStep != null && savedStep > 0 && savedStep < steps.length,
     tours,
     activeTourId,
+    stages: tour.stages ?? [],
+    currentStage,
+    currentStageNumber,
+    goToStage,
     startTour,
     start: startManual,
     startManual,

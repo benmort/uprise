@@ -146,7 +146,9 @@ export default function PoliticiansPage() {
 
       <DataExplorerTabs active="politicians" />
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* id: the full app walkthrough spotlights this filter bar — it carries the whole
+          jurisdiction/state/chamber/party story plus the live member count. */}
+      <div id="tour-data-politicians" className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Jurisdiction
           <select

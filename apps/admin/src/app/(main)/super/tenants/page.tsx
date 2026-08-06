@@ -216,7 +216,9 @@ export default function TenantsPage() {
         <SignupsPanel onCount={setSignupCount} />
       ) : (
         <>
-      <div className="flex flex-wrap items-center gap-3">
+      {/* id: the Climate 200 tour spotlights this — search plus the plan/network filters are
+          how a funder's estate of campaign workspaces is actually navigated. */}
+      <div id="tour-super-tenants" className="flex flex-wrap items-center gap-3">
         <SearchInput
           value={query}
           onValueChange={setQuery}

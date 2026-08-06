@@ -65,6 +65,22 @@ export type ValidatedEnv = {
   // no return_to and the auth app falls back to its own default (today's behaviour).
   APP_URL: string;
   FIELD_APP_URL: string;
+  // The rest of the deployed estate, read ONLY by platform-status to probe each app's health
+  // (see platform-status.registry.ts `envUrlKey`). They must be declared here even though nothing
+  // else consumes them: @nestjs/config assigns only the keys this function RETURNS to process.env,
+  // so an undeclared key set in .env is silently dropped and the probe reports "not configured".
+  ACTION_APP_URL: string;
+  MARKETING_APP_URL: string;
+  ORG_MARKETING_APP_URL: string;
+  // The worker is on Railway, not Vercel, and answers /health off its Bull Board server.
+  WORKER_HEALTH_URL: string;
+  // Provider credentials for the deploy-info panel on the status page. Blank ⇒ the page still
+  // renders, with the probe result but no deploy sha/state. Same drop-if-undeclared rule applies.
+  VERCEL_TOKEN: string;
+  VERCEL_TEAM_ID: string;
+  RAILWAY_TOKEN: string;
+  RAILWAY_SERVICE_ID: string;
+  RAILWAY_ENVIRONMENT_ID: string;
   RATE_LIMIT_WINDOW_MS: number;
   RATE_LIMIT_MAX_REQUESTS: number;
   DATABASE_URL: string;
@@ -189,6 +205,15 @@ export function validateEnv(config: Env): ValidatedEnv {
     AUTH_APP_URL: config.AUTH_APP_URL?.trim() || "",
     APP_URL: config.APP_URL?.trim() || "",
     FIELD_APP_URL: config.FIELD_APP_URL?.trim() || "",
+    ACTION_APP_URL: config.ACTION_APP_URL?.trim() || "",
+    MARKETING_APP_URL: config.MARKETING_APP_URL?.trim() || "",
+    ORG_MARKETING_APP_URL: config.ORG_MARKETING_APP_URL?.trim() || "",
+    WORKER_HEALTH_URL: config.WORKER_HEALTH_URL?.trim() || "",
+    VERCEL_TOKEN: config.VERCEL_TOKEN?.trim() || "",
+    VERCEL_TEAM_ID: config.VERCEL_TEAM_ID?.trim() || "",
+    RAILWAY_TOKEN: config.RAILWAY_TOKEN?.trim() || "",
+    RAILWAY_SERVICE_ID: config.RAILWAY_SERVICE_ID?.trim() || "",
+    RAILWAY_ENVIRONMENT_ID: config.RAILWAY_ENVIRONMENT_ID?.trim() || "",
     RATE_LIMIT_WINDOW_MS: numberInRange(config, "RATE_LIMIT_WINDOW_MS", 1000, 3600000, 60000, errors),
     RATE_LIMIT_MAX_REQUESTS: numberInRange(config, "RATE_LIMIT_MAX_REQUESTS", 10, 10000, 300, errors),
     DATABASE_URL: required(config, "DATABASE_URL", errors),

@@ -4,7 +4,7 @@ import { Spinner } from "@uprise/ui";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Building2, Check, Minus, Network as NetworkIcon, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
+  Building2, Check, Globe, Minus, Network as NetworkIcon, Search, ShieldAlert, ShieldCheck, SlidersHorizontal, X } from "lucide-react";
 import { FLAG_META, NAV_FLAGS, type FeatureFlagKey } from "@uprise/flags";
 import { cn } from "@/lib/utils";
 import { FlagSourceBadge } from "@/components/super/flag-source-badge";
@@ -12,6 +12,7 @@ import {
   getFlagAdminFor,
   searchNetworks,
   searchTenants,
+  setGlobalFlag,
   setTargetFlag,
   type FlagAdminEntry,
   type FlagTarget,
@@ -25,7 +26,16 @@ function isPermissionError(msg: string) {
 
 const NAV_LABEL: Record<string, string> = Object.fromEntries(NAV_FLAGS.map((n) => [n.key, n.label]));
 const NAV_SECTION: Record<string, string> = Object.fromEntries(NAV_FLAGS.map((n) => [n.key, n.section]));
-const SECTION_ORDER = ["Core features", "Inbox", "Channels", "Canvass", "Engagement", "Compliance", "Prog"];
+const SECTION_ORDER = ["Platform", "Core features", "Inbox", "Channels", "Canvass", "Engagement", "Compliance", "Prog"];
+
+/** Platform-wide infra/ops switches: the flags whose only controlling layer is "global". */
+function isGlobalOnly(f: FlagAdminEntry) {
+  return (
+    f.controllableBy.includes("global") &&
+    !f.controllableBy.includes("tenant") &&
+    !f.controllableBy.includes("plan")
+  );
+}
 
 function flagLabel(f: string) {
   if (NAV_LABEL[f]) return NAV_LABEL[f];
@@ -36,7 +46,16 @@ function flagLabel(f: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type SelTarget = { type: "tenant" | "network"; id: string; label: string; sub?: string };
+type TabKind = "tenant" | "network" | "platform";
+type SelTarget = { type: TabKind; id: string; label: string; sub?: string };
+
+/** The pseudo-target for the platform tab — no row to pick, the target is "everything". */
+const PLATFORM_TARGET: SelTarget = {
+  type: "platform",
+  id: "_global",
+  label: "Platform-wide",
+  sub: "every tenant",
+};
 
 /** Tri-state override control: Inherit (clear) / Force on / Force off. */
 function TriState({
@@ -81,7 +100,7 @@ function TriState({
 }
 
 export default function FeatureFlagsPage() {
-  const [tab, setTab] = useState<"tenant" | "network">("tenant");
+  const [tab, setTab] = useState<TabKind>("tenant");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Array<TenantLite | NetworkLite>>([]);
   const [searching, setSearching] = useState(false);
@@ -93,11 +112,13 @@ export default function FeatureFlagsPage() {
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // The platform target is "neither" — the API reads that as the global view.
   const targetOf = (s: SelTarget): FlagTarget =>
-    s.type === "tenant" ? { tenantId: s.id } : { networkId: s.id };
+    s.type === "platform" ? {} : s.type === "tenant" ? { tenantId: s.id } : { networkId: s.id };
 
   const runSearch = useCallback(
-    async (kind: "tenant" | "network", q: string) => {
+    async (kind: TabKind, q: string) => {
+      if (kind === "platform") return;
       setSearching(true);
       setError(null);
       setDenied(false);
@@ -109,14 +130,6 @@ export default function FeatureFlagsPage() {
     },
     [],
   );
-
-  // Reset + load an initial (unfiltered) list whenever the tab changes.
-  useEffect(() => {
-    setSelected(null);
-    setEntries([]);
-    setQuery("");
-    void runSearch(tab, "");
-  }, [tab, runSearch]);
 
   const select = useCallback(
     async (s: SelTarget) => {
@@ -132,34 +145,60 @@ export default function FeatureFlagsPage() {
     [],
   );
 
+  // Reset + load an initial (unfiltered) list whenever the tab changes. The platform tab has
+  // no rows to pick from, so it selects itself.
+  useEffect(() => {
+    setEntries([]);
+    setQuery("");
+    if (tab === "platform") {
+      setResults([]);
+      void select(PLATFORM_TARGET);
+      return;
+    }
+    setSelected(null);
+    void runSearch(tab, "");
+  }, [tab, runSearch, select]);
+
   async function setOverride(key: FeatureFlagKey, enabled: boolean | null) {
     if (!selected || pending) return;
     setPending(key);
     setActionError(null);
-    const res = await setTargetFlag(targetOf(selected), key, enabled);
+    const res =
+      selected.type === "platform"
+        ? await setGlobalFlag(key, enabled)
+        : await setTargetFlag(targetOf(selected), key, enabled);
     setPending(null);
     if (res.ok) setEntries(res.data);
     else setActionError(isPermissionError(res.error) ? "Super-admins only." : res.error);
   }
 
-  // Only flags overridable for the target: tenant target → tenant-controllable;
-  // network target → tenant- or plan-controllable. Grouped by nav section.
+  // Only flags overridable for the target: platform target → global-only (there is no tenant
+  // or plan layer to inherit from); tenant target → tenant-controllable; network target →
+  // tenant- or plan-controllable. Grouped by nav section.
   const groups = useMemo(() => {
+    const isPlatform = selected?.type === "platform";
     const overridable = entries.filter((f) =>
-      selected?.type === "network"
-        ? f.controllableBy.includes("tenant") || f.controllableBy.includes("plan")
-        : f.controllableBy.includes("tenant"),
+      isPlatform
+        ? isGlobalOnly(f)
+        : selected?.type === "network"
+          ? f.controllableBy.includes("tenant") || f.controllableBy.includes("plan")
+          : f.controllableBy.includes("tenant"),
     );
     const by: Record<string, FlagAdminEntry[]> = {};
     for (const f of overridable) {
-      const s = NAV_SECTION[f.key] ?? "Core features";
+      // Global-only flags are infra switches, not menu items, so they have no nav section.
+      const s = isPlatform ? "Platform" : (NAV_SECTION[f.key] ?? "Core features");
       (by[s] ||= []).push(f);
     }
     return SECTION_ORDER.filter((s) => by[s]?.length).map((s) => ({ section: s, flags: by[s] }));
   }, [entries, selected]);
 
   const overrideOf = (f: FlagAdminEntry): boolean | null =>
-    selected?.type === "network" ? f.networkOverride : f.tenantOverride;
+    selected?.type === "platform"
+      ? f.globalOverride
+      : selected?.type === "network"
+        ? f.networkOverride
+        : f.tenantOverride;
 
   return (
     <main className="page-stack">
@@ -172,7 +211,8 @@ export default function FeatureFlagsPage() {
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Per-tenant and per-network overrides on top of each target&apos;s plan. Pick a
             tenant or network, then force a feature on or off, or leave it to inherit
-            from the plan. Base entitlements live on the{" "}
+            from the plan. The Platform tab holds the switches that apply everywhere at once –
+            ops mail, worker routing, dry-run. Base entitlements live on the{" "}
             <Link href="/super/plans" className="text-primary hover:underline">
               Plans
             </Link>{" "}
@@ -204,7 +244,7 @@ export default function FeatureFlagsPage() {
           {/* Selector panel */}
           <div className="space-y-3 rounded-xl border border-border bg-surface p-4">
             <div className="inline-flex w-full overflow-hidden rounded-lg border border-border">
-              {(["tenant", "network"] as const).map((t) => (
+              {(["tenant", "network", "platform"] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -214,56 +254,71 @@ export default function FeatureFlagsPage() {
                     tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-surface-variant",
                   )}
                 >
-                  {t === "tenant" ? <Building2 className="h-4 w-4" /> : <NetworkIcon className="h-4 w-4" />}
-                  {t === "tenant" ? "Tenant" : "Network"}
+                  {t === "tenant" ? (
+                    <Building2 className="h-4 w-4" />
+                  ) : t === "network" ? (
+                    <NetworkIcon className="h-4 w-4" />
+                  ) : (
+                    <Globe className="h-4 w-4" />
+                  )}
+                  {t === "tenant" ? "Tenant" : t === "network" ? "Network" : "Platform"}
                 </button>
               ))}
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void runSearch(tab, query);
-              }}
-              className="flex items-center gap-2 rounded-lg border border-border px-2.5"
-            >
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={`Search ${tab}s…`}
-                className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </form>
-            <div className="max-h-[420px] space-y-1 overflow-y-auto">
-              {searching ? (
-                <div className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
-                  <Spinner className="h-4 w-4 animate-spin" /> Searching…
+            {tab === "platform" ? (
+              <p className="px-1 py-2 text-sm text-muted-foreground">
+                Platform-wide infrastructure and ops switches. They apply to every tenant at
+                once, so there is nothing to pick — the flags are on the right.
+              </p>
+            ) : (
+              <>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void runSearch(tab, query);
+                  }}
+                  className="flex items-center gap-2 rounded-lg border border-border px-2.5"
+                >
+                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={`Search ${tab}s…`}
+                    className="w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+                  />
+                </form>
+                <div className="max-h-[420px] space-y-1 overflow-y-auto">
+                  {searching ? (
+                    <div className="flex items-center gap-2 px-1 py-4 text-sm text-muted-foreground">
+                      <Spinner className="h-4 w-4 animate-spin" /> Searching…
+                    </div>
+                  ) : results.length === 0 ? (
+                    <p className="px-1 py-4 text-sm text-muted-foreground">No {tab}s found.</p>
+                  ) : (
+                    results.map((r) => {
+                      const isTenant = tab === "tenant";
+                      const label = r.name;
+                      const sub = isTenant ? (r as TenantLite).slug : ((r as NetworkLite).planName ?? "no plan");
+                      const active = selected?.id === r.id && selected.type === tab;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => void select({ type: tab, id: r.id, label, sub })}
+                          className={cn(
+                            "flex w-full flex-col items-start rounded-lg px-3 py-2 text-left transition-colors",
+                            active ? "bg-primary/10 text-primary" : "hover:bg-surface-variant",
+                          )}
+                        >
+                          <span className="text-sm font-medium text-foreground">{label}</span>
+                          <span className="font-mono text-[11px] text-muted-foreground">{sub}</span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
-              ) : results.length === 0 ? (
-                <p className="px-1 py-4 text-sm text-muted-foreground">No {tab}s found.</p>
-              ) : (
-                results.map((r) => {
-                  const isTenant = tab === "tenant";
-                  const label = r.name;
-                  const sub = isTenant ? (r as TenantLite).slug : ((r as NetworkLite).planName ?? "no plan");
-                  const active = selected?.id === r.id && selected.type === tab;
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => void select({ type: tab, id: r.id, label, sub })}
-                      className={cn(
-                        "flex w-full flex-col items-start rounded-lg px-3 py-2 text-left transition-colors",
-                        active ? "bg-primary/10 text-primary" : "hover:bg-surface-variant",
-                      )}
-                    >
-                      <span className="text-sm font-medium text-foreground">{label}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">{sub}</span>
-                    </button>
-                  );
-                })
-              )}
-            </div>
+              </>
+            )}
           </div>
 
           {/* Override editor */}
@@ -284,12 +339,20 @@ export default function FeatureFlagsPage() {
               <div className="overflow-hidden rounded-xl border border-border bg-surface">
                 <div className="border-b border-border px-5 py-4">
                   <div className="flex items-center gap-2">
-                    {selected.type === "tenant" ? <Building2 className="h-4 w-4 text-muted-foreground" /> : <NetworkIcon className="h-4 w-4 text-muted-foreground" />}
+                    {selected.type === "tenant" ? (
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                    ) : selected.type === "network" ? (
+                      <NetworkIcon className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                    )}
                     <span className="font-semibold text-foreground">{selected.label}</span>
                     <span className="font-mono text-xs text-muted-foreground">{selected.sub}</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Overrides take precedence over the plan. &quot;Inherit&quot; clears the override.
+                    {selected.type === "platform"
+                      ? "These apply to every tenant. “Inherit” falls back to the flag’s built-in default. Changes can take up to 30 seconds to take effect."
+                      : "Overrides take precedence over the plan. “Inherit” clears the override."}
                   </p>
                 </div>
                 <div className="divide-y divide-border">

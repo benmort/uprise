@@ -22,6 +22,8 @@ import { AudiencesService } from "../../audiences/audiences.service";
 import { buildAudienceReactions } from "../../audiences/audience.reactions";
 import { OutboxService } from "../../common/outbox/outbox.service";
 import { buildAutodialerReactions } from "../../autodialer/autodialer.reactions";
+import { FlagsModule } from "../flags/flags.module";
+import { FeatureFlagsService } from "../flags/feature-flags.service";
 
 /**
  * Wires the reaction registry + the ported cross-domain reactions (meld doc 12).
@@ -29,7 +31,7 @@ import { buildAutodialerReactions } from "../../autodialer/autodialer.reactions"
  * Reaction closes over what it needs. Email/Payment/Prisma/Logging are @Global.
  */
 @Module({
-  imports: [LoggingModule, AudiencesModule],
+  imports: [LoggingModule, AudiencesModule, FlagsModule],
   providers: [
     {
       provide: REACTIONS,
@@ -45,8 +47,9 @@ import { buildAutodialerReactions } from "../../autodialer/autodialer.reactions"
         emailProvisioning: EmailProvisioningService,
         audiences: AudiencesService,
         outbox: OutboxService,
+        flags: FeatureFlagsService,
       ): ReactionList => [
-        ...buildDomainReactions({ prisma, email, sms, stripe, billing, config, logger }),
+        ...buildDomainReactions({ prisma, email, sms, stripe, billing, config, logger, flags }),
         ...buildTelephonyProvisioningReactions({ provisioning }),
         ...buildEmailProvisioningReactions({ provisioning: emailProvisioning }),
         ...buildAudienceReactions({ audiences, logger }),
@@ -64,6 +67,7 @@ import { buildAutodialerReactions } from "../../autodialer/autodialer.reactions"
         EmailProvisioningService,
         AudiencesService,
         OutboxService,
+        FeatureFlagsService,
       ],
     },
     ReactionRegistry,

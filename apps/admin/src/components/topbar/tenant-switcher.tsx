@@ -352,6 +352,7 @@ export function TenantSwitcher({
         contentClassName="w-80 p-0 overflow-hidden"
         trigger={({ toggle }) => (
           <button
+            id="tour-tenant-switcher"
             ref={setTriggerEl}
             type="button"
             onClick={toggle}
