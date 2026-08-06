@@ -320,6 +320,12 @@ export class AudiencesService {
             syncedCount: latestSync.syncedCount,
             failedCount: latestSync.failedCount,
             remoteListId: latestSync.remoteListId,
+            // Both carried so the UI can re-request this exact sync. Without `query` a re-sync of
+            // a filtered list would silently pull the whole list into an audience that was meant
+            // to be a subset; without the connection id, requireConnection falls back to picking
+            // by type, which is the wrong account for a tenant holding more than one.
+            query: latestSync.query,
+            integrationConnectionId: latestSync.integrationConnectionId,
             errorSummary: latestSync.errorSummary,
             completedAt: latestSync.completedAt,
             createdAt: latestSync.createdAt,

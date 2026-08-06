@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { deleteAudience, getAudience, getAudienceContacts } from "@/lib/api";
+import { deleteAudience, getAudience, getAudienceContacts, syncIntegrationList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,9 @@ type AudienceDetail = {
     syncedCount: number;
     failedCount: number;
     remoteListId?: string | null;
+    /** Carried so a re-sync reproduces the original request rather than a broader one. */
+    query?: string | null;
+    integrationConnectionId?: string | null;
     completedAt?: string | null;
     createdAt?: string | null;
     startedAt?: string | null;
@@ -76,6 +79,48 @@ export default function AudienceShowPage() {
   const displayListName = listNameFromStats || audience?.name || "—";
   // Present only on a genuinely FAILED job (the failure handler stamps `.error`).
   const syncError = String((syncStats.error as string) || "").trim();
+
+  const [resyncing, setResyncing] = useState(false);
+  const listId = audience?.externalListId || audience?.latestSync?.remoteListId || "";
+  /**
+   * Re-request the same import.
+   *
+   * Only offered once a job has actually FAILED or stalled: a healthy QUEUED job is one the
+   * worker is about to pick up, and re-requesting it would just add a second job racing the first.
+   * The audience is idempotent on (tenant, list, source), so this reuses the existing audience and
+   * mints a fresh job rather than duplicating either.
+   */
+  const canResync =
+    !!listId &&
+    !!audience &&
+    ["ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"].includes(audience.source) &&
+    (audience.latestSync?.status === "FAILED" || audience.latestSync?.stalled === true);
+
+  const resync = async () => {
+    if (!audience || !canResync || resyncing) return;
+    setResyncing(true);
+    const res = await syncIntegrationList({
+      type: audience.source as "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL",
+      listId,
+      audienceName: audience.name,
+      listName: listNameFromStats || undefined,
+      // Reproduce the original request exactly — a dropped filter would pull the whole list.
+      query: audience.latestSync?.query || undefined,
+      connectionId: audience.latestSync?.integrationConnectionId || undefined,
+    });
+    setResyncing(false);
+    if (!res.ok) {
+      showToast({ tone: "error", title: "Could not start the re-sync", description: res.error });
+      return;
+    }
+    showToast({
+      tone: "success",
+      title: "Re-sync requested",
+      description: "The importer will pick it up shortly.",
+    });
+    const refreshed = await getAudience(id);
+    if (refreshed.ok) setAudience(refreshed.data as AudienceDetail);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -210,6 +255,20 @@ export default function AudienceShowPage() {
                           ? ` ${Number(audience.latestSync.syncedCount).toLocaleString()} imported so far.`
                           : ""}
                       </p>
+                    )}
+                    {canResync && (
+                      <div className="pt-1">
+                        <Button size="sm" variant="outline" disabled={resyncing} onClick={() => void resync()}>
+                          {resyncing ? (
+                            <>
+                              <Spinner className="mr-2" />
+                              Requesting…
+                            </>
+                          ) : (
+                            "Re-sync now"
+                          )}
+                        </Button>
+                      </div>
                     )}
                     {reasonRows.length > 0 && (
                       <p>
