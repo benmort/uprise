@@ -204,6 +204,12 @@ export class EngagementService {
           channel: input.channel,
           campaignId: input.campaignId ?? null,
           blastId: input.blastId ?? null,
+          // Widened for CRM write-back: what was recorded, by whom, and the consent
+          // stamp that gates pushing the support level anywhere (APP 3).
+          supportLevel: input.supportLevel ?? null,
+          recordedById: input.recordedById ?? null,
+          consentAt: consentAt ? consentAt.toISOString() : null,
+          consentMethod: consentAt ? (input.consentMethod ?? null) : null,
         },
       });
       return created;
@@ -282,6 +288,13 @@ export class EngagementService {
             channel: input.channel,
             campaignId: input.campaignId ?? null,
             blastId: input.blastId ?? null,
+            // The option-mapped disposition carries the option's support level; there is
+            // no per-row consent capture on this path, so the consent fields stay null
+            // and a consent-gated consumer (CRM push) withholds the support level.
+            supportLevel: option.supportLevel ?? null,
+            recordedById: input.recordedById ?? null,
+            consentAt: null,
+            consentMethod: null,
           },
         });
       }
@@ -299,6 +312,11 @@ export class EngagementService {
           optionId: input.optionId ?? null,
           campaignId: input.campaignId ?? null,
           blastId: input.blastId ?? null,
+          // Widened for CRM write-back: the answer itself, so a consumer can log
+          // "Survey: <question> – <answer>" without a hot-path re-read.
+          valueText: input.valueText ?? null,
+          optionLabel: option?.label ?? null,
+          channel: input.channel,
         },
       });
       return created;

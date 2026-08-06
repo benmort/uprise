@@ -18,6 +18,7 @@ export const EVENT_TYPES = {
   BLAST_SENT: "messaging.blast.sent",
   TX_SMS_REQUESTED: "messaging.tx-sms.requested",
   INBOUND_RECEIVED: "messaging.inbound.received",
+  CONSENT_CHANGED: "messaging.consent.changed",
   USER_CREATED: "iam.user.created",
   TENANT_INVITATION_SENT: "tenant.invitation.sent",
   EMAIL_QUEUED: "email.email.queued",
@@ -145,6 +146,13 @@ export interface DomainEventMap {
     channel: string;
     campaignId: string | null;
     blastId: string | null;
+    // Widened (additive) for CRM write-back: the support level actually recorded (the
+    // SupportLevel enum's string value), who recorded it, and the consent stamp that
+    // gates pushing the support level anywhere.
+    supportLevel?: string | null;
+    recordedById?: string | null;
+    consentAt?: string | null;
+    consentMethod?: string | null;
   };
   "canvass.survey.answered": {
     responseId: string;
@@ -155,6 +163,11 @@ export interface DomainEventMap {
     optionId: string | null;
     campaignId: string | null;
     blastId: string | null;
+    // Widened (additive) for CRM write-back: the answer itself, so a consumer can log
+    // "Survey: <question> – <answer>" without a re-read on the hot path.
+    valueText?: string | null;
+    optionLabel?: string | null;
+    channel?: string;
   };
   "contacts.tag.added": {
     tenantId: string;
@@ -191,7 +204,31 @@ export interface DomainEventMap {
   "messaging.blast.scheduled": { blastId: string; tenantId: string; scheduledAt: string };
   "messaging.blast.sent": { blastId: string; tenantId: string; recipientCount: number };
   "messaging.tx-sms.requested": { tenantId: string; toPhone: string; purpose: string };
-  "messaging.inbound.received": { tenantId: string; contactPhone: string; channel: string };
+  "messaging.inbound.received": {
+    tenantId: string;
+    contactPhone: string;
+    channel: string;
+    // Widened (additive) when the emitter landed (it was declared-but-never-emitted for a
+    // long time): the resolved contact, the message row, its body and any blast attribution
+    // — enough for a text-reply consumer (CRM write-back) without a re-read.
+    contactId?: string;
+    inboundId?: string;
+    body?: string;
+    blastId?: string | null;
+    messageSid?: string | null;
+  };
+  /** A contact's messaging consent actually TRANSITIONED on a channel (no-op upserts
+   *  don't emit). `source` says who moved it: stop_keyword, start_keyword, inbound,
+   *  nation_builder_sync, admin, … Opt-out consumers (CRM write-back) key on state. */
+  "messaging.consent.changed": {
+    tenantId: string;
+    contactId: string | null;
+    phoneE164: string;
+    channel: string;
+    state: string;
+    previousState: string;
+    source: string | null;
+  };
   "iam.user.created": { userId: string; email: string; tenantId: string };
   "tenant.invitation.sent": { invitationId: string; tenantId: string; email: string | null; phone?: string | null };
   "email.email.queued": { emailId: string; tenantId: string; toAddress: string };

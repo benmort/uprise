@@ -10,6 +10,8 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     ...overrides,
   };
+  // setState wraps read + upsert + event in one transaction; the callback receives the mock.
+  base.$transaction = jest.fn(async (cb: any) => cb(base));
   return base;
 }
 
@@ -36,11 +38,13 @@ describe("classifyConsentKeyword", () => {
 
 describe("ConsentService", () => {
   let prisma: any;
+  let outbox: any;
   let service: ConsentService;
 
   beforeEach(() => {
     prisma = makePrisma();
-    service = new ConsentService(prisma);
+    outbox = { append: jest.fn() };
+    service = new ConsentService(prisma, outbox);
   });
 
   describe("getState", () => {
@@ -95,6 +99,45 @@ describe("ConsentService", () => {
       const call = prisma.contactConsent.upsert.mock.calls[0][0];
       expect(call.update).toEqual({ state: ConsentState.OPTED_OUT });
       expect(call.create).toMatchObject({ contactId: null, source: null });
+    });
+
+    it("emits messaging.consent.changed atomically when the state transitions", async () => {
+      // No existing row -> previousState UNKNOWN -> OPTED_OUT is a transition.
+      await service.setState({
+        tenantId: "t1",
+        phoneE164: "+61400000000",
+        channel: MessageChannel.SMS,
+        state: ConsentState.OPTED_OUT,
+        contactId: "c1",
+        source: "stop_keyword",
+      });
+      expect(outbox.append).toHaveBeenCalledTimes(1);
+      const [, evt] = outbox.append.mock.calls[0];
+      expect(evt).toMatchObject({
+        eventType: "messaging.consent.changed",
+        payload: {
+          tenantId: "t1",
+          contactId: "c1",
+          phoneE164: "+61400000000",
+          channel: MessageChannel.SMS,
+          state: ConsentState.OPTED_OUT,
+          previousState: ConsentState.UNKNOWN,
+          source: "stop_keyword",
+        },
+      });
+    });
+
+    it("emits nothing when the state does not change (repeat STOP, re-imported opt-out)", async () => {
+      prisma.contactConsent.findUnique.mockResolvedValue({ state: ConsentState.OPTED_OUT });
+      await service.setState({
+        tenantId: "t1",
+        phoneE164: "+61400000000",
+        channel: MessageChannel.SMS,
+        state: ConsentState.OPTED_OUT,
+        source: "nation_builder_sync",
+      });
+      expect(prisma.contactConsent.upsert).toHaveBeenCalled(); // row still refreshed
+      expect(outbox.append).not.toHaveBeenCalled(); // but no event churn
     });
   });
 

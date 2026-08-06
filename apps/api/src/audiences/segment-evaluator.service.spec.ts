@@ -60,7 +60,12 @@ describe("SegmentEvaluatorService", () => {
 
     expect(prisma.contactSourceRecord.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { tenantId: "t1", sourceSystem: "action_network" },
+        // A bare family name also matches its scoped members ("action_network:<x>") —
+        // NB mappings became nation-scoped and legacy clauses must not silently empty.
+        where: {
+          tenantId: "t1",
+          OR: [{ sourceSystem: "action_network" }, { sourceSystem: { startsWith: "action_network:" } }],
+        },
         distinct: ["contactId"],
       }),
     );

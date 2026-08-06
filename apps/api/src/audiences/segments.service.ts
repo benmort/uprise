@@ -371,7 +371,14 @@ export class SegmentsService {
       blasts: blasts.map((b) => ({ value: b.id, label: b.title })),
       journeys: journeys.map((j) => ({ value: j.id, label: j.name })),
       dispositions: dispositions.map((d) => ({ value: d.code, label: d.label })),
-      sources: sources.map((s) => ({ value: s.sourceSystem, label: s.sourceSystem })),
+      // Nation-scoped NB sources ("nation_builder:<slug>") read as "nation_builder (<slug>)"
+      // in the picker; the raw value stays exact so the condition matches precisely.
+      sources: sources.map((s) => ({
+        value: s.sourceSystem,
+        label: s.sourceSystem.includes(":")
+          ? `${s.sourceSystem.split(":", 1)[0]} (${s.sourceSystem.slice(s.sourceSystem.indexOf(":") + 1)})`
+          : s.sourceSystem,
+      })),
     };
   }
 

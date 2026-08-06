@@ -219,11 +219,20 @@ function fakePrisma() {
       ),
     },
     contactSourceRecord: {
-      findMany: jest.fn(async ({ where }: any) =>
-        FIXTURE.filter((c) => (c.sources ?? []).some((s) => where.sourceSystem.in.includes(s))).map(
-          (c) => ({ contactId: c.id }),
-        ),
-      ),
+      // Mirrors the resolver's family-tolerant where: exact `in` values OR a bare
+      // family root matching its scoped members via startsWith.
+      findMany: jest.fn(async ({ where }: any) => {
+        const inValues: string[] = where.OR?.[0]?.sourceSystem?.in ?? where.sourceSystem?.in ?? [];
+        const prefixes: string[] = (where.OR ?? [])
+          .slice(1)
+          .map((o: any) => o.sourceSystem?.startsWith)
+          .filter(Boolean);
+        return FIXTURE.filter((c) =>
+          (c.sources ?? []).some(
+            (s: string) => inValues.includes(s) || prefixes.some((p) => s.startsWith(p)),
+          ),
+        ).map((c) => ({ contactId: c.id }));
+      }),
     },
     doorKnock: {
       findMany: jest.fn(async ({ where }: any) =>

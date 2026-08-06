@@ -99,8 +99,16 @@ export class LegacyClauseEvaluator {
   private async bySourceSystem(tenantId: string, sourceSystem: string): Promise<Set<string>> {
     const norm = sourceSystem.trim();
     if (!norm) return new Set();
+    // A bare family name ("nation_builder") also matches its nation-scoped members
+    // ("nation_builder:<slug>") — the auto "Imported contacts" segments store the bare
+    // name, and scoping the mapping rows must not silently empty them.
     const rows = await this.prisma.contactSourceRecord.findMany({
-      where: { tenantId, sourceSystem: norm },
+      where: {
+        tenantId,
+        ...(norm.includes(":")
+          ? { sourceSystem: norm }
+          : { OR: [{ sourceSystem: norm }, { sourceSystem: { startsWith: `${norm}:` } }] }),
+      },
       select: { contactId: true },
       distinct: ["contactId"],
     });

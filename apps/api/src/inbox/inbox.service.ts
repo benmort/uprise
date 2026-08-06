@@ -6,6 +6,7 @@ import {
   MessageChannel,
 } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
+import { OutboxService } from "../common/outbox/outbox.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { TwilioService } from "../twilio/twilio.service";
 import { TelephonySenderResolver } from "../telephony/telephony-sender.resolver";
@@ -33,6 +34,7 @@ export class InboxService {
     private readonly ai: AiSuggestionsService,
     private readonly consent: ConsentService,
     private readonly sessionWindow: SessionWindowService,
+    private readonly outbox: OutboxService,
     @Optional() @Inject(JOURNEY_TRIGGER_PORT) private readonly journeys?: JourneyTriggerPort,
   ) {}
 
@@ -64,20 +66,41 @@ export class InboxService {
       orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
     });
 
-    const inbound = await this.prisma.inboundMessage.create({
-      data: {
-        tenantId: tenantId,
-        blastId: attributedOutbound?.blastId || null,
-        contactId: contact.id,
-        channel,
-        fromPhone,
-        toPhone,
-        body: payload.body || "",
-        mediaUrl: payload.mediaUrl ?? null,
-        mediaContentType: payload.mediaContentType ?? null,
-        twilioMessageSid: payload.messageSid || null,
-        threadKey: channel === MessageChannel.WHATSAPP ? `whatsapp:${fromPhone}` : fromPhone,
-      },
+    // The inbound row and its domain event commit atomically (outbox invariant).
+    // `messaging.inbound.received` sat declared-but-never-emitted for a long time;
+    // the CRM write-back's text-reply stream is its first consumer.
+    const inbound = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.inboundMessage.create({
+        data: {
+          tenantId: tenantId,
+          blastId: attributedOutbound?.blastId || null,
+          contactId: contact.id,
+          channel,
+          fromPhone,
+          toPhone,
+          body: payload.body || "",
+          mediaUrl: payload.mediaUrl ?? null,
+          mediaContentType: payload.mediaContentType ?? null,
+          twilioMessageSid: payload.messageSid || null,
+          threadKey: channel === MessageChannel.WHATSAPP ? `whatsapp:${fromPhone}` : fromPhone,
+        },
+      });
+      await this.outbox.append(tx, {
+        tenantId,
+        eventType: "messaging.inbound.received",
+        aggregateId: created.id,
+        payload: {
+          tenantId,
+          contactPhone: fromPhone,
+          channel,
+          contactId: contact.id,
+          inboundId: created.id,
+          body: payload.body || "",
+          blastId: attributedOutbound?.blastId || null,
+          messageSid: payload.messageSid || null,
+        },
+      });
+      return created;
     });
 
     // An inbound message implies opt-in (and opens the WhatsApp window); STOP/START

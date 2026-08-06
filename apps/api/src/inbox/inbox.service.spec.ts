@@ -12,6 +12,10 @@ describe("InboxService", () => {
     conversationState: { upsert: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
     user: { findMany: jest.fn() },
   } as any;
+  // recordInbound wraps the inbound write + its outbox event in one transaction;
+  // the callback form receives the same mock so per-model mocks keep working.
+  prisma.$transaction = jest.fn(async (cb: any) => (typeof cb === "function" ? cb(prisma) : Promise.all(cb)));
+  const outbox = { append: jest.fn() } as any;
   const twilio = {
     getLatestByContact: jest.fn(),
     getMessagesForPhoneNumber: jest.fn(),
@@ -71,6 +75,7 @@ describe("InboxService", () => {
       ai,
       consent,
       sessionWindow,
+      outbox,
     );
   });
 
@@ -113,6 +118,23 @@ describe("InboxService", () => {
           fromPhone: "+15550000001",
           toPhone: "+15550000000",
           twilioMessageSid: "SM_INBOUND_1",
+        }),
+      }),
+    );
+    // The durable domain event commits with the row (outbox invariant) and carries the
+    // full reply context — the CRM write-back's text-reply stream reads exactly this.
+    expect(outbox.append).toHaveBeenCalledWith(
+      prisma, // the $transaction mock hands back the same client
+      expect.objectContaining({
+        eventType: "messaging.inbound.received",
+        payload: expect.objectContaining({
+          tenantId: "org_1",
+          contactPhone: "+15550000001",
+          contactId: "contact_+15550000001",
+          inboundId: "inbound_2",
+          body: "Yes, I am interested",
+          blastId: "blast_1",
+          messageSid: "SM_INBOUND_1",
         }),
       }),
     );

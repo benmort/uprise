@@ -247,8 +247,19 @@ export class SegmentLeafResolverService {
         return condition.op === "notIn" ? difference(universe, matched) : matched;
       }
       case "source.system": {
+        // NationBuilder mappings are nation-scoped ("nation_builder:<slug>"), but the
+        // condition value may be the bare family name (legacy segments, the generic
+        // option) — a bare value matches its whole scoped family via startsWith.
+        const values = condition.values;
+        const familyRoots = values.filter((v) => !String(v).includes(":"));
         const rows = await this.prisma.contactSourceRecord.findMany({
-          where: { tenantId, sourceSystem: { in: condition.values } },
+          where: {
+            tenantId,
+            OR: [
+              { sourceSystem: { in: values } },
+              ...familyRoots.map((root) => ({ sourceSystem: { startsWith: `${root}:` } })),
+            ],
+          },
           select: { contactId: true },
           distinct: ["contactId"],
         });
