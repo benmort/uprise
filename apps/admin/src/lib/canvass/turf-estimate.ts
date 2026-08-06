@@ -1,3 +1,4 @@
+import { MAX_SHIFTS_PER_TURF } from "@uprise/field";
 import type { TurfEstimate } from "@/lib/api";
 
 /**
@@ -12,8 +13,10 @@ import type { TurfEstimate } from "@/lib/api";
  *    twenty-seven shifts; saying so is most of what this feature is for.
  */
 
-/** Above this, the turf should be split before anyone is assigned to it. */
-export const MAX_SHIFTS_PER_TURF = 1.5;
+/** Above this, the turf should be split before anyone is assigned to it. Defined once in
+ *  `@uprise/field` so the organiser's post-cut warning and the canvasser's pre-claim one
+ *  can't drift apart; re-exported here because this is where the admin surfaces read it. */
+export { MAX_SHIFTS_PER_TURF };
 
 /** "26 doors/hr · 4 h ≈ 105 doors" */
 export function describeEstimate(e: TurfEstimate): string {

@@ -60,6 +60,8 @@ export * from "./lib/survey-flow";
 export * from "./lib/script-flow";
 export * from "./lib/sync-queue";
 export * from "./lib/tile-cache-store";
+export * from "./lib/turf-planner";
+export * from "./lib/turf-draw";
 export * from "./lib/use-theme";
 export * from "./lib/volunteer";
 export * from "./lib/directions";

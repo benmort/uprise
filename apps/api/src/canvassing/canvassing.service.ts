@@ -60,6 +60,12 @@ function startOfToday(): Date {
 /** Disposition codes that count as a conversation (the canvasser spoke to someone). */
 const SPOKE_TO_CODES = ["spoke_to_target", "spoke_to_other"];
 
+/** Ceiling on the areas shipped to a phone for self-serve carving. Far below the organiser
+ *  map's 5,000: a mid-range handset renders a few hundred tappable polygons comfortably and
+ *  chokes well before the desktop limit. A boundary with more areas than this is one to cut
+ *  at a coarser level, which the screen says rather than silently dropping the tail. */
+const SELF_SERVE_AREA_LIMIT = 1200;
+
 export type SurveyAnswerInput = {
   questionId: string;
   optionId?: string | null;
@@ -1354,6 +1360,67 @@ export class CanvassingService {
         contactCount: t._count.contacts,
       })),
     };
+  }
+
+  /**
+   * Everything the canvasser's carve-turf screen needs to draw one campaign, in one call:
+   * the boundary to stay inside, the union of turf already claimed (so the map can shade
+   * what's gone), and – when `layer` is given – the ASGS areas inside the boundary, each
+   * carrying its address count so the phone can price a selection without a second trip.
+   *
+   * This exists because the organiser geo surface (`/geo/tiles/*`, `/canvass/campaigns/:id/areas`)
+   * is ORGANISER-gated: a volunteer must not be handed the national boundary explorer just to
+   * carve their own patch. Every field here is scoped to one self-serve-enabled campaign, and
+   * the claim endpoints remain the enforcer – this is what to *show*, not what is permitted.
+   */
+  async selfServeClaimable(tenantId: string, campaignId: string, layer?: string) {
+    // A layer is only meaningful for mode A, so gate on it only when one is asked for.
+    const c = await this.assertSelfClaim(tenantId, campaignId, layer ? "area" : undefined);
+    // Same defaulting as selfServeAvailable: an unset list means every mode is on.
+    const modes =
+      Array.isArray(c.selfClaimModes) && (c.selfClaimModes as string[]).length
+        ? (c.selfClaimModes as string[])
+        : ["area", "draw", "existing"];
+    const [areas, claimed] = await Promise.all([
+      layer ? this.geo.areasInBoundary(layer, c.boundary ?? null, SELF_SERVE_AREA_LIMIT) : null,
+      this.assignedTurfUnion(campaignId),
+    ]);
+    if (!areas || areas.features.length === 0) {
+      return { boundary: c.boundary, modes, claimed, layer: layer ?? null, truncated: false, areas };
+    }
+    const codes = areas.features.map((f) => String(f.properties.code));
+    const counts = await this.geo.areaAddressCount(codes.map((code) => ({ level: layer as string, code })));
+    return {
+      boundary: c.boundary,
+      modes,
+      claimed,
+      layer: layer ?? null,
+      // The cap was hit, so this is a partial view of the campaign — the screen says so and
+      // points at a coarser level rather than pretending the tail doesn't exist.
+      truncated: areas.features.length >= SELF_SERVE_AREA_LIMIT,
+      areas: {
+        type: "FeatureCollection" as const,
+        features: areas.features.map((f) => ({
+          ...f,
+          properties: { ...f.properties, addresses: counts.byArea[`${layer}:${f.properties.code}`] ?? 0 },
+        })),
+      },
+    };
+  }
+
+  /** Union of the campaign's already-ASSIGNED turf as GeoJSON — the "taken" map overlay.
+   *  Null when nothing is claimed yet. Mirrors the `assigned` CTE `clipToCampaign` subtracts
+   *  with, so what a volunteer sees shaded is exactly what a claim would be clipped around. */
+  private async assignedTurfUnion(campaignId: string): Promise<unknown | null> {
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT ST_AsGeoJSON(ST_Multi(ST_CollectionExtract(ST_Union(t."geom"), 3))) AS geojson
+         FROM "canvass"."Turf" t
+         JOIN "canvass"."TurfAssignment" a ON a."turfId" = t."id" AND a."status" = 'ASSIGNED'
+        WHERE t."campaignId" = $1 AND t."geom" IS NOT NULL`,
+      campaignId,
+    )) as Array<{ geojson: string | null }>;
+    const g = rows[0]?.geojson;
+    return g ? JSON.parse(g) : null;
   }
 
   /** Recommended ready-made turf for a volunteer across the tenant's self-serve campaigns —

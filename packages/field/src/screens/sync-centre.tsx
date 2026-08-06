@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Bell, BellRing, CheckCircle2, CloudOff, DoorOpen, LogOut, MessagesSquare, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, BellRing, CheckCircle2, CloudOff, DoorOpen, LogOut, MessagesSquare, RefreshCw, Route, X } from "lucide-react";
 import { Button, Skeleton, ConfirmDialog, useToast } from "@uprise/ui";
 import { useFieldPush } from "../hooks/use-field-push";
 import { releaseTurf } from "../api";
@@ -218,6 +218,15 @@ export function SyncCentre({ onClose }: { onClose?: () => void } = {}) {
       >
         <MessagesSquare className="h-4 w-4 text-primary" />
         Text banks
+      </Link>
+
+      <Link
+        href="/planner"
+        onClick={onClose}
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-border text-base font-bold text-foreground"
+      >
+        <Route className="h-4 w-4 text-primary" />
+        Turf planner
       </Link>
 
       <Link

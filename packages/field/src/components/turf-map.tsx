@@ -51,6 +51,25 @@ const FLOW_PERIOD_MS = 6000; // time for one chevron to travel one gap, then loo
 const METRES_PER_PX_Z0 = 156543.03392; // web-mercator metres/px at the equator, zoom 0
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
+/** Filter matching the carve basket's picked areas by `code`. Never `undefined` — mapbox-gl
+ *  3.x rejects an undefined filter and drops the whole layer; an empty list matches nothing,
+ *  which is exactly what an empty basket should paint. */
+const CARVE_PICKED_FILTER = (codes?: string[]): FilterSpecification => [
+  "in",
+  ["get", "code"],
+  ["literal", codes ?? []],
+];
+
+/** The outline being tapped out: a closed polygon once it encloses something, an open line
+ *  while it's still two corners. Rendering the partial line is what makes tap-to-draw legible. */
+function drawOutline(ring: Array<[number, number]>): GeoJSON.Feature {
+  const geometry: GeoJSON.Geometry =
+    ring.length >= 3
+      ? { type: "Polygon", coordinates: [[...ring, ring[0]!]] }
+      : { type: "LineString", coordinates: ring };
+  return { type: "Feature", geometry, properties: {} };
+}
+
 /** Point-placed chevrons; each is rotated to the along-line bearing via its `rotate` property. */
 const CHEVRON_POINT_LAYOUT: SymbolLayerSpecification["layout"] = {
   "symbol-placement": "point",
@@ -154,6 +173,12 @@ export function TurfMap({
   boundaryFilter,
   selectedBoundaryCode,
   onBoundaryClick,
+  areaFeatures,
+  selectedAreaCodes,
+  onAreaTap,
+  unavailableGeometry,
+  drawRing,
+  onMapTap,
   gestureToggle = true,
 }: {
   mode: "view" | "edit";
@@ -220,6 +245,24 @@ export function TurfMap({
   selectedBoundaryCode?: string;
   /** Fired with the clicked boundary's code + name (+ the layer id, for multi-layer). */
   onBoundaryClick?: (code: string, name: string | null, layerId?: string) => void;
+
+  // ── Carve turf (the volunteer self-serve screen) ──────────────────────────
+  /** Claimable areas as plain GeoJSON, each feature carrying `code`/`name`. Unlike
+   *  `boundaryTilesUrl` this needs no vector-tile endpoint — the campaign-scoped
+   *  self-serve payload is small, and `/geo/tiles` is organiser-only. Tapping one
+   *  fires `onAreaTap`. */
+  areaFeatures?: GeoJSON.FeatureCollection | null;
+  /** Codes currently in the basket — filled solid, so the selection reads at a glance. */
+  selectedAreaCodes?: string[];
+  onAreaTap?: (code: string, name: string | null) => void;
+  /** Turf already claimed by someone else — shaded out as unavailable. */
+  unavailableGeometry?: GeoJSON.Geometry | null;
+  /** The outline being tapped out, corner by corner, in draw mode. Rendered as a live
+   *  polygon with a numbered handle on each corner; three or more corners fill it in. */
+  drawRing?: Array<[number, number]>;
+  /** A tap anywhere on the map, as `[lng, lat]` — how a corner gets dropped. Set this and
+   *  the map is in drawing mode: stop taps and area taps still fire first. */
+  onMapTap?: (point: [number, number]) => void;
 }) {
   const { theme } = useTheme();
   const mapRef = useRef<MapRef | null>(null);
@@ -554,13 +597,28 @@ export function TurfMap({
           }
           return;
         }
+        // A tap on a claimable area toggles it into the carve basket.
+        const area = e.features?.find((f) => f.layer?.id === "carve-areas-fill");
+        if (area && onAreaTap) {
+          const props = (area.properties ?? {}) as { code?: unknown; name?: unknown };
+          if (props.code != null) {
+            onAreaTap(String(props.code), props.name != null ? String(props.name) : null);
+          }
+          return;
+        }
         const feature = e.features?.[0];
         const id = feature?.properties?.id;
-        if (id && onStopTap) onStopTap(String(id));
+        if (id && onStopTap) {
+          onStopTap(String(id));
+          return;
+        }
+        // Nothing interactive under the finger — in draw mode that's a new corner.
+        if (onMapTap) onMapTap([e.lngLat.lng, e.lngLat.lat]);
       }}
       interactiveLayerIds={[
         ...(boundaryTilesUrl ? ["boundaries-fill"] : []),
         ...(boundaryLayers?.filter((bl) => bl.interactive).map((bl) => `boundaries-${bl.id}-fill`) ?? []),
+        ...(areaFeatures ? ["carve-areas-fill"] : []),
       ]}
     >
       {/* Whole-layer boundary overlay (States/Divisions explorer parity with Areas):
@@ -628,6 +686,76 @@ export function TurfMap({
           ) : null}
         </Source>
       ))}
+
+      {/* ── Carve turf: claimable areas, what's taken, and the outline being drawn ──
+          Drawn before the turf boundary so a campaign outline stays legible over them. */}
+      {areaFeatures && (
+        <Source id="carve-areas" type="geojson" data={areaFeatures}>
+          <Layer id="carve-areas-fill" type="fill" paint={{ "fill-color": PRIMARY, "fill-opacity": 0.05 }} />
+          <Layer
+            id="carve-areas-line"
+            type="line"
+            paint={{ "line-color": "#64748b", "line-width": 0.8, "line-opacity": 0.7 }}
+          />
+          {/* The basket, filled solid green — "mine" reads instantly against the faint rest. */}
+          <Layer
+            id="carve-areas-picked-fill"
+            type="fill"
+            filter={CARVE_PICKED_FILTER(selectedAreaCodes)}
+            paint={{ "fill-color": SUCCESS, "fill-opacity": 0.45 }}
+          />
+          <Layer
+            id="carve-areas-picked-line"
+            type="line"
+            filter={CARVE_PICKED_FILTER(selectedAreaCodes)}
+            paint={{ "line-color": SUCCESS, "line-width": 2.5 }}
+          />
+        </Source>
+      )}
+
+      {unavailableGeometry && (
+        <Source
+          id="carve-taken"
+          type="geojson"
+          data={{ type: "Feature", geometry: unavailableGeometry, properties: {} }}
+        >
+          <Layer id="carve-taken-fill" type="fill" paint={{ "fill-color": "#64748b", "fill-opacity": 0.35 }} />
+          <Layer
+            id="carve-taken-line"
+            type="line"
+            paint={{ "line-color": "#64748b", "line-width": 1.5, "line-dasharray": [2, 2] }}
+          />
+        </Source>
+      )}
+
+      {drawRing && drawRing.length > 0 && (
+        <>
+          <Source id="carve-draw" type="geojson" data={drawOutline(drawRing)}>
+            {/* Only a closed shape gets a fill; two corners are still just a line. */}
+            {drawRing.length >= 3 ? (
+              <Layer id="carve-draw-fill" type="fill" paint={{ "fill-color": PRIMARY, "fill-opacity": 0.18 }} />
+            ) : null}
+            <Layer
+              id="carve-draw-line"
+              type="line"
+              layout={{ "line-cap": "round", "line-join": "round" }}
+              paint={{ "line-color": PRIMARY, "line-width": 3 }}
+            />
+          </Source>
+          {/* Numbered handles: big enough to see under a thumb, and the number tells the
+              volunteer which corner Undo will take back. */}
+          {drawRing.map((p, i) => (
+            <Marker key={`draw-${i}-${p[0]},${p[1]}`} longitude={p[0]} latitude={p[1]}>
+              <span
+                aria-hidden
+                className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-primary text-[10px] font-bold text-white shadow"
+              >
+                {i + 1}
+              </span>
+            </Marker>
+          ))}
+        </>
+      )}
 
       {turfGeometry && (
         <Source id="turf" type="geojson" data={{ type: "Feature", geometry: turfGeometry, properties: {} }}>

@@ -3,10 +3,9 @@
 import { useMemo, useState } from "react";
 import { Route } from "lucide-react";
 import { PageHeader } from "@/components/shell/page-header";
-import { SectionCard, KpiTile } from "@uprise/field";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import {
+  SectionCard,
+  KpiTile,
   buildTurf,
   DENSITY_PRESETS,
   estimateTurf,
@@ -15,7 +14,9 @@ import {
   PRIOR_ALLOWANCE,
   type DensityPreset,
   type Pace,
-} from "@/lib/canvass/turf-planner";
+} from "@uprise/field";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 // The reference table + door breakdown are computed once, off a fixed 200-address turf so
 // each row reports the steady-state rate rather than a small-turf edge.

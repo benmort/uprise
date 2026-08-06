@@ -116,6 +116,8 @@ describe("CanvassingService", () => {
       addresses: jest.fn().mockResolvedValue([]),
       unionAreas: jest.fn(),
       unionSources: jest.fn(),
+      areasInBoundary: jest.fn(),
+      areaAddressCount: jest.fn().mockResolvedValue({ addresses: 0, byArea: {} }),
     };
     put.mockClear();
     // The estimate is queued, never awaited: a cut must not fail because Redis hiccuped.
@@ -1719,6 +1721,102 @@ describe("CanvassingService", () => {
       it("throws SELF_CLAIM_DISABLED when self-serve is off", async () => {
         prisma.canvassCampaign.findFirst.mockResolvedValue({ ...campaign, volunteerCanSelfClaimTurf: false });
         await expect(service.selfServeAvailable("org1", "camp1")).rejects.toThrow();
+      });
+    });
+
+    describe("selfServeClaimable", () => {
+      const feature = (code: string) => ({
+        type: "Feature" as const,
+        id: code,
+        geometry: { type: "Polygon", coordinates: [] },
+        properties: { code, name: `Area ${code}`, level: "sa1", coverage: 1 },
+      });
+
+      it("returns the boundary + claimed union and skips the area query with no layer", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: JSON.stringify(square) }]);
+
+        const res = await service.selfServeClaimable("org1", "camp1");
+
+        expect(res.boundary).toEqual(campaign.boundary);
+        expect(res.claimed).toEqual(square);
+        expect(res.areas).toBeNull();
+        expect(res.layer).toBeNull();
+        expect(res.modes).toEqual(["area", "draw", "existing"]); // unset ⇒ every mode on
+        // Draw mode needs no areas — never pay for the spatial scan.
+        expect(geo.areasInBoundary).not.toHaveBeenCalled();
+      });
+
+      it("reads null claimed when nothing in the campaign is assigned yet", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null }]);
+
+        const res = await service.selfServeClaimable("org1", "camp1");
+
+        expect(res.claimed).toBeNull();
+      });
+
+      it("merges each area's address count onto its feature properties", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null }]);
+        geo.areasInBoundary.mockResolvedValue({
+          type: "FeatureCollection",
+          features: [feature("A1"), feature("A2")],
+        });
+        geo.areaAddressCount.mockResolvedValue({ addresses: 130, byArea: { "sa1:A1": 90 } });
+
+        const res = await service.selfServeClaimable("org1", "camp1", "sa1");
+
+        expect(geo.areasInBoundary).toHaveBeenCalledWith("sa1", campaign.boundary, 1200);
+        expect(res.layer).toBe("sa1");
+        expect(res.areas?.features[0]!.properties).toMatchObject({ code: "A1", name: "Area A1", addresses: 90 });
+        // An area the counter has no row for reads 0, never undefined — the phone prices a sum.
+        expect(res.areas?.features[1]!.properties).toMatchObject({ code: "A2", addresses: 0 });
+        expect(res.truncated).toBe(false);
+      });
+
+      it("flags truncated when the boundary holds more areas than a phone should render", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null }]);
+        geo.areasInBoundary.mockResolvedValue({
+          type: "FeatureCollection",
+          features: Array.from({ length: 1200 }, (_u, i) => feature(`A${i}`)),
+        });
+
+        const res = await service.selfServeClaimable("org1", "camp1", "mb");
+
+        expect(res.truncated).toBe(true);
+      });
+
+      it("returns an empty collection untouched when the boundary holds no areas", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue(campaign);
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null }]);
+        geo.areasInBoundary.mockResolvedValue({ type: "FeatureCollection", features: [] });
+
+        const res = await service.selfServeClaimable("org1", "camp1", "sa1");
+
+        expect(res.areas?.features).toEqual([]);
+        expect(geo.areaAddressCount).not.toHaveBeenCalled();
+      });
+
+      it("gates a layer request on the area mode being allowed", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue({ ...campaign, selfClaimModes: ["draw"] });
+        await expect(service.selfServeClaimable("org1", "camp1", "sa1")).rejects.toThrow();
+      });
+
+      it("still serves a draw-only campaign when no layer is asked for", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue({ ...campaign, selfClaimModes: ["draw"] });
+        prisma.$queryRawUnsafe.mockResolvedValue([{ geojson: null }]);
+
+        await expect(service.selfServeClaimable("org1", "camp1")).resolves.toMatchObject({
+          areas: null,
+          modes: ["draw"], // the screen hides the Areas tab off the back of this
+        });
+      });
+
+      it("throws SELF_CLAIM_DISABLED when self-serve is off entirely", async () => {
+        prisma.canvassCampaign.findFirst.mockResolvedValue({ ...campaign, volunteerCanSelfClaimTurf: false });
+        await expect(service.selfServeClaimable("org1", "camp1")).rejects.toThrow();
       });
     });
 

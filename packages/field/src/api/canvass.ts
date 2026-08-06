@@ -228,6 +228,50 @@ export async function getSelfServeAvailable(campaignId: string) {
   return request<SelfServeAvailable>(`/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/available`);
 }
 
+/** ASGS levels a volunteer can carve at, coarsest to finest. */
+export type SelfServeLayer = "sa4" | "sa3" | "sa2" | "sa1" | "mb";
+
+/** One claimable area on the carve map: the ASGS boundary plus what it's worth.
+ *  `coverage` is the 0–1 fraction inside the campaign; `addresses` is its door count. */
+export type ClaimableAreaProps = {
+  code: string;
+  name: string;
+  level: string;
+  coverage: number;
+  addresses: number;
+};
+export type ClaimableAreas = {
+  type: "FeatureCollection";
+  features: Array<GeoJSON.Feature<GeoJSON.Geometry, ClaimableAreaProps>>;
+};
+
+/** Everything the carve-turf screen draws for one campaign. The volunteer-safe twin of the
+ *  ORGANISER-gated /geo surface — scoped to a single self-serve campaign. `areas` is null
+ *  when no `layer` was asked for (draw mode needs only the boundary + what's taken). */
+export type SelfServeClaimable = {
+  boundary: unknown | null;
+  /** Which self-serve modes this campaign allows — "area" | "draw" | "existing". */
+  modes: string[];
+  /** Union of turf already claimed in this campaign — shaded on the map as unavailable. */
+  claimed: unknown | null;
+  layer: string | null;
+  /** The campaign holds more areas at this level than the phone will render. */
+  truncated: boolean;
+  areas: ClaimableAreas | null;
+};
+
+export async function getSelfServeClaimable(
+  campaignId: string,
+  layer?: SelfServeLayer,
+  signal?: AbortSignal,
+) {
+  const q = layer ? `?layer=${encodeURIComponent(layer)}` : "";
+  return request<SelfServeClaimable>(
+    `/canvass/campaigns/${encodeURIComponent(campaignId)}/self-serve/claimable${q}`,
+    signal ? { signal } : undefined,
+  );
+}
+
 /** Ready-made unassigned turf recommended for this volunteer across their tenant's self-serve
  *  campaigns — powers the "Recommended turf" section on an empty My turf. Each carries its own
  *  campaignId so claiming still routes per-campaign. */

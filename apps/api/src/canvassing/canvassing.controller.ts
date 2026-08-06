@@ -391,6 +391,19 @@ export class CanvassingController {
     return this.canvassing.selfServeAvailable(tenantId, campaignId);
   }
 
+  /** What the canvasser's carve-turf screen draws: the campaign boundary, the turf already
+   *  claimed, and (with `?layer=`) the claimable ASGS areas + their address counts. The
+   *  volunteer-safe, campaign-scoped alternative to the ORGANISER-gated /geo surface. */
+  @Get("campaigns/:campaignId/self-serve/claimable")
+  @RequirePermission(CANVASS_READ)
+  async selfServeClaimable(
+    @Param("campaignId") campaignId: string,
+    @TenantId() tenantId: string,
+    @Query("layer") layer?: string,
+  ) {
+    return this.canvassing.selfServeClaimable(tenantId, campaignId, layer || undefined);
+  }
+
   @Post("campaigns/:campaignId/self-serve/claim-area")
   @RequirePermission(CANVASS_READ)
   async selfServeClaimArea(

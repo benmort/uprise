@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, Loader2, MapPin, PencilLine, Squircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, MapPin, PencilLine } from "lucide-react";
 import { Button, EmptyState, PaginationControls, Skeleton } from "@uprise/ui";
 import { getSelfServeAvailable, claimExistingTurf, type SelfServeAvailable } from "../api";
 import { MapThumbnail } from "../components/map-thumbnail";
@@ -142,27 +143,34 @@ export function GetTurf() {
         </section>
       ) : null}
 
-      {/* Modes A + B — need a draw-capable map (desktop for now) */}
+      {/* Modes A + B — both land on the carve screen, which owns the map for either. */}
       {(modes.has("area") || modes.has("draw")) && (
         <section className="space-y-2">
           <h2 className="text-sm font-bold text-foreground">Carve your own</h2>
           <div className="space-y-2">
             {modes.has("area") ? (
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-surface/60 p-3">
-                <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
-                <p className="flex-1 text-sm text-muted-foreground">
-                  Claim unclaimed areas within the campaign — pick meshblocks on a bigger screen for now.
+              <Link
+                href={`/carve-turf?campaignId=${encodeURIComponent(campaignId)}`}
+                className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3"
+              >
+                <MapPin className="h-5 w-5 shrink-0 text-primary" />
+                <p className="flex-1 text-sm font-medium text-foreground">
+                  Pick unclaimed areas inside the campaign
                 </p>
-                <Squircle className="h-4 w-4 shrink-0 text-muted-foreground" />
-              </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
             ) : null}
             {modes.has("draw") ? (
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-surface/60 p-3">
-                <PencilLine className="h-5 w-5 shrink-0 text-muted-foreground" />
-                <p className="flex-1 text-sm text-muted-foreground">
-                  Draw your own turf within the campaign boundary — available from a desktop for now.
+              <Link
+                href={`/carve-turf?campaignId=${encodeURIComponent(campaignId)}`}
+                className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3"
+              >
+                <PencilLine className="h-5 w-5 shrink-0 text-primary" />
+                <p className="flex-1 text-sm font-medium text-foreground">
+                  Draw your own turf on the map
                 </p>
-              </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </Link>
             ) : null}
           </div>
         </section>

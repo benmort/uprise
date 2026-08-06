@@ -16,6 +16,7 @@ import {
   getCanvassAssignments,
   getRecommendedTurf,
   getSelfServeAvailable,
+  getSelfServeClaimable,
   getPushConfig,
   getVolunteerMetrics,
   listDispositions,
@@ -73,6 +74,21 @@ describe("canvass api client — reads", () => {
   it("getSelfServeAvailable encodes the campaignId into the path", async () => {
     await getSelfServeAvailable("c/1");
     expect(mockReq.mock.calls[0][0]).toBe("/canvass/campaigns/c%2F1/self-serve/available");
+  });
+
+  it("getSelfServeClaimable omits the layer for draw mode and passes no options", async () => {
+    await getSelfServeClaimable("c/1");
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c%2F1/self-serve/claimable");
+    expect(opts).toBeUndefined();
+  });
+
+  it("getSelfServeClaimable appends the area layer and passes the signal", async () => {
+    const signal = new AbortController().signal;
+    await getSelfServeClaimable("c1", "sa1", signal);
+    const [url, opts] = mockReq.mock.calls[0];
+    expect(url).toBe("/canvass/campaigns/c1/self-serve/claimable?layer=sa1");
+    expect(opts).toEqual({ signal });
   });
 
   it("getPushConfig GETs the push config", async () => {

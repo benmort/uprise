@@ -3,10 +3,14 @@
  * `apps/api/src/canvassing/turf-estimate.model.ts` (`estimateTurf` + `PRIOR_ALLOWANCE`).
  *
  * The backend model prices a *real* turf from its geocoded addresses (and Mapbox-routed
- * walks); this port prices a *hypothetical* turf from a density preset, so the planner page
- * can answer "how big should this turf be?" before any addresses exist. Every constant is a
+ * walks); this port prices a *hypothetical* turf from a density preset, so the planner can
+ * answer "how big should this turf be?" before any addresses exist. Every constant is a
  * literature prior, and every number here is a forecast until `canvass.DoorKnock` has real
  * timings — keep the two in sync if the priors change.
+ *
+ * Lives in `@uprise/field` because both planners run on it: the organiser desktop page
+ * (`apps/admin` /canvass/planner) and the canvasser's mobile one (the `TurfPlanner` screen,
+ * which also prices a carve-your-own selection live). One model, two surfaces.
  */
 
 export const PRIOR_ALLOWANCE = {
@@ -128,6 +132,13 @@ export const DENSITY_PRESETS: DensityPreset[] = [
   { id: "township", label: "Regional township", doorsPerBuilding: 1.0, gapMetres: 47, hint: "spread out" },
   { id: "rural", label: "Rural spread", doorsPerBuilding: 1.0, gapMetres: 120, hint: "West Wimmera" },
 ];
+
+/**
+ * Above this many shifts of work, a turf is not a turf — it's a turf that should have been
+ * several. The organiser's post-cut estimate (`apps/admin/.../turf-estimate.ts`) reads the
+ * same number off the server's measured figure; this is the pre-claim side of it.
+ */
+export const MAX_SHIFTS_PER_TURF = 1.5;
 
 export type Pace = "fast" | "steady" | "slow";
 
