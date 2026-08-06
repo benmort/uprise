@@ -28,6 +28,12 @@ export const HANDBOOK_SECTIONS: HandbookSection[] = [
     blurb: "End-to-end walkthroughs of the things a campaign actually does.",
     docs: [
       {
+        slug: "from-network-to-doorstep",
+        title: "From network to doorstep",
+        description:
+          "The whole pipeline in one place – network, campaign, turf, shift, doorstep, data, follow-up – and where it leaks.",
+      },
+      {
         slug: "your-first-30-days",
         title: "Your first 30 days",
         description: "What to do, in what order, when the account is new and nobody has knocked a door yet.",
