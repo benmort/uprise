@@ -350,6 +350,7 @@ function buildNav(
               { label: "Queue & Redis Stats", href: "/super/queues", match: sp("queues") },
               // Durable errors + the live Railway stream + Vercel build output + queue job
               // detail, in one place. Counts alone (above) hid a real incident for months.
+              { label: "Platform logs", href: "/super/logs", match: sp("logs") },
               // Health + last deploy for every app, across Vercel and Railway. Lives here
               // rather than at the top level because the API gates it to super-admins — the
               // customer-facing view of the same health is /status on the marketing site.

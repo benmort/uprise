@@ -34,9 +34,12 @@ describe("bootstrap CORS configuration", () => {
       error: jest.fn(),
       warn: jest.fn(),
       log: jest.fn(),
+      // configureNestApp attaches the durable log sink through this.
+      setSink: jest.fn(),
     } as unknown as DomainLogger;
     const prisma = {
       enableShutdownHooks: jest.fn().mockResolvedValue(undefined),
+      logEvent: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     } as unknown as PrismaService;
 
     const app = {

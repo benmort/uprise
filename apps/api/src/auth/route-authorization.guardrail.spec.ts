@@ -75,6 +75,13 @@ const OPEN_ROUTES = new Set<string>([
   // it inserts one capped, validated row into ops.ErrorLog, reads nothing and returns
   // nothing (204). See errors.controller.ts.
   "ErrorsController#report",
+  // Log retention sweep (Bearer CRON_SECRET; deletes ops.LogEvent rows past the window).
+  "ObservabilityController#sweep",
+  // Vercel log-drain intake + its ownership handshake. Public by necessity — Vercel signs
+  // deliveries rather than authenticating, so the HMAC-SHA1 over the raw body is the gate, and
+  // the GET must answer before any secret exists. See observability.controller.ts.
+  "ObservabilityController#ingestDrain",
+  "ObservabilityController#verify",
 ]);
 
 describe("route authorization guardrail", () => {

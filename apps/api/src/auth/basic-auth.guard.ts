@@ -179,6 +179,9 @@ export class BasicAuthGuard implements CanActivate {
       // opens/resolves incidents — the uptime numbers on the public page come from these).
       "/platform-status/record",
       "/api/v1/platform-status/record",
+      // Log retention sweep (Bearer CRON_SECRET; deletes ops.LogEvent rows past the window).
+      "/observability/logs/sweep",
+      "/api/v1/observability/logs/sweep",
       // Integration audience auto-refresh (Bearer CRON_SECRET; re-syncs stale
       // provider audiences whose connection opted into scheduled pulls).
       "/integrations/dispatch-refresh",
@@ -203,6 +206,11 @@ export class BasicAuthGuard implements CanActivate {
       "/email-webhook",
       "/payment-webhook",
       "/telephony/bundle-status-callback",
+      // Vercel log drain: the six Next apps' server-side runtime output. Protected by an
+      // HMAC-SHA1 over the raw body (VERCEL_LOG_DRAIN_SECRET); the GET is the ownership
+      // handshake Vercel requires before it will accept the endpoint.
+      "/observability/vercel-drain",
+      "/api/v1/observability/vercel-drain",
       "/api/v1/inbound-text-message-hook",
       "/api/v1/twilio-status-callback",
       "/api/v1/voice-status-callback",

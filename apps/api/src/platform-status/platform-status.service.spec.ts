@@ -1,6 +1,7 @@
 import { ConfigService } from "@nestjs/config";
 import type { PrismaService } from "../prisma/prisma.service";
 import type { OutboxService } from "../common/outbox/outbox.service";
+import { RailwayClient } from "../observability/railway.client";
 import {
   PlatformStatusService,
   dayState,
@@ -95,10 +96,13 @@ function makeService(extraEnv: Record<string, string> = {}, prisma = stubPrisma(
   const env = { ...ENV, ...extraEnv };
   const config = { get: (k: string, fallback?: string) => env[k] ?? fallback } as unknown as ConfigService;
   const outbox = { append: jest.fn(async (_tx: unknown, _evt: OutboxCall) => undefined) };
+  // A real RailwayClient over the same config stub: it calls the same global `fetch` these tests
+  // already stub, so the Railway assertions below keep exercising the actual transport.
   const service = new PlatformStatusService(
     config,
     prisma as unknown as PrismaService,
     outbox as unknown as OutboxService,
+    new RailwayClient(config),
   );
   return Object.assign(service, { __prisma: prisma, __outbox: outbox });
 }

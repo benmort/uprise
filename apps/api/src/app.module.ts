@@ -39,6 +39,7 @@ import { InsightsModule } from "./insights/insights.module";
 import { CivicModule } from "./civic/civic.module";
 import { DemographicsModule } from "./demographics/demographics.module";
 import { HealthModule } from "./health/health.module";
+import { ObservabilityModule } from "./observability/observability.module";
 import { PlatformStatusModule } from "./platform-status/platform-status.module";
 import { AutodialerModule } from "./autodialer/autodialer.module";
 import { ActionsModule } from "./actions/actions.module";
@@ -118,6 +119,7 @@ import { TenantRoutingModule } from "./tenant-routing/tenant-routing.module";
     DemographicsModule,
     InboxModule,
     HealthModule,
+    ObservabilityModule,
     PlatformStatusModule,
     AutodialerModule,
     ActionsModule,

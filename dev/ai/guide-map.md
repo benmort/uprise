@@ -38,6 +38,7 @@ Single entry point and router to layer-local guides. Read this, then read every 
 | Show loading / empty / error / no-permission states | `apps/admin/dev/ai/how-to/feedback-states.md` |
 | Permission-gate UI | `apps/admin/dev/ai/how-to/permission-gating.md` |
 | Change what the status pages report, or add a deploy target to the estate | `dev/ai/how-to/platform-status.md` |
+| Find out what errored, or why a queued job isn't running | `dev/ai/how-to/observability.md` |
 | Deploy / promote / rollback a Vercel app, or manage its env vars | `dev/ai/how-to/vercel-ops.md` |
 | Deploy or configure the Railway BullMQ worker | `dev/ai/how-to/railway-ops.md` |
 | Add / verify / remove a DNS record (DNSimple) | `dev/ai/how-to/dnsimple-dns.md` |

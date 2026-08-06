@@ -2252,6 +2252,39 @@ model StatusIncident {
   @@schema("ops")
 }
 
+// Durable error history for both halves of the estate.
+//
+// Vercel keeps runtime logs for about a day on Pro and exposes no REST endpoint to query them;
+// Railway's is a rolling buffer. Neither can answer "why did that import fail on Tuesday". Because
+// the API and the worker both run the same Nest application, DomainLogger can write the error here
+// as it is emitted — at source, with its context object intact as JSON rather than flattened into
+// a log string, and with retention we control.
+//
+// WARN and ERROR only, deliberately. Piping every info line into the database you reach for when
+// that database is misbehaving is both expensive and circular.
+model LogEvent {
+  id String @id @default(cuid())
+  at DateTime @default(now())
+  // "api" or "worker" — the two processes that share this schema.
+  service String
+  // DomainLogger's first argument: "integrations", "http", "worker", …
+  domain String
+  // "warn" | "error".
+  level String
+  message String
+  // The context object as passed, minus redacted keys (see log-redaction.ts).
+  context Json?
+  trace String?
+  // Denormalised from context when present, so per-tenant filtering doesn't scan JSON.
+  tenantId String?
+
+  // Reads are "recent errors", optionally narrowed by domain — and the retention sweep deletes
+  // by age, which the first index also serves.
+  @@index([at])
+  @@index([domain, at])
+  @@index([level, at])
+  @@schema("ops")
+}
 
 // ── Payment domain (meld doc 08) ─────────────────────────────────────────────
 enum PaymentStatus {

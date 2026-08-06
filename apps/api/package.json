@@ -26,6 +26,7 @@
     "seed:admin": "ts-node src/scripts/seed-admin-user.ts",
     "reset:tenants": "ts-node src/scripts/reset-to-tenants.ts",
     "integrations:audit-connections": "ts-node src/scripts/integrations/audit-env-seeded-connections.ts",
+    "ops:logs": "ts-node src/scripts/ops/logs.ts",
     "geo:map": "ts-node src/scripts/geo/map.ts",
     "geo:chambers": "ts-node src/scripts/geo/backfill-chambers.ts",
     "geo:load-first-nations": "ts-node src/scripts/geo/load-first-nations.ts",

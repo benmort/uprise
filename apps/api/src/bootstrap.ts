@@ -1,9 +1,11 @@
 import { INestApplication, ValidationPipe } from "@nestjs/common";
+import type { Prisma } from "@uprise/db";
 import { ApiExceptionFilter } from "./common/http/api-exception.filter";
 import { ErrorLogService } from "./common/errors/error-log.service";
 import { ApiResponseInterceptor } from "./common/http/api-response.interceptor";
 import { RequestLoggingInterceptor } from "./common/logging/request-logging.interceptor";
 import { DomainLogger } from "./common/logging/domain-logger.service";
+import { LogEventSink } from "./common/logging/log-event.sink";
 import { PrismaService } from "./prisma/prisma.service";
 import { ConfigService } from "@nestjs/config";
 
@@ -127,5 +129,34 @@ export async function configureNestApp(app: INestApplication): Promise<void> {
   );
 
   const prisma = app.get(PrismaService);
+  attachLogEventSink(app.get(DomainLogger), prisma, config, "api");
   await prisma.enableShutdownHooks(app);
+}
+
+/**
+ * Give DomainLogger somewhere durable to put warn/error.
+ *
+ * Wired here rather than through DI on purpose — see the comment on `DomainLogger.sink`. Both
+ * entry points call this: the API from `configureNestApp`, and the worker from its own bootstrap,
+ * with `service` naming which process the row came from.
+ *
+ * Off unless `OPS_LOG_PERSIST_ENABLED` is true, so the write path can be switched off from the
+ * dashboard without a deploy if it ever misbehaves.
+ */
+export function attachLogEventSink(
+  logger: DomainLogger,
+  prisma: PrismaService,
+  config: ConfigService,
+  service: "api" | "worker",
+): void {
+  const enabled = String(config.get("OPS_LOG_PERSIST_ENABLED", "true")).toLowerCase() !== "false";
+  if (!enabled) return;
+  logger.setSink(
+    new LogEventSink(
+      // The one place Prisma's JSON input type meets the sink's plain-object rows. `context` is
+      // already redacted and JSON-serialisable by the time it gets here.
+      (rows) => prisma.logEvent.createMany({ data: rows as Prisma.LogEventCreateManyInput[] }),
+      service,
+    ),
+  );
 }

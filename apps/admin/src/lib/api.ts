@@ -125,6 +125,77 @@ export async function getQueueStats() {
   return request<QueueStatsResponse>("/system/queue-stats");
 }
 
+/**
+ * One normalised log line, whatever it came from.
+ *
+ * `stored` is the durable `ops.LogEvent` history — the only source that outlives provider
+ * retention, and the only one covering Vercel runtime errors at all (Vercel exposes no runtime-log
+ * API on Pro). `railway` is the live worker stream, `vercel` its build logs.
+ */
+export type ObservabilityLogRecord = {
+  at: string;
+  source: "stored" | "railway" | "vercel" | "queue";
+  service: string;
+  level: "debug" | "info" | "warn" | "error";
+  message: string;
+  domain?: string;
+  context?: Record<string, unknown>;
+};
+
+export type ObservabilityLogsResponse = {
+  at: string;
+  records: ObservabilityLogRecord[];
+  /** A source that failed reports here rather than failing the whole query. */
+  warnings: string[];
+};
+
+export type ObservabilityQueueJob = {
+  id: string;
+  name: string;
+  state: string;
+  queue: string;
+  attemptsMade: number;
+  attemptsAllowed: number | null;
+  failedReason: string | null;
+  /** When a delayed job next becomes runnable — what explains a queue nothing is touching. */
+  nextRunAt: string | null;
+  createdAt: string | null;
+  processedAt: string | null;
+  finishedAt: string | null;
+  data: string;
+  stacktrace: string | null;
+};
+
+export type ObservabilityQueueJobsResponse = {
+  at: string;
+  jobs: ObservabilityQueueJob[];
+  warnings: string[];
+};
+
+export async function getObservabilityLogs(params: {
+  source?: string;
+  level?: string;
+  domain?: string;
+  q?: string;
+  since?: string;
+  limit?: number;
+} = {}) {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") qs.set(key, String(value));
+  }
+  const suffix = qs.toString();
+  return request<ObservabilityLogsResponse>(`/observability/logs${suffix ? `?${suffix}` : ""}`);
+}
+
+export async function getObservabilityQueueJobs(params: { queue?: string; state?: string; limit?: number } = {}) {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") qs.set(key, String(value));
+  }
+  const suffix = qs.toString();
+  return request<ObservabilityQueueJobsResponse>(`/observability/queue/jobs${suffix ? `?${suffix}` : ""}`);
+}
 
 /** Per-tenant async-work health (domain-table aggregation) — the tenant-scoped
  *  counterpart to the global queue/Redis stats. Super-admin only. */

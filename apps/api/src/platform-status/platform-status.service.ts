@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { OutboxService } from "../common/outbox/outbox.service";
+import { RailwayClient } from "../observability/railway.client";
 import { DEPLOYED_APPS, PUBLIC_SERVICES, type AppDefinition } from "./platform-status.registry";
 import type {
   AppStatus,
@@ -41,13 +42,14 @@ export class PlatformStatusService {
    */
   private cache: { at: number; value: PlatformStatus } | null = null;
   private inFlight: Promise<PlatformStatus> | null = null;
-  /** Resolved once from the Railway token when RAILWAY_ENVIRONMENT_ID isn't configured. */
-  private railwayEnvId: string | undefined;
 
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    // The GraphQL transport + environment resolution live here so this service and the log
+    // viewer cannot drift on the Project-Access-Token rule.
+    private readonly railway: RailwayClient,
   ) {}
 
   /** The internal view: every app, with deploy shas. Super-admin only. */
@@ -478,7 +480,7 @@ export class PlatformStatusService {
       return out;
     }
 
-    const environmentId = await this.railwayEnvironmentId(token, warnings);
+    const environmentId = await this.railway.environmentId(token, warnings);
     if (!environmentId) return out;
 
     const query = `query($serviceId: String!, $environmentId: String!) {
@@ -488,7 +490,7 @@ export class PlatformStatusService {
       }
     }`;
 
-    const data = await this.railwayQuery<{
+    const data = await this.railway.query<{
       serviceInstance?: {
         activeDeployments?: RailwayDeploy[] | null;
         latestDeployment?: RailwayDeploy | null;
@@ -514,68 +516,6 @@ export class PlatformStatusService {
     return out;
   }
 
-  /**
-   * The Railway environment the worker's service instance lives in.
-   *
-   * Configured wins; otherwise a project-scoped token can name its own environment, which keeps the
-   * common case zero-config. An account/team token can't answer that, so it needs the env var.
-   */
-  private async railwayEnvironmentId(token: string, warnings: string[]): Promise<string | undefined> {
-    const configured = this.config.get<string>("RAILWAY_ENVIRONMENT_ID");
-    if (configured) return configured;
-    if (this.railwayEnvId) return this.railwayEnvId;
-
-    const data = await this.railwayQuery<{ projectToken?: { environmentId?: string } | null }>(
-      token,
-      `{ projectToken { environmentId } }`,
-      {},
-      warnings,
-    );
-    const resolved = data?.projectToken?.environmentId;
-    if (!resolved) {
-      warnings.push("Railway environment unresolved — set RAILWAY_ENVIRONMENT_ID");
-      return undefined;
-    }
-    // It never changes for a given token, so resolve it once per process.
-    this.railwayEnvId = resolved;
-    return resolved;
-  }
-
-  /**
-   * One Railway GraphQL call, with every failure turned into a warning.
-   *
-   * Auth is `Project-Access-Token`, not `Authorization: Bearer`: RAILWAY_TOKEN is the worker's
-   * project-scoped token, and Railway answers Bearer with "Not Authorized" for those. Swap in an
-   * account/team token and this header has to become Bearer — the warning will say so.
-   */
-  private async railwayQuery<T>(
-    token: string,
-    query: string,
-    variables: Record<string, string>,
-    warnings: string[],
-  ): Promise<T | undefined> {
-    try {
-      const res = await fetch("https://backboard.railway.com/graphql/v2", {
-        method: "POST",
-        headers: { "Project-Access-Token": token, "content-type": "application/json" },
-        body: JSON.stringify({ query, variables }),
-        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        warnings.push(`Railway API returned HTTP ${res.status}`);
-        return undefined;
-      }
-      const body = (await res.json()) as { data?: T; errors?: Array<{ message?: string }> };
-      if (body.errors?.length) {
-        warnings.push(`Railway API error: ${body.errors[0]?.message ?? "unknown"}`);
-        return undefined;
-      }
-      return body.data;
-    } catch (err) {
-      warnings.push(`Railway API unreachable (${err instanceof Error ? err.name : "Error"})`);
-      return undefined;
-    }
-  }
 }
 
 /** A Railway deployment as this page reads it. */
