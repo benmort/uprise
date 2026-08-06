@@ -196,10 +196,19 @@ describe("demo seed fixtures", () => {
   });
 
   describe("inbox threads", () => {
-    it("only references households that exist, at most one thread each", () => {
-      const indices = DEMO_THREADS.map((t) => t.contactIndex);
-      expect(new Set(indices).size).toBe(indices.length);
+    it("only references households that exist, at most one thread per contact per channel", () => {
+      // ConversationState is unique on [tenantId, contactPhone, channel], so a contact may hold
+      // one SMS thread AND one WhatsApp thread — the uniqueness is on the pair, not the contact.
+      // Two contacts do exactly that on purpose: one person reachable two ways, on one record.
+      const keys = DEMO_THREADS.map((t) => `${t.contactIndex}:${t.channel ?? "SMS"}`);
+      expect(new Set(keys).size).toBe(keys.length);
       for (const t of DEMO_THREADS) expect(contacts[t.contactIndex]).toBeDefined();
+    });
+
+    it("gives at least one contact a thread on both channels", () => {
+      const sms = new Set(DEMO_THREADS.filter((t) => (t.channel ?? "SMS") === "SMS").map((t) => t.contactIndex));
+      const wa = DEMO_THREADS.filter((t) => t.channel === "WHATSAPP").map((t) => t.contactIndex);
+      expect(wa.some((i) => sms.has(i))).toBe(true);
     });
 
     it("fills the inbox past its page size", () => {

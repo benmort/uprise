@@ -6,6 +6,7 @@ import {
   AudienceSource,
   BlastRecipientStatus,
   BlastStatus,
+  ConsentState,
   EventStatus,
   MessageChannel,
   Prisma,
@@ -43,10 +44,12 @@ import {
   DEMO_THREADS,
   DEMO_TURF,
   DEMO_WALK_LIST,
+  DEMO_WHATSAPP_TEMPLATES,
   DEMO_WALK_LIST_SIZE,
   EXAMPLE_AUDIENCE_NAME,
   EXAMPLE_BLAST_TITLE,
   buildDemoContacts,
+  demoContentSid,
   demoPhone,
 } from "./seed-data";
 import { PRIMARY_TENANT } from "./tenants.seed";
@@ -85,9 +88,31 @@ export class SeedService {
     private readonly canvassing: CanvassingService,
   ) {}
 
+  /**
+   * The tenant every demo row is written into.
+   *
+   * Defaults to the primary tenant (Uprise Labs). `SEED_TENANT_SLUG` retargets it — needed to
+   * furnish a specific campaign workspace for a partner demo, where the walkthrough tours a
+   * candidate's own workspace rather than ours.
+   *
+   * The override must name a tenant that ALREADY EXISTS: the default is upserted (the primary
+   * tenant is ours to create), but a typo'd override silently conjuring a new workspace is not a
+   * failure mode worth having on a production database.
+   */
   private async org(): Promise<string> {
-    // Seed target: the primary tenant (Uprise Labs). All demo/tour/seed data is
-    // written here. Idempotent upsert by slug — safe to re-run.
+    const override = this.config.get<string>("SEED_TENANT_SLUG", "").trim();
+    if (override) {
+      const target = await this.prisma.tenant.findUnique({ where: { slug: override } });
+      if (!target || target.deletedAt) {
+        throw new Error(
+          `SEED_TENANT_SLUG="${override}" does not match a live tenant — refusing to create one. ` +
+            "Check the slug, or seed the workspace first.",
+        );
+      }
+      this.logger.log(`Seeding demo data into tenant "${override}" (${target.name})`);
+      return target.id;
+    }
+    // Idempotent upsert by slug — safe to re-run.
     const org = await this.prisma.tenant.upsert({
       where: { slug: PRIMARY_TENANT.slug },
       create: { slug: PRIMARY_TENANT.slug, name: PRIMARY_TENANT.name },
@@ -133,12 +158,53 @@ export class SeedService {
   }
 
   /**
+   * The WhatsApp channel: approved templates, and the entitlement that makes any of it visible.
+   *
+   * FEATURE_WHATSAPP_ENABLED defaults to OFF and is plan-driven, so without a per-tenant override
+   * the seeded WhatsApp conversations exist in the database and render nowhere — data that is
+   * present, correct, and invisible. The override is therefore part of seeding the channel, not a
+   * separate administrative step someone has to remember on the morning of a demo.
+   */
+  private async seedWhatsapp(tenantId: string): Promise<void> {
+    for (const [i, tpl] of DEMO_WHATSAPP_TEMPLATES.entries()) {
+      const contentSid = demoContentSid(tenantId, i);
+      const existing = await this.prisma.whatsappTemplate.findUnique({ where: { contentSid } });
+      if (existing) continue;
+      await this.prisma.whatsappTemplate.create({
+        data: {
+          tenantId,
+          contentSid,
+          friendlyName: tpl.friendlyName,
+          category: tpl.category,
+          language: tpl.language,
+          status: tpl.status,
+          variables: tpl.variables as Prisma.InputJsonValue,
+          bodyPreview: tpl.bodyPreview,
+        },
+      });
+    }
+
+    const flagKey = "FEATURE_WHATSAPP_ENABLED";
+    const override = await this.prisma.featureFlagOverride.findFirst({ where: { tenantId, flagKey } });
+    if (!override) {
+      await this.prisma.featureFlagOverride.create({ data: { tenantId, flagKey, enabled: true } });
+    } else if (!override.enabled) {
+      await this.prisma.featureFlagOverride.update({ where: { id: override.id }, data: { enabled: true } });
+    }
+  }
+
+  /**
    * Seed the shared inbox from DEMO_THREADS: an inbound/outbound message pair per exchange plus the
    * ConversationState row that carries unread/resolved/owner. Before this, seedDemo() created no
    * messages at all, so the inbox rendered empty on every fresh environment.
    *
-   * Idempotent via a deterministic `twilioMessageSid` (`demo:thread:<thread>:<msg>`) — the column is
-   * @unique, so a re-seed skips messages it already wrote rather than duplicating the thread.
+   * Idempotent via a deterministic `twilioMessageSid` (`demo:thread:<tenant>:<thread>:<msg>`) — the
+   * column is @unique, so a re-seed skips messages it already wrote rather than duplicating a thread.
+   *
+   * The tenant id is IN the key, and must stay there: the uniqueness is global, so a key of
+   * `demo:thread:<thread>:<msg>` meant the first tenant seeded on a database claimed every sid and
+   * every later tenant silently got an empty inbox — the seed reporting success while the surface
+   * the tour spends most of its time on rendered blank.
    */
   private async seedThreads(
     tenantId: string,
@@ -157,7 +223,8 @@ export class SeedService {
 
       let lastMessageAt: Date | null = null;
       for (const [m, msg] of thread.messages.entries()) {
-        const sid = `demo:thread:${t}:${m}`;
+        const sid = `demo:thread:${tenantId}:${t}:${m}`;
+        const channel = thread.channel === "WHATSAPP" ? MessageChannel.WHATSAPP : MessageChannel.SMS;
         const at = new Date(now - msg.minutesAgo * 60_000);
         if (!lastMessageAt || at > lastMessageAt) lastMessageAt = at;
 
@@ -171,6 +238,7 @@ export class SeedService {
               fromPhone: contactPhone,
               toPhone: DEMO_SENDER_PHONE,
               body: msg.body,
+              channel,
               threadKey: contactPhone,
               twilioMessageSid: sid,
               receivedAt: at,
@@ -186,6 +254,7 @@ export class SeedService {
               toPhone: contactPhone,
               fromPhone: DEMO_SENDER_PHONE,
               body: msg.body,
+              channel,
               twilioMessageSid: sid,
               sentAt: at,
             },
@@ -193,12 +262,36 @@ export class SeedService {
         }
       }
 
+      const threadChannel =
+        thread.channel === "WHATSAPP" ? MessageChannel.WHATSAPP : MessageChannel.SMS;
+
+      // WhatsApp requires recorded opt-in. Seeding conversations without it would depict the
+      // platform doing something it is not permitted to do, so the consent row is part of the
+      // fixture rather than an afterthought.
+      if (threadChannel === MessageChannel.WHATSAPP) {
+        await this.prisma.contactConsent.upsert({
+          where: {
+            tenantId_phoneE164_channel: { tenantId, phoneE164: contactPhone, channel: threadChannel },
+          },
+          create: {
+            tenantId,
+            contactId,
+            phoneE164: contactPhone,
+            channel: threadChannel,
+            state: ConsentState.OPTED_IN,
+            source: "inbound",
+          },
+          update: { state: ConsentState.OPTED_IN },
+        });
+      }
+
       await this.prisma.conversationState.upsert({
-        where: { tenantId_contactPhone_channel: { tenantId, contactPhone, channel: MessageChannel.SMS } },
+        where: { tenantId_contactPhone_channel: { tenantId, contactPhone, channel: threadChannel } },
         create: {
           tenantId,
           contactId,
           contactPhone,
+          channel: threadChannel,
           unreadCount: thread.unread,
           resolved: thread.resolved,
           ownerId: thread.claimed ? organiserId : null,
@@ -640,6 +733,7 @@ export class SeedService {
     // conversation detail pane have something to render. Idempotent on the deterministic
     // twilioMessageSid (a @unique column), so re-seeding never duplicates a message.
     await this.seedThreads(tenantId, contactIds, contacts, organiserId);
+    await this.seedWhatsapp(tenantId);
 
     // Survey (dual-channel options)
     const survey =

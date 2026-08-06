@@ -39,6 +39,10 @@ export type ValidatedEnv = {
   // 2FA / phone-login OTP for a tenant-independent break-glass super-admin. Optional; blank ⇒
   // fall back to the oldest tenant. The send uses the platform transactional number regardless.
   PLATFORM_TENANT_ID: string;
+  // Retargets the demo seeder at an existing tenant (blank = the primary tenant). Declared here
+  // because @nestjs/config only assigns the keys this validator RETURNS to process.env — an
+  // undeclared key set in .env is silently dropped and ConfigService never sees it.
+  SEED_TENANT_SLUG: string;
   // Dev only: actually send OTP/2FA SMS via Twilio (vs the on-screen code). Ignored in prod.
   DEV_SEND_OTP_SMS: boolean;
   // Gate new-workspace self-service signups behind super-admin approval. When on, /auth/register
@@ -190,6 +194,7 @@ export function validateEnv(config: Env): ValidatedEnv {
   const output: ValidatedEnv = {
     NODE_ENV: config.NODE_ENV?.trim() || "development",
     PLATFORM_TENANT_ID: config.PLATFORM_TENANT_ID?.trim() || "",
+    SEED_TENANT_SLUG: config.SEED_TENANT_SLUG?.trim() || "",
     DEV_SEND_OTP_SMS: boolish(config, "DEV_SEND_OTP_SMS", false),
     // Default on in production so a public launch is gated; explicit env value always wins.
     SIGNUP_APPROVAL_REQUIRED: boolish(

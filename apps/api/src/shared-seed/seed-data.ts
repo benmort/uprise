@@ -402,6 +402,16 @@ export type DemoThreadSeed = {
   resolved: boolean;
   /** Claimed by the demo organiser — exercises the "mine" folder and the owner badge. */
   claimed: boolean;
+  /**
+   * Defaults to SMS. ConversationState is unique on [tenantId, contactPhone, channel], so the same
+   * contact can hold parallel threads on both — which is the point worth showing: one person, one
+   * record, two channels, rather than two disconnected tools.
+   *
+   * A WHATSAPP thread also gets a ContactConsent row at OPTED_IN (see seedThreads). That is not
+   * decoration: WhatsApp requires recorded opt-in, and seeding conversations without it would model
+   * something the platform is not allowed to do.
+   */
+  channel?: "SMS" | "WHATSAPP";
   messages: Array<{ direction: "in" | "out"; body: string; minutesAgo: number }>;
 };
 
@@ -532,7 +542,116 @@ export const DEMO_THREADS: DemoThreadSeed[] = [
       { direction: "in", body: "Was a good day! Count me in for the next one.", minutesAgo: 4260 },
     ],
   },
+
+  // ── WhatsApp ────────────────────────────────────────────────────────────────
+  // A second channel in the same shared inbox, deliberately including two contacts who also have
+  // an SMS thread above (indexes 0 and 12) — the same person reachable two ways, on one record,
+  // which is the thing a stitched-together stack cannot show.
+  {
+    contactIndex: 0,
+    channel: "WHATSAPP",
+    unread: 1,
+    resolved: false,
+    claimed: false,
+    messages: [
+      { direction: "out", body: "Hi Ada, it's Priya from the Kooyong campaign. You asked about phone shifts — we run them Tuesday and Thursday evenings, 6pm to 8pm, all from home. Would either suit?", minutesAgo: 140 },
+      { direction: "in", body: "Thursday works better for me. Do I need to install anything?", minutesAgo: 115 },
+    ],
+  },
+  {
+    contactIndex: 12,
+    channel: "WHATSAPP",
+    unread: 0,
+    resolved: false,
+    claimed: true,
+    messages: [
+      { direction: "in", body: "Hi, a neighbour forwarded me your message about the Glebe Point Rd doorknock. Can I bring my teenager along? She's doing a civics unit at school.", minutesAgo: 260 },
+      { direction: "out", body: "Absolutely — under-18s are welcome as long as they're paired with an adult. I'll put you both on Saturday's list.", minutesAgo: 240 },
+      { direction: "in", body: "Perfect, thank you.", minutesAgo: 236 },
+    ],
+  },
+  {
+    contactIndex: 21,
+    channel: "WHATSAPP",
+    unread: 3,
+    resolved: false,
+    claimed: false,
+    messages: [
+      { direction: "out", body: "Hi Sione, thanks for signing the integrity petition. We're hosting a community forum on the federal integrity commission next Wednesday evening — would you like the details?", minutesAgo: 95 },
+      { direction: "in", body: "Yes please.", minutesAgo: 74 },
+      { direction: "in", body: "Is it accessible? My father uses a wheelchair and would like to come.", minutesAgo: 72 },
+      { direction: "in", body: "Also is there parking nearby?", minutesAgo: 70 },
+    ],
+  },
+  {
+    contactIndex: 33,
+    channel: "WHATSAPP",
+    unread: 0,
+    resolved: true,
+    claimed: true,
+    messages: [
+      { direction: "in", body: "Hello — I spoke to one of your volunteers at my door on the weekend about climate policy. She said someone would send through the candidate's position paper?", minutesAgo: 2900 },
+      { direction: "out", body: "Hi Marcus, yes — apologies for the delay. Sending it through now. The short version: net zero by 2035 with an interim 2030 target, and no new coal or gas approvals.", minutesAgo: 2840 },
+      { direction: "in", body: "Appreciated. That's clearer than what I've had from the other candidates.", minutesAgo: 2790 },
+    ],
+  },
 ];
+
+/**
+ * WhatsApp templates, as synced from Twilio's Content API.
+ *
+ * Business-initiated WhatsApp conversations must open with an approved template, so the composer's
+ * WhatsApp mode is unusable without at least one. Statuses are mixed on purpose: an APPROVED
+ * template to send with, and one still PENDING, because "waiting on Meta approval" is the state a
+ * real campaign spends much of its time in.
+ */
+export const DEMO_WHATSAPP_TEMPLATES: Array<{
+  friendlyName: string;
+  category: "MARKETING" | "UTILITY";
+  language: string;
+  /** Lowercase, matching the schema's documented `approved | pending | rejected`. */
+  status: string;
+  variables: string[];
+  bodyPreview: string;
+}> = [
+  {
+    friendlyName: "volunteer_shift_invite",
+    category: "MARKETING",
+    language: "en_AU",
+    status: "approved",
+    variables: ["first_name", "organiser", "suburb", "day"],
+    bodyPreview:
+      "Hi {{1}}, it's {{2}} from the campaign. We're doorknocking in {{3}} on {{4}} — would you like to join us? Reply STOP to opt out.",
+  },
+  {
+    friendlyName: "event_reminder",
+    category: "UTILITY",
+    language: "en_AU",
+    status: "approved",
+    variables: ["event_name", "start_time", "location"],
+    bodyPreview: "Reminder: {{1}} starts at {{2}} tomorrow at {{3}}. Reply STOP to opt out.",
+  },
+  {
+    friendlyName: "policy_followup",
+    category: "MARKETING",
+    language: "en_AU",
+    // Left pending on purpose: waiting on Meta approval is the state a real campaign spends much
+    // of its time in, and the composer should be seen handling it.
+    status: "pending",
+    variables: ["first_name", "topic"],
+    bodyPreview: "Hi {{1}}, following up on your question about {{2}}. Here's where the candidate stands.",
+  },
+];
+
+/**
+ * A deterministic, obviously-fake Twilio Content SID.
+ *
+ * `contentSid` is globally @unique, so a fixed literal would let the first tenant seeded on a
+ * database claim it and every later tenant collide — the same trap the thread sid fell into.
+ * Keyed on the tenant, so each workspace gets its own.
+ */
+export const demoContentSid = (tenantId: string, index: number): string =>
+  `HXdemo${tenantId.slice(-24)}${String(index).padStart(2, "0")}`;
 
 // ── Surfaces that previously photographed empty ───────────────────────────────
 // Everything below exists because a dashboard card or a nav destination rendered its

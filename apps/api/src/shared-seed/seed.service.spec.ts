@@ -8,6 +8,7 @@ import {
   DEMO_SHIFTS,
   DEMO_THREADS,
   DEMO_WALK_LIST,
+  DEMO_WHATSAPP_TEMPLATES,
   buildDemoContacts,
   demoPhone,
 } from "./seed-data";
@@ -57,10 +58,12 @@ function mockPrisma(overrides: Record<string, Record<string, unknown>> = {}) {
   return { client, calls };
 }
 
-function service(prisma: any) {
-  // Constructor order is (config, prisma, engagement, canvassing); the config and the
-  // engagement/canvassing collaborators aren't reached by the paths under test.
-  return new SeedService({} as any, prisma, {} as any, {} as any);
+function service(prisma: any, seedTenantSlug = "") {
+  // Constructor order is (config, prisma, engagement, canvassing); the engagement/canvassing
+  // collaborators aren't reached by the paths under test. Config is: org() reads
+  // SEED_TENANT_SLUG to decide whether to retarget the seed at an existing tenant.
+  const config = { get: (_key: string, fallback = "") => seedTenantSlug || fallback } as any;
+  return new SeedService(config, prisma, {} as any, {} as any);
 }
 
 const contacts = buildDemoContacts();
@@ -93,7 +96,20 @@ describe("SeedService — inbox threads", () => {
       ...calls["outboundMessage.create"].mock.calls.map((c) => c[0].data.twilioMessageSid),
     ];
     expect(new Set(sids).size).toBe(sids.length);
-    for (const sid of sids) expect(sid).toMatch(/^demo:thread:\d+:\d+$/);
+    for (const sid of sids) expect(sid).toMatch(/^demo:thread:tenant_1:\d+:\d+$/);
+  });
+
+  it("scopes the sid to the tenant, so a second tenant on the same database still gets an inbox", async () => {
+    // twilioMessageSid is globally @unique. Without the tenant in the key, the first tenant seeded
+    // claims every sid and every later one skips all its messages — a silent empty inbox.
+    const { client, calls } = mockPrisma();
+    const svc = service(client);
+    await (svc as any).seedThreads("tenant_A", contactIds, contacts, "organiser_1");
+    await (svc as any).seedThreads("tenant_B", contactIds, contacts, "organiser_1");
+    const sids = calls["inboundMessage.create"].mock.calls.map((c) => c[0].data.twilioMessageSid);
+    expect(sids.some((s: string) => s.startsWith("demo:thread:tenant_A:"))).toBe(true);
+    expect(sids.some((s: string) => s.startsWith("demo:thread:tenant_B:"))).toBe(true);
+    expect(new Set(sids).size).toBe(sids.length);
   });
 
   it("skips a message that already exists rather than duplicating the thread", async () => {
@@ -416,5 +432,129 @@ describe("SeedService — clearDemo", () => {
     await service(client).clearDemo();
     expect(order.indexOf("shiftAssignment")).toBeLessThan(order.indexOf("shift"));
     expect(order.indexOf("eventRsvp")).toBeLessThan(order.indexOf("event"));
+  });
+});
+
+/**
+ * Where the demo data lands.
+ *
+ * Retargeting exists so a partner demo can furnish a specific campaign workspace rather than ours.
+ * That capability points at a production database, so the guard around it — never invent a tenant
+ * — matters more than the happy path.
+ */
+describe("SeedService — seed target", () => {
+  /** org() is private; the resolution rule is the unit worth pinning, so reach for it directly. */
+  const resolveOrg = (svc: SeedService): Promise<string> => (svc as any).org();
+
+  it("upserts the primary tenant when no override is set", async () => {
+    const { client } = mockPrisma({ tenant: { upsert: async () => ({ id: "primary-id" }) } });
+    await expect(resolveOrg(service(client))).resolves.toBe("primary-id");
+    expect((client as any).tenant.upsert).toHaveBeenCalled();
+    expect((client as any).tenant.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("resolves an override to an existing tenant without creating anything", async () => {
+    const { client } = mockPrisma({
+      tenant: { findUnique: async () => ({ id: "kooyong-id", name: "Monique Ryan – Kooyong", deletedAt: null }) },
+    });
+    await expect(resolveOrg(service(client, "monique-ryan"))).resolves.toBe("kooyong-id");
+    expect((client as any).tenant.upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses an override that matches no tenant, rather than conjuring one", async () => {
+    // A typo'd slug silently creating a workspace on a production database is the failure mode
+    // this whole branch exists to prevent.
+    const { client } = mockPrisma({ tenant: { findUnique: async () => null } });
+    await expect(resolveOrg(service(client, "moniqe-ryan"))).rejects.toThrow(/does not match a live tenant/);
+    expect((client as any).tenant.upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses an override naming a soft-deleted tenant", async () => {
+    const { client } = mockPrisma({
+      tenant: { findUnique: async () => ({ id: "gone", name: "Old", deletedAt: new Date() }) },
+    });
+    await expect(resolveOrg(service(client, "old-tenant"))).rejects.toThrow(/does not match a live tenant/);
+  });
+});
+
+describe("SeedService — WhatsApp in the shared inbox", () => {
+  const waThreads = DEMO_THREADS.filter((t) => t.channel === "WHATSAPP");
+
+  it("has WhatsApp threads in the fixture at all", () => {
+    expect(waThreads.length).toBeGreaterThan(0);
+  });
+
+  it("writes WhatsApp messages and conversations on the WHATSAPP channel", async () => {
+    const { client, calls } = mockPrisma();
+    await seedThreads(service(client));
+    const states = calls["conversationState.upsert"].mock.calls.map((c) => c[0]);
+    const wa = states.filter((s) => s.create.channel === "WHATSAPP");
+    expect(wa).toHaveLength(waThreads.length);
+    // And the SMS threads must not have been dragged onto the new channel.
+    expect(states.filter((s) => s.create.channel === "SMS")).toHaveLength(DEMO_THREADS.length - waThreads.length);
+  });
+
+  it("records opt-in consent for every WhatsApp thread, and none for SMS", async () => {
+    // WhatsApp requires recorded opt-in. Conversations without it would depict the platform doing
+    // something it is not permitted to do, so this is a correctness assertion, not tidiness.
+    const { client, calls } = mockPrisma();
+    await seedThreads(service(client));
+    expect(calls["contactConsent.upsert"]).toHaveBeenCalledTimes(waThreads.length);
+    for (const call of calls["contactConsent.upsert"].mock.calls) {
+      expect(call[0].create).toMatchObject({ channel: "WHATSAPP", state: "OPTED_IN" });
+    }
+  });
+
+  it("lets one contact hold parallel SMS and WhatsApp threads", async () => {
+    // ConversationState is unique on [tenantId, contactPhone, channel] — the same person on two
+    // channels is one record, which is the whole argument the demo makes.
+    const { client, calls } = mockPrisma();
+    await seedThreads(service(client));
+    const byPhone = new Map<string, Set<string>>();
+    for (const c of calls["conversationState.upsert"].mock.calls) {
+      const { contactPhone, channel } = c[0].create;
+      byPhone.set(contactPhone, (byPhone.get(contactPhone) ?? new Set()).add(channel));
+    }
+    expect([...byPhone.values()].some((channels) => channels.size > 1)).toBe(true);
+  });
+});
+
+describe("SeedService — WhatsApp entitlement and templates", () => {
+  const seedWhatsapp = (svc: SeedService, tenantId = "tenant_1") =>
+    (svc as any).seedWhatsapp(tenantId);
+
+  it("turns FEATURE_WHATSAPP_ENABLED on for the tenant", async () => {
+    // The flag defaults to OFF, so without this the seeded conversations render nowhere: data that
+    // is present, correct and invisible.
+    const { client, calls } = mockPrisma();
+    await seedWhatsapp(service(client));
+    expect(calls["featureFlagOverride.create"]).toHaveBeenCalledWith({
+      data: { tenantId: "tenant_1", flagKey: "FEATURE_WHATSAPP_ENABLED", enabled: true },
+    });
+  });
+
+  it("flips an existing override that is switched off rather than duplicating it", async () => {
+    const { client, calls } = mockPrisma({
+      featureFlagOverride: { findFirst: async () => ({ id: "ovr_1", enabled: false }) },
+    });
+    await seedWhatsapp(service(client));
+    expect(calls["featureFlagOverride.create"]).toBeUndefined();
+    expect(calls["featureFlagOverride.update"]).toHaveBeenCalledWith({
+      where: { id: "ovr_1" },
+      data: { enabled: true },
+    });
+  });
+
+  it("keys template content sids to the tenant so two tenants can both be seeded", async () => {
+    // contentSid is globally @unique — a fixed literal would let the first tenant claim it and
+    // every later tenant collide, the same trap the thread sid fell into.
+    const { client, calls } = mockPrisma();
+    const svc = service(client);
+    await seedWhatsapp(svc, "tenant_A");
+    await seedWhatsapp(svc, "tenant_B");
+    const sids = calls["whatsappTemplate.create"].mock.calls.map((c) => c[0].data.contentSid);
+    expect(new Set(sids).size).toBe(sids.length);
+    expect(sids).toHaveLength(DEMO_WHATSAPP_TEMPLATES.length * 2);
+    for (const sid of sids) expect(sid).toMatch(/^HXdemo/);
   });
 });
