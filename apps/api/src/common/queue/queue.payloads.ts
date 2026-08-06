@@ -23,6 +23,7 @@ export type IntegrationSyncJobPayload = {
   run?: number;
 };
 
+
 export type JourneyRunRungJobPayload = {
   enrolmentId: string;
   rungIndex: number;
@@ -91,13 +92,19 @@ export function isIntegrationSyncJobPayload(value: unknown): value is Integratio
   if (!isNonEmptyString(payload.syncJobId)) return false;
   if (!isNonEmptyString(payload.listId)) return false;
   if (!isNonEmptyString(payload.audienceName)) return false;
-  if (payload.type !== "ACTION_NETWORK" && payload.type !== "INTERNAL") return false;
+  // Every member of the payload type's union must be accepted here – this guard once
+  // rejected NATION_BUILDER, so every NationBuilder sync died in the worker before
+  // processing while the job row sat QUEUED forever.
+  if (payload.type !== "ACTION_NETWORK" && payload.type !== "NATION_BUILDER" && payload.type !== "INTERNAL") {
+    return false;
+  }
   if (payload.listName !== undefined && typeof payload.listName !== "string") return false;
   if (payload.query !== undefined && typeof payload.query !== "string") return false;
   if (payload.cursorUrl !== undefined && typeof payload.cursorUrl !== "string") return false;
   if (payload.run !== undefined && !Number.isFinite(payload.run)) return false;
   return true;
 }
+
 
 export function isTurfEstimateRunJobPayload(value: unknown): value is TurfEstimateRunJobPayload {
   if (!value || typeof value !== "object") return false;

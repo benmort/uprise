@@ -45,6 +45,25 @@ describe("queue payload contracts", () => {
         run: 2,
       }),
     ).toBe(true);
+    // Regression: the guard once rejected NATION_BUILDER (the type union's third member),
+    // so every NationBuilder sync job died in the worker before processing.
+    expect(
+      isIntegrationSyncJobPayload({
+        syncJobId: "sync_1",
+        type: "NATION_BUILDER",
+        listId: "list_1",
+        audienceName: "NationBuilder: Volunteers",
+        cursorUrl: "/api/v1/lists/1/people?limit=100&__nonce=abc",
+      }),
+    ).toBe(true);
+    expect(
+      isIntegrationSyncJobPayload({
+        syncJobId: "sync_1",
+        type: "SOMETHING_ELSE",
+        listId: "list_1",
+        audienceName: "x",
+      }),
+    ).toBe(false);
     expect(
       isIntegrationSyncJobPayload({
         syncJobId: "",
