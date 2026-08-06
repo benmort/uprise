@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { navigateAndWait, tourScroll } from "@/lib/tours/uprise-tour";
 import { AUTO_DWELL_MS, useUpriseTour } from "@/lib/tours/use-uprise-tour";
+import { SlideDeck } from "./slide-deck";
 
 // ─── Layout constants ────────────────────────────────────────────────────────
 const CARD_W = 320;
@@ -278,6 +279,7 @@ export function FloatingTourCard() {
     currentStage,
     currentStageNumber,
     goToStage,
+    slidePos,
   } = useUpriseTour();
   const [stagesOpen, setStagesOpen] = useState(false);
 
@@ -306,6 +308,14 @@ export function FloatingTourCard() {
   // scroll the target into view, then measure for the spotlight + card placement.
   useEffect(() => {
     if (!active || !step) {
+      setTarget(null);
+      return;
+    }
+    // A slide covers the screen, so there is nothing to spotlight and nothing to navigate to.
+    // Bailing here also skips the ~4s selector-retry ladder below, which would otherwise run in
+    // full on every slide, and guarantees no route change or scrollIntoView moves the page
+    // hidden behind the deck.
+    if (step.slide) {
       setTarget(null);
       return;
     }
@@ -405,6 +415,28 @@ export function FloatingTourCard() {
   }, []);
 
   if (!mounted || !active || !step) return null;
+
+  // Slide steps take over the screen instead of pointing at it. Branching here — below every
+  // hook — means the deck inherits this component's keyboard handling (←/→/Enter/Esc), its fade
+  // timing and its close-with-progress-saved, while none of the spotlight chrome renders.
+  if (step.slide && slidePos) {
+    return createPortal(
+      <SlideDeck
+        slide={step.slide}
+        index={slidePos.index}
+        total={slidePos.count}
+        mode={mode}
+        paused={paused}
+        visible={visible}
+        isLastSlide={currentStep === totalSteps - 1}
+        onNext={next}
+        onPrev={prev}
+        onClose={handleClose}
+        onPauseToggle={paused ? resumeAuto : pauseAuto}
+      />,
+      document.body,
+    );
+  }
 
   const isFirst = currentStep === 0;
   const isLast = currentStep === totalSteps - 1;

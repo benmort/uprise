@@ -7,10 +7,13 @@ import { ServiceWorkerCleanup } from "@/components/sw-cleanup";
 import { ToastProvider } from "@/components/ui/toast";
 import { NO_FLASH_THEME_SCRIPT, ThemeProvider } from "@/components/theme/theme-provider";
 
+// No `weight` list: Outfit is a variable font, so omitting it ships one woff2 covering 100–900
+// rather than five static cuts capped at 700. `font-extrabold` (800) was previously synthesised —
+// the presentation deck's display headlines need the real weight. Matches apps/auth.
 const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-outfit",
-  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

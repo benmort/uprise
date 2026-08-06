@@ -8,6 +8,7 @@ import {
   getTourById,
   resetExampleData,
   seedExampleData,
+  slidePosition,
   stageEntryPoints,
   stageOfStep,
   ONBOARDING_TOUR_ID,
@@ -57,6 +58,8 @@ export interface UpriseTourState {
   currentStageNumber: number;
   /** Jump straight to a stage's first step — lets a presenter re-cut a demo live. */
   goToStage: (stageId: string) => void;
+  /** Position among the tour's slides for the deck footer, or null on a spotlight step. */
+  slidePos: { index: number; count: number } | null;
   /** Start a specific tour in the given mode. */
   startTour: (tourId: string, mode: TourMode) => void;
   start: () => void;
@@ -90,6 +93,7 @@ export const UpriseTourContext = createContext<UpriseTourState>({
   currentStage: null,
   currentStageNumber: 0,
   goToStage: noop,
+  slidePos: null,
   startTour: noop,
   start: noop,
   startManual: noop,
@@ -245,6 +249,7 @@ export function useUpriseTourState(): UpriseTourState {
   }, [active, mode, paused, currentStep, next]);
 
   const currentStage = active ? stageOfStep(tour, currentStep) : null;
+  const slidePos = active ? slidePosition(tour, currentStep) : null;
   const currentStageNumber = currentStage
     ? (tour.stages ?? []).findIndex((s) => s.id === currentStage.id) + 1
     : 0;
@@ -264,6 +269,7 @@ export function useUpriseTourState(): UpriseTourState {
     currentStage,
     currentStageNumber,
     goToStage,
+    slidePos,
     startTour,
     start: startManual,
     startManual,
