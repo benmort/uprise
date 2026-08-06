@@ -103,6 +103,13 @@ export default function MobileMenu({ isOpen, onClose, sessionHint }: MobileMenuP
                   >
                     Integrations
                   </Link>
+                  <Link
+                    href="/comparison"
+                    className="flex w-full rounded-2xl p-3 text-base duration-200 hover:bg-gray-100"
+                    onClick={onClose}
+                  >
+                    Comparison
+                  </Link>
                   {/* "Developers" (/developers) is hidden for now – see
                       (community)/developers/page.tsx for what to restore. */}
                 </div>

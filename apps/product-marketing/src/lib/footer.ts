@@ -31,6 +31,7 @@ export const FOOTER = {
         { label: "Plans", href: "/plans" },
         { label: "Campaigners", href: "/campaigners" },
         { label: "Integrations", href: "/integrations" },
+        { label: "Comparison", href: "/comparison" },
         // "Developers" (/developers) is hidden for now – see (community)/developers/page.tsx.
       ],
     },

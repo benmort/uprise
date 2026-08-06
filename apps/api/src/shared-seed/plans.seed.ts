@@ -35,24 +35,34 @@ export interface PlanSeed {
   features: FeatureRow[];
 }
 
+/**
+ * The public pricing table's rows.
+ *
+ * These are DISPLAY strings, separate from the enforced `featureFlags` and `limits` — which is
+ * exactly why they drifted. Every tier previously advertised "Email campaigns" and
+ * "Forms & petitions"; neither capability exists. MessageChannel has no EMAIL member, so a blast
+ * can structurally never be an email, and ActionPageType is only CLICK_TO_CALL and EVENT_RSVP.
+ * "Surveys & fundraisers" bundled a real capability with an absent one, and API access was
+ * advertised on the top tier while API keys authenticate nothing.
+ *
+ * A pricing page is a representation a customer can buy on, so the rule here is: a row may only
+ * claim what a customer on that tier can actually reach today. Anything else belongs on the
+ * roadmap, not in the price table.
+ */
 const featureRows = (
-  email: boolean,
   sms: boolean,
   calling: boolean,
-  forms: boolean,
   surveys: boolean,
   analytics: boolean,
-  api: boolean,
   multibrand: boolean,
 ): FeatureRow[] => [
-  { label: "Email campaigns", value: email },
   { label: "SMS campaigns", value: sms },
+  { label: "Peer-to-peer texting", value: sms },
   { label: "Calling campaigns", value: calling },
-  { label: "Forms & petitions", value: forms },
-  { label: "Surveys & fundraisers", value: surveys },
+  { label: "Door-knocking & turf", value: true },
+  { label: "Surveys & support scoring", value: surveys },
   { label: "Basic reporting", value: true },
   { label: "Advanced analytics", value: analytics },
-  { label: "API access & priority support", value: api },
   { label: "Multi-tenant & multi-brand", value: multibrand },
 ];
 
@@ -85,7 +95,7 @@ export const PLAN_SEED: PlanSeed[] = [
       FEATURE_OWN_CHANNELS_SETUP: false,
     },
     limits: { contacts: 1000, teamMembers: 2, segments: 2 },
-    features: featureRows(true, false, false, true, false, false, false, false),
+    features: featureRows(true, false, true, false, false),
   },
   {
     key: "starter",
@@ -111,7 +121,7 @@ export const PLAN_SEED: PlanSeed[] = [
       FEATURE_OWN_CHANNELS_SETUP: false,
     },
     limits: { contacts: 5000, teamMembers: 3, segments: 5 },
-    features: featureRows(true, false, false, true, false, false, false, false),
+    features: featureRows(true, true, true, false, false),
   },
   {
     key: "growth",
@@ -138,7 +148,7 @@ export const PLAN_SEED: PlanSeed[] = [
       FEATURE_OWN_CHANNELS_SETUP: true,
     },
     limits: { contacts: 25000, teamMembers: 10, segments: 20 },
-    features: featureRows(true, true, false, true, true, true, false, false),
+    features: featureRows(true, true, true, true, false),
   },
   {
     key: "scale",
@@ -164,7 +174,7 @@ export const PLAN_SEED: PlanSeed[] = [
       FEATURE_OWN_CHANNELS_SETUP: true,
     },
     limits: { contacts: 100000, teamMembers: 25, segments: null },
-    features: featureRows(true, true, true, true, true, true, true, true),
+    features: featureRows(true, true, true, true, true),
   },
 ];
 

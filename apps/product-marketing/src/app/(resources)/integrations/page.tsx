@@ -15,6 +15,11 @@ const LIVE = [
     body: "Connect your Action Network account, search your lists, and sync their members into Uprise audiences. Test the connection before you sync, then run it on demand and watch progress live.",
   },
   {
+    icon: Network,
+    title: "NationBuilder",
+    body: "Connect a nation, browse its lists, and sync people into Uprise audiences. One connection per nation, so an organisation running several keeps them separate.",
+  },
+  {
     icon: FileSpreadsheet,
     title: "CSV import",
     body: "Upload contacts from any tool as a CSV, with live import progress and per-row error reporting. Map names, mobiles and custom fields straight onto the contact spine.",
@@ -142,9 +147,19 @@ export default function IntegrationsPage() {
             <h2 className="mb-4 text-2xl font-bold !leading-[1.2] text-title-color md:text-3xl">
               Need a specific integration?
             </h2>
-            <p className="mb-8 max-w-[560px] text-base text-text-color-secondary">
+            <p className="mb-4 max-w-[560px] text-base text-text-color-secondary">
               Tell us what your organisation runs on. We'll let you know what's possible today and
               what's coming next.
+            </p>
+            {/* Action Network and NationBuilder are partners here and comparison points on
+                /comparison. Linking the two keeps that coherent rather than leaving a reader to
+                notice the tension on their own. */}
+            <p className="mb-8 max-w-[560px] text-sm text-text-color-secondary">
+              Already running Action Network or NationBuilder?{" "}
+              <Link href="/comparison" className="text-primary hover:underline">
+                See how Uprise compares
+              </Link>{" "}
+              – we sync with both rather than replace them.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link

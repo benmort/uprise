@@ -234,6 +234,9 @@ export default function Header() {
                   <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/integrations">
                     Integrations
                   </Link>
+                  <Link className="nested-group flex w-full items-center gap-3 rounded-lg p-3 text-sm font-medium text-text-color-secondary duration-200 hover:bg-gray-100 hover:text-text-color" href="/comparison">
+                    Comparison
+                  </Link>
                   {/* "Developers" (/developers) is hidden for now – see
                       (community)/developers/page.tsx for what to restore. */}
                 </div>
