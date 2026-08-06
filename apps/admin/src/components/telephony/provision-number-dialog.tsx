@@ -1,6 +1,6 @@
 "use client";
 
-import { Spinner } from "@uprise/ui";
+import { Alert, Spinner } from "@uprise/ui";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FormDialog, Field, Input } from "@uprise/ui";
@@ -51,17 +51,27 @@ export function ProvisionNumberDialog({
   // second number is a second purchase and a second bundle a human at Twilio reviews.
   const [bothNumbers, setBothNumbers] = useState(true);
   const [input, setInput] = useState<TelephonyComplianceInput>(EMPTY);
+  /**
+   * The compliance details are locked to the organisation profile by default.
+   *
+   * Both numbers are applied for under one regulatory identity, and a mismatch between what is
+   * submitted here and what the organisation actually is means a rejected bundle and a wait —
+   * Twilio's review is done by a person. Prefilled-and-editable invited exactly that drift, so the
+   * default is locked and overriding is a deliberate act.
+   */
+  const [lockedToOrg, setLockedToOrg] = useState(true);
   const [prefilling, setPrefilling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [setupIncomplete, setSetupIncomplete] = useState(false);
 
-  // Prefill from the org profile each time the dialog opens (fields stay editable).
+  // Prefill from the org profile each time the dialog opens, locked by default.
   useEffect(() => {
     if (!open) return;
     let alive = true;
     setNumberType(defaultNumberType);
     setBothNumbers(true);
+    setLockedToOrg(true);
     setError(null);
     setPrefilling(true);
     void telephony.compliancePrefill().then((res) => {
@@ -77,6 +87,15 @@ export function ProvisionNumberDialog({
   const set = (patch: Partial<TelephonyComplianceInput>) => setInput((prev) => ({ ...prev, ...patch }));
   const setAddress = (patch: Partial<TelephonyComplianceInput["address"]>) =>
     setInput((prev) => ({ ...prev, address: { ...prev.address, ...patch } }));
+
+  /** Applied to every compliance input, so the lock cannot be half-honoured across the form. */
+  const locked = {
+    readOnly: lockedToOrg,
+    // readOnly rather than disabled: the values stay selectable and copyable, and they still
+    // reach the payload. A disabled field reads as broken here, not as intentionally fixed.
+    "aria-readonly": lockedToOrg,
+    className: cn(lockedToOrg && "bg-surface-variant text-muted-foreground focus-visible:ring-0"),
+  } as const;
 
   const complete =
     input.legalName.trim() &&
@@ -186,12 +205,53 @@ export function ProvisionNumberDialog({
         </p>
       ) : null}
 
+      {/* One identity covers both numbers, so the lock sits above the whole compliance block
+          rather than beside any single field. */}
+      <Alert variant="info" showIcon={false}>
+        <label className="flex items-start gap-2.5">
+          <input
+            type="checkbox"
+            className="mt-0.5 shrink-0"
+            checked={lockedToOrg}
+            onChange={(e) => setLockedToOrg(e.target.checked)}
+          />
+          <span className="text-sm">
+            <span className="block font-semibold text-foreground">
+              Use my organisation&apos;s registered details
+            </span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+              {lockedToOrg ? (
+                <>
+                  Both the local and mobile numbers are applied for under this one identity, taken
+                  from your{" "}
+                  <Link
+                    href="/getting-started#organisation"
+                    className="font-medium underline"
+                    onClick={onClose}
+                  >
+                    organisation profile
+                  </Link>
+                  . Untick to change them for this application only.
+                </>
+              ) : (
+                <>
+                  Editing for this application only – your organisation profile will not change.
+                  These details must match your registered entity, because a person at the carrier
+                  checks them against public records before either number goes live.
+                </>
+              )}
+            </span>
+          </span>
+        </label>
+      </Alert>
+
       <Field label="Legal organisation name" htmlFor="prov-legal-name">
         <Input
           id="prov-legal-name"
           value={input.legalName}
           onChange={(e) => set({ legalName: e.target.value })}
           autoComplete="organization"
+          {...locked}
         />
       </Field>
 
@@ -201,6 +261,7 @@ export function ProvisionNumberDialog({
             id="prov-first"
             value={input.contactFirstName}
             onChange={(e) => set({ contactFirstName: e.target.value })}
+            {...locked}
           />
         </Field>
         <Field label="Contact last name" htmlFor="prov-last">
@@ -208,6 +269,7 @@ export function ProvisionNumberDialog({
             id="prov-last"
             value={input.contactLastName}
             onChange={(e) => set({ contactLastName: e.target.value })}
+            {...locked}
           />
         </Field>
       </div>
@@ -219,6 +281,7 @@ export function ProvisionNumberDialog({
             type="email"
             value={input.email}
             onChange={(e) => set({ email: e.target.value })}
+            {...locked}
           />
         </Field>
         <Field label="ABN / ACN" htmlFor="prov-abn" hint="Optional but speeds up review.">
@@ -226,6 +289,7 @@ export function ProvisionNumberDialog({
             id="prov-abn"
             value={input.businessNumber ?? ""}
             onChange={(e) => set({ businessNumber: e.target.value })}
+            {...locked}
           />
         </Field>
       </div>
@@ -236,12 +300,18 @@ export function ProvisionNumberDialog({
           value={input.address.street}
           onChange={(e) => setAddress({ street: e.target.value })}
           autoComplete="street-address"
+          {...locked}
         />
       </Field>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Suburb" htmlFor="prov-city">
-          <Input id="prov-city" value={input.address.city} onChange={(e) => setAddress({ city: e.target.value })} />
+          <Input
+            id="prov-city"
+            value={input.address.city}
+            onChange={(e) => setAddress({ city: e.target.value })}
+            {...locked}
+          />
         </Field>
         <Field label="State" htmlFor="prov-region">
           <Input
@@ -249,6 +319,7 @@ export function ProvisionNumberDialog({
             value={input.address.region}
             onChange={(e) => setAddress({ region: e.target.value })}
             placeholder="NSW"
+            {...locked}
           />
         </Field>
         <Field label="Postcode" htmlFor="prov-postcode">
@@ -257,6 +328,7 @@ export function ProvisionNumberDialog({
             inputMode="numeric"
             value={input.address.postalCode}
             onChange={(e) => setAddress({ postalCode: e.target.value })}
+            {...locked}
           />
         </Field>
       </div>
