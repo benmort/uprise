@@ -35,7 +35,8 @@ export interface IntegrationWriteConnector {
   ): Promise<NbPersonRef>;
   /** Idempotent provider-side tag add. */
   addTags(apiKey: string, personId: string, tags: string[], baseUrl?: string): Promise<void>;
-  /** Log a canvassing-style contact against a person (method/status/support level/note). */
+  /** Log a canvassing-style contact against a person (method/status/note). NB's contact
+   *  resource has NO support_level field — levels go via updatePersonFields. */
   logContact(
     apiKey: string,
     personId: string,
@@ -43,7 +44,6 @@ export interface IntegrationWriteConnector {
       method: string;
       statusCode?: string;
       note?: string;
-      supportLevel?: number;
       senderId?: number;
     },
     baseUrl?: string,
@@ -143,7 +143,7 @@ export class NationBuilderWriteConnector implements IntegrationWriteConnector {
   async logContact(
     apiKey: string,
     personId: string,
-    input: { method: string; statusCode?: string; note?: string; supportLevel?: number; senderId?: number },
+    input: { method: string; statusCode?: string; note?: string; senderId?: number },
     baseUrl?: string,
   ): Promise<void> {
     const root = mustBaseUrl(baseUrl);
@@ -158,7 +158,6 @@ export class NationBuilderWriteConnector implements IntegrationWriteConnector {
             method: input.method,
             ...(input.statusCode ? { status: input.statusCode } : {}),
             ...(input.note ? { note: input.note } : {}),
-            ...(input.supportLevel != null ? { support_level: input.supportLevel } : {}),
             ...(input.senderId != null ? { sender_id: input.senderId } : {}),
           },
         },

@@ -546,7 +546,6 @@ export class CrmPushService {
           method: op.method,
           statusCode: op.statusCode,
           note: op.note,
-          supportLevel: op.supportLevel,
           senderId: op.senderId,
         },
         baseUrl,

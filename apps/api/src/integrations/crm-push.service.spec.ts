@@ -198,10 +198,18 @@ describe("CrmPushService", () => {
       prisma.contactSourceRecord.findFirst.mockResolvedValue({ externalId: "nb42" });
       const out = await service.processDeliveryJob({ deliveryId: "d1", tenantId: "org1" });
       expect(out.status).toBe("SUCCEEDED");
+      // The contact log carries NO support level (NB's contact resource has no such
+      // field) — the level goes as a separate person-field update.
       expect(writeConnector.logContact).toHaveBeenCalledWith(
         "apikey",
         "nb42",
-        expect.objectContaining({ method: "door_knock", statusCode: "spoke_to_target", supportLevel: 1 }),
+        expect.objectContaining({ method: "door_knock", statusCode: "spoke_to_target" }),
+        "https://riverside.nationbuilder.com",
+      );
+      expect(writeConnector.updatePersonFields).toHaveBeenCalledWith(
+        "apikey",
+        "nb42",
+        { support_level: 1 },
         "https://riverside.nationbuilder.com",
       );
     });
@@ -217,8 +225,8 @@ describe("CrmPushService", () => {
         consentAt: null,
       });
       await service.processDeliveryJob({ deliveryId: "d1", tenantId: "org1" });
-      const call = writeConnector.logContact.mock.calls[0][2];
-      expect(call.supportLevel).toBeUndefined();
+      // No consent ⇒ no person-field update carries the level anywhere.
+      expect(writeConnector.updatePersonFields).not.toHaveBeenCalled();
       // The ledger says so honestly.
       const success = prisma.integrationPushDelivery.update.mock.calls.find(
         (c: any[]) => c[0]?.data?.status === "SUCCEEDED",
@@ -440,7 +448,7 @@ describe("CrmPushService", () => {
       expect(writeConnector.logContact).toHaveBeenCalledWith(
         "apikey",
         "nb42",
-        expect.objectContaining({ method: "text_message", note: "Text reply: Count me in for Saturday" }),
+        expect.objectContaining({ method: "text", note: "Text reply: Count me in for Saturday" }),
         expect.any(String),
       );
     });

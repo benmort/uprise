@@ -14,7 +14,6 @@ export type NbWriteOp =
       method: string;
       statusCode?: string;
       note?: string;
-      supportLevel?: number;
       senderId?: number;
     }
   | { kind: "updatePersonFields"; fields: Record<string, unknown> };
@@ -28,10 +27,12 @@ export const NB_SUPPORT_LEVEL: Record<string, number> = {
   STRONG_OPPOSE: 5,
 };
 
-/** uprise engagement channel → NB contact-log method (NB's canonical method slugs). */
+/** uprise engagement channel → NB contact-log method. Platform-fixed slugs, enumerable at
+ *  GET /api/v1/settings/contact_methods — note SMS is "text", NOT "text_message" (verified
+ *  against the People API docs; an invalid slug is rejected, not coerced). */
 export const NB_CONTACT_METHOD: Record<string, string> = {
   DOOR: "door_knock",
-  SMS: "text_message",
+  SMS: "text",
   PHONE: "phone_call",
   BOTH: "other",
 };
@@ -46,10 +47,13 @@ export type DispositionPushInput = {
 };
 
 /**
- * A recorded disposition → one NB contact log. The support level rides ONLY when the
- * connection's toggle is on AND the row carries affirmative consent — otherwise the
- * contact log still goes (attempt history is not sensitive) with the level withheld.
- * Returns the ops plus what was withheld, so the delivery ledger can say so honestly.
+ * A recorded disposition → an NB contact log, plus — only when the connection's toggle
+ * is on AND the row carries affirmative consent — a person-field update setting the
+ * support level. Two operations because NB's contact resource has NO support_level
+ * field (verified against the People API docs — it would be silently dropped): the
+ * level lives on the person, set via `PUT /people/:id`. Without both gates the contact
+ * log still goes (attempt history is not sensitive) and the ledger records the
+ * withholding honestly.
  */
 export function mapDispositionToOps(
   input: DispositionPushInput,
@@ -68,9 +72,11 @@ export function mapDispositionToOps(
         kind: "logContact",
         method,
         statusCode: input.code,
-        ...(includeLevel ? { supportLevel: level } : {}),
         ...(settings.push.nbSenderId != null ? { senderId: settings.push.nbSenderId } : {}),
       },
+      ...(includeLevel
+        ? [{ kind: "updatePersonFields" as const, fields: { support_level: level } }]
+        : []),
     ],
     withheld,
   };
@@ -133,7 +139,8 @@ export function mapTextReplyToOps(
     ops: [
       {
         kind: "logContact",
-        method: "text_message",
+        // NB's fixed method slug for SMS is "text" (NOT "text_message").
+        method: "text",
         note: `Text reply: ${body.slice(0, 500)}`,
         ...(settings.push.nbSenderId != null ? { senderId: settings.push.nbSenderId } : {}),
       },

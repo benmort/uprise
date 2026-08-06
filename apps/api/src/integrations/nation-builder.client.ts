@@ -9,10 +9,13 @@ import { IntegrationAuthError, IntegrationConnectionError } from "./integration.
  * connector previously lacked entirely: a long list pull would hammer the nation until
  * NationBuilder 429'd, and the 429 surfaced as a hard failure.
  *
- * NationBuilder rate limits are per-nation and plan-dependent (the default here is a
- * conservative 8 req/s – verify against the nation's actual plan before raising it), so
- * the throttle is keyed by host: two connected nations pace independently, one nation's
- * reads and writes share a lane.
+ * NationBuilder's documented limit is 250 requests per 10 seconds, enforced as TWO
+ * independent budgets: per API token AND per source IP (support article "API rate
+ * limit policy"; raiseable only by asking NB support). The throttle here is keyed by
+ * host, which equals per-token in practice (one token per nation connection). The
+ * default 8 req/s (80/10s) sits well under the token budget; the per-IP budget is the
+ * one to watch if MANY nations ever sync from one egress IP — 429s honour Retry-After,
+ * so the retry loop absorbs occasional collisions either way.
  */
 @Injectable()
 export class NationBuilderClient {
