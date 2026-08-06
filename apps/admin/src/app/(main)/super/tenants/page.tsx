@@ -286,13 +286,12 @@ export default function TenantsPage() {
                         <CardTitle className="text-lg text-gray-900 dark:text-gray-100">
                           {t.name}
                         </CardTitle>
+                        {/* No plan chip here: every tenant in a network carries its network's
+                            plan, so the card repeated the same word ("Scale") down the whole
+                            list without distinguishing anything. The plan still shows on the
+                            status pill below and on the tenant's own page. */}
                         <div className="flex flex-wrap gap-1 mt-1">
                           {active ? <Badge variant="info">Current</Badge> : null}
-                          {t.planName ? (
-                            <Badge variant="secondary" className="capitalize">
-                              {t.planName}
-                            </Badge>
-                          ) : null}
                           {t.role ? (
                             <Badge variant="secondary" className="capitalize">
                               {t.role.toLowerCase()}
