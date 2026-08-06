@@ -630,6 +630,11 @@ describe("telephony + email provisioning", () => {
     expect(call()[0]).toBe(`${BASE}/tenants/t%201/setup`);
   });
 
+  it("emailProvisioning.senderPrefill GETs the prefill", async () => {
+    await emailProvisioning.senderPrefill();
+    expect(call()[0]).toBe(`${BASE}/email-provisioning/prefill`);
+  });
+
   it("emailProvisioning.requestSetup POSTs the (optional) body to /requests", async () => {
     await emailProvisioning.requestSetup({ domain: "acme.org.au", notes: "please" });
     const [url, init] = call();

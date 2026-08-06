@@ -260,6 +260,30 @@ describe("TenantSetupService", () => {
       const state = await service.getSetupState("t1", OWNER);
       expect(state.gates.canRequestEmail).toMatchObject({ allowed: false, reason: "OPEN_REQUEST" });
     });
+
+    // Email clears the same org-identification bar as telephony: a sender identity needs a
+    // legal name, a contactable human and a postal address. The gate used to check only the
+    // plan flag, so the admin card's `missing` list was always empty.
+    it("incomplete org identification closes BOTH channel gates with the same missing[]", async () => {
+      const { service } = setup({ orgProfile: null });
+      const state = await service.getSetupState("t1", OWNER);
+      expect(state.gates.canRequestEmail).toMatchObject({ allowed: false, reason: "SETUP_INCOMPLETE" });
+      expect(state.gates.canRequestEmail.missing).toEqual(state.gates.canProvisionTelephony.missing);
+      expect(state.gates.canRequestEmail.missing?.length).toBeGreaterThan(0);
+    });
+
+    it("opens the email gate once org identification is complete", async () => {
+      const { service } = setup();
+      const state = await service.getSetupState("t1", OWNER);
+      expect(state.gates.canRequestEmail).toEqual({ allowed: true });
+    });
+
+    // An already-lodged request is more useful to say than a checklist they can't act on.
+    it("reports OPEN_REQUEST ahead of SETUP_INCOMPLETE when both apply", async () => {
+      const { service } = setup({ orgProfile: null, emailRequest: { id: "req1" } });
+      const state = await service.getSetupState("t1", OWNER);
+      expect(state.gates.canRequestEmail).toMatchObject({ allowed: false, reason: "OPEN_REQUEST" });
+    });
   });
 
   it("reads dismissed/updatedAt from the legacy onboarding JSON", async () => {

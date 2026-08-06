@@ -11,8 +11,8 @@ import {
   TelephonyStepStatus,
 } from "@uprise/db";
 import type { DomainEventMap } from "@uprise/events";
-import { evaluateOrgSetup } from "@uprise/contracts";
 import { PrismaService } from "../prisma/prisma.service";
+import { loadOrgSetup } from "../org-profile/org-setup.snapshot";
 import { OutboxService, type AppendInput } from "../common/outbox/outbox.service";
 import { DomainLogger } from "../common/logging/domain-logger.service";
 import { ApiHttpException } from "../common/http/api-response";
@@ -273,54 +273,7 @@ export class TelephonyProvisioningService {
         403,
       );
     }
-    const profile = await this.prisma.orgProfile.findFirst({
-      where: { tenantId },
-      select: {
-        name: true,
-        bio: true,
-        logoBlockUrl: true,
-        logoLandscapeUrl: true,
-        primaryColour: true,
-        secondaryColour: true,
-        heroImageUrl: true,
-        credential: {
-          select: {
-            legalTradingName: true,
-            australianBusinessNumber: true,
-            australianCompanyNumber: true,
-            entityType: true,
-          },
-        },
-        contacts: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-            isPrimaryContact: true,
-            isAuthorisedSignatory: true,
-          },
-        },
-        addresses: {
-          select: { line1: true, suburb: true, city: true, state: true, postcode: true },
-        },
-      },
-    });
-    const result = evaluateOrgSetup({
-      profile: profile
-        ? {
-            name: profile.name,
-            bio: profile.bio,
-            logoBlockUrl: profile.logoBlockUrl,
-            logoLandscapeUrl: profile.logoLandscapeUrl,
-            primaryColour: profile.primaryColour,
-            secondaryColour: profile.secondaryColour,
-            heroImageUrl: profile.heroImageUrl,
-          }
-        : null,
-      credential: profile?.credential ?? null,
-      contacts: profile?.contacts ?? [],
-      addresses: profile?.addresses ?? [],
-    });
+    const result = await loadOrgSetup(this.prisma, tenantId);
     if (!result.provisionReady) {
       throw new ApiHttpException(
         "SETUP_INCOMPLETE",
@@ -528,8 +481,15 @@ export class TelephonyProvisioningService {
       where: { tenantId },
       include: { contacts: true, addresses: true, credential: true },
     });
+    // The AUTHORISED SIGNATORY first: the bundle names the human who attests to the
+    // organisation's identity, which is what step 5 collects that flag for. Falls back to
+    // the primary contact, then to any contact — an org that named neither still gets the
+    // form prefilled with someone rather than blanks.
     const contact =
-      profile?.contacts.find((c) => c.isPrimaryContact) ?? profile?.contacts[0] ?? null;
+      profile?.contacts.find((c) => c.isAuthorisedSignatory) ??
+      profile?.contacts.find((c) => c.isPrimaryContact) ??
+      profile?.contacts[0] ??
+      null;
     // The REGISTERED address, not merely the first one. A tenant can hold several (billing,
     // postal, registered), and Twilio's regulatory bundle is matched against the address
     // registered to the ABN — submitting a billing address gets the bundle rejected by a
@@ -547,6 +507,9 @@ export class TelephonyProvisioningService {
         profile?.credential?.australianBusinessNumber ||
           profile?.credential?.australianCompanyNumber,
       ),
+      // `evaluateOrgSetup` won't unlock provisioning without an entity type, so it was
+      // being collected under a promise it didn't keep — nothing carried it to Twilio.
+      entityType: profile?.credential?.entityType || undefined,
       address: {
         street: [address?.line1, address?.line2].filter(Boolean).join(", "),
         city: address?.suburb || address?.city || "",

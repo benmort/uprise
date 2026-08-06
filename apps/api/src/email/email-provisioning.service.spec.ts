@@ -8,6 +8,36 @@ import {
 } from "@uprise/db";
 import { EmailProvisioningService } from "./email-provisioning.service";
 
+/** An OrgProfile (ORG_SETUP_SELECT shape) whose identification is complete. */
+function completeOrgProfile(over: Record<string, unknown> = {}) {
+  return {
+    name: "Acme",
+    bio: "We do things",
+    logoBlockUrl: null,
+    logoLandscapeUrl: null,
+    primaryColour: null,
+    secondaryColour: null,
+    heroImageUrl: null,
+    credential: {
+      legalTradingName: "Acme Ltd",
+      australianBusinessNumber: "51824753556",
+      australianCompanyNumber: null,
+      entityType: "charity",
+    },
+    contacts: [
+      {
+        firstName: "Ada",
+        lastName: "Lovelace",
+        email: "ada@acme.org",
+        isPrimaryContact: true,
+        isAuthorisedSignatory: false,
+      },
+    ],
+    addresses: [{ line1: "1 Test St", suburb: "Fitzroy", city: null, state: "VIC", postcode: "3065" }],
+    ...over,
+  };
+}
+
 // ── shared mock factory (positional construction, hand-mocked Prisma) ──
 function setup() {
   const prisma: any = {
@@ -40,6 +70,10 @@ function setup() {
       create: jest.fn(async ({ data }: any) => ({ id: "req1", status: "OPEN", ...data })),
       update: jest.fn(async ({ data }: any) => ({ id: "req1", ...data })),
     },
+    // Org identification that satisfies evaluateOrgSetup, so the setup gate on the two
+    // entry points (createSetupRequest / startRun) passes by default. Tests that want the
+    // gate to bite override this with a null / incomplete profile.
+    orgProfile: { findFirst: jest.fn(async () => completeOrgProfile()) },
     $queryRaw: jest.fn(async () => []),
     // callback seam: tx === prisma so code under test runs against the same mock
     $transaction: jest.fn(async (cb: any) => cb(prisma)),
@@ -526,6 +560,17 @@ describe("stepActivate", () => {
 
 // ── startRun ────────────────────────────────────────────────────────────
 describe("startRun", () => {
+  // The operator's entry point clears the same bar as the owner's ask — provisioning a
+  // sender identity for an org with no address would only fail later, at SendGrid.
+  it("422s SETUP_INCOMPLETE before creating a run when org identification is incomplete", async () => {
+    const { svc, prisma } = setup();
+    prisma.orgProfile.findFirst.mockResolvedValueOnce(completeOrgProfile({ credential: null }));
+    await expect(
+      svc.startRun({ tenantId: "t1", mode: "SUBUSER", kind: "UPRISE_SUBDOMAIN", fromLocalPart: "hi", fromName: "Acme" }),
+    ).rejects.toMatchObject({ response: { error: { code: "SETUP_INCOMPLETE" } } });
+    expect(prisma.emailProvisioningRun.create).not.toHaveBeenCalled();
+  });
+
   it("rejects BYO mode without an API key", async () => {
     const { svc } = setup();
     await expect(
@@ -713,6 +758,26 @@ describe("validateNow / reads", () => {
       });
     });
 
+    // Email now clears the same org-identification bar telephony does: a sender identity
+    // needs the legal name, a contactable human and a physical postal address.
+    it("422s SETUP_INCOMPLETE with missing[] when the org has no profile at all", async () => {
+      const { svc, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValueOnce(null);
+      await expect(svc.createSetupRequest(input)).rejects.toMatchObject({
+        response: { error: { code: "SETUP_INCOMPLETE" } },
+      });
+    });
+
+    it("422s when the registered address is missing, and names it in missing[]", async () => {
+      const { svc, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValueOnce(completeOrgProfile({ addresses: [] }));
+      const err = await svc.createSetupRequest(input).catch((e: unknown) => e);
+      expect(err).toMatchObject({ response: { error: { code: "SETUP_INCOMPLETE" } } });
+      const details = (err as { response: { error: { details?: { missing?: Array<{ field: string }> } } } })
+        .response.error.details;
+      expect(details?.missing).toEqual(expect.arrayContaining([{ step: "address", field: "address" }]));
+    });
+
     it("409s when a request is already OPEN", async () => {
       const { svc, prisma } = setup();
       prisma.emailProvisioningRequest.findFirst.mockResolvedValueOnce({ id: "req0", status: "OPEN" });
@@ -728,6 +793,51 @@ describe("validateNow / reads", () => {
       prisma.emailProvisioningRequest.create.mockRejectedValueOnce(p2002);
       await expect(svc.createSetupRequest(input)).rejects.toMatchObject({
         response: { error: { code: "EMAIL_REQUEST_ALREADY_OPEN" } },
+      });
+    });
+  });
+
+  describe("senderPrefill", () => {
+    const withAddresses = (addresses: unknown[]) => ({
+      name: "Acme",
+      contacts: [{ email: "ada@acme.org", isPrimaryContact: true }],
+      credential: { legalTradingName: "Acme Ltd" },
+      addresses,
+    });
+
+    it("prefills from-name, reply-to and the REGISTERED address (not merely the first)", async () => {
+      const { svc, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValueOnce(
+        withAddresses([
+          { addressType: "billing", line1: "9 Wrong St", suburb: "Carlton", state: "VIC", postcode: "3053" },
+          { addressType: "Registered", line1: "1 Test St", line2: "Level 2", suburb: "Fitzroy", state: "VIC", postcode: "3065" },
+        ]),
+      );
+      expect(await svc.senderPrefill("t1")).toEqual({
+        fromName: "Acme Ltd",
+        replyToEmail: "ada@acme.org",
+        physicalAddress: {
+          street: "1 Test St, Level 2",
+          city: "Fitzroy",
+          region: "VIC",
+          postalCode: "3065",
+          country: "AU",
+        },
+      });
+    });
+
+    it("returns empty strings rather than throwing when nothing is on file", async () => {
+      const { svc, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValueOnce(null);
+      const prefill = await svc.senderPrefill("t1");
+      expect(prefill.fromName).toBe("");
+      expect(prefill.replyToEmail).toBe("");
+      expect(prefill.physicalAddress).toEqual({
+        street: "",
+        city: "",
+        region: "",
+        postalCode: "",
+        country: "AU",
       });
     });
   });

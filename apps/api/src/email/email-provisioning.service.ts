@@ -18,6 +18,7 @@ import { DomainLogger } from "../common/logging/domain-logger.service";
 import { ApiHttpException } from "../common/http/api-response";
 import { CredentialCryptoService } from "../integrations/credential-crypto.service";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
+import { loadOrgSetup } from "../org-profile/org-setup.snapshot";
 import { EmailSenderResolver } from "./email-sender.resolver";
 import { assertValidEmailProvisioningTransition } from "./email-provisioning-state.machine";
 import { assertValidEmailSetupRequestTransition } from "./email-setup-request-state.machine";
@@ -49,6 +50,26 @@ export type StartEmailRunInput = {
 };
 
 type RunInput = StartEmailRunInput;
+
+/**
+ * Org KYC → the sender-identity form. The email counterpart of the telephony
+ * `ComplianceInput` prefill: what SendGrid needs to stand up a verified sender, sourced
+ * from the organisation-setup steps rather than retyped.
+ */
+export type EmailSenderPrefill = {
+  /** Display name on the From header — the legal trading name, falling back to the org name. */
+  fromName: string;
+  /** Where replies land — the primary org contact. */
+  replyToEmail: string;
+  /** Required by SendGrid on a sender identity, and printed in the branded footer. */
+  physicalAddress: {
+    street: string;
+    city: string;
+    region: string;
+    postalCode: string;
+    country: string;
+  };
+};
 
 /** Entry event that drives each state's step — re-emitted on retry. */
 const ENTRY_EVENT: Partial<Record<EmailProvisioningStatus, keyof DomainEventMap>> = {
@@ -84,6 +105,71 @@ export class EmailProvisioningService {
     private readonly senderResolver: EmailSenderResolver,
     private readonly flags: FeatureFlagsService,
   ) {}
+
+  /**
+   * Gate on entering email setup — the SendGrid twin of
+   * `TelephonyProvisioningService.assertProvisioningAllowed`: the tenant's plan must
+   * include a dedicated email identity, and the org identification the sender identity is
+   * built from must be complete. 422 carries machine-readable `missing[]` for the UI (the
+   * admin's email setup card already renders `gate.missing`).
+   *
+   * Applied at the two ENTRY points — the owner's request and the operator's run start —
+   * never to retry/validate, so a run that was complete at start cannot strand on a later
+   * edit to the org profile.
+   */
+  private async assertEmailSetupAllowed(tenantId: string): Promise<void> {
+    const enabled = await this.flags.isEnabled("FEATURE_TENANT_EMAIL_ENABLED", { tenantId });
+    if (!enabled) {
+      throw new ApiHttpException(
+        "PLAN_UPGRADE_REQUIRED",
+        "Your plan does not include a dedicated email identity",
+        403,
+      );
+    }
+    const setup = await loadOrgSetup(this.prisma, tenantId);
+    if (!setup.provisionReady) {
+      throw new ApiHttpException(
+        "SETUP_INCOMPLETE",
+        "Complete your organisation's business, contact and address details first",
+        422,
+        { missing: setup.missing },
+      );
+    }
+  }
+
+  /**
+   * Org KYC → a best-effort sender-identity prefill, the email twin of
+   * `TelephonyProvisioningService.compliancePrefill`. Missing pieces come back empty —
+   * the form stays editable either way.
+   *
+   * `physicalAddress` is not decoration: SendGrid requires a physical mailing address on
+   * a sender identity, and it is what the branded footer prints. It takes the REGISTERED
+   * address over merely the first one, matching the bundle rule in `compliancePrefill` —
+   * a tenant can hold billing/postal/registered addresses and the registered one is the
+   * address tied to the ABN.
+   */
+  async senderPrefill(tenantId: string): Promise<EmailSenderPrefill> {
+    const profile = await this.prisma.orgProfile.findFirst({
+      where: { tenantId },
+      include: { contacts: true, addresses: true, credential: true },
+    });
+    const contact = profile?.contacts.find((c) => c.isPrimaryContact) ?? profile?.contacts[0] ?? null;
+    const address =
+      profile?.addresses.find((a) => a.addressType?.toLowerCase() === "registered") ??
+      profile?.addresses[0] ??
+      null;
+    return {
+      fromName: profile?.credential?.legalTradingName || profile?.name || "",
+      replyToEmail: contact?.email || "",
+      physicalAddress: {
+        street: [address?.line1, address?.line2].filter(Boolean).join(", "),
+        city: address?.suburb || address?.city || "",
+        region: address?.state || "",
+        postalCode: address?.postcode || "",
+        country: address?.country || "AU",
+      },
+    };
+  }
 
   private emailWebhookUrl(): string {
     const base = this.config.get<string>("API_BASE_URL", "").trim().replace(/\/+$/, "");
@@ -203,6 +289,7 @@ export class EmailProvisioningService {
 
   // ── lifecycle ───────────────────────────────────────────────────────
   async startRun(input: StartEmailRunInput) {
+    await this.assertEmailSetupAllowed(input.tenantId);
     if (input.mode === "BYO" && !input.byoApiKey) {
       throw new ApiHttpException("BYO_KEY_REQUIRED", "BYO mode needs a SendGrid API key");
     }
@@ -303,14 +390,7 @@ export class EmailProvisioningService {
     domain?: string | null;
     notes?: string | null;
   }) {
-    const enabled = await this.flags.isEnabled("FEATURE_TENANT_EMAIL_ENABLED", { tenantId: input.tenantId });
-    if (!enabled) {
-      throw new ApiHttpException(
-        "PLAN_UPGRADE_REQUIRED",
-        "Your plan does not include a dedicated email identity",
-        403,
-      );
-    }
+    await this.assertEmailSetupAllowed(input.tenantId);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const open = await tx.emailProvisioningRequest.findFirst({

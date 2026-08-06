@@ -16,6 +16,7 @@ import {
 } from "@uprise/contracts";
 import { PrismaService } from "../prisma/prisma.service";
 import { FeatureFlagsService } from "../common/flags/feature-flags.service";
+import { ORG_SETUP_SELECT, toOrgSetupSnapshot } from "../org-profile/org-setup.snapshot";
 import type { AuthUser } from "../auth/auth-user";
 
 /**
@@ -44,36 +45,7 @@ export class TenantSetupService {
           where: { userId: actor.id },
           select: { displayName: true, avatarUrl: true },
         }),
-        this.prisma.orgProfile.findFirst({
-          where: { tenantId },
-          select: {
-            name: true,
-            bio: true,
-            logoBlockUrl: true,
-            logoLandscapeUrl: true,
-            primaryColour: true,
-            secondaryColour: true,
-            heroImageUrl: true,
-            credential: {
-              select: {
-                legalTradingName: true,
-                australianBusinessNumber: true,
-                australianCompanyNumber: true,
-                entityType: true,
-              },
-            },
-            contacts: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-                isPrimaryContact: true,
-                isAuthorisedSignatory: true,
-              },
-            },
-            addresses: { select: { line1: true, suburb: true, city: true, state: true, postcode: true } },
-          },
-        }),
+        this.prisma.orgProfile.findFirst({ where: { tenantId }, select: ORG_SETUP_SELECT }),
         this.prisma.telephonyProvisioningRun.findFirst({
           where: { tenantId },
           orderBy: { createdAt: "desc" },
@@ -108,22 +80,7 @@ export class TenantSetupService {
     const identityComplete = Boolean(user?.emailVerified && user?.mobileVerified);
 
     // ── Organisation setup (owner view only) ──────────────────────────────────
-    const org = evaluateOrgSetup({
-      profile: orgProfile
-        ? {
-            name: orgProfile.name,
-            bio: orgProfile.bio,
-            logoBlockUrl: orgProfile.logoBlockUrl,
-            logoLandscapeUrl: orgProfile.logoLandscapeUrl,
-            primaryColour: orgProfile.primaryColour,
-            secondaryColour: orgProfile.secondaryColour,
-            heroImageUrl: orgProfile.heroImageUrl,
-          }
-        : null,
-      credential: orgProfile?.credential ?? null,
-      contacts: orgProfile?.contacts ?? [],
-      addresses: orgProfile?.addresses ?? [],
-    });
+    const org = evaluateOrgSetup(toOrgSetupSnapshot(orgProfile));
     const required = (done: boolean): SetupStepStatus => (done ? "done" : "todo");
     const orgSteps: SetupStep[] = [
       { key: "orgIdentity", status: required(org.steps.orgIdentity) },
@@ -212,11 +169,19 @@ export class TenantSetupService {
       : !org.provisionReady
         ? { allowed: false, reason: "SETUP_INCOMPLETE", missing: org.missing }
         : { allowed: true };
+    // Same org-identification bar as telephony. A sender identity needs the legal name,
+    // a contactable human and a physical postal address (SendGrid requires one on the
+    // identity; the Spam Act requires the sender be identifiable), which is exactly what
+    // provisionReady covers — so an incomplete org blocks email for the same reason it
+    // blocks a number. OPEN_REQUEST is checked first: an already-lodged request is a more
+    // useful thing to tell someone than a checklist they can no longer act on.
     const canRequestEmail: SetupGate = !emailFlagOn
       ? { allowed: false, reason: "PLAN_UPGRADE_REQUIRED" }
       : emailRequest
         ? { allowed: false, reason: "OPEN_REQUEST" }
-        : { allowed: true };
+        : !org.provisionReady
+          ? { allowed: false, reason: "SETUP_INCOMPLETE", missing: org.missing }
+          : { allowed: true };
 
     // Legacy advisory JSON carries only dismissed/updatedAt for the new surface.
     const onboarding = (tenant?.onboarding ?? null) as { dismissed?: boolean; updatedAt?: string } | null;

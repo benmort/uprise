@@ -1,4 +1,44 @@
-import { EmailService, type SendGridEvent } from "./email.service";
+import { EmailService, formatPostalAddress, type SendGridEvent } from "./email.service";
+
+describe("formatPostalAddress", () => {
+  const addr = (over: Record<string, unknown> = {}) => ({
+    addressType: "registered",
+    line1: "1 Test St",
+    line2: null,
+    suburb: "Fitzroy",
+    city: null,
+    state: "VIC",
+    postcode: "3065",
+    ...over,
+  });
+
+  it("formats the registered address as one line", () => {
+    expect(formatPostalAddress([addr()])).toBe("1 Test St, Fitzroy VIC 3065");
+  });
+
+  it("prefers the REGISTERED address over merely the first", () => {
+    const billing = addr({ addressType: "billing", line1: "9 Wrong St", suburb: "Carlton", postcode: "3053" });
+    expect(formatPostalAddress([billing, addr()])).toBe("1 Test St, Fitzroy VIC 3065");
+  });
+
+  it("falls back to the first address when none is typed 'registered'", () => {
+    expect(formatPostalAddress([addr({ addressType: null })])).toBe("1 Test St, Fitzroy VIC 3065");
+  });
+
+  it("includes line2 when present, and falls back to city when there's no suburb", () => {
+    expect(formatPostalAddress([addr({ line2: "Level 2", suburb: null, city: "Melbourne" })])).toBe(
+      "1 Test St, Level 2, Melbourne VIC 3065",
+    );
+  });
+
+  // A half-filled address in a footer identifies nobody — better to print nothing than
+  // something that reads like a real address and isn't one.
+  it("returns undefined without a street or without a locality", () => {
+    expect(formatPostalAddress([])).toBeUndefined();
+    expect(formatPostalAddress([addr({ line1: null })])).toBeUndefined();
+    expect(formatPostalAddress([addr({ suburb: null, city: null })])).toBeUndefined();
+  });
+});
 
 function setup() {
   const prisma: any = {

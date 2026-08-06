@@ -37,6 +37,12 @@ export type ComplianceInput = {
   email: string;
   /** AU business identifier (ABN/ACN) — carried in end-user attributes. */
   businessNumber?: string;
+  /**
+   * The org's legal structure, in uprise's own vocabulary (`charity`,
+   * `incorporated_association`, …). Translated to Twilio's `business_type` enum by
+   * {@link twilioBusinessType} — it is NOT passed through raw.
+   */
+  entityType?: string;
   address: {
     street: string;
     city: string;
@@ -44,6 +50,31 @@ export type ComplianceInput = {
     postalCode: string;
   };
 };
+
+/**
+ * uprise entity type → Twilio regulatory `business_type`.
+ *
+ * The two vocabularies are not the same: uprise collects AU legal structures from its own
+ * select (`ENTITY_TYPE_OPTIONS` in the admin credentials form), Twilio accepts a fixed
+ * enum on the end-user's attributes. Unmapped values are OMITTED rather than guessed —
+ * a value Twilio does not recognise risks a rejected bundle a human reviews days later,
+ * which is strictly worse than the attribute being absent (its long-standing state).
+ */
+const TWILIO_BUSINESS_TYPE: Readonly<Record<string, string>> = {
+  charity: "non_profit_corporation",
+  incorporated_association: "non_profit_corporation",
+  company_limited_by_guarantee: "non_profit_corporation",
+  atsi_corporation: "non_profit_corporation",
+  cooperative: "co_operative",
+  trust: "trust",
+  // Deliberately absent: `unincorporated_association`, `political_party`, `other` — no
+  // confident Twilio equivalent, so nothing is sent for them.
+};
+
+export function twilioBusinessType(entityType?: string): string | undefined {
+  const key = (entityType ?? "").trim().toLowerCase();
+  return key ? TWILIO_BUSINESS_TYPE[key] : undefined;
+}
 
 /**
  * The inbound hook a provisioned number is configured with. It is a UNION, not two optional
@@ -242,6 +273,9 @@ export class TwilioProvisioningClient {
             last_name: input.contactLastName,
             email: input.email,
             ...(input.businessNumber ? { business_registration_number: input.businessNumber } : {}),
+            ...(twilioBusinessType(input.entityType)
+              ? { business_type: twilioBusinessType(input.entityType) }
+              : {}),
           },
         }),
       { retries: 2 },

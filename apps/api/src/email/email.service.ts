@@ -23,6 +23,45 @@ export interface SendTransactionalEmailInput {
   sendPurpose?: EmailSendPurpose;
 }
 
+/** The sending tenant's identity as the email frame consumes it. */
+interface EmailBrand {
+  brandName: string;
+  logoUrl?: string;
+  accentColour?: string;
+  buttonColour?: string;
+  /** One-line registered postal address for the footer; absent when not on file. */
+  postalAddress?: string;
+}
+
+type BrandAddressRow = {
+  addressType: string | null;
+  line1: string | null;
+  line2: string | null;
+  suburb: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+};
+
+/**
+ * The REGISTERED address as one footer line, or undefined when there isn't a usable one.
+ *
+ * Same registered-over-first rule the Twilio bundle uses (`compliancePrefill`): a tenant
+ * can hold billing/postal/registered addresses and only the registered one is the address
+ * tied to the ABN. Requires a street AND a locality — a lone postcode in a footer
+ * identifies no one, so a half-filled address prints nothing rather than something wrong.
+ */
+export function formatPostalAddress(addresses: BrandAddressRow[]): string | undefined {
+  const a =
+    addresses.find((x) => x.addressType?.toLowerCase() === "registered") ?? addresses[0] ?? null;
+  if (!a) return undefined;
+  const street = [a.line1, a.line2].map((v) => v?.trim()).filter(Boolean).join(", ");
+  const locality = (a.suburb || a.city || "").trim();
+  if (!street || !locality) return undefined;
+  const tail = [locality, (a.state || "").trim(), (a.postcode || "").trim()].filter(Boolean).join(" ");
+  return `${street}, ${tail}`;
+}
+
 export interface SendGridEvent {
   event: string; // delivered | bounce | dropped | open | click | ...
   sg_event_id?: string;
@@ -93,7 +132,7 @@ export class EmailService implements OnModuleInit {
   private renderHtml(
     template: EmailTemplateDef,
     vars: Record<string, string> | undefined,
-    brand: { brandName: string; logoUrl?: string; accentColour?: string; buttonColour?: string },
+    brand: EmailBrand,
   ): string {
     const sub = (s: string) => this.render(s, vars);
     const frame = {
@@ -101,6 +140,7 @@ export class EmailService implements OnModuleInit {
       logoUrl: brand.logoUrl,
       accentColour: brand.accentColour,
       buttonColour: brand.buttonColour,
+      postalAddress: brand.postalAddress,
     };
     let content: BrandedEmailContent;
     if (template.layout) {
@@ -135,18 +175,44 @@ export class EmailService implements OnModuleInit {
   private async resolveBrand(
     tenantId: string,
     vars: Record<string, string> | undefined,
-  ): Promise<{ brandName: string; logoUrl?: string; accentColour?: string; buttonColour?: string }> {
+  ): Promise<EmailBrand> {
     let profile: {
       name: string;
       logoLandscapeUrl: string | null;
       logoBlockUrl: string | null;
       primaryColour: string | null;
       secondaryColour: string | null;
+      addresses: Array<{
+        addressType: string | null;
+        line1: string | null;
+        line2: string | null;
+        suburb: string | null;
+        city: string | null;
+        state: string | null;
+        postcode: string | null;
+      }>;
     } | null = null;
     try {
       profile = await this.prisma.orgProfile.findFirst({
         where: { tenantId },
-        select: { name: true, logoLandscapeUrl: true, logoBlockUrl: true, primaryColour: true, secondaryColour: true },
+        select: {
+          name: true,
+          logoLandscapeUrl: true,
+          logoBlockUrl: true,
+          primaryColour: true,
+          secondaryColour: true,
+          addresses: {
+            select: {
+              addressType: true,
+              line1: true,
+              line2: true,
+              suburb: true,
+              city: true,
+              state: true,
+              postcode: true,
+            },
+          },
+        },
       });
     } catch {
       profile = null; // never let a branding lookup fail the send
@@ -159,6 +225,7 @@ export class EmailService implements OnModuleInit {
       // Links use the primary colour; the CTA button wears the secondary (falls back to primary).
       accentColour: profile?.primaryColour ?? undefined,
       buttonColour: profile?.secondaryColour ?? profile?.primaryColour ?? undefined,
+      postalAddress: formatPostalAddress(profile?.addresses ?? []),
     };
   }
 

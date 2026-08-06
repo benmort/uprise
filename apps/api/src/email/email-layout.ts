@@ -47,6 +47,14 @@ export interface BrandedEmailContent {
   cta?: EmailCta;
   /** Paragraphs after the button (e.g. an expiry note or "didn't expect this?"). */
   outro?: string[];
+  /**
+   * The sending organisation's registered postal address, one line. Printed under the
+   * "Sent by …" attribution: a physical address is what makes a commercial sender
+   * identifiable under the Spam Act, and SendGrid requires one on a sender identity.
+   * Absent for a tenant that hasn't completed its registered address — the footer then
+   * reads exactly as it always did.
+   */
+  postalAddress?: string;
 }
 
 const esc = (v: unknown): string =>
@@ -167,7 +175,12 @@ export function renderBrandedEmail(c: BrandedEmailContent): string {
             <td style="padding:18px 8px 4px;">
               <p style="margin:0;font-size:12px;line-height:1.5;color:${C.muted};">
                 ${esc(sentBy(c.brandName, c.platformName))} If you weren't expecting this email you can safely ignore it.
-              </p>
+              </p>${
+                c.postalAddress?.trim()
+                  ? `
+              <p style="margin:6px 0 0;font-size:12px;line-height:1.5;color:${C.muted};">${esc(c.postalAddress.trim())}</p>`
+                  : ""
+              }
             </td>
           </tr>
         </table>
@@ -183,6 +196,8 @@ export function renderPlainEmail(c: BrandedEmailContent): string {
   const lines: string[] = [c.heading, "", ...c.intro];
   if (c.cta) lines.push("", `${c.cta.label}: ${c.cta.url}`);
   if (c.outro?.length) lines.push("", ...c.outro);
-  lines.push("", sentBy(c.brandName, c.platformName), `— ${c.brandName}`);
+  lines.push("", sentBy(c.brandName, c.platformName));
+  if (c.postalAddress?.trim()) lines.push(c.postalAddress.trim());
+  lines.push(`— ${c.brandName}`);
   return lines.join("\n");
 }

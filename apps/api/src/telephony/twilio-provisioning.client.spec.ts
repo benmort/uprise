@@ -1,4 +1,35 @@
-import { TwilioProvisioningClient } from "./twilio-provisioning.client";
+import { TwilioProvisioningClient, twilioBusinessType } from "./twilio-provisioning.client";
+
+/**
+ * uprise's entity-type vocabulary is not Twilio's. Anything unmapped must come back
+ * undefined so `createEndUser` omits the attribute — sending a value Twilio doesn't
+ * accept risks a bundle a human rejects days later, which is worse than omitting it.
+ */
+describe("twilioBusinessType", () => {
+  it("maps the AU not-for-profit structures onto non_profit_corporation", () => {
+    expect(twilioBusinessType("charity")).toBe("non_profit_corporation");
+    expect(twilioBusinessType("incorporated_association")).toBe("non_profit_corporation");
+    expect(twilioBusinessType("company_limited_by_guarantee")).toBe("non_profit_corporation");
+    expect(twilioBusinessType("atsi_corporation")).toBe("non_profit_corporation");
+  });
+
+  it("maps the structures with a direct Twilio equivalent", () => {
+    expect(twilioBusinessType("trust")).toBe("trust");
+    expect(twilioBusinessType("cooperative")).toBe("co_operative");
+  });
+
+  it("is case- and whitespace-insensitive", () => {
+    expect(twilioBusinessType("  Charity  ")).toBe("non_profit_corporation");
+  });
+
+  it("returns undefined for unmapped, empty and unknown values", () => {
+    expect(twilioBusinessType("unincorporated_association")).toBeUndefined();
+    expect(twilioBusinessType("political_party")).toBeUndefined();
+    expect(twilioBusinessType("other")).toBeUndefined();
+    expect(twilioBusinessType("")).toBeUndefined();
+    expect(twilioBusinessType(undefined)).toBeUndefined();
+  });
+});
 
 /**
  * The whole surface under test here is HOW the client is constructed and which host the one

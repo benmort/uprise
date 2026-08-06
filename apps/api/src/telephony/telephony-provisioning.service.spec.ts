@@ -2364,6 +2364,58 @@ describe("TelephonyProvisioningService lifecycle + reads", () => {
       });
     });
 
+    // The bundle names the human who attests to the org's identity — that is what the
+    // isAuthorisedSignatory flag on step 5 is collected for. It used to be ignored.
+    it("names the AUTHORISED SIGNATORY over the primary contact", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Org",
+        credential: { legalTradingName: "Org Ltd", australianBusinessNumber: "43687271227", australianCompanyNumber: null },
+        contacts: [
+          { isPrimaryContact: true, isAuthorisedSignatory: false, firstName: "Pat", lastName: "Primary", email: "pat@org.au" },
+          { isPrimaryContact: false, isAuthorisedSignatory: true, firstName: "Sam", lastName: "Signatory", email: "sam@org.au" },
+        ],
+        addresses: [],
+      });
+
+      const prefill = await service.compliancePrefill(TENANT_ID);
+
+      expect(prefill).toMatchObject({
+        contactFirstName: "Sam",
+        contactLastName: "Signatory",
+        email: "sam@org.au",
+      });
+    });
+
+    it("falls back to the primary contact when no signatory is named", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Org",
+        credential: null,
+        contacts: [
+          { isPrimaryContact: false, isAuthorisedSignatory: false, firstName: "Bob", lastName: "Backup", email: "bob@org.au" },
+          { isPrimaryContact: true, isAuthorisedSignatory: false, firstName: "Pat", lastName: "Primary", email: "pat@org.au" },
+        ],
+        addresses: [],
+      });
+
+      expect(await service.compliancePrefill(TENANT_ID)).toMatchObject({ contactFirstName: "Pat" });
+    });
+
+    // evaluateOrgSetup blocks provisioning without an entity type, so it was being
+    // collected under a promise nothing kept — it never reached the bundle.
+    it("carries the entity type through for the bundle's business type", async () => {
+      const { service, prisma } = setup();
+      prisma.orgProfile.findFirst.mockResolvedValue({
+        name: "Org",
+        credential: { legalTradingName: "Org Ltd", australianBusinessNumber: "43687271227", australianCompanyNumber: null, entityType: "charity" },
+        contacts: [],
+        addresses: [],
+      });
+
+      expect((await service.compliancePrefill(TENANT_ID)).entityType).toBe("charity");
+    });
+
     it("falls back to the first address when none is marked registered", async () => {
       const { service, prisma } = setup();
       prisma.orgProfile.findFirst.mockResolvedValue({

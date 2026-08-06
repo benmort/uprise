@@ -818,7 +818,23 @@ export interface TelephonyComplianceInput {
   contactLastName: string;
   email: string;
   businessNumber?: string;
+  /** Legal structure, mapped to the Twilio bundle's business type where one applies. */
+  entityType?: string;
   address: { street: string; city: string; region: string; postalCode: string };
+}
+
+/** Org KYC → the email sender-identity form; the twin of TelephonyComplianceInput. */
+export interface EmailSenderPrefill {
+  fromName: string;
+  replyToEmail: string;
+  /** SendGrid requires a physical mailing address on a sender identity. */
+  physicalAddress: {
+    street: string;
+    city: string;
+    region: string;
+    postalCode: string;
+    country: string;
+  };
 }
 
 export interface TelephonyProvisioningRun {
@@ -1376,6 +1392,9 @@ export const emailProvisioning = {
     /** An OPEN setup request this run fulfils. */
     requestId?: string;
   }) => request<EmailProvisioningRun>("/email-provisioning/runs", { method: "POST", body: JSON.stringify(body) }),
+
+  /** Org KYC → the sender-identity form, so the setup steps aren't retyped. */
+  senderPrefill: () => request<EmailSenderPrefill>("/email-provisioning/prefill"),
 
   /** Owner: ask the platform team to set up the org's email identity. */
   requestSetup: (body: { kind?: string; domain?: string; notes?: string } = {}) =>

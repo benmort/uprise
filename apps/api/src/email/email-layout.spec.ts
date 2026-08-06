@@ -32,6 +32,25 @@ describe("renderBrandedEmail", () => {
     expect(renderBrandedEmail({ ...base, platformName: "Field" })).toContain("Sent by Common Threads via Field.");
   });
 
+  // A physical postal address is what makes a commercial sender identifiable under the
+  // Spam Act, and SendGrid requires one on a sender identity. It comes from the org's
+  // registered address (setup step 6), so it is absent until that step is done.
+  it("prints the postal address under the attribution when the org has one on file", () => {
+    const html = renderBrandedEmail({ ...base, postalAddress: "1 Test St, Fitzroy VIC 3065" });
+    expect(html).toContain("Sent by Common Threads via Uprise.");
+    expect(html).toContain("1 Test St, Fitzroy VIC 3065");
+  });
+
+  it("leaves the footer exactly as it was when no address is on file", () => {
+    expect(renderBrandedEmail(base)).toBe(renderBrandedEmail({ ...base, postalAddress: "   " }));
+  });
+
+  it("escapes the postal address rather than interpolating markup", () => {
+    const html = renderBrandedEmail({ ...base, postalAddress: '1 <script>alert("x")</script> St' });
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
   it("collapses the footer to just the platform when the sender IS the platform", () => {
     const html = renderBrandedEmail({ ...base, brandName: "Uprise" });
     expect(html).toContain("Sent by Uprise.");
@@ -114,5 +133,12 @@ describe("renderPlainEmail", () => {
     const text = renderPlainEmail({ ...base, cta: undefined, outro: undefined });
     expect(text).not.toContain("http");
     expect(text).toContain("— Common Threads");
+  });
+
+  it("carries the postal address in the text twin too, above the sign-off", () => {
+    const text = renderPlainEmail({ ...base, postalAddress: "1 Test St, Fitzroy VIC 3065" });
+    expect(text).toContain("1 Test St, Fitzroy VIC 3065");
+    expect(text.indexOf("1 Test St")).toBeLessThan(text.indexOf("— Common Threads"));
+    expect(text.trimEnd().endsWith("— Common Threads")).toBe(true);
   });
 });

@@ -69,6 +69,19 @@ export class EmailProvisioningController {
     });
   }
 
+  /**
+   * Org KYC → sender-identity prefill for the tenant-facing setup form: from-name from
+   * OrgCredential, reply-to from the primary contact, and the registered postal address
+   * SendGrid requires on the identity. The telephony twin of GET /telephony/compliance-prefill.
+   */
+  @Get("prefill")
+  @RequirePermission(READ)
+  async prefill(@Req() req: Request & { user?: AuthUser }) {
+    const tenantId = this.scopeTenant(req);
+    if (!tenantId) throw new ForbiddenException("No tenant in scope");
+    return this.provisioning.senderPrefill(tenantId);
+  }
+
   // ── Setup requests: the owner ask → operator queue ─────────────────────────
 
   /** Owner asks for email setup; always their own tenant. Plan-gated in the service. */
