@@ -1535,3 +1535,100 @@ export const publicActions = {
   sessionEventsUrl: (sessionId: string, token: string) =>
     `${getApiUrl()}/actions/public/call-sessions/${encodeURIComponent(sessionId)}/events?token=${encodeURIComponent(token)}`,
 };
+
+// ── Integrations: CRM data sync (push transparency + settings) ────────────────
+// Only the write-back-era endpoints live here; the legacy pull functions remain in
+// apps/admin/src/lib/api.ts until their mechanical migration. Types mirror the api's
+// IntegrationPushDelivery ledger + parseDataSyncSettings shape.
+
+export type SyncStreamKey = "dispositions" | "surveyAnswers" | "tags" | "textReplies" | "rsvps";
+
+export type IntegrationDataSyncSettings = {
+  pull: { importTags: boolean; autoRefresh: { enabled: boolean; intervalHours: number } };
+  push: {
+    enabled: boolean;
+    streams: Record<SyncStreamKey, boolean>;
+    supportLevelsEnabled: boolean;
+    supportLevelRequiresConsent: true;
+    createMissingPeople: boolean;
+    tagPrefix: string;
+    nbSenderId: number | null;
+  };
+};
+
+export type IntegrationDataSyncSettingsPatch = {
+  pull?: { importTags?: boolean; autoRefreshEnabled?: boolean; autoRefreshIntervalHours?: number };
+  push?: {
+    enabled?: boolean;
+    streams?: Partial<Record<SyncStreamKey, boolean>>;
+    supportLevelsEnabled?: boolean;
+    createMissingPeople?: boolean;
+    tagPrefix?: string;
+    nbSenderId?: number | null;
+  };
+};
+
+export type PushDeliveryStatus = "PENDING" | "SENDING" | "SUCCEEDED" | "SKIPPED" | "FAILED" | "HELD";
+
+/** One row of the push-delivery ledger — what uprise sent (or couldn't) to the CRM. */
+export type PushDeliveryRecord = {
+  id: string;
+  tenantId: string;
+  connectionId: string;
+  eventId: string;
+  eventType: string;
+  stream: string;
+  contactId: string | null;
+  externalPersonId: string | null;
+  status: PushDeliveryStatus;
+  attempts: number;
+  requestSummary: Record<string, unknown> | null;
+  responseSummary: Record<string, unknown> | null;
+  skipReason: string | null;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+};
+
+export type PushDeliverySummary = {
+  since: string;
+  byConnection: Record<string, Partial<Record<PushDeliveryStatus, number>>>;
+};
+
+const pushDeliveriesQuery = (params: {
+  connectionId?: string;
+  stream?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  const q = new URLSearchParams();
+  if (params.connectionId) q.set("connectionId", params.connectionId);
+  if (params.stream) q.set("stream", params.stream);
+  if (params.status) q.set("status", params.status);
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  const s = q.toString();
+  return s ? `?${s}` : "";
+};
+
+export const integrations = {
+  updateDataSyncSettings: (connectionId: string, patch: IntegrationDataSyncSettingsPatch) =>
+    request<IntegrationDataSyncSettings>(
+      `/integrations/connections/${encodeURIComponent(connectionId)}/settings`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    ),
+  listPushDeliveries: (
+    params: { connectionId?: string; stream?: string; status?: string; limit?: number; offset?: number } = {},
+  ) =>
+    request<{ rows: PushDeliveryRecord[]; total: number }>(
+      `/integrations/push-deliveries${pushDeliveriesQuery(params)}`,
+    ),
+  pushDeliverySummary: (sinceHours = 24) =>
+    request<PushDeliverySummary>(`/integrations/push-deliveries/summary?sinceHours=${sinceHours}`),
+  retryPushDelivery: (deliveryId: string) =>
+    request<{ queued: boolean }>(`/integrations/push-deliveries/${encodeURIComponent(deliveryId)}/retry`, {
+      method: "POST",
+    }),
+};

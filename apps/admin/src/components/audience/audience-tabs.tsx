@@ -8,22 +8,23 @@ import { TabNav, TabNavItem } from "@uprise/ui";
  * explorers use (see data-explorer-tabs.tsx), for the same reason: four unrelated jobs were
  * stacked down one page, so reaching Searches meant scrolling past a table of every audience.
  *
- * All four are states of `/audience` (`?tab=`) rather than routes: they share one component's
- * data — the audience list, sync jobs, connection state — which would otherwise have to be
- * lifted into a layout to survive a route change. `/audience/segments` still exists as the
- * fuller Searches page with the builder under it; the Searches tab here shows the summary card
- * that links into it.
+ * Three tabs are states of `/audience` (`?tab=`) sharing that page's data. Data sync is the
+ * exception — a real route (`/audience/sync`): it grew from one pull card into a surface with
+ * its own data (connections, deliveries, sync settings) that the other tabs never touch, so
+ * the shared-state argument stopped applying. `/audience?tab=sync` redirects there for old
+ * bookmarks. `/audience/segments` still exists as the fuller Searches page with the builder.
  */
 export type AudienceTab = "audiences" | "import" | "sync" | "searches";
 
 const TABS: Array<{ key: AudienceTab; label: string; href: string }> = [
   { key: "audiences", label: "Segmented audiences", href: "/audience" },
   { key: "import", label: "Import subscribers", href: "/audience?tab=import" },
-  { key: "sync", label: "List sync", href: "/audience?tab=sync" },
+  { key: "sync", label: "Data sync", href: "/audience/sync" },
   { key: "searches", label: "Searches", href: "/audience?tab=searches" },
 ];
 
-/** `?tab=` → a tab, defaulting to the audience list (the page's landing state). */
+/** `?tab=` → a tab, defaulting to the audience list (the page's landing state).
+ *  `"sync"` is still resolved so the page can redirect the legacy `?tab=sync` URL. */
 export function resolveAudienceTab(raw: string | null | undefined): AudienceTab {
   return raw === "import" || raw === "sync" || raw === "searches" ? raw : "audiences";
 }

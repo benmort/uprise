@@ -22,6 +22,7 @@ import {
   transactionalCalls,
   emailProvisioning,
   tenantLogoUrl,
+  integrations,
 } from "./index";
 
 const BASE = "http://localhost:3001/api/v1";
@@ -996,5 +997,36 @@ describe("publicActions", () => {
     expect(publicActions.sessionEventsUrl("s 1", "t/k")).toBe(
       `${BASE}/actions/public/call-sessions/s%201/events?token=t%2Fk`,
     );
+  });
+});
+
+describe("integrations (data sync)", () => {
+  it("PATCHes a partial settings blob to the connection", async () => {
+    await integrations.updateDataSyncSettings("conn 1", { push: { enabled: true } });
+    const [url, init] = call();
+    expect(url).toBe(`${BASE}/integrations/connections/conn%201/settings`);
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ push: { enabled: true } });
+  });
+
+  it("lists push deliveries with the filter query string", async () => {
+    await integrations.listPushDeliveries({ connectionId: "c1", stream: "tag", status: "FAILED", limit: 25, offset: 50 });
+    expect(call()[0]).toBe(
+      `${BASE}/integrations/push-deliveries?connectionId=c1&stream=tag&status=FAILED&limit=25&offset=50`,
+    );
+  });
+
+  it("omits the query entirely when unfiltered", async () => {
+    await integrations.listPushDeliveries();
+    expect(call()[0]).toBe(`${BASE}/integrations/push-deliveries`);
+  });
+
+  it("summary carries the window; retry POSTs the encoded id", async () => {
+    await integrations.pushDeliverySummary(48);
+    expect(call(0)[0]).toBe(`${BASE}/integrations/push-deliveries/summary?sinceHours=48`);
+    await integrations.retryPushDelivery("d 1");
+    const [url, init] = call(1);
+    expect(url).toBe(`${BASE}/integrations/push-deliveries/d%201/retry`);
+    expect(init.method).toBe("POST");
   });
 });

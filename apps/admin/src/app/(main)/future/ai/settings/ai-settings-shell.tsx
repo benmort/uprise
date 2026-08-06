@@ -348,7 +348,7 @@ function ConnectorsSection() {
         </p>
         <div className="rounded-lg border border-border p-3">
           <p className="text-sm font-medium">Action Network</p>
-          <p className="text-xs text-muted-foreground">Audience list sync — connected under Data. Assistant access off.</p>
+          <p className="text-xs text-muted-foreground">Audience data sync – connected under Audience → Data sync. Assistant access off.</p>
         </div>
       </CardContent>
     </Card>

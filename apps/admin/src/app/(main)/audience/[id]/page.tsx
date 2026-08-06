@@ -15,6 +15,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@uprise/ui";
+import { importSummaryLine, reasonRowsFromStats, type SyncRunStats } from "@/lib/sync-health";
 
 type AudienceDetail = {
   id: string;
@@ -70,8 +71,8 @@ export default function AudienceShowPage() {
   const [page, setPage] = useState(0);
   const pageSize = 25;
   const syncStats = (audience?.latestSync?.stats || {}) as Record<string, unknown>;
-  const reasonCounts = (syncStats.reasonCounts || {}) as Record<string, unknown>;
-  const reasonRows = Object.entries(reasonCounts).filter(([, value]) => Number(value) > 0);
+  // Labelled, sorted, zero-free — "No mobile number – kept as email-only: 214", not snake_case.
+  const reasonRows = reasonRowsFromStats(syncStats as SyncRunStats);
   const skippedNoPhone = Number(syncStats.skippedNoPhone || 0);
   const skippedInvalidPhone = Number(syncStats.skippedInvalidPhone || 0);
   const skippedTotal = skippedNoPhone + skippedInvalidPhone;
@@ -231,9 +232,16 @@ export default function AudienceShowPage() {
                         that never progressed (QUEUED/RUNNING past the healthy window) reads
                         as "stuck" rather than a finished import that returned nothing. */}
                     {audience.latestSync.status === "SUCCEEDED" ? (
+                      // The honest counts line: what landed, what was kept but can't be
+                      // texted (email-only NB people), what was skipped.
                       <p>
-                        Imported {Number(audience.latestSync.syncedCount || 0).toLocaleString()} · Failed{" "}
-                        {Number(audience.latestSync.failedCount || 0).toLocaleString()}
+                        {importSummaryLine(
+                          Number(audience.latestSync.syncedCount || 0),
+                          syncStats as SyncRunStats,
+                        )}
+                        {Number(audience.latestSync.failedCount || 0) > 0
+                          ? ` · Failed ${Number(audience.latestSync.failedCount).toLocaleString()}`
+                          : ""}
                       </p>
                     ) : audience.latestSync.status === "FAILED" ? (
                       <p className="text-error">Import failed{syncError ? `: ${syncError}` : "."}</p>

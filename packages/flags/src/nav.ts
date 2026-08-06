@@ -43,6 +43,7 @@ export const NAV_FLAGS = [
 
   // ── Second level: Engagement ──────────────────────────────────────────
   { key: "FEATURE_NAV_ENGAGEMENT_AUDIENCE", label: "Audience", section: "Engagement", level: 2 },
+  { key: "FEATURE_NAV_ENGAGEMENT_AUDIENCE_SYNC", label: "Data sync", section: "Engagement", level: 2 },
   { key: "FEATURE_NAV_ENGAGEMENT_SURVEYS", label: "Surveys", section: "Engagement", level: 2 },
   { key: "FEATURE_NAV_ENGAGEMENT_SCRIPTS", label: "Scripts", section: "Engagement", level: 2 },
   { key: "FEATURE_NAV_ENGAGEMENT_DISPOSITIONS", label: "Dispositions", section: "Engagement", level: 2 },

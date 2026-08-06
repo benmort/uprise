@@ -125,6 +125,7 @@ export async function getQueueStats() {
   return request<QueueStatsResponse>("/system/queue-stats");
 }
 
+
 /** Per-tenant async-work health (domain-table aggregation) — the tenant-scoped
  *  counterpart to the global queue/Redis stats. Super-admin only. */
 export type TenantActivityResponse = {
@@ -302,9 +303,12 @@ export async function searchIntegrationLists(
   type: "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL",
   query: string,
   connectionId?: string,
+  /** Browse the provider's lists (default) or its tags — NationBuilder only. */
+  kind?: "lists" | "tags",
 ) {
   const q = new URLSearchParams({ type, query });
   if (connectionId) q.set("connectionId", connectionId);
+  if (kind) q.set("kind", kind);
   return request<{ lists: Array<Record<string, unknown>> }>(`/integrations/lists/search?${q}`);
 }
 

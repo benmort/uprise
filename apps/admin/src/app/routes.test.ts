@@ -18,8 +18,15 @@ describe("major route files", () => {
 
   it("contains audience page scaffold", () => {
     const source = read("audience/page.tsx");
-    expect(source).toContain(">Audience</h1>");
+    // The h1 lives in the shared AudienceHeader (also rendered by /audience/sync).
+    expect(source).toContain("<AudienceHeader />");
     expect(source).toContain("Upload CSV");
+  });
+
+  it("keeps the Data sync route rendering the pull surface", () => {
+    const source = read("audience/sync/page.tsx");
+    expect(source).toContain("<AudienceHeader />");
+    expect(source).toContain("<DataSyncView />");
   });
 
   it("keeps legacy composer route as a redirect shim", () => {

@@ -125,12 +125,19 @@ async function stubIntegrations(
 }
 
 async function openAudiencePage(page: Page) {
-  await page.goto("/audience", { waitUntil: "domcontentloaded" });
-  await expect(page, "no sign-in bounce from /audience").not.toHaveURL(/\/sign-in|\/login/);
+  // Data sync is its own route now (graduated from /audience?tab=sync).
+  await page.goto("/audience/sync", { waitUntil: "domcontentloaded" });
+  await expect(page, "no sign-in bounce from /audience/sync").not.toHaveURL(/\/sign-in|\/login/);
   await expect(page.locator("#tour-audience-sync")).toBeVisible({ timeout: 20_000 });
 }
 
 test.describe("Action Network import", () => {
+  test("the legacy /audience?tab=sync URL redirects to the Data sync route", async ({ page }) => {
+    await page.goto("/audience?tab=sync", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/audience\/sync$/, { timeout: 20_000 });
+    await expect(page.locator("#tour-audience-sync")).toBeVisible({ timeout: 20_000 });
+  });
+
   test("with nothing connected, the import card says so and points at Integrations", async ({ page }) => {
     // No stubs: this is the true state of a tenant that has never connected a source, and the
     // failure it guards against is an empty picker that reads as "broken" rather than "not set up".
@@ -174,7 +181,9 @@ test.describe("Action Network import", () => {
       onSync: (body) => syncs.push(body),
       syncJobStates: [
         { status: "RUNNING", syncedCount: 0 },
-        { status: "COMPLETED", syncedCount: 62, failedCount: 0 },
+        // SUCCEEDED, not "COMPLETED": the poller's terminal states are SUCCEEDED/FAILED —
+        // anything else keeps it polling forever and the success panel never lands.
+        { status: "SUCCEEDED", syncedCount: 62, failedCount: 0 },
       ],
     });
     await openAudiencePage(page);
@@ -219,14 +228,17 @@ test.describe("Action Network import", () => {
     });
     expect(String(syncs[0].audienceName)).toMatch(/action network: training — interested/i);
 
-    // And the organiser is told it is happening, and the audience shows up in the table under a
-    // name that says where it came from. (The row's live badge is not asserted: once the job goes
-    // terminal the page refetches audiences from the REAL API, which knows nothing of this stub,
-    // so the badge's final state belongs to a test with a real connection behind it.)
+    // And the organiser is told it is happening, then lands on the success panel once the
+    // job goes terminal. (The audiences TABLE lives on /audience now, and it refetches from
+    // the REAL API which knows nothing of this stub — the table row belongs to a test with a
+    // real connection behind it.)
     await expect(card).toContainText(/sync queued/i, { timeout: 20_000 });
-    await expect(page.locator("#tour-audience-table")).toContainText(
-      /action network: training — interested/i,
-      { timeout: 30_000 },
+    const panel = page.getByTestId("sync-success-panel");
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+    await expect(panel).toContainText("Synced 62 people");
+    await expect(panel.getByRole("link", { name: "View audience" })).toHaveAttribute(
+      "href",
+      `/audience/${AUDIENCE_ID}`,
     );
   });
 

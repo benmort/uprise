@@ -7,7 +7,7 @@ import {
   autoSelectedSourceId,
   findSource,
   providerLabel,
-  syncCardTitle,
+  pullCardTitle,
   toImportSources,
 } from "./integration-sources";
 import type { IntegrationConnectionRow } from "./api";
@@ -117,7 +117,7 @@ describe("audienceNameForList", () => {
   });
 });
 
-describe("audienceSourceFor / providerLabel / syncCardTitle", () => {
+describe("audienceSourceFor / providerLabel / pullCardTitle", () => {
   it("maps the connection type to the audience source column", () => {
     expect(audienceSourceFor("ACTION_NETWORK")).toBe("ACTION_NETWORK");
     expect(audienceSourceFor("NATION_BUILDER")).toBe("NATION_BUILDER");
@@ -129,19 +129,17 @@ describe("audienceSourceFor / providerLabel / syncCardTitle", () => {
   });
 
   it("titles the card with every connected provider, deduped, in connection order", () => {
-    expect(syncCardTitle([])).toBe("External integration list sync");
-    expect(syncCardTitle(toImportSources([row()]))).toBe(
-      "External integration list sync – Action Network",
-    );
+    expect(pullCardTitle([])).toBe("Pull lists from a connected source");
+    expect(pullCardTitle(toImportSources([row()]))).toBe("Pull lists – Action Network");
     expect(
-      syncCardTitle(
+      pullCardTitle(
         toImportSources([
           row({ id: "an1", group: "Riverside West" }),
           row({ id: "an2", group: "Riverside North" }),
           row({ id: "nb1", type: "NATION_BUILDER", name: "Nation", group: "riverside" }),
         ]),
       ),
-    ).toBe("External integration list sync – Action Network + NationBuilder");
+    ).toBe("Pull lists – Action Network + NationBuilder");
   });
 });
 

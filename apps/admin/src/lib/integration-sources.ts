@@ -127,12 +127,14 @@ export function audienceSourceFor(
   return "INTERNAL";
 }
 
-/** Card title for the sync panel — every connected provider trails it ("A + B"). */
-export function syncCardTitle(sources: ImportSource[]): string {
+/** Card title for the pull panel on Data sync — every connected provider trails it ("A + B").
+ *  The card sits under a surface already titled "Data sync", so the title names the job
+ *  (pulling lists in), not the feature. */
+export function pullCardTitle(sources: ImportSource[]): string {
   const providers = [...new Set(sources.map((s) => s.providerLabel))];
   return providers.length
-    ? `External integration list sync – ${providers.join(" + ")}`
-    : "External integration list sync";
+    ? `Pull lists – ${providers.join(" + ")}`
+    : "Pull lists from a connected source";
 }
 
 function escapeRegExp(value: string): string {

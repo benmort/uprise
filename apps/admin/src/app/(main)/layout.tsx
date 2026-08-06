@@ -237,7 +237,9 @@ function buildNav(
       flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE",
       children: [
         // The imported lists themselves (CSV, Action Network, WhatsApp opt-ins) + the import card.
-        { label: "Segmented audiences", href: "/audience", match: (p) => p === "/audience" || /^\/audience\/[^/]+$/.test(p) },
+        { label: "Segmented audiences", href: "/audience", match: (p) => p === "/audience" || /^\/audience\/(?!sync$|segments)[^/]+$/.test(p) },
+        // Bidirectional CRM sync — pull NationBuilder/Action Network lists in; push activity back.
+        { label: "Data sync", href: "/audience/sync", match: (p) => p.startsWith("/audience/sync"), flag: "FEATURE_NAV_ENGAGEMENT_AUDIENCE_SYNC" },
         // Saved search definitions over those lists, and the builder that creates them.
         { label: "Searches", href: "/audience/segments", match: (p) => p.startsWith("/audience/segments") },
       ],
@@ -346,6 +348,8 @@ function buildNav(
               // Platform-wide (global) BullMQ/Redis infra stats — the per-tenant version
               // lives on /settings ("Tenant Queue & Redis Stats").
               { label: "Queue & Redis Stats", href: "/super/queues", match: sp("queues") },
+              // Durable errors + the live Railway stream + Vercel build output + queue job
+              // detail, in one place. Counts alone (above) hid a real incident for months.
               // Health + last deploy for every app, across Vercel and Railway. Lives here
               // rather than at the top level because the API gates it to super-admins — the
               // customer-facing view of the same health is /status on the marketing site.
