@@ -13,9 +13,11 @@ import {
   LayoutDashboard,
   ListChecks,
   MapPin,
+  Flag,
   MessageSquareText,
   Network as NetworkIcon,
   PlusCircle,
+  Presentation,
   Radio,
   Route,
   Search,
@@ -33,6 +35,7 @@ import {
 } from "lucide-react";
 
 import { createAudience, createBlast } from "@/lib/api";
+import { CLIMATE_200_SLIDES, type TourSlide } from "./slides";
 import {
   DEFAULT_TOUR_TEMPLATE,
   EXAMPLE_AUDIENCE_NAME,
@@ -65,6 +68,14 @@ export interface TourStep {
   title: string;
   /** Which stage this step belongs to (TourStage.id). Steps must be ordered by stage. */
   stage?: string;
+  /**
+   * Full-screen presentation slide. Mutually exclusive with the spotlight: a step carrying a
+   * slide renders the opaque deck layer INSTEAD of the dim overlay + floating card, so it
+   * declares no `selector`, `route`, `onEnter`, `overlay` or `tldr`, and always sets an explicit
+   * `dwellMs` (the 3.7s default is unreadable at full-screen). Enforced by uprise-tour.test.ts
+   * rather than at runtime, the same way the banned-route invariants are.
+   */
+  slide?: TourSlide;
   /** Larger summary shown at the top of the card. */
   content: string;
   /** Smaller supporting copy shown under a divider. */
@@ -386,6 +397,14 @@ export const CLIMATE_200_TOUR_ID = "uprise-climate-200";
  */
 export const CLIMATE_200_STAGES: TourStage[] = [
   {
+    id: "c200-why",
+    label: "Why we're here",
+    minutes: 10,
+    keyMessage:
+      "Supporting many campaigns creates the same infrastructure problem over and over – this is one answer to it.",
+    icon: Presentation,
+  },
+  {
     id: "c200-admin",
     label: "Network administration",
     minutes: 3,
@@ -449,9 +468,42 @@ export const CLIMATE_200_STAGES: TourStage[] = [
       "Both the campaign and the funder can tell whether capacity is turning into activity — within the permission boundary.",
     icon: BarChart3,
   },
+  {
+    id: "c200-pilot",
+    label: "The pilot",
+    minutes: 5,
+    keyMessage:
+      "Start with two campaigns and clear success measures, not a network-wide rollout.",
+    icon: Flag,
+  },
 ];
 
+/** Build the deck's tour steps from the slide payloads, so titles never drift between the two. */
+function slideSteps(
+  stage: string,
+  icon: LucideIcon,
+  slides: TourSlide[],
+  dwellMs: number,
+): TourStep[] {
+  return slides.map((slide) => ({
+    stage,
+    icon,
+    title: slide.title,
+    // `content` is what the Tours menu and any non-deck surface would show; the slide itself
+    // renders its own copy from the payload.
+    content: slide.eyebrow,
+    slide,
+    dwellMs,
+  }));
+}
+
 export const climate200TourSteps: TourStep[] = [
+  // ── Stage 0: the opening deck ──────────────────────────────────────────────
+  // Nine full-screen slides (incl. the three-slide KnockHQ comparison). They earn the demo rather than substituting for it: the room should
+  // know why they are about to be shown a system, and what to watch for, before anything loads.
+  // 12s dwell on auto-play — a full-screen slide needs reading time a tooltip does not.
+  ...slideSteps("c200-why", Presentation, CLIMATE_200_SLIDES.slice(0, 9), 12000),
+
   // ── Stage 1: network administration ────────────────────────────────────────
   {
     stage: "c200-admin",
@@ -664,6 +716,11 @@ export const climate200TourSteps: TourStep[] = [
     selector: "#tour-help-button",
     route: "/super/tenants",
   },
+
+  // ── Stage 9: the closing ask ───────────────────────────────────────────────
+  // Reached after the discussion, not immediately after the demo — a presenter jumps here from
+  // the stage list when the room is ready to talk about what happens next.
+  ...slideSteps("c200-pilot", Flag, CLIMATE_200_SLIDES.slice(9), 10000),
 ];
 
 // ─── Tour registry (the menu of tours) ──────────────────────────────────────
@@ -675,6 +732,28 @@ export interface TourDefinition {
   steps: TourStep[];
   /** Staged tours render a stage header + selector; flat tours omit this. */
   stages?: TourStage[];
+}
+
+/** A step that renders as a full-screen slide rather than a spotlight. */
+export function isSlideStep(step: TourStep): step is TourStep & { slide: TourSlide } {
+  return step.slide != null;
+}
+
+/**
+ * Where this step sits among the tour's slides, for the deck's "02 / 08" footer.
+ *
+ * Counts across ALL slide steps in the tour, not within the stage — the deck reads as one
+ * document to the room even though the guided walkthrough is spliced into the middle of it.
+ * Returns null for a step that is not a slide.
+ */
+export function slidePosition(
+  tour: TourDefinition,
+  stepIndex: number,
+): { index: number; count: number } | null {
+  const step = tour.steps[stepIndex];
+  if (!step || !isSlideStep(step)) return null;
+  const slideIndexes = tour.steps.flatMap((s, i) => (isSlideStep(s) ? [i] : []));
+  return { index: slideIndexes.indexOf(stepIndex), count: slideIndexes.length };
 }
 
 /** The stage a step index sits in, or null for a flat tour. */
@@ -709,7 +788,7 @@ export const UPRISE_TOURS: TourDefinition[] = [
   {
     id: CLIMATE_200_TOUR_ID,
     label: "Climate 200 — network to doorstep",
-    description: "Staged partner walkthrough: the network, one campaign, the door, the follow-up.",
+    description: "Partner presentation: why we're here, the product from network to doorstep, then the pilot.",
     icon: NetworkIcon,
     steps: climate200TourSteps,
     stages: CLIMATE_200_STAGES,

@@ -8,7 +8,9 @@ import {
   UPRISE_TOURS,
   climate200TourSteps,
   getTourById,
+  isSlideStep,
   onboardingTourSteps,
+  slidePosition,
   stageEntryPoints,
   stageOfStep,
   type TourDefinition,
@@ -88,7 +90,7 @@ describe("stage helpers", () => {
 });
 
 describe.each([
-  ["Climate 200", climate200TourSteps, CLIMATE_200_STAGES, 25],
+  ["Climate 200", climate200TourSteps, CLIMATE_200_STAGES, 40],
   ["onboarding", onboardingTourSteps, ONBOARDING_STAGES, 12],
 ] as const)("%s tour", (_name, steps, stages, expectedMinutes) => {
   it("declares a stage on every step, and only stages that exist", () => {
@@ -126,7 +128,77 @@ describe.each([
   });
 });
 
+describe("slide steps", () => {
+  const c200Slides = climate200TourSteps.filter(isSlideStep);
+
+  it("carries no spotlight machinery", () => {
+    // A slide renders an opaque full-screen layer, so there is nothing to spotlight and nowhere
+    // to navigate. A stray route would also move the page *behind* the layer, which the presenter
+    // cannot see but would land on when the deck ends.
+    for (const step of c200Slides) {
+      expect(step.selector).toBeUndefined();
+      expect(step.route).toBeUndefined();
+      expect(step.onEnter).toBeUndefined();
+      expect(step.overlay).toBeUndefined();
+      expect(step.tldr).toBeUndefined();
+    }
+  });
+
+  it("gives every slide real reading time on auto-play", () => {
+    // AUTO_DWELL_MS (3.7s) is tuned for a tooltip beside a highlighted control. A full-screen
+    // slide with a headline and eight chips needs considerably longer.
+    for (const step of c200Slides) {
+      expect(step.dwellMs).toBeGreaterThanOrEqual(8000);
+    }
+  });
+
+  it("wraps the walkthrough rather than interleaving with it", () => {
+    expect(CLIMATE_200_STAGES[0].id).toBe("c200-why");
+    expect(CLIMATE_200_STAGES.at(-1)?.id).toBe("c200-pilot");
+    expect(c200Slides).toHaveLength(11);
+  });
+
+  it("keeps deck stages all-slide and guided stages all-spotlight", () => {
+    // Stage homogeneity is what makes a stage jump predictable: landing on a stage is either
+    // always a slide or always a spotlight, never a coin toss.
+    const deckStages = new Set(["c200-why", "c200-pilot"]);
+    for (const step of climate200TourSteps) {
+      expect(isSlideStep(step)).toBe(deckStages.has(step.stage as string));
+    }
+  });
+
+  it("splits the deck nine before the demo, two after", () => {
+    const inStage = (id: string) => climate200TourSteps.filter((s) => s.stage === id);
+    expect(inStage("c200-why")).toHaveLength(9);
+    expect(inStage("c200-pilot")).toHaveLength(2);
+  });
+
+  it("numbers slides across the whole deck, not within a stage", () => {
+    // The room reads the deck as one document even though the walkthrough is spliced into it,
+    // so the closing slides are 10 and 11 – not 01 and 02 of a second deck.
+    const tour = getTourById(CLIMATE_200_TOUR_ID);
+    const first = tour.steps.findIndex(isSlideStep);
+    expect(slidePosition(tour, first)).toEqual({ index: 0, count: 11 });
+    const last = tour.steps.length - 1;
+    expect(slidePosition(tour, last)).toEqual({ index: 10, count: 11 });
+  });
+
+  it("returns no slide position for a guided step or a bad index", () => {
+    const tour = getTourById(CLIMATE_200_TOUR_ID);
+    const guided = tour.steps.findIndex((s) => !isSlideStep(s));
+    expect(slidePosition(tour, guided)).toBeNull();
+    expect(slidePosition(tour, tour.steps.length + 5)).toBeNull();
+  });
+});
+
 describe("the onboarding tour specifically", () => {
+  it("has no slides", () => {
+    // Onboarding is what first-run auto-start launches, for every new teammate and every fresh
+    // Playwright context. An opaque takeover appearing unbidden there would block e2e clicks and
+    // ambush a user who just wanted to look around.
+    expect(onboardingTourSteps.some(isSlideStep)).toBe(false);
+  });
+
   it("stays clear of super-admin-only surfaces", () => {
     // It is the first-run tour for any new teammate, most of whom are not super-admins. A step
     // routing to /super/* or the embedded field app would dead-end them on a permission error.
