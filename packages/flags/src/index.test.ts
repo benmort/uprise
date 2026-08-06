@@ -12,8 +12,8 @@ import {
 
 describe("FLAGS catalogue", () => {
   it("includes every core flag plus one flag per nav item", () => {
-    // 17 core flags are declared in index.ts; the rest are generated from NAV_FLAGS.
-    expect(FLAGS.length).toBe(17 + NAV_FLAGS.length);
+    // 18 core flags are declared in index.ts; the rest are generated from NAV_FLAGS.
+    expect(FLAGS.length).toBe(18 + NAV_FLAGS.length);
   });
 
   it("has a unique key for every flag", () => {

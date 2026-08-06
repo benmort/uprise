@@ -48,7 +48,9 @@ describe("IntegrationsService — sync queue", () => {
     };
   }
 
-  function build(opts: { job?: unknown; queueEnqueue?: jest.Mock; decrypt?: () => string } = {}) {
+  function build(
+    opts: { job?: unknown; queueEnqueue?: jest.Mock; decrypt?: () => string; nbSync?: jest.Mock } = {},
+  ) {
     const tx = {
       integrationSyncJob: { update: jest.fn().mockResolvedValue({}), create: jest.fn().mockResolvedValue({ id: "job1" }) },
       audience: {
@@ -98,22 +100,31 @@ describe("IntegrationsService — sync queue", () => {
     };
     const outbox = { append: jest.fn().mockResolvedValue(undefined) };
     const actionNetwork = { syncList: jest.fn().mockResolvedValue({ contacts: [], stats: stats() }) };
+    const nationBuilder = {
+      syncList:
+        opts.nbSync ??
+        jest.fn().mockResolvedValue({ contacts: [], stats: stats({ provider: "NATION_BUILDER" }) }),
+    };
     const queue = {
       enqueue: opts.queueEnqueue ?? jest.fn().mockResolvedValue({ jobId: "q1", queued: true }),
     };
+    const contactTags = { applyTag: jest.fn().mockResolvedValue(undefined) };
+    const consent = { setState: jest.fn().mockResolvedValue(undefined) };
     const service = new IntegrationsService(
       prisma,
       { get: (_k: string, d?: unknown) => d } as any,
       { decrypt: opts.decrypt ?? (() => "apikey") } as any,
       actionNetwork as any,
       {} as any,
-      {} as any,
+      nationBuilder as any,
       { log: jest.fn(), warn: jest.fn(), error: jest.fn() } as any,
       contacts as any,
       outbox as any,
       queue as any,
+      contactTags as any,
+      consent as any,
     );
-    return { service, prisma, tx, contacts, outbox, actionNetwork, queue };
+    return { service, prisma, tx, contacts, outbox, actionNetwork, nationBuilder, queue, contactTags, consent };
   }
 
   const payload = { syncJobId: "job1", type: "ACTION_NETWORK" as const, listId: "list1", audienceName: "Vols", listName: "Vols", run: 1 };
@@ -391,5 +402,279 @@ describe("IntegrationsService — sync queue", () => {
     expect(prisma.integrationSyncJob.findMany.mock.calls[0][0]).toMatchObject({ take: 1 });
     expect(prisma.integrationSyncJob.findMany.mock.calls[1][0]).toMatchObject({ take: 100 });
     expect(prisma.integrationSyncJob.findMany.mock.calls[2][0]).toMatchObject({ take: 20 });
+  });
+
+  // ── NationBuilder pull extras (tags, email-only people, opt-out mirror) ─────
+  describe("NationBuilder pull", () => {
+    const nbPayload = {
+      syncJobId: "job1",
+      type: "NATION_BUILDER" as const,
+      listId: "7",
+      audienceName: "NationBuilder: Vols",
+      listName: "Vols",
+      run: 1,
+    };
+    const nbJob = (settings: unknown = {}) =>
+      baseJob({
+        connection: {
+          id: "conn1",
+          type: "NATION_BUILDER",
+          encryptedCredential: "enc",
+          settings,
+          externalGroup: "riverside",
+        },
+      });
+    const nbPerson = (over: Record<string, unknown> = {}, nb: Record<string, unknown> = {}) => ({
+      externalId: "12",
+      name: "Ada Nguyen",
+      phone: "+61400000000",
+      metadata: { email: "ada@example.org", nationBuilder: { id: 12, tags: ["doorknockers"], ...nb } },
+      ...over,
+    });
+    const nbSyncOf = (contacts: unknown[]) =>
+      jest.fn().mockResolvedValue({
+        contacts,
+        stats: stats({ provider: "NATION_BUILDER", listId: "7", returnedContacts: contacts.length }),
+      });
+
+    it("keeps an email-only person as a non-contactable row instead of dropping them", async () => {
+      const nbSync = nbSyncOf([nbPerson({ phone: "" })]);
+      const { service, prisma, contacts } = build({ job: nbJob(), nbSync });
+      await service.processSyncQueueJob(nbPayload);
+      // No spine resolution for a non-contactable row…
+      expect(contacts.getOrCreateByPhone).not.toHaveBeenCalled();
+      // …but the audience row IS written, under the synthetic phone key.
+      const upsert = prisma.audienceContact.upsert.mock.calls[0][0];
+      expect(upsert.where.audienceId_phoneE164.phoneE164).toBe("__noncontactable__:12");
+      expect(upsert.create.metadata).toMatchObject({
+        contactable: false,
+        nonContactableReason: "missing_phone_number",
+      });
+    });
+
+    it("mirrors NB person tags onto contact tags with source nation_builder", async () => {
+      const nbSync = nbSyncOf([nbPerson()]);
+      const { service, contactTags } = build({ job: nbJob(), nbSync });
+      await service.processSyncQueueJob(nbPayload);
+      expect(contactTags.applyTag).toHaveBeenCalledWith("org1", "c1", "doorknockers", "nation_builder");
+    });
+
+    it("writes NATION-SCOPED source records — person 12 of two nations must never collide", async () => {
+      const nbSync = nbSyncOf([nbPerson()]);
+      const { service, contacts } = build({ job: nbJob(), nbSync });
+      await service.processSyncQueueJob(nbPayload);
+      expect(contacts.recordSourceRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceSystem: "nation_builder:riverside", externalId: "12" }),
+      );
+    });
+
+    it("skips the tag mirror when the connection turned importTags off", async () => {
+      const nbSync = nbSyncOf([nbPerson()]);
+      const { service, contactTags } = build({
+        job: nbJob({ dataSync: { pull: { importTags: false } } }),
+        nbSync,
+      });
+      await service.processSyncQueueJob(nbPayload);
+      expect(contactTags.applyTag).not.toHaveBeenCalled();
+    });
+
+    it("a tag failure never fails the contact row", async () => {
+      const nbSync = nbSyncOf([nbPerson()]);
+      const { service, contactTags, prisma } = build({ job: nbJob(), nbSync });
+      contactTags.applyTag.mockRejectedValue(new Error("tag store down"));
+      const result = await service.processSyncQueueJob(nbPayload);
+      // The row still landed and counted as synced — a tag mirror is best-effort.
+      expect(result.syncedCount).toBe(1);
+      expect(result.failedCount).toBe(0);
+      expect(prisma.audienceContact.upsert).toHaveBeenCalled();
+      // The failure is visible in the run's stats rather than swallowed.
+      expect(result.stats?.reasonCounts).toMatchObject({ tag_apply_failed: 1 });
+    });
+
+    it("mirrors an NB do-not-contact flag into consent as OPTED_OUT on both channels", async () => {
+      const nbSync = nbSyncOf([nbPerson({}, { do_not_call: true })]);
+      const { service, consent } = build({ job: nbJob(), nbSync });
+      await service.processSyncQueueJob(nbPayload);
+      expect(consent.setState).toHaveBeenCalledTimes(2);
+      expect(consent.setState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "org1",
+          phoneE164: "+61400000000",
+          state: "OPTED_OUT",
+          source: "nation_builder_sync",
+        }),
+      );
+    });
+
+    it("never touches consent for a person with no opt-out signal", async () => {
+      const nbSync = nbSyncOf([nbPerson()]);
+      const { service, consent } = build({ job: nbJob(), nbSync });
+      await service.processSyncQueueJob(nbPayload);
+      expect(consent.setState).not.toHaveBeenCalled();
+    });
+
+    it("a consent-mirror failure never fails the contact row", async () => {
+      const nbSync = nbSyncOf([nbPerson({}, { do_not_contact: true })]);
+      const { service, consent } = build({ job: nbJob(), nbSync });
+      consent.setState.mockRejectedValue(new Error("consent store down"));
+      const result = await service.processSyncQueueJob(nbPayload);
+      expect(result.syncedCount).toBe(1);
+      expect(result.stats?.reasonCounts).toMatchObject({ consent_mirror_failed: 1 });
+    });
+  });
+
+  // ── Checkpoint column (resume state out of errorSummary) ────────────────────
+  describe("checkpoint column", () => {
+    it("prefers the checkpoint column's cursor over the legacy errorSummary blob", async () => {
+      const { service, actionNetwork } = build({
+        job: baseJob({
+          checkpoint: { nextCursorUrl: "https://an.example/next?page=9" },
+          errorSummary: JSON.stringify({ nextCursorUrl: "https://an.example/stale?page=1" }),
+        }),
+      });
+      await service.processSyncQueueJob({ ...payload, cursorUrl: undefined });
+      expect(actionNetwork.syncList).toHaveBeenCalledWith(
+        "apikey",
+        expect.objectContaining({ cursorUrl: "https://an.example/next?page=9" }),
+        undefined,
+      );
+    });
+
+    it("still resumes a legacy row whose state lives only in errorSummary", async () => {
+      const { service, actionNetwork } = build({
+        job: baseJob({
+          checkpoint: null,
+          errorSummary: JSON.stringify({ nextCursorUrl: "https://an.example/legacy?page=4" }),
+        }),
+      });
+      await service.processSyncQueueJob({ ...payload, cursorUrl: undefined });
+      expect(actionNetwork.syncList).toHaveBeenCalledWith(
+        "apikey",
+        expect.objectContaining({ cursorUrl: "https://an.example/legacy?page=4" }),
+        undefined,
+      );
+    });
+
+    it("a FAILED run leaves the checkpoint untouched so the retry resumes mid-list", async () => {
+      const { service, prisma } = build();
+      prisma.audienceContact.upsert.mockRejectedValue(new Error("db down"));
+      // Force a hard failure past the per-contact classifier by breaking the connector.
+      const { service: failing, prisma: failingPrisma, actionNetwork } = build();
+      actionNetwork.syncList.mockRejectedValue(new Error("provider down"));
+      await expect(failing.processSyncQueueJob(payload)).rejects.toThrow("provider down");
+      const failedUpdate = failingPrisma.integrationSyncJob.update.mock.calls.find(
+        (c: any[]) => c[0]?.data?.status === "FAILED",
+      );
+      expect(failedUpdate).toBeDefined();
+      // The failure record writes errorSummary but never the checkpoint key.
+      expect(Object.keys(failedUpdate![0].data)).not.toContain("checkpoint");
+      void service;
+      void prisma;
+    });
+  });
+
+  // ── Scheduled auto-refresh (cron sweep) ─────────────────────────────────────
+  describe("dispatchDueRefreshes", () => {
+    const staleDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    const audienceRow = (over: Record<string, unknown> = {}) => ({
+      id: "aud1",
+      tenantId: "org1",
+      name: "NationBuilder: Vols",
+      source: "NATION_BUILDER",
+      externalListId: "7",
+      integrationConnectionId: "conn1",
+      syncedAt: staleDate,
+      ...over,
+    });
+    const activeConnection = (settings: unknown = {}) => ({
+      id: "conn1",
+      type: "NATION_BUILDER",
+      settings,
+    });
+
+    function buildSweep(opts: {
+      audiences?: unknown[];
+      connections?: unknown[];
+      liveJobs?: unknown[];
+    }) {
+      const built = build();
+      built.prisma.audience.findMany = jest.fn().mockResolvedValue(opts.audiences ?? []);
+      built.prisma.integrationConnection.findMany.mockResolvedValue(opts.connections ?? []);
+      built.prisma.integrationSyncJob.findMany.mockResolvedValue(opts.liveJobs ?? []);
+      const requestSpy = jest
+        .spyOn(built.service, "requestSyncList")
+        .mockResolvedValue({ syncJobId: "job2", queued: true } as any);
+      return { ...built, requestSpy };
+    }
+
+    it("re-syncs a stale audience through its own connection", async () => {
+      const { service, requestSpy } = buildSweep({
+        audiences: [audienceRow()],
+        connections: [activeConnection()],
+      });
+      const out = await service.dispatchDueRefreshes();
+      expect(out).toEqual({ dispatched: 1, considered: 1 });
+      expect(requestSpy).toHaveBeenCalledWith("org1", {
+        type: "NATION_BUILDER",
+        listId: "7",
+        audienceName: "NationBuilder: Vols",
+        connectionId: "conn1",
+      });
+    });
+
+    it("skips an audience that already has a QUEUED/RUNNING job", async () => {
+      const { service, requestSpy } = buildSweep({
+        audiences: [audienceRow()],
+        connections: [activeConnection()],
+        liveJobs: [{ audienceId: "aud1" }],
+      });
+      const out = await service.dispatchDueRefreshes();
+      expect(out.dispatched).toBe(0);
+      expect(requestSpy).not.toHaveBeenCalled();
+    });
+
+    it("skips a connection that turned auto-refresh off", async () => {
+      const { service, requestSpy } = buildSweep({
+        audiences: [audienceRow()],
+        connections: [activeConnection({ dataSync: { pull: { autoRefresh: { enabled: false } } } })],
+      });
+      const out = await service.dispatchDueRefreshes();
+      expect(out.dispatched).toBe(0);
+      expect(requestSpy).not.toHaveBeenCalled();
+    });
+
+    it("respects the connection's interval — freshly synced audiences wait", async () => {
+      const { service, requestSpy } = buildSweep({
+        // Synced 2h ago; connection asks for a 24h cadence.
+        audiences: [audienceRow({ syncedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })],
+        connections: [activeConnection({ dataSync: { pull: { autoRefresh: { enabled: true, intervalHours: 24 } } } })],
+      });
+      const out = await service.dispatchDueRefreshes();
+      expect(out.dispatched).toBe(0);
+      expect(requestSpy).not.toHaveBeenCalled();
+    });
+
+    it("never refreshes through a disconnected connection", async () => {
+      const { service, requestSpy } = buildSweep({
+        audiences: [audienceRow()],
+        connections: [], // ACTIVE filter returned nothing — connection is INACTIVE/gone
+      });
+      const out = await service.dispatchDueRefreshes();
+      expect(out.dispatched).toBe(0);
+      expect(requestSpy).not.toHaveBeenCalled();
+    });
+
+    it("one audience's failure never stops the sweep", async () => {
+      const { service, requestSpy } = buildSweep({
+        audiences: [audienceRow(), audienceRow({ id: "aud2", externalListId: "8", name: "NB: Donors" })],
+        connections: [activeConnection()],
+      });
+      requestSpy
+        .mockRejectedValueOnce(new Error("token revoked"))
+        .mockResolvedValueOnce({ syncJobId: "job3", queued: true } as any);
+      const out = await service.dispatchDueRefreshes();
+      expect(out.dispatched).toBe(1);
+      expect(requestSpy).toHaveBeenCalledTimes(2);
+    });
   });
 });

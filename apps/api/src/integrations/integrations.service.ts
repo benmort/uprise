@@ -1,12 +1,14 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHash } from "crypto";
 import { UnrecoverableError } from "bullmq";
 import {
   AudienceSource,
+  ConsentState,
   IntegrationConnectionStatus,
   IntegrationJobStatus,
   IntegrationType,
+  MessageChannel,
   Prisma,
 } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
@@ -14,6 +16,9 @@ import { ContactsService } from "../contacts/contacts.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
+import { CONTACT_TAG_PORT, type ContactTagPort } from "../tags/tag.port";
+import { ConsentService } from "../messaging/consent.service";
+import { parseDataSyncSettings } from "./data-sync-settings";
 import { CredentialCryptoService, CredentialDecryptionError } from "./credential-crypto.service";
 import { ActionNetworkConnector } from "./action-network.connector";
 import { InternalSourceConnector } from "./internal-source.connector";
@@ -94,6 +99,11 @@ export class IntegrationsService {
     private readonly contacts: ContactsService,
     private readonly outbox: OutboxService,
     @Inject(DISPATCH_QUEUE_TOKEN) queue?: DispatchQueue,
+    /** Optional cross-domain seams (existing specs construct positionally; DI supplies them):
+     *  the tag port mirrors NB person tags onto contact tags, consent mirrors NB-side
+     *  opt-outs. Both best-effort — a missing seam skips the mirror, never the sync. */
+    @Optional() @Inject(CONTACT_TAG_PORT) private readonly contactTags?: ContactTagPort,
+    @Optional() private readonly consent?: ConsentService,
   ) {
     this.queue = queue ?? {
       enqueue: async (job) => ({ jobId: job.id, queued: true }),
@@ -295,7 +305,7 @@ export class IntegrationsService {
     });
     const lists = await this.connector(connection.type).searchLists(
       connection.apiKey,
-      { query: dto.query, limit: 25 },
+      { query: dto.query, limit: 25, kind: dto.kind },
       connection.baseUrl,
     );
     return { lists };
@@ -320,9 +330,15 @@ export class IntegrationsService {
       contact?.metadata && typeof contact.metadata === "object"
         ? (contact.metadata as Record<string, unknown>)
         : {};
-    if (type === "ACTION_NETWORK") {
+    // Providers whose people can legitimately lack a phone (email-only members) keep
+    // those rows as non-contactable audience entries — the synthetic phone key makes
+    // the upsert work and `contactable: false` keeps them out of every send path.
+    // Previously NationBuilder took the strict branch below, so an email-only nation
+    // imported as zero members.
+    if (type === "ACTION_NETWORK" || type === "NATION_BUILDER") {
       const externalId = String(contact.externalId || "").trim() || null;
-      const requestedContactable = rawMetadata.contactable !== false;
+      const requestedContactable =
+        rawMetadata.contactable !== false && String(contact.phone ?? "").trim() !== "";
       let contactable = requestedContactable;
       let nonContactableReason: string | null = null;
       let phoneE164 = "__noncontactable__:missing-external-id";
@@ -341,11 +357,17 @@ export class IntegrationsService {
         const fallbackId = createHash("sha1").update(JSON.stringify(contact || {})).digest("hex").slice(0, 16);
         phoneE164 = `__noncontactable__:${externalId || fallbackId}`;
       }
+      const email =
+        type === "ACTION_NETWORK"
+          ? this.emailFromActionNetwork(rawMetadata)
+          : typeof rawMetadata.email === "string"
+            ? rawMetadata.email.trim().toLowerCase() || null
+            : null;
       return {
         source,
         phoneE164,
         fullName: contact.name || null,
-        email: this.emailFromActionNetwork(rawMetadata),
+        email,
         externalId,
         contactable,
         nonContactableReason,
@@ -370,10 +392,68 @@ export class IntegrationsService {
     };
   }
 
-  /** Provenance source-system key for a connection type (drives ContactSourceRecord). */
-  private sourceSystemFor(type: IntegrationConnectionType): string {
+  /** NB person tags from the connector metadata blob — capped so a pathological person
+   *  can't turn one row into hundreds of tag writes. */
+  private nationBuilderTagsOf(mapped: MappedExternalContact): string[] {
+    const meta = mapped.metadata as Record<string, unknown> | null;
+    const nb = meta && typeof meta === "object" ? (meta as Record<string, unknown>).nationBuilder : undefined;
+    const tags =
+      nb && typeof nb === "object" && !Array.isArray(nb)
+        ? (nb as Record<string, unknown>).tags
+        : undefined;
+    if (!Array.isArray(tags)) return [];
+    return tags
+      .filter((t): t is string => typeof t === "string" && t.trim().length > 0)
+      .slice(0, 100);
+  }
+
+  /** True when the NB person blob carries an explicit do-not-contact signal. */
+  private nationBuilderOptedOut(mapped: MappedExternalContact): boolean {
+    const meta = mapped.metadata as Record<string, unknown> | null;
+    const nb = meta && typeof meta === "object" ? (meta as Record<string, unknown>).nationBuilder : undefined;
+    if (!nb || typeof nb !== "object" || Array.isArray(nb)) return false;
+    const person = nb as Record<string, unknown>;
+    return person.do_not_contact === true || person.do_not_call === true || person.mobile_opt_in === false;
+  }
+
+  /**
+   * Mirror an NB-side opt-out into uprise consent (SMS + WhatsApp, mirroring the STOP
+   * keyword's behaviour). One-way by design: uprise never writes an opt-IN from a pull,
+   * so a nation flag can only ever tighten contactability here.
+   */
+  private async mirrorNationBuilderOptOut(
+    tenantId: string,
+    mapped: MappedExternalContact,
+    contactId: string | null,
+  ): Promise<void> {
+    if (!this.consent || !mapped.contactable || !this.nationBuilderOptedOut(mapped)) return;
+    for (const channel of [MessageChannel.SMS, MessageChannel.WHATSAPP]) {
+      await this.consent.setState({
+        tenantId,
+        phoneE164: mapped.phoneE164,
+        channel,
+        state: ConsentState.OPTED_OUT,
+        contactId,
+        source: "nation_builder_sync",
+      });
+    }
+  }
+
+  /**
+   * Provenance source-system key for a connection (drives ContactSourceRecord).
+   * NationBuilder keys are NATION-SCOPED (`nation_builder:<slug>`): NB person ids are
+   * per-nation sequential integers, so the bare constant collapsed person 123 of two
+   * nations connected by one tenant onto a single mapping row — harmless-ish for pull,
+   * catastrophic for a push (activity written to the WRONG nation's person). Segment
+   * resolvers treat the whole `nation_builder*` family as one source; the backfill
+   * migration (20260806190000) scoped legacy rows for single-nation tenants.
+   */
+  private sourceSystemFor(type: IntegrationConnectionType, externalGroup?: string | null): string {
     if (type === "ACTION_NETWORK") return "action_network";
-    if (type === "NATION_BUILDER") return "nation_builder";
+    if (type === "NATION_BUILDER") {
+      const slug = String(externalGroup ?? "").trim();
+      return slug ? `nation_builder:${slug}` : "nation_builder";
+    }
     return "internal_source";
   }
 
@@ -469,13 +549,17 @@ export class IntegrationsService {
   }
 
   private parseCheckpointState(
-    raw: string | null | undefined,
+    raw: unknown,
     fallbackPayload: IntegrationSyncJobPayload,
   ): SyncCheckpointState {
     const fallback = this.createInitialCheckpointState(fallbackPayload);
     if (!raw) return fallback;
     try {
-      const parsed = JSON.parse(raw) as Partial<SyncCheckpointState>;
+      // The dedicated `checkpoint` column arrives as a parsed object; the legacy
+      // errorSummary overload arrives as a JSON string. Accept both.
+      const parsed = (
+        typeof raw === "string" ? JSON.parse(raw) : raw
+      ) as Partial<SyncCheckpointState>;
       if (!parsed || typeof parsed !== "object") return fallback;
       return {
         ...fallback,
@@ -593,6 +677,9 @@ export class IntegrationsService {
           query: dto.query,
           remoteListId: dto.listId,
           audienceId: audience.id,
+          // checkpoint owns the resume state; errorSummary keeps a copy while the
+          // admin surfaces still parse stats out of it (dual-write, retired later).
+          checkpoint: initialState as unknown as Prisma.InputJsonValue,
           errorSummary: JSON.stringify(initialState),
         },
       });
@@ -643,6 +730,8 @@ export class IntegrationsService {
             type: true,
             encryptedCredential: true,
             settings: true,
+            // NB nation slug — scopes ContactSourceRecord.sourceSystem per nation.
+            externalGroup: true,
           },
         },
       },
@@ -660,7 +749,8 @@ export class IntegrationsService {
     }
 
     const connectionType = syncJob.connection.type as IntegrationConnectionType;
-    const checkpoint = this.parseCheckpointState(syncJob.errorSummary, payload);
+    // checkpoint column first; errorSummary keeps legacy in-flight rows resumable.
+    const checkpoint = this.parseCheckpointState(syncJob.checkpoint ?? syncJob.errorSummary, payload);
     const audienceId = syncJob.audienceId;
     let ensuredAudienceId = audienceId;
     // Resolving the endpoint, decrypting the credential and the RUNNING stamp itself all
@@ -718,6 +808,7 @@ export class IntegrationsService {
         checkpoint.reasonCounts,
         remoteSync.stats.reasonCounts,
       );
+      const dataSync = parseDataSyncSettings(syncJob.connection.settings);
       for (const contact of remoteContacts) {
         try {
           const mapped = this.mapExternalContact(connectionType, contact);
@@ -774,7 +865,7 @@ export class IntegrationsService {
               await this.contacts.recordSourceRecord({
                 tenantId: syncJob.tenantId,
                 contactId: resolvedContactId,
-                sourceSystem: this.sourceSystemFor(connectionType),
+                sourceSystem: this.sourceSystemFor(connectionType, syncJob.connection.externalGroup),
                 externalId: mapped.externalId,
               });
             }
@@ -783,6 +874,27 @@ export class IntegrationsService {
                 email: mapped.email,
                 phoneE164: mapped.phoneE164,
               });
+            }
+            // NB person tags → contact tags, so `tag.tagged` segments see them. Source
+            // "nation_builder" is load-bearing: the future push reaction filters on it
+            // so an imported tag never echoes back to the nation. Best-effort — a tag
+            // failure is counted, never fatal to the row.
+            if (connectionType === "NATION_BUILDER" && dataSync.pull.importTags && this.contactTags) {
+              for (const tag of this.nationBuilderTagsOf(mapped)) {
+                try {
+                  await this.contactTags.applyTag(syncJob.tenantId, resolvedContactId, tag, "nation_builder");
+                } catch {
+                  this.bumpReason(reasonCounts, "tag_apply_failed");
+                }
+              }
+            }
+          }
+          // Mirror an NB do-not-contact flag into uprise consent (one-way tighten only).
+          if (connectionType === "NATION_BUILDER") {
+            try {
+              await this.mirrorNationBuilderOptOut(syncJob.tenantId, mapped, resolvedContactId);
+            } catch {
+              this.bumpReason(reasonCounts, "consent_mirror_failed");
             }
           }
           syncedDelta += 1;
@@ -822,6 +934,7 @@ export class IntegrationsService {
             status: IntegrationJobStatus.RUNNING,
             syncedCount,
             failedCount,
+            checkpoint: nextState as unknown as Prisma.InputJsonValue,
             errorSummary: JSON.stringify(nextState),
             audienceId: ensuredAudienceId,
           completedAt: null,
@@ -873,6 +986,9 @@ export class IntegrationsService {
             status: IntegrationJobStatus.SUCCEEDED,
             syncedCount,
             failedCount,
+            // Done — no resume state left. errorSummary keeps the final stats record
+            // (that IS its real meaning here, and the audience page parses it).
+            checkpoint: Prisma.DbNull,
             errorSummary: JSON.stringify(finalStats),
             completedAt: new Date(),
             audienceId: finalAudienceId,
@@ -946,6 +1062,151 @@ export class IntegrationsService {
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
     });
+  }
+
+  /**
+   * Scheduled re-sync: keep provider-sourced audiences fresh without anyone clicking
+   * Sync again. Finds audiences whose connection has `pull.autoRefresh` on and whose
+   * `syncedAt` is older than that connection's interval, skips any with a live job
+   * (the new `[audienceId, status]` index), and re-runs `requestSyncList` — which
+   * find-or-creates onto the SAME audience via `(tenantId, externalListId, source)`,
+   * so a refresh is a top-up, never a duplicate.
+   *
+   * Cron-dispatched (CRON_SECRET) like `/audiences/dispatch-imports`. Bounded per tick
+   * so one giant tenant can't starve the rest; the next tick picks up the remainder.
+   */
+  async dispatchDueRefreshes(limit = 20) {
+    const cap = Math.min(Math.max(1, limit), 50);
+    // The finest interval is 1 h — anything synced within the last hour can't be due.
+    const coarseCutoff = new Date(Date.now() - 60 * 60 * 1000);
+    const candidates = await this.prisma.audience.findMany({
+      where: {
+        status: "ACTIVE",
+        source: { in: [AudienceSource.NATION_BUILDER, AudienceSource.ACTION_NETWORK] },
+        integrationConnectionId: { not: null },
+        externalListId: { not: null },
+        OR: [{ syncedAt: null }, { syncedAt: { lt: coarseCutoff } }],
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        name: true,
+        source: true,
+        externalListId: true,
+        integrationConnectionId: true,
+        syncedAt: true,
+      },
+      orderBy: { syncedAt: "asc" },
+      take: cap * 3, // headroom for the per-connection filters below
+    });
+    if (candidates.length === 0) return { dispatched: 0, considered: 0 };
+
+    const connections = await this.prisma.integrationConnection.findMany({
+      where: {
+        id: { in: [...new Set(candidates.map((a) => a.integrationConnectionId!))] },
+        status: IntegrationConnectionStatus.ACTIVE,
+      },
+      select: { id: true, type: true, settings: true },
+    });
+    const connectionById = new Map(connections.map((c) => [c.id, c]));
+
+    // One query answers "which candidates already have a live job".
+    const liveJobs = await this.prisma.integrationSyncJob.findMany({
+      where: {
+        audienceId: { in: candidates.map((a) => a.id) },
+        status: { in: [IntegrationJobStatus.QUEUED, IntegrationJobStatus.RUNNING] },
+      },
+      select: { audienceId: true },
+    });
+    const busyAudienceIds = new Set(liveJobs.map((j) => j.audienceId));
+
+    let dispatched = 0;
+    for (const audience of candidates) {
+      if (dispatched >= cap) break;
+      if (busyAudienceIds.has(audience.id)) continue;
+      const connection = connectionById.get(audience.integrationConnectionId!);
+      if (!connection) continue; // disconnected or deactivated — never refresh through it
+      const refresh = parseDataSyncSettings(connection.settings).pull.autoRefresh;
+      if (!refresh.enabled) continue;
+      const due =
+        !audience.syncedAt ||
+        Date.now() - audience.syncedAt.getTime() >= refresh.intervalHours * 60 * 60 * 1000;
+      if (!due) continue;
+      try {
+        await this.requestSyncList(audience.tenantId, {
+          type: connection.type as IntegrationConnectionType,
+          listId: audience.externalListId!,
+          audienceName: audience.name,
+          connectionId: connection.id,
+        });
+        dispatched += 1;
+      } catch (error) {
+        // One audience's failure (revoked token, deleted remote list) must not stop
+        // the sweep — log and keep walking.
+        this.logger.warn("integrations", "Scheduled refresh dispatch failed", {
+          audienceId: audience.id,
+          connectionId: connection.id,
+          error: String(error),
+        });
+      }
+    }
+    return { dispatched, considered: candidates.length };
+  }
+
+  /**
+   * Merge a partial data-sync settings patch into the connection's `settings.dataSync`
+   * blob. Absent fields keep their stored value; the response is the fully defaulted
+   * shape (what every reader — the pull loop, the push worker, the UI — will see).
+   */
+  async updateDataSyncSettings(
+    tenantId: string,
+    connectionId: string,
+    patch: {
+      pull?: { importTags?: boolean; autoRefreshEnabled?: boolean; autoRefreshIntervalHours?: number };
+      push?: {
+        enabled?: boolean;
+        streams?: Partial<Record<"dispositions" | "surveyAnswers" | "tags" | "textReplies" | "rsvps", boolean>>;
+        supportLevelsEnabled?: boolean;
+        createMissingPeople?: boolean;
+        tagPrefix?: string;
+        nbSenderId?: number | null;
+      };
+    },
+  ) {
+    const connection = await this.prisma.integrationConnection.findFirst({
+      where: { id: connectionId, tenantId },
+      select: { id: true, settings: true },
+    });
+    if (!connection) throw new NotFoundException("Integration connection not found");
+    const current = parseDataSyncSettings(connection.settings);
+    const next = {
+      pull: {
+        importTags: patch.pull?.importTags ?? current.pull.importTags,
+        autoRefresh: {
+          enabled: patch.pull?.autoRefreshEnabled ?? current.pull.autoRefresh.enabled,
+          intervalHours: patch.pull?.autoRefreshIntervalHours ?? current.pull.autoRefresh.intervalHours,
+        },
+      },
+      push: {
+        enabled: patch.push?.enabled ?? current.push.enabled,
+        streams: { ...current.push.streams, ...(patch.push?.streams ?? {}) },
+        supportLevelsEnabled: patch.push?.supportLevelsEnabled ?? current.push.supportLevelsEnabled,
+        // Not configurable — the per-row consent gate on support levels always applies.
+        supportLevelRequiresConsent: true as const,
+        createMissingPeople: patch.push?.createMissingPeople ?? current.push.createMissingPeople,
+        tagPrefix: patch.push?.tagPrefix ?? current.push.tagPrefix,
+        nbSenderId: patch.push?.nbSenderId !== undefined ? patch.push.nbSenderId : current.push.nbSenderId,
+      },
+    };
+    const priorSettings =
+      connection.settings && typeof connection.settings === "object"
+        ? (connection.settings as Record<string, unknown>)
+        : {};
+    await this.prisma.integrationConnection.update({
+      where: { id: connection.id },
+      data: { settings: { ...priorSettings, dataSync: next } as Prisma.InputJsonValue },
+    });
+    return next;
   }
 
   /** Flip a connection ACTIVE↔INACTIVE (disconnect / reconnect). Scoped to the org. */

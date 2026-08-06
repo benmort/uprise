@@ -179,6 +179,14 @@ export class BasicAuthGuard implements CanActivate {
       // opens/resolves incidents — the uptime numbers on the public page come from these).
       "/platform-status/record",
       "/api/v1/platform-status/record",
+      // Integration audience auto-refresh (Bearer CRON_SECRET; re-syncs stale
+      // provider audiences whose connection opted into scheduled pulls).
+      "/integrations/dispatch-refresh",
+      "/api/v1/integrations/dispatch-refresh",
+      // CRM push sweep (Bearer CRON_SECRET; re-enqueues stranded deliveries and
+      // releases circuit-breaker HELD rows once a connection is reconnected).
+      "/integrations/crm-push/sweep",
+      "/api/v1/integrations/crm-push/sweep",
     ]);
     const candidates = this.requestPathCandidates(request);
     return candidates.some((candidate) => allowedPaths.has(candidate));

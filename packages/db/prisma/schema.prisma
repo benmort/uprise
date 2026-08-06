@@ -130,6 +130,20 @@ enum IntegrationType {
 enum IntegrationConnectionStatus {
   ACTIVE
   INACTIVE
+  /// Circuit breaker: the credential stopped working (401 mid-push). Not the user's
+  /// deliberate INACTIVE — reconnecting (test passes) flips back to ACTIVE and held
+  /// deliveries resume.
+  NEEDS_ATTENTION
+  @@schema("integration")
+}
+
+enum IntegrationPushStatus {
+  PENDING
+  SENDING
+  SUCCEEDED
+  SKIPPED
+  FAILED
+  HELD
   @@schema("integration")
 }
 
@@ -835,6 +849,7 @@ model IntegrationConnection {
   updatedAt      DateTime                    @updatedAt
   tenant   Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   syncJobs       IntegrationSyncJob[]
+  pushDeliveries IntegrationPushDelivery[]
 
   // One connection per (tenant, type, group) — a real upsert key. externalGroup "" keeps
   // the previous one-per-type behaviour for everything that has no group concept.
@@ -854,10 +869,49 @@ model IntegrationSyncJob {
   syncedCount           Int                  @default(0)
   failedCount           Int                  @default(0)
   errorSummary          String?
+  /// Resumable sync state (cursor URL + accumulated stats). Its own column so a failure
+  /// writing errorSummary no longer destroys the cursor — a retried job resumes mid-list.
+  checkpoint            Json?
   startedAt             DateTime?
   completedAt           DateTime?
   createdAt             DateTime             @default(now())
   connection            IntegrationConnection @relation(fields: [integrationConnectionId], references: [id], onDelete: Cascade)
+  @@index([audienceId, status])
+  @@index([tenantId, createdAt])
+  @@schema("integration")
+}
+
+/// The CRM write-back's delivery LEDGER: one row per (connection, domain event) — what
+/// uprise tried to push, what happened, why. BullMQ only schedules; the sweep re-enqueues
+/// stranded PENDING rows, and the (connectionId, eventId) unique is the at-most-once floor.
+model IntegrationPushDelivery {
+  id               String                @id @default(cuid())
+  tenantId         String
+  connectionId     String
+  /// The outbox event id — the dedupe key under at-least-once delivery.
+  eventId          String
+  eventType        String
+  /// "disposition" | "survey" | "tag" | "opt_out" | "text_reply" | "rsvp"
+  stream           String
+  contactId        String?
+  /// CRM person id resolved at push time — also feeds future webhook echo-suppression.
+  externalPersonId String?
+  status           IntegrationPushStatus @default(PENDING)
+  attempts         Int                   @default(0)
+  /// Endpoint + field-level digest of what was actually sent (codes, not free text).
+  requestSummary   Json?
+  /// Provider outcome (ids, statuses) — per-operation, so a retry skips succeeded ops.
+  responseSummary  Json?
+  skipReason       String?
+  lastError        String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  completedAt      DateTime?
+  connection       IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  @@unique([connectionId, eventId])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, contactId, createdAt])
+  @@index([status, updatedAt])
   @@schema("integration")
 }
 
@@ -2197,6 +2251,7 @@ model StatusIncident {
   @@index([startedAt])
   @@schema("ops")
 }
+
 
 // ── Payment domain (meld doc 08) ─────────────────────────────────────────────
 enum PaymentStatus {

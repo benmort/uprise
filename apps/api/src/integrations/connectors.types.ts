@@ -8,6 +8,9 @@ export type RemoteAudienceList = {
 export type RemoteContact = {
   externalId?: string;
   name?: string;
+  /** E.164-ish phone, or `""` for a person the provider knows only by email/id — the
+   *  service keeps those as non-contactable audience rows (the `__noncontactable__:`
+   *  convention) rather than silently dropping them from the import. */
   phone: string;
   metadata?: Record<string, unknown>;
 };
@@ -15,6 +18,10 @@ export type RemoteContact = {
 export type SearchListsInput = {
   query?: string;
   limit?: number;
+  /** What to browse: the provider's lists (default) or its tags. NationBuilder
+   *  organisers mostly organise by tag; connectors without a tag concept return
+   *  an empty result for `"tags"`. */
+  kind?: "lists" | "tags";
 };
 
 export type SyncListInput = {

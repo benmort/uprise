@@ -1,4 +1,16 @@
-import { IsIn, IsOptional, IsString, MaxLength, MinLength } from "class-validator";
+import { Type } from "class-transformer";
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateNested,
+} from "class-validator";
 
 export class UpsertIntegrationConnectionDto {
   @IsIn(["ACTION_NETWORK", "NATION_BUILDER", "INTERNAL"])
@@ -64,6 +76,93 @@ export class SearchIntegrationListsDto {
   @IsOptional()
   @IsString()
   connectionId?: string;
+
+  // Browse the provider's lists (default) or its tags — NationBuilder organisers
+  // mostly slice their nation by tag. Ignored by providers without tags.
+  @IsOptional()
+  @IsIn(["lists", "tags"])
+  kind?: "lists" | "tags";
+}
+
+export class DataSyncPullSettingsDto {
+  @IsOptional()
+  @IsBoolean()
+  importTags?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  autoRefreshEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(168)
+  autoRefreshIntervalHours?: number;
+}
+
+export class DataSyncPushStreamsDto {
+  @IsOptional()
+  @IsBoolean()
+  dispositions?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  surveyAnswers?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  tags?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  textReplies?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  rsvps?: boolean;
+}
+
+export class DataSyncPushSettingsDto {
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DataSyncPushStreamsDto)
+  streams?: DataSyncPushStreamsDto;
+
+  @IsOptional()
+  @IsBoolean()
+  supportLevelsEnabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  createMissingPeople?: boolean;
+
+  @IsOptional()
+  @IsString()
+  tagPrefix?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  nbSenderId?: number | null;
+}
+
+/** PATCH /integrations/connections/:id/settings — partial; absent fields keep their
+ *  stored value. `supportLevelRequiresConsent` is deliberately NOT accepted: the per-row
+ *  consent gate on pushed support levels is not configurable off (APP 3). */
+export class UpdateConnectionDataSyncDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DataSyncPullSettingsDto)
+  pull?: DataSyncPullSettingsDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DataSyncPushSettingsDto)
+  push?: DataSyncPushSettingsDto;
 }
 
 export class SampleIntegrationListDto {

@@ -49,6 +49,8 @@ const OPEN_ROUTES = new Set<string>([
   // provisioning polls also carry an inline super-admin check for any user-session caller.
   "BlastsController#dispatchDue",
   "AudiencesController#dispatchImports",
+  "IntegrationsController#dispatchRefresh", // audience auto-refresh cron (Bearer CRON_SECRET)
+  "IntegrationsController#crmPushSweep", // push-delivery sweep cron (Bearer CRON_SECRET)
   "JourneysController#sweepDue",
   "TelephonyProvisioningController#poll",
   // Private-pool re-sync (Bearer CRON_SECRET; inline super-admin check for any user session).

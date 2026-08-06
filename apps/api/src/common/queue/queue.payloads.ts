@@ -23,6 +23,12 @@ export type IntegrationSyncJobPayload = {
   run?: number;
 };
 
+/** Deliver one recorded push (the IntegrationPushDelivery row is the source of truth —
+ *  the job carries only ids; the worker re-reads current state at send time). */
+export type IntegrationPushDeliverJobPayload = {
+  deliveryId: string;
+  tenantId: string;
+};
 
 export type JourneyRunRungJobPayload = {
   enrolmentId: string;
@@ -105,6 +111,13 @@ export function isIntegrationSyncJobPayload(value: unknown): value is Integratio
   return true;
 }
 
+export function isIntegrationPushDeliverJobPayload(
+  value: unknown,
+): value is IntegrationPushDeliverJobPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Record<string, unknown>;
+  return isNonEmptyString(payload.deliveryId) && isNonEmptyString(payload.tenantId);
+}
 
 export function isTurfEstimateRunJobPayload(value: unknown): value is TurfEstimateRunJobPayload {
   if (!value || typeof value !== "object") return false;

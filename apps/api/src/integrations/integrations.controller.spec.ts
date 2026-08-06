@@ -9,6 +9,14 @@ import type {
 } from "./dto/integration.dto";
 
 describe("IntegrationsController", () => {
+  const makeCrmPush = () =>
+    ({
+      listDeliveries: jest.fn(),
+      deliverySummary: jest.fn(),
+      retryDelivery: jest.fn(),
+      sweepPushDeliveries: jest.fn(),
+    }) as any;
+
   const makeSvc = () =>
     ({
       upsertConnection: jest.fn().mockResolvedValue({ id: "c1" }),
@@ -24,7 +32,7 @@ describe("IntegrationsController", () => {
 
   it("upsertConnection delegates with tenantId + dto", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     const dto = { type: "ACTION_NETWORK", name: "AN" } as UpsertIntegrationConnectionDto;
     await c.upsertConnection("t1", dto);
     expect(svc.upsertConnection).toHaveBeenCalledWith("t1", dto);
@@ -34,7 +42,7 @@ describe("IntegrationsController", () => {
   // stored credential rather than falling back to a platform env key.
   it("testConnection delegates with tenantId + dto", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     const dto = { type: "ACTION_NETWORK", apiKey: "k" } as TestIntegrationConnectionDto;
     await c.testConnection("t1", dto);
     expect(svc.testConnection).toHaveBeenCalledWith("t1", dto);
@@ -42,21 +50,21 @@ describe("IntegrationsController", () => {
 
   it("updateConnectionStatus delegates with tenantId, id + status", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     await c.updateConnectionStatus("t1", "c1", { status: "INACTIVE" });
     expect(svc.setConnectionStatus).toHaveBeenCalledWith("t1", "c1", "INACTIVE");
   });
 
   it("deleteConnection delegates with tenantId + id", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     await c.deleteConnection("t1", "c1");
     expect(svc.deleteConnection).toHaveBeenCalledWith("t1", "c1");
   });
 
   it("searchLists delegates with tenantId + dto", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     const dto = { type: "ACTION_NETWORK", query: "vol" } as SearchIntegrationListsDto;
     await c.searchLists("t1", dto);
     expect(svc.searchLists).toHaveBeenCalledWith("t1", dto);
@@ -64,7 +72,7 @@ describe("IntegrationsController", () => {
 
   it("sampleList delegates with tenantId + dto", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     const dto = { type: "ACTION_NETWORK", listId: "l1" } as SampleIntegrationListDto;
     await c.sampleList("t1", dto);
     expect(svc.sampleList).toHaveBeenCalledWith("t1", dto);
@@ -72,7 +80,7 @@ describe("IntegrationsController", () => {
 
   it("syncList delegates with tenantId + dto", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     const dto = {
       type: "ACTION_NETWORK",
       listId: "l1",
@@ -84,21 +92,21 @@ describe("IntegrationsController", () => {
 
   it("syncJobs delegates + parses limit", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     await c.syncJobs("t1", "5");
     expect(svc.getSyncJobs).toHaveBeenCalledWith("t1", 5);
   });
 
   it("syncJobs defaults limit to 20 for non-numeric input", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     await c.syncJobs("t1", "abc");
     expect(svc.getSyncJobs).toHaveBeenCalledWith("t1", 20);
   });
 
   it("listConnections delegates with tenantId", async () => {
     const svc = makeSvc();
-    const c = new IntegrationsController(svc);
+    const c = new IntegrationsController(svc, makeCrmPush());
     await c.listConnections("t1");
     expect(svc.listConnections).toHaveBeenCalledWith("t1");
   });

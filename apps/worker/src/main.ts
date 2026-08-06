@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { type Server } from "node:http";
 import { config as dotenvConfig } from "dotenv";
 import { NestFactory } from "@nestjs/core";
+import { ConfigService } from "@nestjs/config";
 import { Job, Queue, QueueEvents, Worker } from "bullmq";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { createBullBoard } from "@bull-board/api";
@@ -16,10 +17,12 @@ import { TurfEstimateService } from "../../api/src/canvassing/turf-estimate.serv
 import { HeatService } from "../../api/src/canvassing/heat.service";
 import { BlastsService } from "../../api/src/blasts/blasts.service";
 import { IntegrationsService } from "../../api/src/integrations/integrations.service";
+import { CrmPushService } from "../../api/src/integrations/crm-push.service";
 import { JourneysService } from "../../api/src/journeys/journeys.service";
 import { DialerCallPlacerService } from "../../api/src/autodialer/dialer-call-placer.service";
 import { DialerDispatchService } from "../../api/src/autodialer/dialer-dispatch.service";
 import { DomainLogger } from "../../api/src/common/logging/domain-logger.service";
+import { attachLogEventSink } from "../../api/src/bootstrap";
 import { PrismaService } from "../../api/src/prisma/prisma.service";
 import { ReactionRegistry } from "../../api/src/common/reactions/reaction-registry";
 import { QueueConfigService } from "../../api/src/common/queue/queue-config.service";
@@ -28,6 +31,7 @@ import {
   isBlastRetryFailedJobPayload,
   isBlastSendBatchJobPayload,
   isIntegrationSyncJobPayload,
+  isIntegrationPushDeliverJobPayload,
   isJourneyRunRungJobPayload,
   isDialerCampaignTickJobPayload,
   isDialerPlaceCallJobPayload,
@@ -227,12 +231,17 @@ async function bootstrap(): Promise<void> {
   const heat = app.get(HeatService);
   const blasts = app.get(BlastsService);
   const integrations = app.get(IntegrationsService);
+  const crmPush = app.get(CrmPushService);
   const journeys = app.get(JourneysService);
   const dialerDispatch = app.get(DialerDispatchService);
   const dialerPlacer = app.get(DialerCallPlacerService);
   const prisma = app.get(PrismaService);
   const reactions = app.get(ReactionRegistry);
   const logger = app.get(DomainLogger);
+  // Worker warn/error into ops.LogEvent, tagged "worker". Railway's log buffer is the only other
+  // record of what this process does, and it rolls — the credential-decrypt failure that ran for
+  // months was invisible partly because nothing outlived that buffer.
+  attachLogEventSink(logger, prisma, app.get(ConfigService), "worker");
 
   const connection = queueConfig.queueConnection;
   const prefix = queueConfig.queuePrefix;
@@ -300,6 +309,19 @@ async function bootstrap(): Promise<void> {
         return integrations.processSyncQueueJob(job.data);
       },
       { connection, prefix, concurrency: queueConfig.integrationSyncQueueConcurrency },
+    ),
+    new Worker(
+      QUEUE_NAMES.INTEGRATION_PUSH,
+      async (job: Job) => {
+        if (job.name !== QUEUE_JOB_TYPES.INTEGRATION_PUSH_DELIVER) return null;
+        if (!isIntegrationPushDeliverJobPayload(job.data)) {
+          throw new Error(`Invalid integration push job payload for job ${job.id}`);
+        }
+        return crmPush.processDeliveryJob(job.data);
+      },
+      // Low concurrency on purpose: the per-nation throttle inside the NB client does
+      // the real pacing; more workers here would just queue inside it.
+      { connection, prefix, concurrency: 3 },
     ),
     new Worker(
       QUEUE_NAMES.JOURNEY_RUN,
@@ -417,6 +439,7 @@ async function bootstrap(): Promise<void> {
     new QueueEvents(QUEUE_NAMES.BLAST_SEND, { connection, prefix }),
     new QueueEvents(QUEUE_NAMES.BLAST_RETRY, { connection, prefix }),
     new QueueEvents(QUEUE_NAMES.INTEGRATION_SYNC, { connection, prefix }),
+    new QueueEvents(QUEUE_NAMES.INTEGRATION_PUSH, { connection, prefix }),
   ];
 
   await Promise.all(queueEvents.map((events) => events.waitUntilReady()));

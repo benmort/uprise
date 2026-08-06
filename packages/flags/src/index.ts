@@ -161,6 +161,15 @@ const CORE_FLAGS = [
     envVar: "FEATURE_BULLMQ_UPLOAD_ENABLED",
   },
   {
+    key: "FEATURE_NB_PUSH_ENABLED",
+    description:
+      "Master kill switch for the NationBuilder write-back (Data sync push). Off: reactions record nothing and the worker parks in-flight deliveries as HELD — nothing is lost, everything resumes on re-enable. Each connection still opts in separately.",
+    default: false,
+    kind: "ops",
+    controllableBy: GLOBAL_ONLY,
+    envVar: "FEATURE_NB_PUSH_ENABLED",
+  },
+  {
     key: "FEATURE_BULLMQ_BLAST_ENABLED",
     description: "Route blast sends through the BullMQ worker (vs inline).",
     default: false,

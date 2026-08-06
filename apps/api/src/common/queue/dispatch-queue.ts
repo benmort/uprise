@@ -3,6 +3,7 @@ export type DispatchQueueName =
   | "blast-send"
   | "blast-retry"
   | "integration-sync"
+  | "integration-push"
   | "journey-run"
   | "segment-eval"
   | "turf-estimate"

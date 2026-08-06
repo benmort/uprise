@@ -3,6 +3,7 @@ export const QUEUE_NAMES = {
   BLAST_SEND: "blast-send",
   BLAST_RETRY: "blast-retry",
   INTEGRATION_SYNC: "integration-sync",
+  INTEGRATION_PUSH: "integration-push",
   JOURNEY_RUN: "journey-run",
   DOMAIN_EVENTS: "domain-events",
   SEGMENT_EVAL: "segment-eval",
@@ -17,6 +18,7 @@ export const QUEUE_JOB_TYPES = {
   BLAST_SEND_BATCH: "blast.send.batch",
   BLAST_RETRY_FAILED: "blast.retry.failed",
   INTEGRATION_SYNC_LIST: "integration.sync.list",
+  INTEGRATION_PUSH_DELIVER: "integration.push.deliver",
   JOURNEY_RUN_RUNG: "journey.run.rung",
   DOMAIN_EVENT: "domain.event",
   SEGMENT_EVAL_RUN: "segment.eval.run",
@@ -43,6 +45,12 @@ export function getIntegrationSyncJobId(syncJobId: string, chunkKey?: string): s
   return chunkKey
     ? `integration-sync_${syncJobId}_${chunkKey}`
     : `integration-sync_${syncJobId}`;
+}
+
+/** One job per delivery row — deterministic, so a reaction replay's re-enqueue and the
+ *  sweep's re-enqueue collapse onto the same job (BullMQ dedups on jobId). */
+export function getIntegrationPushJobId(deliveryId: string): string {
+  return `integration-push_${deliveryId}`;
 }
 
 export function getJourneyRungJobId(enrolmentId: string, rungIndex: number): string {

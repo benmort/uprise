@@ -37,6 +37,14 @@
     {
       "path": "/api/v1/platform-status/record",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/v1/integrations/dispatch-refresh",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/v1/integrations/crm-push/sweep",
+      "schedule": "*/15 * * * *"
     }
   ],
   "routes": [

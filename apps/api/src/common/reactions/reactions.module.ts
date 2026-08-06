@@ -24,6 +24,9 @@ import { OutboxService } from "../../common/outbox/outbox.service";
 import { buildAutodialerReactions } from "../../autodialer/autodialer.reactions";
 import { FlagsModule } from "../flags/flags.module";
 import { FeatureFlagsService } from "../flags/feature-flags.service";
+import { IntegrationsModule } from "../../integrations/integrations.module";
+import { CrmPushService } from "../../integrations/crm-push.service";
+import { buildCrmPushReactions } from "../../integrations/crm-push.reactions";
 
 /**
  * Wires the reaction registry + the ported cross-domain reactions (meld doc 12).
@@ -31,7 +34,7 @@ import { FeatureFlagsService } from "../flags/feature-flags.service";
  * Reaction closes over what it needs. Email/Payment/Prisma/Logging are @Global.
  */
 @Module({
-  imports: [LoggingModule, AudiencesModule, FlagsModule],
+  imports: [LoggingModule, AudiencesModule, FlagsModule, IntegrationsModule],
   providers: [
     {
       provide: REACTIONS,
@@ -48,12 +51,14 @@ import { FeatureFlagsService } from "../flags/feature-flags.service";
         audiences: AudiencesService,
         outbox: OutboxService,
         flags: FeatureFlagsService,
+        crmPush: CrmPushService,
       ): ReactionList => [
         ...buildDomainReactions({ prisma, email, sms, stripe, billing, config, logger, flags }),
         ...buildTelephonyProvisioningReactions({ provisioning }),
         ...buildEmailProvisioningReactions({ provisioning: emailProvisioning }),
         ...buildAudienceReactions({ audiences, logger }),
         ...buildAutodialerReactions({ prisma, outbox, logger }),
+        ...buildCrmPushReactions({ crmPush, logger }),
       ],
       inject: [
         PrismaService,
@@ -68,6 +73,7 @@ import { FeatureFlagsService } from "../flags/feature-flags.service";
         AudiencesService,
         OutboxService,
         FeatureFlagsService,
+        CrmPushService,
       ],
     },
     ReactionRegistry,
