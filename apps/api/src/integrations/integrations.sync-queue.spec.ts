@@ -1,6 +1,8 @@
 import { NotFoundException } from "@nestjs/common";
+import { UnrecoverableError } from "bullmq";
 import { IntegrationsService } from "./integrations.service";
 import { IntegrationNotConnectedError } from "./integration.errors";
+import { CredentialDecryptionError } from "./credential-crypto.service";
 
 /**
  * Covers the sync QUEUE machinery of IntegrationsService: the eager-audience
@@ -46,7 +48,7 @@ describe("IntegrationsService — sync queue", () => {
     };
   }
 
-  function build(opts: { job?: unknown; queueEnqueue?: jest.Mock } = {}) {
+  function build(opts: { job?: unknown; queueEnqueue?: jest.Mock; decrypt?: () => string } = {}) {
     const tx = {
       integrationSyncJob: { update: jest.fn().mockResolvedValue({}), create: jest.fn().mockResolvedValue({ id: "job1" }) },
       audience: {
@@ -102,7 +104,7 @@ describe("IntegrationsService — sync queue", () => {
     const service = new IntegrationsService(
       prisma,
       { get: (_k: string, d?: unknown) => d } as any,
-      { decrypt: () => "apikey" } as any,
+      { decrypt: opts.decrypt ?? (() => "apikey") } as any,
       actionNetwork as any,
       {} as any,
       {} as any,
@@ -174,6 +176,38 @@ describe("IntegrationsService — sync queue", () => {
     const appended = outbox.append.mock.calls[0][1];
     expect(appended.eventType).toBe("audience.imported");
     expect(appended.payload).toEqual({ audienceId: "aud1", tenantId: "org1", count: 1 });
+  });
+
+  // Regression: the credential decrypt used to sit ABOVE the try/catch, so a worker whose
+  // INTEGRATION_CREDENTIAL_SECRET had drifted from the API's threw before the row was
+  // touched. The job stayed QUEUED with a null startedAt forever and the audience page
+  // read "queued but hasn't started — the background importer isn't processing it", while
+  // the worker was picking it up and dying on the same line every retry.
+  it("marks the job FAILED when the credential cannot be decrypted (never leaves it QUEUED)", async () => {
+    const { service, prisma, actionNetwork } = build({
+      decrypt: () => {
+        throw new CredentialDecryptionError(new Error("Unsupported state or unable to authenticate data"));
+      },
+    });
+    await expect(service.processSyncQueueJob(payload)).rejects.toBeInstanceOf(UnrecoverableError);
+    const failUpdate = prisma.integrationSyncJob.update.mock.calls.at(-1)[0];
+    expect(failUpdate.where).toEqual({ id: "job1" });
+    expect(failUpdate.data.status).toBe("FAILED");
+    expect(failUpdate.data.errorSummary).toContain("INTEGRATION_CREDENTIAL_SECRET");
+    expect(failUpdate.data.completedAt).toBeInstanceOf(Date);
+    expect(actionNetwork.syncList).not.toHaveBeenCalled();
+  });
+
+  // A key that does not match never starts matching, so retrying it burns 19 attempts on
+  // an exponential backoff and parks the job in `delayed` (removeOnFail: false) where no
+  // failure count surfaces it. UnrecoverableError routes it straight to `failed`.
+  it("raises UnrecoverableError for a decrypt failure so BullMQ does not retry it", async () => {
+    const { service } = build({
+      decrypt: () => {
+        throw new CredentialDecryptionError();
+      },
+    });
+    await expect(service.processSyncQueueJob(payload)).rejects.toThrow(/INTEGRATION_CREDENTIAL_SECRET/);
   });
 
   it("marks the job FAILED and rethrows when the connector throws", async () => {

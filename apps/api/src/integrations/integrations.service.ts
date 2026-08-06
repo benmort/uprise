@@ -1,6 +1,7 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createHash } from "crypto";
+import { UnrecoverableError } from "bullmq";
 import {
   AudienceSource,
   IntegrationConnectionStatus,
@@ -13,7 +14,7 @@ import { ContactsService } from "../contacts/contacts.service";
 import { OutboxService } from "../common/outbox/outbox.service";
 import { normalizePhoneE164 } from "../common/utils/phone.utils";
 import { sanitizeMetadata, withDefaultContactable } from "../common/utils/metadata.utils";
-import { CredentialCryptoService } from "./credential-crypto.service";
+import { CredentialCryptoService, CredentialDecryptionError } from "./credential-crypto.service";
 import { ActionNetworkConnector } from "./action-network.connector";
 import { InternalSourceConnector } from "./internal-source.connector";
 import { NationBuilderConnector } from "./nation-builder.connector";
@@ -659,23 +660,30 @@ export class IntegrationsService {
     }
 
     const connectionType = syncJob.connection.type as IntegrationConnectionType;
-    const baseUrl = this.baseUrlFromSettings(syncJob.connection.settings) || this.envBaseUrl(connectionType);
-    const apiKey = this.crypto.decrypt(syncJob.connection.encryptedCredential);
     const checkpoint = this.parseCheckpointState(syncJob.errorSummary, payload);
-    const cursorUrl = payload.cursorUrl || checkpoint.nextCursorUrl || undefined;
-    const startedAt = syncJob.startedAt ?? new Date();
-    await this.prisma.integrationSyncJob.update({
-      where: { id: syncJob.id },
-      data: {
-        status: IntegrationJobStatus.RUNNING,
-        startedAt,
-        completedAt: null,
-      },
-    });
-
     const audienceId = syncJob.audienceId;
     let ensuredAudienceId = audienceId;
+    // Resolving the endpoint, decrypting the credential and the RUNNING stamp itself all
+    // sit INSIDE this try. They used to run above it, and anything that threw there never
+    // reached the catch that records the failure: the row kept status QUEUED with a null
+    // startedAt and no errorSummary, so the audience page reported "queued but hasn't
+    // started — the background importer isn't processing it" while the worker was in fact
+    // picking the job up on every retry and dying on the same line. A worker whose
+    // INTEGRATION_CREDENTIAL_SECRET has drifted from the API's hits exactly that.
     try {
+      const baseUrl = this.baseUrlFromSettings(syncJob.connection.settings) || this.envBaseUrl(connectionType);
+      const apiKey = this.crypto.decrypt(syncJob.connection.encryptedCredential);
+      const cursorUrl = payload.cursorUrl || checkpoint.nextCursorUrl || undefined;
+      const startedAt = syncJob.startedAt ?? new Date();
+      await this.prisma.integrationSyncJob.update({
+        where: { id: syncJob.id },
+        data: {
+          status: IntegrationJobStatus.RUNNING,
+          startedAt,
+          completedAt: null,
+        },
+      });
+
       const remoteSync = await this.connector(connectionType).syncList(
         apiKey,
         {
@@ -915,6 +923,19 @@ export class IntegrationsService {
           audienceId: ensuredAudienceId ?? undefined,
         },
       });
+      // A credential this process cannot decrypt is permanent — the key will not change
+      // between attempts. Left retryable it burns all 19 attempts on an exponential
+      // backoff from 9.5 min (attempt 14 lands ~54 days out) and, because the job is
+      // enqueued with removeOnFail: false, it parks in `delayed` where no failure count
+      // ever surfaces it. UnrecoverableError sends it straight to `failed` instead.
+      if (error instanceof CredentialDecryptionError) {
+        this.logger.error("integrations", "Sync credential could not be decrypted", undefined, {
+          syncJobId: syncJob.id,
+          connectionId: syncJob.connection.id,
+          type: connectionType,
+        });
+        throw new UnrecoverableError(error.message);
+      }
       throw error;
     }
   }

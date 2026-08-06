@@ -1,4 +1,4 @@
-import { CredentialCryptoService } from "./credential-crypto.service";
+import { CredentialCryptoService, CredentialDecryptionError } from "./credential-crypto.service";
 
 /** A ConfigService stub returning a fixed INTEGRATION_CREDENTIAL_SECRET. */
 const svc = (secret = "unit-test-secret") =>
@@ -36,5 +36,27 @@ describe("CredentialCryptoService", () => {
     const a = svc("secret-a");
     const b = svc("secret-b");
     expect(() => b.decrypt(a.encrypt("cross"))).toThrow();
+  });
+
+  // A drifted secret used to surface only as Node's "Unsupported state or unable to
+  // authenticate data" from the GCM tag check — a message that names neither the env
+  // var nor the fix, and which callers had no type to branch on.
+  it("raises CredentialDecryptionError naming the secret, not a raw GCM message", () => {
+    const a = svc("api-side-secret");
+    const b = svc("worker-side-secret");
+    let caught: unknown;
+    try {
+      b.decrypt(a.encrypt("an-api-key"));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(CredentialDecryptionError);
+    expect((caught as Error).message).toContain("INTEGRATION_CREDENTIAL_SECRET");
+    // The underlying crypto failure is kept as the cause, not swallowed.
+    expect(String((caught as CredentialDecryptionError).cause)).toMatch(/unable to authenticate data/i);
+  });
+
+  it("raises CredentialDecryptionError on malformed (non-ciphertext) input", () => {
+    expect(() => svc().decrypt("not-base64-ciphertext")).toThrow(CredentialDecryptionError);
   });
 });
