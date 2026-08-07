@@ -71,6 +71,17 @@ export interface SendGridEvent {
   [key: string]: unknown;
 }
 
+/** The Email columns the webhook branches read – a shared, in-memory snapshot per batch. */
+type WebhookEmailRow = {
+  id: string;
+  tenantId: string;
+  status: EmailStatus;
+  toAddress: string;
+  openedAt: Date | null;
+  clickedAt: Date | null;
+  providerMessageId: string | null;
+};
+
 /**
  * Transactional email (meld doc 07) — the email counterpart of TransactionalMessagingService
  * (transactional SMS, doc 06). Like that service, it DELIBERATELY takes no
@@ -429,13 +440,67 @@ export class EmailService implements OnModuleInit {
     return dot >= 0 ? sgMessageId.slice(0, dot) : sgMessageId;
   }
 
-  private async resolveEmail(event: SendGridEvent) {
-    if (event.emailId) return this.prisma.email.findUnique({ where: { id: event.emailId } });
-    if (event.sg_message_id) {
-      return this.prisma.email.findFirst({
-        where: { providerMessageId: this.stripFilter(event.sg_message_id) },
-      });
+  /** Event ids in this batch that are already recorded as processed – one read, not one per event. */
+  private async alreadyProcessedEventIds(events: SendGridEvent[]): Promise<Set<string>> {
+    const ids = [...new Set(events.map((e) => e.sg_event_id ?? "").filter(Boolean))];
+    if (!ids.length) return new Set();
+    const rows = await this.prisma.webhookEvent.findMany({
+      where: { provider: "sendgrid", eventId: { in: ids } },
+      select: { eventId: true },
+    });
+    return new Set(rows.map((r) => r.eventId));
+  }
+
+  /**
+   * Every Email this batch references, resolved in ONE query. Rows are shared
+   * mutable snapshots: as each event's transition applies, the caller updates the
+   * row in memory so later events in the batch observe the fresh state – exactly
+   * what the previous read-per-event behaviour gave them.
+   */
+  private async resolveEmailsForBatch(events: SendGridEvent[]): Promise<{
+    byId: Map<string, WebhookEmailRow>;
+    bySgId: Map<string, WebhookEmailRow>;
+  }> {
+    const emailIds = new Set<string>();
+    const sgIds = new Set<string>();
+    for (const event of events) {
+      // Mirrors the per-event precedence: an event with our emailId custom_arg
+      // never resolves via sg_message_id, so it contributes only its emailId.
+      if (event.emailId) emailIds.add(event.emailId);
+      else if (event.sg_message_id) sgIds.add(this.stripFilter(event.sg_message_id));
     }
+    const or: Prisma.EmailWhereInput[] = [];
+    if (emailIds.size) or.push({ id: { in: [...emailIds] } });
+    if (sgIds.size) or.push({ providerMessageId: { in: [...sgIds] } });
+    const rows: WebhookEmailRow[] = or.length
+      ? await this.prisma.email.findMany({
+          where: { OR: or },
+          select: {
+            id: true,
+            tenantId: true,
+            status: true,
+            toAddress: true,
+            openedAt: true,
+            clickedAt: true,
+            providerMessageId: true,
+          },
+        })
+      : [];
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const bySgId = new Map<string, WebhookEmailRow>();
+    for (const r of rows) {
+      if (r.providerMessageId && !bySgId.has(r.providerMessageId)) bySgId.set(r.providerMessageId, r);
+    }
+    return { byId, bySgId };
+  }
+
+  /** Per-event precedence unchanged: our emailId custom_arg first, else sg_message_id. */
+  private emailForEvent(
+    event: SendGridEvent,
+    emails: { byId: Map<string, WebhookEmailRow>; bySgId: Map<string, WebhookEmailRow> },
+  ): WebhookEmailRow | null {
+    if (event.emailId) return emails.byId.get(event.emailId) ?? null;
+    if (event.sg_message_id) return emails.bySgId.get(this.stripFilter(event.sg_message_id)) ?? null;
     return null;
   }
 
@@ -459,11 +524,21 @@ export class EmailService implements OnModuleInit {
   }
 
   async processSendGridEvents(events: SendGridEvent[]): Promise<void> {
+    // Two reads per batch, not per event: already-processed duplicates drop out
+    // cheaply, and every referenced Email is resolved up front. Each remaining
+    // event still claims individually – the (provider, eventId) unique constraint
+    // stays the concurrency guard against a racing delivery.
+    const seen = await this.alreadyProcessedEventIds(events);
+    const emails = await this.resolveEmailsForBatch(events);
     for (const event of events) {
       const eventId = event.sg_event_id ?? "";
-      if (eventId && !(await this.webhookEvents.claim("sendgrid", eventId))) continue; // duplicate
+      if (eventId) {
+        if (seen.has(eventId)) continue; // duplicate – already processed
+        if (!(await this.webhookEvents.claim("sendgrid", eventId))) continue; // duplicate (lost a concurrent race)
+        seen.add(eventId); // a same-batch repeat skips without another claim
+      }
       try {
-        await this.applySendGridEvent(event);
+        await this.applySendGridEvent(event, this.emailForEvent(event, emails));
       } catch (err) {
         // Release the claim so SendGrid's retry reprocesses this event.
         await this.webhookEvents.release("sendgrid", eventId);
@@ -472,90 +547,105 @@ export class EmailService implements OnModuleInit {
     }
   }
 
-  private async applySendGridEvent(event: SendGridEvent): Promise<void> {
-    {
-      const email = await this.resolveEmail(event);
-      if (!email) return;
-      switch (event.event) {
-        case "delivered":
+  /**
+   * Apply one event against its batch-resolved Email snapshot. After a transition
+   * commits, the shared snapshot is updated in memory so later events in the same
+   * batch see the fresh state (the same view a re-read would have given them).
+   */
+  private async applySendGridEvent(event: SendGridEvent, email: WebhookEmailRow | null): Promise<void> {
+    if (!email) return;
+    switch (event.event) {
+      case "delivered": {
+        const applied = await this.prisma.$transaction(async (tx) => {
+          const moved = await this.transitionTx(tx, email.id, email.status, EmailStatus.DELIVERED);
+          if (!moved) return false; // illegal/terminal move – no state change, no event
+          await this.outbox.append(tx, {
+            tenantId: email.tenantId,
+            eventType: "email.email.delivered",
+            aggregateId: email.id,
+            payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
+          });
+          return true;
+        });
+        if (applied) email.status = EmailStatus.DELIVERED;
+        break;
+      }
+      case "bounce": {
+        const applied = await this.prisma.$transaction(async (tx) => {
+          const moved = await this.transitionTx(tx, email.id, email.status, EmailStatus.BOUNCED, {
+            bounceReason: String(event.reason ?? ""),
+          });
+          if (!moved) return false;
+          await this.outbox.append(tx, {
+            tenantId: email.tenantId,
+            eventType: "email.email.bounced",
+            aggregateId: email.id,
+            payload: {
+              emailId: email.id,
+              tenantId: email.tenantId,
+              toAddress: email.toAddress,
+              reason: String(event.reason ?? ""),
+            },
+          });
+          return true;
+        });
+        if (applied) email.status = EmailStatus.BOUNCED;
+        break;
+      }
+      case "dropped": {
+        const applied = await this.prisma.$transaction(async (tx) => {
+          const moved = await this.transitionTx(tx, email.id, email.status, EmailStatus.FAILED, {
+            errorMessage: String(event.reason ?? "dropped"),
+          });
+          if (!moved) return false;
+          await this.outbox.append(tx, {
+            tenantId: email.tenantId,
+            eventType: "email.email.failed",
+            aggregateId: email.id,
+            payload: {
+              emailId: email.id,
+              tenantId: email.tenantId,
+              toAddress: email.toAddress,
+              reason: String(event.reason ?? "dropped"),
+            },
+          });
+          return true;
+        });
+        if (applied) email.status = EmailStatus.FAILED;
+        break;
+      }
+      case "open":
+        if (!email.openedAt) {
+          const openedAt = this.eventTime(event);
           await this.prisma.$transaction(async (tx) => {
-            const applied = await this.transitionTx(tx, email.id, email.status, EmailStatus.DELIVERED);
-            if (!applied) return; // illegal/terminal move — no state change, no event
+            await tx.email.update({ where: { id: email.id }, data: { openedAt } });
             await this.outbox.append(tx, {
               tenantId: email.tenantId,
-              eventType: "email.email.delivered",
+              eventType: "email.email.opened",
               aggregateId: email.id,
               payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
             });
           });
-          break;
-        case "bounce":
+          email.openedAt = openedAt;
+        }
+        break;
+      case "click":
+        if (!email.clickedAt) {
+          const clickedAt = this.eventTime(event);
           await this.prisma.$transaction(async (tx) => {
-            const applied = await this.transitionTx(tx, email.id, email.status, EmailStatus.BOUNCED, {
-              bounceReason: String(event.reason ?? ""),
-            });
-            if (!applied) return;
+            await tx.email.update({ where: { id: email.id }, data: { clickedAt } });
             await this.outbox.append(tx, {
               tenantId: email.tenantId,
-              eventType: "email.email.bounced",
+              eventType: "email.email.clicked",
               aggregateId: email.id,
-              payload: {
-                emailId: email.id,
-                tenantId: email.tenantId,
-                toAddress: email.toAddress,
-                reason: String(event.reason ?? ""),
-              },
+              payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
             });
           });
-          break;
-        case "dropped":
-          await this.prisma.$transaction(async (tx) => {
-            const applied = await this.transitionTx(tx, email.id, email.status, EmailStatus.FAILED, {
-              errorMessage: String(event.reason ?? "dropped"),
-            });
-            if (!applied) return;
-            await this.outbox.append(tx, {
-              tenantId: email.tenantId,
-              eventType: "email.email.failed",
-              aggregateId: email.id,
-              payload: {
-                emailId: email.id,
-                tenantId: email.tenantId,
-                toAddress: email.toAddress,
-                reason: String(event.reason ?? "dropped"),
-              },
-            });
-          });
-          break;
-        case "open":
-          if (!email.openedAt) {
-            await this.prisma.$transaction(async (tx) => {
-              await tx.email.update({ where: { id: email.id }, data: { openedAt: this.eventTime(event) } });
-              await this.outbox.append(tx, {
-                tenantId: email.tenantId,
-                eventType: "email.email.opened",
-                aggregateId: email.id,
-                payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
-              });
-            });
-          }
-          break;
-        case "click":
-          if (!email.clickedAt) {
-            await this.prisma.$transaction(async (tx) => {
-              await tx.email.update({ where: { id: email.id }, data: { clickedAt: this.eventTime(event) } });
-              await this.outbox.append(tx, {
-                tenantId: email.tenantId,
-                eventType: "email.email.clicked",
-                aggregateId: email.id,
-                payload: { emailId: email.id, tenantId: email.tenantId, toAddress: email.toAddress },
-              });
-            });
-          }
-          break;
-        default:
-          break;
-      }
+          email.clickedAt = clickedAt;
+        }
+        break;
+      default:
+        break;
     }
   }
 
