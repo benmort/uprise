@@ -392,6 +392,7 @@ model StoredFile {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, folder])
+  @@index([tenantId, createdAt])
   @@schema("tenant")
 }
 
@@ -459,6 +460,7 @@ model Contact {
   @@index([tenantId, gnafPid])
   @@index([tenantId, email])
   @@index([canonicalContactId])
+  @@index([tenantId, createdAt])
   @@schema("public")
 }
 
@@ -584,6 +586,7 @@ model AudienceContact {
   @@unique([audienceId, phoneE164])
   @@index([tenantId, phoneE164])
   @@index([contactId])
+  @@index([audienceId, createdAt])
   @@schema("audience")
 }
 
@@ -607,6 +610,7 @@ model AudienceImport {
   audience       Audience             @relation(fields: [audienceId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, status, createdAt])
+  @@index([status, createdAt])
   @@schema("audience")
 }
 
@@ -668,6 +672,7 @@ model Blast {
 
   @@index([tenantId, status])
   @@index([campaignId])
+  @@index([status, scheduledFor])
   @@schema("messaging")
 }
 
@@ -713,6 +718,8 @@ model BlastRecipient {
   @@index([blastId, assigneeId])
   @@index([phoneE164])
   @@index([contactId])
+  @@index([twilioMessageSid])
+  @@index([blastId, status, assigneeId, createdAt])
   @@schema("messaging")
 }
 
@@ -737,6 +744,9 @@ model InboundMessage {
 
   @@index([tenantId, threadKey, receivedAt])
   @@index([contactId])
+  @@index([tenantId, blastId, receivedAt])
+  @@index([tenantId, fromPhone, receivedAt])
+  @@index([tenantId, receivedAt])
   @@schema("messaging")
 }
 
@@ -768,6 +778,7 @@ model OutboundMessage {
   @@index([tenantId, toPhone, sentAt])
   @@index([tenantId, kind, sentAt])
   @@index([contactId])
+  @@index([tenantId, sentAt])
   @@schema("messaging")
 }
 
@@ -810,6 +821,7 @@ model ContactConsent {
   @@unique([tenantId, phoneE164, channel])
   @@index([tenantId, channel, state])
   @@index([contactId])
+  @@index([tenantId, state, updatedAt])
   @@schema("messaging")
 }
 
@@ -878,6 +890,7 @@ model IntegrationSyncJob {
   connection            IntegrationConnection @relation(fields: [integrationConnectionId], references: [id], onDelete: Cascade)
   @@index([audienceId, status])
   @@index([tenantId, createdAt])
+  @@index([integrationConnectionId, createdAt])
   @@schema("integration")
 }
 
@@ -912,6 +925,7 @@ model IntegrationPushDelivery {
   @@index([tenantId, status, createdAt])
   @@index([tenantId, contactId, createdAt])
   @@index([status, updatedAt])
+  @@index([tenantId, createdAt])
   @@schema("integration")
 }
 
@@ -928,6 +942,7 @@ model AnalyticsSnapshot {
   blast          Blast?       @relation(fields: [blastId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, metricName, bucketAt])
+  @@index([blastId, bucketAt])
   @@schema("analytics")
 }
 
@@ -950,6 +965,7 @@ model ConversationState {
   @@unique([tenantId, contactPhone, channel])
   @@index([contactId])
   @@index([tenantId, ownerId])
+  @@index([tenantId, updatedAt])
   @@schema("messaging")
 }
 
@@ -1075,6 +1091,8 @@ model QuestionResponse {
   @@index([tenantId, contactId, createdAt])
   @@index([questionId, optionId])
   @@index([tenantId, recordedById, channel, createdAt], map: "QuestionResponse_recordedBy_idx") // field volunteer-metrics
+  @@index([tenantId, createdAt])
+  @@index([optionId])
   @@schema("canvass")
 }
 
@@ -1128,6 +1146,9 @@ model Disposition {
 
   @@index([tenantId, contactId, createdAt])
   @@index([tenantId, code, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, recordedById, channel, createdAt], map: "Disposition_recordedBy_idx") // field volunteer-metrics
+  @@index([tenantId, supportLevel, createdAt])
   @@schema("canvass")
 }
 
@@ -1316,6 +1337,8 @@ model JourneyEnrolment {
   @@unique([journeyId, contactId, enrolledAt])
   @@index([tenantId, state, resumeAt])
   @@index([journeyId, contactId, state])
+  @@index([state, resumeAt])
+  @@index([contactId])
   @@schema("journey")
 }
 
@@ -1522,6 +1545,7 @@ model WalkListItem {
 
   @@unique([walkListId, contactId])
   @@index([walkListId, orderIndex])
+  @@index([contactId])
   @@schema("canvass")
 }
 
@@ -1549,6 +1573,7 @@ model DoorKnock {
   @@unique([tenantId, localId])
   @@index([tenantId, contactId, createdAt])
   @@index([volunteerId, createdAt])
+  @@index([tenantId, createdAt])
   @@schema("canvass")
 }
 
@@ -1584,6 +1609,7 @@ model Shift {
   @@index([tenantId, volunteerId])
   @@index([tenantId, type, startsAt])
   @@index([eventId])
+  @@index([tenantId, startsAt])
   @@schema("canvass")
 }
 
@@ -1698,6 +1724,7 @@ model TenantMember {
 
   @@unique([tenantId, userId])
   @@index([tenantId, role])
+  @@index([userId, createdAt])
   @@schema("tenant")
 }
 
@@ -1746,6 +1773,7 @@ model TenantJoinRequest {
 
   @@unique([tenantId, userId])
   @@index([tenantId, status])
+  @@index([userId, status])
   @@schema("tenant")
 }
 
@@ -2410,6 +2438,7 @@ model Invoice {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  @@index([tenantId, createdAt])
   @@schema("payment")
 }
 
@@ -2511,6 +2540,7 @@ model Call {
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  @@index([status, createdAt])
   @@schema("telephony")
 }
 
@@ -3333,6 +3363,7 @@ model DialerAttempt {
   @@index([campaignId, outcome])
   @@index([callId])
   @@index([tenantId, createdAt])
+  @@index([campaignId, createdAt])
   @@schema("autodialer")
 }
 
@@ -3377,6 +3408,7 @@ model DialerCallSession {
   @@index([actionPageId, createdAt])
   @@index([callId])
   @@index([status, expiresAt])
+  @@index([targetCallId])
   @@schema("autodialer")
 }
 
