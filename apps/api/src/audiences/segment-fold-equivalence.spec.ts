@@ -166,6 +166,10 @@ function fakePrisma() {
             if (where.turfId?.in && !(c.turfId && where.turfId.in.includes(c.turfId))) return false;
             if (where.email?.not === null && c.email === null) return false;
             if (where.phoneE164?.not === null && c.phoneE164 === null) return false;
+            // Presence leaves ask for the negative directly (`IS NULL`), not a
+            // universe complement — `where.email === null`, distinct from `{ not: null }`.
+            if (where.email === null && c.email !== null) return false;
+            if (where.phoneE164 === null && c.phoneE164 !== null) return false;
             if (where.email?.endsWith) {
               if (!c.email?.toLowerCase().endsWith(where.email.endsWith.toLowerCase())) return false;
             }
@@ -338,6 +342,25 @@ function fakePrisma() {
         })),
       ),
     },
+    // `compliance.notSuppressed` is one anti-join now. Emulated the way Postgres
+    // would run it — a contact survives when NO suppression row matches its phone
+    // or (case-insensitively) its email; NULLs on either side never match.
+    $queryRaw: jest.fn(async (query: any) => {
+      const sql = String(query?.sql ?? query?.text ?? query);
+      if (!sql.includes(`"Suppression"`)) {
+        throw new Error(`unexpected raw SQL in fixture: ${sql}`);
+      }
+      const rows = FIXTURE.filter((c) => c.suppressed);
+      const phones = new Set(rows.map((c) => c.phoneE164).filter(Boolean));
+      const emails = new Set(rows.map((c) => c.email?.toLowerCase()).filter(Boolean));
+      return FIXTURE.filter(
+        (c) =>
+          !(
+            (c.phoneE164 && phones.has(c.phoneE164)) ||
+            (c.email && emails.has(c.email.toLowerCase()))
+          ),
+      ).map((c) => ({ id: c.id }));
+    }),
     $queryRawUnsafe: jest.fn(async (sql: string, _tenantId: string, valuesJson: string) => {
       const values: string[] = JSON.parse(valuesJson);
       if (sql.includes("geo.gnaf_address")) {

@@ -193,6 +193,39 @@ describe("SegmentEvaluatorService", () => {
     expect(idSet(created)).toEqual(new Set(["c1", "c2", "c3"]));
   });
 
+  it("reads the contact universe ONCE per run, however many `all` clauses reach it", async () => {
+    // Four separate paths to the universe in one definition: two bare `all`s, an
+    // empty `all` group, and an unknown type falling through to the default.
+    const { svc, prisma, created } = setup({
+      any: [
+        { type: "all" },
+        { all: [] },
+        { type: "not_a_real_clause_type" },
+        { all: [{ type: "all" }, { type: "emailDomain", domain: "getup.org.au" }] },
+      ],
+    });
+    prisma.contact.findMany.mockResolvedValue([{ id: "c1" }, { id: "c2" }]);
+
+    await svc.evaluate("seg1");
+
+    const universeReads = prisma.contact.findMany.mock.calls.filter(
+      ([args]: any[]) => JSON.stringify(args.where) === JSON.stringify({ tenantId: "t1" }),
+    );
+    expect(universeReads).toHaveLength(1);
+    // Memoising must not change what the clauses resolve to.
+    expect(idSet(created)).toEqual(new Set(["c1", "c2"]));
+  });
+
+  it("a memoised universe is not shared across runs", async () => {
+    const { svc, prisma } = setup({ type: "all" });
+    prisma.contact.findMany.mockResolvedValue([{ id: "c1" }]);
+
+    await svc.evaluate("seg1");
+    await svc.evaluate("seg1");
+
+    expect(prisma.contact.findMany).toHaveBeenCalledTimes(2);
+  });
+
   it("throws when the segment does not exist", async () => {
     const { svc, prisma } = setup({ type: "all" });
     prisma.audienceSegment.findUnique.mockResolvedValueOnce(null);

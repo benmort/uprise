@@ -81,6 +81,16 @@ describe("SegmentEvaluatorService — v2 (engine) routing", () => {
     await expect(svc.evaluate("seg1")).rejects.toThrow();
   });
 
+  it("loads the universe once per run and hands the same set to the resolver and the fold", async () => {
+    const { svc, leafResolver } = setup(V2_DEFINITION);
+    await svc.evaluate("seg1");
+
+    expect(leafResolver.universe).toHaveBeenCalledTimes(1);
+    // The set passed to resolveLeaves is the memo's, not a second read.
+    const handed = leafResolver.resolveLeaves.mock.calls[0][2];
+    expect(handed).toBe(await leafResolver.universe.mock.results[0].value);
+  });
+
   it("emits audience.segment.recomputed with the v2 count", async () => {
     const { svc, outbox, prisma } = setup(V2_DEFINITION);
     await svc.evaluate("seg1");
