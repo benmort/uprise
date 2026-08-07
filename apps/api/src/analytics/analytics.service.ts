@@ -2,7 +2,11 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { BlastRecipientStatus, MessageChannel, Prisma } from "@uprise/db";
 import { PrismaService } from "../prisma/prisma.service";
 import { toUtcMinuteBucket } from "../common/utils/date.utils";
-import { sanitiseVitals } from "./vitals.util";
+import { sanitiseVitals, VITAL_METRICS } from "./vitals.util";
+
+/** Explicit metric-name list so the (tenantId, metricName, bucketAt) index applies –
+ *  a LIKE 'webvital.%' prefix predicate defeats it. */
+const VITAL_METRIC_NAMES = VITAL_METRICS.map((metric) => `webvital.${metric}`);
 
 @Injectable()
 export class AnalyticsService {
@@ -27,30 +31,24 @@ export class AnalyticsService {
   async kpiSummary(tenantId: string, blastId: string, channel?: string | null) {
     await this.assertBlast(tenantId, blastId);
     const ch = this.channelFilter(channel);
-    const [totalContacted, sent, delivered, responded, failed] = await Promise.all([
-      this.prisma.blastRecipient.count({
-        where: {
-          blastId,
-          ...ch,
-          status: {
-            in: [
-              BlastRecipientStatus.SENT,
-              BlastRecipientStatus.DELIVERED,
-              BlastRecipientStatus.RESPONDED,
-              BlastRecipientStatus.FAILED,
-            ],
-          },
-        },
+    // One status roll-up replaces four separate counts over the same rows; delivered
+    // stays its own count because it keys off deliveredAt, not status.
+    const [byStatus, delivered] = await Promise.all([
+      this.prisma.blastRecipient.groupBy({
+        by: ["status"],
+        where: { blastId, ...ch },
+        _count: true,
       }),
-      this.prisma.blastRecipient.count({ where: { blastId, ...ch, status: BlastRecipientStatus.SENT } }),
       this.prisma.blastRecipient.count({
         where: { blastId, ...ch, deliveredAt: { not: null } },
       }),
-      this.prisma.blastRecipient.count({
-        where: { blastId, ...ch, status: BlastRecipientStatus.RESPONDED },
-      }),
-      this.prisma.blastRecipient.count({ where: { blastId, ...ch, status: BlastRecipientStatus.FAILED } }),
     ]);
+    const countFor = (status: BlastRecipientStatus) =>
+      byStatus.find((row) => row.status === status)?._count ?? 0;
+    const sent = countFor(BlastRecipientStatus.SENT);
+    const responded = countFor(BlastRecipientStatus.RESPONDED);
+    const failed = countFor(BlastRecipientStatus.FAILED);
+    const totalContacted = sent + countFor(BlastRecipientStatus.DELIVERED) + responded + failed;
     return { totalContacted, sent, delivered, responded, failed };
   }
 
@@ -150,40 +148,35 @@ export class AnalyticsService {
       where: { tenantId, ...this.channelFilter(channel) },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
-      include: {
-        _count: {
-          select: { recipients: true },
-        },
-      },
     });
 
     const blastIds = blasts.map((blast) => blast.id);
-    if (blastIds.length === 0) return blasts;
+    if (blastIds.length === 0) return [];
 
+    // One widened roll-up supplies both the total recipient count (previously a
+    // duplicate relation _count pass) and the awaiting-response count.
     const recipientCounts = await this.prisma.blastRecipient.groupBy({
       by: ["blastId", "status"],
-      where: {
-        blastId: { in: blastIds },
-        status: {
-          in: [
-            BlastRecipientStatus.SENT,
-            BlastRecipientStatus.DELIVERED,
-            BlastRecipientStatus.RESPONDED,
-          ],
-        },
-      },
+      where: { blastId: { in: blastIds } },
       _count: true,
     });
 
+    const totalByBlastId = new Map<string, number>();
     const awaitingByBlastId = new Map<string, number>();
     for (const row of recipientCounts) {
-      if (row.status === BlastRecipientStatus.RESPONDED) continue;
-      const current = awaitingByBlastId.get(row.blastId) || 0;
-      awaitingByBlastId.set(row.blastId, current + row._count);
+      totalByBlastId.set(row.blastId, (totalByBlastId.get(row.blastId) || 0) + row._count);
+      if (
+        row.status === BlastRecipientStatus.SENT ||
+        row.status === BlastRecipientStatus.DELIVERED
+      ) {
+        const current = awaitingByBlastId.get(row.blastId) || 0;
+        awaitingByBlastId.set(row.blastId, current + row._count);
+      }
     }
 
     return blasts.map((blast) => ({
       ...blast,
+      _count: { recipients: totalByBlastId.get(blast.id) || 0 },
       awaitingResponseCount: awaitingByBlastId.get(blast.id) || 0,
     }));
   }
@@ -222,7 +215,7 @@ export class AnalyticsService {
              percentile_cont(0.95) WITHIN GROUP (ORDER BY "metricValue") AS p95
       FROM "analytics"."AnalyticsSnapshot"
       WHERE "tenantId" = ${tenantId}
-        AND "metricName" LIKE 'webvital.%'
+        AND "metricName" IN (${Prisma.join(VITAL_METRIC_NAMES)})
         AND "bucketAt" >= ${since}
       GROUP BY 1, 2
       ORDER BY 1, 2
