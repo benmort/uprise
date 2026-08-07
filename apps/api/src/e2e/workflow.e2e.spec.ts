@@ -17,7 +17,7 @@ describe("workflow e2e-style", () => {
     blastRecipient: {
       count: jest.fn(),
       findMany: jest.fn(),
-      create: jest.fn(),
+      createMany: jest.fn(),
       update: jest.fn(),
     },
     outboundMessage: { create: jest.fn() },
@@ -230,7 +230,8 @@ describe("workflow e2e-style", () => {
     prisma.blastRecipient.count
       .mockResolvedValueOnce(0) // no existing recipients
       .mockResolvedValueOnce(1) // count after seeding
-      .mockResolvedValueOnce(0); // remaining
+      .mockResolvedValueOnce(0) // remaining
+      .mockResolvedValueOnce(0); // INTERNAL_-prefixed failures
     prisma.audienceContact.findMany.mockResolvedValue([
       {
         id: "contact_1",
@@ -238,7 +239,7 @@ describe("workflow e2e-style", () => {
         metadata: { first_name: "Taylor" },
       },
     ]);
-    prisma.blastRecipient.create.mockResolvedValue({});
+    prisma.blastRecipient.createMany.mockResolvedValue({ count: 1 });
     prisma.blastRecipient.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
@@ -246,12 +247,15 @@ describe("workflow e2e-style", () => {
     prisma.analyticsSnapshot.create.mockResolvedValue({});
 
     const result = await service.sendNow("blast_seed");
-    expect(prisma.blastRecipient.create).toHaveBeenCalledWith(
+    expect(prisma.blastRecipient.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          blastId: "blast_seed",
-          status: BlastRecipientStatus.PENDING,
-        }),
+        skipDuplicates: true,
+        data: [
+          expect.objectContaining({
+            blastId: "blast_seed",
+            status: BlastRecipientStatus.PENDING,
+          }),
+        ],
       }),
     );
     expect(result.blast.status).toBe(BlastStatus.SENT);
