@@ -16,7 +16,7 @@ describe("CampaignsService", () => {
         delete: jest.fn(async () => ({ id: "c1" })),
       },
       turf: { findMany: jest.fn() },
-      doorKnock: { count: jest.fn(), findMany: jest.fn() },
+      doorKnock: { count: jest.fn(), findMany: jest.fn(), groupBy: jest.fn(async () => []) },
       disposition: { groupBy: jest.fn(), count: jest.fn(), findMany: jest.fn() },
       questionResponse: { count: jest.fn() },
       walkListItem: { count: jest.fn() },
@@ -192,6 +192,72 @@ describe("CampaignsService", () => {
         expect.objectContaining({ where: expect.objectContaining({ turf: { tenantId: "org1" } }) }),
       );
       expect(res).toMatchObject({ doorsToday: 0, volunteers: [] });
+    });
+
+    it("matches a JS aggregation of the same knocks, per volunteer and in total", async () => {
+      // The raw rows the old findMany shipped, and the grouped rows Postgres returns for them.
+      const t = (min: number) => new Date(`2026-06-17T0${min}:00:00Z`);
+      const rawKnocks = [
+        { volunteerId: "u1", createdAt: t(1) },
+        { volunteerId: "u2", createdAt: t(2) },
+        { volunteerId: "u1", createdAt: t(4) }, // u1's latest
+        { volunteerId: "u1", createdAt: t(3) },
+        { volunteerId: null, createdAt: t(5) }, // volunteer since deleted (SetNull)
+      ];
+      const expected = new Map<string, { count: number; last: Date }>();
+      for (const k of rawKnocks) {
+        if (!k.volunteerId) continue;
+        const cur = expected.get(k.volunteerId);
+        if (!cur) expected.set(k.volunteerId, { count: 1, last: k.createdAt });
+        else {
+          cur.count += 1;
+          if (k.createdAt > cur.last) cur.last = k.createdAt;
+        }
+      }
+
+      prisma.turfAssignment.findMany.mockResolvedValue([
+        { volunteerId: "u1", volunteer: { id: "u1", displayName: "Ada" }, turf: { id: "t1", name: "Turf 1" } },
+        { volunteerId: "u2", volunteer: { id: "u2", displayName: "Bo" }, turf: { id: "t2", name: "Turf 2" } },
+        { volunteerId: "u3", volunteer: { id: "u3", displayName: "Cy" }, turf: { id: "t3", name: "Turf 3" } },
+      ]);
+      prisma.doorKnock.groupBy.mockResolvedValue([
+        { volunteerId: "u1", _count: { _all: 3 }, _max: { createdAt: t(4) } },
+        { volunteerId: "u2", _count: { _all: 1 }, _max: { createdAt: t(2) } },
+        { volunteerId: null, _count: { _all: 1 }, _max: { createdAt: t(5) } },
+      ]);
+      prisma.doorKnock.findMany.mockResolvedValue([]); // the "recent 20" strip
+
+      const res = await service.getLive("org1");
+
+      // Today's total counts every knock, orphaned ones included – as the row loop did.
+      expect(res.doorsToday).toBe(rawKnocks.length);
+      for (const v of res.volunteers) {
+        expect(v.doorsToday).toBe(expected.get(v.volunteerId)?.count ?? 0);
+        expect(v.lastActionAt).toEqual(expected.get(v.volunteerId)?.last ?? null);
+      }
+      // u3 holds a turf but knocked nothing today: zero doors, no last action, idle.
+      const cy = res.volunteers.find((v) => v.volunteerId === "u3");
+      expect(cy).toMatchObject({ name: "Cy", turf: "Turf 3", doorsToday: 0, lastActionAt: null, idle: true });
+      // One aggregate query, windowed to today.
+      expect(prisma.doorKnock.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ["volunteerId"],
+          _count: { _all: true },
+          _max: { createdAt: true },
+          where: expect.objectContaining({ tenantId: "org1", createdAt: { gte: expect.any(Date) } }),
+        }),
+      );
+    });
+
+    it("scopes the aggregate to the campaign's turf contacts when an id is given", async () => {
+      prisma.canvassCampaign.findFirst.mockResolvedValue({ id: "c1" });
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.turfAssignment.findMany.mockResolvedValue([]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      await service.getLive("org1", "c1");
+      expect(prisma.doorKnock.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ contact: { turfId: { in: ["t1"] } } }) }),
+      );
     });
   });
 

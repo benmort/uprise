@@ -82,6 +82,16 @@ const SPOKE_TO_CODES = ["spoke_to_target", "spoke_to_other"];
  *  at a coarser level, which the screen says rather than silently dropping the tail. */
 const SELF_SERVE_AREA_LIMIT = 1200;
 
+/** How far back the QA review looks. A knock older than this is history an organiser can no
+ *  longer act on, and the unbounded scan it replaces grew with every knock the tenant ever
+ *  recorded. */
+const QA_REVIEW_WINDOW_DAYS = 30;
+/** Knocks scanned per QA page, and the ceiling a caller may ask for. Cadence is judged
+ *  against the previous knock, so the first row of a page has no predecessor to compare
+ *  against – pages want to be big enough that the seam is rare. */
+const QA_REVIEW_DEFAULT_TAKE = 2000;
+const QA_REVIEW_MAX_TAKE = 5000;
+
 export type SurveyAnswerInput = {
   questionId: string;
   optionId?: string | null;
@@ -2287,18 +2297,31 @@ export class CanvassingService {
 
   // ── QA review (G10): flag suspicious knocks ─────────────────────
   /** Knocks that look suspect: too-fast cadence or missing GPS. Read-only heuristic.
-   *  Tenant-wide when no campaign id (the "All campaigns" view). */
-  async qaReview(tenantId: string, campaignId?: string) {
+   *  Tenant-wide when no campaign id (the "All campaigns" view).
+   *
+   *  Bounded on both axes: only the last QA_REVIEW_WINDOW_DAYS days are scanned, one page
+   *  at a time. `nextCursor` is the last knock of a full page – pass it back as `cursor` to
+   *  continue; null means the tail. The NO_GPS / FAST_CADENCE heuristic itself is unchanged. */
+  async qaReview(tenantId: string, campaignId?: string, opts?: { cursor?: string; take?: number }) {
     const turfs = await this.prisma.turf.findMany({
       where: { tenantId, ...(campaignId ? { campaignId } : {}) },
       select: { id: true },
     });
     const turfIds = turfs.map((t) => t.id);
-    if (turfIds.length === 0) return { flags: [] };
+    if (turfIds.length === 0) return { flags: [], nextCursor: null as string | null };
 
+    // A garbage or absent `take` falls back to the default rather than reaching Prisma as NaN.
+    const requested = Number(opts?.take);
+    const take =
+      Number.isFinite(requested) && requested > 0
+        ? Math.min(Math.trunc(requested), QA_REVIEW_MAX_TAKE)
+        : QA_REVIEW_DEFAULT_TAKE;
+    const since = new Date(Date.now() - QA_REVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000);
     const knocks = await this.prisma.doorKnock.findMany({
-      where: { tenantId, contact: { turfId: { in: turfIds } } },
+      where: { tenantId, createdAt: { gte: since }, contact: { turfId: { in: turfIds } } },
       orderBy: [{ volunteerId: "asc" }, { createdAt: "asc" }],
+      take,
+      ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
       include: { volunteer: { select: { displayName: true } } },
     });
 
@@ -2357,7 +2380,9 @@ export class CanvassingService {
         f.state = state;
       }
     }
-    return { flags };
+    // A short page is the tail; a full one may not be, so hand back where to resume.
+    const nextCursor = knocks.length === take ? (knocks[knocks.length - 1]?.id ?? null) : null;
+    return { flags, nextCursor };
   }
 
   /** Record (or clear) an organiser's action on a computed QA flag. */

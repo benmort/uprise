@@ -315,14 +315,24 @@ describe("CanvassingController", () => {
   });
 
   // ── QA review ──
-  it("qaReview delegates with tenantId + id", async () => {
+  it("qaReview delegates with tenantId + id, defaulting the page when no query params", async () => {
     await c.qaReview("camp1", "t1");
-    expect(svc.qaReview).toHaveBeenCalledWith("t1", "camp1");
+    expect(svc.qaReview).toHaveBeenCalledWith("t1", "camp1", { cursor: undefined, take: undefined });
   });
 
-  it("qaReviewAll delegates with tenantId only (tenant-wide)", async () => {
+  it("qaReviewAll delegates with no campaign id (tenant-wide)", async () => {
     await c.qaReviewAll("t1");
-    expect(svc.qaReview).toHaveBeenCalledWith("t1");
+    expect(svc.qaReview).toHaveBeenCalledWith("t1", undefined, { cursor: undefined, take: undefined });
+  });
+
+  it("qaReview forwards the cursor + numeric take from the query string", async () => {
+    await c.qaReview("camp1", "t1", "k9", "50");
+    expect(svc.qaReview).toHaveBeenCalledWith("t1", "camp1", { cursor: "k9", take: 50 });
+  });
+
+  it("qaReviewAll forwards paging too, and an empty cursor reads as absent", async () => {
+    await c.qaReviewAll("t1", "", "50");
+    expect(svc.qaReview).toHaveBeenCalledWith("t1", undefined, { cursor: undefined, take: 50 });
   });
 
   it("resolveQaFlag delegates with tenantId + id + resolvedById from the session", async () => {

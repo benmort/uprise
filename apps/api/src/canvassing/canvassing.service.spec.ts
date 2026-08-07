@@ -600,8 +600,94 @@ describe("CanvassingService", () => {
 
     it("returns no flags when the campaign has no turf", async () => {
       prisma.turf.findMany.mockResolvedValue([]);
+      expect(await service.qaReview("org1", "c1")).toEqual({ flags: [], nextCursor: null });
+    });
+
+    it("scans only the last 30 days – a knock 29 days old is in, one 31 days old is out", async () => {
+      jest.useFakeTimers().setSystemTime(new Date("2026-06-17T10:00:00Z"));
+      try {
+        prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+        prisma.doorKnock.findMany.mockResolvedValue([]);
+        await service.qaReview("org1", "c1");
+        const { where } = prisma.doorKnock.findMany.mock.calls[0][0];
+        expect(where.createdAt.gte).toEqual(new Date("2026-05-18T10:00:00Z"));
+        const daysAgo = (n: number) => Date.now() - n * 24 * 60 * 60 * 1000;
+        expect(daysAgo(29)).toBeGreaterThanOrEqual(where.createdAt.gte.getTime());
+        expect(daysAgo(31)).toBeLessThan(where.createdAt.gte.getTime());
+        // The turf scope is untouched by the window.
+        expect(where.contact).toEqual({ turfId: { in: ["t1"] } });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("windows the tenant-wide variant the same way", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      await service.qaReview("org1");
+      const { where } = prisma.doorKnock.findMany.mock.calls[0][0];
+      expect(where.createdAt.gte).toBeInstanceOf(Date);
+      // Within a second of exactly 30 days back.
+      expect(Date.now() - where.createdAt.gte.getTime()).toBeGreaterThanOrEqual(30 * 24 * 60 * 60 * 1000);
+      expect(Date.now() - where.createdAt.gte.getTime()).toBeLessThan(30 * 24 * 60 * 60 * 1000 + 1000);
+    });
+
+    it("still applies the unchanged NO_GPS / FAST_CADENCE heuristic inside the window", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      // Both knocks sit inside the window; the flags must match the pre-window behaviour.
+      const base = Date.now() - 5 * 24 * 60 * 60 * 1000;
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k1", volunteerId: "u1", lat: null, lng: null, createdAt: new Date(base), volunteer: { displayName: "Ada" } },
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 5000), volunteer: { displayName: "Ada" } },
+        // A different volunteer 1s later is NOT fast cadence – the run resets per volunteer.
+        { id: "k3", volunteerId: "u2", lat: 1, lng: 1, createdAt: new Date(base + 6000), volunteer: { displayName: "Bo" } },
+      ]);
       const { flags } = await service.qaReview("org1", "c1");
-      expect(flags).toEqual([]);
+      expect(flags.map((f) => f.id)).toEqual(["k1:NO_GPS", "k2:FAST_CADENCE"]);
+      expect(flags[1].reason).toBe("Knocked 5s after previous");
+    });
+
+    it("takes a page and reports the next cursor when the page came back full", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      const base = new Date("2026-06-17T10:00:00Z").getTime();
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k1", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base), volunteer: null },
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 60_000), volunteer: null },
+      ]);
+      const res = await service.qaReview("org1", "c1", { cursor: "k0", take: 2 });
+      expect(prisma.doorKnock.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 2, cursor: { id: "k0" }, skip: 1 }),
+      );
+      expect(res.nextCursor).toBe("k2");
+    });
+
+    it("reports no next cursor on a short page, and sends no cursor when none is given", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k1", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(), volunteer: null },
+      ]);
+      const res = await service.qaReview("org1", "c1", { take: 5 });
+      const args = prisma.doorKnock.findMany.mock.calls[0][0];
+      expect(args.take).toBe(5);
+      expect(args).not.toHaveProperty("cursor");
+      expect(args).not.toHaveProperty("skip");
+      expect(res.nextCursor).toBeNull();
+    });
+
+    it("defaults, floors and caps `take` rather than passing junk to Prisma", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      const takeOf = async (opts?: { take?: number }) => {
+        prisma.doorKnock.findMany.mockClear();
+        await service.qaReview("org1", "c1", opts);
+        return prisma.doorKnock.findMany.mock.calls[0][0].take;
+      };
+      expect(await takeOf()).toBe(2000); // default page
+      expect(await takeOf({ take: Number.NaN })).toBe(2000);
+      expect(await takeOf({ take: 0 })).toBe(2000);
+      expect(await takeOf({ take: -5 })).toBe(2000);
+      expect(await takeOf({ take: 99999 })).toBe(5000); // capped
+      expect(await takeOf({ take: 10.7 })).toBe(10); // truncated
     });
 
     it("reviews tenant-wide when no campaign id (no campaignId filter)", async () => {
