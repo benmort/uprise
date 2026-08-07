@@ -5,6 +5,7 @@ import { UnrecoverableError } from "bullmq";
 import {
   AudienceSource,
   ConsentState,
+  type Contact,
   IntegrationConnectionStatus,
   IntegrationJobStatus,
   IntegrationType,
@@ -40,6 +41,10 @@ import { IntegrationSyncJobPayload } from "../common/queue/queue.payloads";
 
 type IntegrationConnectionType = "ACTION_NETWORK" | "NATION_BUILDER" | "INTERNAL";
 type SyncReasonCounts = Record<string, number>;
+
+/** How many people a sync page persists at once. High enough to hide the per-row round-trip
+ *  latency, low enough that one import can't monopolise the connection pool. */
+const SYNC_ROW_CONCURRENCY = 20;
 
 /**
  * A connection resolved for use, with its provenance. `shared` / `ownerTenantId` /
@@ -451,6 +456,20 @@ export class IntegrationsService {
   }
 
   /**
+   * The contact rows a sync page will ask for, in one read, keyed by phone.
+   *
+   * Nothing here creates or enriches – it only saves `getOrCreateByPhone` its opening
+   * `findFirst` for the (very common) case where the person already exists. A phone the
+   * prime misses just falls through to the per-row lookup, so a contact created between
+   * the prime and the row is found normally.
+   */
+  private async primeContactSpines(tenantId: string, phones: string[]): Promise<Map<string, Contact>> {
+    if (phones.length === 0) return new Map();
+    const rows = await this.prisma.contact.findMany({ where: { tenantId, phoneE164: { in: phones } } });
+    return new Map(rows.filter((r): r is Contact & { phoneE164: string } => !!r.phoneE164).map((r) => [r.phoneE164, r]));
+  }
+
+  /**
    * Mirror an NB-side opt-out into uprise consent (SMS + WhatsApp, mirroring the STOP
    * keyword's behaviour). One-way by design: uprise never writes an opt-IN from a pull,
    * so a nation flag can only ever tighten contactability here.
@@ -843,9 +862,44 @@ export class IntegrationsService {
         remoteSync.stats.reasonCounts,
       );
       const dataSync = parseDataSyncSettings(syncJob.connection.settings);
+      // Invariant for the whole page – it was recomputed once per contactable row.
+      const sourceSystem = this.sourceSystemFor(connectionType, syncJob.connection.externalGroup);
+
+      const recordRowFailure = (error: unknown) => {
+        failedDelta += 1;
+        const reason = this.classifySyncError(error);
+        this.bumpReason(reasonCounts, reason);
+        if (reason === "invalid_phone_format") skippedInvalidPhone += 1;
+        else failedPersist += 1;
+        errors.push(String(error));
+      };
+
+      // Map first. It is pure, it is where an unusable phone surfaces (so its failure still
+      // lands in the same per-row accounting), and it yields the phone key the pool groups on.
+      const groups = new Map<string, MappedExternalContact[]>();
       for (const contact of remoteContacts) {
         try {
           const mapped = this.mapExternalContact(connectionType, contact);
+          const group = groups.get(mapped.phoneE164);
+          if (group) group.push(mapped);
+          else groups.set(mapped.phoneE164, [mapped]);
+        } catch (error) {
+          recordRowFailure(error);
+        }
+      }
+
+      // Prime the contact spine for the whole page in one read. `getOrCreateByPhone` opens
+      // with a `findFirst` on (tenantId, phoneE164); on a re-sync nearly every one of them
+      // hits, so a page of a thousand people paid for a thousand lookups of rows a single
+      // `IN` could have fetched.
+      const primedSpines = await this.primeContactSpines(syncJob.tenantId, [...groups.keys()]);
+
+      // The pool's closure cannot see the flow analysis that proved the audience exists
+      // above, so pin it once here.
+      const audienceIdForRows = ensuredAudienceId;
+
+      const persistRow = async (mapped: MappedExternalContact) => {
+        try {
           if (!mapped.contactable && mapped.nonContactableReason) {
             if (mapped.nonContactableReason === "invalid_phone_format") {
               this.bumpReason(reasonCounts, mapped.nonContactableReason);
@@ -861,6 +915,7 @@ export class IntegrationsService {
               syncJob.tenantId,
               mapped.phoneE164,
               { fullName: mapped.fullName, email: mapped.email },
+              primedSpines.get(mapped.phoneE164),
             );
             resolvedContactId = spine.id;
           }
@@ -868,7 +923,7 @@ export class IntegrationsService {
           await this.prisma.audienceContact.upsert({
             where: {
               audienceId_phoneE164: {
-                audienceId: ensuredAudienceId,
+                audienceId: audienceIdForRows,
                 phoneE164: mapped.phoneE164,
               },
             },
@@ -881,7 +936,7 @@ export class IntegrationsService {
             },
             create: {
               tenantId: syncJob.tenantId,
-              audienceId: ensuredAudienceId,
+              audienceId: audienceIdForRows,
               phoneE164: mapped.phoneE164,
               fullName: mapped.fullName,
               metadata: mapped.metadata,
@@ -899,7 +954,7 @@ export class IntegrationsService {
               await this.contacts.recordSourceRecord({
                 tenantId: syncJob.tenantId,
                 contactId: resolvedContactId,
-                sourceSystem: this.sourceSystemFor(connectionType, syncJob.connection.externalGroup),
+                sourceSystem,
                 externalId: mapped.externalId,
               });
             }
@@ -933,14 +988,28 @@ export class IntegrationsService {
           }
           syncedDelta += 1;
         } catch (error) {
-          failedDelta += 1;
-          const reason = this.classifySyncError(error);
-          this.bumpReason(reasonCounts, reason);
-          if (reason === "invalid_phone_format") skippedInvalidPhone += 1;
-          else failedPersist += 1;
-          errors.push(String(error));
+          recordRowFailure(error);
         }
-      }
+      };
+
+      // A page of people used to be one long serial chain – spine, audience upsert,
+      // provenance, identity and the consent mirror, each awaited before the next person
+      // started. The rows are independent, so they run through a small bounded pool instead.
+      // The unit of work is a PHONE GROUP, not a row: the contact spine (tenantId, phoneE164)
+      // and the audience row (audienceId, phoneE164) are both unique on the phone, so two
+      // copies of the same person in flight would collide on the index where, serially, the
+      // second simply updated the first. Same-phone rows therefore stay in order with one
+      // another while different people run SYNC_ROW_CONCURRENCY wide.
+      const phoneKeys = [...groups.keys()];
+      let nextKey = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(SYNC_ROW_CONCURRENCY, phoneKeys.length) }, async () => {
+          while (nextKey < phoneKeys.length) {
+            const group = groups.get(phoneKeys[nextKey++]!) ?? [];
+            for (const mapped of group) await persistRow(mapped);
+          }
+        }),
+      );
 
       const nextState: SyncCheckpointState = {
         ...checkpoint,
@@ -1090,11 +1159,31 @@ export class IntegrationsService {
     }
   }
 
+  /**
+   * The audience page's sync feed. Explicitly selected so the two JSON blobs on the row –
+   * `checkpoint` (the resumable cursor plus accumulated stats) and `query` – stay on the
+   * server: nothing in the UI reads them, and a hundred in-flight imports would otherwise
+   * ship a hundred accumulated-stats documents to render a status badge.
+   */
   async getSyncJobs(tenantId: string, limit = 20) {
     return this.prisma.integrationSyncJob.findMany({
       where: { tenantId },
       orderBy: { createdAt: "desc" },
       take: Math.min(Math.max(1, limit), 100),
+      select: {
+        id: true,
+        tenantId: true,
+        integrationConnectionId: true,
+        audienceId: true,
+        status: true,
+        remoteListId: true,
+        syncedCount: true,
+        failedCount: true,
+        errorSummary: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+      },
     });
   }
 

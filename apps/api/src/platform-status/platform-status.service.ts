@@ -20,6 +20,16 @@ import type {
 /** How long a snapshot is reused. */
 const CACHE_MS = 30_000;
 
+/**
+ * How long the computed 90-day history (uptime, day bars, incidents) is reused. The public
+ * status endpoint is unauthenticated, and each cold read runs two unbounded 90-day
+ * aggregations over ops.StatusCheck – one of them a LATERAL jsonb_each_text row explosion –
+ * while the underlying data only changes when the platform cron writes a check (~every 5
+ * minutes). A short memo keeps the page honest and stops anonymous traffic from re-running
+ * the aggregation per request.
+ */
+const HISTORY_CACHE_MS = 60_000;
+
 /** Per-probe ceiling. A hung host must not hold the whole page open. */
 const PROBE_TIMEOUT_MS = 4_000;
 
@@ -42,6 +52,9 @@ export class PlatformStatusService {
    */
   private cache: { at: number; value: PlatformStatus } | null = null;
   private inFlight: Promise<PlatformStatus> | null = null;
+  /** The same collapse-and-memo pair for the history reads (see HISTORY_CACHE_MS). */
+  private historyCache: { at: number; value: PublicHistory } | null = null;
+  private historyInFlight: Promise<PublicHistory> | null = null;
 
   constructor(
     private readonly config: ConfigService,
@@ -81,13 +94,7 @@ export class PlatformStatusService {
     const snapshot = await this.status();
     const live = this.rollUp(snapshot);
 
-    // History is a read of two small tables; a failure there must not take the live view with it,
-    // because "is it up right now" is the question the page exists to answer.
-    const [uptime, days, incidents] = await Promise.all([
-      this.uptimeByService().catch(() => new Map<string, number>()),
-      this.dailyStates().catch(() => [] as PublicDay[]),
-      this.recentIncidents().catch(() => [] as PublicIncident[]),
-    ]);
+    const { uptime, days, incidents } = await this.publicHistory();
 
     const services: PublicService[] = live.map((s) => ({
       ...s,
@@ -206,6 +213,46 @@ export class PlatformStatusService {
       );
       return { key, name, status: rollUpPublic(apps.map((a) => a.health)) };
     });
+  }
+
+  /**
+   * The 90-day history behind the public page, memoised for HISTORY_CACHE_MS.
+   *
+   * Same shape as the snapshot cache above, and for the same reason: the page is anonymous, so
+   * without a memo every visitor pays for two full-window aggregations. `historyInFlight`
+   * collapses concurrent misses so a burst costs one pass, not one per reader.
+   *
+   * A failed read is cached too. The empty history already degrades gracefully (the live view
+   * is what the page exists for), and a database that is struggling should not also be asked
+   * the same expensive question once per anonymous request.
+   */
+  private async publicHistory(): Promise<PublicHistory> {
+    const now = Date.now();
+    if (this.historyCache && now - this.historyCache.at < HISTORY_CACHE_MS) return this.historyCache.value;
+    if (this.historyInFlight) return this.historyInFlight;
+
+    this.historyInFlight = this.loadHistory()
+      .then((value) => {
+        this.historyCache = { at: Date.now(), value };
+        return value;
+      })
+      .finally(() => {
+        this.historyInFlight = null;
+      });
+    return this.historyInFlight;
+  }
+
+  /**
+   * History is a read of two small tables; a failure there must not take the live view with it,
+   * because "is it up right now" is the question the page exists to answer.
+   */
+  private async loadHistory(): Promise<PublicHistory> {
+    const [uptime, days, incidents] = await Promise.all([
+      this.uptimeByService().catch(() => new Map<string, number>()),
+      this.dailyStates().catch(() => [] as PublicDay[]),
+      this.recentIncidents().catch(() => [] as PublicIncident[]),
+    ]);
+    return { uptime, days, incidents };
   }
 
   /** Operational share of the recorded checks per service, over the history window. */
@@ -517,6 +564,9 @@ export class PlatformStatusService {
   }
 
 }
+
+/** The memoised 90-day history: uptime per service, the day bar, and the incident list. */
+type PublicHistory = { uptime: Map<string, number>; days: PublicDay[]; incidents: PublicIncident[] };
 
 /** A Railway deployment as this page reads it. */
 type RailwayDeploy = {

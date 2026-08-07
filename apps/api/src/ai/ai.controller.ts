@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Req } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Query, Req } from "@nestjs/common";
 import type { Request } from "express";
 import { SuperAdmin } from "../auth/super-admin.decorator";
 import type { AuthUser } from "../auth/auth-user";
@@ -21,10 +21,19 @@ export class AiController {
     return this.ai.chat(req.user!.id, dto);
   }
 
+  /** Paged: `cursor` is the `nextCursor` of the previous page (absent for the first). */
   @Get("conversations")
   @SuperAdmin()
-  list(@Req() req: Request & { user?: AuthUser }) {
-    return this.ai.listConversations(req.user!.id);
+  list(
+    @Req() req: Request & { user?: AuthUser },
+    @Query("limit") limit?: string,
+    @Query("cursor") cursor?: string,
+  ) {
+    const n = Number(limit);
+    return this.ai.listConversations(req.user!.id, {
+      ...(Number.isFinite(n) && n > 0 ? { limit: n } : {}),
+      ...(cursor ? { cursor } : {}),
+    });
   }
 
   @Get("conversations/:id")

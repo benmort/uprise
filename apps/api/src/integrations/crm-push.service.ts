@@ -48,6 +48,10 @@ const STREAM_TOGGLE: Record<PushStream, keyof DataSyncSettings["push"]["streams"
 const PUSH_JOB_ATTEMPTS = 10;
 const PUSH_JOB_BACKOFF_MS = 60_000;
 
+/** How many sweep enqueues are in flight at once – bounded so a 1000-row sweep neither
+ *  serialises into 1000 awaited round-trips nor fires them all at the queue at once. */
+const SWEEP_ENQUEUE_CONCURRENCY = 25;
+
 /**
  * The CRM write-back pipeline (meld docs 05 + data-sync plan).
  *
@@ -115,8 +119,11 @@ export class CrmPushService {
       const toggle = STREAM_TOGGLE[stream];
       if (toggle && !settings.push.streams[toggle]) continue;
 
+      // The create already returns the claimed row, so the common (first-delivery) path
+      // needs no read-back – only the replay branch has to go and find who won.
+      let claimed: { id: string; status: IntegrationPushStatus } | null = null;
       try {
-        await this.prisma.integrationPushDelivery.create({
+        claimed = await this.prisma.integrationPushDelivery.create({
           data: {
             tenantId: event.tenantId,
             connectionId: connection.id,
@@ -125,20 +132,22 @@ export class CrmPushService {
             stream,
             contactId: typeof payload.contactId === "string" ? payload.contactId : null,
           },
+          select: { id: true, status: true },
         });
       } catch (error) {
-        // P2002 = this (connection, event) is already recorded — a replay. Fall through
-        // to the enqueue: the deterministic jobId makes that idempotent too.
+        // P2002 = this (connection, event) is already recorded – a replay. Read the row
+        // that exists and fall through to the enqueue: the deterministic jobId makes that
+        // idempotent too, and a terminal row is filtered out below.
         if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) {
           throw error;
         }
+        claimed = await this.prisma.integrationPushDelivery.findUnique({
+          where: { connectionId_eventId: { connectionId: connection.id, eventId: event.id } },
+          select: { id: true, status: true },
+        });
       }
-      const existing = await this.prisma.integrationPushDelivery.findUnique({
-        where: { connectionId_eventId: { connectionId: connection.id, eventId: event.id } },
-        select: { id: true, status: true },
-      });
-      if (!existing || existing.status !== IntegrationPushStatus.PENDING) continue;
-      await this.enqueueDelivery(existing.id, event.tenantId);
+      if (!claimed || claimed.status !== IntegrationPushStatus.PENDING) continue;
+      await this.enqueueDelivery(claimed.id, event.tenantId);
     }
   }
 
@@ -638,21 +647,47 @@ export class CrmPushService {
       take: Math.min(Math.max(1, limit), 1000),
       orderBy: { updatedAt: "asc" },
     });
-    let requeued = 0;
-    let released = 0;
-    for (const row of stranded) {
-      if (row.status === IntegrationPushStatus.HELD) {
-        await this.transition(row.id, IntegrationPushStatus.HELD, IntegrationPushStatus.PENDING, {
-          lastError: null,
-        });
-        released += 1;
-      } else if (row.status === IntegrationPushStatus.SENDING) {
+    // One guarded `updateMany` per source status, not one round-trip per row. The per-row
+    // `transition` is nothing but an FSM check plus a status write – no outbox append, no
+    // per-row domain event – so the bucket update is the same write, and a full sweep costs
+    // two statements instead of up to a thousand. The source status stays in the WHERE, so a
+    // row that moved underneath us is skipped exactly as the per-row guard would have.
+    const buckets = [
+      {
+        from: IntegrationPushStatus.HELD,
+        ids: stranded.filter((r) => r.status === IntegrationPushStatus.HELD).map((r) => r.id),
+        data: { status: IntegrationPushStatus.PENDING, lastError: null },
+      },
+      {
         // A worker died mid-attempt; the FSM allows SENDING → PENDING.
-        await this.transition(row.id, IntegrationPushStatus.SENDING, IntegrationPushStatus.PENDING, {});
-      }
-      await this.enqueueDelivery(row.id, row.tenantId);
-      requeued += 1;
+        from: IntegrationPushStatus.SENDING,
+        ids: stranded.filter((r) => r.status === IntegrationPushStatus.SENDING).map((r) => r.id),
+        data: { status: IntegrationPushStatus.PENDING },
+      },
+    ];
+    for (const bucket of buckets) {
+      if (bucket.ids.length === 0) continue;
+      // The state machine stays authoritative in bulk: outlawing one of these moves must
+      // stop the sweep making it, not be quietly bypassed because the write got batched.
+      if (!canTransitionPushDelivery(bucket.from, IntegrationPushStatus.PENDING)) continue;
+      await this.prisma.integrationPushDelivery.updateMany({
+        where: { id: { in: bucket.ids }, status: bucket.from },
+        data: bucket.data,
+      });
     }
+
+    // Enqueues stay per row (the jobId is per delivery) but run in bounded chunks – a
+    // thousand awaited Redis round-trips in series was the other half of the sweep's clock.
+    for (let i = 0; i < stranded.length; i += SWEEP_ENQUEUE_CONCURRENCY) {
+      await Promise.all(
+        stranded
+          .slice(i, i + SWEEP_ENQUEUE_CONCURRENCY)
+          .map((row) => this.enqueueDelivery(row.id, row.tenantId)),
+      );
+    }
+
+    const released = buckets[0].ids.length;
+    const requeued = stranded.length;
     if (requeued > 0) {
       this.logger.log("integrations", "integration-push sweep", { requeued, released });
     }

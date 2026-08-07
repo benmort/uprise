@@ -36,6 +36,8 @@ describe("IntegrationsService — sync identity wiring", () => {
         update: jest.fn().mockResolvedValue({}),
       },
       audienceContact: { upsert: jest.fn().mockResolvedValue({}) },
+      // The page's spine prime: one read of the contacts that already exist.
+      contact: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn().mockImplementation(async (cb: any) => cb(tx)),
     };
     const contacts = {
@@ -99,10 +101,14 @@ describe("IntegrationsService — sync identity wiring", () => {
       run: 1,
     });
 
-    expect(contacts.getOrCreateByPhone).toHaveBeenCalledWith("org1", "+61400000000", {
-      fullName: "Ada Lovelace",
-      email: "ada@example.org",
-    });
+    // The fourth argument is the primed spine – undefined here, because the prime found
+    // nothing, so the find-or-create does its own lookup exactly as before.
+    expect(contacts.getOrCreateByPhone).toHaveBeenCalledWith(
+      "org1",
+      "+61400000000",
+      { fullName: "Ada Lovelace", email: "ada@example.org" },
+      undefined,
+    );
     const upsertArg = prisma.audienceContact.upsert.mock.calls[0][0];
     expect(upsertArg.create.contactId).toBe("c1");
     expect(upsertArg.update.contactId).toBe("c1");

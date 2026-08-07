@@ -87,13 +87,19 @@ describe("AiService", () => {
   it("passes model + system through and prepends prior context", async () => {
     createMock.mockResolvedValueOnce(reply({ model: "claude-haiku-4-5" }));
     const prisma = makePrisma();
+    // The context read is newest-first with a `take`, so the stub answers the way that
+    // query does – the service turns the tail back the right way round.
     prisma.aiMessage.findMany.mockResolvedValueOnce([
-      { role: "user", content: "before" },
       { role: "assistant", content: "answer" },
+      { role: "user", content: "before" },
     ]);
     const svc = new AiService(prisma, logger);
     await svc.chat("u1", dto({ conversationId: "conv1", model: "claude-haiku-4-5", system: "Be terse." }));
 
+    // The window is asked of the database, not sliced out in JS after loading everything.
+    expect(prisma.aiMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { createdAt: "desc" }, take: 40 }),
+    );
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "claude-haiku-4-5",
@@ -177,5 +183,33 @@ describe("AiService", () => {
     prisma.aiConversation.findFirst.mockResolvedValueOnce(null);
     const err = await svc.deleteConversation("u1", "foreign").catch((e) => e);
     expect(err.getStatus()).toBe(404);
+  });
+
+  it("bounds the conversation list and pages it with a cursor", async () => {
+    const prisma = makePrisma();
+    const svc = new AiService(prisma, logger);
+
+    // A short page is the end of the list: no cursor to follow.
+    expect((await svc.listConversations("u1")).nextCursor).toBeNull();
+    expect(prisma.aiConversation.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 50, orderBy: { updatedAt: "desc" } }),
+    );
+    expect(prisma.aiConversation.findMany.mock.calls[0][0].cursor).toBeUndefined();
+
+    // A full page hands back the last id to resume from.
+    prisma.aiConversation.findMany.mockResolvedValueOnce([{ id: "a" }, { id: "b" }]);
+    const page = await svc.listConversations("u1", { limit: 2 });
+    expect(page.nextCursor).toBe("b");
+
+    await svc.listConversations("u1", { limit: 2, cursor: "b" });
+    expect(prisma.aiConversation.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ take: 2, cursor: { id: "b" }, skip: 1 }),
+    );
+
+    // The caller-supplied limit is clamped at both ends.
+    await svc.listConversations("u1", { limit: 5000 });
+    expect(prisma.aiConversation.findMany.mock.calls.at(-1)[0].take).toBe(100);
+    await svc.listConversations("u1", { limit: 0 });
+    expect(prisma.aiConversation.findMany.mock.calls.at(-1)[0].take).toBe(1);
   });
 });

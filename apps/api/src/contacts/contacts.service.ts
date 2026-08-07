@@ -23,15 +23,23 @@ export class ContactsService {
    * Resolve (or create) the single Contact for an org + normalised phone.
    * The (org, phoneE164) uniqueness is a partial index Prisma can't target with
    * upsert(), so we find-then-create and treat a P2002 as a concurrent insert.
+   *
+   * `primed` lets a caller that has already read a batch of contacts (the integration
+   * importer reads a whole sync page in one query) hand this row's spine straight in,
+   * skipping the lookup. It only replaces the FIND – the enrich still runs, so a primed
+   * call behaves identically to an unprimed one.
    */
   async getOrCreateByPhone(
     tenantId: string,
     phoneE164: string,
     seed?: ContactSeed,
+    primed?: Contact | null,
   ): Promise<Contact> {
-    const existing = await this.prisma.contact.findFirst({
-      where: { tenantId, phoneE164 },
-    });
+    const existing =
+      primed ??
+      (await this.prisma.contact.findFirst({
+        where: { tenantId, phoneE164 },
+      }));
     if (existing) return this.enrich(existing, seed);
 
     try {

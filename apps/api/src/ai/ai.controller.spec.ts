@@ -17,12 +17,20 @@ describe("AiController", () => {
     expect(service.chat).toHaveBeenCalledWith("u1", dto);
 
     await controller.list(req);
-    expect(service.listConversations).toHaveBeenCalledWith("u1");
+    expect(service.listConversations).toHaveBeenCalledWith("u1", {});
 
     await controller.get("c1", req);
     expect(service.getConversation).toHaveBeenCalledWith("u1", "c1");
 
     await controller.remove("c1", req);
     expect(service.deleteConversation).toHaveBeenCalledWith("u1", "c1");
+  });
+
+  it("passes a page size and cursor through, ignoring junk", async () => {
+    await controller.list(req, "25", "conv9");
+    expect(service.listConversations).toHaveBeenLastCalledWith("u1", { limit: 25, cursor: "conv9" });
+
+    await controller.list(req, "not-a-number", "");
+    expect(service.listConversations).toHaveBeenLastCalledWith("u1", {});
   });
 });

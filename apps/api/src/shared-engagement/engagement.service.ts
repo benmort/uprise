@@ -237,13 +237,18 @@ export class EngagementService {
     tenantId: string,
     input: RecordSurveyAnswerInput,
   ): Promise<QuestionResponse> {
-    const option = input.optionId
-      ? await this.prisma.questionOption.findUnique({ where: { id: input.optionId } })
-      : null;
-    const question = await this.prisma.question.findUnique({
-      where: { id: input.questionId },
-      select: { surveyId: true },
-    });
+    // Independent reads – the option says whether a disposition falls out of the answer, the
+    // question only supplies the surveyId. Awaiting them in series doubled the latency of the
+    // one call a doorknocker makes per question.
+    const [option, question] = await Promise.all([
+      input.optionId
+        ? this.prisma.questionOption.findUnique({ where: { id: input.optionId } })
+        : null,
+      this.prisma.question.findUnique({
+        where: { id: input.questionId },
+        select: { surveyId: true },
+      }),
+    ]);
 
     const response = await this.prisma.$transaction(async (tx) => {
       const created = await tx.questionResponse.create({
