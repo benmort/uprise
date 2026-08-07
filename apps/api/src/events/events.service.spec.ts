@@ -252,6 +252,49 @@ describe("EventsService", () => {
       expect(res.events).toHaveLength(1);
       expect(res.tenant).toMatchObject({ slug: "acme" });
     });
+    it("counts a whole public board with ONE grouped read, not an aggregate per card", async () => {
+      prisma.tenant.findUnique.mockResolvedValueOnce({ id: "org1" }).mockResolvedValue({ id: "org1", name: "Acme", slug: "acme" });
+      const card = (id: string, capacity: number | null) => ({
+        id, tenantId: "org1", title: id, description: null, category: null, location: null,
+        lat: null, lng: null, startsAt: new Date(), endsAt: new Date(),
+        status: EventStatus.PUBLISHED, capacity, imageUrl: null,
+      });
+      prisma.event.findMany.mockResolvedValue([card("e1", 10), card("e2", null), card("e3", 2)]);
+      // e3 has no RSVPs at all, so the grouped read simply omits it.
+      prisma.eventRsvp.groupBy.mockResolvedValue([
+        { eventId: "e1", _count: { _all: 2 }, _sum: { guests: 2 } },
+        { eventId: "e2", _count: { _all: 1 }, _sum: { guests: 0 } },
+      ]);
+
+      const res = await service.listPublicEvents("acme");
+
+      // Parity with the per-event view: heads = rows + guests, and spotsLeft follows.
+      expect(res.events.map((e) => [e.id, e.attendeeCount, e.spotsLeft])).toEqual([
+        ["e1", 4, 6],
+        ["e2", 1, null],
+        ["e3", 0, 2],
+      ]);
+      expect(prisma.eventRsvp.groupBy).toHaveBeenCalledTimes(1);
+      expect(prisma.eventRsvp.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ eventId: { in: ["e1", "e2", "e3"] } }) }),
+      );
+      // The per-event aggregate is what the board used to fire once per card.
+      expect(prisma.eventRsvp.aggregate).not.toHaveBeenCalled();
+    });
+    it("still counts a single event on its own when nobody hands the number in", async () => {
+      prisma.event.findFirst.mockResolvedValue({
+        id: "e1", tenantId: "org1", title: "T", description: null, category: null, location: null,
+        lat: null, lng: null, startsAt: new Date(), endsAt: new Date(),
+        status: EventStatus.PUBLISHED, capacity: 5, imageUrl: null,
+      });
+      prisma.eventRsvp.aggregate.mockResolvedValue(heads(2));
+
+      const res = await service.publicPreview("e1");
+
+      expect(res).toMatchObject({ attendeeCount: 2, spotsLeft: 3 });
+      expect(prisma.eventRsvp.aggregate).toHaveBeenCalledTimes(1);
+      expect(prisma.eventRsvp.groupBy).not.toHaveBeenCalled();
+    });
     it("manageByToken 404s an unknown token, and cancelByToken cancels + promotes", async () => {
       prisma.eventRsvp.findUnique.mockResolvedValue(null);
       await expect(service.manageByToken("nope")).rejects.toMatchObject({ response: { error: { code: "RSVP_NOT_FOUND" } } });

@@ -82,6 +82,36 @@ describe("ContactsService", () => {
         data: { firstName: "Edsger" }, // email already set → not overwritten
       });
     });
+
+    it("skips the lookup when the caller primes the row, but still enriches it", async () => {
+      prisma.contact.update.mockResolvedValue({ id: "c4", firstName: "Ada" });
+
+      const result = await service.getOrCreateByPhone(
+        "org_1",
+        "+15550000005",
+        { firstName: "Ada" },
+        { id: "c4", firstName: null } as never,
+      );
+
+      expect(prisma.contact.findFirst).not.toHaveBeenCalled();
+      expect(prisma.contact.create).not.toHaveBeenCalled();
+      // A primed call behaves exactly like an unprimed hit – the enrich still runs.
+      expect(prisma.contact.update).toHaveBeenCalledWith({
+        where: { id: "c4" },
+        data: { firstName: "Ada" },
+      });
+      expect(result.id).toBe("c4");
+    });
+
+    it("falls through to the lookup when the prime missed", async () => {
+      prisma.contact.findFirst.mockResolvedValue({ id: "c5" });
+
+      await service.getOrCreateByPhone("org_1", "+15550000006", undefined, null);
+
+      expect(prisma.contact.findFirst).toHaveBeenCalledWith({
+        where: { tenantId: "org_1", phoneE164: "+15550000006" },
+      });
+    });
   });
 
   describe("getOrCreateByAddress", () => {

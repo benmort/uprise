@@ -419,6 +419,48 @@ describe("PlatformStatusService", () => {
       });
     });
 
+    it("memoises the 90-day history: a second read inside the TTL does not re-aggregate", async () => {
+      jest.useFakeTimers();
+      try {
+        global.fetch = stubFetch({}) as unknown as typeof fetch;
+        const prisma = stubPrisma({ uptime: [{ key: "workspace", total: 10n, operational: 10n }] });
+        const service = makeService({}, prisma);
+
+        await service.publicStatus();
+        // Two aggregations (the jsonb_each_text uptime roll-up and the day bar) plus the
+        // incident list – the whole cost this memo exists to stop repeating per visitor.
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+        expect(prisma.statusIncident.findMany).toHaveBeenCalledTimes(1);
+
+        // Past the 30 s snapshot cache but inside the 60 s history memo: the live probes
+        // run again, the window aggregations do not.
+        jest.setSystemTime(Date.now() + 45_000);
+        const again = await service.publicStatus();
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+        expect(prisma.statusIncident.findMany).toHaveBeenCalledTimes(1);
+        expect(again.services.find((s) => s.key === "workspace")?.uptime90d).toBe(100);
+
+        // Past the memo, the window is read afresh – the page never goes permanently stale.
+        jest.setSystemTime(Date.now() + 61_000);
+        await service.publicStatus();
+        expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
+        expect(prisma.statusIncident.findMany).toHaveBeenCalledTimes(2);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("collapses concurrent history misses into a single pass", async () => {
+      global.fetch = stubFetch({}) as unknown as typeof fetch;
+      const prisma = stubPrisma({ uptime: [{ key: "workspace", total: 4n, operational: 4n }] });
+      const service = makeService({}, prisma);
+
+      await Promise.all([service.publicStatus(), service.publicStatus(), service.publicStatus()]);
+
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+      expect(prisma.statusIncident.findMany).toHaveBeenCalledTimes(1);
+    });
+
     it("still answers live when the history tables are unreadable", async () => {
       global.fetch = stubFetch({}) as unknown as typeof fetch;
       const prisma = stubPrisma();

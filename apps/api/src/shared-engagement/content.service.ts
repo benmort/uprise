@@ -11,6 +11,10 @@ import { ApiHttpException } from "../common/http/api-response";
 
 type SetItemInput = { id: string; orderIndex?: number };
 
+/** Map keys for the batched name lookups: the id alone can repeat across tables. */
+const contentKey = (type: ContentType, id: string) => `${type}:${id}`;
+const objectKey = (type: ContentObjectType, id: string) => `${type}:${id}`;
+
 /** The disposition/canned channels an object of the given engagement channel should see. */
 function channelsFor(channel: EngagementChannel): EngagementChannel[] {
   if (channel === EngagementChannel.BOTH)
@@ -160,21 +164,59 @@ export class ContentService {
       where: { tenantId, objectType, objectId },
       orderBy: [{ contentType: "asc" }, { orderIndex: "asc" }],
     });
-    return Promise.all(bindings.map(async (b) => ({ ...b, contentName: await this.contentName(tenantId, b.contentType, b.contentId) })));
+    const names = await this.contentNames(tenantId, bindings);
+    return bindings.map((b) => ({ ...b, contentName: names.get(contentKey(b.contentType, b.contentId)) ?? null }));
   }
 
-  private async contentName(tenantId: string, type: ContentType, id: string): Promise<string | null> {
+  /**
+   * Names for a mixed bag of content ids: one query per content TABLE, not one per binding.
+   *
+   * The bindable library lives in four unrelated tables, so there is no join to reach for –
+   * but there is no need for a `findFirst` per row either. Partition the ids by contentType,
+   * read each table once over its id list, and resolve names from the map. An object with
+   * twelve bindings costs at most four queries instead of twelve. Ids are keyed by type as
+   * well, because two tables may legitimately hold the same id.
+   */
+  private async contentNames(
+    tenantId: string,
+    refs: Array<{ contentType: ContentType; contentId: string }>,
+  ): Promise<Map<string, string>> {
+    const byType = new Map<ContentType, string[]>();
+    for (const ref of refs) {
+      const ids = byType.get(ref.contentType);
+      if (ids) ids.push(ref.contentId);
+      else byType.set(ref.contentType, [ref.contentId]);
+    }
+
+    const names = new Map<string, string>();
+    await Promise.all(
+      [...byType].map(async ([type, ids]) => {
+        for (const row of await this.contentRowsByIds(tenantId, type, ids)) {
+          names.set(contentKey(type, row.id), row.name);
+        }
+      }),
+    );
+    return names;
+  }
+
+  private contentRowsByIds(
+    tenantId: string,
+    type: ContentType,
+    ids: string[],
+  ): Promise<Array<{ id: string; name: string }>> {
+    const where = { id: { in: ids }, tenantId };
+    const select = { id: true, name: true };
     switch (type) {
       case ContentType.SURVEY:
-        return (await this.prisma.survey.findFirst({ where: { id, tenantId }, select: { name: true } }))?.name ?? null;
+        return this.prisma.survey.findMany({ where, select });
       case ContentType.SCRIPT:
-        return (await this.prisma.script.findFirst({ where: { id, tenantId }, select: { name: true } }))?.name ?? null;
+        return this.prisma.script.findMany({ where, select });
       case ContentType.DISPOSITION_SET:
-        return (await this.prisma.dispositionSet.findFirst({ where: { id, tenantId }, select: { name: true } }))?.name ?? null;
+        return this.prisma.dispositionSet.findMany({ where, select });
       case ContentType.CANNED_SET:
-        return (await this.prisma.cannedSet.findFirst({ where: { id, tenantId }, select: { name: true } }))?.name ?? null;
+        return this.prisma.cannedSet.findMany({ where, select });
       default:
-        return null;
+        return Promise.resolve([]);
     }
   }
 
@@ -184,22 +226,46 @@ export class ContentService {
       where: { tenantId, contentType, contentId },
       orderBy: { createdAt: "asc" },
     });
-    const objects = await Promise.all(
-      bindings.map(async (b) => ({
-        bindingId: b.id,
-        objectType: b.objectType,
-        objectId: b.objectId,
-        slot: b.slot,
-        objectName: await this.objectName(tenantId, b.objectType, b.objectId),
-      })),
-    );
+    const names = await this.objectNames(tenantId, bindings);
+    const objects = bindings.map((b) => ({
+      bindingId: b.id,
+      objectType: b.objectType,
+      objectId: b.objectId,
+      slot: b.slot,
+      objectName: names.get(objectKey(b.objectType, b.objectId)) ?? null,
+    }));
     return { count: objects.length, objects };
   }
 
-  private async objectName(tenantId: string, type: ContentObjectType, id: string): Promise<string | null> {
-    if (type === ContentObjectType.CANVASS_CAMPAIGN)
-      return (await this.prisma.canvassCampaign.findFirst({ where: { id, tenantId }, select: { name: true } }))?.name ?? null;
-    return (await this.prisma.blast.findFirst({ where: { id, tenantId }, select: { title: true } }))?.title ?? null;
+  /**
+   * Names for the objects a piece of content is bound to – one campaign query and one blast
+   * query for the whole list, instead of a `findFirst` per binding. A survey reused across
+   * twenty campaigns made "used by 20" cost twenty reads.
+   */
+  private async objectNames(
+    tenantId: string,
+    refs: Array<{ objectType: ContentObjectType; objectId: string }>,
+  ): Promise<Map<string, string>> {
+    const campaignIds: string[] = [];
+    const blastIds: string[] = [];
+    for (const ref of refs) {
+      if (ref.objectType === ContentObjectType.CANVASS_CAMPAIGN) campaignIds.push(ref.objectId);
+      else blastIds.push(ref.objectId);
+    }
+
+    const [campaigns, blasts] = await Promise.all([
+      campaignIds.length
+        ? this.prisma.canvassCampaign.findMany({ where: { id: { in: campaignIds }, tenantId }, select: { id: true, name: true } })
+        : [],
+      blastIds.length
+        ? this.prisma.blast.findMany({ where: { id: { in: blastIds }, tenantId }, select: { id: true, title: true } })
+        : [],
+    ]);
+
+    const names = new Map<string, string>();
+    for (const c of campaigns) names.set(objectKey(ContentObjectType.CANVASS_CAMPAIGN, c.id), c.name);
+    for (const b of blasts) names.set(objectKey(ContentObjectType.BLAST, b.id), b.title);
+    return names;
   }
 
   /**

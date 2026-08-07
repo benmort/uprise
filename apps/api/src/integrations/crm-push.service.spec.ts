@@ -59,10 +59,13 @@ describe("CrmPushService", () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       integrationPushDelivery: {
-        create: jest.fn().mockResolvedValue({ id: "d1" }),
+        // A real create returns the claimed row, PENDING by schema default – the reaction
+        // reads its status straight off it rather than reading the row back.
+        create: jest.fn().mockResolvedValue({ id: "d1", status: "PENDING" }),
         findUnique: jest.fn().mockResolvedValue({ id: "d1", status: "PENDING" }),
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       outboxEvent: { findUnique: jest.fn().mockResolvedValue({ aggregateId: "disp1", payload: {} }) },
       disposition: {
@@ -129,6 +132,9 @@ describe("CrmPushService", () => {
       expect(queue.enqueue).toHaveBeenCalledWith(
         expect.objectContaining({ id: "integration-push_d1", queue: "integration-push" }),
       );
+      // The create already returned the claimed row, so the first-delivery path does not
+      // go and read it back – only the P2002 replay branch below does.
+      expect(prisma.integrationPushDelivery.findUnique).not.toHaveBeenCalled();
     });
 
     it("does nothing while the global kill switch is off", async () => {
@@ -551,11 +557,55 @@ describe("CrmPushService", () => {
       expect(out).toEqual({ requeued: 2, released: 1 });
       expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ id: "integration-push_p1" }));
       expect(queue.enqueue).toHaveBeenCalledWith(expect.objectContaining({ id: "integration-push_h1" }));
-      // The HELD row was moved back to PENDING before its re-enqueue.
-      const release = prisma.integrationPushDelivery.update.mock.calls.find(
-        (c: any[]) => c[0]?.where?.id === "h1" && c[0]?.data?.status === "PENDING",
-      );
-      expect(release).toBeDefined();
+      // The HELD row was moved back to PENDING before its re-enqueue – in ONE bucketed
+      // write, with the source status still in the where so a row that moved underneath
+      // the sweep is skipped exactly as the per-row FSM guard skipped it.
+      expect(prisma.integrationPushDelivery.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ["h1"] }, status: "HELD" },
+        data: { status: "PENDING", lastError: null },
+      });
+      // A PENDING row is only re-enqueued: it has no status to move.
+      expect(prisma.integrationPushDelivery.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.integrationPushDelivery.update).not.toHaveBeenCalled();
+    });
+
+    it("buckets stranded SENDING rows into their own guarded updateMany", async () => {
+      const { service, prisma, queue } = build();
+      prisma.integrationPushDelivery.findMany.mockResolvedValue([
+        { id: "s1", tenantId: "org1", status: "SENDING" },
+        { id: "h1", tenantId: "org1", status: "HELD" },
+        { id: "s2", tenantId: "org1", status: "SENDING" },
+      ]);
+
+      const out = await service.sweepPushDeliveries();
+
+      expect(out).toEqual({ requeued: 3, released: 1 });
+      expect(prisma.integrationPushDelivery.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ["h1"] }, status: "HELD" },
+        data: { status: "PENDING", lastError: null },
+      });
+      // A worker that died mid-attempt: SENDING → PENDING, and `lastError` is left alone.
+      expect(prisma.integrationPushDelivery.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ["s1", "s2"] }, status: "SENDING" },
+        data: { status: "PENDING" },
+      });
+      expect(prisma.integrationPushDelivery.updateMany).toHaveBeenCalledTimes(2);
+      for (const id of ["s1", "s2", "h1"]) {
+        expect(queue.enqueue).toHaveBeenCalledWith(
+          expect.objectContaining({ id: `integration-push_${id}` }),
+        );
+      }
+    });
+
+    it("writes nothing when every stranded row is already PENDING", async () => {
+      const { service, prisma, queue } = build();
+      prisma.integrationPushDelivery.findMany.mockResolvedValue([
+        { id: "p1", tenantId: "org1", status: "PENDING" },
+      ]);
+
+      expect(await service.sweepPushDeliveries()).toEqual({ requeued: 1, released: 0 });
+      expect(prisma.integrationPushDelivery.updateMany).not.toHaveBeenCalled();
+      expect(queue.enqueue).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -520,9 +520,14 @@ export class EventsService {
     return { id: t.id, name: t.name, slug: t.slug, ...brandFields(profile) };
   }
 
-  /** Leak-safe public projection of an event (no organiser detail) — the shape public pages render. */
-  private async buildPublicView(event: EventRow) {
-    const heads = await this.attendingHeads(event.tenantId, event.id);
+  /**
+   * Leak-safe public projection of an event (no organiser detail) – the shape public pages render.
+   *
+   * `knownHeads` lets a caller that already counted a whole page of events hand the number in
+   * (see `listPublicEvents`); single-event callers omit it and pay for the one aggregate.
+   */
+  private async buildPublicView(event: EventRow, knownHeads?: number) {
+    const heads = knownHeads ?? (await this.attendingHeads(event.tenantId, event.id));
     return {
       id: event.id,
       title: event.title,
@@ -561,7 +566,10 @@ export class EventsService {
       },
       orderBy: { startsAt: "asc" },
     });
-    const items = await Promise.all(events.map((e) => this.buildPublicView(e)));
+    // One grouped count for the whole board, not an aggregate per card: a tenant with fifty
+    // published events was fifty round-trips to render one anonymous page.
+    const counts = await this.attendeeCounts(tenant.id, events.map((e) => e.id));
+    const items = await Promise.all(events.map((e) => this.buildPublicView(e, counts.get(e.id) ?? 0)));
     return { tenant: await this.tenantBrand(tenant.id), events: items };
   }
 
