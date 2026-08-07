@@ -35,6 +35,28 @@ export const TILE_SOURCE: Record<string, { table: string; codeCol: string; nameE
 };
 
 /**
+ * Server-side minimum zoom per DENSE tile layer, in lockstep with the client's source
+ * floors (`areaMinZoom` in `apps/admin/src/lib/canvass/area-limits.ts`). Below the floor
+ * a single tile's bbox covers a whole layer's national set (~368k meshblocks / ~61k
+ * SA1s), so the request is answered with the empty tile (the controller's 204) without
+ * touching the database – a well-behaved client never asks, but the floor must not
+ * depend on that. Every coarser layer is small enough to serve whole at any zoom, so it
+ * has no floor. Bump client and server together, keeping the client's floor ≥ the
+ * server's.
+ */
+export const TILE_MIN_ZOOM: Record<string, number> = { mb: 9, sa1: 7 };
+
+/**
+ * Pathological backstop on a tile's row count – NOT a paging mechanism. At every
+ * legitimate zoom (≥ the layer's TILE_MIN_ZOOM floor) a tile holds far fewer rows than
+ * this, so the limit never bites; it exists only so a bug in the floors can't stream a
+ * whole national layer. Small LIMITs are rejected deliberately: a tile is a complete
+ * picture of its bbox, and mid-viewport truncation at a legitimate zoom is not
+ * acceptable (see the no-feature-cap note in {@link GeoService.tile}).
+ */
+const TILE_ROW_BACKSTOP = 50000;
+
+/**
  * A division layer keyed by an `address_region` column — so every one of these supports
  * per-address lookups, address counts and turf-cutting uniformly.
  *
@@ -87,6 +109,16 @@ const AREA_TABLE: Record<AreaLevel, { table: string; codeCol: string; nameExpr: 
   sa2: { table: "geo.sa2", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa3: { table: "geo.sa3", codeCol: "code", nameExpr: "COALESCE(name, code)" },
   sa4: { table: "geo.sa4", codeCol: "code", nameExpr: "COALESCE(name, code)" },
+};
+/** `geo.dataset_meta.key` each area level's loader stamps its national row count under –
+ *  meshblocks under `asgs_mb`, every SA level under its own name (see
+ *  `src/scripts/geo/load-boundaries.ts` LAYERS). Read by {@link GeoService.areaTotal}. */
+const AREA_META_KEY: Record<AreaLevel, string> = {
+  mb: "asgs_mb",
+  sa1: "sa1",
+  sa2: "sa2",
+  sa3: "sa3",
+  sa4: "sa4",
 };
 // geo.address_region column that maps an address to each ASGS level — the join key for
 // area address counts (mirrors REGION_COL for divisions).
@@ -192,6 +224,8 @@ export type RegionHierarchy = {
   parents: RegionRef[];
   childGroups: Array<{ kind: RegionKind; label: string; total: number; rows: RegionRef[] }>;
 };
+/** One group of child regions – what each `regionChildren` helper resolves to. */
+type ChildGroup = RegionHierarchy["childGroups"][number];
 
 const REGION_KINDS = new Set<RegionKind>([
   "state", "ced", "sed", "sed_lower", "sed_upper", "lga", "ward",
@@ -355,18 +389,25 @@ export class GeoService {
     if (x < 0 || x >= span || y < 0 || y >= span) {
       throw new ApiHttpException("BAD_TILE", "x/y out of range for this zoom");
     }
+    // Dense-layer zoom floor: below it, answer the empty tile (204) without querying –
+    // one low-zoom meshblock tile would otherwise pull the whole national layer.
+    const minZoom = TILE_MIN_ZOOM[layer];
+    if (minZoom !== undefined && z < minZoom) return Buffer.alloc(0);
     const [w, s, e, n] = this.tileToBBox(z, x, y);
     // Drop vertices finer than ~1/2048 of the tile width before transfer; geojson-vt
     // re-simplifies in tile space, so this only trims payload for dense tiles.
     const tolerance = Math.min((e - w) / 2048, 0.02);
     const geomExpr =
       tolerance > 0.00002 ? `ST_SimplifyPreserveTopology(d.geom, ${tolerance})` : "d.geom";
-    // No feature cap — a tile holds every feature in its bbox so nothing truncates in
-    // view. "Batching" is the vector-tile grid itself: mapbox requests the covering
-    // tiles at the current zoom and renders each as it arrives, so a dense level loads
-    // progressively rather than in one blocking chunk. The one runaway case (a whole
-    // level's worth of meshblocks in a single low-zoom tile, ~368k) is kept off the
-    // wire by the client's per-level minzoom floor, so that tile is never requested.
+    // No feature cap at legitimate zooms – a tile holds every feature in its bbox so
+    // nothing truncates in view. "Batching" is the vector-tile grid itself: mapbox
+    // requests the covering tiles at the current zoom and renders each as it arrives,
+    // so a dense level loads progressively rather than in one blocking chunk. The one
+    // runaway case (a whole level's worth of meshblocks in a single low-zoom tile,
+    // ~368k) is stopped above by the TILE_MIN_ZOOM floor, mirrored client-side so the
+    // tile is never even requested; TILE_ROW_BACKSTOP is only the belt-and-braces
+    // bound behind that floor, sized to never bite at any zoom the floor admits –
+    // mid-viewport truncation at a legitimate zoom is not acceptable.
     //
     // Address density rides along on the feature. The alternative — shipping the client a
     // `["match", ["get","code"], …]` expression — would be 61,811 code/colour pairs at SA1
@@ -395,7 +436,8 @@ export class GeoService {
          LEFT JOIN geo.region_address_count rac
                 ON rac.kind = $5 AND rac.code = d.${src.codeCol}
          ${metricJoin}
-        WHERE d.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)`,
+        WHERE d.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+        LIMIT ${TILE_ROW_BACKSTOP}`,
       ...params,
     )) as Array<{ code: string; name: string | null; density: number | null; value?: number | null; geojson: string }>;
     if (rows.length === 0) return Buffer.alloc(0);
@@ -474,7 +516,16 @@ export class GeoService {
    *  filtered to one state (the `state` ASGS digit, 1–9). */
   async searchAreas(layer: string, q: string, limit?: number, state?: string) {
     const { table, codeCol, nameExpr } = this.areaTable(layer);
-    const term = `%${(q ?? "").trim()}%`;
+    const trimmed = (q ?? "").trim();
+    // Minimum term length, mirroring the client rule (`areaSearchMinChars` in
+    // apps/admin/src/lib/canvass/area-limits.ts): an empty term matches nothing on any
+    // layer, and a 1–2 char pattern yields no trigram, so the GIN indexes can't apply –
+    // on the dense layers that meant seq-scanning and name-sorting ~368k meshblocks per
+    // keystroke. The small layers (sa2–sa4, ≤ ~2.5k rows) can afford a 2-char scan; the
+    // dense ones (mb/sa1) need 3.
+    const minChars = layer === "mb" || layer === "sa1" ? 3 : 2;
+    if (trimmed.length < minChars) return [];
+    const term = `%${trimmed}%`;
     const lim = Math.min(Math.max(1, limit ?? 12), 50);
     // WHERE must hit the PLAIN columns so the GIN trigram indexes apply — a
     // COALESCE(name, code) ILIKE wraps the column in an expression and forces a
@@ -505,7 +556,7 @@ export class GeoService {
    * equivalent for the areas list view (name + address count + total), with the
    * same optional state-digit and name/code filters as searchAreas. Two queries:
    * the page reads via the PK index (ORDER BY code, LIMIT stops early even on
-   * 368k meshblocks), the COUNT skips the address-count join entirely.
+   * 368k meshblocks), and the total comes from {@link areaTotal}.
    */
   async browseAreas(layer: string, opts: { q?: string; state?: string; limit?: number; offset?: number }) {
     const { table, codeCol } = this.areaTable(layer);
@@ -530,7 +581,7 @@ export class GeoService {
       clauses.push(`d.${codeCol} LIKE $${params.length}`);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const [rows, counts] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.$queryRawUnsafe(
         `SELECT d.${codeCol} AS code, ${nameSel} AS name,
                 COALESCE(rac.address_count, 0)::int AS "addressCount"
@@ -541,15 +592,50 @@ export class GeoService {
          LIMIT ${lim} OFFSET ${off}`,
         ...params,
       ) as Promise<Array<{ code: string; name: string | null; addressCount: number }>>,
-      this.prisma.$queryRawUnsafe(
-        `SELECT COUNT(*)::int AS total FROM ${table} d ${where}`,
-        ...params,
-      ) as Promise<Array<{ total: number }>>,
+      this.areaTotal(layer, table, where, params),
     ]);
     return {
       rows: rows.map((r) => ({ level: layer, code: r.code, name: r.name ?? r.code, addressCount: r.addressCount })),
-      total: counts[0]?.total ?? 0,
+      total,
     };
+  }
+
+  /**
+   * Row count behind a {@link browseAreas} page.
+   *
+   * A filtered browse still needs the real `COUNT(*)` – the filter is what the count is
+   * about, and the trigram/prefix predicate keeps it bounded. The UNFILTERED one does not:
+   * it is the level's national row count, a fixed number that never varies by page, and
+   * counting it meant a full scan of 368k meshblocks on every keystroke-free page turn.
+   * So it is read instead from `geo.dataset_meta.row_count`, which the boundary loader
+   * stamps for exactly these layers, falling back to the planner's `pg_class.reltuples`
+   * estimate when the level has never been loaded (or was loaded before dataset_meta
+   * carried a count). `to_regclass` rather than a `::regclass` cast so a missing table
+   * yields NULL instead of raising.
+   */
+  private async areaTotal(
+    layer: string,
+    table: string,
+    where: string,
+    params: unknown[],
+  ): Promise<number> {
+    if (where) {
+      const rows = (await this.prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int AS total FROM ${table} d ${where}`,
+        ...params,
+      )) as Array<{ total: number }>;
+      return rows[0]?.total ?? 0;
+    }
+    const rows = (await this.prisma.$queryRawUnsafe(
+      `SELECT COALESCE(
+                (SELECT NULLIF(row_count, 0)::int FROM geo.dataset_meta WHERE key = $1),
+                (SELECT GREATEST(c.reltuples, 0)::int FROM pg_class c WHERE c.oid = to_regclass($2)),
+                0
+              ) AS total`,
+      AREA_META_KEY[layer as AreaLevel] ?? layer,
+      table,
+    )) as Array<{ total: number }>;
+    return rows[0]?.total ?? 0;
   }
 
   /** One statistical area's boundary — used when a search result is picked. */
@@ -1664,8 +1750,13 @@ export class GeoService {
   /** The regions this one immediately CONTAINS, grouped by child kind. */
   private async regionChildren(kind: RegionKind, code: string, region: RegionRef): Promise<RegionHierarchy["childGroups"]> {
     const groups: RegionHierarchy["childGroups"] = [];
+    /** Append a group unless the lookup found nothing. Keeps the switch's push order –
+     *  which is the panel's display order – independent of when each query resolved. */
+    const add = (g: ChildGroup | null) => {
+      if (g) groups.push(g);
+    };
 
-    const areaGroup = async (childKind: RegionKind, whereExpr: string, label: string) => {
+    const areaGroup = async (childKind: RegionKind, whereExpr: string, label: string): Promise<ChildGroup | null> => {
       const { table, codeCol } = this.areaTable(childKind);
       const nameSel = childKind === "mb" ? `${table}.${codeCol}` : `COALESCE(${table}.name, ${table}.code)`;
       const rows = await this.q(
@@ -1675,36 +1766,39 @@ export class GeoService {
          WHERE ${whereExpr} ORDER BY 2 LIMIT ${CHILD_ROW_CAP}`,
         code,
       );
-      if (rows.length) {
-        groups.push({
-          kind: childKind,
-          label,
-          total: rows.length,
-          rows: rows.map((r) => ({ kind: childKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
-        });
-      }
+      if (!rows.length) return null;
+      return {
+        kind: childKind,
+        label,
+        total: rows.length,
+        rows: rows.map((r) => ({ kind: childKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
+      };
     };
 
-    const divGroup = async (divKind: DivisionType, label: string) => {
+    const divGroup = async (divKind: DivisionType, label: string): Promise<ChildGroup | null> => {
       const rows = await this.q(
         `SELECT d.code, d.name, COALESCE(rac.address_count, 0)::int AS "addressCount"
          FROM ${DIVISION_TABLE[divKind]} d LEFT JOIN geo.region_address_count rac ON rac.kind = '${divKind}' AND rac.code = d.code
          WHERE d.state = $1 ORDER BY d.name LIMIT ${CHILD_ROW_CAP}`,
         region.name,
       );
-      if (rows.length) {
-        groups.push({
-          kind: divKind,
-          label,
-          total: rows.length,
-          rows: rows.map((r) => ({ kind: divKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
-        });
-      }
+      if (!rows.length) return null;
+      return {
+        kind: divKind,
+        label,
+        total: rows.length,
+        rows: rows.map((r) => ({ kind: divKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
+      };
     };
 
     /** First Nations levels nested under their parent (Areas under a Region, Locations under
      *  an Area). Separate from divGroup/nestedGroup, which index DIVISION_TABLE. */
-    const fnGroup = async (childKind: FirstNationsLevel, whereExpr: string, label: string, param: unknown = code) => {
+    const fnGroup = async (
+      childKind: FirstNationsLevel,
+      whereExpr: string,
+      label: string,
+      param: unknown = code,
+    ): Promise<ChildGroup | null> => {
       const { table } = FN_TABLE[childKind];
       const rows = await this.q(
         `SELECT d.code, COALESCE(d.name, d.code) AS name, COALESCE(rac.address_count, 0)::int AS "addressCount"
@@ -1713,21 +1807,20 @@ export class GeoService {
          WHERE ${whereExpr} ORDER BY d.code LIMIT ${CHILD_ROW_CAP}`,
         param,
       );
-      if (rows.length) {
-        groups.push({
-          kind: childKind,
-          label,
-          total: rows.length,
-          rows: rows.map((r) => ({ kind: childKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
-        });
-      }
+      if (!rows.length) return null;
+      return {
+        kind: childKind,
+        label,
+        total: rows.length,
+        rows: rows.map((r) => ({ kind: childKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
+      };
     };
 
     /** Divisions nested under a parent division (VIC Assembly districts under their
      *  Legislative Council region; wards under their council). Emits nothing when the
      *  relationship does not hold — Tasmania's chambers cross-cut, so a TAS Legislative
      *  Council division has no child districts, only addresses. */
-    const nestedGroup = async (childKind: DivisionType, whereExpr: string, label: string) => {
+    const nestedGroup = async (childKind: DivisionType, whereExpr: string, label: string): Promise<ChildGroup | null> => {
       const rows = await this.q(
         `SELECT d.code, d.name, COALESCE(rac.address_count, 0)::int AS "addressCount"
          FROM ${DIVISION_TABLE[childKind]} d
@@ -1735,92 +1828,109 @@ export class GeoService {
          WHERE ${whereExpr} ORDER BY d.name LIMIT ${CHILD_ROW_CAP}`,
         code,
       );
-      if (rows.length) {
-        groups.push({
-          kind: childKind,
-          label,
-          total: rows.length,
-          rows: rows.map((r) => ({ kind: childKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
-        });
-      }
+      if (!rows.length) return null;
+      return {
+        kind: childKind,
+        label,
+        total: rows.length,
+        rows: rows.map((r) => ({ kind: childKind, code: String(r.code), name: String(r.name), addressCount: Number(r.addressCount) })),
+      };
     };
 
-    const addressGroup = async (col: string) => {
+    const addressGroup = async (col: string): Promise<ChildGroup> => {
       const total = await this.countOf(kind, code);
+      // No ORDER BY. `address_label` lives on the JOINED gnaf table, so ordering by it
+      // forces every address in the region (up to ~1.5M under a large LGA) to be joined
+      // and sorted before the LIMIT can take 200; without it Postgres stops as soon as
+      // the address_region index has yielded 200 rows. Either way these 200 are an
+      // arbitrary capped subset – the real figure rides on `total` – so they are sorted
+      // here instead: the list still reads alphabetically, it is just not the
+      // alphabetically-first 200 of the region. Capped arbitrary subset, sorted
+      // client-side – user-approved.
       const rows = await this.q(
         `SELECT a.gnaf_pid AS code, a.address_label AS name
          FROM geo.address_region ar JOIN geo.gnaf_address a ON a.gnaf_pid = ar.gnaf_pid
-         WHERE ar.${col} = $1 ORDER BY a.address_label LIMIT ${CHILD_ROW_CAP}`,
+         WHERE ar.${col} = $1 LIMIT ${CHILD_ROW_CAP}`,
         code,
       );
-      groups.push({
+      return {
         kind: "address",
         label: "Addresses",
         total,
-        rows: rows.map((r) => ({ kind: "address" as const, code: String(r.code), name: String(r.name ?? r.code) })),
-      });
+        rows: rows
+          .map((r) => ({ kind: "address" as const, code: String(r.code), name: String(r.name ?? r.code) }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      };
     };
 
     switch (kind) {
-      case "state":
-        await areaGroup("sa4", `left(geo.sa4.code, 1) = $1`, "SA4 regions");
-        await divGroup("ced", "Federal – House of Representatives");
-        await divGroup("sed_lower", "State – lower house");
-        await divGroup("sed_upper", "State – upper house");
-        await divGroup("lga", "Local government areas (LGA)");
-        await divGroup("ward", "Council wards");
-        // Matched by NAME, so the three 'Other Territories' regions appear under no state —
-        // consistent with regionParents omitting their state parent.
-        await fnGroup("ireg", `d.state = $1`, "First Nations regions", region.name);
+      case "state": {
+        // A state's seven child groups are independent lookups over different tables, so
+        // they run concurrently rather than as seven sequential round trips. The results
+        // are pushed in this fixed order – the panel's display order must not depend on
+        // which query finished first.
+        const stateGroups = await Promise.all([
+          areaGroup("sa4", `left(geo.sa4.code, 1) = $1`, "SA4 regions"),
+          divGroup("ced", "Federal – House of Representatives"),
+          divGroup("sed_lower", "State – lower house"),
+          divGroup("sed_upper", "State – upper house"),
+          divGroup("lga", "Local government areas (LGA)"),
+          divGroup("ward", "Council wards"),
+          // Matched by NAME, so the three 'Other Territories' regions appear under no state –
+          // consistent with regionParents omitting their state parent.
+          fnGroup("ireg", `d.state = $1`, "First Nations regions", region.name),
+        ]);
+        for (const g of stateGroups) add(g);
         break;
+      }
       case "sa4":
-        await areaGroup("sa3", `geo.sa3.sa4_code = $1`, "SA3 regions");
+        add(await areaGroup("sa3", `geo.sa3.sa4_code = $1`, "SA3 regions"));
         break;
       case "sa3":
-        await areaGroup("sa2", `geo.sa2.sa3_code = $1`, "SA2 regions");
+        add(await areaGroup("sa2", `geo.sa2.sa3_code = $1`, "SA2 regions"));
         break;
       case "sa2":
-        await areaGroup("sa1", `geo.sa1.sa2_code = $1`, "SA1 regions");
+        add(await areaGroup("sa1", `geo.sa1.sa2_code = $1`, "SA1 regions"));
         break;
       case "sa1":
-        await areaGroup("mb", `geo.meshblock.sa1_code = $1`, "Meshblocks");
+        add(await areaGroup("mb", `geo.meshblock.sa1_code = $1`, "Meshblocks"));
         break;
       case "mb":
-        await addressGroup("mb_code");
+        add(await addressGroup("mb_code"));
         break;
       case "ced":
-        await addressGroup("ced_code");
+        add(await addressGroup("ced_code"));
         break;
       case "sed":
-        await addressGroup("sed_code");
+        add(await addressGroup("sed_code"));
         break;
       case "sed_lower":
-        await addressGroup("sed_lower_code");
+        add(await addressGroup("sed_lower_code"));
         break;
       case "sed_upper":
         // Victoria's regions contain their 11 Assembly districts; Tasmania's Legislative
         // Council divisions contain no lower-house division at all (the chambers cross-cut),
         // so nestedGroup emits nothing there and only the addresses show.
-        await nestedGroup("sed_lower", `d.parent_upper_code = $1`, "Nested lower-house districts");
-        await addressGroup("sed_upper_code");
+        add(await nestedGroup("sed_lower", `d.parent_upper_code = $1`, "Nested lower-house districts"));
+        add(await addressGroup("sed_upper_code"));
         break;
       case "lga":
-        await nestedGroup("ward", `d.lga_code = $1`, "Wards");
-        await addressGroup("lga_code");
+        add(await nestedGroup("ward", `d.lga_code = $1`, "Wards"));
+        add(await addressGroup("lga_code"));
         break;
       case "ward":
-        await addressGroup("ward_code");
+        add(await addressGroup("ward_code"));
         break;
       case "ireg":
-        await fnGroup("iare", `d.ireg_code = $1`, "Indigenous Areas");
-        await addressGroup("ireg_code");
+        add(await fnGroup("iare", `d.ireg_code = $1`, "Indigenous Areas"));
+        add(await addressGroup("ireg_code"));
         break;
       case "iare":
-        await fnGroup("iloc", `d.iare_code = $1`, "Indigenous Locations");
-        await addressGroup("iare_code");
+        add(await fnGroup("iloc", `d.iare_code = $1`, "Indigenous Locations"));
+        add(await addressGroup("iare_code"));
         break;
       case "iloc":
-        await addressGroup("iloc_code");
+        add(await addressGroup("iloc_code"));
         break;
       case "address":
         break;

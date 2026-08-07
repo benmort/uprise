@@ -1,4 +1,19 @@
-import { GeoService, DIVISION_TYPES, TURF_DIVISION_TYPES, parseBbox } from "./geo.service";
+import { GeoService, DIVISION_TYPES, TILE_MIN_ZOOM, TURF_DIVISION_TYPES, parseBbox } from "./geo.service";
+
+/** Lowest zoom at which `tile()` will actually query for a layer – the layer's dense-level
+ *  floor, or 1 for the coarse layers that have none. Tests asserting on the SQL must sit at
+ *  or above it, otherwise the floor short-circuits before a query is ever issued. */
+const zoomFor = (layer: string) => TILE_MIN_ZOOM[layer] ?? 1;
+/** Web-Mercator tile containing a lon/lat at zoom z – so a fixture polygon can be put in the
+ *  tile actually requested when a floor forces a high zoom. */
+const tileOf = (z: number, lon: number, lat: number) => {
+  const n = 2 ** z;
+  const rad = (lat * Math.PI) / 180;
+  return {
+    x: Math.floor(((lon + 180) / 360) * n),
+    y: Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n),
+  };
+};
 
 /**
  * Focused unit tests for the vector-tile generator. The DB is mocked (the SQL is
@@ -62,14 +77,14 @@ describe("GeoService.tile", () => {
       ["state", "geo.state"],
     ] as const) {
       const { svc, $queryRawUnsafe } = make([]);
-      await svc.tile(layer, 1, 0, 0);
+      await svc.tile(layer, zoomFor(layer), 0, 0);
       expect($queryRawUnsafe.mock.calls[0][0]).toContain(table);
     }
   });
 
   it("bakes an ABS ?metric onto the tile via an abs_value join, and omits it otherwise", async () => {
     const withMetric = make([{ code: "20604112700", name: "MB", geojson: squarePoly(0, 0) } as never]);
-    await withMetric.svc.tile("sa1", 1, 0, 0, "median_age");
+    await withMetric.svc.tile("sa1", zoomFor("sa1"), 0, 0, "median_age");
     const [sql, , , , , layer, metric] = withMetric.$queryRawUnsafe.mock.calls[0];
     expect(sql).toContain("LEFT JOIN geo.abs_value av");
     expect(sql).toContain("av.value AS value");
@@ -77,7 +92,7 @@ describe("GeoService.tile", () => {
     expect(metric).toBe("median_age");
 
     const plain = make([]);
-    await plain.svc.tile("sa1", 1, 0, 0);
+    await plain.svc.tile("sa1", zoomFor("sa1"), 0, 0);
     expect(plain.$queryRawUnsafe.mock.calls[0][0]).not.toContain("geo.abs_value");
   });
 
@@ -544,7 +559,7 @@ describe("GeoService — ambiguous-column regression guard", () => {
   // second `code` column in scope — exactly the shape that 500'd browseAreas.
   it.each(["sa1", "mb", "lga", "iloc"] as const)("tile(%s) qualifies every column", async (layer) => {
     const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
-    await svcOf($queryRawUnsafe).tile(layer, 1, 0, 0);
+    await svcOf($queryRawUnsafe).tile(layer, zoomFor(layer), 0, 0);
     expectNoAmbiguousColumns($queryRawUnsafe.mock.calls[0][0] as string);
   });
 });
@@ -579,7 +594,10 @@ describe("GeoService — density", () => {
       const $queryRawUnsafe = jest
         .fn()
         .mockResolvedValue([{ code: "DEMO-MB", name: "Demo", density: null, geojson: squarePoly() }]);
-      const buf = await svcOf($queryRawUnsafe).tile("mb", 1, 0, 0);
+      // Meshblocks are floored at z9, so ask for the tile the fixture square actually sits in.
+      const z = zoomFor("mb");
+      const { x, y } = tileOf(z, 0.5, 0.5);
+      const buf = await svcOf($queryRawUnsafe).tile("mb", z, x, y);
       expect(buf.length).toBeGreaterThan(0);
     });
   });
@@ -1028,5 +1046,218 @@ describe("parseBbox", () => {
     // Off the planet.
     expect(parseBbox("-181,-37,145,-36")).toBeNull();
     expect(parseBbox("144,-91,145,-36")).toBeNull();
+  });
+});
+
+/**
+ * Bounded geo queries: the guards that stop a single request sweeping a whole national
+ * layer. Each one has a client-side twin (`apps/admin/src/lib/canvass/area-limits.ts`);
+ * these pin the SERVER half, which is the one that has to hold when the client misbehaves.
+ */
+describe("GeoService – bounded geo queries", () => {
+  const svcOf = ($queryRawUnsafe: jest.Mock) => new GeoService({ $queryRawUnsafe } as never);
+
+  describe("tile() zoom floors", () => {
+    it.each([
+      ["mb", 9],
+      ["sa1", 7],
+    ] as const)("%s answers the empty tile below z%i without touching the database", async (layer, floor) => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      const buf = await svcOf($queryRawUnsafe).tile(layer, floor - 1, 0, 0);
+      expect(buf.length).toBe(0);
+      expect($queryRawUnsafe).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["mb", 9],
+      ["sa1", 7],
+    ] as const)("%s queries again at its floor (z%i)", async (layer, floor) => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      await svcOf($queryRawUnsafe).tile(layer, floor, 0, 0);
+      expect($queryRawUnsafe).toHaveBeenCalledTimes(1);
+    });
+
+    it("floors only the dense layers – a coarse one still serves z0", async () => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      await svcOf($queryRawUnsafe).tile("sa2", 0, 0, 0);
+      expect($queryRawUnsafe).toHaveBeenCalledTimes(1);
+      expect(TILE_MIN_ZOOM.sa2).toBeUndefined();
+    });
+
+    it("carries a generous backstop LIMIT that cannot bite at a legitimate zoom", async () => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      await svcOf($queryRawUnsafe).tile("mb", zoomFor("mb"), 0, 0);
+      // 50k is far above any single tile's row count at or above the floor – it exists only
+      // so a broken floor can't stream all 368k meshblocks.
+      expect($queryRawUnsafe.mock.calls[0][0]).toContain("LIMIT 50000");
+    });
+  });
+
+  describe("searchAreas minimum term length", () => {
+    it.each([
+      ["mb", "", false],
+      ["mb", "  ", false],
+      ["mb", "ab", false],
+      ["mb", "abc", true],
+      ["sa1", "ab", false],
+      ["sa1", "abc", true],
+      ["sa2", "", false],
+      ["sa2", "a", false],
+      ["sa2", "ab", true],
+      ["sa3", "a", false],
+      ["sa3", "ab", true],
+      ["sa4", "a", false],
+      ["sa4", "ab", true],
+    ] as const)("%s + %p → queries: %p", async (layer, q, shouldQuery) => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      const res = await svcOf($queryRawUnsafe).searchAreas(layer, q);
+      expect($queryRawUnsafe).toHaveBeenCalledTimes(shouldQuery ? 1 : 0);
+      if (!shouldQuery) expect(res).toEqual([]);
+    });
+
+    it("measures the TRIMMED term, so padding cannot buy a short query in", async () => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValue([]);
+      await svcOf($queryRawUnsafe).searchAreas("mb", "  ab  ");
+      expect($queryRawUnsafe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("browseAreas total", () => {
+    it("serves the unfiltered total from dataset_meta (reltuples fallback), never COUNT(*)", async () => {
+      const $queryRawUnsafe = jest
+        .fn()
+        .mockResolvedValueOnce([]) // page rows
+        .mockResolvedValueOnce([{ total: 368286 }]); // total
+      const res = await svcOf($queryRawUnsafe).browseAreas("mb", {});
+      const [totalSql, metaKey, table] = $queryRawUnsafe.mock.calls[1] as [string, string, string];
+      expect(totalSql).not.toContain("COUNT(*)");
+      expect(totalSql).toContain("geo.dataset_meta");
+      expect(totalSql).toContain("pg_class");
+      expect(totalSql).toContain("to_regclass");
+      // The loader stamps meshblocks under `asgs_mb`, not `mb`.
+      expect(metaKey).toBe("asgs_mb");
+      expect(table).toBe("geo.meshblock");
+      expect(res.total).toBe(368286);
+    });
+
+    it.each(["sa1", "sa2", "sa3", "sa4"] as const)("looks %s up under its own dataset_meta key", async (layer) => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 1 }]);
+      await svcOf($queryRawUnsafe).browseAreas(layer, {});
+      expect(($queryRawUnsafe.mock.calls[1] as unknown[])[1]).toBe(layer);
+    });
+
+    it.each([{ q: "syd" }, { state: "1" }, { q: "syd", state: "1" }])(
+      "still COUNTs a filtered browse (%p) – the filter is what the total is about",
+      async (opts) => {
+        const $queryRawUnsafe = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 7 }]);
+        const res = await svcOf($queryRawUnsafe).browseAreas("sa2", opts);
+        const [totalSql] = $queryRawUnsafe.mock.calls[1] as [string];
+        expect(totalSql).toContain("COUNT(*)");
+        expect(totalSql).toContain("WHERE");
+        expect(totalSql).not.toContain("geo.dataset_meta");
+        expect(res.total).toBe(7);
+      },
+    );
+
+    it("reads 0 rather than NaN when neither source knows the count", async () => {
+      const $queryRawUnsafe = jest.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      const res = await svcOf($queryRawUnsafe).browseAreas("sa3", {});
+      expect(res.total).toBe(0);
+    });
+  });
+
+  describe("regionChildren address group", () => {
+    const region = { kind: "mb", code: "20604112700", name: "Fitzroy North · SE" };
+    const children = (m: jest.Mock) => {
+      const svc = svcOf(m) as unknown as {
+        regionChildren: (
+          k: string,
+          c: string,
+          r: { kind: string; code: string; name: string },
+        ) => Promise<Array<{ kind: string; total: number; rows: Array<{ name: string }> }>>;
+      };
+      return svc.regionChildren.bind(svc);
+    };
+
+    it("does not ORDER BY the joined gnaf column, and sorts the capped page in JS instead", async () => {
+      const $queryRawUnsafe = jest
+        .fn()
+        .mockResolvedValueOnce([{ n: 41 }]) // countOf
+        .mockResolvedValueOnce([
+          { code: "G3", name: "3 Zeta St" },
+          { code: "G1", name: "1 Alpha St" },
+          { code: "G2", name: "2 Mu St" },
+        ]);
+      const groups = await children($queryRawUnsafe)("mb", region.code, region);
+      const [rowsSql] = $queryRawUnsafe.mock.calls[1] as [string];
+      expect(rowsSql).not.toMatch(/ORDER BY/i);
+      expect(rowsSql).toContain("LIMIT 200");
+      expect(groups.map((g) => g.kind)).toEqual(["address"]);
+      expect(groups[0].rows.map((r) => r.name)).toEqual(["1 Alpha St", "2 Mu St", "3 Zeta St"]);
+      // The cap is a subset of the region – the real figure still comes from countOf.
+      expect(groups[0].total).toBe(41);
+    });
+
+    it("falls back to the gnaf_pid when an address has no label, and still sorts", async () => {
+      const $queryRawUnsafe = jest
+        .fn()
+        .mockResolvedValueOnce([{ n: 2 }])
+        .mockResolvedValueOnce([
+          { code: "G9", name: "9 Beta St" },
+          { code: "A0", name: null },
+        ]);
+      const groups = await children($queryRawUnsafe)("mb", region.code, region);
+      expect(groups[0].rows.map((r) => r.name)).toEqual(["9 Beta St", "A0"]);
+    });
+  });
+
+  describe("regionChildren(state) group order", () => {
+    it("is fixed by the switch, not by which of the seven concurrent queries lands first", async () => {
+      let issued = 0;
+      // Resolve in REVERSE issue order: a helper that pushed into a shared array as it
+      // resolved would come back scrambled; pushing the awaited Promise.all results cannot.
+      const $queryRawUnsafe = jest.fn().mockImplementation(() => {
+        const i = issued++;
+        return new Promise((resolve) =>
+          setTimeout(() => resolve([{ code: `C${i}`, name: `N${i}`, addressCount: i }]), (8 - i) * 2),
+        );
+      });
+      const region = { kind: "state", code: "2", name: "Victoria" };
+      const groups = await (svcOf($queryRawUnsafe) as unknown as {
+        regionChildren: (
+          k: string,
+          c: string,
+          r: { kind: string; code: string; name: string },
+        ) => Promise<Array<{ kind: string; label: string }>>;
+      }).regionChildren("state", "2", region);
+
+      expect(groups.map((g) => g.kind)).toEqual([
+        "sa4", "ced", "sed_lower", "sed_upper", "lga", "ward", "ireg",
+      ]);
+      // Concurrent, not sequential: all seven were issued before any had resolved.
+      expect($queryRawUnsafe).toHaveBeenCalledTimes(7);
+    });
+
+    it("omits a group whose lookup found nothing, keeping the rest in order", async () => {
+      const rows = [{ code: "C", name: "N", addressCount: 0 }];
+      const $queryRawUnsafe = jest
+        .fn()
+        .mockResolvedValueOnce(rows) // sa4
+        .mockResolvedValueOnce([]) // ced – none
+        .mockResolvedValueOnce(rows) // sed_lower
+        .mockResolvedValueOnce([]) // sed_upper – none
+        .mockResolvedValueOnce(rows) // lga
+        .mockResolvedValueOnce([]) // ward – none
+        .mockResolvedValueOnce(rows); // ireg
+      const region = { kind: "state", code: "2", name: "Victoria" };
+      const groups = await (svcOf($queryRawUnsafe) as unknown as {
+        regionChildren: (
+          k: string,
+          c: string,
+          r: { kind: string; code: string; name: string },
+        ) => Promise<Array<{ kind: string }>>;
+      }).regionChildren("state", "2", region);
+      expect(groups.map((g) => g.kind)).toEqual(["sa4", "sed_lower", "lga", "ireg"]);
+    });
   });
 });
