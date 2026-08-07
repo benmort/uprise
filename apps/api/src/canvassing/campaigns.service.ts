@@ -272,9 +272,14 @@ export class CampaignsService {
           turf: { select: { id: true, name: true } },
         },
       }),
-      this.prisma.doorKnock.findMany({
+      // Today's knocks as a per-volunteer aggregate, not a row per knock: the screen only
+      // ever wanted each volunteer's tally and their most recent knock, and on a busy day
+      // that was thousands of rows shipped to compute two numbers apiece.
+      this.prisma.doorKnock.groupBy({
+        by: ["volunteerId"],
         where: { tenantId, createdAt: { gte: startOfToday() }, ...contactFilter },
-        select: { volunteerId: true, createdAt: true },
+        _count: { _all: true },
+        _max: { createdAt: true },
       }),
       this.prisma.doorKnock.findMany({
         where: { tenantId, ...contactFilter },
@@ -285,14 +290,14 @@ export class CampaignsService {
     ]);
 
     const doorsByVolunteer = new Map<string, { count: number; last: Date }>();
-    for (const k of knocksToday) {
-      if (!k.volunteerId) continue;
-      const cur = doorsByVolunteer.get(k.volunteerId);
-      if (!cur) doorsByVolunteer.set(k.volunteerId, { count: 1, last: k.createdAt });
-      else {
-        cur.count += 1;
-        if (k.createdAt > cur.last) cur.last = k.createdAt;
-      }
+    let doorsToday = 0;
+    for (const row of knocksToday) {
+      // A knock whose volunteer was deleted (SetNull) groups under null: it still counts
+      // towards the tenant total but belongs to nobody on the roster, exactly as the
+      // per-row loop treated it.
+      doorsToday += row._count._all;
+      if (!row.volunteerId || !row._max.createdAt) continue;
+      doorsByVolunteer.set(row.volunteerId, { count: row._count._all, last: row._max.createdAt });
     }
 
     const volunteers = locks.map((l) => {
@@ -310,7 +315,7 @@ export class CampaignsService {
 
     return {
       volunteers,
-      doorsToday: knocksToday.length,
+      doorsToday,
       recentKnocks: recent.map((k) => ({
         id: k.id,
         at: k.createdAt,

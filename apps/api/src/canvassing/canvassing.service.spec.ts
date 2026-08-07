@@ -65,6 +65,7 @@ describe("CanvassingService", () => {
         createMany: jest.fn(async ({ data }: any) => ({ count: data.length })),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
         findMany: jest.fn().mockResolvedValue([]),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       walkList: {
         findMany: jest.fn(),
@@ -599,8 +600,94 @@ describe("CanvassingService", () => {
 
     it("returns no flags when the campaign has no turf", async () => {
       prisma.turf.findMany.mockResolvedValue([]);
+      expect(await service.qaReview("org1", "c1")).toEqual({ flags: [], nextCursor: null });
+    });
+
+    it("scans only the last 30 days – a knock 29 days old is in, one 31 days old is out", async () => {
+      jest.useFakeTimers().setSystemTime(new Date("2026-06-17T10:00:00Z"));
+      try {
+        prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+        prisma.doorKnock.findMany.mockResolvedValue([]);
+        await service.qaReview("org1", "c1");
+        const { where } = prisma.doorKnock.findMany.mock.calls[0][0];
+        expect(where.createdAt.gte).toEqual(new Date("2026-05-18T10:00:00Z"));
+        const daysAgo = (n: number) => Date.now() - n * 24 * 60 * 60 * 1000;
+        expect(daysAgo(29)).toBeGreaterThanOrEqual(where.createdAt.gte.getTime());
+        expect(daysAgo(31)).toBeLessThan(where.createdAt.gte.getTime());
+        // The turf scope is untouched by the window.
+        expect(where.contact).toEqual({ turfId: { in: ["t1"] } });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it("windows the tenant-wide variant the same way", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      await service.qaReview("org1");
+      const { where } = prisma.doorKnock.findMany.mock.calls[0][0];
+      expect(where.createdAt.gte).toBeInstanceOf(Date);
+      // Within a second of exactly 30 days back.
+      expect(Date.now() - where.createdAt.gte.getTime()).toBeGreaterThanOrEqual(30 * 24 * 60 * 60 * 1000);
+      expect(Date.now() - where.createdAt.gte.getTime()).toBeLessThan(30 * 24 * 60 * 60 * 1000 + 1000);
+    });
+
+    it("still applies the unchanged NO_GPS / FAST_CADENCE heuristic inside the window", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      // Both knocks sit inside the window; the flags must match the pre-window behaviour.
+      const base = Date.now() - 5 * 24 * 60 * 60 * 1000;
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k1", volunteerId: "u1", lat: null, lng: null, createdAt: new Date(base), volunteer: { displayName: "Ada" } },
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 5000), volunteer: { displayName: "Ada" } },
+        // A different volunteer 1s later is NOT fast cadence – the run resets per volunteer.
+        { id: "k3", volunteerId: "u2", lat: 1, lng: 1, createdAt: new Date(base + 6000), volunteer: { displayName: "Bo" } },
+      ]);
       const { flags } = await service.qaReview("org1", "c1");
-      expect(flags).toEqual([]);
+      expect(flags.map((f) => f.id)).toEqual(["k1:NO_GPS", "k2:FAST_CADENCE"]);
+      expect(flags[1].reason).toBe("Knocked 5s after previous");
+    });
+
+    it("takes a page and reports the next cursor when the page came back full", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      const base = new Date("2026-06-17T10:00:00Z").getTime();
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k1", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base), volunteer: null },
+        { id: "k2", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(base + 60_000), volunteer: null },
+      ]);
+      const res = await service.qaReview("org1", "c1", { cursor: "k0", take: 2 });
+      expect(prisma.doorKnock.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 2, cursor: { id: "k0" }, skip: 1 }),
+      );
+      expect(res.nextCursor).toBe("k2");
+    });
+
+    it("reports no next cursor on a short page, and sends no cursor when none is given", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([
+        { id: "k1", volunteerId: "u1", lat: 1, lng: 1, createdAt: new Date(), volunteer: null },
+      ]);
+      const res = await service.qaReview("org1", "c1", { take: 5 });
+      const args = prisma.doorKnock.findMany.mock.calls[0][0];
+      expect(args.take).toBe(5);
+      expect(args).not.toHaveProperty("cursor");
+      expect(args).not.toHaveProperty("skip");
+      expect(res.nextCursor).toBeNull();
+    });
+
+    it("defaults, floors and caps `take` rather than passing junk to Prisma", async () => {
+      prisma.turf.findMany.mockResolvedValue([{ id: "t1" }]);
+      prisma.doorKnock.findMany.mockResolvedValue([]);
+      const takeOf = async (opts?: { take?: number }) => {
+        prisma.doorKnock.findMany.mockClear();
+        await service.qaReview("org1", "c1", opts);
+        return prisma.doorKnock.findMany.mock.calls[0][0].take;
+      };
+      expect(await takeOf()).toBe(2000); // default page
+      expect(await takeOf({ take: Number.NaN })).toBe(2000);
+      expect(await takeOf({ take: 0 })).toBe(2000);
+      expect(await takeOf({ take: -5 })).toBe(2000);
+      expect(await takeOf({ take: 99999 })).toBe(5000); // capped
+      expect(await takeOf({ take: 10.7 })).toBe(10); // truncated
     });
 
     it("reviews tenant-wide when no campaign id (no campaignId filter)", async () => {
@@ -780,35 +867,61 @@ describe("CanvassingService", () => {
   });
 
   describe("listWalkLists", () => {
-    it("surfaces stop counts and the active lock holder", async () => {
-      prisma.walkList.findMany.mockResolvedValue([
-        {
-          id: "w1",
-          name: "List A",
-          turfId: "t1",
-          campaignId: "c1",
-          listType: "STATIC",
-          createdAt: new Date(),
-          _count: { items: 32 },
-          items: [{ id: "i1" }, { id: "i2" }],
-          turf: {
-            id: "t1",
-            name: "Turf 1",
-            assignments: [
-              {
-                volunteerId: "u1",
-                assignedAt: new Date(),
-                lockedUntil: null,
-                volunteer: { id: "u1", displayName: "Ada" },
-              },
-            ],
+    const listRow = {
+      id: "w1",
+      name: "List A",
+      turfId: "t1",
+      campaignId: "c1",
+      listType: "STATIC",
+      createdAt: new Date(),
+      _count: { items: 32 },
+      turf: {
+        id: "t1",
+        name: "Turf 1",
+        assignments: [
+          {
+            volunteerId: "u1",
+            assignedAt: new Date(),
+            lockedUntil: null,
+            volunteer: { id: "u1", displayName: "Ada" },
           },
-        },
-      ]);
+        ],
+      },
+    };
+
+    it("surfaces stop counts and the active lock holder", async () => {
+      prisma.walkList.findMany.mockResolvedValue([listRow]);
+      prisma.walkListItem.groupBy.mockResolvedValue([{ walkListId: "w1", _count: { _all: 2 } }]);
       const rows = await service.listWalkLists("org1", "t1");
       expect(rows[0].stopCount).toBe(32);
       expect(rows[0].visitedCount).toBe(2);
       expect(rows[0].assignedTo?.name).toBe("Ada");
+    });
+
+    it("counts VISITED stops with a filtered grouped count, never a page of item ids", async () => {
+      prisma.walkList.findMany.mockResolvedValue([listRow]);
+      prisma.walkListItem.groupBy.mockResolvedValue([{ walkListId: "w1", _count: { _all: 2 } }]);
+      await service.listWalkLists("org1", "t1");
+      // The include carries the plain total only – no `items` hydration.
+      const include = prisma.walkList.findMany.mock.calls[0][0].include;
+      expect(include._count).toEqual({ select: { items: true } });
+      expect(include).not.toHaveProperty("items");
+      expect(prisma.walkListItem.groupBy).toHaveBeenCalledWith({
+        by: ["walkListId"],
+        where: { walkListId: { in: ["w1"] }, status: "VISITED" },
+        _count: { _all: true },
+      });
+    });
+
+    it("reports zero visited for a list the grouped count skipped, and queries nothing when empty", async () => {
+      prisma.walkList.findMany.mockResolvedValue([listRow]);
+      prisma.walkListItem.groupBy.mockResolvedValue([]);
+      expect((await service.listWalkLists("org1", "t1"))[0].visitedCount).toBe(0);
+
+      prisma.walkListItem.groupBy.mockClear();
+      prisma.walkList.findMany.mockResolvedValue([]);
+      expect(await service.listWalkLists("org1")).toEqual([]);
+      expect(prisma.walkListItem.groupBy).not.toHaveBeenCalled();
     });
   });
 
@@ -957,15 +1070,15 @@ describe("CanvassingService", () => {
             campaignId: "c1",
             campaign: { volunteerCanSelfClaimTurf: true },
             estimate: { doorsPerHour: 30 },
-            walkLists: [
-              {
-                id: "w1",
-                name: "Walk 1",
-                items: [{ status: "PENDING" }, { status: "VISITED" }, { status: "SKIPPED" }],
-              },
-            ],
+            walkLists: [{ id: "w1", name: "Walk 1", _count: { items: 3 } }],
           },
         },
+      ]);
+      // The same PENDING/VISITED/SKIPPED mix the include used to hydrate, as grouped counts.
+      prisma.walkListItem.groupBy.mockResolvedValue([
+        { walkListId: "w1", status: "PENDING", _count: { _all: 1 } },
+        { walkListId: "w1", status: "VISITED", _count: { _all: 1 } },
+        { walkListId: "w1", status: "SKIPPED", _count: { _all: 1 } },
       ]);
       prisma.shift.findMany.mockResolvedValue([{ campaignId: "c1" }]); // campaign c1 has shifts
       const res = await service.listAssignments("org1", "u1");
@@ -991,6 +1104,43 @@ describe("CanvassingService", () => {
       ]);
       // Walk lists still ship COUNTS, not their items.
       expect(res[0].walkLists[0]).not.toHaveProperty("items");
+      // The statuses are one grouped count over every assigned list, not per-item hydration.
+      expect(prisma.walkListItem.groupBy).toHaveBeenCalledTimes(1);
+      expect(prisma.walkListItem.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          by: ["walkListId", "status"],
+          where: { walkListId: { in: ["w1"] } },
+        }),
+      );
+    });
+
+    it("skips the grouped count entirely when no assigned turf has a walk list", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([
+        { turfId: "t1", lockedUntil: null, turf: { id: "t1", name: "T", tenantId: "org1", geometry: {}, campaignId: null, walkLists: [] } },
+      ]);
+      prisma.contact.findMany.mockResolvedValue([]);
+      const res = await service.listAssignments("org1", "u1");
+      expect(prisma.walkListItem.groupBy).not.toHaveBeenCalled();
+      expect(res[0].walkLists).toEqual([]);
+    });
+
+    it("reports zeroes for a list the grouped count returned no rows for", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([
+        {
+          turfId: "t1",
+          lockedUntil: null,
+          turf: {
+            id: "t1",
+            name: "Turf 1",
+            geometry: square,
+            campaignId: null,
+            walkLists: [{ id: "w_empty", name: "Empty", _count: { items: 0 } }],
+          },
+        },
+      ]);
+      prisma.walkListItem.groupBy.mockResolvedValue([]);
+      const res = await service.listAssignments("org1", "u1");
+      expect(res[0].walkLists[0]).toEqual({ id: "w_empty", name: "Empty", total: 0, pending: 0, visited: 0 });
     });
 
     it("defaults canSelfClaim to false when the turf has no campaign", async () => {
@@ -1003,9 +1153,12 @@ describe("CanvassingService", () => {
             name: "Turf 1",
             geometry: square,
             campaignId: null,
-            walkLists: [{ id: "w1", name: "Walk 1", items: [{ status: "PENDING" }] }],
+            walkLists: [{ id: "w1", name: "Walk 1", _count: { items: 1 } }],
           },
         },
+      ]);
+      prisma.walkListItem.groupBy.mockResolvedValue([
+        { walkListId: "w1", status: "PENDING", _count: { _all: 1 } },
       ]);
       const res = await service.listAssignments("org1", "u1");
       expect(res[0].turf.canSelfClaim).toBe(false);
@@ -1021,11 +1174,14 @@ describe("CanvassingService", () => {
         ...bare,
         turf: {
           ...bare.turf,
-          walkLists: [{ id: "wl_turf_t1", name: "Turf 1", items: [{ status: "PENDING" }, { status: "PENDING" }] }],
+          walkLists: [{ id: "wl_turf_t1", name: "Turf 1", _count: { items: 2 } }],
         },
       };
       prisma.turfAssignment.findMany.mockResolvedValueOnce([bare]).mockResolvedValueOnce([healed]);
       prisma.contact.findMany.mockResolvedValue([{ id: "c1" }, { id: "c2" }]);
+      prisma.walkListItem.groupBy.mockResolvedValue([
+        { walkListId: "wl_turf_t1", status: "PENDING", _count: { _all: 2 } },
+      ]);
 
       const res = await service.listAssignments("org1", "u1");
 
@@ -1235,25 +1391,59 @@ describe("CanvassingService", () => {
   });
 
   describe("listTurfContacts", () => {
+    /** The single `Prisma.Sql` the reader is now called with: its text + bound values. */
+    const rawCall = () => {
+      const sql = prisma.$queryRaw.mock.calls[0][0];
+      return { text: sql.strings.join("?"), values: sql.values };
+    };
+
     it("returns the turf's contacts joined to the G-NAF address detail, tenant+turf scoped", async () => {
       const contacts = [
         { id: "c1", firstName: "A", lastName: "B", address: "96 Smith Street, Richmond VIC 3121", street: "Smith Street", locality: "Richmond", postcode: "3121", lat: 1, lng: 2 },
       ];
       prisma.$queryRaw.mockResolvedValue(contacts);
       const res = await service.listTurfContacts("org1", "t1");
-      // Tagged-template call: params carry the tenant + turf; the SQL joins geo.gnaf_address.
-      const [strings, tenantId, turfId] = prisma.$queryRaw.mock.calls[0];
-      expect(strings.join("?")).toContain("geo.gnaf_address");
-      expect(strings.join("?")).toContain('c."gnafPid"');
+      const { text, values } = rawCall();
+      expect(text).toContain("geo.gnaf_address");
+      expect(text).toContain('c."gnafPid"');
       // gnafPid is selected out (not just joined on) so the preview popover can fetch address detail.
-      expect(strings.join("?")).toContain('c."gnafPid"   AS "gnafPid"');
+      expect(text).toContain('c."gnafPid"   AS "gnafPid"');
       // Coords fall back to the G-NAF row so a cold door with no backfilled Contact.lat/lng
       // still gets a map pin.
-      expect(strings.join("?")).toContain("COALESCE(c.lat, a.lat)");
-      expect(strings.join("?")).toContain("COALESCE(c.lng, a.lng)");
-      expect(tenantId).toBe("org1");
-      expect(turfId).toBe("t1");
+      expect(text).toContain("COALESCE(c.lat, a.lat)");
+      expect(text).toContain("COALESCE(c.lng, a.lng)");
+      // One turf now rides the same array-parameterised predicate as the many-turf reader.
+      expect(values[0]).toBe("org1");
+      expect(values[1]).toEqual(["t1"]);
       expect(res).toBe(contacts);
+    });
+  });
+
+  describe("listVolunteerContacts", () => {
+    it("reads every held turf in ONE query, ordered turf-by-turf then by createdAt", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([{ turfId: "t1" }, { turfId: "t2" }]);
+      const rows = [{ id: "c1" }, { id: "c2" }];
+      prisma.$queryRaw.mockResolvedValue(rows);
+
+      const res = await service.listVolunteerContacts("org1", "c1", "u1");
+
+      expect(res).toBe(rows);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1); // was one query PER held turf
+      const sql = prisma.$queryRaw.mock.calls[0][0];
+      expect(sql.strings.join("?")).toContain('c."turfId" = ANY(');
+      // array_position over the held-turf list reproduces the old per-turf concatenation order.
+      expect(sql.strings.join("?")).toContain("array_position(");
+      expect(sql.values).toEqual(["org1", ["t1", "t2"], ["t1", "t2"]]);
+      expect(prisma.turfAssignment.findMany).toHaveBeenCalledWith({
+        where: { volunteerId: "u1", status: TurfAssignmentStatus.ASSIGNED, turf: { tenantId: "org1", campaignId: "c1" } },
+        select: { turfId: true },
+      });
+    });
+
+    it("returns [] without touching the database when the volunteer holds nothing", async () => {
+      prisma.turfAssignment.findMany.mockResolvedValue([]);
+      expect(await service.listVolunteerContacts("org1", "c1", "u1")).toEqual([]);
+      expect(prisma.$queryRaw).not.toHaveBeenCalled();
     });
   });
 
@@ -1404,7 +1594,6 @@ describe("CanvassingService", () => {
 
     it("returns the volunteer's knocks oldest-first, client capture time beating server receipt", async () => {
       prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
-      prisma.walkListItem.findMany.mockResolvedValue([{ id: "i1" }, { id: "i2" }]);
       prisma.doorKnock = {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -1433,58 +1622,130 @@ describe("CanvassingService", () => {
       expect(res.map((k) => k.walkListItemId)).toEqual(["i1", "i2"]);
       expect(res[0].at).toBe("2026-07-22T01:00:00.000Z");
       expect(res[1].at).toBe("2026-07-22T02:00:00.000Z");
+      // Scoped by the knock's contact, not by a prefetched walk-list-item id list.
       expect(prisma.doorKnock.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { tenantId: "org1", volunteerId: "u1", walkListItemId: { in: ["i1", "i2"] } },
+          where: { tenantId: "org1", volunteerId: "u1", contact: { tenantId: "org1", turfId: "t1" } },
         }),
       );
+      expect(prisma.walkListItem.findMany).not.toHaveBeenCalled();
     });
 
-    it("returns [] for a turf with no walk-list items (no knock query)", async () => {
+    it("includes an off-list knock (null walkListItemId) whose contact sits in the turf", async () => {
       prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
-      prisma.walkListItem.findMany.mockResolvedValue([]);
-      prisma.doorKnock = { findMany: jest.fn() };
+      prisma.doorKnock = {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            // A door added at the door (createDoorContact) never joins a walk list, so the
+            // old walkListItemId IN-list dropped it from the replay. The contact filter keeps it.
+            walkListItemId: null,
+            contactId: "c9",
+            lat: -33.9,
+            lng: 151.2,
+            dispositionCode: "not_home",
+            clientCapturedAt: null,
+            createdAt: new Date("2026-07-22T04:00:00Z"),
+          },
+        ]),
+      };
+      const res = await service.turfKnocksForVolunteer("org1", "t1", "u1");
+      expect(res).toEqual([
+        {
+          walkListItemId: null,
+          contactId: "c9",
+          lat: -33.9,
+          lng: 151.2,
+          dispositionCode: "not_home",
+          at: "2026-07-22T04:00:00.000Z",
+        },
+      ]);
+    });
+
+    it("returns [] for a turf with no knocks", async () => {
+      prisma.turfAssignment.findFirst.mockResolvedValue({ volunteerId: "u1" });
+      prisma.doorKnock = { findMany: jest.fn().mockResolvedValue([]) };
       expect(await service.turfKnocksForVolunteer("org1", "t1", "u1")).toEqual([]);
-      expect(prisma.doorKnock.findMany).not.toHaveBeenCalled();
     });
   });
 
   describe("listTurfs", () => {
+    /** The fixture the deep include used to hydrate: turf t1 has two lists (w1: one VISITED +
+     *  one PENDING, w2: one VISITED); turf t2 has none. Expressed as walk-list ids + the
+     *  grouped rows the pushed-down count returns for them. */
+    const turfRows = [
+      {
+        id: "t1",
+        name: "Turf 1",
+        campaignId: "c1",
+        geometry: { type: "Polygon" },
+        _count: { contacts: 12, walkLists: 2 },
+        assignments: [{ volunteerId: "u1", volunteer: { displayName: "Ada" } }],
+        walkLists: [{ id: "w1" }, { id: "w2" }],
+      },
+      {
+        id: "t2",
+        name: "Turf 2",
+        campaignId: "c1",
+        geometry: null,
+        _count: { contacts: 0, walkLists: 0 },
+        assignments: [],
+        walkLists: [],
+      },
+    ];
+    const groupedRows = [
+      { walkListId: "w1", status: "VISITED", _count: { _all: 1 } },
+      { walkListId: "w1", status: "PENDING", _count: { _all: 1 } },
+      { walkListId: "w2", status: "VISITED", _count: { _all: 1 } },
+    ];
+
     it("summarises stop progress and the active assignee", async () => {
-      prisma.turf.findMany.mockResolvedValue([
-        {
-          id: "t1",
-          name: "Turf 1",
-          campaignId: "c1",
-          geometry: { type: "Polygon" },
-          _count: { contacts: 12, walkLists: 2 },
-          assignments: [{ volunteerId: "u1", volunteer: { displayName: "Ada" } }],
-          walkLists: [
-            { items: [{ status: "VISITED" }, { status: "PENDING" }] },
-            { items: [{ status: "VISITED" }] },
-          ],
-        },
-        {
-          id: "t2",
-          name: "Turf 2",
-          campaignId: "c1",
-          geometry: null,
-          _count: { contacts: 0, walkLists: 0 },
-          assignments: [],
-          walkLists: [],
-        },
-      ]);
+      prisma.turf.findMany.mockResolvedValue(turfRows);
+      prisma.walkListItem.groupBy.mockResolvedValue(groupedRows);
       const res = await service.listTurfs("org1", "c1");
       expect(res[0]).toMatchObject({
         id: "t1",
         contactCount: 12,
         walkListCount: 2,
+        // Parity with the old include-derived numbers: 3 stops across w1+w2, 2 of them VISITED.
         totalStops: 3,
         visitedStops: 2,
         assignedTo: { volunteerId: "u1", name: "Ada" },
       });
       expect(res[1].assignedTo).toBeNull();
       expect(res[1].totalStops).toBe(0);
+      expect(res[1].visitedStops).toBe(0);
+    });
+
+    it("counts stops with ONE grouped query scoped to the listed turfs, not a per-item include", async () => {
+      prisma.turf.findMany.mockResolvedValue(turfRows);
+      prisma.walkListItem.groupBy.mockResolvedValue(groupedRows);
+      await service.listTurfs("org1", "c1");
+      expect(prisma.turf.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ include: expect.objectContaining({ walkLists: { select: { id: true } } }) }),
+      );
+      expect(prisma.walkListItem.groupBy).toHaveBeenCalledTimes(1);
+      expect(prisma.walkListItem.groupBy).toHaveBeenCalledWith({
+        by: ["walkListId", "status"],
+        where: { walkList: { turfId: { in: ["t1", "t2"] } } },
+        _count: { _all: true },
+      });
+    });
+
+    it("ignores grouped rows for a walk list that is not on any listed turf", async () => {
+      prisma.turf.findMany.mockResolvedValue(turfRows);
+      prisma.walkListItem.groupBy.mockResolvedValue([
+        ...groupedRows,
+        { walkListId: "w_elsewhere", status: "VISITED", _count: { _all: 99 } },
+      ]);
+      const res = await service.listTurfs("org1", "c1");
+      expect(res[0].totalStops).toBe(3);
+      expect(res[0].visitedStops).toBe(2);
+    });
+
+    it("skips the grouped count when the tenant has no turfs", async () => {
+      prisma.turf.findMany.mockResolvedValue([]);
+      expect(await service.listTurfs("org1")).toEqual([]);
+      expect(prisma.walkListItem.groupBy).not.toHaveBeenCalled();
     });
   });
 
